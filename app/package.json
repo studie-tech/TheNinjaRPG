@@ -123,6 +123,7 @@
     "next": "16.3.3",
     "node-html-markdown": "^2.0.0",
     "openai": "^7.5.0",
+    "pixi.js": "^8.21.0",
     "pusher-js": "8.6.0",
     "react": "19.2.8",
     "react-colorful": "^5.8.0",

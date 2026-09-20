@@ -3146,6 +3146,12 @@ export const MIN_NATIVE_APP_VERSION = "1.0.0";
 /** Fishing shares the player XP curve but is intentionally independent of occupations. */
 export const FISHING_MAX_LEVEL = 100;
 export const FISHING_STARTER_BAIT = 12;
+export const FISHING_VISUAL_ENGINE_VERSION = 2;
+export const FISHING_SIMULATION_STEP_MS = 50;
+export const FISHING_INPUT_BATCH_MS = 200;
+export const FISHING_MAX_INPUT_BATCH = 8;
+export const FISHING_VISUAL_SESSION_SECONDS = 120;
+export const FISHING_TUTORIAL_QUEST_ID = "fishing-fundamentals";
 
 /**
  * Marker appended to the WebView user agent by the native shell, e.g.

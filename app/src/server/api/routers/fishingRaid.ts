@@ -332,11 +332,7 @@ export const fishingRaidRouter = createTRPCRouter({
           where: eq(fishingProfile.userId, ctx.userId),
         }),
       ]);
-      if (
-        !occurrence ||
-        occurrence.state !== "OPEN" ||
-        occurrence.closesAt <= new Date()
-      )
+      if (occurrence?.state !== "OPEN" || occurrence.closesAt <= new Date())
         return errorResponse("This raid is not open.");
       if (user.status !== "AWAKE" || user.battleId)
         return errorResponse("You must be awake and out of combat to join a raid.");
@@ -385,7 +381,7 @@ export const fishingRaidRouter = createTRPCRouter({
           where: eq(fishingProfile.userId, ctx.userId),
         }),
       ]);
-      if (!lobby || lobby.state !== "OPEN")
+      if (lobby?.state !== "OPEN")
         return errorResponse("This lobby is no longer accepting anglers.");
       if (await hasLiveRaidMembership(ctx.drizzle, ctx.userId, lobby.id))
         return errorResponse("Leave your current raid lobby before joining another.");
@@ -395,8 +391,7 @@ export const fishingRaidRouter = createTRPCRouter({
       if (!profile?.tutorialClaimedAt)
         return errorResponse("Start the fishing tutorial before joining a raid.");
       if (
-        !occurrence ||
-        occurrence.state !== "OPEN" ||
+        occurrence?.state !== "OPEN" ||
         occurrence.closesAt <= new Date() ||
         !hasSelectedRaidEquipment(
           userItems,
@@ -432,7 +427,7 @@ export const fishingRaidRouter = createTRPCRouter({
       const lobby = await ctx.drizzle.query.fishingRaidLobby.findFirst({
         where: eq(fishingRaidLobby.id, input.lobbyId),
       });
-      if (!lobby || lobby.state !== "OPEN")
+      if (lobby?.state !== "OPEN")
         return errorResponse("Readiness can only change while the lobby is open.");
       const updated = await ctx.drizzle
         .update(fishingRaidParticipant)
@@ -479,14 +474,24 @@ export const fishingRaidRouter = createTRPCRouter({
         ? asNumber(occurrence.templateConfig, "minimumParticipants")
         : 0;
       if (
-        !occurrence ||
-        occurrence.state !== "OPEN" ||
+        occurrence?.state !== "OPEN" ||
         occurrence.closesAt <= new Date() ||
         activeParticipants.length < minimum ||
         activeParticipants.some((participant) => !participant.ready)
       )
         return errorResponse(
           "The event must be open and every angler ready before starting.",
+        );
+      const assignedRoles = new Set(
+        activeParticipants.map((participant) => participant.role),
+      );
+      if (
+        !assignedRoles.has("PULLER") ||
+        !assignedRoles.has("ANCHOR") ||
+        !assignedRoles.has("GUIDE")
+      )
+        return errorResponse(
+          "The roster needs at least one Puller, Anchor, and Guide before starting.",
         );
       const eligible = await Promise.all(
         activeParticipants.map(async (participant) =>
@@ -618,14 +623,18 @@ export const fishingRaidRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       const now = new Date();
+      if (lobby && encounter && encounter.deadlineAt <= now) {
+        await failRaidAndClearLocks(ctx.drizzle, lobby.id, now);
+        return errorResponse(
+          "The raid timer expired and every fishing lock was cleared.",
+        );
+      }
       if (
-        !lobby ||
-        lobby.state !== "ACTIVE" ||
+        lobby?.state !== "ACTIVE" ||
         !encounter ||
         !participant ||
         !participant.active ||
         encounter.version !== input.version ||
-        encounter.deadlineAt <= now ||
         user.status !== "AWAKE" ||
         user.battleId
       )
@@ -953,6 +962,10 @@ const beginRaidRecovery = async (
     return;
   }
   if (encounter.recoveryUntil > now) return;
+  await failRaidAndClearLocks(db, lobbyId, now);
+};
+
+const failRaidAndClearLocks = async (db: DrizzleClient, lobbyId: string, now: Date) => {
   const members = await db.query.fishingRaidParticipant.findMany({
     where: eq(fishingRaidParticipant.lobbyId, lobbyId),
   });
@@ -965,6 +978,10 @@ const beginRaidRecovery = async (
       .update(fishingRaidLobby)
       .set({ state: "FAILED" })
       .where(eq(fishingRaidLobby.id, lobbyId));
+    await tx
+      .update(fishingRaidParticipant)
+      .set({ active: false, ready: false, reconnectUntil: null })
+      .where(eq(fishingRaidParticipant.lobbyId, lobbyId));
     await tx
       .update(fishingProfile)
       .set({ activeSessionId: null, updatedAt: now })

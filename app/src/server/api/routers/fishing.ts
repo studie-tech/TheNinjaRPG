@@ -1,12 +1,19 @@
 import { and, eq, gt, gte, isNull, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { FISHING_STARTER_BAIT } from "@/drizzle/constants";
+import {
+  FISHING_STARTER_BAIT,
+  FISHING_TUTORIAL_QUEST_ID,
+  FISHING_VISUAL_ENGINE_VERSION,
+  FISHING_VISUAL_SESSION_SECONDS,
+} from "@/drizzle/constants";
 import {
   fishingActivity,
   fishingCatchReceipt,
   fishingCollectionLog,
   fishingHabitat,
   fishingProfile,
+  fishingRaidLobby,
+  fishingRaidParticipant,
   fishingSchoolMark,
   fishingSession,
   item,
@@ -29,6 +36,11 @@ import {
   selectFishingSpecies,
 } from "@/libs/fishing";
 import {
+  advanceFishingSimulation,
+  createFishingSimulation,
+  type FishingSimulationState,
+} from "@/libs/fishing/simulation";
+import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
   type ObjectiveTrackerTaskInput,
@@ -47,6 +59,7 @@ import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
 import { canChangeContent } from "@/utils/permissions";
 import {
   fishingActInputSchema,
+  fishingCancelInputSchema,
   fishingCastInputSchema,
   fishingHabitatDeleteInputSchema,
   fishingHabitatInputSchema,
@@ -54,6 +67,8 @@ import {
   fishingMarkSchoolInputSchema,
   fishingPendingCatchClaimInputSchema,
   fishingResolveInputSchema,
+  fishingSimulationStateSchema,
+  fishingSyncInputSchema,
   fishingTrackInputSchema,
 } from "@/validators/fishing";
 
@@ -245,6 +260,18 @@ export const fishingRouter = createTRPCRouter({
 
   claimTutorialSupplies: protectedProcedure.mutation(async ({ ctx }) => {
     const now = new Date();
+    const tutorialQuest = await ctx.drizzle.query.questHistory.findFirst({
+      where: and(
+        eq(questHistory.userId, ctx.userId),
+        eq(questHistory.questId, FISHING_TUTORIAL_QUEST_ID),
+        isNull(questHistory.endAt),
+        eq(questHistory.completed, 0),
+      ),
+    });
+    if (!tutorialQuest)
+      return errorResponse(
+        "Accept Fishing Fundamentals from the mission board before claiming supplies.",
+      );
     await ctx.drizzle
       .insert(fishingProfile)
       .values({ userId: ctx.userId })
@@ -471,9 +498,12 @@ export const fishingRouter = createTRPCRouter({
       }
       const level = getFishingLevel(user.fishingExperience);
       const validHabitats = await filterReachableHabitats(ctx.drizzle, habitats, user);
-      const habitatSpecies = new Set(
-        validHabitats.flatMap((habitat) => habitat.speciesIds),
+      const selectedHabitat = validHabitats.find(
+        (habitat) => habitat.id === input.habitatId,
       );
+      if (!selectedHabitat)
+        return errorResponse("Choose a reachable fishing habitat before casting.");
+      const habitatSpecies = new Set(selectedHabitat.speciesIds);
       const eligible = FISHING_SPECIES.filter(
         (fish) => fish.minLevel <= level && habitatSpecies.has(fish.id),
       );
@@ -481,7 +511,6 @@ export const fishingRouter = createTRPCRouter({
         return errorResponse("There is no active fishing habitat in this sector.");
       const fish = selectFishingSpecies(
         eligible,
-        profile?.trackedSpeciesId,
         `${ctx.userId}:${input.sector}:${Math.floor(Date.now() / 60000)}`,
       );
       if (!fish) return errorResponse("No fish are currently available here.");
@@ -509,14 +538,42 @@ export const fishingRouter = createTRPCRouter({
         (total, entry) => total + entry.experienceBonus,
         0,
       );
+      const sessionId = nanoid();
+      const school = await getSchoolState(ctx.drizzle, selectedHabitat, now);
+      const targetX = 100 + input.aimX * 800;
+      const targetY = 90 + input.aimY * 560;
+      const castTarget = {
+        x: 500 + (targetX - 500) * (0.35 + input.charge * 0.65),
+        y: 910 + (targetY - 910) * (0.35 + input.charge * 0.65),
+      };
+      const simulation = createFishingSimulation({
+        sessionId,
+        behavior: fish.behavior,
+        castTarget,
+        schoolPoint: school
+          ? {
+              x: 100 + (Math.abs(school.x) % 10) * 88,
+              y: 90 + (Math.abs(school.y) % 7) * 78,
+            }
+          : null,
+        modifiers: {
+          attractionBonus: equipmentAttractionBonus,
+          controlBonus: equipmentControlBonus,
+          socialBonus: socialBonusPercent,
+        },
+      });
       const session = {
-        id: nanoid(),
+        id: sessionId,
         userId: ctx.userId,
         speciesId: fish.id,
+        habitatId: selectedHabitat.id,
         sector: input.sector,
         castLongitude: user.longitude,
         castLatitude: user.latitude,
         state: "ATTRACT" as const,
+        engineVersion: FISHING_VISUAL_ENGINE_VERSION,
+        simulationState: simulation,
+        lastInputSequence: 0,
         socialBonusPercent,
         socialParticipantCount: participantCount,
         equipmentAttractionBonus,
@@ -524,7 +581,7 @@ export const fishingRouter = createTRPCRouter({
         equipmentExperienceBonus,
         startedAt: now,
         actionAt: now,
-        expiresAt: new Date(now.getTime() + 45_000),
+        expiresAt: new Date(now.getTime() + FISHING_VISUAL_SESSION_SECONDS * 1_000),
       };
       // The profile lock and the selected bait-stack CAS commit together. Parallel
       // tabs can neither start two sessions nor consume bait without a session.
@@ -573,11 +630,22 @@ export const fishingRouter = createTRPCRouter({
       ]);
       return {
         success: true,
-        message: "Cast accepted. Use gentle lure movement to attract a bite.",
-        session: { ...session, version: 1, tension: 20, landingProgress: 0 },
+        message: "Cast accepted. Move the lure through the water to attract a bite.",
+        session: {
+          id: session.id,
+          speciesId: null,
+          state: session.state,
+          version: 1,
+          tension: 18,
+          landingProgress: 0,
+          expiresAt: session.expiresAt,
+          simulation,
+        },
       };
     }),
 
+  // Rollout compatibility only: pre-migration sessions may finish during their
+  // 45-second lifetime. New casts always use the visual fixed-step engine.
   act: protectedProcedure
     .input(fishingActInputSchema)
     .mutation(async ({ ctx, input }) => {
@@ -591,6 +659,8 @@ export const fishingRouter = createTRPCRouter({
         }),
       ]);
       if (!session) return errorResponse("Fishing attempt not found.");
+      if (session.engineVersion >= FISHING_VISUAL_ENGINE_VERSION)
+        return errorResponse("This visual encounter uses continuous controls.");
       const now = new Date();
       if (
         user.status !== "AWAKE" ||
@@ -671,6 +741,139 @@ export const fishingRouter = createTRPCRouter({
       };
     }),
 
+  sync: protectedProcedure
+    .input(fishingSyncInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const [user, session] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.fishingSession.findFirst({
+          where: and(
+            eq(fishingSession.id, input.sessionId),
+            eq(fishingSession.userId, ctx.userId),
+          ),
+        }),
+      ]);
+      if (!session) return errorResponse("Fishing attempt not found.");
+      const now = new Date();
+      if (
+        session.engineVersion !== FISHING_VISUAL_ENGINE_VERSION ||
+        user.status !== "AWAKE" ||
+        user.battleId ||
+        terminalStates.has(session.state) ||
+        session.expiresAt <= now ||
+        hasFishingCastPositionChanged(session, user)
+      ) {
+        await interruptFishingSession(ctx.drizzle, ctx.userId, session, now);
+        return errorResponse("This fishing attempt was interrupted.");
+      }
+      if (session.version !== input.version)
+        return errorResponse("The server has a newer fishing snapshot. Resyncing.");
+      const parsed = fishingSimulationStateSchema.safeParse(session.simulationState);
+      const fish = getFishingSpecies(session.speciesId);
+      if (!parsed.success || !fish)
+        return errorResponse("This fishing encounter can no longer continue.");
+      let simulation = parsed.data as FishingSimulationState;
+      for (const frame of input.inputs) {
+        if (frame.sequence !== simulation.lastInputSequence + 1)
+          return errorResponse("Fishing inputs must arrive once and in order.");
+        simulation = advanceFishingSimulation(simulation, frame, fish.behavior, {
+          attractionBonus: session.equipmentAttractionBonus,
+          controlBonus: session.equipmentControlBonus,
+          socialBonus: session.socialBonusPercent,
+        });
+      }
+      const maximumElapsedMs = Math.min(
+        FISHING_VISUAL_SESSION_SECONDS * 1_000,
+        now.getTime() - session.startedAt.getTime() + 2_000,
+      );
+      if (simulation.elapsedMs > maximumElapsedMs)
+        return errorResponse("Fishing inputs advanced beyond the allowed time window.");
+      const state =
+        simulation.phase === "BITE"
+          ? ("HOOK" as const)
+          : simulation.phase === "LANDED"
+            ? ("LANDED" as const)
+            : simulation.phase === "FAILED"
+              ? ("FAILED" as const)
+              : simulation.phase === "FIGHT"
+                ? ("FIGHT" as const)
+                : ("ATTRACT" as const);
+      const update = await ctx.drizzle
+        .update(fishingSession)
+        .set({
+          simulationState: simulation,
+          lastInputSequence: simulation.lastInputSequence,
+          state,
+          tension: Math.min(100, Math.max(0, Math.round(simulation.line.tension))),
+          landingProgress: Math.round(simulation.landingProgress),
+          version: sql`${fishingSession.version} + 1`,
+          actionAt: now,
+          resolvedAt: state === "FAILED" ? now : undefined,
+        })
+        .where(
+          and(
+            eq(fishingSession.id, session.id),
+            eq(fishingSession.version, input.version),
+            eq(fishingSession.lastInputSequence, session.lastInputSequence),
+          ),
+        );
+      if (Number(update.rowsAffected ?? 0) !== 1)
+        return errorResponse("Another input updated this encounter. Resyncing.");
+      await ctx.drizzle
+        .update(fishingActivity)
+        .set({ interactedAt: now })
+        .where(
+          and(
+            eq(fishingActivity.userId, ctx.userId),
+            eq(fishingActivity.sessionId, session.id),
+          ),
+        );
+      if (state === "FAILED")
+        await clearFishingActivity(ctx.drizzle, ctx.userId, session.id, now);
+      return {
+        success: true,
+        message:
+          state === "LANDED"
+            ? "The fish is landed! Keep it or release it."
+            : state === "FAILED"
+              ? "The line went slack or snapped. The fish escaped."
+              : simulation.phase === "BITE"
+                ? "Bite! Set the hook now."
+                : "Fishing input accepted.",
+        session: {
+          id: session.id,
+          speciesId: state === "LANDED" ? session.speciesId : null,
+          state,
+          version: input.version + 1,
+          tension: Math.min(100, Math.max(0, Math.round(simulation.line.tension))),
+          landingProgress: Math.round(simulation.landingProgress),
+          expiresAt: session.expiresAt,
+          simulation,
+        },
+      };
+    }),
+
+  cancel: protectedProcedure
+    .input(fishingCancelInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const now = new Date();
+      const cancelled = await ctx.drizzle
+        .update(fishingSession)
+        .set({ state: "FAILED", resolvedAt: now })
+        .where(
+          and(
+            eq(fishingSession.id, input.sessionId),
+            eq(fishingSession.userId, ctx.userId),
+            eq(fishingSession.version, input.version),
+            sql`${fishingSession.state} IN ('ATTRACT', 'HOOK', 'FIGHT')`,
+          ),
+        );
+      if (Number(cancelled.rowsAffected ?? 0) !== 1)
+        return errorResponse("That fishing attempt is no longer active.");
+      await clearFishingActivity(ctx.drizzle, ctx.userId, input.sessionId, now);
+      return { success: true, message: "Fishing attempt cancelled." };
+    }),
+
   resolve: protectedProcedure
     .input(fishingResolveInputSchema)
     .mutation(async ({ ctx, input }) => {
@@ -680,7 +883,7 @@ export const fishingRouter = createTRPCRouter({
           eq(fishingSession.userId, ctx.userId),
         ),
       });
-      if (!session || session.state !== "LANDED" || session.version !== input.version)
+      if (session?.state !== "LANDED" || session.version !== input.version)
         return errorResponse("That catch is no longer ready to resolve.");
       const fish = getFishingSpecies(session.speciesId);
       if (!fish)
@@ -909,7 +1112,7 @@ const buildFishingState = async (
       fetchUserItems(client, userId),
     ]);
   const progress = getFishingLevelProgress(user.fishingExperience);
-  const activeSession =
+  const activeSessionRecord =
     latest && !terminalStates.has(latest.state) && latest.expiresAt > new Date()
       ? latest
       : null;
@@ -936,6 +1139,22 @@ const buildFishingState = async (
   const schools = await Promise.all(
     reachableHabitats.map((habitat) => getSchoolState(client, habitat, now)),
   );
+  const activeSimulation = activeSessionRecord
+    ? fishingSimulationStateSchema.safeParse(activeSessionRecord.simulationState)
+    : null;
+  const activeSession = activeSessionRecord
+    ? {
+        id: activeSessionRecord.id,
+        speciesId:
+          activeSessionRecord.state === "LANDED" ? activeSessionRecord.speciesId : null,
+        state: activeSessionRecord.state,
+        version: activeSessionRecord.version,
+        tension: activeSessionRecord.tension,
+        landingProgress: activeSessionRecord.landingProgress,
+        expiresAt: activeSessionRecord.expiresAt,
+        simulation: activeSimulation?.success ? activeSimulation.data : null,
+      }
+    : null;
   return {
     fishingExperience: user.fishingExperience,
     fishingLevel: progress.level,
@@ -970,14 +1189,30 @@ const buildFishingState = async (
         itemId: receipt.itemId as string,
       })),
     activeSession,
+    habitats: reachableHabitats.map((habitat) => ({
+      id: habitat.id,
+      name: habitat.name,
+      speciesIds: habitat.speciesIds,
+    })),
     participantCount,
     socialBonusPercent: getFishingTogetherBonus(participantCount),
     recentMarks: recentMarks
       .filter((mark) => reachableHabitatIds.has(mark.habitatId))
-      .map((mark) => ({ habitatId: mark.habitatId, markedAt: mark.markedAt })),
-    schools: schools.filter(
-      (school): school is NonNullable<typeof school> => school !== null,
-    ),
+      .map((mark) => ({
+        habitatId: mark.habitatId,
+        markedAt: mark.markedAt,
+        expiresAt: new Date(mark.markedAt.getTime() + 120_000),
+      })),
+    schools: schools
+      .filter((school): school is NonNullable<typeof school> => school !== null)
+      .map((school) => ({
+        ...school,
+        matchesTrackedSpecies:
+          !!profile?.trackedSpeciesId &&
+          !!reachableHabitats
+            .find((habitat) => habitat.id === school.habitatId)
+            ?.speciesIds.includes(profile.trackedSpeciesId),
+      })),
   };
 };
 
@@ -987,23 +1222,43 @@ const getEligibleFishingParticipantCount = async (
   now: Date,
   includeUserId?: string,
 ) => {
-  const active = await client
-    .select({ userId: fishingActivity.userId })
-    .from(fishingActivity)
-    .innerJoin(userData, eq(userData.userId, fishingActivity.userId))
-    .innerJoin(fishingSession, eq(fishingSession.id, fishingActivity.sessionId))
-    .where(
-      and(
-        eq(fishingActivity.sector, sector),
-        gt(fishingActivity.interactedAt, new Date(now.getTime() - 60_000)),
-        eq(userData.sector, sector),
-        eq(userData.status, "AWAKE"),
-        isNull(userData.battleId),
-        gt(fishingSession.expiresAt, now),
-        sql`${fishingSession.state} IN ('ATTRACT', 'HOOK', 'FIGHT')`,
+  const [active, raidParticipants] = await Promise.all([
+    client
+      .select({ userId: fishingActivity.userId })
+      .from(fishingActivity)
+      .innerJoin(userData, eq(userData.userId, fishingActivity.userId))
+      .innerJoin(fishingSession, eq(fishingSession.id, fishingActivity.sessionId))
+      .where(
+        and(
+          eq(fishingActivity.sector, sector),
+          gt(fishingActivity.interactedAt, new Date(now.getTime() - 60_000)),
+          eq(userData.sector, sector),
+          eq(userData.status, "AWAKE"),
+          isNull(userData.battleId),
+          gt(fishingSession.expiresAt, now),
+          sql`${fishingSession.state} IN ('ATTRACT', 'HOOK', 'FIGHT')`,
+        ),
       ),
-    );
+    client
+      .select({ userId: fishingRaidParticipant.userId })
+      .from(fishingRaidParticipant)
+      .innerJoin(
+        fishingRaidLobby,
+        eq(fishingRaidLobby.id, fishingRaidParticipant.lobbyId),
+      )
+      .innerJoin(userData, eq(userData.userId, fishingRaidParticipant.userId))
+      .where(
+        and(
+          eq(fishingRaidLobby.state, "ACTIVE"),
+          eq(fishingRaidParticipant.active, true),
+          eq(userData.sector, sector),
+          eq(userData.status, "AWAKE"),
+          isNull(userData.battleId),
+        ),
+      ),
+  ]);
   const participantIds = new Set(active.map((entry) => entry.userId));
+  for (const participant of raidParticipants) participantIds.add(participant.userId);
   if (includeUserId) participantIds.add(includeUserId);
   return Math.max(1, participantIds.size);
 };

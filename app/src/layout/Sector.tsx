@@ -495,6 +495,8 @@ const Sector: React.FC<SectorProps> = (props) => {
       habitatId: mark.habitatId,
       x: school?.x ?? habitat?.tileX,
       y: school?.y ?? habitat?.tileY,
+      markedAt: mark.markedAt,
+      expiresAt: mark.expiresAt,
     };
   });
 
@@ -2765,6 +2767,7 @@ const Sector: React.FC<SectorProps> = (props) => {
                 {fishingState.schools.map((school) => (
                   <li key={school.habitatId}>
                     Moving school at {school.x}, {school.y}
+                    {school.matchesTrackedSpecies ? " · tracked species signal" : ""}
                   </li>
                 ))}
               </ul>
@@ -2777,6 +2780,8 @@ const Sector: React.FC<SectorProps> = (props) => {
                     {sighting.x !== undefined && sighting.y !== undefined
                       ? ` at ${sighting.x}, ${sighting.y}`
                       : " nearby"}
+                    {` · ${Math.max(0, Math.floor((Date.now() - sighting.markedAt.getTime()) / 1_000))}s old`}
+                    {sighting.expiresAt <= new Date() ? " · expired" : ""}
                   </li>
                 ))}
               </ul>

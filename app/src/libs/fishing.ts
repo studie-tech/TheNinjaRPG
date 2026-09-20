@@ -320,15 +320,12 @@ export const fishingHexDistance = (
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.z - b.z));
 };
 
-/** Tracking doubles a species' selection weight, but never guarantees a catch. */
+/** Selection stays neutral; tracking is a visual school-finding aid. */
 export const selectFishingSpecies = (
   eligible: readonly FishingSpecies[],
-  trackedSpeciesId: string | null | undefined,
   seed: string,
 ) => {
-  const tracked = eligible.find((species) => species.id === trackedSpeciesId);
-  const weighted = tracked ? [...eligible, tracked] : eligible;
-  return weighted[Math.abs(hashFishing(seed)) % weighted.length];
+  return eligible[Math.abs(hashFishing(seed)) % eligible.length];
 };
 
 /** A line belongs to a specific bank, not merely to its sector. */

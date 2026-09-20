@@ -79,11 +79,11 @@ describe("fishing selection and line movement", () => {
       experience: 1,
     },
   ];
-  it("uses tracking as a preference without making it a guaranteed choice", () => {
-    expect(selectFishingSpecies(eligible, "a", "seed")).toBeDefined();
+  it("selects species neutrally without a tracking probability input", () => {
+    expect(selectFishingSpecies(eligible, "seed")).toBeDefined();
     const selections = Array.from(
       { length: 100 },
-      (_, index) => selectFishingSpecies(eligible, "a", String(index))?.id,
+      (_, index) => selectFishingSpecies(eligible, String(index))?.id,
     );
     expect(selections).toContain("a");
     expect(selections).toContain("b");
