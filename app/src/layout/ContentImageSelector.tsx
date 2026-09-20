@@ -4,7 +4,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { HistoricalAiAvatar } from "@/app/profile/edit/page";
+import { HistoricalAiAvatar } from "@/app/[shell]/profile/edit/page";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

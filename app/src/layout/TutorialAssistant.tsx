@@ -2,7 +2,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { ArrowRight, Loader2, Settings2, Sparkles, X } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,7 @@ import {
 } from "@/libs/tutorial";
 import { getMobileOperatingSystem } from "@/utils/hardware";
 import { parseHtml } from "@/utils/parse";
+import { usePublicPathname } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useUserData } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
@@ -361,7 +362,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
 }) => {
   // State
   const { data: userData, userAgent } = useUserData();
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const router = useRouter();
   const utils = api.useUtils();
 

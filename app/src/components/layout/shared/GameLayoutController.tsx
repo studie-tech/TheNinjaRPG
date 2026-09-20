@@ -1,6 +1,5 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import {
@@ -19,6 +18,7 @@ import {
   type MobileNavConfig,
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
+import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 import {
   LayoutLeftSidebar,
@@ -49,7 +49,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     userId,
     updateUser,
   } = useUserData();
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const { systems, location } = useGameMenu(userData);
   const [leftSideBarOpen, setLeftSideBarOpen] = useState(false);
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);

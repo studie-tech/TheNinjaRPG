@@ -1,11 +1,9 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { MultisessionAppSupport } from "@clerk/nextjs/internal";
-import { auth } from "@clerk/nextjs/server";
-import * as Sentry from "@sentry/nextjs";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
-import { cookies, headers } from "next/headers";
+import { notFound } from "next/navigation";
 import { extractRouterConfig } from "uploadthing/server";
 import TrpcClientProvider from "@/app/_trpc/Provider";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
@@ -22,51 +20,57 @@ import LayoutSwitcher from "@/layout/LayoutSwitcher";
 import StructuredData from "@/layout/StructuredData";
 import { WebAnalytics } from "@/layout/WebAnalytics";
 import {
-  AB_PIXEL_LAYOUT_COOKIE,
-  cookieValueToLayout,
   DEFAULT_FONT_SCALE,
   FONT_SCALE_COOKIE,
-  LAYOUT_PREFERENCE_COOKIE,
-  toFontScale,
+  FONT_SCALE_VALUES,
 } from "@/libs/layoutPreference";
-import { isNativeUserAgent, parseNativeUserAgent } from "@/libs/native/userAgent";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/libs/seo";
+import { PRERENDERED_SHELL_PARAMS, parseShellParam } from "@/libs/shell";
 import { UserContextProvider } from "@/utils/UserContext";
 
-import "../styles/globals.css";
+import "../../styles/globals.css";
 import "sonner/dist/styles.css";
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [readCookies, requestHeaders] = await Promise.all([cookies(), headers()]);
-  const isNativeShell = isNativeUserAgent(requestHeaders.get("user-agent"));
-  // A path the proxy matcher misses reaches here without Clerk context and auth()
-  // throws. Fall back to the signed-out shell so ClerkProvider can still hydrate the
-  // session on the client instead of the whole render failing - but keep reporting it,
-  // because a genuine Clerk outage would otherwise silently sign everyone out.
-  const authResult = await auth().catch((error: unknown) => {
-    Sentry.captureException(error, {
-      level: "warning",
-      tags: { source: "rootLayoutAuth" },
-    });
-    return null;
-  });
-  const initialIsSignedIn = !!authResult?.userId;
-  const initialLayout =
-    cookieValueToLayout(readCookies.get(LAYOUT_PREFERENCE_COOKIE)?.value) ??
-    cookieValueToLayout(readCookies.get(AB_PIXEL_LAYOUT_COOKIE)?.value) ??
-    "default";
-  // Inlined here rather than applied from localStorage after hydration: --font-scale
-  // feeds the root font-size, so changing it client-side re-flows the entire document.
-  const initialFontScale =
-    toFontScale(readCookies.get(FONT_SCALE_COOKIE)?.value) ?? DEFAULT_FONT_SCALE;
+/**
+ * The web variants are built at deploy time; see PRERENDERED_SHELL_PARAMS for why the
+ * native ones are not. Anything else in the segment renders on demand, which is how the
+ * native variants come to exist, and is why the value is checked below.
+ */
+export function generateStaticParams() {
+  return PRERENDERED_SHELL_PARAMS.map((shell) => ({ shell }));
+}
+
+/**
+ * --font-scale feeds the root font-size, so it has to be set before first paint: applied
+ * after hydration it re-flows the entire document. It used to be inlined from the cookie
+ * on the server; a prerendered document cannot do that, so this runs in <head> instead
+ * and reads the same cookie. Only the values the settings dialog can write are honoured.
+ */
+const FONT_SCALE_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^|; )${FONT_SCALE_COOKIE}=([^;]*)/);var v=m&&parseFloat(decodeURIComponent(m[1]));if(v!==${DEFAULT_FONT_SCALE}&&${JSON.stringify(FONT_SCALE_VALUES)}.indexOf(v)>=0)document.documentElement.style.setProperty("--font-scale",String(v))}catch(e){}})()`;
+
+export default async function RootLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ shell: string }>;
+}) {
+  const variant = parseShellParam((await params).shell);
+  if (!variant) notFound();
+  const initialIsSignedIn = variant.signedIn;
+  const initialLayout = variant.layout;
+  const isNativeShell = variant.client === "native";
 
   return (
     <html
       lang="en"
       className={initialLayout === "pixel" ? "dark" : undefined}
-      style={{ "--font-scale": initialFontScale } as React.CSSProperties}
       suppressHydrationWarning
     >
+      <head>
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the script is a module-level constant assembled from two other constants, with no input from anywhere. */}
+        <script dangerouslySetInnerHTML={{ __html: FONT_SCALE_SCRIPT }} />
+      </head>
       <body className="h-full">
         <StructuredData />
         <NextSSRPlugin
@@ -74,11 +78,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           routerConfig={extractRouterConfig(ourFileRouter)}
         />
         <ClerkProvider
-          proxyUrl={
-            isNativeShell && env.NATIVE_CLERK_PROXY_ENABLED === "true"
-              ? "/__clerk"
-              : undefined
-          }
+          proxyUrl={isNativeShell ? "/__clerk" : undefined}
           telemetry={false}
           appearance={{
             elements: {
@@ -207,17 +207,12 @@ export const metadata: Metadata = {
   },
 };
 
-export async function generateViewport(): Promise<Viewport> {
-  const requestHeaders = await headers();
-  const client = parseNativeUserAgent(requestHeaders.get("user-agent"));
-  return {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-    themeColor: "#ce7e00",
-    colorScheme: "dark light",
-    // Android's fixed game controls need native insets; iOS PWAs need cover for CSS safe areas.
-    viewportFit: client?.platform === "android" ? "contain" : "cover",
-  };
-}
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: "#ce7e00",
+  colorScheme: "dark light",
+  viewportFit: "cover",
+};

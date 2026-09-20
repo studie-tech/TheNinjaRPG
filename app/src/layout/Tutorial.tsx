@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Info } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/libs/shadui";
 import { getMobileOperatingSystem } from "@/utils/hardware";
+import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 
 interface TutorialStepConfig {
@@ -263,7 +264,7 @@ const Tutorial: React.FC<TutorialProps> = ({
 }) => {
   // State
   const { data: userData, userAgent, updateUser } = useUserData();
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const router = useRouter();
   const tutorialRef = useRef<HTMLDivElement>(null);
   const [currentStep, setCurrentStep] = useState<number>(0);

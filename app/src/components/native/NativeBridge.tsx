@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
 import {
@@ -27,6 +27,7 @@ import {
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
 import { NativeWidgetOperations } from "@/libs/native/widgetOperations";
+import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
 
@@ -46,7 +47,7 @@ export default function NativeBridge() {
     timeDiff,
   } = useUserData();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const [isOutdated, setIsOutdated] = useState(false);
   const [snapshotOwnerUserId, setSnapshotOwnerUserId] = useState<string | null>(() =>
     safeLocalStorageGetItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY),

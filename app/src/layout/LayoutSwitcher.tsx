@@ -1,6 +1,5 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import type React from "react";
 import { useEffect } from "react";
 import LayoutCore4Beta from "@/components/layout/core4_beta";
@@ -15,6 +14,7 @@ import {
   storedValueToLayout,
 } from "@/libs/layoutPreference";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
+import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 
 interface LayoutSwitcherProps {
@@ -33,7 +33,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   initialIsSignedIn,
   initialLayout,
 }) => {
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const { data: userData, isClerkLoaded, userId } = useUserData();
 
   // The server picks the layout from the cookie; localStorage is only a recovery source

@@ -16,7 +16,6 @@ import {
   Tag,
   Ticket,
 } from "lucide-react";
-import { usePathname } from "next/navigation";
 import {
   type Dispatch,
   type ReactNode,
@@ -55,7 +54,7 @@ import { getMaxItemShopPurchaseQuantity, isItemAvailableInStore } from "@/libs/s
 import { showMutationToast } from "@/libs/toast";
 import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
-import { useAwake } from "@/utils/routing";
+import { useAwake, usePublicPathname } from "@/utils/routing";
 import { getStrucBoost } from "@/utils/village";
 
 /** First-page catalog size; further rows load through the existing infinite-query cursor. */
@@ -314,7 +313,7 @@ const Shop: React.FC<ShopProps> = (props) => {
     .flatMap((page) => page.data)
     .filter((row) => isItemAvailableInStore(row.expireFromStoreAt));
 
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const { currentStep, handleNextStep } = useTutorialStep();
   // Shop also renders the souvenir and black-market catalogs; the tutorial pin
   // belongs only on the page its step points at.

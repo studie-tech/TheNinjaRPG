@@ -1,6 +1,23 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { publicPathForShellPath } from "@/libs/shell";
 import type { UserWithRelations } from "../server/api/routers/profile";
+
+/**
+ * The pathname as the visitor sees it.
+ *
+ * usePathname() reports the path a page was rendered under. On the client that is the
+ * public URL, but a prerendered page was rendered under its shell variant's internal
+ * path -- /web-pixel-out/home rather than /home -- and anything that branches on the
+ * path would then render one thing on the server and another on the first client
+ * render. The landing page did exactly that: the server chose the game frame because
+ * the path was not "/", and the client replaced it with the landing frame. Reading the
+ * path through here gives both sides the same value.
+ */
+export const usePublicPathname = () => {
+  const pathname = usePathname();
+  return publicPathForShellPath(pathname) ?? pathname;
+};
 
 /** The battle whose start has already sent this tab to /combat. */
 let navigatedBattleId: string | null = null;
@@ -26,7 +43,7 @@ export const pushToCombat = (
 
 export const useAwake = (userData: UserWithRelations) => {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const userStatus = userData?.status;
   useEffect(() => {
     if (userStatus === "HOSPITALIZED") {

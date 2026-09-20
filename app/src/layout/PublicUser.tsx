@@ -31,8 +31,8 @@ import type { UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import { NewConversationPrompt } from "@/app/inbox/page";
-import { TransactionHistory } from "@/app/points/page";
+import { NewConversationPrompt } from "@/app/[shell]/inbox/page";
+import { TransactionHistory } from "@/app/[shell]/points/page";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

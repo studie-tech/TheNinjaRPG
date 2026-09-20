@@ -10,10 +10,17 @@ import ConceptBox_ConceptImage from "./conceptimage";
 type Props = { params: Promise<{ imageid: string }> };
 
 /**
- * Note: openGraph.images is deliberately left unset so Next keeps using the generated
- * card from opengraph-image.tsx in this folder. Setting it here would override that
- * with a link to the HTML page rather than an actual image.
+ * The card is the generated one from opengraph-image.tsx in this folder, named by its
+ * public path. Left to Next, the tag would carry the path the page was rendered under,
+ * which is the internal shell variant rather than the URL a crawler is meant to fetch.
  */
+const cardFor = (id: string) => ({
+  url: absoluteUrl(`/conceptart/${id}/opengraph-image`),
+  width: 1200,
+  height: 630,
+  alt: "TheNinja-RPG Concept Art",
+});
+
 // Cached so generateMetadata and the page render share a single lookup. The columns
 // beyond `prompt` are what the page hands the client component to render before its own
 // query resolves -- without them the server sent every concept-art URL an identical
@@ -47,6 +54,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
       description,
       url,
       siteName: SITE_NAME,
+      images: [cardFor(id)],
       locale: "en_US",
       type: "article",
     },
@@ -54,6 +62,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
       card: "summary_large_image",
       title: `Concept Art: ${shortPrompt}`,
       description,
+      images: [cardFor(id)],
     },
   };
 }

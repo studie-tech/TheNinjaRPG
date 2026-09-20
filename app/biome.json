@@ -52,7 +52,15 @@
                 ],
                 "message": "Import Link from @/layout/Link, which turns prefetching off: every route here is dynamic, so a prefetch is a function invocation the router discards."
               }
-            ]
+            ],
+            "paths": {
+              "next/navigation": {
+                "importNames": [
+                  "usePathname"
+                ],
+                "message": "Read the path through usePublicPathname from @/utils/routing: a prerendered page renders under its shell variant's internal path, and usePathname would give the server and the client different values."
+              }
+            }
           }
         }
       },
@@ -91,7 +99,8 @@
     {
       "includes": [
         "src/libs/native/**",
-        "src/layout/Link.tsx"
+        "src/layout/Link.tsx",
+        "src/utils/routing.ts"
       ],
       "linter": {
         "rules": {

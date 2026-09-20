@@ -2,7 +2,7 @@
 
 import { useAtomValue } from "jotai";
 import { MapPin } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
@@ -20,6 +20,7 @@ import {
   TUTORIAL_CAPTURE_SECTOR,
   TUTORIAL_HOME_SECTOR,
 } from "@/libs/tutorial";
+import { usePublicPathname } from "@/utils/routing";
 import { combatActionIdAtom, userBattleAtom, useUserData } from "@/utils/UserContext";
 
 export interface TutorialStepConfig {
@@ -756,7 +757,7 @@ const getDynamicCombatStep = (
 export const useTutorialStep = () => {
   // State
   const { data: userData, updateUser } = useUserData();
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const router = useRouter();
   const [currentStepNumber, setCurrentStepNumber] = useState<number>(0);
   const [isAssistantVisible, setIsAssistantVisible] = useState<boolean>(false);

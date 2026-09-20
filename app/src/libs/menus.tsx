@@ -21,7 +21,6 @@ import {
   User,
   XCircle,
 } from "lucide-react";
-import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { api } from "@/app/_trpc/client";
 import type { SupportTicketStatus } from "@/drizzle/constants";
@@ -29,6 +28,7 @@ import Image from "@/layout/Image";
 import { calcIsInVillage } from "@/libs/travel";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship } from "@/utils/alliance";
+import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 
 export interface NavBarDropdownLink {
@@ -99,7 +99,7 @@ export const BUGS_NAV_LINK: NavBarDropdownLink = {
 };
 
 export const useGameMenu = (userData?: UserWithRelations | null) => {
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const { notifications } = useUserData();
 
   // Extract inbox notifications

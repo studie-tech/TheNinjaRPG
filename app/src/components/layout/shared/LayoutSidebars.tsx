@@ -3,7 +3,6 @@
 import { UserButton, useUser } from "@clerk/nextjs";
 import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
 import { Bell, Bug, Eclipse, Link2 } from "lucide-react";
-import { usePathname } from "next/navigation";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -28,6 +27,7 @@ import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
+import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 import { CollapsibleNotifications } from "./LayoutNotifications";
 import { type LayoutVariant, layoutVariantClasses } from "./layoutVariants";
@@ -339,7 +339,7 @@ export const RightSideBar: React.FC<RightSideBarProps> = ({
   location,
 }) => {
   const inBattle = userData?.status === "BATTLE";
-  const pathname = usePathname();
+  const pathname = usePublicPathname();
   const variantClasses = layoutVariantClasses[variant];
 
   const renderDefaultSidebar = () => (

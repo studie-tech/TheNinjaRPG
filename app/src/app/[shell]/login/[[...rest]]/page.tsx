@@ -1,60 +1,42 @@
 "use client";
 
-import { SignUp } from "@clerk/nextjs";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { SignIn } from "@clerk/nextjs";
+import { useState } from "react";
 import NativeSignIn from "@/components/native/NativeSignIn";
 import { useNativeShell } from "@/hooks/useNativeShell";
+import { useWebGL2Detection } from "@/hooks/webgl";
 import ContentBox from "@/layout/ContentBox";
-import WebGlError from "@/layout/WebGLError";
+import WebGL2Warning, { WebGL2WarningBanner } from "@/layout/WebGL2Warning";
+import { usePublicPathname } from "@/utils/routing";
 
-export default function SignupUser() {
-  const [webglError, setWebglError] = useState<boolean>(false);
-  const [isChecking, setIsChecking] = useState<boolean>(true);
+export default function LoginUser() {
+  const { webglError, isChecking } = useWebGL2Detection();
+  const [proceedAnyway, setProceedAnyway] = useState<boolean>(false);
   const isNativeShell = useNativeShell();
-  const pathname = usePathname();
-
-  useEffect(() => {
-    // Detect WebGL2 support on mount
-    const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl2");
-
-    if (!gl) {
-      setWebglError(true);
-    }
-
-    setIsChecking(false);
-  }, []);
+  const pathname = usePublicPathname();
 
   if (isChecking || isNativeShell === undefined) {
-    return null; // Or a loading spinner if preferred
+    return null;
   }
 
-  if (webglError) {
-    return (
-      <ContentBox
-        title="Browser Not Supported"
-        subtitle="WebGL2 is required to play this game"
-        alreadyHasH1
-        defaultBackHref="/"
-      >
-        <WebGlError />
-      </ContentBox>
-    );
+  if (webglError && !proceedAnyway) {
+    return <WebGL2Warning onProceed={() => setProceedAnyway(true)} />;
   }
 
   return (
     <ContentBox
-      title="Create Account"
-      subtitle="Choose how you want to join the ninja world."
+      title="Login"
+      subtitle="Welcome back. Continue your ninja’s journey."
       alreadyHasH1
       defaultBackHref="/"
     >
-      {pathname === "/signup" && <NativeSignIn />}
+      {webglError && <WebGL2WarningBanner />}
+      {pathname === "/login" && <NativeSignIn />}
       <div className="flex flex-row items-center justify-center [color-scheme:light]">
-        <SignUp
-          path="/signup"
+        <SignIn
+          path="/login"
           routing="path"
+          signUpUrl="/signup"
           appearance={{
             elements: {
               rootBox: "!w-full [color-scheme:light]",
@@ -64,7 +46,7 @@ export default function SignupUser() {
               ...(isNativeShell
                 ? {
                     // Keep Clerk's instructions on verification and recovery steps.
-                    ...(pathname === "/signup" ? { header: { display: "none" } } : {}),
+                    ...(pathname === "/login" ? { header: { display: "none" } } : {}),
                     card: {
                       background: "transparent",
                       boxShadow: "none",

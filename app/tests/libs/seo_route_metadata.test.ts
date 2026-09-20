@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 import { isProfileIndexable, profileIndexCutoff } from "@/libs/profileIndexing";
 import { SITE_URL, buildMetadata, noindexMetadata, stripSiteName } from "@/libs/seo";
 
-const APP_DIR = join(import.meta.dirname, "..", "..", "src", "app");
+// Every page lives under the shell segment; what remains at the app root is route
+// handlers and metadata files, which have no metadata of their own to declare.
+const APP_DIR = join(import.meta.dirname, "..", "..", "src", "app", "[shell]");
 
 /**
  * Every directory holding a page.tsx, anywhere under `dir`.
