@@ -145,7 +145,10 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { scopedRead } from "@/server/requestScope";
-import { adjustSeichiSilverAtomically } from "@/server/utils/concurrency";
+import {
+  adjustSeichiSilverAtomically,
+  claimUserSnapshot,
+} from "@/server/utils/concurrency";
 import { getFarmCollectionCount } from "@/server/utils/farming";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
@@ -2967,6 +2970,7 @@ export const fetchUpdatedUser = async (props: {
       forceRegen || // Hard overwrite for e.g. debugging or simply ensuring updated user
       (user.villagePrestige < 0 && !user.isOutlaw) // To trigger getting kicked out of village
     ) {
+      const originalUpdatedAt = user.updatedAt;
       const regen = (user.regeneration * secondsPassed(user.regenAt)) / REGEN_SECONDS;
       user.curHealth = Math.min(user.curHealth + regen, user.maxHealth);
       user.curStamina = Math.min(user.curStamina + regen, user.maxStamina);
@@ -2985,13 +2989,22 @@ export const fetchUpdatedUser = async (props: {
       }
       // Update database (pools, questData, etc.; village columns only when includeVillageState)
       try {
-        await persistPassiveRegenToDb({
+        const persisted = await persistPassiveRegenToDb({
           client,
           userId,
           user,
           userIp,
           forceRegen: forceRegen ?? false,
+          originalUpdatedAt,
         });
+        if (!persisted) {
+          // Another mutation won the snapshot. Use its current pools and version rather than
+          // returning the regeneration values calculated from our stale read.
+          const freshUser = await client.query.userData.findFirst({
+            where: eq(userData.userId, userId),
+          });
+          if (freshUser) Object.assign(user, freshUser);
+        }
       } catch (error) {
         // Regen is background bookkeeping and is already applied to the returned
         // in-memory user, so a database blip here must not fail the query that
@@ -3066,12 +3079,14 @@ const persistPassiveRegenToDb = async ({
   user,
   userIp,
   forceRegen,
+  originalUpdatedAt,
 }: {
   client: DrizzleClient;
   userId: string;
   user: NonNullable<UserWithRelations>;
   userIp?: string;
   forceRegen: boolean;
+  originalUpdatedAt: Date;
 }) => {
   const includeVillageState = forceRegen || (user.villagePrestige < 0 && user.isOutlaw);
 
@@ -3117,10 +3132,17 @@ const persistPassiveRegenToDb = async ({
     userForRegenPersist,
   );
 
-  await client
-    .update(userData)
-    .set(derivedUserUpdate)
-    .where(eq(userData.userId, userId));
+  // A delayed regeneration must not restore pools from before a heal or another user claim.
+  // claimUserSnapshot advances updatedAt and writes the regeneration fields together.
+  delete derivedUserUpdate.updatedAt;
+  const claim = await claimUserSnapshot({
+    client,
+    userId,
+    updatedAt: originalUpdatedAt,
+    set: derivedUserUpdate,
+  });
+  if (claim.success) user.updatedAt = claim.claimedAt;
+  return claim.success;
 };
 
 /**

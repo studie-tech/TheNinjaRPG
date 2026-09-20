@@ -8,6 +8,7 @@ import {
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { fetchUpdatedUser } from "@/routers/profile";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { insertUsers } from "../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../setup/serverModules";
@@ -187,6 +188,63 @@ describeWithDatabase("hospital self-healing", () => {
     expect(saved?.curChakra).toBe(7865);
     expect(saved?.medicalExperience).toBe(MEDNIN_REQUIRED_EXP.LEGENDARY + 45);
   });
+
+  it("does not let a delayed regeneration reopen an already completed self-heal", async () => {
+    await insertLegendaryHealer();
+    const database = await getTestDatabase();
+    // Bootstrap profile rows before both requests read the same user concurrently.
+    await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
+
+    let releaseFirstRegen!: () => void;
+    let releaseSecondRegen!: () => void;
+    const secondRegenReached = new Promise<void>((resolve) => {
+      releaseFirstRegen = resolve;
+    });
+    const firstHealFinished = new Promise<void>((resolve) => {
+      releaseSecondRegen = resolve;
+    });
+    let regenWrites = 0;
+    const delayedDatabase = new Proxy(database, {
+      get(target, property) {
+        if (property !== "update") return Reflect.get(target, property);
+        return (table: typeof userData) => {
+          const builder = target.update(table);
+          return {
+            set(values: Record<string, unknown>) {
+              const update = builder.set(values);
+              return {
+                async where(condition: Parameters<typeof update.where>[0]) {
+                  if ("primaryElement" in values) {
+                    regenWrites++;
+                    if (regenWrites === 1) await secondRegenReached;
+                    else if (regenWrites === 2) {
+                      releaseFirstRegen();
+                      await firstHealFinished;
+                    }
+                  }
+                  return await update.where(condition);
+                },
+              };
+            },
+          };
+        };
+      },
+    });
+    const api = callerForDatabase(hospitalRouter, USER_ID, delayedDatabase);
+
+    const first = api
+      .userHeal({ userId: USER_ID, healPercentage: 100 })
+      .finally(releaseSecondRegen);
+    const second = api.userHeal({ userId: USER_ID, healPercentage: 100 });
+    const results = await Promise.all([first, second]);
+
+    expect(regenWrites).toBe(2);
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    const saved = await readHealer();
+    expect(saved?.curHealth).toBe(1000);
+    expect(saved?.curChakra).toBe(7865);
+    expect(saved?.medicalExperience).toBe(MEDNIN_REQUIRED_EXP.LEGENDARY + 45);
+  }, 20_000);
 
   it("does not let a hospitalized user self-heal", async () => {
     await insertLegendaryHealer({ status: "HOSPITALIZED" });
