@@ -68,6 +68,7 @@ describe("hospital self-heal loading", () => {
     expect(fetchUpdatedUser).toHaveBeenCalledWith(
       expect.objectContaining({ userId: USER_ID, forceRegen: true }),
     );
+    expect(database.select).not.toHaveBeenCalled();
   });
 });
 
@@ -322,5 +323,48 @@ describeWithDatabase("hospital healing another user", () => {
       "event",
       expect.objectContaining({ type: "userMessage" }),
     );
+  });
+
+  it("adds healing to the target's current pool when another write follows the snapshot", async () => {
+    const database = await getTestDatabase();
+    let injectedTargetUpdate = false;
+    const delayedDatabase = new Proxy(database, {
+      get(target, property) {
+        if (property !== "update") return Reflect.get(target, property);
+        return (table: typeof userData) => {
+          const builder = target.update(table);
+          return {
+            set(values: Record<string, unknown>) {
+              const update = builder.set(values);
+              return {
+                async where(condition: Parameters<typeof update.where>[0]) {
+                  if (
+                    !injectedTargetUpdate &&
+                    "curHealth" in values &&
+                    "regenAt" in values &&
+                    !("medicalExperience" in values) &&
+                    !("primaryElement" in values)
+                  ) {
+                    injectedTargetUpdate = true;
+                    await database
+                      .update(userData)
+                      .set({ curHealth: 200 })
+                      .where(eq(userData.userId, TARGET_ID));
+                  }
+                  return await update.where(condition);
+                },
+              };
+            },
+          };
+        };
+      },
+    });
+    const api = callerForDatabase(hospitalRouter, USER_ID, delayedDatabase);
+
+    const result = await api.userHeal({ userId: TARGET_ID, healPercentage: 10 });
+
+    expect(result.success).toBe(true);
+    expect(injectedTargetUpdate).toBe(true);
+    expect((await readHealer(TARGET_ID))?.curHealth).toBe(300);
   });
 });

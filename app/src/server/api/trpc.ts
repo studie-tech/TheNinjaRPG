@@ -18,7 +18,7 @@ import type { ReadonlyHeaders } from "next/dist/server/web/spec-extension/adapte
 import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 import type { NextRequest } from "next/server";
 import superjson from "superjson";
-import { ZodError, z } from "zod";
+import { ZodError } from "zod";
 import { userData } from "@/drizzle/schema";
 import {
   AB_PIXEL_LAYOUT_COOKIE,
@@ -231,11 +231,7 @@ export const serverError = (code: TRPC_ERROR_CODE_KEY, message: string) => {
   });
 };
 
-export const baseServerResponse = z.object({
-  success: z.boolean(),
-  message: z.string(),
-});
-export type BaseServerResponse = z.infer<typeof baseServerResponse>;
+export { type BaseServerResponse, baseServerResponse } from "@/validators/base";
 
 export const errorResponse = (msg: string) => {
   return { success: false as const, message: msg };

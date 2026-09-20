@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const baseServerResponse = z.object({
+  success: z.boolean(),
+  message: z.string(),
+});
+export type BaseServerResponse = z.infer<typeof baseServerResponse>;
+
 /**
  * Schema for specifying item/jutsu/AI IDs with drop chance and quantity.
  * Used in objectives for attackers, rewards, and other ID-based fields.

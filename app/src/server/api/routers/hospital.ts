@@ -1,7 +1,6 @@
 import type { ExecutedQuery } from "@planetscale/database";
 import { and, asc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { after } from "next/server";
-import { z } from "zod";
 import {
   MEDNIN_EXP_CAP,
   MEDNIN_HEALABLE_STATES,
@@ -24,7 +23,6 @@ import { hasRequiredRank } from "@/libs/train";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchAlliances, fetchStructures } from "@/routers/village";
 import {
-  baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -35,7 +33,12 @@ import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { findRelationship } from "@/utils/alliance";
 import { secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
-import { healerAfterHealSchema } from "@/validators/hospital";
+import {
+  npcHealInputSchema,
+  npcHealOutputSchema,
+  userHealInputSchema,
+  userHealOutputSchema,
+} from "@/validators/hospital";
 
 const pusher = getServerPusher();
 
@@ -94,21 +97,8 @@ export const hospitalRouter = createTRPCRouter({
   // Let users heal other users if they are GENIN or above
   userHeal: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Heal another user using chakra" } })
-    .input(
-      z.object({
-        userId: z.string(),
-        healPercentage: z.int().min(1).max(100),
-      }),
-    )
-    .output(
-      baseServerResponse.extend({
-        chakraCost: z.number().optional(),
-        expGain: z.number().optional(),
-        // The healer's row after the heal, so the client can patch its cached user instead
-        // of refetching the full profile.
-        healer: healerAfterHealSchema.optional(),
-      }),
-    )
+    .input(userHealInputSchema)
+    .output(userHealOutputSchema)
     .mutation(async ({ ctx, input }) => {
       const isSelfHeal = input.userId === ctx.userId;
       // Reuse the regenerated healer snapshot for self-heals so one request cannot race two
@@ -127,7 +117,7 @@ export const hospitalRouter = createTRPCRouter({
               userId: input.userId,
               forceRegen: true,
             }),
-        fetchAlliances(ctx.drizzle),
+        isSelfHeal ? [] : fetchAlliances(ctx.drizzle),
       ]);
       const updatedTarget = updatedTargetOrNull ?? updatedUser;
       // Extract user & target to shorthand variables
@@ -231,14 +221,18 @@ export const hospitalRouter = createTRPCRouter({
             .update(userData)
             .set({
               ...(pools.includes("Health")
-                ? { curHealth: sql`LEAST(${t.curHealth + toHeal}, ${t.maxHealth})` }
+                ? {
+                    curHealth: sql`LEAST(${userData.curHealth} + ${toHeal}, ${userData.maxHealth})`,
+                  }
                 : {}),
               ...(pools.includes("Chakra")
-                ? { curChakra: sql`LEAST(${t.curChakra + toHeal}, ${t.maxChakra})` }
+                ? {
+                    curChakra: sql`LEAST(${userData.curChakra} + ${toHeal}, ${userData.maxChakra})`,
+                  }
                 : {}),
               ...(pools.includes("Stamina")
                 ? {
-                    curStamina: sql`LEAST(${t.curStamina + toHeal}, ${t.maxStamina})`,
+                    curStamina: sql`LEAST(${userData.curStamina} + ${toHeal}, ${userData.maxStamina})`,
                   }
                 : {}),
               regenAt: new Date(),
@@ -285,18 +279,8 @@ export const hospitalRouter = createTRPCRouter({
   // Pay to heal & get out of hospital
   npcHeal: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Pay NPC to heal and leave hospital" } })
-    .input(z.object({ villageId: z.string().nullish() }))
-    .output(
-      baseServerResponse.extend({
-        data: z
-          .object({
-            curHealth: z.number(),
-            money: z.number(),
-            regenAt: z.date(),
-          })
-          .optional(),
-      }),
-    )
+    .input(npcHealInputSchema)
+    .output(npcHealOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, structures] = await Promise.all([
