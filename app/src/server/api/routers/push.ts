@@ -256,7 +256,7 @@ export const pushRouter = createTRPCRouter({
     const summary = await sendPushToUsers(ctx.drizzle, [ctx.userId], deliveryTest());
     if (summary.sent === 0) {
       return errorResponse(
-        "No device received the test. Check that notifications are allowed for TheNinja-RPG.",
+        "No device received the test. Check that Announcements are on in App settings and notifications are allowed for TheNinja-RPG on your device.",
       );
     }
     return {

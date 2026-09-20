@@ -125,6 +125,10 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
     onSuccess: (result) => showMutationToast(result),
   });
 
+  const announcementsEnabled =
+    preferenceOverrides.system ??
+    preferences?.categories.find(({ category }) => category === "system")?.enabled;
+
   const [requesting, setRequesting] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const enableNotifications = async () => {
@@ -256,12 +260,20 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
             <Button
               className="min-h-[44px] w-full"
               variant="outline"
-              disabled={isSendingTest}
+              disabled={
+                isSendingTest || !announcementsEnabled || savingCategories.has("system")
+              }
+              aria-describedby={!announcementsEnabled ? "push-test-help" : undefined}
               onClick={() => sendTest()}
             >
               <Send className="mr-1 h-4 w-4" />
               {isSendingTest ? "Sending…" : "Test notification"}
             </Button>
+            {announcementsEnabled === false && (
+              <p id="push-test-help" className="text-muted-foreground text-sm">
+                Turn on Announcements to send a test notification.
+              </p>
+            )}
           </div>
         )}
         {permissionError && (
