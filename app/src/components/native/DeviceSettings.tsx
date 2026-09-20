@@ -263,7 +263,9 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
               disabled={
                 isSendingTest || !announcementsEnabled || savingCategories.has("system")
               }
-              aria-describedby={!announcementsEnabled ? "push-test-help" : undefined}
+              aria-describedby={
+                announcementsEnabled === false ? "push-test-help" : undefined
+              }
               onClick={() => sendTest()}
             >
               <Send className="mr-1 h-4 w-4" />
