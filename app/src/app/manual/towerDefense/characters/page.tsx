@@ -1,7 +1,6 @@
 "use client";
 
 import { FilePlus, HelpCircle, Skull, User } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -10,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { TowerDefenseCharacterDb } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";

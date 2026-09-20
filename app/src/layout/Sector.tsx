@@ -5,7 +5,6 @@ import alea from "alea";
 import type { Grid } from "honeycomb-grid";
 import { useAtomValue } from "jotai";
 import { Swords } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -48,6 +47,7 @@ import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import { LogbookEntry, QuestDialogScene } from "@/layout/Logbook";
 import Modal from "@/layout/Modal";
 import RaidBrowser from "@/layout/RaidBrowser";
@@ -3104,7 +3104,7 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                   )}
                 </div>
                 <div className="absolute top-0 left-0 z-50 max-w-1/3 hover:cursor-pointer hover:opacity-80">
-                  <Link prefetch={false} href={`/userid/${user.userId}`}>
+                  <Link href={`/userid/${user.userId}`}>
                     <Image
                       src={IMG_SECTOR_INFO}
                       width={40}

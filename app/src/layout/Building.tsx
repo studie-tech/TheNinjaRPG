@@ -1,7 +1,6 @@
 "use client";
 
 import { CircleArrowUp, Info, RefreshCw } from "lucide-react";
-import Link from "next/link";
 import { api } from "@/app/_trpc/client";
 import {
   Tooltip,
@@ -13,6 +12,7 @@ import { CLANS_PER_STRUCTURE_LEVEL } from "@/drizzle/constants";
 import type { Village, VillageStructure } from "@/drizzle/schema";
 import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import StatusBar from "@/layout/StatusBar";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";

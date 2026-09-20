@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Pusher from "pusher-js";
 import { useEffect, useState } from "react";
@@ -8,6 +7,7 @@ import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
 import { env } from "@/env/client.mjs";
+import Link from "@/layout/Link";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 

@@ -21,7 +21,6 @@ import {
   Zap,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import type React from "react";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { api } from "@/app/_trpc/client";
@@ -41,6 +40,7 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import { useHudStoreValues, useTowerDefense } from "@/hooks/useTowerDefense";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import type { TowerDefenseHandle } from "@/layout/TowerDefense";
 import TowerDefenseUpgrades from "@/layout/TowerDefenseUpgrades";

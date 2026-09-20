@@ -1,7 +1,6 @@
 "use client";
 
 import { BarChart3, Pencil, Trash2 } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
@@ -13,6 +12,7 @@ import AiBalanceFiltering, {
 } from "@/layout/AiBalanceFiltering";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";

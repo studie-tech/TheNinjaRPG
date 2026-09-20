@@ -109,9 +109,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
                   <span
                     className={`h-2 w-2 rounded-full ${state.waiting ? "bg-amber-300" : "bg-emerald-300"}`}
                   />
-                  <span
-                    className={`font-semibold ${state.label ? "" : "invisible"}`}
-                  >
+                  <span className={`font-semibold ${state.label ? "" : "invisible"}`}>
                     {state.label || "..."}
                   </span>
                 </div>

@@ -1,6 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, Medal, ShieldBan, Swords, Trophy, UserRoundPlus } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -22,6 +21,7 @@ import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { Reward } from "@/layout/Objective";
 import { showMutationToast } from "@/libs/toast";
@@ -415,7 +415,6 @@ const UserMatch: React.FC<UserMatchProps> = (props) => {
         </div>
       )}
       <Link
-        prefetch={false}
         href={`/userid/${seed.userId1}`}
         className={`grow text-slate-100 ${seed.userId1 ? "hover:cursor-pointer hover:text-orange-100" : ""}`}
       >

@@ -1,5 +1,5 @@
-import Link from "next/link";
 import React from "react";
+import Link from "@/layout/Link";
 import { SITE_FOOTER_LINKS } from "@/libs/legalLinks";
 
 const Footer: React.FC = () => {

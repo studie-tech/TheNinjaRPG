@@ -1,5 +1,4 @@
 import { Coins, Lock, LogIn, Sparkles } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +16,7 @@ import {
   type TowerDefenseUpgradeCategory,
 } from "@/drizzle/constants";
 import type { TowerDefenseUpgrade, UserTowerDefenseUpgrade } from "@/drizzle/schema";
+import Link from "@/layout/Link";
 import { showMutationToast } from "@/libs/toast";
 import { calculateUpgradeCost } from "@/libs/towerDefense/game";
 import {

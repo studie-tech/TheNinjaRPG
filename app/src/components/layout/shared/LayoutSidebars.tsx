@@ -3,7 +3,6 @@
 import { UserButton, useUser } from "@clerk/nextjs";
 import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
 import { Bell, Bug, Eclipse, Link2 } from "lucide-react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
@@ -23,6 +22,7 @@ import {
 import AvatarImage from "@/layout/Avatar";
 import { GameSettingsPopover } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import type { NavBarDropdownLink } from "@/libs/menus";
@@ -106,7 +106,6 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
         <>
           <SideBannerTitle>
             <Link
-              prefetch={false}
               href={`/userid/${userData.userId}`}
               className="inline-block flex flex-row hover:text-orange-500"
             >
@@ -121,7 +120,6 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
           <SideBannerTitle>Participate</SideBannerTitle>
           <div className="flex flex-row gap-4 pt-3">
             <Link
-              prefetch={false}
               href="https://github.com/studie-tech/TheNinjaRPG/issues"
               className="flex flex-col items-center font-bold hover:opacity-50"
             >
@@ -131,7 +129,6 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
               />
             </Link>
             <Link
-              prefetch={false}
               href={DISCORD_INVITE_URL}
               className="flex flex-col items-center font-bold hover:opacity-50"
             >
@@ -216,7 +213,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
               height={50}
             ></Image>
           </div>
-          <Link prefetch={false} href="/login" className="relative">
+          <Link href="/login" className="relative">
             <Button variant="default" size="sm" className="w-full" decoration="gold">
               Sign in
             </Button>
@@ -266,15 +263,10 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
           />
         </span>
       )}
-      <Link
-        prefetch={false}
-        href="/event"
-        onClick={onEventClick}
-        aria-label="Event Notifications"
-      >
+      <Link href="/event" onClick={onEventClick} aria-label="Event Notifications">
         <Bell className="mx-1 ml-2 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
       </Link>
-      <Link prefetch={false} href="/help" id="tutorial-bugs" aria-label="Bugs">
+      <Link href="/help" id="tutorial-bugs" aria-label="Bugs">
         <Bug className="mx-1 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
       </Link>
       <GameSettingsPopover userData={userData} updateUser={updateUser} />
@@ -310,7 +302,6 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
         {navbarMenuItems.map((system) => {
           return (
             <Link
-              prefetch={false}
               key={system.href}
               href={system.href}
               onClick={onNavigate}
@@ -362,7 +353,6 @@ export const RightSideBar: React.FC<RightSideBarProps> = ({
           const disabled = system.requireAwake && userData?.status !== "AWAKE";
           return (
             <Link
-              prefetch={false}
               key={system.href}
               href={system.href}
               className={system.className ? system.className : ""}
@@ -391,7 +381,6 @@ export const RightSideBar: React.FC<RightSideBarProps> = ({
           <SideBannerTitle break>Location Menu</SideBannerTitle>
           <div className={inBattle && location.requireAwake ? "opacity-30" : ""}>
             <Link
-              prefetch={false}
               href={inBattle && location.requireAwake ? "/combat" : location.href}
               className="flex flex-row justify-center text-center"
               id={location.id}
@@ -447,10 +436,7 @@ export const StrongestUsersBanner: React.FC = () => {
       >
         <div className="relative top-[-40px]">
           <div className="relative left-10 w-[140px] max-w-[140px] lg:left-14 lg:w-[178px] lg:max-w-[178px]">
-            <Link
-              prefetch={false}
-              href={userData ? "/battlearena#PVP%20Rank" : "/login"}
-            >
+            <Link href={userData ? "/battlearena#PVP%20Rank" : "/login"}>
               <Button decoration="gold" className="w-full" animation="pulse">
                 Join Ranked PvP
               </Button>
@@ -458,7 +444,6 @@ export const StrongestUsersBanner: React.FC = () => {
           </div>
           {users?.map((user, i) => (
             <Link
-              prefetch={false}
               href={`/username/${user.username}`}
               key={user.userId}
               className="hover:opacity-50"

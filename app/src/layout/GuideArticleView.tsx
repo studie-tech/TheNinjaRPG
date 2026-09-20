@@ -1,11 +1,11 @@
 "use client";
 
 import { ArrowLeft, ArrowRight, BookOpenText, Database, Pencil } from "lucide-react";
-import Link from "next/link";
 import { GUIDE_CATEGORY_LABELS, type GuideCategory } from "@/drizzle/constants";
 import type { GuideArticle } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import { prepareGuideHtml } from "@/libs/guide/html";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent } from "@/utils/permissions";

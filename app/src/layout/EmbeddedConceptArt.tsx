@@ -1,12 +1,12 @@
 "use client";
 
 import { ExternalLink, ImageOff, Loader2 } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 

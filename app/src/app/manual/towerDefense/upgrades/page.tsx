@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { TowerDefenseUpgradeCategories } from "@/drizzle/constants";
 import type { TowerDefenseUpgrade } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { getUpgradeColor, getUpgradeIcon } from "@/libs/towerDefense/upgrades";
 import { canChangeContent } from "@/utils/permissions";

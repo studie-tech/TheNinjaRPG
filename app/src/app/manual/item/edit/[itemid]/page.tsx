@@ -489,154 +489,159 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
           aria-busy={variantOperationPending}
         >
           <fieldset disabled={variantOperationPending} className="space-y-3">
-          <h3 className="font-medium">
-            {editingVariant ? "Edit Variant" : "New Variant"}
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="variant-name" className="font-medium text-sm">
-                Name
-              </label>
-              <Input
-                id="variant-name"
-                {...form.register("name")}
-                placeholder="e.g. Red Edition"
-              />
-              {form.formState.errors.name && (
-                <p className="mt-1 text-destructive text-xs">
-                  {form.formState.errors.name.message}
-                </p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="variant-order" className="font-medium text-sm">
-                Order (1–{MAX_ITEM_VARIANTS})
-              </label>
-              <Input
-                id="variant-order"
-                type="number"
-                {...form.register("order")}
-                min={1}
-                max={MAX_ITEM_VARIANTS}
-              />
-              {form.formState.errors.order && (
-                <p className="mt-1 text-destructive text-xs">
-                  {form.formState.errors.order.message}
-                </p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="variant-cost-type" className="font-medium text-sm">
-                Cost Type
-              </label>
-              <Controller
-                control={form.control}
-                name="costType"
-                render={({ field }) => (
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger id="variant-cost-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VARIANT_COST_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {displayCostType(t)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <h3 className="font-medium">
+              {editingVariant ? "Edit Variant" : "New Variant"}
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="variant-name" className="font-medium text-sm">
+                  Name
+                </label>
+                <Input
+                  id="variant-name"
+                  {...form.register("name")}
+                  placeholder="e.g. Red Edition"
+                />
+                {form.formState.errors.name && (
+                  <p className="mt-1 text-destructive text-xs">
+                    {form.formState.errors.name.message}
+                  </p>
                 )}
-              />
+              </div>
+              <div>
+                <label htmlFor="variant-order" className="font-medium text-sm">
+                  Order (1–{MAX_ITEM_VARIANTS})
+                </label>
+                <Input
+                  id="variant-order"
+                  type="number"
+                  {...form.register("order")}
+                  min={1}
+                  max={MAX_ITEM_VARIANTS}
+                />
+                {form.formState.errors.order && (
+                  <p className="mt-1 text-destructive text-xs">
+                    {form.formState.errors.order.message}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="variant-cost-type" className="font-medium text-sm">
+                  Cost Type
+                </label>
+                <Controller
+                  control={form.control}
+                  name="costType"
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger id="variant-cost-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VARIANT_COST_TYPES.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {displayCostType(t)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div>
+                <label htmlFor="variant-cost" className="font-medium text-sm">
+                  Cost
+                </label>
+                <Input
+                  id="variant-cost"
+                  type="number"
+                  {...form.register("cost")}
+                  min={0}
+                />
+                {form.formState.errors.cost && (
+                  <p className="mt-1 text-destructive text-xs">
+                    {form.formState.errors.cost.message}
+                  </p>
+                )}
+              </div>
             </div>
             <div>
-              <label htmlFor="variant-cost" className="font-medium text-sm">
-                Cost
-              </label>
-              <Input
-                id="variant-cost"
-                type="number"
-                {...form.register("cost")}
-                min={0}
+              <ContentImageSelector
+                label="Image"
+                imageUrl={imageValue || null}
+                id={editingVariant?.id ?? itemId}
+                prompt="Item variant image"
+                allowImageUpload={true}
+                type="item"
+                onUploadComplete={(url) => {
+                  form.setValue("image", url, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                }}
+                size="square"
+                maxDim={256}
               />
-              {form.formState.errors.cost && (
+              {form.formState.errors.image && (
                 <p className="mt-1 text-destructive text-xs">
-                  {form.formState.errors.cost.message}
+                  {form.formState.errors.image.message}
                 </p>
               )}
             </div>
-          </div>
-          <div>
-            <ContentImageSelector
-              label="Image"
-              imageUrl={imageValue || null}
-              id={editingVariant?.id ?? itemId}
-              prompt="Item variant image"
-              allowImageUpload={true}
-              type="item"
-              onUploadComplete={(url) => {
-                form.setValue("image", url, {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                });
-              }}
-              size="square"
-              maxDim={256}
-            />
-            {form.formState.errors.image && (
-              <p className="mt-1 text-destructive text-xs">
-                {form.formState.errors.image.message}
-              </p>
-            )}
-          </div>
-          <div>
-            <label htmlFor="variant-description" className="font-medium text-sm">
-              Description (optional)
-            </label>
-            <Textarea
-              id="variant-description"
-              {...form.register("description")}
-              placeholder="Flavor text shown in the variant browser"
-              rows={3}
-            />
-          </div>
-          <div>
-            <label htmlFor="variant-battle-description" className="font-medium text-sm">
-              Battle Description (optional)
-            </label>
-            <Textarea
-              id="variant-battle-description"
-              {...form.register("battleDescription")}
-              placeholder="%user strikes with the Crimson Blade"
-              rows={2}
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="submit"
-              disabled={
-                variantOperationPending ||
-                (editingVariant?.id ? deletingVariantIds.has(editingVariant.id) : false)
-              }
-            >
-              {upsert.isPending ? "Saving" : "Save Variant"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={
-                variantOperationPending ||
-                (editingVariant?.id
-                  ? deletingVariantIds.has(editingVariant.id)
-                  : false)
-              }
-              onClick={() => {
-                setShowForm(false);
-                setEditingVariant(null);
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
+            <div>
+              <label htmlFor="variant-description" className="font-medium text-sm">
+                Description (optional)
+              </label>
+              <Textarea
+                id="variant-description"
+                {...form.register("description")}
+                placeholder="Flavor text shown in the variant browser"
+                rows={3}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="variant-battle-description"
+                className="font-medium text-sm"
+              >
+                Battle Description (optional)
+              </label>
+              <Textarea
+                id="variant-battle-description"
+                {...form.register("battleDescription")}
+                placeholder="%user strikes with the Crimson Blade"
+                rows={2}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="submit"
+                disabled={
+                  variantOperationPending ||
+                  (editingVariant?.id
+                    ? deletingVariantIds.has(editingVariant.id)
+                    : false)
+                }
+              >
+                {upsert.isPending ? "Saving" : "Save Variant"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={
+                  variantOperationPending ||
+                  (editingVariant?.id
+                    ? deletingVariantIds.has(editingVariant.id)
+                    : false)
+                }
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingVariant(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
           </fieldset>
         </form>
       )}

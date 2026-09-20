@@ -1,7 +1,6 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -11,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocalStorage } from "@/hooks/localstorage";
 import ChatBox from "@/layout/ChatBox";
 import { GameSettingsPanel } from "@/layout/GameSettings";
+import Link from "@/layout/Link";
 import { cn } from "@/libs/shadui";
 import { useUserData } from "@/utils/UserContext";
 import { type TicketType, TicketTypes } from "@/validators/misc";

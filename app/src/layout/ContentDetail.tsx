@@ -1,9 +1,9 @@
 "use client";
 
 import { BookOpen } from "lucide-react";
-import Link from "next/link";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects, { type ItemWithEffectsProps } from "@/layout/ItemWithEffects";
+import Link from "@/layout/Link";
 
 interface ContentDetailProps {
   item: ItemWithEffectsProps["item"];

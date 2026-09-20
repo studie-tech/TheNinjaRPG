@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { api } from "@/app/_trpc/client";
 import AvatarImage from "@/layout/Avatar";
 import ConceptImage from "@/layout/ConceptImage";
 import ContentBox, { type ContentBoxProps } from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 
 interface ConceptBox_ConceptImageProps
@@ -56,7 +56,6 @@ const ConceptBox_ConceptImage: React.FC<ConceptBox_ConceptImageProps> = (props) 
         image && (
           <div className="w-14">
             <Link
-              prefetch={false}
               href={`/username/${image?.user?.username}`}
               aria-label={image?.user?.username || "unknown user"}
             >

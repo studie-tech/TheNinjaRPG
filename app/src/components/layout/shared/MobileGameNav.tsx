@@ -1,7 +1,7 @@
 "use client";
 
 import { Compass, House } from "lucide-react";
-import Link from "next/link";
+import Link from "@/layout/Link";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { MobileNavConfig } from "@/libs/mobileNavConfig";
 import { getMobileNavIcon, getNavOptionById } from "@/libs/mobileNavConfig";
@@ -27,11 +27,7 @@ const MobileGameNavButton: React.FC<{
 
   const Icon = getMobileNavIcon(optionId);
   return (
-    <Link
-      href={option.href}
-      className="relative -top-2 flex justify-center"
-      prefetch={false}
-    >
+    <Link href={option.href} className="relative -top-2 flex justify-center">
       <Icon className={mobileNavbarButtonClassName} />
     </Link>
   );
@@ -57,21 +53,13 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
         </div>
       ))}
       {location ? (
-        <Link
-          href="/village"
-          className="relative -top-8 flex justify-center"
-          prefetch={false}
-        >
+        <Link href="/village" className="relative -top-8 flex justify-center">
           <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
             <House className={cn(yellowButtonClassName)} />
           </div>
         </Link>
       ) : (
-        <Link
-          href="/travel"
-          className="relative -top-8 flex justify-center"
-          prefetch={false}
-        >
+        <Link href="/travel" className="relative -top-8 flex justify-center">
           <div className="rounded-full bg-linear-to-b from-black/5 to-black/50 p-4">
             <Compass className={mobileNavbarButtonClassName} />
           </div>

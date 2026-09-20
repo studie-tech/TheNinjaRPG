@@ -1,12 +1,12 @@
 import { useAtomValue } from "jotai";
 import { Dna, Gem, Link2 } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import { SideBannerTitle } from "@/components/layout/shared/LayoutSidebars";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import AvatarImage from "@/layout/Avatar";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import Link from "@/layout/Link";
 import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import StatusBar from "@/layout/StatusBar";
 import { getBloodline, getKeystoneItem } from "@/libs/combat/util";
@@ -41,7 +41,6 @@ const MenuBoxCombat: React.FC = () => {
           battleUser.username
         ) : (
           <Link
-            prefetch={false}
             href={`/userid/${battleUser.userId}`}
             className="inline-block flex flex-row hover:text-orange-500"
           >
@@ -50,7 +49,7 @@ const MenuBoxCombat: React.FC = () => {
         )}
       </SideBannerTitle>
       <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
-        <Link prefetch={false} href="/profile">
+        <Link href="/profile">
           <AvatarImage
             href={battleUser.avatar}
             userId={battleUser.userId}

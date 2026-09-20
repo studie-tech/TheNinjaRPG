@@ -1,7 +1,6 @@
 "use client";
 
 import { BriefcaseBusiness, ExternalLink } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -13,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserFiltering, { getFilter, useFiltering } from "@/layout/UserFiltering";

@@ -1,5 +1,5 @@
-import Link from "next/link";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 
 /**
  * Rendered whenever a route calls notFound().

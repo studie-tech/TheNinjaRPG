@@ -1,7 +1,6 @@
 "use client";
 
 import { Bot, Eraser, Presentation } from "lucide-react";
-import Link from "next/link";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import ReportFiltering, { getFilter, useFiltering } from "@/layout/ReportFiltering";

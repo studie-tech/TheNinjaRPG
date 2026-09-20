@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Bookmark, ImagePlus, Lock, Trash2, Unlock } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -30,6 +29,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import RichInput from "@/layout/RichInput";

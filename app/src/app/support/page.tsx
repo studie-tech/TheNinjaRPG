@@ -1,7 +1,6 @@
 "use client";
 
 import { AlertCircle, Plus, Tag, Users } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import SupportTicketFiltering, {

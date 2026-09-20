@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
 import { Bot, Info, Loader2, Sun, Swords } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -47,6 +46,7 @@ import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import type { GenericObject } from "@/layout/ItemWithEffects";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { RankedArenaMain, RankedLoadoutSelector } from "@/layout/PvpRank";
 import QuestPicker from "@/layout/QuestPicker";

@@ -11,7 +11,6 @@ import {
   PlusCircle,
   ShoppingBag,
 } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -33,6 +32,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal from "@/layout/Modal";

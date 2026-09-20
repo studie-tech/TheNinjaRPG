@@ -1,9 +1,9 @@
 "use client";
 
 import { Bell, ChevronDown, Info, ShieldAlert, ShieldCheck } from "lucide-react";
-import Link from "next/link";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLocalStorage } from "@/hooks/localstorage";
+import Link from "@/layout/Link";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import { groupBy } from "@/utils/grouping";
@@ -46,7 +46,6 @@ export const NotificationList: React.FC<NotificationListProps> = ({
     isInPopover = false,
   ) => (
     <Link
-      prefetch={false}
       key={key}
       href={notification.href}
       id={notification.id}

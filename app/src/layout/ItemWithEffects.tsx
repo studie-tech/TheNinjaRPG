@@ -2,7 +2,6 @@
 
 import { BarChartBig, Box, Copy, SquarePen, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useRef, useState } from "react";
@@ -20,6 +19,7 @@ import Confirm from "@/layout/Confirm";
 import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { getPreventTypeName } from "@/libs/combat/util";

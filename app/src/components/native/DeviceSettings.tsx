@@ -2,7 +2,6 @@
 
 import { useUser } from "@clerk/nextjs";
 import { BellRing, LayoutGrid, Loader2, Send, Shield, Vibrate } from "lucide-react";
-import Link from "next/link";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { NativeAccountDeletionLink } from "@/components/native/NativeAccountDeletionLink";
@@ -13,6 +12,7 @@ import type { PushCategory } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNativePushPermission } from "@/hooks/useNativePush";
 import { useNativeShell } from "@/hooks/useNativeShell";
+import Link from "@/layout/Link";
 import { haptics, platform } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
 

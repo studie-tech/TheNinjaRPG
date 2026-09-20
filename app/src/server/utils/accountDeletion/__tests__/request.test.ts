@@ -1,22 +1,21 @@
+import * as clerk from "@clerk/nextjs/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import * as nextServer from "next/server";
 import superjson from "superjson";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as clerk from "@clerk/nextjs/server";
-import * as nextServer from "next/server";
-import * as processor from "../process";
-import * as apple from "../apple";
-import {
-  stubDatabase,
-  resetServerModuleStubs,
-} from "../../../../../tests/setup/serverModules";
 import type { z } from "zod";
 import { accountDeletionRouter } from "@/server/api/routers/accountDeletion";
 import { drizzleDB } from "@/server/db";
 import type { accountDeletionSchema } from "@/validators/accountDeletion";
 import { ACCOUNT_DELETION_REVERIFICATION } from "@/validators/accountDeletion";
+import {
+  resetServerModuleStubs,
+  stubDatabase,
+} from "../../../../../tests/setup/serverModules";
+import * as apple from "../apple";
+import * as processor from "../process";
 
 const originalEnv = { ...process.env };
-
 
 const mocks = {
   auth: vi.fn(),
@@ -28,7 +27,6 @@ const mocks = {
   find: vi.fn(),
   prepare: vi.fn(),
 };
-
 
 afterEach(() => {
   process.env = { ...originalEnv };

@@ -8,7 +8,10 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["src/**/*.ts", "src/**/*.tsx"]
+    "includes": [
+      "src/**/*.ts",
+      "src/**/*.tsx"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -32,12 +35,22 @@
           "options": {
             "patterns": [
               {
-                "group": ["@capacitor/**"],
+                "group": [
+                  "@capacitor/**"
+                ],
                 "message": "Capacitor packages are installed in mobile/, where cap sync needs them. Call the shell through @/libs/native instead."
               },
               {
-                "group": ["**/libs/native/bridge"],
+                "group": [
+                  "**/libs/native/bridge"
+                ],
                 "message": "The raw bridge is internal to @/libs/native. Import the feature module (haptics, push, ...) instead."
+              },
+              {
+                "group": [
+                  "next/link"
+                ],
+                "message": "Import Link from @/layout/Link, which turns prefetching off: every route here is dynamic, so a prefetch is a function invocation the router discards."
               }
             ]
           }
@@ -46,7 +59,7 @@
       "correctness": {
         "noUnusedVariables": "warn",
         "noUnusedImports": "warn",
-        "useExhaustiveDependencies": "off"        
+        "useExhaustiveDependencies": "off"
       },
       "suspicious": {
         "noExplicitAny": "off",
@@ -56,7 +69,11 @@
         "useSortedClasses": {
           "level": "warn",
           "options": {
-            "functions": ["clsx", "cn", "cva"]
+            "functions": [
+              "clsx",
+              "cn",
+              "cva"
+            ]
           }
         },
         "noFloatingPromises": "error",
@@ -72,7 +89,10 @@
   },
   "overrides": [
     {
-      "includes": ["src/libs/native/**"],
+      "includes": [
+        "src/libs/native/**",
+        "src/layout/Link.tsx"
+      ],
       "linter": {
         "rules": {
           "style": {

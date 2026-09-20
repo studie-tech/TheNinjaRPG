@@ -33,7 +33,6 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -93,6 +92,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import NindoChange from "@/layout/NindoChange";

@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { api } from "@/app/_trpc/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IMG_ICON_FORUM } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import { groupBy } from "@/utils/grouping";

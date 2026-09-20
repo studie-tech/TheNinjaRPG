@@ -2,7 +2,6 @@
 
 import { useUser } from "@clerk/nextjs";
 import { AlertTriangle, ChevronRight, UserPlus } from "lucide-react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type React from "react";
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -26,6 +25,7 @@ import { env } from "@/env/client.mjs";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { cn } from "@/libs/shadui";
 import { bunnyImageUrl } from "@/utils/image";

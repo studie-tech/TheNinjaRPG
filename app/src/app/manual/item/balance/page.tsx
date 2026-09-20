@@ -1,7 +1,6 @@
 "use client";
 
 import { BarChart3, InfoIcon, Pencil, Trash2 } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -18,6 +17,7 @@ import ItemFiltering, {
   useFiltering as useItemFiltering,
 } from "@/layout/ItemFiltering";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";

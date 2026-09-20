@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { BattleLengthHistogram } from "@/layout/BattleLengthHistogram";
 import ContentBox from "@/layout/ContentBox";
 import { DmgConfigDialog } from "@/layout/DmgConfigDialog";
+import Link from "@/layout/Link";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { canModifyCombatSettings } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";

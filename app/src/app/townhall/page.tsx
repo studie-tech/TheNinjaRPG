@@ -12,7 +12,6 @@ import {
   ShieldPlus,
   Swords,
 } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -58,6 +57,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
@@ -239,11 +239,7 @@ const ElderHall: React.FC<{
           <div className="grid grid-cols-3 pt-3">
             {elders?.map((elder) => (
               <div key={elder.userId} className="relative">
-                <Link
-                  prefetch={false}
-                  href={`/userid/${elder.userId}`}
-                  className="text-center"
-                >
+                <Link href={`/userid/${elder.userId}`} className="text-center">
                   <AvatarImage
                     href={elder.avatar}
                     alt={elder.username}
@@ -670,7 +666,7 @@ const KageHall: React.FC<{
           <div className="lggrid-cols-5 grid grid-cols-4">
             {village.defendedChallenges.map((challenge) => (
               <div key={challenge.id} className="p-2 text-center">
-                <Link prefetch={false} href={`/userid/${challenge.userId}`}>
+                <Link href={`/userid/${challenge.userId}`}>
                   <AvatarImage
                     href={challenge.user.avatar}
                     alt={challenge.user.username}
@@ -1357,7 +1353,7 @@ const AllianceCard: React.FC<{
           )}
         </div>
         {entity.kage ? (
-          <Link prefetch={false} href={`/userid/${entity.kage.userId}`}>
+          <Link href={`/userid/${entity.kage.userId}`}>
             <AvatarImage
               href={entity.kage.avatar}
               alt={entity.kage.username}

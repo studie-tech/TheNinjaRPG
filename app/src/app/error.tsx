@@ -2,10 +2,10 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle, Home, RefreshCw } from "lucide-react";
-import Link from "next/link";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };

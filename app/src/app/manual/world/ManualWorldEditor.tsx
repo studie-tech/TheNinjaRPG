@@ -2,12 +2,12 @@
 
 import { Images, MapPlus } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { useMap } from "@/hooks/map";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
 

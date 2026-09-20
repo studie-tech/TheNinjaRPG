@@ -10,7 +10,6 @@ import {
   ReceiptJapaneseYen,
   Users,
 } from "lucide-react";
-import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +29,7 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import Building, { StructureRewardEntries } from "@/layout/Building";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import { showMutationToast } from "@/libs/toast";

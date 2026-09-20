@@ -1,7 +1,7 @@
 import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
-import Link from "next/link";
 import { DISCORD_INVITE_URL } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 
 export default function BugReport() {
   const link_t3 = (

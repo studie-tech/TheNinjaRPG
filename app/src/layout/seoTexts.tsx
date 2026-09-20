@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { DISCORD_INVITE_URL } from "@/drizzle/constants";
+import Link from "@/layout/Link";
 
 /**
  * Short, entity-specific intros for the pages a signed-out visitor lands on from search.

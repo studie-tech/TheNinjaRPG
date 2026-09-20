@@ -2,9 +2,9 @@
 
 import { useUser } from "@clerk/nextjs";
 import { ChevronRight, Smartphone } from "lucide-react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useNativeShell } from "@/hooks/useNativeShell";
+import Link from "@/layout/Link";
 import { NativeAccountDeletionLink } from "./NativeAccountDeletionLink";
 
 export const NativeSettingsEntry = ({ onNavigate }: { onNavigate?: () => void }) => {

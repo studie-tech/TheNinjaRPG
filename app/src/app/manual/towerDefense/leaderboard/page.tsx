@@ -1,11 +1,11 @@
 "use client";
 
 import { Clock } from "lucide-react";
-import Link from "next/link";
 import { api } from "@/app/_trpc/client";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { getFirstOfNextMonth } from "@/utils/time";
@@ -28,17 +28,13 @@ export default function TowerDefenseLeaderboard() {
     rank: index + 1,
     user: (
       <div className="flex items-center gap-2">
-        <Link prefetch={false} href={`/username/${run.user.username}`}>
+        <Link href={`/username/${run.user.username}`}>
           <div className="w-10">
             <AvatarImage href={run.user.avatar} alt={run.user.username} size={100} />
           </div>
         </Link>
         <div>
-          <Link
-            prefetch={false}
-            href={`/username/${run.user.username}`}
-            className="font-bold"
-          >
+          <Link href={`/username/${run.user.username}`} className="font-bold">
             {run.user.username}
           </Link>
           <p className="text-muted-foreground text-xs">{run.user.rank}</p>

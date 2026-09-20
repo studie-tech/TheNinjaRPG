@@ -1,7 +1,6 @@
 "use client";
 
 import { Shield, Swords, Users } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,7 @@ import {
 import type { War } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import RaidBrowser from "@/layout/RaidBrowser";
 import RamenShop from "@/layout/RamenShop";

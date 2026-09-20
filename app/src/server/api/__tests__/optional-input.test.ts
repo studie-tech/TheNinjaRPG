@@ -85,7 +85,7 @@ describe("the optional-input scanner", () => {
 
   it("accepts .nullish()", () => {
     expect(
-      findBareOptionalInputs('.input(z.object({ label: z.string() }).nullish())'),
+      findBareOptionalInputs(".input(z.object({ label: z.string() }).nullish())"),
     ).toEqual([]);
   });
 

@@ -1,13 +1,13 @@
 "use client";
 
 import { ChartCandlestick, FilePlus } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import Link from "@/layout/Link";
 import ListLoader from "@/layout/ListLoader";
 import QuestFiltering, { getFilter, useFiltering } from "@/layout/QuestFiltering";
 import { useInfinitePagination } from "@/libs/pagination";

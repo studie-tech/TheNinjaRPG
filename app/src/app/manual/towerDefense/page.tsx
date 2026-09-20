@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   IMG_MANUAL_TOWER_ENEMIES,
   IMG_MANUAL_TOWER_LEADERBOARD,
@@ -8,6 +7,7 @@ import {
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";

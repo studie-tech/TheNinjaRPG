@@ -2,7 +2,6 @@
 
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { CircleHelp, Earth, House, MessageCircleWarning, Music } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import { Suspense } from "react";
 import PixelPublicHeader from "@/components/layout/PixelPublicHeader";
@@ -16,6 +15,7 @@ import {
 import { IMG_LAYOUT_MOBILE_TOP, IMG_LOGO_SHORT } from "@/drizzle/constants";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { cn } from "@/libs/shadui";
@@ -98,7 +98,7 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                 PIXEL_SIGNED_IN_SHELL_SURFACE,
               )}
             >
-              <Link prefetch={false} href="/" className="flex items-center">
+              <Link href="/" className="flex items-center">
                 <Image
                   className="h-auto w-[180px]"
                   id="tutorial-logo"
@@ -114,7 +114,6 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                   const count = link.notificationCount ?? 0;
                   return (
                     <Link
-                      prefetch={false}
                       key={link.name}
                       className="relative z-10 flex flex-row items-center justify-center gap-1 px-2 py-2 hover:text-amber-300"
                       href={link.href}
@@ -188,7 +187,6 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                   )}
                 </div>
                 <Link
-                  prefetch={false}
                   href="/"
                   className="absolute left-1/2 min-w-0 -translate-x-1/2"
                   aria-label="The Ninja RPG home"

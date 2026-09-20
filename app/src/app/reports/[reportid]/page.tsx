@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { use } from "react";
 import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import ParsedReportJson from "@/layout/ReportReason";

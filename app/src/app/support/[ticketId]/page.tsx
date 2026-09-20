@@ -13,7 +13,6 @@ import {
   Tag,
   Users,
 } from "lucide-react";
-import Link from "next/link";
 import { use, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@/app/_trpc/client";
@@ -31,6 +30,7 @@ import {
 import CannedResponsesManagement from "@/layout/CannedResponsesManagement";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import { getStatusIcon } from "@/libs/menus";

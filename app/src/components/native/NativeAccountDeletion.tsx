@@ -2,7 +2,6 @@
 
 import { useClerk, useReverification, useUser } from "@clerk/nextjs";
 import { AlertTriangle, CreditCard, ShieldCheck } from "lucide-react";
-import Link from "next/link";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
@@ -21,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import { appleAuth } from "@/libs/native";
 import { ACCOUNT_DELETION_CONFIRMATION } from "@/validators/accountDeletion";
 

@@ -19,7 +19,6 @@ import {
   UserRoundCog,
   XCircle,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
@@ -89,6 +88,7 @@ import ClanSearchSelect from "@/layout/ClanSearchSelect";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
@@ -1783,7 +1783,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 Founder:{" "}
                 {clanData?.founder ? (
                   <Link
-                    prefetch={false}
                     className="font-bold hover:text-orange-500"
                     href={`/userid/${clanData.founder.userId}`}
                   >
@@ -1797,7 +1796,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 Leader:{" "}
                 {clanData.leader ? (
                   <Link
-                    prefetch={false}
                     className="font-bold hover:text-orange-500"
                     href={`/userid/${clanData.leader.userId}`}
                   >

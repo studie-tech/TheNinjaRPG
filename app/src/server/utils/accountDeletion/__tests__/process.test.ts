@@ -1,12 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as identity from "../identity";
-import * as cleanup from "../cleanup";
 import * as sentry from "@sentry/nextjs";
-import {
-  stubDatabase,
-  resetServerModuleStubs,
-} from "../../../../../tests/setup/serverModules";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
+import {
+  resetServerModuleStubs,
+  stubDatabase,
+} from "../../../../../tests/setup/serverModules";
+import * as cleanup from "../cleanup";
+import * as identity from "../identity";
 
 const f = {
   find: vi.fn(),
@@ -20,7 +20,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   resetServerModuleStubs();
 });
-
 
 describe("shared deletion processor leases", () => {
   beforeEach(() => {

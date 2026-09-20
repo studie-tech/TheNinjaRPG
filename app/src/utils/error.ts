@@ -122,9 +122,7 @@ const EXTENSION_EXECUTOR_PATH = /(^|\/)executors\/\d+\.js$/;
  * True only when EVERY frame comes from that extension bundle. Requiring all of them
  * keeps a genuine error of ours that merely passes through an extension frame reportable.
  */
-export const isExtensionExecutorStack = (
-  paths: Array<string | undefined>,
-): boolean =>
+export const isExtensionExecutorStack = (paths: Array<string | undefined>): boolean =>
   paths.length > 0 &&
   paths.every((path) => !!path && EXTENSION_EXECUTOR_PATH.test(path));
 

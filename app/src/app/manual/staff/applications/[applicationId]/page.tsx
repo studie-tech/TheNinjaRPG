@@ -1,7 +1,6 @@
 "use client";
 
 import { ThumbsDown, ThumbsUp } from "lucide-react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canApproveApplications, getApprovalGroup } from "@/utils/permissions";
@@ -75,7 +75,6 @@ export default function ApplicationDetailPage() {
             <div>
               <div className="font-semibold">
                 <Link
-                  prefetch={false}
                   href={`/username/${app.applicant?.username || "user"}`}
                   className="hover:text-orange-500"
                 >

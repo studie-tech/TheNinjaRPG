@@ -2,7 +2,6 @@
 
 import { differenceInDays, differenceInHours } from "date-fns";
 import { Info, Share2, Wrench } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,6 +15,7 @@ import ContentBox from "@/layout/ContentBox";
 import DeleteUserButton from "@/layout/DeleteUserButton";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import LevelUpBtn from "@/layout/LevelUpBtn";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Logbook from "@/layout/Logbook";
 import Modal from "@/layout/Modal";
@@ -241,7 +241,6 @@ export default function Profile() {
               {marriages !== undefined && marriages.length > 0
                 ? marriages.map((x, i) => (
                     <Link
-                      prefetch={false}
                       key={x.username}
                       href={`/username/${x.username}`}
                       className="font-bold"

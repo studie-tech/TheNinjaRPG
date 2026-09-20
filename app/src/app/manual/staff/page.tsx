@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FileUser, Info, List } from "lucide-react";
-import Link from "next/link";
 import { useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
@@ -22,6 +21,7 @@ import { StaffApplicationTargetRoles } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getBanOrSilenceRestriction, isStaffRole } from "@/utils/permissions";
@@ -417,7 +417,6 @@ const UserList: React.FC<UserListProps> = (props) => {
     >
       {users.map((user, i) => (
         <Link
-          prefetch={false}
           className="relative basis-1/2 text-center"
           key={`${user.role}-${i}`}
           href={`/username/${user.username}`}

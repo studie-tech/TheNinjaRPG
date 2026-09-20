@@ -24,7 +24,6 @@ import {
   Trash2,
   Waypoints,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -96,6 +95,7 @@ import { EditContent } from "@/layout/EditContent";
 import GraphCombatLog from "@/layout/GraphCombatLog";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { ModerationSummary } from "@/layout/ModerationSummary";
@@ -1469,7 +1469,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               Sensei:{" "}
               {profile.rank === "GENIN" && profile.senseiId && profile.sensei ? (
                 <Link
-                  prefetch={false}
                   href={`/username/${profile.sensei.username}`}
                   className="font-bold"
                 >
@@ -3784,7 +3783,6 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ students }) => {
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
           {students.map((user) => (
             <Link
-              prefetch={false}
               href={`/username/${user.username}`}
               className="text-center"
               key={user.userId}
@@ -3834,7 +3832,6 @@ const MarriagesTab: React.FC<MarriagesTabProps> = ({ userId, username, isActive 
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
           {marriages.map((user) => (
             <Link
-              prefetch={false}
               href={`/username/${user.username}`}
               className="text-center"
               key={user.userId}
@@ -4400,11 +4397,7 @@ const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
           {visibleRecruits.map((user) => (
             <div key={user.userId} className="relative text-center">
-              <Link
-                prefetch={false}
-                href={`/username/${user.username}`}
-                className="block"
-              >
+              <Link href={`/username/${user.username}`} className="block">
                 <AvatarImage
                   href={user.avatar || ""}
                   alt={user.username}

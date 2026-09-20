@@ -13,7 +13,6 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -56,6 +55,7 @@ import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import ConceptImage from "@/layout/ConceptImage";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getBanOrSilenceRestriction } from "@/utils/permissions";

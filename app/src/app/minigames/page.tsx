@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { IMG_MANUAL_TOWER_UPGRADES } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 
 export default function MinigamesMain() {
   const entries = [

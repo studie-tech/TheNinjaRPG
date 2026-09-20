@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as clerk from "@clerk/nextjs/server";
 import * as jose from "jose";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { prepareAppleDeletion } from "../apple";
 
 const originalEnv = { ...process.env };
@@ -11,7 +11,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   process.env = { ...originalEnv };
 });
-
 
 describe("Apple deletion authorization", () => {
   beforeEach(() => {

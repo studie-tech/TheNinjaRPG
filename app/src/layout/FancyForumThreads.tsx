@@ -5,13 +5,13 @@ import { MessagesSquare, SquarePen } from "lucide-react";
 // Number of forum threads to display per page in fancy forum component
 const FANCY_FORUM_THREADS_PER_PAGE = 10;
 
-import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import NotFoundPage from "@/components/layout/NotFoundPage";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import type { InfiniteThreads } from "@/libs/forum";
 import { useInfinitePagination } from "@/libs/pagination";

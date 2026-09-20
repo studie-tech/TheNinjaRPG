@@ -1,8 +1,8 @@
 "use client";
 
 import { SquareArrowOutUpRight } from "lucide-react";
-import Link from "next/link";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
 

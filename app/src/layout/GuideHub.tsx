@@ -1,7 +1,6 @@
 "use client";
 
 import { FilePlus, Pencil, Search } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -16,6 +15,7 @@ import {
 import type { GuideArticle } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import NavTabs from "@/layout/NavTabs";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";

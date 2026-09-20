@@ -1,7 +1,6 @@
 "use client";
 
 import { FileMinus, FilePlus, MapPin } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
@@ -13,6 +12,7 @@ import AiProfileEdit from "@/layout/AiProfileEdit";
 import ContentBox from "@/layout/ContentBox";
 import { AiHelper } from "@/layout/ContentHelp";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NindoChange from "@/layout/NindoChange";
 import StatusBar from "@/layout/StatusBar";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/layout/Link";
 import type {
   fetchBloodlineCatalog,
   fetchFarmCatalog,

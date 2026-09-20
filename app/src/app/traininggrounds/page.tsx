@@ -15,7 +15,6 @@ import {
   UserRoundCheck,
   XCircle,
 } from "lucide-react";
-import Link from "next/link";
 import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -66,6 +65,7 @@ import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
@@ -318,11 +318,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
             {students.map((user) => (
               <div className="relative" key={user.userId}>
-                <Link
-                  prefetch={false}
-                  href={`/userid/${user.userId}`}
-                  className="text-center"
-                >
+                <Link href={`/userid/${user.userId}`} className="text-center">
                   <AvatarImage
                     href={user.avatar}
                     alt={user.username}

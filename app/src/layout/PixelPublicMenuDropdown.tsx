@@ -1,7 +1,6 @@
 "use client";
 
 import { Menu } from "lucide-react";
-import Link from "next/link";
 import type React from "react";
 import {
   Menubar,
@@ -10,6 +9,7 @@ import {
   MenubarMenu,
   MenubarTrigger,
 } from "@/components/ui/menubar";
+import Link from "@/layout/Link";
 import { BUGS_NAV_LINK, getMainNavbarLinks } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import { useUserData } from "@/utils/UserContext";
@@ -41,7 +41,7 @@ const PixelPublicMenuDropdown: React.FC<{ className?: string }> = ({ className }
                 }}
                 className="tnr-ink-menu-item"
               >
-                <Link prefetch={false} href={item.href}>
+                <Link href={item.href}>
                   {item.icon}
                   <span>{item.name}</span>
                   {count > 0 && (

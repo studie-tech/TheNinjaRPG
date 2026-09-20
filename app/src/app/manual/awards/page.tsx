@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import AvatarImage from "@/layout/Avatar";
 import AwardsFiltering, { getFilter, useFiltering } from "@/layout/AwardsFiltering";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
@@ -43,7 +43,7 @@ export default function AwardsManual() {
       ...award,
       awardedBy: (
         <div className="w-20 text-center">
-          <Link prefetch={false} href={`/username/${award.awardedBy.username}`}>
+          <Link href={`/username/${award.awardedBy.username}`}>
             <AvatarImage
               href={award.awardedBy?.avatar}
               alt={award.awardedBy.username}
@@ -55,7 +55,7 @@ export default function AwardsManual() {
       ),
       receiver: (
         <div className="w-20 text-center">
-          <Link prefetch={false} href={`/username/${award.receiver.username}`}>
+          <Link href={`/username/${award.receiver.username}`}>
             <AvatarImage
               href={award.receiver?.avatar}
               alt={award.receiver.username}
