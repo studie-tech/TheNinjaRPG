@@ -3,8 +3,6 @@ import * as jose from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appleClientCredentials, prepareAppleDeletion } from "../apple";
 
-vi.mock("jose", { spy: true });
-
 const originalEnv = { ...process.env };
 
 const mocks = { user: vi.fn(), tokens: vi.fn(), verify: vi.fn(), fetch: vi.fn() };
