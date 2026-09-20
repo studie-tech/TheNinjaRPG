@@ -3143,6 +3143,10 @@ export const PUSH_MAX_DEVICES_PER_USER = 10;
  */
 export const MIN_NATIVE_APP_VERSION = "1.0.0";
 
+/** Fishing shares the player XP curve but is intentionally independent of occupations. */
+export const FISHING_MAX_LEVEL = 100;
+export const FISHING_STARTER_BAIT = 12;
+
 /**
  * Marker appended to the WebView user agent by the native shell, e.g.
  * `... TNR-Native/1.0.0 (ios)`. The server branches on this to hide web-only

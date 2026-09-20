@@ -344,6 +344,13 @@
       "when": 1789798335424,
       "tag": "0048_restore_world_guide",
       "breakpoints": false
+    },
+    {
+      "idx": 49,
+      "version": "5",
+      "when": 1789872417548,
+      "tag": "0049_thick_stardust",
+      "breakpoints": false
     }
   ]
 }

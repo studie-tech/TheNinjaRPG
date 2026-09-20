@@ -18,6 +18,8 @@ import { commentsRouter } from "./routers/comments";
 import { conceptartRouter } from "./routers/conceptart";
 import { dataRouter } from "./routers/data";
 import { farmingRouter } from "./routers/farming";
+import { fishingRouter } from "./routers/fishing";
+import { fishingRaidRouter } from "./routers/fishingRaid";
 import { forumRouter } from "./routers/forum";
 import { guideRouter } from "./routers/guide";
 import { homeRouter } from "./routers/home";
@@ -121,6 +123,8 @@ export const appRouter = createTRPCRouter({
   skillTree: skillTreeRouter,
   occupation: occupationRouter,
   farming: farmingRouter,
+  fishing: fishingRouter,
+  fishingRaid: fishingRaidRouter,
   auction: auctionRouter,
   support: supportRouter,
   applications: applicationsRouter,

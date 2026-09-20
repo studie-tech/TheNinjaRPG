@@ -1,0 +1,47 @@
+# Fishing
+
+Fishing is an awake, active skill independent of occupation. The player page is `/fishing`; the sector map exposes reachable fishing habitats and school markers. Progression is stored in `userData.fishingExperience` and uses the shared level curve, capped at 100.
+
+## Player setup and tutorial
+
+The tutorial is built directly into the Fishing page and does not require the player to discover or accept a quest. The **Learn to fish** panel calls `fishing.claimTutorialSupplies`, creating the player's fishing profile and granting a real Bamboo Rod plus 12 Starter Grub inventory items. The claim is guarded and idempotent, so parallel tabs and retries cannot duplicate the starter kit. Fishing casts and raid entry remain locked until this page-level tutorial has been started.
+
+After the starter kit is claimed, the page displays the complete loop: stand at a reachable bank, select equipment, cast, lure, hook, respond to the fight cue, and keep or release the catch. If a player loses access to the basic rod or exhausts the starter bait, `fishing.recoverStarterSupplies` provides one bounded recovery. Starter supplies are non-shop, non-tradeable, and guarded against selling or dropping so recovery cannot become a currency source.
+
+A fishing starter quest can still be authored separately through the normal quest and NPC systems, but it is optional and is not the tutorial trigger. Available fishing objective tasks are `fishing_starter_claimed`, `fishing_casts`, `fishing_catches`, `fishing_collection_viewed`, and `fishing_species_tracked`; the router emits progress only for an accepted quest that uses them.
+
+The static equipment catalog lives beside species in `app/src/libs/fishing.ts`. Willow Rod (1,500 ryo), River Rod (5,000), Cricket/Glow bait (25), and Cork Bobber/Silk Line tackle (800) are normal visible shop items seeded through the item system. Ordinary caught fish are visible, stackable, tradeable cooking items with conservative base values of 5/10/20 ryo for common/uncommon/rare species. They use the shared cooking inventory and cooking-storage limits; there is no fishing-specific inventory. Adjust these catalog values and the matching migration seed together when balancing before release.
+
+## Water, habitats, and schools
+
+Staff create habitats at `/manual/fishing`. A habitat stores a name, sector, water tile (`tileX`, `tileY`), casting radius, species IDs, and active flag. `saveHabitat` validates the published sector map: the tile must resolve to terrain whose `isWater` is true and a reachable, unblocked bank must exist within the casting radius. Players only receive habitats in their current sector that pass the same reachability check. A habitat must reference configured species from the static `FISHING_SPECIES` catalog in `app/src/libs/fishing.ts`.
+
+Schools are deterministic moving opportunities derived from habitat, time, and server seed. They stay within the habitat/water area; players do not reserve or exhaust them. `markSchool` is available to awake, non-combat players in casting range and is rate-limited to one mark per 30 seconds. Marks appear to sector anglers. Ordinary casts require an active reachable habitat and choose only species allowed by that habitat and the player's fishing level. Tracking biases selection toward the chosen species but does not guarantee it.
+
+## Ordinary encounters
+
+`fishing.cast` validates tutorial activation, awake status, no combat, current sector, selected owned rod/bait/tackle, active habitat, casting position, and one unresolved attempt per player. The profile session lock, selected bait-stack CAS, and session creation commit in one short transaction, so an accepted cast consumes exactly one bait and parallel tabs cannot double-cast. The selected equipment modifiers are snapshotted on the session: rods, bait, and optional tackle can improve attraction, tension control, or catch XP without changing an encounter after it starts. The server owns the encounter and returns a versioned state machine: `ATTRACT → HOOK → FIGHT → LANDED → RESOLVED`, with `FAILED` for escape/interruption. Moving away from the cast position, sleeping, combat, expiry, stale versions, or out-of-order actions interrupts safely. Attempts expire after 45 seconds, and the server rejects actions sent less than 800 ms apart.
+
+The cues are deliberately simple: use `LURE` during attraction, `HOOK` on the bite, then respond to species behavior with `REEL`, `SLACK`, and `STEER`. Darting fish favor steering, heavy fish demand tension control, cautious fish reward gentle lure timing, and erratic fish alternate windows. The client displays text/state cues and large buttons; keyboard controls are documented beside the controls (Lure, Hook, Reel, Slack, Steer) and the same actions are touch buttons. Animation is presentation only; action results, tension, landing progress, and fish identity are server-authoritative.
+
+On `LANDED`, choose **Keep** or **Release**. Both award the same fishing XP and collection credit. Keep attempts award the stackable fish to the cooking inventory; if cooking capacity prevents delivery, a durable catch receipt is created and the Fishing page exposes `claimPendingCatch` for later recovery. Release records the catch without an item. Receipt and session CAS guards prevent duplicate XP, items, or collection counts.
+
+## Collection, tracking, and cooperation
+
+The collection log records discovered species, count, first catch, largest size, and best quality. `inspectCollection` and tracking update quest progress. One species can be tracked at a time; tracking biases ordinary species selection without guaranteeing a catch. The sector map shows reachable moving schools and shared sightings, but it does not yet distinguish schools by tracked species. The current release has no collection-milestone/cosmetic reward system.
+
+Active ordinary anglers in the same sector contribute to Fishing Together when awake, out of combat, and recently server-interacted. The bonus is snapshotted at cast: 3% per other eligible angler, capped at 15%, affecting ordinary attraction and XP. Idle pages do not qualify. Raid participation is currently separate and does not yet contribute to, or receive, this social bonus.
+
+## Raid fishing
+
+Staff author raids at `/manual/fishing-raids`. Save a versioned template with species ID, active habitat ID, minimum/maximum participants, minimum fishing level, entry bait, encounter duration, XP, and active state. Then save a one-time or recurring schedule with a local-time input that is stored in UTC, spawn window, announcement lead time, and active state. The page lists existing content and can deactivate schedules or explicitly cancel occurrences; cancellation releases affected raid-line locks. Existing encounters retain their template snapshot when staff edits a later version. Each player selects owned raid equipment when creating or joining a lobby; the server revalidates every selection and consumes the configured bait quantity atomically for the full roster only when start succeeds.
+
+The authenticated cron endpoint is `/api/fishing-raids`; it calls `authenticateCronRequest` before idempotently materializing future UTC occurrences. Occurrence uniqueness absorbs duplicate cron runs. Players view upcoming occurrences, join one lobby, choose Puller/Anchor/Guide, ready up, and start once the minimum is ready. Entry bait and active-line locks are consumed atomically at start. The shared encounter advances through role-specific phase cues; each participant can contribute once per phase. Leaving grants a short reconnect window, and `reconnect` restores contribution if called before it expires. Falling below the minimum begins recovery and eventually fails the encounter.
+
+Success settles durable per-occurrence/user reward receipts. Players must meet the configured contribution threshold to receive XP and raid collection credit; helpers may participate without duplicating rewards. Rejoining, changing groups, retries, or repeated settlement cannot grant a second receipt. Current raid templates reward XP and collection credit. Additional item/cosmetic rewards, retry policy, and custom mechanic JSON are not yet exposed by the staff editor.
+
+## Seeds, migrations, and operations
+
+Apply migration `0049_thick_stardust.sql` and the associated Drizzle journal/snapshot. `app/drizzle/seeds/items.ts` seeds the fishing equipment catalog and stackable cooking-inventory fish items. Keep species and equipment item IDs stable because inventories, habitats, collection rows, sessions, and raid templates reference them. After schema changes, run the repository migration workflow from the root. Use a throwaway database for destructive tests.
+
+For troubleshooting, inspect the player's fishing profile/session, selected `UserItem` equipment, cooking inventory capacity, habitat activation and published terrain, `FishingCatchReceipt`, raid occurrence/lobby/participant rows, and reward receipts. A player who cannot cast is usually asleep/in combat, outside the habitat's reachable radius, missing or failing to select a rod/bait stack, below species level, or already holding an active line. If a raid does not appear, verify the authenticated cron response, active schedule, UTC window, active habitat, and template version. Static species and equipment definitions, plus the absence of collection milestones, cosmetic rewards, recipes, and custom raid mechanics/retry controls, are intentional current limitations.

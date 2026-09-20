@@ -54,6 +54,7 @@ import RaidBrowser from "@/layout/RaidBrowser";
 import SliderField from "@/layout/SliderField";
 import WebGlError from "@/layout/WebGLError";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
+import { fishingHexDistance } from "@/libs/fishing";
 import type { HexagonalFaceMesh, TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
@@ -442,6 +443,60 @@ const Sector: React.FC<SectorProps> = (props) => {
     { enabled: userData?.sector === sector && sector !== undefined },
   );
   const activeRaid = sectorRaidsData?.raids?.[0] ?? null;
+
+  // Fishing uses the same published-map validation server-side at cast time. This
+  // lightweight sector overlay only provides an entry point when the player is
+  // visibly at the bank of one of the active habitats; it never authorizes a cast.
+  const isFishingSector = userData?.sector === sector;
+  const canQueryFishing = isFishingSector && userData?.status === "AWAKE";
+  const { data: fishingHabitats } = api.fishing.getHabitats.useQuery(
+    { sector },
+    { enabled: canQueryFishing },
+  );
+  const { data: fishingState } = api.fishing.getState.useQuery(undefined, {
+    enabled: canQueryFishing,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
+  });
+  const playerFishingTile = userData
+    ? sectorMap.tiles.find(
+        (tile) => tile.x === userData.longitude && tile.y === userData.latitude,
+      )
+    : undefined;
+  const isPlayerAtFishingBank =
+    !!playerFishingTile &&
+    !playerFishingTile.blocked &&
+    !mergedTerrains.get(playerFishingTile.terrain)?.isWater;
+  const reachableFishingHabitat = fishingHabitats?.find((habitat) => {
+    const habitatTile = sectorMap.tiles.find(
+      (tile) => tile.x === habitat.tileX && tile.y === habitat.tileY,
+    );
+    return (
+      !!userData &&
+      !!habitatTile &&
+      mergedTerrains.get(habitatTile.terrain)?.isWater === true &&
+      isPlayerAtFishingBank &&
+      fishingHexDistance(
+        { x: userData.longitude, y: userData.latitude },
+        { x: habitat.tileX, y: habitat.tileY },
+      ) <= habitat.radius
+    );
+  });
+  const canFishHere =
+    !!reachableFishingHabitat && userData?.status === "AWAKE" && !userData.battleId;
+  const sharedFishingSightings = fishingState?.recentMarks.map((mark) => {
+    const school = fishingState.schools.find(
+      (candidate) => candidate.habitatId === mark.habitatId,
+    );
+    const habitat = fishingHabitats?.find(
+      (candidate) => candidate.id === mark.habitatId,
+    );
+    return {
+      habitatId: mark.habitatId,
+      x: school?.x ?? habitat?.tileX,
+      y: school?.y ?? habitat?.tileY,
+    };
+  });
 
   const dialogSceneAssetIds = npcDialog
     ? [npcDialog.sceneBackground, ...(npcDialog.sceneCharacters ?? [])].filter(Boolean)
@@ -2688,6 +2743,46 @@ const Sector: React.FC<SectorProps> = (props) => {
         <div className="pointer-events-none absolute top-3 right-3 z-10">
           <DayNightIndicator className="pointer-events-auto rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm" />
         </div>
+        {(canFishHere ||
+          fishingState?.schools.length ||
+          sharedFishingSightings?.length) && (
+          <aside
+            className="pointer-events-auto absolute bottom-3 left-3 z-10 max-w-xs rounded-lg border bg-background/90 p-3 text-sm shadow-md backdrop-blur-sm"
+            aria-label="Fishing in this sector"
+          >
+            <h2 className="font-semibold">Fishing signals</h2>
+            {canFishHere && (
+              <button
+                type="button"
+                className="mt-2 rounded bg-primary px-3 py-2 text-primary-foreground"
+                onClick={() => router.push("/fishing")}
+              >
+                Fish here
+              </button>
+            )}
+            {fishingState?.schools.length ? (
+              <ul className="mt-2 space-y-1" aria-live="polite">
+                {fishingState.schools.map((school) => (
+                  <li key={school.habitatId}>
+                    Moving school at {school.x}, {school.y}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {sharedFishingSightings?.length ? (
+              <ul className="mt-2 space-y-1 text-muted-foreground">
+                {sharedFishingSightings.map((sighting) => (
+                  <li key={sighting.habitatId}>
+                    Shared sighting
+                    {sighting.x !== undefined && sighting.y !== undefined
+                      ? ` at ${sighting.x}, ${sighting.y}`
+                      : " nearby"}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </aside>
+        )}
       </div>
       {webglError && <WebGlError />}
       {currentStructure && (

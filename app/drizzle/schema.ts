@@ -2432,6 +2432,8 @@ export const userData = mysqlTable(
     huntingExperience: int("huntingExperience").default(0).notNull(),
     gatheringExperience: int("gatheringExperience").default(0).notNull(),
     farmingExperience: int("farmingExperience").default(0).notNull(),
+    /** Progression for the non-occupation fishing activity. */
+    fishingExperience: int("fishingExperience").default(0).notNull(),
     farmCurrency: int("farmCurrency").default(0).notNull(),
     farmPlotsPurchased: smallint("farmPlotsPurchased", { unsigned: true })
       .default(0)
@@ -5508,6 +5510,215 @@ export const farmExtractionRelations = relations(farmExtraction, ({ one }) => ({
     relationName: "farmExtractionSeedItem",
   }),
 }));
+
+// Fishing -------------------------------------------------------------------
+// Fish content is deliberately code-defined for the initial release. These rows hold
+// player-owned state, keeping catch resolution and collection credit durable.
+export const fishingProfile = mysqlTable(
+  "FishingProfile",
+  {
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    tutorialClaimedAt: datetime("tutorialClaimedAt", { mode: "date", fsp: 3 }),
+    starterRecoveryClaimedAt: datetime("starterRecoveryClaimedAt", { mode: "date", fsp: 3 }),
+    trackedSpeciesId: varchar("trackedSpeciesId", { length: 64 }),
+    lastSchoolMarkedAt: datetime("lastSchoolMarkedAt", { mode: "date", fsp: 3 }),
+    /** A profile-owned CAS lock prevents concurrent casts from creating two live lines. */
+    activeSessionId: varchar("activeSessionId", { length: 191 }),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+);
+export type FishingProfile = InferSelectModel<typeof fishingProfile>;
+
+export const fishingHabitat = mysqlTable(
+  "FishingHabitat",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    sector: int("sector").notNull(),
+    tileX: smallint("tileX", { unsigned: true }).notNull(),
+    tileY: smallint("tileY", { unsigned: true }).notNull(),
+    radius: tinyint("radius", { unsigned: true }).default(1).notNull(),
+    speciesIds: json("speciesIds").$type<string[]>().notNull(),
+    active: boolean("active").default(true).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+  },
+  (table) => ({ sectorActiveIdx: index("FishingHabitat_sector_active_idx").on(table.sector, table.active) }),
+);
+export type FishingHabitat = InferSelectModel<typeof fishingHabitat>;
+
+export const fishingActivity = mysqlTable(
+  "FishingActivity",
+  {
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    sessionId: varchar("sessionId", { length: 191 }).notNull(),
+    sector: int("sector").notNull(),
+    interactedAt: datetime("interactedAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => ({
+    sectorInteractedIdx: index("FishingActivity_sector_interacted_idx").on(
+      table.sector,
+      table.interactedAt,
+    ),
+  }),
+);
+
+export const fishingSchoolMark = mysqlTable(
+  "FishingSchoolMark",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    sector: int("sector").notNull(),
+    habitatId: varchar("habitatId", { length: 191 }).notNull(),
+    markedAt: datetime("markedAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => ({
+    sectorMarkedIdx: index("FishingSchoolMark_sector_marked_idx").on(table.sector, table.markedAt),
+    userMarkedIdx: index("FishingSchoolMark_user_marked_idx").on(table.userId, table.markedAt),
+  }),
+);
+
+export const fishingSession = mysqlTable(
+  "FishingSession",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    speciesId: varchar("speciesId", { length: 64 }).notNull(),
+    sector: int("sector").notNull(),
+    /** The exact bank from which this line was cast; moving interrupts the attempt. */
+    castLongitude: smallint("castLongitude").notNull(),
+    castLatitude: smallint("castLatitude").notNull(),
+    state: mysqlEnum("state", ["ATTRACT", "HOOK", "FIGHT", "LANDED", "FAILED", "RESOLVED"] as const).notNull(),
+    version: int("version").default(1).notNull(),
+    tension: tinyint("tension", { unsigned: true }).default(20).notNull(),
+    landingProgress: tinyint("landingProgress", { unsigned: true }).default(0).notNull(),
+    socialBonusPercent: tinyint("socialBonusPercent", { unsigned: true }).default(0).notNull(),
+    socialParticipantCount: tinyint("socialParticipantCount", { unsigned: true }).default(1).notNull(),
+    equipmentAttractionBonus: tinyint("equipmentAttractionBonus", { unsigned: true }).default(0).notNull(),
+    equipmentControlBonus: tinyint("equipmentControlBonus", { unsigned: true }).default(0).notNull(),
+    equipmentExperienceBonus: tinyint("equipmentExperienceBonus", { unsigned: true }).default(0).notNull(),
+    startedAt: datetime("startedAt", { mode: "date", fsp: 3 }).notNull(),
+    actionAt: datetime("actionAt", { mode: "date", fsp: 3 }).notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+    resolvedAt: datetime("resolvedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => ({
+    userOpenIdx: index("FishingSession_user_state_idx").on(table.userId, table.state),
+    expiresIdx: index("FishingSession_expiresAt_idx").on(table.expiresAt),
+  }),
+);
+export type FishingSession = InferSelectModel<typeof fishingSession>;
+
+export const fishingCollectionLog = mysqlTable(
+  "FishingCollectionLog",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    speciesId: varchar("speciesId", { length: 64 }).notNull(),
+    caughtCount: int("caughtCount", { unsigned: true }).default(0).notNull(),
+    firstCaughtAt: datetime("firstCaughtAt", { mode: "date", fsp: 3 }).notNull(),
+    largestSize: smallint("largestSize", { unsigned: true }).default(0).notNull(),
+    bestQuality: tinyint("bestQuality", { unsigned: true }).default(0).notNull(),
+  },
+  (table) => ({
+    userSpeciesKey: primaryKey({ columns: [table.userId, table.speciesId] }),
+    speciesIdx: index("FishingCollectionLog_speciesId_idx").on(table.speciesId),
+  }),
+);
+export type FishingCollectionLog = InferSelectModel<typeof fishingCollectionLog>;
+
+export const fishingCatchReceipt = mysqlTable(
+  "FishingCatchReceipt",
+  {
+    sessionId: varchar("sessionId", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    speciesId: varchar("speciesId", { length: 64 }).notNull(),
+    itemId: varchar("itemId", { length: 191 }),
+    keep: boolean("keep").notNull(),
+    experience: int("experience").notNull(),
+    deliveredAt: datetime("deliveredAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+  },
+  (table) => ({ userDeliveredIdx: index("FishingCatchReceipt_user_delivered_idx").on(table.userId, table.deliveredAt) }),
+);
+
+// Scheduled cooperative fishing raids --------------------------------------
+// Templates are immutable once an occurrence is created: the copied version/configuration
+// lets staff tune future events without changing a group that is already fishing.
+export const fishingRaidTemplate = mysqlTable("FishingRaidTemplate", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  version: int("version").default(1).notNull(),
+  name: varchar("name", { length: 191 }).notNull(),
+  speciesId: varchar("speciesId", { length: 64 }).notNull(),
+  habitatId: varchar("habitatId", { length: 191 }).notNull(),
+  minimumLevel: smallint("minimumLevel", { unsigned: true }).default(1).notNull(),
+  minimumParticipants: tinyint("minimumParticipants", { unsigned: true }).default(3).notNull(),
+  maximumParticipants: tinyint("maximumParticipants", { unsigned: true }).default(8).notNull(),
+  entryBait: tinyint("entryBait", { unsigned: true }).default(1).notNull(),
+  encounterSeconds: smallint("encounterSeconds", { unsigned: true }).default(240).notNull(),
+  rewardExperience: int("rewardExperience", { unsigned: true }).default(100).notNull(),
+  maxRewardsPerOccurrence: tinyint("maxRewardsPerOccurrence", { unsigned: true }).default(1).notNull(),
+  active: boolean("active").default(true).notNull(),
+  config: json("config").$type<Record<string, unknown>>().notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+});
+
+export const fishingRaidSchedule = mysqlTable("FishingRaidSchedule", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  templateId: varchar("templateId", { length: 191 }).notNull(),
+  startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
+  recurrenceMinutes: int("recurrenceMinutes", { unsigned: true }),
+  spawnWindowSeconds: smallint("spawnWindowSeconds", { unsigned: true }).default(900).notNull(),
+  announcementLeadSeconds: smallint("announcementLeadSeconds", { unsigned: true }).default(900).notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+}, (table) => ({ templateActiveIdx: index("FishingRaidSchedule_template_active_idx").on(table.templateId, table.active) }));
+
+export const fishingRaidOccurrence = mysqlTable("FishingRaidOccurrence", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  scheduleId: varchar("scheduleId", { length: 191 }).notNull(),
+  templateId: varchar("templateId", { length: 191 }).notNull(),
+  templateVersion: int("templateVersion").notNull(),
+  templateConfig: json("templateConfig").$type<Record<string, unknown>>().notNull(),
+  opensAt: datetime("opensAt", { mode: "date", fsp: 3 }).notNull(),
+  closesAt: datetime("closesAt", { mode: "date", fsp: 3 }).notNull(),
+  state: mysqlEnum("state", ["SCHEDULED", "OPEN", "CLOSED", "CANCELLED"] as const).default("SCHEDULED").notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+}, (table) => ({ scheduleOpenKey: uniqueIndex("FishingRaidOccurrence_schedule_opensAt_key").on(table.scheduleId, table.opensAt), stateIdx: index("FishingRaidOccurrence_state_opensAt_idx").on(table.state, table.opensAt) }));
+
+export const fishingRaidLobby = mysqlTable("FishingRaidLobby", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  occurrenceId: varchar("occurrenceId", { length: 191 }).notNull(),
+  hostUserId: varchar("hostUserId", { length: 191 }).notNull(),
+  state: mysqlEnum("state", ["OPEN", "STARTING", "ACTIVE", "SUCCEEDED", "FAILED", "CANCELLED"] as const).default("OPEN").notNull(),
+  version: int("version").default(1).notNull(),
+  rosterLockedAt: datetime("rosterLockedAt", { mode: "date", fsp: 3 }),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+}, (table) => ({ occurrenceStateIdx: index("FishingRaidLobby_occurrence_state_idx").on(table.occurrenceId, table.state) }));
+
+export const fishingRaidParticipant = mysqlTable("FishingRaidParticipant", {
+  lobbyId: varchar("lobbyId", { length: 191 }).notNull(), userId: varchar("userId", { length: 191 }).notNull(),
+  rodUserItemId: varchar("rodUserItemId", { length: 191 }), baitUserItemId: varchar("baitUserItemId", { length: 191 }), tackleUserItemId: varchar("tackleUserItemId", { length: 191 }),
+  role: mysqlEnum("role", ["PULLER", "ANCHOR", "GUIDE"] as const).default("PULLER").notNull(),
+  ready: boolean("ready").default(false).notNull(), active: boolean("active").default(true).notNull(),
+  contribution: int("contribution", { unsigned: true }).default(0).notNull(), lineTension: tinyint("lineTension", { unsigned: true }).default(0).notNull(),
+  reattachments: tinyint("reattachments", { unsigned: true }).default(2).notNull(), lastActionPhase: tinyint("lastActionPhase", { unsigned: true }).default(0).notNull(),
+  lastActionAt: datetime("lastActionAt", { mode: "date", fsp: 3 }), reconnectUntil: datetime("reconnectUntil", { mode: "date", fsp: 3 }), joinedAt: datetime("joinedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+}, (table) => ({ lobbyUserKey: primaryKey({ columns: [table.lobbyId, table.userId] }), userActiveIdx: index("FishingRaidParticipant_user_active_idx").on(table.userId, table.active) }));
+
+export const fishingRaidEncounter = mysqlTable("FishingRaidEncounter", {
+  lobbyId: varchar("lobbyId", { length: 191 }).primaryKey().notNull(), state: mysqlEnum("state", ["HOOK", "CONTROL", "WEAR_DOWN", "SURGE", "LAND", "SUCCEEDED", "FAILED"] as const).default("HOOK").notNull(),
+  version: int("version").default(1).notNull(), phase: tinyint("phase", { unsigned: true }).default(1).notNull(), fishStamina: tinyint("fishStamina", { unsigned: true }).default(100).notNull(), landingProgress: tinyint("landingProgress", { unsigned: true }).default(0).notNull(), escapePressure: tinyint("escapePressure", { unsigned: true }).default(0).notNull(), deadlineAt: datetime("deadlineAt", { mode: "date", fsp: 3 }).notNull(), recoveryUntil: datetime("recoveryUntil", { mode: "date", fsp: 3 }), updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+});
+
+// This primary key is the durable per-player/per-occurrence reward limit.
+export const fishingRaidRewardReceipt = mysqlTable("FishingRaidRewardReceipt", {
+  occurrenceId: varchar("occurrenceId", { length: 191 }).notNull(), userId: varchar("userId", { length: 191 }).notNull(), lobbyId: varchar("lobbyId", { length: 191 }).notNull(),
+  experience: int("experience", { unsigned: true }).notNull(), contribution: int("contribution", { unsigned: true }).notNull(), deliveredAt: datetime("deliveredAt", { mode: "date", fsp: 3 }).notNull(),
+}, (table) => ({ occurrenceUserKey: primaryKey({ columns: [table.occurrenceId, table.userId] }), userDeliveredIdx: index("FishingRaidRewardReceipt_user_delivered_idx").on(table.userId, table.deliveredAt) }));
 
 // Native push notifications ---------------------------------------------------
 

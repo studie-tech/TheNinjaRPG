@@ -70,7 +70,12 @@ export default function ManualMain() {
 
   // Add conditional entries based on permissions
   const withWorld = canEditMaps
-    ? [...baseEntries, { name: "world", img: IMG_MANUAL_TRAVEL }]
+    ? [
+        ...baseEntries,
+        { name: "world", img: IMG_MANUAL_TRAVEL },
+        { name: "fishing", img: IMG_MANUAL_TRAVEL },
+        { name: "fishing-raids", img: IMG_MANUAL_TRAVEL },
+      ]
     : baseEntries;
   const withRecruitment = canSeeRecruitment
     ? [{ name: "recruitment", img: IMG_MANUAL_RECRUITMENT }, ...withWorld]
