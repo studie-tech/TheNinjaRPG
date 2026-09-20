@@ -23,6 +23,7 @@ import type { UserWithRelations } from "@/routers/profile";
  *   targetUser={user}
  *   userData={userData}
  *   timeDiff={timeDiff}
+ *   updateUser={updateUser}
  *   open={isOpen}
  *   onOpenChange={setIsOpen}
  *   side="top"
@@ -34,6 +35,7 @@ import type { UserWithRelations } from "@/routers/profile";
  *   targetUser={user}
  *   userData={userData}
  *   timeDiff={timeDiff}
+ *   updateUser={updateUser}
  *   side="top"
  *   onHealComplete={() => console.log('Healing completed!')}
  * />
@@ -46,6 +48,8 @@ interface HealingPopoverProps {
   userData: NonNullable<UserWithRelations>;
   /** Time difference for regeneration calculations */
   timeDiff: number;
+  /** Patches the cached user with the healer's post-heal row */
+  updateUser: (data: Partial<NonNullable<UserWithRelations>>) => Promise<void>;
   /** Custom trigger element. If not provided, uses default heal icon */
   trigger?: React.ReactNode;
   /** Side where the popover should appear relative to the trigger */
@@ -64,6 +68,7 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
   targetUser,
   userData,
   timeDiff,
+  updateUser,
   trigger,
   side = "top",
   className = "",
@@ -79,8 +84,7 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          // Self-heals can restore chakra, so the committed row is authoritative.
-          utils.profile.getUser.invalidate(),
+          data.healer ? updateUser(data.healer) : null,
           utils.village.getAll.invalidate(),
         ]);
         onHealComplete?.();

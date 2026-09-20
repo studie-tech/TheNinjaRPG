@@ -50,8 +50,9 @@ type Healer = Pick<UserData, "medicalExperience" | "rank">;
 /**
  * Calculates medical experience awarded for a hospital heal.
  *
- * Self-healing awards half the experience of healing another user. The award is
- * capped by the healer's remaining medical experience capacity.
+ * Self-healing awards half the experience of healing another user. The award is a whole
+ * number (the column is an integer, so flooring here keeps the reported and stored values
+ * identical) and is capped by the healer's remaining medical experience capacity.
  */
 export const calcHospitalHealExperience = ({
   healerId,
@@ -65,7 +66,7 @@ export const calcHospitalHealExperience = ({
   medicalExperience: number;
 }) => {
   const experienceMultiplier = healerId === targetId ? 0.5 : 1;
-  const rawExperience = MEDNIN_HEAL_TO_EXP * toHeal * experienceMultiplier;
+  const rawExperience = Math.floor(MEDNIN_HEAL_TO_EXP * toHeal * experienceMultiplier);
   return rawExperience > 0
     ? Math.min(rawExperience, Math.max(0, MEDNIN_EXP_CAP - medicalExperience))
     : 0;
@@ -168,6 +169,16 @@ export const calcMedninHealablePool = (healer?: Healer): PoolType[] => {
 };
 
 /**
+ * Pools a hospital heal may restore. A heal is paid in chakra, so a self-heal never
+ * restores Chakra: for a LEGENDARY healer the restore would exceed the cost and refund it.
+ */
+export const calcHospitalHealPools = (
+  healer: Healer,
+  isSelfHeal: boolean,
+): PoolType[] =>
+  calcMedninHealablePool(healer).filter((pool) => !isSelfHeal || pool !== "Chakra");
+
+/**
  * Calculates the amount of health restored based on the healer's healing factor and the amount of chakra used.
  *
  * @param healer - The healer's user data.
@@ -196,14 +207,15 @@ export const calcHealthToChakra = (healer: Healer, health: number) => {
  * @param healer - The healer's user data.
  * @param target - The target's user data.
  * @param percentage - The percentage of the target's health to heal.
+ * @param pools - The pools the heal restores; defaults to everything the healer can heal.
  * @returns The amount of health to heal.
  */
 export const calcHowMuchToHeal = (
   healer: Healer,
   target: UserData,
   percentage: number,
+  pools: PoolType[] = calcMedninHealablePool(healer),
 ) => {
-  const pools = calcMedninHealablePool(healer);
   const poolHealReqs = pools.map((pool) => {
     if (pool === "Health") {
       return Math.min(

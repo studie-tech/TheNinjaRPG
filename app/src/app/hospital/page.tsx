@@ -139,7 +139,11 @@ export default function Hospital() {
         <p className="p-3">You are not hospitalized.</p>
       )}
       {!isPending && !isHospitalized && canHealOthers && (
-        <HealOthersComponent userData={userData} timeDiff={timeDiff} />
+        <HealOthersComponent
+          userData={userData}
+          timeDiff={timeDiff}
+          updateUser={updateUser}
+        />
       )}
       {isPending && <Loader explanation="Healing User" />}
     </ContentBox>
@@ -155,11 +159,12 @@ export default function Hospital() {
 interface HealOthersComponentProps {
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
+  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
 }
 
 const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   // Settings
-  const { userData, timeDiff } = props;
+  const { userData, timeDiff, updateUser } = props;
 
   const pools = calcMedninHealablePool(userData);
   const medninRank = calcMedninRank(userData);
@@ -172,9 +177,8 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
     onSuccess: async (data) => {
       showMutationToast(data);
       void utils.hospital.getHospitalizedUsers.invalidate();
-      if (data.success) {
-        // Self-heals can restore chakra, so the committed row is authoritative.
-        await utils.profile.getUser.invalidate();
+      if (data.success && data.healer) {
+        await updateUser(data.healer);
       }
     },
   });

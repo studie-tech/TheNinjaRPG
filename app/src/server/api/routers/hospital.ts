@@ -15,6 +15,7 @@ import {
   calcHealFinish,
   calcHealthToChakra,
   calcHospitalHealExperience,
+  calcHospitalHealPools,
   calcHowMuchToHeal,
 } from "@/libs/hospital";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
@@ -34,6 +35,7 @@ import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
 import { findRelationship } from "@/utils/alliance";
 import { secondsFromNow } from "@/utils/time";
 import { getStrucBoost } from "@/utils/village";
+import { healerAfterHealSchema } from "@/validators/hospital";
 
 const pusher = getServerPusher();
 
@@ -102,6 +104,9 @@ export const hospitalRouter = createTRPCRouter({
       baseServerResponse.extend({
         chakraCost: z.number().optional(),
         expGain: z.number().optional(),
+        // The healer's row after the heal, so the client can patch its cached user instead
+        // of refetching the full profile.
+        healer: healerAfterHealSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -131,7 +136,8 @@ export const hospitalRouter = createTRPCRouter({
       if (!u) return errorResponse("Your user was not found");
       if (!t) return errorResponse("Your target was not found");
       // Derived
-      const { toHeal, pools } = calcHowMuchToHeal(u, t, input.healPercentage);
+      const pools = calcHospitalHealPools(u, isSelfHeal);
+      const { toHeal } = calcHowMuchToHeal(u, t, input.healPercentage, pools);
       const chakraCost = calcHealthToChakra(u, toHeal);
       // Calculate experience gain, capped at 4 million. Self-heals award half.
       const expGain = calcHospitalHealExperience({
@@ -175,7 +181,23 @@ export const hospitalRouter = createTRPCRouter({
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, u);
       // Claim the fetched user version while charging and awarding experience so concurrent heals
-      // cannot reuse one snapshot. Self-heals also restore pools in this same statement.
+      // cannot reuse one snapshot. Self-heals also restore pools in this same statement. The
+      // claim guarantees the row still matches the snapshot, so the healer's resulting values
+      // are known without reading them back.
+      const healedAt = new Date();
+      const healer = {
+        curHealth:
+          isSelfHeal && pools.includes("Health")
+            ? Math.min(u.curHealth + toHeal, u.maxHealth)
+            : u.curHealth,
+        curChakra: u.curChakra - chakraCost,
+        curStamina:
+          isSelfHeal && pools.includes("Stamina")
+            ? Math.min(u.curStamina + toHeal, u.maxStamina)
+            : u.curStamina,
+        medicalExperience: Math.min(u.medicalExperience + expGain, MEDNIN_EXP_CAP),
+        regenAt: isSelfHeal ? healedAt : u.regenAt,
+      };
       const healerClaim = await claimUserSnapshot({
         client: ctx.drizzle,
         userId: u.userId,
@@ -183,10 +205,7 @@ export const hospitalRouter = createTRPCRouter({
         where: [eq(userData.status, "AWAKE"), gte(userData.curChakra, chakraCost)],
         set: {
           medicalExperience: sql`LEAST(${userData.medicalExperience} + ${expGain}, ${MEDNIN_EXP_CAP})`,
-          curChakra:
-            isSelfHeal && pools.includes("Chakra")
-              ? sql`LEAST(${userData.curChakra} - ${chakraCost} + ${toHeal}, ${t.maxChakra})`
-              : sql`${userData.curChakra} - ${chakraCost}`,
+          curChakra: sql`${userData.curChakra} - ${chakraCost}`,
           ...(isSelfHeal && pools.includes("Health")
             ? {
                 curHealth: sql`LEAST(${userData.curHealth} + ${toHeal}, ${t.maxHealth})`,
@@ -197,7 +216,7 @@ export const hospitalRouter = createTRPCRouter({
                 curStamina: sql`LEAST(${userData.curStamina} + ${toHeal}, ${t.maxStamina})`,
               }
             : {}),
-          ...(isSelfHeal ? { regenAt: new Date() } : {}),
+          ...(isSelfHeal ? { regenAt: healedAt } : {}),
           questData: questDataForDb,
         },
       });
@@ -246,18 +265,21 @@ export const hospitalRouter = createTRPCRouter({
       if (tResult.rowsAffected !== 1) {
         return { success: false, message: "Could not heal target" };
       }
-      void pusher.trigger(t.userId, "event", {
-        type: "userMessage",
-        message: `You've been healed for ${toHeal} ${pools.join(", ")} by ${u.username}`,
-        route: "/profile",
-        routeText: "To profile",
-      });
+      if (!isSelfHeal) {
+        void pusher.trigger(t.userId, "event", {
+          type: "userMessage",
+          message: `You've been healed for ${toHeal} ${pools.join(", ")} by ${u.username}`,
+          route: "/profile",
+          routeText: "To profile",
+        });
+      }
       void updateUserOnMap(pusher, t.sector, t);
       return {
         success: true,
-        message: `You have healed the target user${expGain > 0 ? ` and gained ${Math.round(expGain)} medical experience` : ""}`,
+        message: `You have healed ${isSelfHeal ? "yourself" : "the target user"}${expGain > 0 ? ` and gained ${expGain} medical experience` : ""}`,
         chakraCost,
         expGain,
+        healer,
       };
     }),
   // Pay to heal & get out of hospital
