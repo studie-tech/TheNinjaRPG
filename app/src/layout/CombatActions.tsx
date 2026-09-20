@@ -457,7 +457,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
           </div>
         )}
       </div>
-      {settings.showLabels ? name : ""}
+      {settings.showLabels && <span className="w-full break-words">{name}</span>}
     </div>
   );
 };
