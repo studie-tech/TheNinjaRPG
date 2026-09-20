@@ -9,10 +9,10 @@ import {
   reconcileInterruptedStoreAttempt,
   releaseStorePurchaseLock,
   retainStorePurchaseLock,
+  storeRestoreReconciliation,
+  storePurchaseReconciliation,
   type StorePurchaseAttempt,
   type StorePurchaseSettlement,
-  storePurchaseReconciliation,
-  storeRestoreReconciliation,
 } from "@/libs/native/purchaseSettlement";
 
 const receipt = (
@@ -45,12 +45,9 @@ describe("native purchase settlement", () => {
     const pending = receipt();
     expect(isPendingStorePurchase(pending)).toBe(true);
     expect(
-      hasSettledStorePurchase(
-        [pending],
-        attempt({
-          transactionId: "wanted-transaction",
-        }),
-      ),
+      hasSettledStorePurchase([pending], attempt({
+        transactionId: "wanted-transaction",
+      })),
     ).toBe(false);
     expect(finalStorePurchaseResult("pending")).toBe("timed-out");
   });
@@ -66,42 +63,35 @@ describe("native purchase settlement", () => {
     });
     expect(finalStorePurchaseResult("pending")).toBe("timed-out");
     expect(locked).toEqual([{ accountId: "player", attempt: purchaseAttempt }]);
-    expect(releaseStorePurchaseLock(locked, "other-player", purchaseAttempt)).toEqual(
-      locked,
-    );
+    expect(
+      releaseStorePurchaseLock(locked, "other-player", purchaseAttempt),
+    ).toEqual(locked);
     expect(
       releaseStorePurchaseLock(locked, "player", {
         ...purchaseAttempt,
         startedAt: "2026-08-01T00:00:00.000Z",
       }),
     ).toEqual(locked);
-    expect(releaseStorePurchaseLock(locked, "player", purchaseAttempt)).toEqual([]);
+    expect(
+      releaseStorePurchaseLock(locked, "player", purchaseAttempt),
+    ).toEqual([]);
   });
 
   it("settles only after the new receipt is granted or retired", () => {
     expect(
-      hasSettledStorePurchase(
-        [receipt({ grantedAt: new Date() })],
-        attempt({
-          transactionId: "wanted-transaction",
-        }),
-      ),
+      hasSettledStorePurchase([receipt({ grantedAt: new Date() })], attempt({
+        transactionId: "wanted-transaction",
+      })),
     ).toBe(true);
     expect(
-      hasSettledStorePurchase(
-        [receipt({ revokedAt: new Date() })],
-        attempt({
-          transactionId: "wanted-transaction",
-        }),
-      ),
+      hasSettledStorePurchase([receipt({ revokedAt: new Date() })], attempt({
+        transactionId: "wanted-transaction",
+      })),
     ).toBe(true);
     expect(
-      hasSettledStorePurchase(
-        [receipt({ acceptedAt: null })],
-        attempt({
-          transactionId: "wanted-transaction",
-        }),
-      ),
+      hasSettledStorePurchase([receipt({ acceptedAt: null })], attempt({
+        transactionId: "wanted-transaction",
+      })),
     ).toBe(true);
   });
 
@@ -172,7 +162,10 @@ describe("native purchase settlement", () => {
       ),
     ).toBe("credited");
     expect(
-      storePurchaseReconciliation([receipt({ acceptedAt: null })], purchaseAttempt),
+      storePurchaseReconciliation(
+        [receipt({ acceptedAt: null })],
+        purchaseAttempt,
+      ),
     ).toBe("rejected");
     expect(finalStorePurchaseResult("rejected")).toBe("rejected");
   });
@@ -196,7 +189,10 @@ describe("native purchase settlement", () => {
       phase: "charged-or-pending",
     });
     expect(
-      reconcileInterruptedStoreAttempt(attempt({ phase: "charged-or-pending" }), []),
+      reconcileInterruptedStoreAttempt(
+        attempt({ phase: "charged-or-pending" }),
+        [],
+      ),
     ).not.toBeNull();
   });
 
@@ -319,7 +315,10 @@ describe("native purchase settlement", () => {
     serverValue = "new";
     expect(await fetch()).toBe("old");
     await expect(
-      fetchFreshStoreObservation(() => client.invalidateQueries({ queryKey }), fetch),
+      fetchFreshStoreObservation(
+        () => client.invalidateQueries({ queryKey }),
+        fetch,
+      ),
     ).resolves.toBe("new");
   });
 });

@@ -3,9 +3,9 @@ import { purchaseErrorOutcome } from "@/libs/native/purchases";
 
 describe("native purchase errors", () => {
   it("uses RevenueCat's code instead of ambiguous message matching", () => {
-    expect(purchaseErrorOutcome({ code: "1", message: "Purchase cancelled" })).toEqual({
-      status: "cancelled",
-    });
+    expect(
+      purchaseErrorOutcome({ code: "1", message: "Purchase cancelled" }),
+    ).toEqual({ status: "cancelled" });
     expect(
       purchaseErrorOutcome({
         code: "2",
@@ -26,9 +26,9 @@ describe("native purchase errors", () => {
     expect(
       purchaseErrorOutcome({ code: 6, message: "Product already purchased" }),
     ).toMatchObject({ status: "error", code: "6", mayHaveCharged: false });
-    expect(purchaseErrorOutcome({ code: "20", message: "Payment pending" })).toEqual({
-      status: "pending",
-    });
+    expect(
+      purchaseErrorOutcome({ code: "20", message: "Payment pending" }),
+    ).toEqual({ status: "pending" });
     expect(purchaseErrorOutcome(new Error("Bridge disconnected"))).toMatchObject({
       status: "error",
       mayHaveCharged: true,
