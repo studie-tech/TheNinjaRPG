@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isActivityStreakPopupBlocking,
   isEventPassCompletion,
+  normalizeRecurringStreakProgress,
   resolveActivityStreakDateLatches,
   resolveActivityStreakPopupOpen,
   shouldFetchActivityStreaksForPopup,
@@ -221,5 +222,39 @@ describe("shouldFetchActivityStreaksForPopup", () => {
         state({ isLoading: false, userClosed: true }),
       ),
     ).toBe(false);
+  });
+});
+
+describe("recurring progress after configuration changes", () => {
+  const now = new Date("2026-09-20T12:00:00Z");
+  const progress = {
+    currentDay: 14,
+    startedAt: new Date("2026-09-01"),
+    lastClaimDate: new Date("2026-09-19T12:00:00Z"),
+  };
+  it("starts a new recurring cycle while preserving the claim concurrency token", () => {
+    expect(
+      normalizeRecurringStreakProgress(
+        progress,
+        { streakType: "RECURRING", totalDays: 14 },
+        now,
+      ),
+    ).toEqual({ ...progress, currentDay: 0, startedAt: now });
+  });
+  it("preserves completed event passes and unfinished recurring progress", () => {
+    expect(
+      normalizeRecurringStreakProgress(
+        progress,
+        { streakType: "EVENT_PASS", totalDays: 14 },
+        now,
+      ),
+    ).toBe(progress);
+    expect(
+      normalizeRecurringStreakProgress(
+        progress,
+        { streakType: "RECURRING", totalDays: 28 },
+        now,
+      ),
+    ).toBe(progress);
   });
 });

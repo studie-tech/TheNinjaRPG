@@ -90,3 +90,15 @@ export const isEventPassCompletion = (changes: unknown): boolean =>
   changes.some(
     (change) => typeof change === "string" && change.endsWith("(EVENT_PASS)"),
   );
+
+/** Terminal progress can survive conversion from an event pass to a recurring streak. */
+export const normalizeRecurringStreakProgress = <
+  T extends { currentDay: number; startedAt: Date },
+>(
+  progress: T,
+  config: { streakType: string; totalDays: number },
+  now: Date,
+): T =>
+  config.streakType === "RECURRING" && progress.currentDay >= config.totalDays
+    ? { ...progress, currentDay: 0, startedAt: now }
+    : progress;

@@ -9,7 +9,10 @@ import {
   userData,
   userStreakProgress,
 } from "@/drizzle/schema";
-import { isEventPassCompletion } from "@/libs/activityStreak";
+import {
+  isEventPassCompletion,
+  normalizeRecurringStreakProgress,
+} from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest";
 import { fetchUser } from "@/routers/profile";
@@ -50,7 +53,7 @@ export const activityStreakRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Get user's active activity streaks" } })
     .query(async ({ ctx }) => {
       // Get user's progress entries and active RECURRING config in parallel
-      const [progressEntries, activeRecurring] = await Promise.all([
+      const [progressEntries, activeRecurring, completionLogs] = await Promise.all([
         ctx.drizzle.query.userStreakProgress.findMany({
           where: eq(userStreakProgress.userId, ctx.userId),
           with: {
@@ -70,7 +73,21 @@ export const activityStreakRouter = createTRPCRouter({
             rewards: true,
           },
         }),
+        ctx.drizzle.query.actionLog.findMany({
+          where: and(
+            eq(actionLog.userId, ctx.userId),
+            eq(actionLog.tableName, "activityStreak"),
+          ),
+          columns: { relatedId: true, changes: true },
+        }),
       ]);
+
+      const completedConfigIds = new Set(
+        completionLogs
+          .filter((log) => isEventPassCompletion(log.changes))
+          .map((log) => log.relatedId),
+      );
+      const now = new Date();
 
       // Check if user has progress for the active recurring config
       const hasRecurringProgress = progressEntries.some(
@@ -79,9 +96,10 @@ export const activityStreakRouter = createTRPCRouter({
 
       // Build response - filter out deactivated configs to avoid showing claimable streaks that can't actually be claimed
       const streaks = progressEntries
-        .map((progress) => {
-          const config = progress.config;
+        .map((entry) => {
+          const config = entry.config;
           if (!config) return null;
+          const progress = normalizeRecurringStreakProgress(entry, config, now);
 
           // Skip deactivated configs - users cannot claim these
           if (!config.isActive) return null;
@@ -90,7 +108,8 @@ export const activityStreakRouter = createTRPCRouter({
           // are no longer active streaks that the player can claim.
           if (
             config.streakType === "EVENT_PASS" &&
-            progress.currentDay >= config.totalDays
+            (progress.currentDay >= config.totalDays ||
+              completedConfigIds.has(config.id))
           ) {
             return null;
           }
@@ -381,7 +400,7 @@ export const activityStreakRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch user, config, and progress in parallel
-      const [user, config, existingProgress] = await Promise.all([
+      const [user, config, existingProgress, completionLogs] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.activityStreakConfig.findFirst({
           where: eq(activityStreakConfig.id, input.configId),
@@ -392,6 +411,14 @@ export const activityStreakRouter = createTRPCRouter({
             eq(userStreakProgress.userId, ctx.userId),
             eq(userStreakProgress.configId, input.configId),
           ),
+        }),
+        ctx.drizzle.query.actionLog.findMany({
+          where: and(
+            eq(actionLog.userId, ctx.userId),
+            eq(actionLog.relatedId, input.configId),
+            eq(actionLog.tableName, "activityStreak"),
+          ),
+          columns: { changes: true },
         }),
       ]);
 
@@ -414,7 +441,11 @@ export const activityStreakRouter = createTRPCRouter({
       }
 
       // Get or create progress entry
-      let progress = existingProgress;
+      const now = new Date();
+      let progress = existingProgress
+        ? normalizeRecurringStreakProgress(existingProgress, config, now)
+        : undefined;
+      const normalizedCompletion = !!existingProgress && progress !== existingProgress;
 
       // For RECURRING: auto-create progress if doesn't exist. Concurrent first
       // claims can both reach this branch, so tolerate the row already existing and
@@ -449,7 +480,8 @@ export const activityStreakRouter = createTRPCRouter({
       // record and cannot be claimed or restarted.
       if (
         config.streakType === "EVENT_PASS" &&
-        progress.currentDay >= config.totalDays
+        (progress.currentDay >= config.totalDays ||
+          completionLogs.some((log) => isEventPassCompletion(log.changes)))
       ) {
         return errorResponse("This event pass has already been completed");
       }
@@ -540,8 +572,6 @@ export const activityStreakRouter = createTRPCRouter({
       // Get rewards for this day
       const dayReward = config.rewards.find((r) => r.dayNumber === newCurrentDay);
       const rewards = dayReward?.rewards ?? getDefaultRewards();
-      const now = new Date();
-
       // Check if this completes the streak
       const isComplete = newCurrentDay >= config.totalDays;
 
@@ -554,7 +584,7 @@ export const activityStreakRouter = createTRPCRouter({
           currentDay: newCurrentDay,
           lastClaimDate: now,
           // Reset startedAt when streak is reset so theoreticalMaxDay calculates from new start
-          ...(streakReset && { startedAt: now }),
+          ...((streakReset || normalizedCompletion) && { startedAt: now }),
         })
         .where(
           and(
