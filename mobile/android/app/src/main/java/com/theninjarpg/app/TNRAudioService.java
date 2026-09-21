@@ -84,7 +84,12 @@ public class TNRAudioService extends Service {
         if (ACTION_STOP.equals(action)) {
             // A stop can arrive while a foreground start is still pending. Fulfil that
             // contract before stopping, and do not cancel a newer start request.
-            startInForeground();
+            try {
+                startInForeground();
+            } catch (IllegalStateException | SecurityException error) {
+                // Android can allow delivery of a stop but refuse foreground promotion
+                // after the activity leaves the screen. The service must still stop.
+            }
             stopSelf(startId);
             return START_NOT_STICKY;
         }
