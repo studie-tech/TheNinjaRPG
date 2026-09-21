@@ -28,9 +28,12 @@ const ErrorBoundary: React.FC<ErrorBoundaryProps> = ({ error, reset }) => {
   // would throw again from the cached error. Refetch before rendering it again.
   const retry = async () => {
     setIsRetrying(true);
-    await utils.invalidate();
-    setIsRetrying(false);
-    reset();
+    try {
+      await utils.invalidate();
+    } finally {
+      setIsRetrying(false);
+      reset();
+    }
   };
 
   return (
