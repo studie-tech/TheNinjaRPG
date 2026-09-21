@@ -111,6 +111,11 @@ export const SimpleTasks = [
   "plants_harvested",
   "farming_collection_log",
   "farming_level",
+  "fishing_starter_claimed",
+  "fishing_casts",
+  "fishing_catches",
+  "fishing_collection_viewed",
+  "fishing_species_tracked",
   //"students_trained",
 ] as const;
 export type SimpleTask = (typeof SimpleTasks)[number];
@@ -312,6 +317,17 @@ export const objectiveImageMap: Record<
     title: "Farming Collection",
   },
   farming_level: { image: IMG_FARM_PLOT_SOIL, title: "Farming Level" },
+  fishing_starter_claimed: { image: IMG_BADGE_NEW_QUEST, title: "Fishing Starter Kit" },
+  fishing_casts: { image: IMG_BADGE_COLLECT_ITEM, title: "Fishing Casts" },
+  fishing_catches: { image: IMG_BADGE_COLLECT_ITEM, title: "Fish Caught" },
+  fishing_collection_viewed: {
+    image: IMG_BADGE_COLLECT_ITEM,
+    title: "Fishing Collection Viewed",
+  },
+  fishing_species_tracked: {
+    image: IMG_BADGE_COLLECT_ITEM,
+    title: "Fish Species Tracked",
+  },
   move_to_location: { image: IMG_BADGE_MOVE_TO_LOCATION, title: "Travel" },
   win_encounter_at_location: {
     image: IMG_BADGE_RANDOM_ENCOUNTER_WINS,

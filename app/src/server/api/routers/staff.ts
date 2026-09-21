@@ -24,6 +24,16 @@ import {
   farmCollectionLog,
   farmExtraction,
   farmPlot,
+  fishingActivity,
+  fishingCatchReceipt,
+  fishingCollectionLog,
+  fishingProfile,
+  fishingRaidEncounter,
+  fishingRaidLobby,
+  fishingRaidParticipant,
+  fishingRaidRewardReceipt,
+  fishingSchoolMark,
+  fishingSession,
   forumPost,
   forumThread,
   historicalAvatar,
@@ -1268,17 +1278,64 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
 
   // Batch 1: AI templates may own placement rows. Their lookup is independent of the
   // prerequisite sensei-reference cleanup, so run both together before destructive deletes.
-  const [aiPlacements] = await Promise.all([
+  const [aiPlacements, hostedLobbies] = await Promise.all([
     client
       .select({ id: overworldAiPlacement.id })
       .from(overworldAiPlacement)
       .where(eq(overworldAiPlacement.aiTemplateUserId, userId)),
+    client
+      .select({ id: fishingRaidLobby.id })
+      .from(fishingRaidLobby)
+      .where(eq(fishingRaidLobby.hostUserId, userId)),
     client
       .update(userData)
       .set({ senseiId: null })
       .where(eq(userData.senseiId, userId)),
   ]);
   const aiPlacementIds = aiPlacements.map((placement) => placement.id);
+  const hostedLobbyIds = hostedLobbies.map((lobby) => lobby.id);
+  const hostedParticipants =
+    hostedLobbyIds.length > 0
+      ? await client
+          .select({ userId: fishingRaidParticipant.userId })
+          .from(fishingRaidParticipant)
+          .where(inArray(fishingRaidParticipant.lobbyId, hostedLobbyIds))
+      : [];
+  const hostedParticipantIds = [
+    ...new Set(hostedParticipants.map((participant) => participant.userId)),
+  ];
+
+  // A host deletion dissolves the whole lobby. Release only locks for those exact
+  // raid lobbies, then remove their dependent rows before deleting the lobby itself.
+  // This remains a separate sequential batch to keep the deletion worker's deadlock
+  // ordering; the user's memberships and receipts in other lobbies are handled below.
+  if (hostedLobbyIds.length > 0) {
+    const raidSessionIds = hostedLobbyIds.map((lobbyId) => `raid:${lobbyId}`);
+    await Promise.all([
+      ...(hostedParticipantIds.length > 0
+        ? [
+            client
+              .update(fishingProfile)
+              .set({ activeSessionId: null, updatedAt: new Date() })
+              .where(
+                and(
+                  inArray(fishingProfile.userId, hostedParticipantIds),
+                  inArray(fishingProfile.activeSessionId, raidSessionIds),
+                ),
+              ),
+          ]
+        : []),
+      client
+        .delete(fishingRaidEncounter)
+        .where(inArray(fishingRaidEncounter.lobbyId, hostedLobbyIds)),
+      client
+        .delete(fishingRaidParticipant)
+        .where(inArray(fishingRaidParticipant.lobbyId, hostedLobbyIds)),
+      client
+        .delete(fishingRaidRewardReceipt)
+        .where(inArray(fishingRaidRewardReceipt.lobbyId, hostedLobbyIds)),
+    ]);
+  }
 
   // Batch 2: Communication & social relationships
   await Promise.all([
@@ -1313,6 +1370,19 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(questHistory).where(eq(questHistory.userId, userId)),
     client.delete(userQuestAttempt).where(eq(userQuestAttempt.userId, userId)),
     client.delete(bloodlineRolls).where(eq(bloodlineRolls.userId, userId)),
+    client.delete(fishingActivity).where(eq(fishingActivity.userId, userId)),
+    client.delete(fishingCatchReceipt).where(eq(fishingCatchReceipt.userId, userId)),
+    client.delete(fishingCollectionLog).where(eq(fishingCollectionLog.userId, userId)),
+    client.delete(fishingProfile).where(eq(fishingProfile.userId, userId)),
+    client.delete(fishingSchoolMark).where(eq(fishingSchoolMark.userId, userId)),
+    client.delete(fishingSession).where(eq(fishingSession.userId, userId)),
+    client
+      .delete(fishingRaidParticipant)
+      .where(eq(fishingRaidParticipant.userId, userId)),
+    client.delete(fishingRaidLobby).where(eq(fishingRaidLobby.hostUserId, userId)),
+    client
+      .delete(fishingRaidRewardReceipt)
+      .where(eq(fishingRaidRewardReceipt.userId, userId)),
   ]);
 
   // Batch 5: History, logs, AI & security

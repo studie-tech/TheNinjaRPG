@@ -64,6 +64,7 @@ import {
   meetsEvolutionStatRequirements,
   validateEvolutionGraph,
 } from "@/libs/evolution";
+import { isFishingStarterEquipment } from "@/libs/fishing";
 import {
   buildItemLoadoutData,
   calcItemRepairCost,
@@ -1591,6 +1592,9 @@ export const itemRouter = createTRPCRouter({
       }
       if (useritem.isInAuction) {
         return errorResponse("Cannot sell item in auction");
+      }
+      if (isFishingStarterEquipment(useritem.itemId)) {
+        return errorResponse("Starter fishing supplies cannot be sold or dropped");
       }
       // Derived
       const cost = calcItemSellingPrice(user, useritem, structures);

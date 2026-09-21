@@ -250,6 +250,15 @@ export default function HomePage() {
             />
             Farm
           </Link>
+          <Link
+            href="/fishing"
+            className="col-span-2 rounded border p-4 text-sm not-italic hover:bg-muted sm:col-span-1"
+          >
+            Fishing
+            <span className="mt-1 block font-normal">
+              Explore water habitats and collect fish
+            </span>
+          </Link>
         </div>
       </ContentBox>
       {ownVillage && (
