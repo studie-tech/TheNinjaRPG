@@ -25,19 +25,20 @@ import {
   FONT_SCALE_VALUES,
 } from "@/libs/layoutPreference";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/libs/seo";
-import { PRERENDERED_SHELL_PARAMS, parseShellParam } from "@/libs/shell";
+import { parseShellParam, SHELL_PARAMS } from "@/libs/shell";
 import { UserContextProvider } from "@/utils/UserContext";
 
 import "../../styles/globals.css";
 import "sonner/dist/styles.css";
 
 /**
- * The web variants are built at deploy time; see PRERENDERED_SHELL_PARAMS for why the
- * native ones are not. Anything else in the segment renders on demand, which is how the
- * native variants come to exist, and is why the value is checked below.
+ * Every variant is built at deploy time and the segment is closed to anything else, so
+ * an unknown value is a 404 without a render; see SHELL_PARAMS for what that guards.
  */
+export const dynamicParams = false;
+
 export function generateStaticParams() {
-  return PRERENDERED_SHELL_PARAMS.map((shell) => ({ shell }));
+  return SHELL_PARAMS.map((shell) => ({ shell }));
 }
 
 /**

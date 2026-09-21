@@ -36,8 +36,9 @@ export const useFontScale = () => {
 
   useEffect(() => {
     document.documentElement.style.setProperty("--font-scale", String(validatedScale));
-    // Mirrored to a cookie so the server can inline the scale on <html>; without it the
-    // root font-size only changes after hydration and re-flows the whole document.
+    // Mirrored to a cookie so the root layout's <head> script can apply the scale before
+    // first paint; without it the root font-size only changes after hydration and
+    // re-flows the whole document.
     persistFontScaleCookie(validatedScale);
   }, [validatedScale]);
 

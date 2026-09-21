@@ -85,8 +85,8 @@ const Welcome: React.FC = () => {
             }
           >
             <p>
-              More than <b>{TOTAL_PLAYERS_MILESTONE.toLocaleString()}</b> have played
-              TheNinja-RPG!
+              More than <b>{TOTAL_PLAYERS_MILESTONE.toLocaleString("en-US")}</b> have
+              played TheNinja-RPG!
             </p>
             <p>Join the new version and experience our ninja world!</p>
             <Link href="/signup" aria-label="Signup" className="my-3 w-full px-3">

@@ -83,7 +83,14 @@ const Countdown: React.FC<CountdownProps> = (props) => {
   if (countString === "Done" && onEndShow) {
     return onEndShow;
   }
-  return <span className={className}>{countString}</span>;
+  // The server's string is whatever the clock said when the page was rendered, which
+  // for a prerendered page is the build. The effect above replaces it on mount, so the
+  // mismatch is the one React allows a timestamp to have.
+  return (
+    <span className={className} suppressHydrationWarning>
+      {countString}
+    </span>
+  );
 };
 
 export default Countdown;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  PRERENDERED_SHELL_PARAMS,
   parseShellParam,
   publicPathForShellPath,
+  SHELL_PARAMS,
   shellParam,
 } from "@/libs/shell";
 
@@ -25,15 +25,20 @@ describe("shell variants", () => {
     },
   );
 
-  it("prerenders the four web variants and leaves native to first request", () => {
-    // Native variants only exist while the Clerk proxy is enabled, so building them
-    // for every deploy would be wasted work; on demand they cost one render each.
-    expect(PRERENDERED_SHELL_PARAMS).toEqual([
+  it("builds every variant, so the segment can be closed to anything else", () => {
+    // With dynamicParams off, a file-like path the proxy skips (/wp-login.php) is a
+    // static 404 rather than a render with the file name as the shell.
+    expect(SHELL_PARAMS).toEqual([
       "web-default-out",
       "web-default-in",
       "web-pixel-out",
       "web-pixel-in",
+      "native-default-out",
+      "native-default-in",
+      "native-pixel-out",
+      "native-pixel-in",
     ]);
+    expect(new Set(SHELL_PARAMS.map(parseShellParam)).size).toBe(8);
   });
 });
 

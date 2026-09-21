@@ -48,13 +48,16 @@ export const parseShellParam = (param: string): ShellVariant | null => {
 };
 
 /**
- * The variants built at deploy time. Native ones are left out: they only exist while
- * the Clerk proxy is enabled, and are rendered on first request and cached from then on,
- * which keeps them off the build without costing a native visitor anything after the
- * first.
+ * Every variant, all built at deploy time. The segment accepts nothing else: a
+ * file-like path the proxy matcher skips, such as /wp-login.php, would otherwise match
+ * the segment with the file name as its value and render a bare 404 on a function for
+ * every distinct probe. Building the native variants costs a few seconds and is what
+ * lets the segment be closed.
  */
-export const PRERENDERED_SHELL_PARAMS = SHELL_LAYOUTS.flatMap((layout) =>
-  [false, true].map((signedIn) => shellParam({ client: "web", layout, signedIn })),
+export const SHELL_PARAMS = SHELL_CLIENTS.flatMap((client) =>
+  SHELL_LAYOUTS.flatMap((layout) =>
+    [false, true].map((signedIn) => shellParam({ client, layout, signedIn })),
+  ),
 );
 
 const SHELL_PARAM_PATTERN = /^\/(web|native)-(default|pixel)-(in|out)(?=\/|$)/;

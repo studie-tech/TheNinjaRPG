@@ -75,6 +75,11 @@ const usesNativeClerkProxy = (request: NextRequest) =>
  * Rewrite a request to the prerendered shell variant that matches it. The public URL is
  * untouched -- the router, usePathname and every link keep working on it -- and the
  * original query travels with the rewrite, so the page still sees referral parameters.
+ *
+ * The response carries the prerendered page's long s-maxage and no Vary on the cookie,
+ * which is right on Vercel, where the CDN keys on the rewritten path and this code runs
+ * ahead of every lookup. A cache in front of the platform that keys on the public path
+ * would hand one visitor's variant to the next; nothing sits there today.
  */
 const rewriteToShell = (
   request: NextRequest,
@@ -111,12 +116,15 @@ export default clerkMiddleware(
       : "web";
 
     // Crawlers are never signed in, so pin them to the control layout before the auth()
-    // round-trip. Only the layout cookies are overridden: the user-agent match is broad
-    // enough to catch a signed-in visitor whose browser string contains "bot", and
-    // replacing the whole header would drop their Clerk session before auth runs. The
-    // preference and font-scale cookies are pinned too, so the document a crawler gets
-    // is the default layout at the default size, the same for every crawl.
-    if (isSearchCrawler(request.headers.get("user-agent"))) {
+    // round-trip. The user-agent match is broad enough to catch a person whose browser
+    // string contains "bot"; one carrying a session is a person, not a crawler, and takes
+    // the ordinary path below so every page renders in the frame and layout they chose.
+    // For a crawler the preference and font-scale cookies are pinned too, so the document
+    // it gets is the default layout at the default size, the same for every crawl.
+    const hasSession = request.cookies
+      .getAll()
+      .some(({ name }) => name.startsWith("__session"));
+    if (!hasSession && isSearchCrawler(request.headers.get("user-agent"))) {
       const pinned = new Set([
         LEGACY_AB_LAYOUT_COOKIE,
         AB_PIXEL_LAYOUT_COOKIE,
@@ -202,11 +210,17 @@ export const config = {
   matcher: [
     /*
      * Skip Next internals, legacy static files, and any file-like path. URLs with no
-     * matching route render through global-not-found.tsx without the Clerk-dependent
-     * root layout, so missing assets and scanner probes remain cheap 404 responses.
-     * Paths that do resolve to a route are re-added explicitly below.
+     * matching route render through global-not-found.tsx without the root layout, so
+     * missing assets and scanner probes remain cheap 404 responses. Paths that do
+     * resolve to a route are re-added explicitly below.
      */
     "/((?!api(?:/|$)|trpc(?:/|$)|_next(?:/|$)|static(?:/|$)|[^?]*\\.[^/?]+).*)",
+    /*
+     * A shell variant path is always redirected to the public one, including when the
+     * rest of it is file-like and the skip above would otherwise let it resolve under
+     * the variant URL.
+     */
+    "/(web|native)-(default|pixel)-(in|out)/:path*",
     /*
      * Optional catch-all routes are the exception to the file-like skip above:
      * they render the Clerk-dependent root layout for paths such as
