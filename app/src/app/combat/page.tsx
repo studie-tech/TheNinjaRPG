@@ -81,7 +81,7 @@ export default function CombatPage() {
     !sessionBattleUser.leftBattle;
   const actionGridClass = config.useSmallActions
     ? "grid grid-cols-7 md:grid-cols-9 gap-1"
-    : undefined;
+    : "grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]";
   const actionAspect = config.useSmallActions ? "aspect-square" : undefined;
   const showActionLabels = !config.useSmallActions;
   const isInBattle = userData?.status === "BATTLE";
