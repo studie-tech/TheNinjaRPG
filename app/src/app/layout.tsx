@@ -29,7 +29,7 @@ import {
   LAYOUT_PREFERENCE_COOKIE,
   toFontScale,
 } from "@/libs/layoutPreference";
-import { isNativeUserAgent } from "@/libs/native/userAgent";
+import { isNativeUserAgent, parseNativeUserAgent } from "@/libs/native/userAgent";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/libs/seo";
 import { UserContextProvider } from "@/utils/UserContext";
 
@@ -202,13 +202,17 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
-  themeColor: "#ce7e00",
-  colorScheme: "dark light",
-  // Fixed game controls must stay clear of native status bars and display cutouts.
-  viewportFit: "contain",
-};
+export async function generateViewport(): Promise<Viewport> {
+  const requestHeaders = await headers();
+  const client = parseNativeUserAgent(requestHeaders.get("user-agent"));
+  return {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
+    themeColor: "#ce7e00",
+    colorScheme: "dark light",
+    // Android's fixed game controls need native insets; iOS PWAs need cover for CSS safe areas.
+    viewportFit: client?.platform === "android" ? "contain" : "cover",
+  };
+}
