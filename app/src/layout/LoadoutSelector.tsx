@@ -131,7 +131,7 @@ const LoadoutSelector = <T extends LoadoutData>(
   return (
     <div>
       {props.label && <p className="text-sm">{props.label}</p>}
-      <div className="flex flex-row gap-1">
+      <div className="flex flex-wrap gap-1">
         {data?.map((loadout, index) => {
           const isSelected = selectedId === loadout.id;
           const displayName = getDisplayName(loadout, index);

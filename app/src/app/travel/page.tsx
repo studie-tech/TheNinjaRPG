@@ -1127,8 +1127,8 @@ export default function Travel() {
           </div>
         )}
       </ContentBox>
-      <div className="flex flex-row items-center justify-between p-1">
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 p-1">
+        <div className="flex min-w-0 flex-wrap gap-2">
           {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" />}
           {showSector && <ItemLoadoutSelector size="small" label="Items" />}
         </div>
