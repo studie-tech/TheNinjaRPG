@@ -24,11 +24,11 @@ import {
   FONT_SCALE_VALUES,
 } from "@/libs/layoutPreference";
 import {
+  absoluteUrl,
+  OG_IMAGE_PATH,
   SITE_DESCRIPTION,
   SITE_NAME,
-  SITE_OPEN_GRAPH,
   SITE_TITLE,
-  SITE_TWITTER,
   SITE_URL,
 } from "@/libs/seo";
 import { parseShellParam, SHELL_PARAMS } from "@/libs/shell";
@@ -142,6 +142,14 @@ export default async function RootLayout({
 // Reused variables
 const title = SITE_TITLE;
 const description = SITE_DESCRIPTION;
+// The generated 1200x630 card at the app root, which the file convention would attach on
+// its own if this layout lived in the same segment; it does not, so it is named here.
+const card = {
+  url: absoluteUrl(OG_IMAGE_PATH),
+  width: 1200,
+  height: 630,
+  alt: SITE_NAME,
+};
 
 // Metadata
 export const metadata: Metadata = {
@@ -178,8 +186,24 @@ export const metadata: Metadata = {
   ],
   creator: "Mathias F. Gruber",
   publisher: "Studie-Tech ApS",
-  openGraph: SITE_OPEN_GRAPH,
-  twitter: SITE_TWITTER,
+  openGraph: {
+    title: title,
+    description: description,
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    images: [card],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: title,
+    description: description,
+    siteId: "137431404",
+    creator: "@RealTheNinjaRPG",
+    creatorId: "137431404",
+    images: [card],
+  },
   icons: {
     icon: "/favicon.ico",
     // iOS wants 180x180 and paints transparent corners black, so this one is flattened.

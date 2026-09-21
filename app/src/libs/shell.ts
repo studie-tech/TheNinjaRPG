@@ -49,11 +49,7 @@ export const parseShellParam = (param: string): ShellVariant | null => {
   };
 };
 
-/**
- * Every variant, all built at deploy time. The segment is closed to anything else (the
- * layout sets dynamicParams to false), so a value that is not one of these is a static
- * 404 rather than a render.
- */
+/** Every variant, for generateStaticParams. */
 export const SHELL_PARAMS = SHELL_CLIENTS.flatMap((client) =>
   SHELL_LAYOUTS.flatMap((layout) =>
     [false, true].map((signedIn) => shellParam({ client, layout, signedIn })),
@@ -92,7 +88,7 @@ export interface ShellRequest {
 export interface ShellChoice {
   variant: ShellVariant;
   /** Experiment assignments drawn for this visit, to be set on the response. */
-  assigned: Partial<Record<string, AbVariant>>;
+  assigned: Record<string, AbVariant>;
 }
 
 /**
@@ -110,18 +106,15 @@ const CRAWLER_USER_AGENT =
   /bot|crawler|spider|crawling|slurp|mediapartners|facebookexternalhit|bingpreview|whatsapp|telegram|embedly|quora link preview|pinterest|vkshare|w3c_validator|lighthouse|chrome-lighthouse/i;
 
 /**
- * Whether the browser holds a Clerk session, judged from the cookies Clerk keeps rather
- * than from verifying the token. The signed-in frame is a presentational hint that the
- * client corrects once Clerk loads, and this is the same marker clerk-js reads to know
- * a session exists before it has loaded: __client_uat is a timestamp while signed in and
- * "0" after sign-out, and it outlives a session token that has merely expired. Choosing
- * the frame from the token instead would flip the whole shell -- and remount everything
- * under it -- on any request where a token is stale but about to be refreshed.
+ * Whether the browser holds a Clerk session, read from the marker clerk-js itself reads
+ * before it has loaded: __client_uat is a timestamp while signed in, "0" after sign-out,
+ * and it outlives a session token that has merely expired. The frame is a presentational
+ * hint the client corrects once Clerk loads; deciding it from the token instead flips the
+ * whole shell, and remounts everything under it, on any request with a stale token.
  */
 const clientHasSession = (cookies: ReadonlyMap<string, string>) => {
   for (const [name, value] of cookies) {
     if (name.startsWith("__client_uat") && value !== "" && value !== "0") return true;
-    if (name.startsWith("__session")) return true;
   }
   return false;
 };

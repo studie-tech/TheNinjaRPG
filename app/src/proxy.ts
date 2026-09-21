@@ -1,44 +1,23 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { env } from "@/env/server.mjs";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { chooseShell, publicPathForShellPath, shellParam } from "@/libs/shell";
 
-const isMcpRoute = (pathname: string) =>
-  pathname === "/api/mcp" ||
-  pathname.startsWith("/api/mcp/") ||
-  pathname.startsWith("/.well-known/oauth-authorization-server") ||
-  pathname.startsWith("/.well-known/oauth-protected-resource");
-
 /**
  * Paths the matcher admits that are not pages, and so have no variant to rewrite to:
  * the route handlers that need Clerk's context (tRPC, chat, uploads), the .well-known
- * documents, the metadata image route at the app root, and Clerk's own proxy, which the
- * middleware wrapper serves itself. They reach their handler as they arrived.
+ * documents, and the metadata image route at the app root. They reach their handler as
+ * they arrived; the MCP OAuth documents among them never see auth().
  */
 export const isUnshelledPath = (pathname: string) =>
   pathname.startsWith("/api/") ||
   pathname.startsWith("/.well-known/") ||
-  pathname.startsWith("/__clerk/") ||
   pathname === "/opengraph-image";
-
-/**
- * Whether Clerk must load through the same-origin proxy for this request. Session
- * refresh has to stay on the game origin inside the native WebView, and the proxy is
- * only served while the flag is on.
- */
-const usesNativeClerkProxy = (request: NextRequest) =>
-  env.NATIVE_CLERK_PROXY_ENABLED === "true" &&
-  isNativeUserAgent(request.headers.get("user-agent"));
 
 export default clerkMiddleware(
   async (auth, request) => {
     const { pathname } = request.nextUrl;
-
-    // Skip auth() call for MCP routes - they handle OAuth tokens separately
-    if (isMcpRoute(pathname)) {
-      return NextResponse.next();
-    }
     if (isUnshelledPath(pathname)) return;
 
     // The variant segment is internal to the rewrite below. A request that names one
@@ -61,26 +40,27 @@ export default clerkMiddleware(
       ),
       draw: () => (Math.random() < 0.5 ? "treatment" : "control"),
     });
-    // The public URL is untouched -- the router and every link keep working on it --
-    // and the original query travels with the rewrite, so the page still sees referral
-    // parameters. The response carries the prerendered page's long s-maxage and no Vary
-    // on the cookie, which is right on Vercel, where the CDN keys on the rewritten path
-    // and this code runs ahead of every lookup. A cache in front of the platform that
-    // keyed on the public path would hand one visitor's variant to the next; nothing sits
-    // there today.
+    // The public URL and its query are untouched, so the router, every link and the
+    // referral parameters keep working. The response carries the prerendered page's
+    // long s-maxage with no Vary on the cookie: correct on Vercel, whose CDN keys on the
+    // rewritten path behind this code, and wrong for any cache in front of it that
+    // keyed on the public path. Nothing sits there today.
     const url = request.nextUrl.clone();
     url.pathname = `/${shellParam(variant)}${pathname}`;
     const res = NextResponse.rewrite(url);
     for (const [name, value] of Object.entries(assigned)) {
-      if (value) res.cookies.set(name, value, { path: "/" });
+      res.cookies.set(name, value, { path: "/" });
     }
     return res;
   },
   (request) => ({
     clockSkewInMs: 1000 * 60 * 30,
-    // Serve the SDK proxy before enabling native traffic, so Clerk can verify it.
+    // Session refresh must stay on the game origin inside the native WebView; the proxy
+    // is served ahead of enabling native traffic so Clerk can verify it.
     frontendApiProxy:
-      usesNativeClerkProxy(request) || request.nextUrl.pathname.startsWith("/__clerk/")
+      (env.NATIVE_CLERK_PROXY_ENABLED === "true" &&
+        isNativeUserAgent(request.headers.get("user-agent"))) ||
+      request.nextUrl.pathname.startsWith("/__clerk/")
         ? { enabled: true }
         : undefined,
   }),
@@ -119,7 +99,6 @@ export const config = {
      */
     "/username/:path*",
     "/userid/:path*",
-    "/guide/:path*",
     "/users/:path*",
     "/forum/:path*",
     "/reports/:path*",
@@ -133,7 +112,7 @@ export const config = {
     "/api/trpc/(.*)",
     "/api/chat/:path*",
     "/api/uploadthing(.*)",
-    // MCP OAuth endpoints intentionally bypass Clerk auth in the callback above.
+    // The MCP OAuth discovery documents; isUnshelledPath passes them through untouched.
     "/.well-known/oauth-authorization-server(.*)",
     "/.well-known/oauth-protected-resource(.*)",
     // Keep Clerk's optional frontend API proxy path compatible.

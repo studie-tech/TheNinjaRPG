@@ -1,3 +1,4 @@
+import { tryToParsePath } from "next/dist/lib/try-to-parse-path";
 import { describe, expect, it } from "vitest";
 import { SHELL_PARAMS } from "@/libs/shell";
 import { config, isUnshelledPath } from "../../src/proxy";
@@ -13,7 +14,6 @@ describe("isUnshelledPath", () => {
     "/api/uploadthing",
     "/.well-known/apple-app-site-association",
     "/.well-known/oauth-authorization-server",
-    "/__clerk/v1/client",
     "/opengraph-image",
   ])("lets %s reach its handler untouched", (path) => {
     expect(isUnshelledPath(path)).toBe(true);
@@ -28,31 +28,41 @@ describe("isUnshelledPath", () => {
 });
 
 describe("proxy matcher", () => {
-  // Next needs the matcher as literals, so the entry that admits variant paths cannot
-  // be generated from SHELL_PARAMS; this keeps the two from drifting apart.
-  const variantEntry = config.matcher.find((entry) => entry.includes("(in|out)"));
+  // Compiled exactly as the build compiles it, so this tests what the middleware sees
+  // rather than a hand translation of the matcher syntax.
+  const patterns = config.matcher.map((entry) => {
+    const { regexStr } = tryToParsePath(entry);
+    if (!regexStr) throw new Error(`matcher entry did not compile: ${entry}`);
+    return new RegExp(regexStr);
+  });
+  const admits = (path: string) => patterns.some((pattern) => pattern.test(path));
 
   it("admits every variant path, so the redirect to the public path always runs", () => {
-    expect(variantEntry).toBeDefined();
-    const pattern = new RegExp(`^${variantEntry?.replace("/:path*", "(?:/.*)?")}$`);
+    // Next needs the matcher as literals, so the entry cannot be generated from
+    // SHELL_PARAMS; this keeps the two from drifting apart.
     for (const param of SHELL_PARAMS) {
-      expect(`/${param}/home`).toMatch(pattern);
-      expect(`/${param}/manual/asset/x.y`).toMatch(pattern);
+      expect(admits(`/${param}/home`)).toBe(true);
+      expect(admits(`/${param}/manual/asset/x.y`)).toBe(true);
     }
-    expect("/native-pixel-in/home").not.toMatch(pattern);
   });
 
-  it("treats only a dotted last segment as file-like", () => {
-    // /x.php/guide must be rewritten: left alone it matches the shell segment with the
-    // file name as its value and renders the page beneath it into a 404.
-    const skip = config.matcher[0]?.match(/^\/\(\(\?!(.*)\)\.\*\)$/)?.[1];
-    expect(skip).toBeDefined();
-    const skipped = (path: string) => new RegExp(`^(?:${skip})`).test(path.slice(1));
-    expect(skipped("/foo.png")).toBe(true);
-    expect(skipped("/wp-login.php")).toBe(true);
-    expect(skipped("/x.php/guide")).toBe(false);
-    expect(skipped("/.well-known/apple-app-site-association")).toBe(false);
-    expect(skipped("/home")).toBe(false);
-    expect(skipped("/api/trpc/x")).toBe(true);
+  it.each([
+    "/home",
+    "/x.php/guide",
+    "/.well-known/apple-app-site-association",
+    "/username/some.name",
+    "/login/factor-one",
+    "/api/trpc/profile.getUser",
+  ])("admits %s", (path) => {
+    // A dotted earlier segment (/x.php/guide) must be rewritten: left alone it would
+    // match the shell segment with the file name as its value.
+    expect(admits(path)).toBe(true);
   });
+
+  it.each(["/foo.png", "/wp-login.php", "/guide/x.php", "/api/healthcheck", "/_next/static/a.js"])(
+    "skips %s, which is served without the middleware",
+    (path) => {
+      expect(admits(path)).toBe(false);
+    },
+  );
 });

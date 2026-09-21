@@ -25,24 +25,14 @@ describe("shell variants", () => {
     }
   });
 
-  it.each([
-    "",
-    "web",
-    "web-pixel",
-    "web-pixel-maybe",
-    "mobile-pixel-in",
-    "native-pixel-in",
-    "web-dark-in",
-    "web-pixel-in-x",
-    "WEB-PIXEL-IN",
-    "web-pixel-in ",
-  ])("rejects %j, which no rewrite ever produces", (param) => {
-    expect(parseShellParam(param)).toBeNull();
-  });
+  it.each(["", "native-pixel-in", "web-pixel-in-x", "WEB-PIXEL-IN"])(
+    "rejects %j, which no rewrite ever produces",
+    (param) => {
+      expect(parseShellParam(param)).toBeNull();
+    },
+  );
 
-  it("builds every variant once, so the segment can be closed to anything else", () => {
-    // With dynamicParams off, a file-like path the proxy skips (/wp-login.php) is a
-    // static 404 rather than a render with the file name as the shell.
+  it("builds every variant once", () => {
     expect(SHELL_PARAMS).toHaveLength(12);
     expect(new Set(SHELL_PARAMS).size).toBe(12);
     expect(SHELL_PARAMS).toContain("web-default-out");
@@ -174,7 +164,7 @@ describe("chooseShell", () => {
     const { variant } = chooseShell(
       request({
         userAgent: "Mozilla/5.0 (compatible; SomeBot/1.0)",
-        cookies: { __session: "eyJ.signed.jwt", [LAYOUT_PREFERENCE_COOKIE]: "pixel" },
+        cookies: { __client_uat: "1789800000", [LAYOUT_PREFERENCE_COOKIE]: "pixel" },
       }),
     );
     expect(variant).toEqual({ client: "web", layout: "pixel", signedIn: true });

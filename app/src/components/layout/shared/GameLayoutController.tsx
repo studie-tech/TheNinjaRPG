@@ -74,8 +74,8 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       }
     }
 
-    // The scale is inlined on <html> during SSR from the font-scale cookie, so this is
-    // only a recovery path for visitors who have a stored preference but no cookie yet.
+    // The root layout's head script applies the scale from the cookie before first paint,
+    // so this is only a recovery path for visitors with a stored preference but no cookie.
     // Restore the cookie for the next request without changing this document after
     // hydration; active changes still apply immediately through useFontScale.
     const savedFontScale = safeLocalStorageGetItem(FONT_SCALE_STORAGE_KEY);
