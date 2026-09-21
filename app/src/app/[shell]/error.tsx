@@ -2,10 +2,12 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { AlertTriangle, Home, RefreshCw } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
+import { cn } from "@/libs/shadui";
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
@@ -13,10 +15,23 @@ interface ErrorBoundaryProps {
 }
 
 const ErrorBoundary: React.FC<ErrorBoundaryProps> = ({ error, reset }) => {
+  const utils = api.useUtils();
+  const [isRetrying, setIsRetrying] = useState(false);
+
   useEffect(() => {
     // Log the error to Sentry
     Sentry.captureException(error);
   }, [error]);
+
+  // Resetting the boundary only re-renders this segment; the providers above it keep
+  // their queries, so a page that threw over a failed query (e.g. the character load)
+  // would throw again from the cached error. Refetch before rendering it again.
+  const retry = async () => {
+    setIsRetrying(true);
+    await utils.invalidate();
+    setIsRetrying(false);
+    reset();
+  };
 
   return (
     <ContentBox title="Something Went Wrong" defaultBackHref="/">
@@ -42,8 +57,14 @@ const ErrorBoundary: React.FC<ErrorBoundaryProps> = ({ error, reset }) => {
         </div>
 
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-          <Button onClick={reset} variant="default" size="lg" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
+          <Button
+            onClick={retry}
+            disabled={isRetrying}
+            variant="default"
+            size="lg"
+            className="gap-2"
+          >
+            <RefreshCw className={cn("h-4 w-4", isRetrying && "animate-spin")} />
             Try Again
           </Button>
           <Link href="/">
