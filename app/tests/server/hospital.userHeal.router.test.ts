@@ -236,7 +236,11 @@ describeWithDatabase("hospital self-healing", () => {
     const first = api
       .userHeal({ userId: USER_ID, healPercentage: 100 })
       .finally(releaseSecondRegen);
-    const second = api.userHeal({ userId: USER_ID, healPercentage: 100 });
+    // Either request can reach the first regeneration write; release the delayed
+    // write when either heal finishes, independent of request launch order.
+    const second = api
+      .userHeal({ userId: USER_ID, healPercentage: 100 })
+      .finally(releaseSecondRegen);
     const results = await Promise.all([first, second]);
 
     expect(regenWrites).toBe(2);
