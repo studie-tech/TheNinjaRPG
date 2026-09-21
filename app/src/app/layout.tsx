@@ -82,8 +82,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           telemetry={false}
           appearance={{
             elements: {
-              // Keep focused authentication fields readable without iOS auto-zoom.
-              formFieldInput: { fontSize: "16px" },
+              // Clerk’s mobile rule uses rem units against the game’s smaller root font.
+              // Override it to prevent iOS focus zoom without disabling pinch zoom.
+              formFieldInput: { fontSize: "16px !important" },
             },
             variables: {
               colorPrimary: "#ce7e00",
