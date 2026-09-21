@@ -40,10 +40,11 @@ export const HomeLanding: React.FC = () => {
     }
   }, [isSignedIn, userData, userId, userStatus]);
 
-  // The query is only enabled for a signed-in visitor, so an error is a character that
-  // failed to load, not one that does not exist. The segment's error boundary shows it
-  // with a retry; there is no /500 route to send them to.
-  if (userStatus === "error") {
+  // The query is only enabled for a signed-in visitor, so an error without data is a
+  // character that failed to load, not one that does not exist. The segment's error
+  // boundary shows it with a retry; there is no /500 route to send them to. A failed
+  // background refetch keeps the loaded character and still forwards to the profile.
+  if (userStatus === "error" && !userData) {
     throw new Error("Your character could not be loaded");
   }
 
