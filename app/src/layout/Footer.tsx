@@ -21,7 +21,8 @@ const Footer: React.FC = () => {
           </React.Fragment>
         ))}
       </p>
-      <p className="text-xs" data-footer-meta>
+      {/* A prerendered document carries the build's year; the client renders the real one. */}
+      <p className="text-xs" data-footer-meta suppressHydrationWarning>
         TheNinja-RPG © by Studie-Tech ApS - 2005-{new Date().getFullYear()}
       </p>
       <p className="mb-7 text-xs" data-footer-address>

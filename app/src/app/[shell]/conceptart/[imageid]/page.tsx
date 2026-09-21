@@ -37,7 +37,13 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const params = await props.params;
   const id = params.imageid;
   const image = await fetchArt(id);
-  if (!image) return noindexMetadata("Concept Art Not Found");
+  if (!image) {
+    // Also the page a user watches their own generation on, so it keeps its card.
+    return {
+      ...noindexMetadata("Concept Art Not Found"),
+      openGraph: { images: [cardFor(id)] },
+    };
+  }
   // Prompts run up to 5000 characters, so trim to something that fits a search result.
   const prompt = image.prompt.trim().replace(/\s+/g, " ");
   const shortPrompt = prompt.length > 70 ? `${prompt.slice(0, 67)}...` : prompt;

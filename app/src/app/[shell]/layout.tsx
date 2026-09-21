@@ -11,7 +11,6 @@ import NativeBridge from "@/components/native/NativeBridge";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import PWAManager from "@/components/pwa/PWAManager";
 import { Toaster } from "@/components/ui/toaster";
-import { IMG_LOGO_FULL } from "@/drizzle/constants";
 import { env } from "@/env/server.mjs";
 import { InstallPromptProvider } from "@/hooks/useInstallPrompt";
 import AcceptWarning from "@/layout/AcceptWarning";
@@ -24,7 +23,14 @@ import {
   FONT_SCALE_COOKIE,
   FONT_SCALE_VALUES,
 } from "@/libs/layoutPreference";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/libs/seo";
+import {
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_OPEN_GRAPH,
+  SITE_TITLE,
+  SITE_TWITTER,
+  SITE_URL,
+} from "@/libs/seo";
 import { parseShellParam, SHELL_PARAMS } from "@/libs/shell";
 import { UserContextProvider } from "@/utils/UserContext";
 
@@ -43,9 +49,10 @@ export function generateStaticParams() {
 
 /**
  * --font-scale feeds the root font-size, so it has to be set before first paint: applied
- * after hydration it re-flows the entire document. It used to be inlined from the cookie
- * on the server; a prerendered document cannot do that, so this runs in <head> instead
- * and reads the same cookie. Only the values the settings dialog can write are honoured.
+ * after hydration it re-flows the entire document. A prerendered document cannot carry
+ * the visitor's value, so this runs in <head> and reads it from the cookie the settings
+ * dialog writes. Only the values that dialog can write are honoured. A remount of the
+ * shell strips the attribute again; LayoutSwitcher re-applies it on mount.
  */
 const FONT_SCALE_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^|; )${FONT_SCALE_COOKIE}=([^;]*)/);var v=m&&parseFloat(decodeURIComponent(m[1]));if(v!==${DEFAULT_FONT_SCALE}&&${JSON.stringify(FONT_SCALE_VALUES)}.indexOf(v)>=0)document.documentElement.style.setProperty("--font-scale",String(v))}catch(e){}})()`;
 
@@ -57,10 +64,12 @@ export default async function RootLayout({
   params: Promise<{ shell: string }>;
 }) {
   const variant = parseShellParam((await params).shell);
+  // Unreachable in practice: dynamicParams above already 404s unknown values. Kept for
+  // the type narrowing, and as the last line of defence should that ever change.
   if (!variant) notFound();
   const initialIsSignedIn = variant.signedIn;
   const initialLayout = variant.layout;
-  const isNativeShell = variant.client === "native";
+  const isNativeShell = variant.client !== "web";
 
   return (
     <html
@@ -69,7 +78,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the script is a module-level constant assembled from two other constants, with no input from anywhere. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the script is a module-level constant assembled from three other constants, with no input from anywhere. */}
         <script dangerouslySetInnerHTML={{ __html: FONT_SCALE_SCRIPT }} />
       </head>
       <body className="h-full">
@@ -79,7 +88,11 @@ export default async function RootLayout({
           routerConfig={extractRouterConfig(ourFileRouter)}
         />
         <ClerkProvider
-          proxyUrl={isNativeShell ? "/__clerk" : undefined}
+          proxyUrl={
+            isNativeShell && env.NATIVE_CLERK_PROXY_ENABLED === "true"
+              ? "/__clerk"
+              : undefined
+          }
           telemetry={false}
           appearance={{
             elements: {
@@ -165,31 +178,8 @@ export const metadata: Metadata = {
   ],
   creator: "Mathias F. Gruber",
   publisher: "Studie-Tech ApS",
-  openGraph: {
-    title: title,
-    description: description,
-    url: SITE_URL,
-    siteName: SITE_NAME,
-    images: [
-      {
-        url: IMG_LOGO_FULL,
-        width: 512,
-        height: 768,
-        alt: "TheNinja-RPG Logo",
-      },
-    ],
-    locale: "en_US",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: title,
-    description: description,
-    siteId: "137431404",
-    creator: "@RealTheNinjaRPG",
-    creatorId: "137431404",
-    images: [IMG_LOGO_FULL], // Must be an absolute URL
-  },
+  openGraph: SITE_OPEN_GRAPH,
+  twitter: SITE_TWITTER,
   icons: {
     icon: "/favicon.ico",
     // iOS wants 180x180 and paints transparent corners black, so this one is flattened.
@@ -208,12 +198,20 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
-  themeColor: "#ce7e00",
-  colorScheme: "dark light",
-  viewportFit: "cover",
-};
+export async function generateViewport({
+  params,
+}: {
+  params: Promise<{ shell: string }>;
+}): Promise<Viewport> {
+  const client = parseShellParam((await params).shell)?.client;
+  return {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
+    themeColor: "#ce7e00",
+    colorScheme: "dark light",
+    // Android's fixed game controls need native insets; iOS PWAs need cover for CSS safe areas.
+    viewportFit: client === "android" ? "contain" : "cover",
+  };
+}

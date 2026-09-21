@@ -8,6 +8,7 @@ import LayoutCore4Pixel from "@/components/layout/core4_pixel";
 import ParticleProvider from "@/components/ui/particles";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import {
+  applyFontScaleCookie,
   type EffectiveLayout,
   LAYOUT_PREFERENCE_COOKIE,
   persistLayoutPreferenceCookie,
@@ -52,6 +53,9 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   const displayedLayout = initialLayout;
   useEffect(() => {
     document.documentElement.classList.toggle("dark", displayedLayout === "pixel");
+    // A change of shell variant mid-session remounts everything under <html>, and React
+    // strips what the head script set on it; put the font scale back.
+    applyFontScaleCookie();
   }, [displayedLayout]);
 
   const isKnownAnonymous = isClerkLoaded ? !userId : !initialIsSignedIn;

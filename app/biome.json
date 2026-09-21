@@ -50,7 +50,7 @@
                 "group": [
                   "next/link"
                 ],
-                "message": "Import Link from @/layout/Link, which turns prefetching off: every route here is dynamic, so a prefetch is a function invocation the router discards."
+                "message": "Import Link from @/layout/Link, which turns prefetching off: a prefetched shell buys a navigation nothing, since the data it waits on arrives through tRPC, and the game frame keeps twenty or more links in view."
               }
             ],
             "paths": {

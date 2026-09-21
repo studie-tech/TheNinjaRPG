@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { IMG_LOGO_FULL } from "@/drizzle/constants";
 import { htmlToPlainText } from "@/utils/sanitize";
 
 /**
@@ -15,6 +16,31 @@ export const OG_IMAGE_PATH = "/opengraph-image";
 export const SITE_TITLE = "TheNinja-RPG - Online RPG - Free Online Game for Ninjas";
 export const SITE_DESCRIPTION =
   "Play TheNinja-RPG free in your browser. Train your ninja, master jutsu, join a village and battle thousands of players in the world of Seichi. No download required.";
+
+/**
+ * The site-wide social cards, declared once so a page can replace the image while
+ * keeping the rest: Next replaces a parent's whole openGraph or twitter object when a
+ * child declares one.
+ */
+export const SITE_OPEN_GRAPH: NonNullable<Metadata["openGraph"]> = {
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  url: SITE_URL,
+  siteName: SITE_NAME,
+  images: [{ url: IMG_LOGO_FULL, width: 512, height: 768, alt: "TheNinja-RPG Logo" }],
+  locale: "en_US",
+  type: "website",
+};
+
+export const SITE_TWITTER: NonNullable<Metadata["twitter"]> = {
+  card: "summary_large_image",
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  siteId: "137431404",
+  creator: "@RealTheNinjaRPG",
+  creatorId: "137431404",
+  images: [IMG_LOGO_FULL], // Must be an absolute URL
+};
 
 /**
  * absoluteUrl

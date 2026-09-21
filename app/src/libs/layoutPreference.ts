@@ -5,9 +5,9 @@ export const LEGACY_AB_LAYOUT_COOKIE = "ab_lemu_replacement_2";
 export const LAYOUT_PREFERENCE_COOKIE = "tnr_layout_preference";
 
 /**
- * Font scale is mirrored into a cookie purely so the server can inline it on <html>.
- * Applying it from localStorage after hydration changes the root font-size, which
- * re-flows every rem-based measurement on the page in one frame.
+ * Font scale is mirrored into a cookie purely so the root layout's <head> script can
+ * apply it before first paint. Applying it from localStorage after hydration changes the
+ * root font-size, which re-flows every rem-based measurement on the page in one frame.
  */
 export const FONT_SCALE_COOKIE = "tnr_font_scale";
 export const FONT_SCALE_VALUES = [0.9, 1, 1.15, 1.3] as const;
@@ -126,7 +126,8 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
 
 /**
  * persistFontScaleCookie
- * - Mirrors the chosen font scale into a cookie so the next server render can inline it
+ * - Mirrors the chosen font scale into a cookie so the next document applies it before
+ *   first paint
  * @param scale - Validated font scale
  */
 export const persistFontScaleCookie = (scale: FontScaleValue) => {
@@ -134,6 +135,25 @@ export const persistFontScaleCookie = (scale: FontScaleValue) => {
   const secureAttribute = window.location.protocol === "https:" ? "; secure" : "";
   // biome-ignore lint/suspicious/noDocumentCookie: mirrors persistLayoutPreferenceCookie above.
   document.cookie = `${FONT_SCALE_COOKIE}=${scale}; path=/; max-age=31536000; samesite=lax${secureAttribute}`;
+};
+
+/**
+ * applyFontScaleCookie
+ * - Sets --font-scale on <html> from the cookie, or clears it at the default. The head
+ *   script does the same before first paint; this is for after a remount of the shell,
+ *   which strips every attribute React did not render on <html>.
+ */
+export const applyFontScaleCookie = () => {
+  if (typeof document === "undefined") return;
+  const match = document.cookie.match(
+    new RegExp(`(?:^|; )${FONT_SCALE_COOKIE}=([^;]*)`),
+  );
+  const scale = toFontScale(match ? decodeURIComponent(match[1] ?? "") : undefined);
+  if (scale === undefined || scale === DEFAULT_FONT_SCALE) {
+    document.documentElement.style.removeProperty("--font-scale");
+  } else {
+    document.documentElement.style.setProperty("--font-scale", String(scale));
+  }
 };
 
 export const storedValueToLayout = (

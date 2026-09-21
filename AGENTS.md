@@ -51,7 +51,7 @@ Next.js 15 App Router / React 19 / strict TypeScript; Tailwind, Shadcn/Radix; Dr
 
 | Path | Responsibility |
 | --- | --- |
-| `app/src/app/` | Routes; `manual/` is admin content management |
+| `app/src/app/[shell]/` | Routes, prerendered once per shell variant (`app/src/libs/shell.ts`); the proxy rewrites each request to its variant. Route handlers and metadata files stay at `app/src/app/`. `manual/` is admin content management |
 | `app/src/server/api/` | `root.ts`: router registry; `trpc.ts`: middleware and `baseServerResponse`; `routers/`: endpoints |
 | `app/src/libs/` | Game logic by feature (combat, travel, bounty, etc.) |
 | `app/src/validators/` | Shared Zod schemas |
@@ -87,6 +87,7 @@ Capacitor shells and dependencies live in `mobile/`, with their own `package.jso
 - Use functional/declarative TypeScript, avoid classes, prefer named component exports and descriptive names (auxiliary verbs for booleans).
 - File order: exported component → subcomponents → helpers → types.
 - Comments explain purpose, not review history; remove markers such as "Issue X:" or "TODO from review:".
+- Read the path with `usePublicPathname` from `@/utils/routing`, never `usePathname`: a prerendered page renders under its shell variant's internal path, and branching on `usePathname` gives the server and the client different values. Import `Link` from `@/layout/Link`, never `next/link`. Biome enforces both.
 - Display game values using `@/drizzle/constants.ts`; never hardcode costs, thresholds or damage values.
 - Prefer reusable `app/src/layout/` components and Shadcn/Radix; use mobile-first Tailwind and optimize Web Vitals.
 - Sentry filtering lives in `app/instrumentation-client.ts`; inspect `app/src/app/_trpc/Provider.tsx` for existing toast handling and `isReplicateApiError` for a documented UX example. Third-party, network, extension or hydration errors are not automatically safe to ignore; apply the required UX checks above.
