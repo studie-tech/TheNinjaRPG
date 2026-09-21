@@ -209,5 +209,6 @@ export const viewport: Viewport = {
   userScalable: true,
   themeColor: "#ce7e00",
   colorScheme: "dark light",
-  viewportFit: "cover",
+  // Fixed game controls must stay clear of native status bars and display cutouts.
+  viewportFit: "contain",
 };
