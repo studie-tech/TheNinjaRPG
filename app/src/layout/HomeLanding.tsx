@@ -27,22 +27,25 @@ export const HomeLanding: React.FC = () => {
   // Redirect based on user status
   useEffect(() => {
     // When user is signed in (Clerk) but has not created a character yet, set referral immediately
-    if (isSignedIn && !userData && userStatus !== "pending") {
+    if (isSignedIn && !userData && userStatus === "success") {
       // attempt to read utm_source from localStorage if present
       const utm = safeLocalStorageGetItem("utm_source");
       setReferral.mutate({ utmSource: utm ?? undefined });
     }
-    if (userStatus !== "pending" && !userData) {
-      if (userStatus === "error") {
-        void router.push("/500");
-      } else {
-        void router.push("/register");
-      }
+    if (userStatus === "success" && !userData) {
+      void router.push("/register");
     }
     if (userData && userId) {
       void router.push("/profile");
     }
   }, [isSignedIn, userData, userId, userStatus]);
+
+  // The query is only enabled for a signed-in visitor, so an error is a character that
+  // failed to load, not one that does not exist. The segment's error boundary shows it
+  // with a retry; there is no /500 route to send them to.
+  if (userStatus === "error") {
+    throw new Error("Your character could not be loaded");
+  }
 
   // Guard
   if (!isSignedIn && !userData) {
