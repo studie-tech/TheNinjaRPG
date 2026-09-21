@@ -150,7 +150,10 @@ import {
   claimUserSnapshot,
 } from "@/server/utils/concurrency";
 import { getFarmCollectionCount } from "@/server/utils/farming";
-import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
+import {
+  buildDerivedUserRegenUpdate,
+  buildNegativePrestigeVillageUpdate,
+} from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -1458,7 +1461,9 @@ export const profileRouter = createTRPCRouter({
             ...(usernameChanged ? { username: input.data.username } : {}),
             ...(customTitleChanged ? { customTitle: input.data.customTitle } : {}),
             ...(bloodlineChanged ? { bloodlineId: input.data.bloodlineId } : {}),
-            ...(villageChanged ? { villageId: input.data.villageId } : {}),
+            ...(villageChanged
+              ? { villageId: input.data.villageId, joinedVillageAt: new Date() }
+              : {}),
             ...(rankChanged ? { rank: input.data.rank } : {}),
             ...(bloodlineReskinChanged
               ? { bloodlineReskinId: input.data.bloodlineReskinId ?? null }
@@ -2876,48 +2881,60 @@ export const fetchUpdatedUser = async (props: {
           : null,
       ]);
       if (syndicate) {
-        // Immidiate update of user. Will be effectuated now (forceRegen)
-        user.villagePrestige = -user.villagePrestige;
-        user.villageId = syndicate.id;
-        user.isOutlaw = true;
-        forceRegen = true;
-        // Trigger message to user
-        void pusher.trigger(user.userId, "event", {
-          type: "userMessage",
-          message: "You have been kicked out of your village due to negative prestige",
-          route: "/profile",
-          routeText: "To Profile",
-        });
-        // Queries to be run now
-        await Promise.all([
-          // Squad updates
-          ...(user.anbuId && squadData
-            ? [removeFromSquad(client, squadData, user.userId)]
-            : []),
-          // Clan updates
-          ...(user.clanId && clanData
-            ? [removeFromClan(client, clanData, user, ["Turned outlaw"])]
-            : []),
-          // Kage updates
-          ...(needNewKage && elder
-            ? [
-                client
-                  .update(village)
-                  .set({ kageId: elder.userId, leaderUpdatedAt: new Date() })
-                  .where(eq(village.id, user.villageId)),
-                client
-                  .update(userData)
-                  .set({ villagePrestige: KAGE_PRESTIGE_REQUIREMENT })
-                  .where(eq(userData.userId, user.userId)),
-                pusher.trigger(user.userId, "event", {
-                  type: "userMessage",
-                  message: `Your prestige dropped below ${KAGE_MIN_PRESTIGE} and you are no longer kage`,
-                  route: "/profile",
-                  routeText: "To Profile",
-                }),
-              ]
-            : []),
-        ]);
+        const previousVillageId = user.villageId;
+        const kickUpdate = buildNegativePrestigeVillageUpdate(user, syndicate.id);
+        const expectedVillage = previousVillageId
+          ? eq(userData.villageId, previousVillageId)
+          : isNull(userData.villageId);
+        const kickResult = await client
+          .update(userData)
+          .set(kickUpdate)
+          .where(
+            and(
+              eq(userData.userId, user.userId),
+              eq(userData.villagePrestige, user.villagePrestige),
+              eq(userData.isOutlaw, false),
+              expectedVillage,
+            ),
+          );
+        if (kickResult.rowsAffected === 1) {
+          Object.assign(user, kickUpdate);
+          forceRegen = true;
+          void pusher.trigger(user.userId, "event", {
+            type: "userMessage",
+            message:
+              "You have been kicked out of your village due to negative prestige",
+            route: "/profile",
+            routeText: "To Profile",
+          });
+          // Complete the guarded transition before starting related membership cleanup.
+          await Promise.all([
+            ...(user.anbuId && squadData
+              ? [removeFromSquad(client, squadData, user.userId)]
+              : []),
+            ...(user.clanId && clanData
+              ? [removeFromClan(client, clanData, user, ["Turned outlaw"])]
+              : []),
+            ...(needNewKage && elder && previousVillageId
+              ? [
+                  client
+                    .update(village)
+                    .set({ kageId: elder.userId, leaderUpdatedAt: new Date() })
+                    .where(eq(village.id, previousVillageId)),
+                  client
+                    .update(userData)
+                    .set({ villagePrestige: KAGE_PRESTIGE_REQUIREMENT })
+                    .where(eq(userData.userId, user.userId)),
+                  pusher.trigger(user.userId, "event", {
+                    type: "userMessage",
+                    message: `Your prestige dropped below ${KAGE_MIN_PRESTIGE} and you are no longer kage`,
+                    route: "/profile",
+                    routeText: "To Profile",
+                  }),
+                ]
+              : []),
+          ]);
+        }
       }
     }
   }
@@ -3072,7 +3089,7 @@ export const fetchUpdatedUser = async (props: {
   }
 };
 
-/** Writes passive regen fields to userData; merges fresh village prestige/id/outlaw when persisting village state (not the separate negative-prestige kick flow above). */
+/** Writes passive regen fields to userData after refreshing any included village state. */
 const persistPassiveRegenToDb = async ({
   client,
   userId,

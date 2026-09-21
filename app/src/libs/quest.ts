@@ -44,6 +44,7 @@ import {
   isSupportedOverworldBindingTask,
 } from "@/libs/overworldAi";
 import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
+import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUnique } from "@/utils/grouping";
 import { randomInt } from "@/utils/math";
@@ -285,6 +286,7 @@ export const getReward = (
     const clanMissionBoost = user.isOutlaw
       ? 0
       : (user.clan?.missionRewardBoost ?? 0) / 100;
+    const loyalty = getVillageLoyaltyBonuses(user);
     let boostFactor = 1;
     if (userQuest?.quest.questType) {
       if (["mission", "crime", "medical"].includes(userQuest.quest.questType)) {
@@ -293,6 +295,9 @@ export const getReward = (
         // clanMissionBoost intentionally excluded from errands; only shrine + village hall apply
         boostFactor = 1 + errandsBoost + villageMissionBoost;
       }
+    }
+    if (["mission", "errand"].includes(userQuest.quest.questType)) {
+      boostFactor += loyalty.missionRewards / 100;
     }
     // Get rewards
     const tracker = trackers.find((q) => q.id === userQuest.quest.id);
@@ -383,22 +388,27 @@ export const getReward = (
     });
     // Scale rewards
     const missionLike = ["mission", "crime"].includes(userQuest.quest.questType);
-    let factor = boostFactor; // Start with shrine boost factor
-
-    // Apply daily mission limit penalty if applicable, but keep shrine boost
-    if (
+    const reducedRewardFactor =
       missionLike &&
       isReducedMissionReward(user.dailyMissions, { phase: "in-progress" })
-    ) {
-      factor = ADDITIONAL_MISSION_REWARD_MULTIPLIER * boostFactor;
-    }
+        ? ADDITIONAL_MISSION_REWARD_MULTIPLIER
+        : 1;
+    const factor = boostFactor * reducedRewardFactor;
+    const villageRewardFactor =
+      (boostFactor + loyalty.villageRewards / 100) * reducedRewardFactor;
+    const masteryTrainingFactor =
+      (boostFactor + loyalty.masteryTraining / 100) * reducedRewardFactor;
 
     rawRewards.reward_money = Math.floor(rawRewards.reward_money * factor);
     rawRewards.reward_clanpoints = Math.floor(rawRewards.reward_clanpoints * factor);
     rawRewards.reward_anbupoints = Math.floor(rawRewards.reward_anbupoints * factor);
     rawRewards.reward_exp = Math.floor(rawRewards.reward_exp * factor);
-    rawRewards.reward_tokens = Math.floor(rawRewards.reward_tokens * factor);
-    rawRewards.reward_prestige = Math.floor(rawRewards.reward_prestige * factor);
+    rawRewards.reward_tokens = Math.floor(
+      rawRewards.reward_tokens * villageRewardFactor,
+    );
+    rawRewards.reward_prestige = Math.floor(
+      rawRewards.reward_prestige * villageRewardFactor,
+    );
     rawRewards.reward_reputation = Math.floor(rawRewards.reward_reputation * factor);
     rawRewards.reward_medical_experience = Math.floor(
       rawRewards.reward_medical_experience * factor,
@@ -413,12 +423,11 @@ export const getReward = (
       rawRewards.reward_gathering_experience * factor,
     );
     rawRewards.reward_sage_mastery_experience = Math.floor(
-      rawRewards.reward_sage_mastery_experience * factor,
+      rawRewards.reward_sage_mastery_experience * masteryTrainingFactor,
     );
     rawRewards.reward_seichi_silver = Math.floor(
       rawRewards.reward_seichi_silver * factor,
     );
-
     // Apply clan experience boosts (percentages stored in clan object)
     // Only apply for real clans, not outlaw factions/towns
     const clanHunterExpBoost = user.isOutlaw

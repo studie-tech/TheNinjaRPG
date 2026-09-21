@@ -225,7 +225,8 @@ export default function VillageOverview() {
                 {userData?.isOutlaw ? "faction" : "village"}? Your prestige will be
                 reset to 0. Please be aware that if you join another{" "}
                 {userData?.isOutlaw ? "faction" : "village"} your training benefits &
-                regen will be reduced for {VILLAGE_REDUCED_GAINS_DAYS} days.
+                regen will be reduced for {VILLAGE_REDUCED_GAINS_DAYS} days, and your
+                village loyalty bonuses will restart from day 0.
               </Confirm>
             )}
           </div>

@@ -97,6 +97,10 @@ import {
 } from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
 import { hasRequiredLevel } from "@/libs/train";
+import {
+  getVillageLoyaltyBonuses,
+  getVillageLoyaltyShopCost,
+} from "@/libs/villageLoyalty";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchUserSkills } from "@/routers/skillTree";
@@ -1183,13 +1187,17 @@ export const itemRouter = createTRPCRouter({
       if (existingUnlock) return errorResponse("Variant already unlocked");
 
       // Currency checks
-      const currency = getVariantCurrencyOps(variant.costType, variant.cost, user);
-      if (currency.balance < variant.cost) {
-        return errorResponse(`Insufficient ${currency.label}. Need ${variant.cost}`);
+      const cost =
+        variant.costType === "VILLAGE_PRESTIGE"
+          ? getVillageLoyaltyShopCost(variant.cost, user)
+          : variant.cost;
+      const currency = getVariantCurrencyOps(variant.costType, cost, user);
+      if (currency.balance < cost) {
+        return errorResponse(`Insufficient ${currency.label}. Need ${cost}`);
       }
 
       // Mutate — deduct currency first with CAS guard (skip for free variants)
-      if (variant.cost > 0) {
+      if (cost > 0) {
         const deductResult = await ctx.drizzle
           .update(userData)
           .set(currency.decrementSet)
@@ -1202,7 +1210,7 @@ export const itemRouter = createTRPCRouter({
 
       // Refund the deducted currency (no-op for free variants).
       const refundCurrency = async () => {
-        if (variant.cost > 0) {
+        if (cost > 0) {
           await ctx.drizzle
             .update(userData)
             .set(currency.incrementSet)
@@ -2551,9 +2559,10 @@ export const itemRouter = createTRPCRouter({
       const hDiscount = info?.effects.find((e) => e.type === "heal")
         ? MEDNIN_HEAL_ITEM_DISCOUNT_PERC
         : 0;
+      const loyaltyDiscount = getVillageLoyaltyBonuses(user).shopDiscount;
       const factor = Math.max(
         MIN_ITEM_SHOP_DISCOUNT_FACTOR,
-        (100 - sDiscount - aDiscount - hDiscount) / 100,
+        (100 - sDiscount - aDiscount - hDiscount - loyaltyDiscount) / 100,
       );
       // Guard
       if (user.villageId !== input.villageId) return errorResponse("Wrong village");
