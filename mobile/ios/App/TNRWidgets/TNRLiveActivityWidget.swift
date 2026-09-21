@@ -12,7 +12,6 @@ struct TNRLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TNRActivityAttributes.self) { context in
             LockScreenView(context: context)
-                .activityBackgroundTint(TNRStyle.parchment)
                 .activitySystemActionForegroundColor(.primary)
         } dynamicIsland: { context in
             DynamicIsland {
