@@ -943,7 +943,25 @@ export const insertAction = (info: {
     // Skip per-tile A* pathfinding when no barriers exist on the field
     const hasBarriers = groundEffects.some((g) => g.type === "barrier");
     const EMPTY_BARRIER_RESULT = { barriers: [] as BattleEffect[], totalAbsorb: 0 };
-    const castTags = resolvePotencyTags(action, usersEffects, actorId);
+    // Ground projections are discarded after processing, so snapshot the caster's
+    // current tile before this cast inserts any new effects.
+    const groundPotency: UserEffect[] = groundEffects
+      .filter(
+        (effect) =>
+          (effect.type === "increasepotency" || effect.type === "decreasepotency") &&
+          effect.longitude === user.longitude &&
+          effect.latitude === user.latitude &&
+          !effect.isNew &&
+          isEffectActive(effect) &&
+          checkFriendlyFire(effect, user, usersState) &&
+          !usersEffects.some((userEffect) => userEffect.id === effect.id),
+      )
+      .map((effect) => ({ ...effect, targetId: actorId, fromGround: true }));
+    const castTags = resolvePotencyTags(
+      action,
+      [...usersEffects, ...groundPotency],
+      actorId,
+    );
     // For each affected tile, apply the effects
     affectedTiles.forEach((tile) => {
       // Calculate how many barriers are between origin & target

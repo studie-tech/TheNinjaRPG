@@ -513,6 +513,56 @@ describe("potency element matching", () => {
 
 describe("potency combat lifecycle", () => {
   it.each(["increasepotency", "decreasepotency"] as const)(
+    "snapshots ground %s on subsequent casts only while the caster occupies its tile",
+    (type) => {
+      let battle = makeBattle();
+      cast(battle, makeAction([
+        makeTag(type, { target: "INHERIT", power: 20, powerPerLevel: 0, rounds: 3 }),
+      ], { target: "GROUND" }), "attacker", 0);
+      const damage = makeAction([
+        makeTag("damage", { power: 40, powerPerLevel: 0, calculation: "static" }),
+      ], { id: "ground-boosted-cast" });
+      const castPower = () => {
+        cast(battle, damage);
+        return battle.usersEffects.filter((effect) => effect.actionId === damage.id).at(-1)?.power;
+      };
+      expect(castPower()).toBe(40);
+      battle = applyEffects(battle, "attacker").newBattle;
+      expect(battle.usersEffects.some((effect) => effect.type === type)).toBe(false);
+      expect(castPower()).toBe(type === "increasepotency" ? 60 : 20);
+
+      const caster = battle.usersState.find((user) => user.userId === "attacker")!;
+      caster.latitude = 1;
+      expect(castPower()).toBe(40);
+      caster.latitude = 0;
+      expect(castPower()).toBe(type === "increasepotency" ? 60 : 20);
+
+      const ground = battle.groundEffects.find((effect) => effect.type === type)!;
+      ground.rounds = 0;
+      expect(castPower()).toBe(40);
+    },
+  );
+
+  it.each([
+    ["FRIENDLY", "attacker", 60],
+    ["ENEMIES", "attacker", 40],
+    ["FRIENDLY", "defender", 40],
+    ["ENEMIES", "defender", 60],
+    ["ALL", "defender", 60],
+    ["ALL", "missing", 40],
+  ] as const)("checks ground potency friendly fire %s from %s", (friendlyFire, creatorId, power) => {
+    const battle = makeBattle();
+    battle.groundEffects.push(makePotency(
+      { power: 20, powerPerLevel: 0, friendlyFire },
+      { creatorId, longitude: 0, latitude: 0 },
+    ));
+    cast(battle, makeAction([
+      makeTag("damage", { power: 40, powerPerLevel: 0, calculation: "static" }),
+    ]));
+    expect(battle.usersEffects.find((effect) => effect.type === "damage")?.power).toBe(power);
+  });
+
+  it.each(["increasepotency", "decreasepotency"] as const)(
     "preserves %s element selections through casting and effect processing",
     (type) => {
       let battle = makeBattle();
