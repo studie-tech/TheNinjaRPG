@@ -484,6 +484,7 @@ export default function MyJutsu() {
               Equipped Jutsu ({categorizedJutsus.equipped.length}/{maxEquip})
             </h3>
             <ActionSelector
+              gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]"
               items={transformToActionItems(
                 // Sort equipped by loadout order
                 [...categorizedJutsus.equipped].sort((a, b) => {
@@ -765,6 +766,7 @@ export default function MyJutsu() {
                           <div className="flex flex-col gap-2">
                             <p>Select a jutsu to transfer the level to.</p>
                             <ActionSelector
+                              gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]"
                               items={userJutsus
                                 ?.filter(
                                   (uj) =>
@@ -1262,6 +1264,7 @@ const JutsuCategorySection = memo((props: JutsuCategorySectionProps) => {
       {isOpen && (
         <div className="py-2">
           <ActionSelector
+            gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]"
             items={transformToActionItems(jutsus)}
             counts={counts?.filter((c) => jutsus.some((j) => j.id === c.id))}
             labelSingles={true}
