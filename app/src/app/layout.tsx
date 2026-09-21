@@ -81,6 +81,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           }
           telemetry={false}
           appearance={{
+            elements: {
+              // Keep focused authentication fields readable without iOS auto-zoom.
+              formFieldInput: { fontSize: "16px" },
+            },
             variables: {
               colorPrimary: "#ce7e00",
               colorForeground: "black",
