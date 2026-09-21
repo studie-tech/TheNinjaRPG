@@ -1,4 +1,3 @@
-import Link from "@/layout/Link";
 import "../styles/globals.css";
 
 export const metadata = {
@@ -18,12 +17,13 @@ export default function GlobalNotFound() {
           <p className="mb-6 text-slate-300">
             The page you are trying to access does not exist or may have moved.
           </p>
-          <Link
+          {/* Reload the root layout and providers that this standalone page bypasses. */}
+          <a
             href="/"
             className="inline-flex rounded-md bg-amber-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-amber-400"
           >
             Return to The Ninja RPG
-          </Link>
+          </a>
         </main>
       </body>
     </html>
