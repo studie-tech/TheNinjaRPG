@@ -1,13 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-// Override ONLY checkFriendlyFire — do NOT stub applyEffects. Under `bun test` vi.mock merges the
-// factory over the real module and the override is process-global, so stubbing applyEffects here
-// leaks into sibling suites that drive the real applyEffects (summon/poison/used_tag_types damage-
-// credit tests) and crashes them. This suite never calls applyEffects, so leaving it real is inert.
-vi.mock("@/libs/combat/process", () => ({
-  checkFriendlyFire: vi.fn(() => true),
-}));
-
 vi.mock("@/libs/hexgrid", () => ({
   getPossibleActionTiles: vi.fn((_action, _userHex, grid) => grid),
   PathCalculator: vi.fn(() => ({
