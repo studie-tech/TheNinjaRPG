@@ -17,17 +17,63 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import Logbook from "@/layout/Logbook";
+import { LogbookAchievements, LogbookBattles, LogbookHistory } from "@/layout/Logbook";
 import Modal from "@/layout/Modal";
+import NavTabs from "@/layout/NavTabs";
+import ProfileDashboard from "@/layout/ProfileDashboard";
 import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
+import { isTutorialActive } from "@/libs/tutorial";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+const profileTabs = ["Dashboard", "Character", "Achievements", "History"] as const;
+const tutorialProfileTabs = ["Character", "Achievements", "History"] as const;
+type ProfileTab = (typeof profileTabs)[number];
+
 export default function Profile() {
+  const { data: userData } = useRequiredUserData();
+  const [tab, setTab] = useState<ProfileTab>("Dashboard");
+
+  if (!userData) return <Loader explanation="Loading profile page..." />;
+
+  const tutorialActive = isTutorialActive(userData);
+  const activeTab = tutorialActive && tab === "Dashboard" ? "Character" : tab;
+  const visibleTabs = tutorialActive ? tutorialProfileTabs : profileTabs;
+
+  return (
+    <ContentBox
+      id="tutorial-profile"
+      title="Global Logbook"
+      subtitle="Rewards, current activities, and opportunities"
+      padding={false}
+      topRightContent={
+        <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <NavTabs
+            current={activeTab}
+            options={visibleTabs}
+            setValue={setTab}
+            fontSize="text-xs"
+          />
+        </div>
+      }
+    >
+      {activeTab === "Dashboard" && <ProfileDashboard />}
+      {activeTab === "Character" && <CharacterProfile />}
+      {activeTab === "Achievements" && (
+        <div className="p-3">
+          <LogbookAchievements />
+        </div>
+      )}
+      {activeTab === "History" && <ProfileHistory />}
+    </ContentBox>
+  );
+}
+
+function CharacterProfile() {
   // State
   const { data: userData, notifications } = useRequiredUserData();
   const [pvpInfoModal, setPvpInfoModal] = useState<"activity" | "rank" | null>(null);
@@ -63,7 +109,6 @@ export default function Profile() {
   return (
     <>
       <ContentBox
-        id="tutorial-profile"
         title="Profile"
         subtitle="An overview of basic information"
         topRightContent={
@@ -257,7 +302,7 @@ export default function Profile() {
 
       <Modal
         title="PvP activity"
-        className="w-full max-w-[min(16rem,calc(100%-2rem))] gap-2 p-4 md:!max-w-[16rem]"
+        className="md:!max-w-[16rem] w-full max-w-[min(16rem,calc(100%-2rem))] gap-2 p-4"
         centerText
         isOpen={pvpInfoModal === "activity"}
         setIsOpen={(open) => setPvpInfoModal(open ? "activity" : null)}
@@ -281,7 +326,7 @@ export default function Profile() {
       {topPlayers && (
         <Modal
           title="PvP rank"
-          className="w-full max-w-[min(17rem,calc(100%-2rem))] gap-2 p-4 md:!max-w-[17rem]"
+          className="md:!max-w-[17rem] w-full max-w-[min(17rem,calc(100%-2rem))] gap-2 p-4"
           centerText
           isOpen={pvpInfoModal === "rank"}
           setIsOpen={(open) => setPvpInfoModal(open ? "rank" : null)}
@@ -321,7 +366,20 @@ export default function Profile() {
       )}
 
       <StrengthWeaknesses />
-      <Logbook />
     </>
+  );
+}
+
+function ProfileHistory() {
+  const [tab, setTab] = useState<"Quests" | "Battles">("Quests");
+  return (
+    <div>
+      <div className="flex justify-end border-b px-3">
+        <NavTabs current={tab} options={["Quests", "Battles"]} setValue={setTab} />
+      </div>
+      <div className="p-3">
+        {tab === "Quests" ? <LogbookHistory /> : <LogbookBattles />}
+      </div>
+    </div>
   );
 }
