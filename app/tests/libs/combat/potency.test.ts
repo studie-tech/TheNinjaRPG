@@ -304,6 +304,42 @@ describe("potency arithmetic", () => {
     }
   });
 
+  it.each(["increasepotency", "decreasepotency"] as const)(
+    "suppresses bloodline %s only while a resolved seal is active on the caster",
+    (type) => {
+      const action = makeAction([
+        makeTag("damage", { power: 40, powerPerLevel: 0 }),
+      ]);
+      const bloodline = makePotency(
+        { type, power: 20, powerPerLevel: 0, calculation: "static" },
+        { fromType: "bloodline" },
+      );
+      const jutsu = makePotency({ power: 5, powerPerLevel: 0, calculation: "static" });
+      const seal = makeEffect("seal", { rounds: 2 }, {
+        targetId: "attacker",
+        isNew: false,
+      });
+      const effects = [bloodline, jutsu, seal];
+      const unsealedPower = type === "increasepotency" ? 65 : 25;
+      const resolvePower = () => resolvePotencyTags(action, effects, "attacker")[0]?.power;
+
+      expect(resolvePower()).toBe(45);
+      expect(effects[0]).toBe(bloodline);
+      expect(bloodline.power).toBe(20);
+
+      seal.rounds = 0;
+      expect(resolvePower()).toBe(unsealedPower);
+
+      seal.rounds = 2;
+      seal.isNew = true;
+      expect(resolvePower()).toBe(unsealedPower);
+
+      seal.isNew = false;
+      seal.targetId = "defender";
+      expect(resolvePower()).toBe(unsealedPower);
+    },
+  );
+
   it("distinguishes selectors and modes in stacking identities", () => {
     const effects = [
       makePotency({ affectedTag: "damage" }),

@@ -3,6 +3,7 @@ import {
   type ElementName,
   isPreBattleGearFromType,
 } from "@/drizzle/constants";
+import { sealCheck } from "@/libs/combat/tags";
 import type { CombatAction, UserEffect } from "@/libs/combat/types";
 import { getEffectStackKey, isEffectActive } from "@/libs/combat/util";
 import type { PotencyTag, ZodAllTags } from "@/validators/combat";
@@ -62,6 +63,9 @@ export const resolvePotencyTags = (
   const tags = structuredClone(action.effects);
   if (action.type !== "jutsu") return tags;
 
+  const sealEffects = usersEffects.filter(
+    (effect) => effect.type === "seal" && !effect.isNew && isEffectActive(effect),
+  );
   const seen = new Set<string>();
   const modifiers: (Pick<PotencyTag, "affectedTag" | "affectedElements"> & {
     flat: number;
@@ -72,7 +76,8 @@ export const resolvePotencyTags = (
       (effect.type !== "increasepotency" && effect.type !== "decreasepotency") ||
       effect.targetId !== casterId ||
       effect.isNew ||
-      !isEffectActive(effect)
+      !isEffectActive(effect) ||
+      sealCheck(effect, sealEffects)
     ) {
       continue;
     }
