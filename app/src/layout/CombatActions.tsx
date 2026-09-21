@@ -288,7 +288,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   return (
     <div
       className={cn(
-        "relative flex flex-col items-center justify-start rounded-md text-center",
+        "relative z-0 flex flex-col items-center justify-start rounded-md text-center",
         insufficientAP ? "cursor-not-allowed" : "cursor-pointer",
         props.isGreyed ? "hover:opacity-80" : insufficientAP ? "" : "hover:opacity-90",
         props.className,
