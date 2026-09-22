@@ -13,6 +13,17 @@ export const serverSchema = z.object({
   DEV_DATABASE_URL: z.url().optional(),
   AI_DATABASE_URL: z.url().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]),
+  /**
+   * Pull zone in front of production; unset serves everything from the app itself. Its
+   * value becomes a script-src host and the scheme the zone pulls over, so only a bare
+   * https origin is accepted.
+   */
+  CDN_URL: z
+    .url({ protocol: /^https$/ })
+    .refine((value) => value.replace(/\/+$/, "") === new URL(value).origin, {
+      message: "CDN_URL must be a bare origin, without a path",
+    })
+    .optional(),
   DISCORD_CONTENT_UPDATES: z.url().optional(),
   DISCORD_NEWS_UPDATES: z.url().optional(),
   DISCORD_TICKETS: z.url().optional(),
@@ -70,6 +81,7 @@ export const serverSchema = z.object({
  * @type {{ [k in keyof z.infer<typeof serverSchema>]: z.infer<typeof serverSchema>[k] | undefined }}
  */
 export const serverEnv = {
+  CDN_URL: process.env.CDN_URL,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   PUSHER_APP_ID: process.env.PUSHER_APP_ID,
   PUSHER_APP_SECRET: process.env.PUSHER_APP_SECRET,

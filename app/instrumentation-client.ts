@@ -239,6 +239,8 @@ Sentry.init({
   environment: process.env.NODE_ENV,
 
   // Only on production URLs
+  // Leave this off while a pull zone serves the bundle: app frames then come from
+  // the zone's hostname, and an allowlist of the site would drop every client error.
   // allowUrls: [/https?:\/\/(www\.)?theninja-rpg\.com.*/],
 
   // Replay sample rates are omitted along with the integration above; they have no

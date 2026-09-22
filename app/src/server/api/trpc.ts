@@ -77,6 +77,19 @@ export const createAppTRPCContext = async (options: {
 };
 
 /**
+ * Context for /api/trpc/cdn, whose responses the CDN shares between visitors: nothing
+ * per-request survives but the IP the rate limiter keys on.
+ */
+export const createCdnTRPCContext = (readHeaders: ReadonlyHeaders) => ({
+  drizzle: drizzleDB,
+  userIp: getClientIp(readHeaders),
+  userId: null,
+  userAgent: undefined,
+  abLemuReplacementVariant: undefined,
+  abPixelLayoutVariant: undefined,
+});
+
+/**
  * 2. INITIALIZATION
  *
  * This is where the tRPC API is initialized, connecting the context and transformer.
@@ -84,7 +97,7 @@ export const createAppTRPCContext = async (options: {
 
 const t = initTRPC
   .context<typeof createAppTRPCContext>()
-  .meta<McpMeta>()
+  .meta<ProcedureMeta>()
   .create({
     transformer: superjson,
     errorFormatter({ shape, error }) {
@@ -202,6 +215,29 @@ export const publicProcedure = t.procedure
   .use(ratelimitMiddleware)
   .use(sentryMiddleware);
 
+/**
+ * A public query whose result the CDN caches and shares between visitors (see
+ * /api/trpc/cdn). The context is stripped of everything per-request on every endpoint,
+ * so the result cannot depend on who asked; only build a query with it when no client
+ * code invalidates or refetches it after an action, since the refetch would be served
+ * the cached copy (tests/server/api/cdnCachedQueries.test.ts enforces this).
+ */
+export const cdnCachedProcedure = publicProcedure
+  .meta({ cdnCached: true })
+  .use(({ next }) =>
+    next({
+      ctx: {
+        userId: null,
+        // Nulled after the rate limiter, which is the only thing that reads it: a
+        // shared copy must not be able to depend on who asked for it.
+        userIp: undefined,
+        userAgent: undefined,
+        abLemuReplacementVariant: undefined,
+        abPixelLayoutVariant: undefined,
+      },
+    }),
+  );
+
 const enforceUserIsAuthed = t.middleware(
   async ({ ctx: context, path, getRawInput, next }) => {
     // Check that the user is authed
@@ -236,3 +272,6 @@ export { type BaseServerResponse, baseServerResponse } from "@/validators/base";
 export const errorResponse = (msg: string) => {
   return { success: false as const, message: msg };
 };
+
+/** Procedure meta: MCP exposure, and whether /api/trpc/cdn may cache the result. */
+export type ProcedureMeta = McpMeta & { cdnCached?: true };

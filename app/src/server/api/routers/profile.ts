@@ -40,6 +40,7 @@ import {
   SHRINE_BOOST_TYPES,
   SKILL_POINT_MAX_LEVEL,
   SKILL_POINT_MIN_LEVEL,
+  STRONGEST_USERS_COUNT,
   shrineLobbyFreshAfter,
   TUTORIAL_STEPS_COUNT,
   UserRanks,
@@ -137,6 +138,7 @@ import { fetchVillage, fetchVillages } from "@/routers/village";
 import { deleteUser } from "@/server/api/routers/staff";
 import {
   baseServerResponse,
+  cdnCachedProcedure,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -2135,6 +2137,20 @@ export const profileRouter = createTRPCRouter({
     .input(getPublicUsersSchema)
     .query(async ({ ctx, input }) => {
       return fetchPublicUsers({ client: ctx.drizzle, input, userId: ctx.userId });
+    }),
+  // The sidebar's top list, on nearly every page load. Kept apart from getPublicUsers,
+  // whose rows carry real IPs for staff, so the CDN can serve it.
+  getStrongestUsers: cdnCachedProcedure
+    .meta({
+      mcp: { enabled: true, description: "Get the users with the most ranked LP" },
+    })
+    .query(async ({ ctx }) => {
+      return ctx.drizzle.query.userData.findMany({
+        columns: { userId: true, username: true, avatarLight: true, rankedLp: true },
+        where: eq(userData.isAi, false),
+        orderBy: [desc(userData.rankedLp), desc(userData.experience)],
+        limit: STRONGEST_USERS_COUNT,
+      });
     }),
 
   // Get recruitment rewards for current user

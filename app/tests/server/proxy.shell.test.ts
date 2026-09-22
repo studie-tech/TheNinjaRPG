@@ -53,14 +53,21 @@ describe("proxy matcher", () => {
     "/username/some.name",
     "/login/factor-one",
     "/api/trpc/profile.getUser",
+    "/api/trpc/cdnStats.get",
   ])("admits %s", (path) => {
     // A dotted earlier segment (/x.php/guide) must be rewritten: left alone it would
     // match the shell segment with the file name as its value.
     expect(admits(path)).toBe(true);
   });
 
-  it.each(["/foo.png", "/wp-login.php", "/guide/x.php", "/api/healthcheck", "/_next/static/a.js"])(
-    "skips %s, which is served without the middleware",
+  it.each([
+    "/foo.png",
+    "/wp-login.php",
+    "/guide/x.php",
+    "/api/healthcheck",
+    "/api/trpc/cdn/profile.getStrongestUsers,village.getAllNames",
+    "/_next/static/a.js",
+  ])("skips %s, which is served without the middleware",
     (path) => {
       expect(admits(path)).toBe(false);
     },

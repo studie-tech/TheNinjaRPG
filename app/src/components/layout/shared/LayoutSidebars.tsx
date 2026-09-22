@@ -1,6 +1,6 @@
 "use client";
 
-import { UserButton, useUser } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
 import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
 import { Bell, Bug, Eclipse, Link2 } from "lucide-react";
 import type React from "react";
@@ -17,6 +17,7 @@ import {
   IMG_LAYOUT_USERBANNER_MIDDLE,
   IMG_LAYOUT_USERSBANNER_BOTTOM,
   IMG_LAYOUT_USERSBANNER_TOP,
+  STRONGEST_USERS_COUNT,
 } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import { GameSettingsPopover } from "@/layout/GameSettings";
@@ -412,13 +413,10 @@ export const RightSideBar: React.FC<RightSideBarProps> = ({
 };
 
 export const StrongestUsersBanner: React.FC = () => {
-  const { isLoaded } = useUser();
   const { data: userData } = useUserData();
-  const { data: usersData, isPending } = api.profile.getPublicUsers.useQuery(
-    { limit: 10, orderBy: "Ranked", isAi: false },
-    { enabled: isLoaded, staleTime: 1000 * 60 * 5 },
-  );
-  const users = usersData?.data;
+  const { data: users, isPending } = api.profile.getStrongestUsers.useQuery(undefined, {
+    staleTime: 1000 * 60 * 5,
+  });
 
   return (
     <div className="relative top-[-30px]">
@@ -467,14 +465,15 @@ export const StrongestUsersBanner: React.FC = () => {
           ))}
           {isPending && (
             <div className="flex flex-col items-center gap-1 pb-4">
-              {Array.from({ length: 10 }, (_, idx) => `menu-skeleton-${idx}`).map(
-                (key) => (
-                  <Skeleton
-                    key={key}
-                    className="h-9 w-[154px] w-full max-w-[154px] bg-muted/70 lg:h-10 lg:w-[200px] lg:max-w-[200px]"
-                  />
-                ),
-              )}
+              {Array.from(
+                { length: STRONGEST_USERS_COUNT },
+                (_, idx) => `menu-skeleton-${idx}`,
+              ).map((key) => (
+                <Skeleton
+                  key={key}
+                  className="h-9 w-[154px] w-full max-w-[154px] bg-muted/70 lg:h-10 lg:w-[200px] lg:max-w-[200px]"
+                />
+              ))}
             </div>
           )}
         </div>

@@ -41,6 +41,8 @@ TEST_MYSQL_ALLOW_DESTRUCTIVE=1 TEST_MYSQL_URL='mysql://root:placeholder@127.0.0.
 
 PlanetScale organization: `nano-mathias`. Production: `tnr` / `main-1`; development: `tnr` / `development`; separate AI deployment: `theninja-ai` / `main`.
 
+- `CDN_URL` points production at a pull zone (bunny.net) that fronts `/_next/static` only. `next.config.mjs` resolves it once through `cdnOrigin` in `app/src/libs/cdn.mjs`, which feeds `assetPrefix` and the CSP hosts; read the origin from there and never introduce a second source for it. It stays off outside production, whose assets are the only ones the zone holds, and it belongs to the `tnr` project's Production environment alone — another project building this repo would serve its own chunks from a zone that does not have them. The zone's own settings are part of the contract: origin over https, "respect origin Cache-Control", vary on the query string, strip response cookies, and an edge rule answering for `/_next/static/*` and nothing else, so no page or cookie-bearing response can be cached on its hostname.
+
 For local servers, disposable test users, authenticated tRPC calls and browser login, follow `.agents/skills/tnr-dev-server/SKILL.md`.
 
 Create/edit shared skills only in `.agents/skills/<name>/SKILL.md`. `make ensure-skills` (automatic with `make bun`) symlinks them into gitignored `.claude/skills/`; do not edit those copies.
@@ -71,6 +73,7 @@ Combat logic lives in `app/src/libs/combat/`: `actions.ts` (actions), `process.t
 - Handle deadlocks in safely restartable work with `retryOnDeadlock` from `@/server/utils/mysqlErrors`, not additional locks; even single statements can deadlock on index order.
 - CAS references: `raids.ts` reward JSON guards, `activityStreak.ts` `lastClaimDate`, and `@/server/utils/concurrency.ts` (`claimUserSnapshot`, `consumeUserItemAtomically`). For concurrent counter grants use SQL increments such as `` sql`${userData.money} + ${delta}` ``; see token/point increments in `updateRewards`.
 - `tournament.getTournament` must await `syncTournamentState` before loading data: the read intentionally advances brackets and pays finals. **Keep it off HTTP edge caches**; authenticated tRPC POST batching is fine.
+- Build a query with `cdnCachedProcedure` (`app/src/server/api/trpc.ts`) only when its result reads nothing from `ctx` but `drizzle` and no client code invalidates or refetches it after an action; the client sends those queries to `/api/trpc/cdn`, which answers with `s-maxage`, so a refetch would get the CDN's copy of before the action. `CDN_CACHED_QUERY_PATHS` is derived from the router, and `tests/server/api/cdnCachedQueries.test.ts` fails on a cache call against a listed query.
 
 ## Native apps
 
@@ -87,6 +90,7 @@ Capacitor shells and dependencies live in `mobile/`, with their own `package.jso
 - Use functional/declarative TypeScript, avoid classes, prefer named component exports and descriptive names (auxiliary verbs for booleans).
 - File order: exported component → subcomponents → helpers → types.
 - Comments explain purpose, not review history; remove markers such as "Issue X:" or "TODO from review:".
+- The `QueryClient` and tRPC client are built once, during hydration, and are no longer rebuilt when clerk-js loads (`app/src/layout/ActiveSessionBoundary.tsx` rebuilds only on an account switch or a sign-out). Nothing wired into them may capture auth state at construction: read it when it is needed, as `useGlobalOnMutateProtect` reads `useClerk().isSignedIn`. A captured `isSignedIn` is `undefined` during hydration and silently rejects every mutation for the life of the page.
 - Read the path with `usePublicPathname` from `@/utils/routing`, never `usePathname`: a prerendered page renders under its shell variant's internal path, and branching on `usePathname` gives the server and the client different values. Import `Link` from `@/layout/Link`, never `next/link`. Biome enforces both.
 - Display game values using `@/drizzle/constants.ts`; never hardcode costs, thresholds or damage values.
 - Prefer reusable `app/src/layout/` components and Shadcn/Radix; use mobile-first Tailwind and optimize Web Vitals.
