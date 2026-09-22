@@ -102,7 +102,12 @@ export default async function RootLayout({
                 fontSize: "16px !important",
                 minHeight: "48px",
               },
-              formButtonPrimary: { minHeight: "48px", fontSize: "14px" },
+              formButtonPrimary: {
+                minHeight: "48px",
+                fontSize: "14px",
+                backgroundColor: "hsl(var(--primary))",
+                color: "hsl(var(--primary-foreground))",
+              },
             },
             variables: {
               colorPrimary: "#ce7e00",
