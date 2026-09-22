@@ -301,7 +301,7 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
               Lock Screen timers
             </summary>
             <p className="pb-3 text-[14px] leading-relaxed">
-              Supported countdowns appear as Live Activities. Manage them in iPhone
+              Supported countdowns appear as Live Activities. Manage them in your device
               settings.
             </p>
           </details>

@@ -2,7 +2,7 @@
 
 import { useClerk, useReverification, useUser } from "@clerk/nextjs";
 import { AlertTriangle, CreditCard, ShieldCheck } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
   NativeExternalLink,
@@ -39,6 +39,13 @@ export const NativeAccountDeletion = () => {
   const submitting = useRef(false);
   const requestDeletion = api.accountDeletion.request.useMutation();
   const submitVerified = useReverification(requestDeletion.mutateAsync);
+
+  useEffect(() => {
+    // The shared game frame can preserve scroll past the deletion warnings.
+    if (native && isLoaded && user?.id) {
+      document.getElementById("account-deletion")?.scrollIntoView({ block: "start" });
+    }
+  }, [native, isLoaded, user?.id]);
 
   const submit = async () => {
     if (
@@ -128,6 +135,7 @@ export const NativeAccountDeletion = () => {
     );
   return (
     <ContentBox
+      id="account-deletion"
       title="Delete account permanently"
       subtitle="Applies to the app and website"
     >
