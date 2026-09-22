@@ -59,14 +59,16 @@ describe("contentSecurityPolicy", () => {
 });
 
 describe("CDN_URL validation", () => {
-  const parse = async (value: string) => {
-    process.env.CDN_URL = value;
-    const { serverSchema, serverEnv } = await import("@/env/schema.mjs");
-    const result = serverSchema.safeParse({ ...serverEnv, CDN_URL: value });
-    return result.success
-      ? null
-      : (result.error.issues.find((issue) => issue.path[0] === "CDN_URL") ?? null);
+  const parse = async (value: string | undefined) => {
+    const { serverSchema } = await import("@/env/schema.mjs");
+    const result = serverSchema.shape.CDN_URL.safeParse(value);
+    return result.success ? null : result.error;
   };
+
+  it("allows an unset or empty CDN origin", async () => {
+    expect(await parse(undefined)).toBeNull();
+    expect(await parse("")).toBeNull();
+  });
 
   it("takes a bare https origin", async () => {
     expect(await parse("https://tnrprod.b-cdn.net")).toBeNull();
@@ -78,5 +80,6 @@ describe("CDN_URL validation", () => {
     expect(await parse("http://tnrprod.b-cdn.net")).not.toBeNull();
     expect(await parse("javascript:alert(1)")).not.toBeNull();
     expect(await parse("https://tnrprod.b-cdn.net/assets")).not.toBeNull();
+    expect(await parse("not-a-url")).not.toBeNull();
   });
 });

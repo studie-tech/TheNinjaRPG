@@ -20,9 +20,11 @@ export const serverSchema = z.object({
    */
   CDN_URL: z
     .url({ protocol: /^https$/ })
-    .refine((value) => value.replace(/\/+$/, "") === new URL(value).origin, {
-      message: "CDN_URL must be a bare origin, without a path",
-    })
+    .refine(
+      (value) => URL.canParse(value) && value.replace(/\/+$/, "") === new URL(value).origin,
+      { message: "CDN_URL must be a bare origin, without a path" },
+    )
+    .or(z.literal(""))
     .optional(),
   DISCORD_CONTENT_UPDATES: z.url().optional(),
   DISCORD_NEWS_UPDATES: z.url().optional(),
