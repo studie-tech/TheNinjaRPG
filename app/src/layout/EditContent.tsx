@@ -2741,6 +2741,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   tagType: "Combat Tag Type",
   singleBattle: "Track best single-battle only (else cumulative)",
   shieldRounds: "Shield Rounds",
+  delayRounds: "Diffuse Repayment Turns",
 };
 
 /**

@@ -31,6 +31,7 @@ import {
   damageReductionTypes,
   dmgConfig as defaultDmgConfig,
 } from "./constants";
+import { type DiffusePacket, deferDiffuseDamage, repayDiffuseDamage } from "./diffuse";
 import {
   absorb,
   adjustDamageGiven,
@@ -292,6 +293,8 @@ export const applyEffects = (
   const newUsersEffects: UserEffect[] = [];
   const actionEffects: ActionEffect[] = [];
 
+  repayDiffuseDamage(newUsersState, actorId, round, actionEffects);
+
   // Convert all ground effects to user effects on the users standing on the tile
   groundEffects.sort(sortEffects).forEach((e) => {
     // Get the round information for the effect
@@ -456,6 +459,14 @@ export const applyEffects = (
   });
 
   const sealEffects = getActiveSealEffects(usersEffects);
+  const diffuseEffects = usersEffects.filter(
+    (e) =>
+      e.type === "diffuse" &&
+      e.targetType === "user" &&
+      isEffectActive(e) &&
+      !sealCheck(e, sealEffects),
+  );
+  const diffuseTargets = new Set(diffuseEffects.map((e) => e.targetId));
   const usersStateById = new Map(newUsersState.map((u) => [u.userId, u]));
   const damageModifierEligibilityById = buildDamageModifierEligibilityById(
     usersEffects,
@@ -579,6 +590,8 @@ export const applyEffects = (
   // These read consequence.damage to calculate their effect, so they must run after pierce
   // to include pierce damage in their calculations
   postDamageModifierEffects.sort(sortEffects).forEach((effect) => {
+    // Absorb reads the immediate portion after Diffuse, including secondary damage.
+    if (effect.type === "absorb" && diffuseTargets.has(effect.targetId)) return;
     applySingleEffect(
       consequences,
       newUsersState,
@@ -592,6 +605,31 @@ export const applyEffects = (
       action,
     );
   });
+
+  applyDiffuseToConsequences({
+    consequences,
+    effects: diffuseEffects,
+    users: newUsersState,
+    battle,
+    eligibilityById: damageModifierEligibilityById,
+    actionEffects,
+  });
+  postDamageModifierEffects
+    .filter((e) => e.type === "absorb" && diffuseTargets.has(e.targetId))
+    .forEach((effect) => {
+      applySingleEffect(
+        consequences,
+        newUsersState,
+        newUsersEffects,
+        newGroundEffects,
+        actionEffects,
+        appliedEffects,
+        battle,
+        actorId,
+        effect,
+        action,
+      );
+    });
 
   // Apply heal adjustment effects (increaseheal/decreaseheal) AFTER post-damage modifiers
   // These modify lifesteal_hp/absorb_hp/vampRatio values set by lifesteal/absorb/vamp effects
@@ -696,14 +734,23 @@ export const applyEffects = (
 
       // Adjust damages and reduce shields
       if (target && user) {
+        // A Diffuse remainder is ordinary incoming damage, even when its original source bypassed shields.
+        const immediateTypes = c.diffuseImmediateDamage !== undefined ? [] : c.types;
         if (c.damage && c.damage > 0) {
-          c.damage = calcAdjustedDamage(target, c.damage, c.types);
+          c.damage = calcAdjustedDamage(target, c.damage, immediateTypes);
         }
         if (c.residual && c.residual > 0) {
-          c.residual = calcAdjustedDamage(target, c.residual, c.types);
+          c.residual = calcAdjustedDamage(target, c.residual, immediateTypes);
         }
         if (c.wound && c.wound > 0) {
-          c.wound = calcAdjustedDamage(target, c.wound, c.types);
+          c.wound = calcAdjustedDamage(target, c.wound, immediateTypes);
+        }
+        if (c.diffuseImmediateDamage !== undefined) {
+          for (const key of ["afterburn", "drain_hp", "poison"] as const) {
+            const damage = c[key];
+            if (damage && damage > 0)
+              c[key] = calcAdjustedDamage(target, damage, immediateTypes);
+          }
         }
         if (c.reflect && c.reflect > 0) {
           c.reflect = calcAdjustedDamage(user, c.reflect, c.types);
@@ -715,6 +762,7 @@ export const applyEffects = (
 
       // Store pre-shield damage for later use (preserve if already set, e.g. by vamp)
       c.preShieldDamage = c.preShieldDamage ?? preShieldDamage;
+      c.diffuseImmediateDamage ??= preShieldDamage;
       return c;
     })
     .reduce(collapseConsequences, [] as Consequence[])
@@ -744,9 +792,9 @@ export const applyEffects = (
           // for the damage_dealt quest tracker. Direct damage plus DoT/drain (residual,
           // wound, afterburn, drain_hp, poison) each credit via creditDamageDealt below;
           // reflect and recoil hit the attacker's own HP and are intentionally excluded.
-          creditDamageDealt(damageCreditUser, target, c.damage);
+          if (!c.damageSource) creditDamageDealt(damageCreditUser, target, c.damage);
           actionEffects.push({
-            txt: `${target.username} takes ${c.damage.toFixed(2)} damage`,
+            txt: `${target.username} takes ${c.damage.toFixed(2)} ${c.damageSource ? `${c.damageSource} ` : ""}damage`,
             color: "red",
             types: c.types,
           });
@@ -924,7 +972,7 @@ export const applyEffects = (
         if (c.absorb_hp !== undefined && c.absorb_hp >= 0 && target.curHealth > 0) {
           // Use pre-shield damage for the 60% cap calculation to avoid shield interference
           const preShieldDamage = c.preShieldDamage ?? 0;
-          const maxAbsorb = preShieldDamage * 0.6;
+          const maxAbsorb = (c.diffuseImmediateDamage ?? preShieldDamage) * 0.6;
           const absorbAmount = Math.min(c.absorb_hp, maxAbsorb);
           target.curHealth += absorbAmount;
           target.curHealth = Math.min(target.maxHealth, target.curHealth);
@@ -1312,6 +1360,12 @@ export const applySingleEffect = (
           );
         } else if (effect.type === "finalstand") {
           info = finalStand(effect, curTarget);
+        } else if (effect.type === "diffuse" && effect.isNew) {
+          info = {
+            txt: `${curTarget.username} can diffuse incoming damage for ${effect.rounds} rounds`,
+            color: "blue",
+            types: ["diffuse"],
+          };
         }
         if (effect.type !== "activatesagemode") {
           updateStatUsage(newTarget, effect, true);
@@ -1672,6 +1726,12 @@ export const buildDamagePacketModifierLists = (
 
 type DamagePacketComputeContext = {
   rawDamage: number;
+  /** Scale incoming damage before percentage/static defenses (including static increases). */
+  damageScale?: number;
+  /** Preview incoming damage without player defenses; retain the system's base normalization. */
+  ignoreDamageReduction?: boolean;
+  /** Secondary damage has already been generated; apply defenses without boosting it again. */
+  reductionsOnly?: boolean;
   damageEffect: UserEffect;
   usersEffects: UserEffect[];
   attackerId: string;
@@ -1680,6 +1740,137 @@ type DamagePacketComputeContext = {
   battleRound: number;
   modifierLists?: DamagePacketModifierLists;
   sealEffects?: UserEffect[];
+};
+
+/** Resolve all HP damage sources together; secondary packets already contain their damage boosts. */
+const applyDiffuseToConsequences = ({
+  consequences,
+  effects,
+  users,
+  battle,
+  eligibilityById,
+  actionEffects,
+}: {
+  consequences: Map<string, Consequence>;
+  effects: UserEffect[];
+  users: BattleUserState[];
+  battle: CompleteBattle;
+  eligibilityById: Map<string, DamageModifierEligibility>;
+  actionEffects: ActionEffect[];
+}) => {
+  if (!effects.length) return;
+  const packets: DiffusePacket[] = [];
+  const affected = new Set<Consequence>();
+  for (const [effectId, consequence] of consequences) {
+    const source =
+      battle.usersEffects.find((e) => e.id === effectId) ??
+      battle.usersEffects.find(
+        (e) =>
+          e.id === effectId.replace(/^wound-/, "") ||
+          (e.type === "drain" &&
+            e.creatorId === consequence.userId &&
+            e.targetId === consequence.targetId),
+      );
+    for (const key of [
+      "damage",
+      "residual",
+      "wound",
+      "afterburn",
+      "drain_hp",
+      "poison",
+      "reflect",
+      "recoil",
+    ] as const) {
+      const originalDamage = consequence[key] ?? 0;
+      if (originalDamage <= 0) continue;
+      const isReturnDamage = key === "reflect" || key === "recoil";
+      const targetId = isReturnDamage ? consequence.userId : consequence.targetId;
+      const attackerId = isReturnDamage ? consequence.targetId : consequence.userId;
+      if (!effects.some((e) => e.targetId === targetId)) continue;
+      const isPrimary = key === "damage" || key === "residual";
+      const isPierce = consequence.types?.includes("pierce") ?? false;
+      const context = source
+        ? {
+            rawDamage: isPrimary
+              ? (consequence.baseDamageForModifiers ?? originalDamage)
+              : originalDamage,
+            damageEffect: source,
+            usersEffects: battle.usersEffects,
+            attackerId,
+            defenderId: targetId,
+            preBattleGearModifiers: battle.extraState.preBattleGearModifiers ?? {},
+            battleRound: battle.round,
+            modifierLists: buildDamagePacketModifierLists(
+              battle.usersEffects,
+              attackerId,
+              targetId,
+              eligibilityById,
+            ),
+            reductionsOnly: !isPrimary || isPierce,
+          }
+        : undefined;
+      // Reflect is capped against the source hit before splitting the returned damage.
+      const cappedDamage =
+        key === "reflect"
+          ? Math.min(originalDamage, (consequence.damage ?? 0) * 0.6)
+          : originalDamage;
+      const damage =
+        isPrimary && context && !isPierce
+          ? computeDamagePacket({ ...context, ignoreDamageReduction: true }).damage
+          : cappedDamage;
+      packets.push({
+        targetId,
+        attackerId,
+        damage,
+        creditDamage: !isReturnDamage,
+        applyRemaining: (fraction) => {
+          const remaining = context
+            ? computeDamagePacket({
+                ...context,
+                rawDamage: isPrimary ? context.rawDamage : cappedDamage,
+                damageScale: fraction,
+              }).damage
+            : cappedDamage * fraction;
+          if (isReturnDamage) {
+            // Return damage must pass through the recipient's absorb/shield handling,
+            // without granting damage-dealt credit or sharing the original target's defenses.
+            const returned: Consequence = {
+              userId: attackerId,
+              targetId,
+              damage: remaining,
+              damageSource: key,
+              diffuseSourceEffectId: source?.id,
+              types: [key],
+            };
+            consequences.set(`diffuse-${effectId}-${key}`, returned);
+            consequence[key] = undefined;
+            affected.add(returned);
+            return;
+          }
+          consequence[key] = remaining;
+          if (key === "damage") {
+            consequence.preShieldDamage = remaining;
+            // Damage-derived leech uses the immediate hit. Absorb is resolved after this pass.
+            if (consequence.lifesteal_hp !== undefined) {
+              consequence.lifesteal_hp *= remaining / originalDamage;
+            }
+          }
+          affected.add(consequence);
+          consequence.diffuseSourceEffectId = source?.id;
+        },
+      });
+    }
+  }
+  deferDiffuseDamage(packets, effects, users, battle.round, actionEffects);
+  for (const c of affected) {
+    c.diffuseImmediateDamage =
+      (c.damage ?? 0) +
+      (c.residual ?? 0) +
+      (c.wound ?? 0) +
+      (c.afterburn ?? 0) +
+      (c.drain_hp ?? 0) +
+      (c.poison ?? 0);
+  }
 };
 
 export const computeDamagePacket = (
@@ -1693,7 +1884,7 @@ export const computeDamagePacket = (
     preBattleGearModifiers,
     battleRound,
   } = ctx;
-  const modifierLists =
+  const originalModifierLists =
     ctx.modifierLists ??
     buildDamagePacketModifierLists(
       usersEffects,
@@ -1702,12 +1893,26 @@ export const computeDamagePacket = (
       buildDamageModifierEligibilityById(usersEffects, battleRound),
     );
   const sealEffects = ctx.sealEffects ?? getActiveSealEffects(usersEffects);
+  const modifierLists = { ...originalModifierLists };
+  if (ctx.ignoreDamageReduction) {
+    modifierLists.stage1PreBattleDrEffects = [];
+    modifierLists.inCombatDrEffects = [];
+    modifierLists.staticDrEffects = [];
+    modifierLists.bloodlineDrEffects = [];
+  }
+  if (ctx.reductionsOnly) {
+    modifierLists.stage1PreBattleIncreases = [];
+    modifierLists.inBattleIncreases = [];
+    modifierLists.staticIncEffects = [];
+    modifierLists.bloodlineIncreases = [];
+  }
   const attackerGear =
     preBattleGearModifiers[attackerId] ?? emptyPreBattleGearModifiers();
   const defenderGear =
     preBattleGearModifiers[defenderId] ?? emptyPreBattleGearModifiers();
 
-  let damage = ctx.rawDamage;
+  const damageScale = ctx.damageScale ?? 1;
+  let damage = ctx.rawDamage * damageScale;
 
   for (const effect of modifierLists.stage1PreBattleIncreases) {
     const ratio = getEfficiencyRatio(damageEffect, effect);
@@ -1720,7 +1925,7 @@ export const computeDamagePacket = (
     OUT_OF_COMBAT_BASE_DAMAGE_INCREASE +
     attackerGear.incDamageGivenFromGear +
     defenderGear.incDamageTakenFromGear;
-  damage *= 1 + incPoints / 100;
+  if (!ctx.reductionsOnly) damage *= 1 + incPoints / 100;
 
   for (const effect of modifierLists.inBattleIncreases) {
     const ratio = getEfficiencyRatio(damageEffect, effect);
@@ -1732,10 +1937,12 @@ export const computeDamagePacket = (
 
   const baseDamageAfterBoosts = damage;
 
+  const systemDr = ctx.reductionsOnly ? 0 : OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION;
   const drPoints =
-    OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION +
-    defenderGear.drTakenFromGear +
-    attackerGear.drGivenFromGear;
+    systemDr +
+    (ctx.ignoreDamageReduction
+      ? 0
+      : defenderGear.drTakenFromGear + attackerGear.drGivenFromGear);
   damage = applyPercentageDrMultiplier(damage, drPoints / 100);
 
   for (const effect of modifierLists.stage1PreBattleDrEffects) {
@@ -1755,7 +1962,7 @@ export const computeDamagePacket = (
 
   const baseDamageAfterSystemDr = applyPercentageDrMultiplier(
     baseDamageAfterBoosts,
-    OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100,
+    systemDr / 100,
   );
   const minDamage = baseDamageAfterSystemDr * (1 - DMG_REDUCTION_CAP);
   damage = Math.max(damage, minDamage);
@@ -1772,7 +1979,7 @@ export const computeDamagePacket = (
     ) {
       continue;
     }
-    totalStaticIncrease += power * ratio;
+    totalStaticIncrease += power * ratio * damageScale;
   }
   damage += totalStaticIncrease;
 
@@ -1789,11 +1996,13 @@ export const computeDamagePacket = (
   const keystoneIncPoints =
     (attackerGear.incDamageGivenFromKeystone ?? 0) +
     (defenderGear.incDamageTakenFromKeystone ?? 0);
-  damage *= 1 + keystoneIncPoints / 100;
+  if (!ctx.reductionsOnly) damage *= 1 + keystoneIncPoints / 100;
 
   const keystoneDrPoints =
     (defenderGear.drTakenFromKeystone ?? 0) + (attackerGear.drGivenFromKeystone ?? 0);
-  damage = applyPercentageDrMultiplier(damage, keystoneDrPoints / 100);
+  if (!ctx.ignoreDamageReduction) {
+    damage = applyPercentageDrMultiplier(damage, keystoneDrPoints / 100);
+  }
   damage = Math.max(minDamage, damage);
 
   for (const effect of modifierLists.bloodlineIncreases) {

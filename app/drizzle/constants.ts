@@ -2975,6 +2975,8 @@ export const DMG_ADVANTAGE_MIN = 0.01; // Minimum advantage modifier (prevents z
 export const DMG_ADVANTAGE_MAX = 10.0; // Maximum advantage modifier (prevents extreme damage spikes)
 export const DMG_REDUCTION_CAP = 0.9; // Max fraction damage can be reduced by (90% cap, so 10% always gets through)
 export const OUT_OF_COMBAT_BASE_DAMAGE_INCREASE = 60; // Percentage points added to pre-battle damage increase pool
+export const DIFFUSE_MAX_PERCENTAGE = 99;
+export const DIFFUSE_DEFAULT_DELAY_ROUNDS = 3;
 export const OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION = 50; // Percentage points added to pre-battle DR pool
 
 /** Armor/accessory folded into early pre-battle inc/DR pools in the damage pipeline. */

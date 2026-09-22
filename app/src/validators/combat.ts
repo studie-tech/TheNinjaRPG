@@ -5,6 +5,8 @@ import {
   AttackTargets,
   BattleUsageTypes,
   BloodlineDifficultyRatings,
+  DIFFUSE_DEFAULT_DELAY_ROUNDS,
+  DIFFUSE_MAX_PERCENTAGE,
   ElementNames,
   GeneralTypes,
   getUserCaps,
@@ -632,6 +634,24 @@ export const WoundTag = z.object({
 });
 export type WoundTagType = z.infer<typeof WoundTag>;
 
+export const DiffuseTag = z.object({
+  ...BaseAttributes,
+  type: z.literal("diffuse").prefault("diffuse"),
+  description: msg(
+    "Defer a percentage of nonlethal incoming damage over subsequent turns. Cannot be cleansed, prevented, or copied.",
+  ),
+  calculation: z.enum(["percentage"]).prefault("percentage"),
+  power: z.coerce.number().gt(0).max(DIFFUSE_MAX_PERCENTAGE).prefault(25),
+  powerPerLevel: z.coerce.number().min(0).max(1).prefault(0),
+  rounds: z.coerce.number().int().min(1).max(100).prefault(3),
+  delayRounds: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .prefault(DIFFUSE_DEFAULT_DELAY_ROUNDS),
+});
+
 export const RemoveBloodline = z.object({
   ...BaseAttributes,
   type: z.literal("removebloodline").prefault("removebloodline"),
@@ -891,6 +911,7 @@ export const AllTags = z.union([
   DecreasePoolCostTag.prefault({}),
   DecreaseMaxPoolsTag.prefault({}),
   DecreaseStatTag.prefault({}),
+  DiffuseTag.prefault({}),
   DisarmTag.prefault({}),
   DrainTag.prefault({}),
   ElementalSealTag.prefault({}),
