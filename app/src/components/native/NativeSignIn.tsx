@@ -55,7 +55,7 @@ export default function NativeSignIn() {
     <div className="flex w-full flex-col gap-3 rounded-lg border border-primary/25 bg-background p-4 shadow-xs">
       {appleAuth.isSupported() && (
         <Button
-          className="h-auto min-h-[44px] w-full bg-black text-[14px] text-white hover:bg-neutral-800"
+          className="h-auto min-h-[48px] w-full bg-black text-[14px] text-white hover:bg-neutral-800"
           disabled={isPending}
           onClick={() => void handle("apple", signInWithApple)}
         >
@@ -72,7 +72,7 @@ export default function NativeSignIn() {
         <Button
           key={id}
           variant="outline"
-          className="h-auto min-h-[44px] w-full text-[14px]"
+          className="h-auto min-h-[48px] w-full text-[14px]"
           disabled={isPending}
           onClick={() => void handle(id, () => signInWithProvider(id))}
         >
