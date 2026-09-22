@@ -1,10 +1,10 @@
 import { ClerkProvider } from "@clerk/nextjs";
-import { MultisessionAppSupport } from "@clerk/nextjs/internal";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { extractRouterConfig } from "uploadthing/server";
+import { CDN_CACHED_QUERY_PATHS } from "@/api/root";
 import TrpcClientProvider from "@/app/_trpc/Provider";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
 import NativeBridge from "@/components/native/NativeBridge";
@@ -14,6 +14,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { env } from "@/env/server.mjs";
 import { InstallPromptProvider } from "@/hooks/useInstallPrompt";
 import AcceptWarning from "@/layout/AcceptWarning";
+import { ActiveSessionBoundary } from "@/layout/ActiveSessionBoundary";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
 import StructuredData from "@/layout/StructuredData";
@@ -115,8 +116,8 @@ export default async function RootLayout({
             },
           }}
         >
-          <MultisessionAppSupport>
-            <TrpcClientProvider>
+          <ActiveSessionBoundary>
+            <TrpcClientProvider cdnCachedQueryPaths={CDN_CACHED_QUERY_PATHS}>
               <UserContextProvider initialIsSignedIn={initialIsSignedIn}>
                 <InstallPromptProvider>
                   {/* The web marketing container includes advertising pixels; never load it in the native shell. */}
@@ -141,7 +142,7 @@ export default async function RootLayout({
                 </InstallPromptProvider>
               </UserContextProvider>
             </TrpcClientProvider>
-          </MultisessionAppSupport>
+          </ActiveSessionBoundary>
         </ClerkProvider>
       </body>
     </html>

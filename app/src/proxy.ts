@@ -44,7 +44,8 @@ export default clerkMiddleware(
     // referral parameters keep working. The response carries the prerendered page's
     // long s-maxage with no Vary on the cookie: correct on Vercel, whose CDN keys on the
     // rewritten path behind this code, and wrong for any cache in front of it that
-    // keyed on the public path. Nothing sits there today.
+    // keyed on the public path. The pull zone that can sit there answers only for
+    // /_next/static, which never reaches this.
     const url = request.nextUrl.clone();
     url.pathname = `/${shellParam(variant)}${pathname}`;
     const res = NextResponse.rewrite(url);
@@ -108,8 +109,9 @@ export const config = {
     "/clanhall/:path*",
     "/conceptart/:path*",
     "/manual/:path*",
-    // Only route handlers that call Clerk's server helpers need its context.
-    "/api/trpc/(.*)",
+    // Only route handlers that call Clerk's server helpers need its context; the
+    // CDN-cached tRPC endpoint runs without a session by design.
+    "/api/trpc/((?!cdn/).*)",
     "/api/chat/:path*",
     "/api/uploadthing(.*)",
     // The MCP OAuth discovery documents; isUnshelledPath passes them through untouched.

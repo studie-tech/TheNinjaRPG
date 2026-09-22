@@ -7,7 +7,13 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { httpBatchLink, loggerLink, retryLink, TRPCClientError } from "@trpc/client";
+import {
+  httpBatchLink,
+  loggerLink,
+  retryLink,
+  splitLink,
+  TRPCClientError,
+} from "@trpc/client";
 import { useState } from "react";
 import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
@@ -25,7 +31,10 @@ const getBaseUrl = () => {
   return `http://127.0.0.1:${process.env.PORT ?? 3000}`;
 };
 
-const TrpcClientProvider = (props: { children: React.ReactNode }) => {
+const TrpcClientProvider = (props: {
+  cdnCachedQueryPaths: readonly string[];
+  children: React.ReactNode;
+}) => {
   const onMutateCheck = useGlobalOnMutateProtect();
   const [queryClient] = useState(
     () =>
@@ -54,8 +63,9 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
         }),
       }),
   );
-  const [trpcClient] = useState(() =>
-    api.createClient({
+  const [trpcClient] = useState(() => {
+    const cdnCachedQueries = new Set(props.cdnCachedQueryPaths);
+    return api.createClient({
       links: [
         retryLink({
           retry(options) {
@@ -85,13 +95,22 @@ const TrpcClientProvider = (props: { children: React.ReactNode }) => {
             process.env.NODE_ENV === "development" ||
             (opts.direction === "down" && opts.result instanceof Error),
         }),
-        httpBatchLink({
-          url: `${getBaseUrl()}/api/trpc`,
-          transformer: superjson,
+        // CDN-cached queries get their own batch, so their URL is the same for every
+        // visitor.
+        splitLink({
+          condition: (op) => op.type === "query" && cdnCachedQueries.has(op.path),
+          true: httpBatchLink({
+            url: `${getBaseUrl()}/api/trpc/cdn`,
+            transformer: superjson,
+          }),
+          false: httpBatchLink({
+            url: `${getBaseUrl()}/api/trpc`,
+            transformer: superjson,
+          }),
         }),
       ],
-    }),
-  );
+    });
+  });
   return (
     <api.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>{props.children}</QueryClientProvider>

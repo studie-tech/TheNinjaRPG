@@ -1,5 +1,6 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import bundleAnalyzer from "@next/bundle-analyzer";
+import { cdnOrigin, contentSecurityPolicy } from "./src/libs/cdn.mjs";
 
 // @ts-check
 /**
@@ -9,6 +10,12 @@ import bundleAnalyzer from "@next/bundle-analyzer";
 if (!process.env.SKIP_ENV_VALIDATION) {
   await import("./src/env/server.mjs");
 }
+
+/** Resolved once, so `assetPrefix` and the CSP cannot disagree about where the zone is. */
+const CDN_ORIGIN = cdnOrigin({
+  cdnUrl: process.env.CDN_URL,
+  vercelEnv: process.env.VERCEL_ENV,
+});
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
@@ -26,6 +33,7 @@ const config = {
     resolveExtensions: [".tsx", ".ts", ".jsx", ".js"],
   },
   generateBuildId: () => process.env.VERCEL_GIT_COMMIT_SHA || "unknown",
+  assetPrefix: CDN_ORIGIN,
   reactStrictMode: false,
   productionBrowserSourceMaps: true,
   outputFileTracingIncludes: {
@@ -111,6 +119,19 @@ const config = {
         headers: securityHeaders,
       },
       {
+        // Next marks its chunks `crossorigin`, so cross-origin delivery needs this.
+        // Vercel already sends it for static files; stating it keeps the zone correct
+        // wherever the app is hosted.
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          // The zone answers on its own hostname, which must not become a second
+          // indexable home for these files. robots.txt cannot say so: the zone serves
+          // nothing but this path.
+          { key: "X-Robots-Tag", value: "noindex" },
+        ],
+      },
+      {
         // The sitemaps are generated per request (they read the database and the build
         // has none), so they are cached at the edge instead. Crawlers fetch them rarely,
         // and a stale copy for an hour is harmless. The section names are listed rather
@@ -178,23 +199,11 @@ export default withSentryConfig(withBundleAnalyzer(config), {
 });
 
 // https://securityheaders.com
-const ContentSecurityPolicy = `
-  default-src 'self';
-  script-src 'self' 'unsafe-eval' 'unsafe-inline' *.google-analytics.com *.analytics.google.com *.googletagmanager.com *.doubleclick.net *.clerk.accounts.dev *.vercel.live *.paypal.com *.paypalobjects.com *.tiny.cloud *.theninja-rpg.com *.theninja-rpg.ai *.opendns.com *.cookiebot.com *.termly.io connect.facebook.net va.vercel-scripts.com *.redditstatic.com analytics.tiktok.com clerk.www.theninja-rpg.ai clerk.www.theninja-rpg.com challenges.cloudflare.com;
-  child-src 'self' *.doubleclick.net *.paypal.com ghbtns.com *.youtube.com *.widgetbot.io *.cookiebot.com *.termly.io *.googletagmanager.com https://fastsvr.com https://www.facebook.com challenges.cloudflare.com;
-  style-src 'self' 'unsafe-inline' *.googleapis.com *.tiny.cloud;
-  img-src * blob: data:;
-  media-src 'self' https://uploadthing.b-cdn.net https://*.ufs.sh;
-  connect-src *;
-  font-src 'self';
-  worker-src 'self' blob:;
-`;
-
 const securityHeaders = [
   // https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
   {
     key: "Content-Security-Policy",
-    value: ContentSecurityPolicy.replace(/\n/g, ""),
+    value: contentSecurityPolicy(CDN_ORIGIN),
   },
   // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy
   {

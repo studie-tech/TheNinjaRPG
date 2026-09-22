@@ -2,7 +2,7 @@
  * This is the client-side entrypoint for your tRPC API.
  */
 
-import { useUser } from "@clerk/nextjs";
+import { useClerk } from "@clerk/nextjs";
 import { TRPCClientError } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
@@ -71,13 +71,16 @@ export const PUBLIC_MUTATIONS: string[] = [
 ];
 
 export const useGlobalOnMutateProtect = () => {
-  const { isSignedIn } = useUser();
+  // The QueryClient keeps the guard it was created with, before clerk-js had loaded, so
+  // the sign-in state is read from the Clerk instance when a mutation fires, never
+  // captured from a render.
+  const clerk = useClerk();
   return (mutationPath?: string) => {
     // Skip check for public mutations
     if (mutationPath && PUBLIC_MUTATIONS.includes(mutationPath)) {
       return;
     }
-    if (!isSignedIn) {
+    if (!clerk.isSignedIn) {
       throw new Error(SIGN_IN_REQUIRED_MUTATION_MESSAGE);
     }
   };

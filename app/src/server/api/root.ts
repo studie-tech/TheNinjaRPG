@@ -60,7 +60,7 @@ import { travelRouter } from "./routers/travel";
 import { villageRouter } from "./routers/village";
 import { warRouter } from "./routers/war";
 import { worldMapRouter } from "./routers/worldMap";
-import { createTRPCRouter } from "./trpc";
+import { createTRPCRouter, type ProcedureMeta } from "./trpc";
 
 /**
  * This is the primary router for your server.
@@ -131,6 +131,19 @@ export const appRouter = createTRPCRouter({
   worldMap: worldMapRouter,
   sageMode: sageModeRouter,
 });
+
+/**
+ * The queries built with cdnCachedProcedure, keyed as the client's `op.path`. The shell
+ * layout hands them to TrpcClientProvider, which sends them to /api/trpc/cdn.
+ */
+export const CDN_CACHED_QUERY_PATHS: readonly string[] = Object.entries(
+  appRouter._def.procedures,
+)
+  .filter(([, procedure]) => {
+    const def = (procedure as { _def?: { type?: string; meta?: ProcedureMeta } })._def;
+    return def?.type === "query" && def.meta?.cdnCached === true;
+  })
+  .map(([path]) => path);
 
 // export type definition of API
 export type AppRouter = typeof appRouter;
