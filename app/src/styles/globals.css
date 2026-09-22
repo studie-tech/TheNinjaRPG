@@ -368,14 +368,14 @@
   }
 
   .tnr-ink-menu-root {
-    height: 32px;
+    height: 48px;
     align-items: center;
   }
 
   .tnr-ink-menu-trigger {
     display: inline-flex;
-    height: 32px;
-    min-width: 38px;
+    height: 48px;
+    min-width: 48px;
     align-items: center;
     justify-content: center;
     border: 2px solid #26110c;

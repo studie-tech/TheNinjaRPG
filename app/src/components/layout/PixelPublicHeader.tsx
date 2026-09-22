@@ -25,12 +25,12 @@ const PixelPublicHeader: React.FC<PixelPublicHeaderProps> = ({
 }) => {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-sky-100/10 border-b bg-slate-950/55 backdrop-blur-md">
-      <div className="mx-auto grid min-h-20 w-[min(100%_-_32px,1180px)] grid-cols-[auto_1fr_auto] items-center gap-4">
+      <div className="mx-auto grid min-h-[64px] w-[min(100%_-_32px,1180px)] grid-cols-[minmax(0,1fr)_auto] items-center gap-[8px] md:grid-cols-[auto_1fr_auto] md:gap-4">
         <Link
           href="/"
           aria-label="The Ninja RPG home"
           className={cn(
-            "col-start-1 transition-[opacity,transform,filter] duration-300 ease-out",
+            "col-start-1 flex min-h-[48px] items-center transition-[opacity,transform,filter] duration-300 ease-out",
             showLogo
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none -translate-y-2 scale-95 opacity-0",
@@ -44,23 +44,28 @@ const PixelPublicHeader: React.FC<PixelPublicHeaderProps> = ({
             height={63}
             alt="The Ninja RPG"
             priority
-            className="h-auto w-36 sm:w-44"
+            className="h-auto w-36 max-w-full sm:w-44"
           />
         </Link>
         <nav className="col-start-2 hidden justify-center gap-3 text-sm md:flex">
           <PixelPublicMenuDropdown />
           {navLinks.map((link) => (
-            <a key={link.href} href={link.href} className="tnr-ink-nav-link">
+            <a
+              key={link.href}
+              href={link.href}
+              className="tnr-ink-nav-link min-h-[48px]"
+            >
               {link.name}
             </a>
           ))}
         </nav>
-        <div className="col-start-3 flex items-center justify-self-end gap-3">
+        <div className="col-start-2 flex items-center gap-[8px] justify-self-end md:col-start-3 md:gap-3">
           <Link href="/login">
             <Button
               variant="outline"
               size="sm"
-              className="tnr-ink-btn tnr-ink-btn-secondary"
+              className="tnr-ink-btn tnr-ink-btn-secondary min-h-[48px]"
+              style={{ minWidth: 64 }}
             >
               Log In
             </Button>
@@ -68,14 +73,15 @@ const PixelPublicHeader: React.FC<PixelPublicHeaderProps> = ({
           <Link href="/signup">
             <Button
               size="sm"
-              className="tnr-ink-btn tnr-ink-btn-primary tnr-ink-register"
+              className="tnr-ink-btn tnr-ink-btn-primary tnr-ink-register min-h-[48px]"
+              style={{ minWidth: 64 }}
             >
               Register
             </Button>
           </Link>
           <GameSettingsPopover
             trigger="settings"
-            triggerClassName="tnr-ink-settings-btn"
+            triggerClassName="tnr-ink-settings-btn min-h-[48px] min-w-[48px]"
           />
         </div>
       </div>
