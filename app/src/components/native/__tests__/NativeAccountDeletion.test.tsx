@@ -86,7 +86,7 @@ beforeEach(() => {
   ));
   vi.spyOn(appleAuth, "isSupported").mockReturnValue(false);
 });
-const confirm = () => {
+const confirm = (phrase = "DELETE MY ACCOUNT") => {
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
   fireEvent.click(
     screen.getByLabelText(
@@ -99,7 +99,7 @@ const confirm = () => {
     ),
   );
   fireEvent.input(screen.getByRole("textbox"), {
-    target: { value: "DELETE MY ACCOUNT" },
+    target: { value: phrase },
   });
 };
 
@@ -150,21 +150,24 @@ describe("native deletion confirmation", () => {
     expect(state.mutate).not.toHaveBeenCalled();
     expect(state.signOut).not.toHaveBeenCalled();
   });
-  it("queues once and signs out only after server acceptance", async () => {
-    render(<NativeAccountDeletion />);
-    confirm();
-    const button = screen.getByRole("button", {
-      name: "Delete permanently",
-    });
-    fireEvent.click(button);
-    fireEvent.click(button);
-    await waitFor(() => expect(state.signOut).toHaveBeenCalledOnce());
-    expect(state.mutate).toHaveBeenCalledOnce();
-    expect(state.mutate.mock.calls[0]?.[0]).toMatchObject({
-      expectedUserId: "user_test",
-      confirmation: "DELETE MY ACCOUNT",
-    });
-  });
+  it.each(["DELETE MY ACCOUNT", " DELETE MY ACCOUNT "])(
+    "queues once with normalized confirmation %j and signs out after acceptance",
+    async (phrase) => {
+      render(<NativeAccountDeletion />);
+      confirm(phrase);
+      const button = screen.getByRole("button", {
+        name: "Delete permanently",
+      });
+      fireEvent.click(button);
+      fireEvent.click(button);
+      await waitFor(() => expect(state.signOut).toHaveBeenCalledOnce());
+      expect(state.mutate).toHaveBeenCalledOnce();
+      expect(state.mutate.mock.calls[0]?.[0]).toMatchObject({
+        expectedUserId: "user_test",
+        confirmation: "DELETE MY ACCOUNT",
+      });
+    },
+  );
   it("releases the confirmation dialog during verification and restores it on dismissal", async () => {
     let dismiss!: () => void;
     state.mutate.mockReturnValue(

@@ -52,7 +52,7 @@ export const NativeAccountDeletion = () => {
     if (
       !user ||
       submitting.current ||
-      confirmation !== ACCOUNT_DELETION_CONFIRMATION ||
+      confirmation.trim() !== ACCOUNT_DELETION_CONFIRMATION ||
       !permanent ||
       !subscriptions
     )
@@ -75,7 +75,7 @@ export const NativeAccountDeletion = () => {
       const result = await submitVerified({
         expectedUserId: user.id,
         appleAuthorizationCode,
-        confirmation,
+        confirmation: ACCOUNT_DELETION_CONFIRMATION,
         understandsPermanentLoss: permanent,
         understandsSubscriptions: subscriptions,
       });
@@ -308,7 +308,7 @@ export const NativeAccountDeletion = () => {
                 !permanent ||
                 !subscriptions ||
                 confirmationOwner !== user.id ||
-                confirmation !== ACCOUNT_DELETION_CONFIRMATION
+                confirmation.trim() !== ACCOUNT_DELETION_CONFIRMATION
               }
               onClick={() => void submit()}
             >
