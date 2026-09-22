@@ -49,7 +49,8 @@ struct SnapshotProvider: TimelineProvider {
                   let data,
                   var remote = try? TNRSnapshotStore.makeDecoder().decode(TNRSnapshot.self, from: data)
             else {
-                completion(snapshot)
+                // Sign-out or an account switch can finish while this request is pending.
+                completion(TNRSnapshotStore.load())
                 return
             }
             remote.widgetToken = token
