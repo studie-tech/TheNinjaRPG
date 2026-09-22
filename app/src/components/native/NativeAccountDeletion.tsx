@@ -192,10 +192,15 @@ export const NativeAccountDeletion = () => {
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button
               variant="outline"
-              asChild
+              asChild={!pending}
+              disabled={pending}
               className="min-h-[44px] flex-1 text-[14px]"
             >
-              <Link href="/profile">Keep my account</Link>
+              {pending ? (
+                "Keep my account"
+              ) : (
+                <Link href="/profile">Keep my account</Link>
+              )}
             </Button>
             <Button
               variant="destructive"
