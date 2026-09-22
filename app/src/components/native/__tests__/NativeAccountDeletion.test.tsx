@@ -176,6 +176,11 @@ describe("native deletion confirmation", () => {
     confirm();
     fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Keep my account" })).toBeNull();
+    expect(
+      (screen.getByRole("button", { name: "Keep my account" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
     expect(
       (screen.getByRole("button", { name: "Verifying…" }) as HTMLButtonElement)
         .disabled,
