@@ -1287,6 +1287,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                               <b>Shield Rounds: </b> {parsedEffect.shieldRounds}
                             </span>
                           )}
+                        {parsedEffect.type === "diffuse" && (
+                          <span>
+                            <b>Repayment Turns: </b> {parsedEffect.delayRounds}
+                          </span>
+                        )}
                         {"calculation" in parsedEffect && (
                           <span>
                             <b>Calculation: </b>
