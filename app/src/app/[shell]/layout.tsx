@@ -96,9 +96,13 @@ export default async function RootLayout({
           telemetry={false}
           appearance={{
             elements: {
-              // Clerk’s mobile rule uses rem units against the game’s smaller root font.
-              // Override it to prevent iOS focus zoom without disabling pinch zoom.
-              formFieldInput: { fontSize: "16px !important" },
+              // Pixel sizes preserve touch targets against the game's smaller root font;
+              // 16px inputs also prevent iOS focus zoom without disabling pinch zoom.
+              formFieldInput: {
+                fontSize: "16px !important",
+                minHeight: "48px",
+              },
+              formButtonPrimary: { minHeight: "48px", fontSize: "14px" },
             },
             variables: {
               colorPrimary: "#ce7e00",
