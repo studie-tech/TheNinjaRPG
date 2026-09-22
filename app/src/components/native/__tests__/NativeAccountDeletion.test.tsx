@@ -1,4 +1,5 @@
 import * as clerk from "@clerk/nextjs";
+import * as clerkErrors from "@clerk/nextjs/errors";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,6 +25,9 @@ beforeEach(() => {
   state.cancel = false;
   state.signOut.mockResolvedValue(undefined);
   state.mutate.mockResolvedValue({ success: true });
+  vi.spyOn(clerkErrors, "isReverificationCancelledError").mockImplementation(
+    () => state.cancel,
+  );
   ensureDom();
   screen = within(document.body);
   vi.spyOn(clerk, "useUser").mockReturnValue({
@@ -140,7 +144,9 @@ describe("native deletion confirmation", () => {
     render(<NativeAccountDeletion />);
     confirm();
     fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
-    await screen.findByRole("alert");
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Verification cancelled. Your account has not been deleted.",
+    );
     expect(state.mutate).not.toHaveBeenCalled();
     expect(state.signOut).not.toHaveBeenCalled();
   });
@@ -158,6 +164,32 @@ describe("native deletion confirmation", () => {
       expectedUserId: "user_test",
       confirmation: "DELETE MY ACCOUNT",
     });
+  });
+  it("releases the confirmation dialog during verification and restores it on dismissal", async () => {
+    let dismiss!: () => void;
+    state.mutate.mockReturnValue(
+      new Promise((resolve) => {
+        dismiss = () => resolve(undefined);
+      }),
+    );
+    render(<NativeAccountDeletion />);
+    confirm();
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(
+      (screen.getByRole("button", { name: "Verifying…" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    dismiss();
+    await screen.findByRole("dialog");
+    expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe(
+      "DELETE MY ACCOUNT",
+    );
+    expect(
+      (screen.getByRole("button", { name: "Delete permanently" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    expect(state.signOut).not.toHaveBeenCalled();
   });
   it.each([
     "Use the native app to request account deletion.",

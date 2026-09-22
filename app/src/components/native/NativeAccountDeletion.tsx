@@ -1,6 +1,7 @@
 "use client";
 
 import { useClerk, useReverification, useUser } from "@clerk/nextjs";
+import { isReverificationCancelledError } from "@clerk/nextjs/errors";
 import { AlertTriangle, CreditCard, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -94,9 +95,11 @@ export const NativeAccountDeletion = () => {
       );
     } catch (cause) {
       setError(
-        cause instanceof Error
-          ? cause.message
-          : "Unable to request deletion. Please try again.",
+        cause && isReverificationCancelledError(cause)
+          ? "Verification cancelled. Your account has not been deleted."
+          : cause instanceof Error
+            ? cause.message
+            : "Unable to request deletion. Please try again.",
       );
     } finally {
       submitting.current = false;
@@ -197,19 +200,21 @@ export const NativeAccountDeletion = () => {
             <Button
               variant="destructive"
               className="h-[44px] min-h-[44px] flex-1 whitespace-nowrap text-[14px]"
+              disabled={pending}
               onClick={() => {
                 setOpen(true);
                 setConfirmationOwner(user.id);
                 setError("");
               }}
             >
-              Continue
+              {pending ? "Verifying…" : "Continue"}
             </Button>
           </div>
         </NativeFeatureCard>
       </div>
       <Dialog
-        open={open}
+        // Clerk renders verification outside this dialog's focus and pointer trap.
+        open={open && !pending}
         onOpenChange={(value) => {
           if (!pending) {
             setOpen(value);
