@@ -1,85 +1,86 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 
-export const CookieConsentSkeleton: React.FC = () => {
-  return (
-    <Skeleton className="flex h-[2000px] w-full items-start justify-center">
-      <Loader explanation="Loading consent data" />
-    </Skeleton>
-  );
-};
-
 export default function CookieConsent() {
-  const [isLoading, setIsLoading] = useState(true);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
-    // Create container div
-    const containerDiv = document.createElement("div");
-    containerDiv.id = "CookiebotDeclaration";
-    containerDiv.style.opacity = "0"; // Hide initially to prevent flashing
-
-    // Get the parent element where we'll mount our elements
     const mountPoint = document.getElementById("cookie-consent-mount");
     if (!mountPoint) return;
 
-    // Clear any existing content
-    mountPoint.innerHTML = "";
-    mountPoint.appendChild(containerDiv);
+    const container = document.createElement("div");
+    container.id = "CookiebotDeclaration";
+    mountPoint.replaceChildren(container);
 
-    // Function to check if content is meaningful
-    const hasMeaningfulContent = () => {
-      // Check for specific Cookiebot elements that indicate full content load
-      return (
-        containerDiv.querySelector("#CookieDeclarationUserStatusPanel") !== null &&
-        containerDiv.getBoundingClientRect().height > 100
-      );
+    const finish = (next: "ready" | "error") => {
+      observer.disconnect();
+      clearTimeout(timeout);
+      setStatus(next);
     };
-
-    // Mutation observer
-    const config = { attributes: true, childList: true, subtree: true };
-    const observer = new MutationObserver((_mutationList, observer) => {
-      if (hasMeaningfulContent()) {
-        // Add a small delay to ensure content is fully rendered
-        timeoutRef.current = setTimeout(() => {
-          containerDiv.style.opacity = "1";
-          setIsLoading(false);
-          observer.disconnect();
-        }, 100);
+    const observer = new MutationObserver(() => {
+      if (
+        container.querySelector("#CookieDeclarationUserStatusPanel") &&
+        container.getBoundingClientRect().height > 100
+      ) {
+        finish("ready");
       }
     });
+    observer.observe(container, { attributes: true, childList: true, subtree: true });
 
-    // Start observing before adding the script
-    observer.observe(containerDiv, config);
-
-    // Create and add script element
+    // The declaration loads additional scripts; its first load event is not completion.
+    const timeout = setTimeout(() => finish("error"), 30_000);
     const script = document.createElement("script");
     script.id = "CookieDeclaration";
-    script.type = "text/javascript";
     script.async = true;
-    script.src = `https://consent.cookiebot.com/c578fa10-0990-4928-aa4b-5f44629c7067/cd.js`;
-    containerDiv.appendChild(script);
+    script.src =
+      "https://consent.cookiebot.com/c578fa10-0990-4928-aa4b-5f44629c7067/cd.js";
+    script.onerror = () => finish("error");
+    container.appendChild(script);
 
-    // Cleanup
     return () => {
       observer.disconnect();
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      clearTimeout(timeout);
+      script.onerror = null;
+      container.remove();
     };
   }, []);
 
   return (
     <ContentBox title="Cookie Consent" subtitle="View, edit, or withdraw consent!">
-      {isLoading && <CookieConsentSkeleton />}
+      {status === "loading" && <CookieConsentSkeleton />}
+      {status === "error" && (
+        <Alert>
+          <AlertTitle>Cookie settings unavailable</AlertTitle>
+          <AlertDescription>
+            <p>Check your connection or content blocker, then reload to try again.</p>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              Reload page
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <div
         id="cookie-consent-mount"
-        className={`transition-opacity duration-200 ${isLoading ? "opacity-0" : "opacity-100"}`}
+        className={
+          status === "ready"
+            ? "transition-opacity duration-200"
+            : status === "error"
+              ? "hidden"
+              : "opacity-0"
+        }
       />
     </ContentBox>
   );
 }
+
+export const CookieConsentSkeleton: React.FC = () => (
+  <Skeleton className="flex h-[2000px] w-full items-start justify-center">
+    <Loader explanation="Loading consent data" />
+  </Skeleton>
+);
