@@ -186,6 +186,13 @@
       <button id="retry" type="button">Try again</button>
     </div>
 
+    <div id="update-required" class="card" role="alert" hidden>
+      <h1>A browser update is needed</h1>
+      <p id="update-instructions">
+        Install the latest system update in your device settings, then reopen TheNinja-RPG.
+      </p>
+    </div>
+
     <script src="config.js"></script>
     <script>
       // The whole point of this page is that it is bundled in the binary: it paints
@@ -193,6 +200,19 @@
       // the site would show nothing at all. It hands over to the live origin as soon as
       // the server answers.
       (function () {
+        // Tailwind's color system requires color-mix (Chrome 111 / Safari 16.4).
+        // Check before connecting so an outdated engine never opens an unstyled game.
+        if (!window.CSS || !CSS.supports("color", "color-mix(in oklab, black, white)")) {
+          document.getElementById("loading").hidden = true;
+          document.getElementById("update-required").hidden = false;
+          if (/Android/i.test(navigator.userAgent)) {
+            document.getElementById("update-instructions").textContent =
+              "Update Android System WebView and Chrome in your app store, then reopen " +
+              "TheNinja-RPG. If updates are unavailable, check for a system update in device settings.";
+          }
+          return;
+        }
+
         var ORIGIN = window.TNR_ORIGIN || "https://www.theninja-rpg.com";
         var HEALTH = ORIGIN + "/api/healthcheck";
         var TIMEOUT_MS = 8000;
