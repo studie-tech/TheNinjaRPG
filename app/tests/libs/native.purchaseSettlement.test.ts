@@ -183,6 +183,11 @@ describe("native purchase settlement", () => {
       ]),
     ).toEqual(localAttempt);
     expect(
+      reconcileInterruptedStoreAttempt(localAttempt, [
+        { transactionId: "native-history-id", productId: localAttempt.productId },
+      ]),
+    ).toEqual(localAttempt);
+    expect(
       reconcileInterruptedStoreAttempt(
         { ...localAttempt, phase: "sheet-open" },
         [{ transactionId: "0", productId: localAttempt.productId }],

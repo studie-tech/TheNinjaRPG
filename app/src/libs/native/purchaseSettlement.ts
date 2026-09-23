@@ -127,6 +127,8 @@ export const reconcileInterruptedStoreAttempt = (
   attempt: StorePurchaseAttempt,
   history: readonly NativePurchaseHistory[],
 ): StorePurchaseAttempt | null => {
+  if (attempt.phase !== "sheet-open" && attempt.transactionId !== undefined)
+    return attempt;
   const transaction = history.find(
     (entry) =>
       entry.productId === attempt.productId &&
