@@ -48,7 +48,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   const title = props.defaultBackHref ? (
     <button
       type="button"
-      className="ml-1 flex cursor-pointer flex-row items-center hover:text-orange-700 disabled:cursor-wait disabled:opacity-60"
+      className="ml-1 flex min-h-[48px] min-w-[48px] cursor-pointer flex-row items-center hover:text-orange-700 disabled:cursor-wait disabled:opacity-60"
       disabled={props.backDisabled}
       aria-busy={props.backDisabled}
       onClick={() => {
