@@ -1,10 +1,12 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
+import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Welcome from "@/layout/Welcome";
 import { useUserData } from "@/utils/UserContext";
@@ -18,8 +20,11 @@ import { useUserData } from "@/utils/UserContext";
 export const HomeLanding: React.FC = () => {
   // Fetch data
   const { isSignedIn } = useUser();
+  const { signOut } = useClerk();
   const { data: userData, status: userStatus, userId } = useUserData();
   const setReferral = api.register.setReferralSource.useMutation();
+  const utils = api.useUtils();
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Navigation
   const router = useRouter();
@@ -40,12 +45,43 @@ export const HomeLanding: React.FC = () => {
     }
   }, [isSignedIn, userData, userId, userStatus]);
 
-  // The query is only enabled for a signed-in visitor, so an error without data is a
-  // character that failed to load, not one that does not exist. The segment's error
-  // boundary shows it with a retry; there is no /500 route to send them to. A failed
-  // background refetch keeps the loaded character and still forwards to the profile.
-  if (userStatus === "error" && !userData) {
-    throw new Error("Your character could not be loaded");
+  // A signed-in session can expire before the character query completes. Keep both
+  // retry and sign-in available instead of trapping the player in the error boundary.
+  // A failed background refetch still forwards when character data is already loaded.
+  if (isSignedIn && userStatus === "error" && !userData) {
+    return (
+      <ContentBox title="Connection interrupted">
+        <div className="flex flex-col gap-4 p-4">
+          <p>
+            We couldn&apos;t load your character. Check your connection and try again,
+            or sign in again if your session has expired.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              className="min-h-12"
+              disabled={isRetrying}
+              onClick={async () => {
+                setIsRetrying(true);
+                try {
+                  await utils.profile.getUser.invalidate();
+                } finally {
+                  setIsRetrying(false);
+                }
+              }}
+            >
+              {isRetrying ? "Trying again…" : "Try again"}
+            </Button>
+            <Button
+              className="min-h-12"
+              variant="outline"
+              onClick={() => void signOut({ redirectUrl: "/login" })}
+            >
+              Sign in again
+            </Button>
+          </div>
+        </div>
+      </ContentBox>
+    );
   }
 
   // Guard
