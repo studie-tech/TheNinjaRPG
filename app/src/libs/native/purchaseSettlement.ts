@@ -86,12 +86,16 @@ export const isPendingStorePurchase = (purchase: StorePurchaseSettlement): boole
   purchase.grantedAt === null &&
   purchase.revokedAt === null;
 
+/** Xcode's local StoreKit can report `0`, while RevenueCat records a distinct receipt id. */
+export const hasStoreTransactionId = (id?: string): id is string =>
+  Boolean(id && id !== "0");
+
 /** Classify only the receipt belonging to this exact checkout attempt. */
 export const storePurchaseReconciliation = (
   recent: StorePurchaseSettlement[],
   attempt: StorePurchaseAttempt,
 ): StorePurchaseObservation => {
-  const matching = attempt.transactionId
+  const matching = hasStoreTransactionId(attempt.transactionId)
     ? recent.find((purchase) => purchase.transactionId === attempt.transactionId)
     : recent.find(
         (purchase) =>
@@ -126,6 +130,7 @@ export const reconcileInterruptedStoreAttempt = (
   const transaction = history.find(
     (entry) =>
       entry.productId === attempt.productId &&
+      hasStoreTransactionId(entry.transactionId) &&
       !attempt.baselineNativeTransactionIds.includes(entry.transactionId),
   );
   if (transaction) {
