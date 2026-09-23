@@ -7,7 +7,7 @@
       "dependencies": {
         "@ai-sdk/openai": "^4.0.46",
         "@ai-sdk/react": "^4.0.80",
-        "@blockstruggle/game-ui": "file:../vendor/blockstruggle/blockstruggle-game-ui-0.1.5.tgz",
+        "@blockstruggle/game-ui": "file:../vendor/blockstruggle/blockstruggle-game-ui-0.1.6.tgz",
         "@builder.io/partytown": "^0.10.3",
         "@clerk/mcp-tools": "^0.6.0",
         "@clerk/nextjs": "^7.8.0",
@@ -247,7 +247,7 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.10", "", { "os": "win32", "cpu": "x64" }, "sha512-M+2dgBsl3lXRiTfgPVc2p3anS4Tocojke4rzFLScZ2Y/wmF+36dRb1iHCLiyGqOzQGyTplZH1HnEYviiAqi3nA=="],
 
-    "@blockstruggle/game-ui": ["@blockstruggle/game-ui@../vendor/blockstruggle/blockstruggle-game-ui-0.1.5.tgz", { "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" } }, "sha512-cdF3cdxJvGtsVYzvzoxsIrrf51Hzb9mIBkt6T2Q29DjivHOo7nWzBgboAkXf1wcCaAeGZYBBBhcZCNsSF90Ulg=="],
+    "@blockstruggle/game-ui": ["@blockstruggle/game-ui@../vendor/blockstruggle/blockstruggle-game-ui-0.1.6.tgz", { "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" } }, "sha512-Sh863F4CGe+/ZYXZK4UR7oMOAD9ZCpSruc2/4qkfRKK2afZ+1Cw+5AZtWX3BSA/1xdsCHWClUxRLazRevkVQKA=="],
 
     "@bramus/specificity": ["@bramus/specificity@2.4.2", "", { "dependencies": { "css-tree": "^3.0.0" }, "bin": { "specificity": "bin/cli.js" } }, "sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw=="],
 
