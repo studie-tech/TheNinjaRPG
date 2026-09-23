@@ -24,9 +24,18 @@ Sentry.init({
   // VERCEL_ENV is what separates production from preview deployments.
   environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
 
-  // Adds request headers and IP for users, for more info visit:
-  // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
-  sendDefaultPii: true,
+  // Keep diagnostics without sending account credentials or request/user data.
+  dataCollection: {
+    userInfo: false,
+    cookies: false,
+    httpHeaders: { request: false, response: false },
+    httpBodies: [],
+    urlQueryParams: false,
+    graphQL: { document: false, variables: false },
+    genAI: { inputs: false, outputs: false },
+    databaseQueryData: false,
+    stackFrameVariables: false,
+  },
 
   // Only on production URLs
   // allowUrls: [/https?:\/\/(www\.)?theninja-rpg\.com.*/],
