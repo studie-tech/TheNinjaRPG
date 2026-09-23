@@ -1870,6 +1870,47 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     expect(oldReceipt?.grantedAt).toBeInstanceOf(Date);
   });
 
+  it.each(["APPLE", "GOOGLE"] as const)(
+    "%s applies an effective downgrade without an expiration webhook or cleaner",
+    async (store) => {
+      const database = await db();
+      const silverTransactionId = await buyFederal("SILVER", 0, store);
+      await database
+        .update(storePurchase)
+        .set({ expiresAt: new Date(Date.now() - MINUTE) })
+        .where(eq(storePurchase.transactionId, silverTransactionId));
+
+      await buyFederal("NORMAL", 0, store);
+      expect(await statusOf()).toBe("NORMAL");
+    },
+  );
+
+  it("repairs a previously granted downgrade on retry", async () => {
+    const database = await db();
+    const transactionId = await buyFederal("NORMAL");
+    await database
+      .update(userData)
+      .set({ federalStatus: "SILVER" })
+      .where(eq(userData.userId, USER));
+    const grant = {
+      userId: USER,
+      transactionId,
+      productId: "tnr_federal_normal",
+      store: "APPLE" as const,
+      isSandbox: false,
+      purchasedAt: new Date(),
+      raw: {},
+    };
+
+    await expect(
+      grantStorePurchase(failStatements(database, userData), grant),
+    ).rejects.toThrow("Statement failed on purpose");
+    await expect(grantStorePurchase(database, grant)).resolves.toMatchObject({
+      status: "duplicate",
+    });
+    expect(await statusOf()).toBe("NORMAL");
+  });
+
   it("bulk reconciliation downgrades expired GOLD to a live store SILVER", async () => {
     const goldTransactionId = await buyFederal("GOLD");
     const database = await db();
@@ -1878,7 +1919,11 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       .set({ expiresAt: new Date(Date.now() - MINUTE) })
       .where(eq(storePurchase.transactionId, goldTransactionId));
     await buyFederal("SILVER");
-    expect(await statusOf()).toBe("GOLD");
+    // Simulate stale derived state from an interrupted or older grant implementation.
+    await database
+      .update(userData)
+      .set({ federalStatus: "GOLD" })
+      .where(eq(userData.userId, USER));
 
     await reconcileFederalStatuses(database);
     expect(await statusOf()).toBe("SILVER");

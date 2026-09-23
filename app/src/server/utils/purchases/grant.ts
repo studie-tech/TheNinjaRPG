@@ -571,11 +571,19 @@ const applyStorePurchase = async (
         ? { status: "ignored", reason: "Sandbox purchase" }
         : { status: "duplicate" };
     }
-    if (receipt.grantedAt) return { status: "duplicate" };
-    if (receipt.revokedAt) return { status: "ignored", reason: "Revoked purchase" };
-    if (await retireIfExpired(receipt.expiresAt)) {
-      return { status: "ignored", reason: "Expired purchase" };
+    if (!receipt.grantedAt) {
+      if (receipt.revokedAt) return { status: "ignored", reason: "Revoked purchase" };
+      if (await retireIfExpired(receipt.expiresAt)) {
+        return { status: "ignored", reason: "Expired purchase" };
+      }
     }
+    if (federal) {
+      // An effective downgrade arrives as a purchase/renewal, without requiring an
+      // expiration webhook for the old tier. Include accepted receipts on retries too.
+      const paypal = await paypalFederalFloor(client, recipientUserId);
+      await setFederalStatusWithStoreFloor(client, recipientUserId, paypal);
+    }
+    if (receipt.grantedAt) return { status: "duplicate" };
 
     if (!recipient) return { status: "ignored", reason: "Deleted user" };
     // The receipt deliberately remains durable when a later grant fails, so correctness
