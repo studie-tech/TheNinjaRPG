@@ -343,6 +343,9 @@ export const purchaseForBoundIdentity = async <T>(
   prepare: (customerInfo: CustomerInfo) => BoundPurchasePreparation<T>,
 ): Promise<BoundPurchaseResult<T>> =>
   await runPurchaseIdentityOperation(async () => {
+    // Recovery compares this snapshot with native history after a restart, so do not
+    // capture a stale SDK cache as the pre-sheet baseline.
+    await invoke(PLUGIN, "invalidateCustomerInfoCache");
     const customerInfo = await getCustomerInfo();
     if (!customerInfo) throw new Error("Could not verify store purchase history");
     const { prepared, storeProductChangeInfo } = prepare(customerInfo);

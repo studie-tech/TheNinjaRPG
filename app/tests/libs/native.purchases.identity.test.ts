@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPurchaseIdentityScope,
+  purchaseForBoundIdentity,
   runPurchaseIdentityOperation,
   syncPurchaseIdentitySnapshot,
 } from "@/libs/native/purchases";
@@ -20,6 +21,57 @@ afterEach(() => {
 });
 
 describe("RevenueCat identity queue", () => {
+  it("refreshes customer history before opening the purchase sheet", async () => {
+    const events: string[] = [];
+    const syncPurchases = vi.fn();
+    capacitorWindow.Capacitor = {
+      isNativePlatform: () => true,
+      Plugins: {
+        Purchases: {
+          invalidateCustomerInfoCache: async () => {
+            events.push("invalidate");
+          },
+          getCustomerInfo: async () => {
+            events.push("customer-info");
+            return {
+              customerInfo: {
+                entitlements: { active: {} },
+                activeSubscriptions: [],
+                originalAppUserId: "player-a",
+                nonSubscriptionTransactions: [],
+              },
+            };
+          },
+          purchasePackage: async () => {
+            events.push("purchase");
+            return { userCancelled: true };
+          },
+          syncPurchases,
+        },
+      },
+    };
+
+    const result = await purchaseForBoundIdentity(
+      {
+        identifier: "tier1",
+        product: {
+          identifier: "tnr_reps_tier1",
+          priceString: "$4.99",
+          title: "8 reputation points",
+          description: "",
+        },
+      },
+      () => {
+        events.push("prepare");
+        return { prepared: "baseline" };
+      },
+    );
+
+    expect(result.outcome.status).toBe("cancelled");
+    expect(events).toEqual(["invalidate", "customer-info", "prepare", "purchase"]);
+    expect(syncPurchases).not.toHaveBeenCalled();
+  });
+
   it("keeps sync and its customer-info read ahead of logout and account rebind", async () => {
     const events: string[] = [];
     let finishSync: (() => void) | undefined;
