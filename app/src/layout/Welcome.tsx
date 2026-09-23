@@ -32,6 +32,22 @@ import { bunnyImageUrl } from "@/utils/image";
 import { useActiveLayout, useIsPixelLanding } from "@/utils/LayoutContext";
 import { getFirstOfNextMonth } from "@/utils/time";
 
+/**
+ * Dimensions for the game-feature screenshots below.
+ *
+ * `layout/Image` turns the `width` prop into a Bunny rendition request, so it has to name
+ * the rendition to fetch rather than the source's own size: every one of these sources is
+ * 900x700, and asking for 1024 asked the optimizer to upscale, which it declines -- it
+ * returned the untouched original and the prop bought nothing. 768 is the container's
+ * max-width and the widest these ever render is 665 CSS px, so it stays above 1x
+ * everywhere while sitting below the source width, where the optimizer does run.
+ *
+ * The height is the rendition's own: Bunny preserves the aspect ratio, so a 900x700
+ * source returns exactly 768x597. Declaring that keeps the reserved box equal to the
+ * pixels that arrive, which the previous per-image heights did not.
+ */
+const FEATURE_SHOT = { width: 768, height: 597 } as const;
+
 const Welcome: React.FC = () => {
   const activeLayout = useActiveLayout();
   const isPixelLanding = useIsPixelLanding();
@@ -346,8 +362,8 @@ url = "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"`}
                   </p>
                   <Image
                     src={IMG_FRONTPAGE_SCREENSHOT_JUTSUS}
-                    width={1024}
-                    height={716}
+                    width={FEATURE_SHOT.width}
+                    height={FEATURE_SHOT.height}
                     className="w-full rounded-xl"
                     alt="Screenshot from Jutsus"
                   />
@@ -376,8 +392,8 @@ url = "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"`}
                   </p>
                   <Image
                     src={IMG_FRONTPAGE_SCREENSHOT_COMBAT}
-                    width={1024}
-                    height={702}
+                    width={FEATURE_SHOT.width}
+                    height={FEATURE_SHOT.height}
                     className="w-full rounded-xl"
                     alt="Screenshot from Combat"
                   />
@@ -409,8 +425,8 @@ url = "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"`}
                   </p>
                   <Image
                     src={IMG_FRONTPAGE_SCREENSHOT_VILLAGE}
-                    width={1024}
-                    height={679}
+                    width={FEATURE_SHOT.width}
+                    height={FEATURE_SHOT.height}
                     className="w-full rounded-xl"
                     alt="Screenshot from Village"
                   />
@@ -440,8 +456,8 @@ url = "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"`}
                   </p>
                   <Image
                     src={IMG_FRONTPAGE_SCREENSHOT_SECTOR}
-                    width={1024}
-                    height={732}
+                    width={FEATURE_SHOT.width}
+                    height={FEATURE_SHOT.height}
                     className="w-full rounded-xl"
                     alt="Screenshot from Sector"
                   />
@@ -470,10 +486,10 @@ url = "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"`}
                   </p>
                   <Image
                     src={IMG_FRONTPAGE_SCREENSHOT_GLOBAL}
-                    width={1024}
-                    height={743}
+                    width={FEATURE_SHOT.width}
+                    height={FEATURE_SHOT.height}
                     className="w-full rounded-xl"
-                    alt="Screenshot from Jutsus"
+                    alt="Screenshot from the global map"
                   />
                 </div>
               </div>
