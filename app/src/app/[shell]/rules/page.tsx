@@ -350,10 +350,10 @@ export default function GameRules() {
         </h3>
         <ul className="list-disc pl-5">
           <li>
-            The selling and the advertisement of selling reputation points for real
-            currency is prohibited. Players wishing to buy reputation points may only
-            use the blackmarket to purchase through paypal or with ryo from another
-            player. Players caught doing so may face warnings or a ban.
+            Players may buy reputation points through the official store or trade with
+            other players on the black market for in-game ryo. Selling or advertising
+            player-to-player reputation trades for real-world currency is prohibited and
+            may result in a warning or ban.
           </li>
         </ul>
         <hr className="my-2" />
