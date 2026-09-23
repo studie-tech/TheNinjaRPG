@@ -2121,17 +2121,6 @@ export const IMG_FRONTPAGE_SCREENSHOT_SECTOR =
 export const IMG_FRONTPAGE_SCREENSHOT_VILLAGE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuU9cvZemvaQu94EYJs8HpxVzofny6iPtbgC.webp";
 
-export const IMG_FRONTPAGE_SCREENSHOT_COMBAT_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhuLmX5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM.webp";
-export const IMG_FRONTPAGE_SCREENSHOT_JUTSUS_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAaVOt2SoZUC4muiGcQNzjfEndY5y1w20B8hT.webp";
-export const IMG_FRONTPAGE_SCREENSHOT_GLOBAL_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJvSzUp4EmSnXwslYEpV1yOeNL8gMtqhjPdf36.webp";
-export const IMG_FRONTPAGE_SCREENSHOT_SECTOR_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJXMBBarqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv.webp";
-export const IMG_FRONTPAGE_SCREENSHOT_VILLAGE_HR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJRmBtUg0udmODoNtpa0FMcwI4k2Eq7nJhyvjl.webp";
-
 export const IMG_REGISTRATIN_STEP1 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeKNAEEyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp";
 export const IMG_REGISTRATIN_STEP2 =
