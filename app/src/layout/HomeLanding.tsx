@@ -48,7 +48,7 @@ export const HomeLanding: React.FC = () => {
   // A signed-in session can expire before the character query completes. Keep both
   // retry and sign-in available instead of trapping the player in the error boundary.
   // A failed background refetch still forwards when character data is already loaded.
-  if (isSignedIn && userStatus === "error" && !userData) {
+  if (isSignedIn && !userData && (userStatus === "error" || isRetrying)) {
     return (
       <ContentBox title="Connection interrupted">
         <div className="flex flex-col gap-4 p-4">
