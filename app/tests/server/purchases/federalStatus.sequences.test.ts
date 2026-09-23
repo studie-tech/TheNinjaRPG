@@ -1885,6 +1885,37 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     },
   );
 
+  it("applies an allowlisted Play sandbox downgrade when the lower tier takes effect", async () => {
+    env.STORE_SANDBOX_USER_IDS = USER;
+    const database = await db();
+    const silverTransactionId = nanoid();
+    await grantStorePurchase(database, {
+      userId: USER,
+      transactionId: silverTransactionId,
+      productId: "tnr_federal_silver:monthly",
+      store: "GOOGLE",
+      isSandbox: true,
+      purchasedAt: new Date(Date.now() - MINUTE),
+      raw: {},
+    });
+    await database
+      .update(storePurchase)
+      .set({ expiresAt: new Date(Date.now() - 1) })
+      .where(eq(storePurchase.transactionId, silverTransactionId));
+
+    const result = await grantStorePurchase(database, {
+      userId: USER,
+      transactionId: nanoid(),
+      productId: "tnr_federal_normal:monthly",
+      store: "GOOGLE",
+      isSandbox: true,
+      purchasedAt: new Date(),
+      raw: {},
+    });
+    expect(result).toMatchObject({ status: "granted", federalStatus: "NORMAL" });
+    expect(await statusOf()).toBe("NORMAL");
+  });
+
   it("repairs a previously granted downgrade on retry", async () => {
     const database = await db();
     const transactionId = await buyFederal("NORMAL");
