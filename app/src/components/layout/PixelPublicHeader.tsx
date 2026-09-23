@@ -24,7 +24,7 @@ const PixelPublicHeader: React.FC<PixelPublicHeaderProps> = ({
   navLinks,
 }) => {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-sky-100/10 border-b bg-slate-950/55 backdrop-blur-md">
+    <header className="fixed inset-x-0 top-0 z-50 border-sky-100/10 border-b bg-slate-950">
       <div className="mx-auto grid min-h-[64px] w-[min(100%_-_32px,1180px)] grid-cols-[minmax(0,1fr)_auto] items-center gap-[8px] md:grid-cols-[auto_1fr_auto] md:gap-4">
         <Link
           href="/"
