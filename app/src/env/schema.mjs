@@ -45,6 +45,11 @@ export const serverSchema = z.object({
   CAPTCHA_SALT: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
   NATIVE_CLERK_PROXY_ENABLED: z.enum(["true", "false"]).optional(),
+  // Optional same-origin bridge to the shared Block Struggle puzzle service.
+  BLOCKSTRUGGLE_API_ORIGIN: z.url().optional(),
+  BLOCKSTRUGGLE_RPG_ORIGIN: z.url().optional(),
+  BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY: z.string().optional(),
+  BLOCKSTRUGGLE_CLERK_JWT_TEMPLATE: z.string().optional(),
   AI_TEST_USER_BROKER_TOKEN: z.string().optional(),
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: z.string().optional(),
@@ -112,6 +117,10 @@ export const serverEnv = {
   NATIVE_CLERK_PROXY_ENABLED: /** @type {"true" | "false" | undefined} */ (
     process.env.NATIVE_CLERK_PROXY_ENABLED
   ),
+  BLOCKSTRUGGLE_API_ORIGIN: process.env.BLOCKSTRUGGLE_API_ORIGIN,
+  BLOCKSTRUGGLE_RPG_ORIGIN: process.env.BLOCKSTRUGGLE_RPG_ORIGIN,
+  BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY: process.env.BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY,
+  BLOCKSTRUGGLE_CLERK_JWT_TEMPLATE: process.env.BLOCKSTRUGGLE_CLERK_JWT_TEMPLATE,
   AI_TEST_USER_BROKER_TOKEN: process.env.AI_TEST_USER_BROKER_TOKEN,
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,
