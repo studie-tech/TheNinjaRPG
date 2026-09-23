@@ -218,6 +218,7 @@ beforeEach(() => {
         getOfferings: async () => ({
           current: { availablePackages: [storePackage] },
         }),
+        invalidateCustomerInfoCache: async () => undefined,
         getCustomerInfo: async () => {
           const info =
             syncedCustomerInfo ??
