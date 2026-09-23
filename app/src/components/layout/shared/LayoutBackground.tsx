@@ -24,32 +24,35 @@ interface LayoutBackgroundProps {
  * contentful paint on most pages. next/image cannot emit a srcSet while
  * images.unoptimized is set, so the renditions are selected here with <picture> media
  * queries and produced by Bunny's optimizer.
+ *
+ * There are only two renditions because Bunny's optimizer re-encodes at quality 85,
+ * which is higher than these files were authored at: every rendition it produces above
+ * roughly 900px is larger than the untouched 1600px source, so an intermediate tablet
+ * width costs bytes and resolution at once. `full` is therefore a passthrough -- Bunny
+ * returns the original when the requested width is at or above the source width -- and
+ * anything wider than the mobile breakpoint is better served by it.
  */
-const WALLPAPER_WIDTHS = { mobile: 828, tablet: 1280, full: 1600 } as const;
+const WALLPAPER_WIDTHS = { mobile: 828, full: 1600 } as const;
 
 /**
- * The same three renditions the <picture> below selects between, as preload hints.
+ * The same two renditions the <picture> below selects between, as preload hints.
  *
  * The wallpaper is the largest contentful paint on most pages, and marking it eager and
  * high priority only reorders it against other work the browser has already found -- the
  * browser cannot start it until the parser reaches the body. Search Console reported
  * every LCP group at 4.0s, so the fetch is moved into <head>.
  *
- * The media queries have to be mutually exclusive, unlike the <source> ones, which rely
- * on first-match: a preload keyed to `(max-width: 1279px)` would also match a phone and
- * pull down a second copy of an image the page never shows. They also have to leave no
- * gap, or a viewport that lands in one preloads nothing. Hence the .02px lower bounds
- * rather than the +1px that reads more naturally -- viewport widths are fractional under
- * browser zoom and on some devices, and `(min-width: 769px)` skips 768.5 while the
- * <source> above still resolves it to the tablet rendition.
+ * The media queries have to be mutually exclusive, unlike the <source> one, which relies
+ * on first-match: a preload keyed to `(max-width: 768px)` alongside an unconditional one
+ * would pull down a second copy of an image the page never shows. They also have to leave
+ * no gap, or a viewport that lands between them preloads nothing. Hence the .02px lower
+ * bound rather than the +1px that reads more naturally -- viewport widths are fractional
+ * under browser zoom and on some devices, and `(min-width: 769px)` skips 768.5 while the
+ * <source> above still resolves it to the full rendition.
  */
 const WALLPAPER_PRELOADS = [
   { media: "(max-width: 768px)", width: WALLPAPER_WIDTHS.mobile },
-  {
-    media: "(min-width: 768.02px) and (max-width: 1279px)",
-    width: WALLPAPER_WIDTHS.tablet,
-  },
-  { media: "(min-width: 1279.02px)", width: WALLPAPER_WIDTHS.full },
+  { media: "(min-width: 768.02px)", width: WALLPAPER_WIDTHS.full },
 ] as const;
 
 interface WallpaperProps {
@@ -85,10 +88,6 @@ const Wallpaper: React.FC<WallpaperProps> = ({
       <source
         media="(max-width: 768px)"
         srcSet={bunnyImageUrl(src, WALLPAPER_WIDTHS.mobile)}
-      />
-      <source
-        media="(max-width: 1279px)"
-        srcSet={bunnyImageUrl(src, WALLPAPER_WIDTHS.tablet)}
       />
       <img
         className={className}
