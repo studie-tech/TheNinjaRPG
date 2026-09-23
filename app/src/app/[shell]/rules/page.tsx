@@ -351,9 +351,9 @@ export default function GameRules() {
         <ul className="list-disc pl-5">
           <li>
             Players may buy reputation points through the official store or trade with
-            other players on the black market for in-game ryo. Selling or advertising
-            player-to-player reputation trades for real-world currency is prohibited and
-            may result in a warning or ban.
+            other players on the black market for in-game ryo. Buying or selling
+            reputation points between players for real-world currency, or advertising
+            such trades, is prohibited and may result in a warning or ban.
           </li>
         </ul>
         <hr className="my-2" />
