@@ -42,18 +42,17 @@ const WALLPAPER_WIDTHS = { mobile: 828, full: 1600 } as const;
  * browser cannot start it until the parser reaches the body. Search Console reported
  * every LCP group at 4.0s, so the fetch is moved into <head>.
  *
- * The media queries have to be mutually exclusive, unlike the <source> one, which relies
- * on first-match: a preload keyed to `(max-width: 768px)` alongside an unconditional one
- * would pull down a second copy of an image the page never shows. The gap between them
- * also has to stay smaller than any viewport width that can occur, or a viewport landing
- * inside it preloads nothing. Hence the .02px lower bound rather than the +1px that reads
- * more naturally -- viewport widths are fractional under browser zoom and on some devices,
- * and `(min-width: 769px)` skips 768.5 while the <source> above still resolves it to the
- * full rendition.
+ * Both queries are written from one breakpoint, the second as the exact complement of the
+ * first, so they cannot overlap (which would preload an image the page never shows) and
+ * cannot leave a gap (which would leave a viewport with no preload at all). Spelling the
+ * second bound out as a number instead would do both at fractional viewport widths, which
+ * occur under browser zoom and on some devices.
  */
+const WALLPAPER_MOBILE_MEDIA = "(max-width: 768px)";
+
 const WALLPAPER_PRELOADS = [
-  { media: "(max-width: 768px)", width: WALLPAPER_WIDTHS.mobile },
-  { media: "(min-width: 768.02px)", width: WALLPAPER_WIDTHS.full },
+  { media: WALLPAPER_MOBILE_MEDIA, width: WALLPAPER_WIDTHS.mobile },
+  { media: `not all and ${WALLPAPER_MOBILE_MEDIA}`, width: WALLPAPER_WIDTHS.full },
 ] as const;
 
 interface WallpaperProps {
@@ -87,7 +86,7 @@ const Wallpaper: React.FC<WallpaperProps> = ({
   return (
     <picture>
       <source
-        media="(max-width: 768px)"
+        media={WALLPAPER_MOBILE_MEDIA}
         srcSet={bunnyImageUrl(src, WALLPAPER_WIDTHS.mobile)}
       />
       <img
