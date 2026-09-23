@@ -4,6 +4,7 @@ import {
   fetchFreshStoreObservation,
   finalStorePurchaseResult,
   finalStoreRestoreResult,
+  hasStoreTransactionId,
   hasSettledStorePurchase,
   isPendingStorePurchase,
   reconcileInterruptedStoreAttempt,
@@ -150,6 +151,37 @@ describe("native purchase settlement", () => {
         purchaseAttempt,
       ),
     ).toBe(true);
+  });
+
+  it("reconciles a local StoreKit purchase whose SDK transaction id is zero", () => {
+    const localAttempt = attempt({
+      transactionId: "0",
+      baselineReceiptIds: ["previous-receipt"],
+    });
+    expect(hasStoreTransactionId(localAttempt.transactionId)).toBe(false);
+    expect(
+      storePurchaseReconciliation(
+        [receipt({ id: "previous-receipt", grantedAt: new Date() })],
+        localAttempt,
+      ),
+    ).toBe("pending");
+    expect(
+      storePurchaseReconciliation(
+        [
+          receipt({
+            id: "local-receipt",
+            transactionId: "StoreKitTest_Transaction_abc_0",
+            grantedAt: new Date(),
+          }),
+        ],
+        localAttempt,
+      ),
+    ).toBe("credited");
+    expect(
+      reconcileInterruptedStoreAttempt(localAttempt, [
+        { transactionId: "0", productId: localAttempt.productId },
+      ]),
+    ).toEqual(localAttempt);
   });
 
   it("distinguishes credited, rejected, and pending receipts", () => {

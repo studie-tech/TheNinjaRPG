@@ -18,6 +18,7 @@ import {
   fetchFreshStoreObservation,
   finalStorePurchaseResult,
   finalStoreRestoreResult,
+  hasStoreTransactionId,
   isPendingStorePurchase,
   reconcileInterruptedStoreAttempt,
   releaseStorePurchaseLock,
@@ -424,7 +425,7 @@ export default function NativeStore() {
         assertCurrent?.();
         const matching = await fetchRecentFresh({
           limit: 50,
-          ...(attempt.transactionId
+          ...(hasStoreTransactionId(attempt.transactionId)
             ? { transactionId: attempt.transactionId }
             : { productId: attempt.productId }),
         });
@@ -459,7 +460,7 @@ export default function NativeStore() {
       assertCurrent?.();
       const matching = await fetchRecentFresh({
         limit: 50,
-        ...(attempt.transactionId
+        ...(hasStoreTransactionId(attempt.transactionId)
           ? { transactionId: attempt.transactionId }
           : { productId: attempt.productId }),
       });
