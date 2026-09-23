@@ -130,7 +130,6 @@ export const reconcileInterruptedStoreAttempt = (
   const transaction = history.find(
     (entry) =>
       entry.productId === attempt.productId &&
-      hasStoreTransactionId(entry.transactionId) &&
       !attempt.baselineNativeTransactionIds.includes(entry.transactionId),
   );
   if (transaction) {

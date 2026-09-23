@@ -182,6 +182,12 @@ describe("native purchase settlement", () => {
         { transactionId: "0", productId: localAttempt.productId },
       ]),
     ).toEqual(localAttempt);
+    expect(
+      reconcileInterruptedStoreAttempt(
+        { ...localAttempt, phase: "sheet-open" },
+        [{ transactionId: "0", productId: localAttempt.productId }],
+      ),
+    ).toMatchObject({ transactionId: "0", phase: "charged-or-pending" });
   });
 
   it("distinguishes credited, rejected, and pending receipts", () => {
