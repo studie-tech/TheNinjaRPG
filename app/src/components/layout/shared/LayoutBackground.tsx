@@ -19,18 +19,18 @@ interface LayoutBackgroundProps {
 }
 
 /**
- * Wallpapers are authored at 1600x800 but cover the whole viewport, so a phone was
- * downloading roughly four times the pixels it can show — and this is the largest
- * contentful paint on most pages. next/image cannot emit a srcSet while
- * images.unoptimized is set, so the renditions are selected here with <picture> media
- * queries and produced by Bunny's optimizer.
+ * Wallpapers cover the whole viewport, so a phone was downloading several times the
+ * pixels it can show — and this is the largest contentful paint on most pages.
+ * next/image cannot emit a srcSet while images.unoptimized is set, so the renditions are
+ * selected here with <picture> media queries and produced by Bunny's optimizer.
  *
- * There are only two renditions because Bunny's optimizer re-encodes at quality 85,
- * which is higher than these files were authored at: every rendition it produces above
- * roughly 900px is larger than the untouched 1600px source, so an intermediate tablet
- * width costs bytes and resolution at once. `full` is therefore a passthrough -- Bunny
- * returns the original when the requested width is at or above the source width -- and
- * anything wider than the mobile breakpoint is better served by it.
+ * Two renditions, not three: Bunny re-encodes at quality 85, above what these files were
+ * authored at, so a rendition narrower than the source is larger than the source itself
+ * (fall: 137,670 B at width=1280, worst at 143,442 B at width=1342, against 94,994 B
+ * untouched). Bunny passes the original through once the requested width reaches the
+ * source width, so `full` has to stay at or above the widest source — currently 1343px,
+ * except summer at 1594px. An intermediate tablet width sits below that cliff by
+ * definition and costs bytes and resolution at once.
  */
 const WALLPAPER_WIDTHS = { mobile: 828, full: 1600 } as const;
 
@@ -44,11 +44,12 @@ const WALLPAPER_WIDTHS = { mobile: 828, full: 1600 } as const;
  *
  * The media queries have to be mutually exclusive, unlike the <source> one, which relies
  * on first-match: a preload keyed to `(max-width: 768px)` alongside an unconditional one
- * would pull down a second copy of an image the page never shows. They also have to leave
- * no gap, or a viewport that lands between them preloads nothing. Hence the .02px lower
- * bound rather than the +1px that reads more naturally -- viewport widths are fractional
- * under browser zoom and on some devices, and `(min-width: 769px)` skips 768.5 while the
- * <source> above still resolves it to the full rendition.
+ * would pull down a second copy of an image the page never shows. The gap between them
+ * also has to stay smaller than any viewport width that can occur, or a viewport landing
+ * inside it preloads nothing. Hence the .02px lower bound rather than the +1px that reads
+ * more naturally -- viewport widths are fractional under browser zoom and on some devices,
+ * and `(min-width: 769px)` skips 768.5 while the <source> above still resolves it to the
+ * full rendition.
  */
 const WALLPAPER_PRELOADS = [
   { media: "(max-width: 768px)", width: WALLPAPER_WIDTHS.mobile },
