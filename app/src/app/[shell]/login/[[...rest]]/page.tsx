@@ -32,7 +32,9 @@ export default function LoginUser() {
     >
       {webglError && <WebGL2WarningBanner />}
       {pathname === "/login" && <NativeSignIn />}
-      <div className="flex flex-row items-center justify-center [color-scheme:light]">
+      {/* Clerk mounts its root without the rootBox class for a frame; stretching it here
+          keeps the card from painting shrink-wrapped and then widening. */}
+      <div className="flex flex-row items-center justify-center [color-scheme:light] *:w-full">
         <SignIn
           path="/login"
           routing="path"
