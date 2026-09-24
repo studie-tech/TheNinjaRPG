@@ -30,12 +30,14 @@ const DIRECTIVELESS_CLIENT_ENTRIES = ["instrumentation-client.ts"];
 
 /**
  * Staff-only content-management forms validated with drizzle-zod insert schemas, which
- * are derived from the table definitions and so need the schema itself.
+ * are derived from the table definitions: they may ship the schema and drizzle, but not
+ * the database client or the server env.
  */
-const EXEMPT_CLIENT_ENTRIES = [
+const SCHEMA_EDITORS = [
   "src/app/[shell]/manual/ai/edit/[aiid]/page.tsx",
   "src/app/[shell]/manual/towerDefense/characters/edit/[characterid]/page.tsx",
 ];
+const SCHEMA_SUPPORT = /^(?:drizzle\/schema\.ts|drizzle-orm(?:\/.*)?|drizzle-zod)$/;
 
 // Typed locally: importing "bun" would load its global types into the whole program.
 const { Transpiler, resolveSync } = (globalThis as unknown as { Bun: BunRuntime }).Bun;
@@ -65,52 +67,51 @@ const resolveFrom = (file: string, specifier: string) => {
   }
 };
 
+/** Each server-only import reachable from `entries` and not `allowed`, as an import chain. */
+const findServerOnlyImports = (entries: string[], allowed?: RegExp) => {
+  const cameFrom = new Map<string, string | null>(entries.map((entry) => [entry, null]));
+  const chain = (file: string) => {
+    const steps: string[] = [];
+    for (let at: string | null | undefined = file; at; at = cameFrom.get(at)) {
+      steps.unshift(relative(APP_ROOT, at));
+    }
+    return steps.join(" > ");
+  };
+
+  const offenders: string[] = [];
+  const queue = [...entries];
+  while (queue.length > 0) {
+    const file = queue.shift() as string;
+    for (const specifier of runtimeImports(file)) {
+      const target = resolveFrom(file, specifier);
+      const local = target?.startsWith(APP_ROOT) && !target.includes("/node_modules/") ? target : undefined;
+      const serverOnly = SERVER_ONLY_PACKAGES.test(specifier)
+        ? specifier
+        : SERVER_ONLY_FILES.find((path) => local === join(APP_ROOT, path));
+      if (serverOnly && !allowed?.test(serverOnly)) {
+        offenders.push(`${chain(file)} > ${serverOnly}`);
+        continue;
+      }
+      if (!local || !CODE_FILE.test(local) || cameFrom.has(local)) continue;
+      cameFrom.set(local, file);
+      queue.push(local);
+    }
+  }
+  return offenders;
+};
+
 describe("client bundle", () => {
-  it("never reaches the drizzle schema, drizzle or the database client", () => {
+  it("never reaches drizzle, the schema, the database client or the server env", () => {
     const entries = [
       ...sourceFiles(SOURCE_ROOT).filter(isClientModule),
       ...DIRECTIVELESS_CLIENT_ENTRIES.map((path) => join(APP_ROOT, path)),
     ];
-    const exempt = new Set(EXEMPT_CLIENT_ENTRIES.map((path) => join(APP_ROOT, path)));
-    const serverOnlyFiles = new Set(SERVER_ONLY_FILES.map((path) => join(APP_ROOT, path)));
-
-    const cameFrom = new Map<string, string | null>();
-    const queue = entries.filter((entry) => !exempt.has(entry));
-    for (const entry of queue) cameFrom.set(entry, null);
-    const chain = (file: string) => {
-      const steps: string[] = [];
-      for (let at: string | null | undefined = file; at; at = cameFrom.get(at)) {
-        steps.unshift(relative(APP_ROOT, at));
-      }
-      return steps.join(" > ");
-    };
-
-    const offenders: string[] = [];
-    while (queue.length > 0) {
-      const file = queue.shift() as string;
-      for (const specifier of runtimeImports(file)) {
-        if (SERVER_ONLY_PACKAGES.test(specifier)) {
-          offenders.push(`${chain(file)} > ${specifier}`);
-          continue;
-        }
-        const target = resolveFrom(file, specifier);
-        if (!target?.startsWith(APP_ROOT) || target.includes("/node_modules/") || !CODE_FILE.test(target)) {
-          continue;
-        }
-        if (serverOnlyFiles.has(target)) {
-          offenders.push(`${chain(file)} > ${relative(APP_ROOT, target)}`);
-          continue;
-        }
-        if (!cameFrom.has(target)) {
-          cameFrom.set(target, file);
-          queue.push(target);
-        }
-      }
-    }
+    const editors = SCHEMA_EDITORS.map((path) => join(APP_ROOT, path));
 
     expect(entries.length).toBeGreaterThan(100);
-    for (const path of exempt) expect(entries).toContain(path);
-    expect(offenders).toEqual([]);
+    for (const editor of editors) expect(entries).toContain(editor);
+    expect(findServerOnlyImports(entries.filter((entry) => !editors.includes(entry)))).toEqual([]);
+    expect(findServerOnlyImports(editors, SCHEMA_SUPPORT)).toEqual([]);
   });
 });
 
