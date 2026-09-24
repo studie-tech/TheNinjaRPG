@@ -82,7 +82,10 @@ const IdentityLinkForm = ({ onLinked }: { onLinked: () => void }) => {
     }
   };
   return (
-    <section className="mx-auto mb-4 max-w-3xl rounded-lg border border-amber-500/50 bg-slate-950 p-4 text-amber-50">
+    <section
+      aria-label="Block Struggle account linking"
+      className="mx-auto mb-4 max-w-3xl rounded-lg border border-amber-500/50 bg-slate-950 p-4 text-amber-50"
+    >
       <button
         type="button"
         className="font-semibold text-amber-200 underline"
@@ -108,7 +111,7 @@ const IdentityLinkForm = ({ onLinked }: { onLinked: () => void }) => {
               maxLength={43}
               autoComplete="off"
               spellCheck={false}
-              onChange={(event) => setCode(event.target.value)}
+              onInput={(event) => setCode(event.currentTarget.value)}
               placeholder="Paste 43-character code"
               disabled={pending}
             />
