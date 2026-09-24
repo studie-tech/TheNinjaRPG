@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
  * puts the whole schema, the query builder and the PlanetScale driver into the bundle
  * and evaluates them on page load. Shared libs keep their database code in
  * src/server/utils (see libs/war.ts and server/utils/war.ts) so that client code can
- * import the pure half.
+ * import the pure half. react-dom/server is listed too: it is CommonJS, so one import
+ * ships both of its renderers whole.
  *
  * `import "server-only"` cannot guard this: the test preload imports the server
  * modules, and that package throws outside a React server environment.
@@ -21,7 +22,8 @@ const APP_ROOT = join(import.meta.dirname, "../..");
 const SOURCE_ROOT = join(APP_ROOT, "src");
 
 const SERVER_ONLY_FILES = ["drizzle/schema.ts", "src/server/db.ts", "src/env/server.mjs"];
-const SERVER_ONLY_PACKAGES = /^(?:drizzle-orm(?:\/.*)?|drizzle-zod|@planetscale\/database)$/;
+const SERVER_ONLY_PACKAGES =
+  /^(?:drizzle-orm(?:\/.*)?|drizzle-zod|@planetscale\/database|react-dom\/server(?:\..*)?)$/;
 const RUNTIME_IMPORT_KINDS = new Set(["import-statement", "dynamic-import", "require-call"]);
 const CODE_FILE = /\.[cm]?[jt]sx?$/;
 
@@ -101,7 +103,7 @@ const findServerOnlyImports = (entries: string[], allowed?: RegExp) => {
 };
 
 describe("client bundle", () => {
-  it("never reaches drizzle, the schema, the database client or the server env", () => {
+  it("never reaches server-only files or packages", () => {
     const entries = [
       ...sourceFiles(SOURCE_ROOT).filter(isClientModule),
       ...DIRECTIVELESS_CLIENT_ENTRIES.map((path) => join(APP_ROOT, path)),
