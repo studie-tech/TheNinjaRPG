@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect } from "react";
+import { startTransition, useEffect } from "react";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { cn } from "@/libs/shadui";
 
@@ -49,9 +49,13 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
                 props.className,
               )}
               onClick={() => {
-                if (setValue) setValue(option);
-                if (onChange) onChange(option);
                 if (id) safeLocalStorageSetItem(id, option);
+                // A transition lets the tab's content render after the click is
+                // painted, so heavy mounts (e.g. three.js scenes) stay out of INP
+                startTransition(() => {
+                  if (setValue) setValue(option);
+                  if (onChange) onChange(option);
+                });
               }}
             >
               {option}
