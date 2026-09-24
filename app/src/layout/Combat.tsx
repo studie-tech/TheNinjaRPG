@@ -9,12 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Clock, Group, OrthographicCamera, Vector2 } from "three";
 import { api, type RouterInputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import {
-  HEX_ASPECT_RATIO,
-  HEX_STACKING_DISPLACEMENT,
-  IMG_INITIATIVE_D20,
-  PvpBattleTypes,
-} from "@/drizzle/constants";
+import { IMG_INITIATIVE_D20, PvpBattleTypes } from "@/drizzle/constants";
 import {
   type CombatPreferences,
   shouldInvalidateEndedBattleCaches,
@@ -41,7 +36,11 @@ import type {
   CombatAction,
   ReturnedBattle,
 } from "@/libs/combat/types";
-import { getTurnControl, resolveControlledActorId } from "@/libs/combat/util";
+import {
+  getBattlefieldHeightRatio,
+  getTurnControl,
+  resolveControlledActorId,
+} from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { haptics } from "@/libs/native";
 import { getBackgroundColor } from "@/libs/threejs/biome";
@@ -869,10 +868,10 @@ const Combat: React.FC<CombatProps> = (props) => {
       // Mark component as mounted
       isMountedRef.current = true;
       // Used for map size calculations
-      const width2height =
-        ((battleRef.current.height + 2) * HEX_ASPECT_RATIO) /
-        (battleRef.current.width -
-          HEX_STACKING_DISPLACEMENT * (battleRef.current.width - 1));
+      const width2height = getBattlefieldHeightRatio(
+        battleRef.current.width,
+        battleRef.current.height,
+      );
 
       // Map size
       const WIDTH = sceneRef.getBoundingClientRect().width;
