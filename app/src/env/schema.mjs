@@ -50,7 +50,7 @@ export const serverSchema = z.object({
   BLOCKSTRUGGLE_RPG_ORIGIN: z.url().optional(),
   BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY: z.string().optional(),
   BLOCKSTRUGGLE_CLERK_JWT_TEMPLATE: z.string().optional(),
-  BLOCKSTRUGGLE_PREVIEW_BYPASS_SECRET: z.string().optional(),
+  BLOCKSTRUGGLE_TRUSTED_VERCEL_SOURCE: z.enum(["true", "false"]).optional(),
   AI_TEST_USER_BROKER_TOKEN: z.string().optional(),
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: z.string().optional(),
@@ -122,7 +122,9 @@ export const serverEnv = {
   BLOCKSTRUGGLE_RPG_ORIGIN: process.env.BLOCKSTRUGGLE_RPG_ORIGIN,
   BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY: process.env.BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY,
   BLOCKSTRUGGLE_CLERK_JWT_TEMPLATE: process.env.BLOCKSTRUGGLE_CLERK_JWT_TEMPLATE,
-  BLOCKSTRUGGLE_PREVIEW_BYPASS_SECRET: process.env.BLOCKSTRUGGLE_PREVIEW_BYPASS_SECRET,
+  BLOCKSTRUGGLE_TRUSTED_VERCEL_SOURCE: /** @type {"true" | "false" | undefined} */ (
+    process.env.BLOCKSTRUGGLE_TRUSTED_VERCEL_SOURCE
+  ),
   AI_TEST_USER_BROKER_TOKEN: process.env.AI_TEST_USER_BROKER_TOKEN,
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,

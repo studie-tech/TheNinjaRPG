@@ -1,12 +1,15 @@
 // @vitest-environment node
 import { randomBytes } from "node:crypto";
 import { auth } from "@clerk/nextjs/server";
+import { getVercelOidcToken } from "@vercel/oidc";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
+vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: vi.fn() }));
 const mockAuth = auth as unknown as ReturnType<typeof vi.fn>;
+const mockOidc = getVercelOidcToken as unknown as ReturnType<typeof vi.fn>;
 
 const route = "https://rpg.example/api/minigames/blockstruggle/session";
 const context = { params: Promise.resolve({ path: ["session"] }) };
@@ -15,7 +18,7 @@ const environmentNames = [
   "BLOCKSTRUGGLE_RPG_ORIGIN",
   "BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY",
   "BLOCKSTRUGGLE_CLERK_JWT_TEMPLATE",
-  "BLOCKSTRUGGLE_PREVIEW_BYPASS_SECRET",
+  "BLOCKSTRUGGLE_TRUSTED_VERCEL_SOURCE",
 ] as const;
 const originalEnvironment = environmentNames.map((name) => process.env[name]);
 const originalFetch = globalThis.fetch;
@@ -85,6 +88,7 @@ describe("Block Struggle Next.js route boundary", () => {
     expect(auth).toHaveBeenCalledTimes(2);
     expect(exchanges).toBe(1);
     expect(getToken).toHaveBeenCalledWith({ template: "blockstruggle_ninja" });
+    expect(mockOidc).not.toHaveBeenCalled();
 
     mockAuth.mockResolvedValue({
       userId: null,
@@ -107,5 +111,39 @@ describe("Block Struggle Next.js route boundary", () => {
     const response = await GET(request(), context);
     expect(response.status).toBe(503);
     expect(getToken).not.toHaveBeenCalled();
+  });
+
+  it("forwards a Vercel OIDC token only to the protected game preview", async () => {
+    process.env.BLOCKSTRUGGLE_API_ORIGIN =
+      "https://blockstruggle-git-codex-rebuild-the-ninja-rpg.vercel.app";
+    process.env.BLOCKSTRUGGLE_TRUSTED_VERCEL_SOURCE = "true";
+    mockOidc.mockResolvedValue("header.payload.signature");
+    mockAuth.mockResolvedValue({
+      userId: "rpg-user",
+      sessionId: "rpg-session",
+      getToken: async () => "clerk.proof",
+    } as unknown as Awaited<ReturnType<typeof auth>>);
+    let calls = 0;
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls++;
+      expect(String(input)).toMatch(
+        /^https:\/\/blockstruggle-git-codex-rebuild-the-ninja-rpg\.vercel\.app\//,
+      );
+      expect(new Headers(init?.headers).get("x-vercel-trusted-oidc-idp-token")).toBe(
+        "header.payload.signature",
+      );
+      return new URL(String(input)).pathname.endsWith("/exchange")
+        ? Response.json({
+            token: "a".repeat(43),
+            playerId: "p_player",
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          })
+        : Response.json({ playerId: "p_player" });
+    };
+    const response = await GET(request(), context);
+    expect(response.status).toBe(200);
+    expect(calls).toBe(2);
+    expect(mockOidc).toHaveBeenCalledTimes(1);
+    expect(response.headers.has("x-vercel-trusted-oidc-idp-token")).toBe(false);
   });
 });

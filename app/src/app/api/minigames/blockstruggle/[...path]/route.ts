@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import { getVercelOidcToken } from "@vercel/oidc";
 import { Effect, Either } from "effect";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -43,12 +44,16 @@ const handle = async (request: NextRequest, context: Context) => {
     const { path } = await context.params;
     const bridge = await Effect.runPromise(
       Effect.either(
-        makeBlockStruggleBridge({
-          apiOrigin: process.env.BLOCKSTRUGGLE_API_ORIGIN,
-          siteOrigin: process.env.BLOCKSTRUGGLE_RPG_ORIGIN,
-          cookieKey: process.env.BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY,
-          previewBypassSecret: process.env.BLOCKSTRUGGLE_PREVIEW_BYPASS_SECRET,
-        }).pipe(
+        makeBlockStruggleBridge(
+          {
+            apiOrigin: process.env.BLOCKSTRUGGLE_API_ORIGIN,
+            siteOrigin: process.env.BLOCKSTRUGGLE_RPG_ORIGIN,
+            cookieKey: process.env.BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY,
+            trustedVercelSource: process.env.BLOCKSTRUGGLE_TRUSTED_VERCEL_SOURCE,
+          },
+          fetch,
+          getVercelOidcToken,
+        ).pipe(
           Effect.flatMap((service) =>
             service.handle(
               request,
