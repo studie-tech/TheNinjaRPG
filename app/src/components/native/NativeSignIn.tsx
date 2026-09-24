@@ -45,6 +45,12 @@ export default function NativeSignIn() {
     setActiveProvider(id);
     const result = await run();
     setActiveProvider(null);
+    if (result.status === "complete") {
+      // A fresh request lets the shell and home page route the new session to
+      // character creation or the existing character.
+      window.location.assign("/");
+      return;
+    }
     // A dismissed sheet is the player changing their mind, not something to report.
     if (result.status === "error") {
       showMutationToast({ success: false, message: result.message });

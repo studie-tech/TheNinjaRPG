@@ -46,6 +46,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     data: userData,
     notifications,
     isClerkLoaded,
+    status: userStatus,
     userId,
     updateUser,
   } = useUserData();
@@ -127,6 +128,10 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const isSignedInLayout =
     !!userData || !!userId || (!isClerkLoaded && initialIsSignedIn);
   const isAnonymousLayout = !isSignedInLayout;
+  const isCharacterLoading =
+    isSignedInLayout && !userData && (!isClerkLoaded || userStatus === "pending");
+  const isCreatingCharacter =
+    isClerkLoaded && !!userId && !userData && userStatus === "success";
   const showMobileNotifications = pathname !== "/combat";
   const mobileNotificationCount = shownNotifications?.length ?? 0;
   const imageset = getImageSet(userData);
@@ -141,6 +146,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const signedInIcons = (
     <SignedInIcons
       variant={variant}
+      isSignedIn={!!userId}
       userData={userData}
       updateUser={updateUser}
       onEventClick={() => setLeftSideBarOpen(false)}
@@ -153,6 +159,8 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       isClerkLoaded={isClerkLoaded}
       isSignedInLayout={isSignedInLayout}
+      isCharacterLoading={isCharacterLoading}
+      isCreatingCharacter={isCreatingCharacter}
       userData={userData}
     />
   );
@@ -162,6 +170,8 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       isClerkLoaded={isClerkLoaded}
       isSignedInLayout={isSignedInLayout}
+      isCharacterLoading={isCharacterLoading}
+      isCreatingCharacter={isCreatingCharacter}
       userData={userData}
       systems={systems}
       notifications={shownNotifications}
