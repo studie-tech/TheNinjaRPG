@@ -314,15 +314,18 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                 <div
                   className={cn(
                     "p-3 pb-28 md:pb-3",
-                    // The footer bar below sits in normal flow under this wrapper, so on
-                    // a phone it starts wherever the page's first paint ends -- often a
-                    // spinner a few hundred pixels tall -- and then travels the full
-                    // height of the loaded page once the query resolves. Speed Insights
-                    // measured that bar as the site's largest layout shift (0.36 over 23
-                    // visits). Holding the wrapper to one viewport keeps the bar below the
-                    // fold at first paint, and an element that is not yet visible cannot
-                    // register a shift when the content above it grows.
-                    isSignedInLayout && "min-h-svh p-0 pb-28 md:min-h-0 md:pb-8",
+                    // The footer bar below sits in normal flow under this wrapper, so it
+                    // starts wherever the page's first paint ends -- often a spinner a few
+                    // hundred pixels tall -- and then travels the full height of the loaded
+                    // page once the query resolves. Speed Insights measured that bar as the
+                    // site's largest layout shift on phones (0.36 over 23 visits). On
+                    // desktop the same growth is when the document first overflows: a
+                    // classic scrollbar appears, the viewport narrows, and the centred
+                    // container moves sideways with it. Holding the wrapper to one viewport
+                    // at every width keeps the bar below the fold and the page scrollable
+                    // from first paint, so neither the bar nor the viewport width changes
+                    // when the content above grows.
+                    isSignedInLayout && "min-h-svh p-0 pb-28 md:pb-8",
                     isAnonymousLayout && "p-5 pb-8 md:p-7",
                   )}
                 >
