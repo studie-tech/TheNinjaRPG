@@ -70,7 +70,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
 import { canChallengeKage } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate, secondsPassed } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {

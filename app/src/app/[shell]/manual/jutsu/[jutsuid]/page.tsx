@@ -5,7 +5,7 @@ import ContentDetail from "@/layout/ContentDetail";
 import { buildMetadata, metaDescription } from "@/libs/seo";
 import { fetchJutsu } from "@/server/api/routers/jutsu";
 import { drizzleDB } from "@/server/db";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 
 type Props = { params: Promise<{ jutsuid: string }> };
 

@@ -36,7 +36,7 @@ import { capUserStats } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { round } from "@/utils/math";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { createStatSchema, type StatSchemaType } from "@/validators/combat";
 
 interface StatDistributionProps {

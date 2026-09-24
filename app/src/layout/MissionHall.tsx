@@ -39,7 +39,7 @@ import { showMutationToast } from "@/libs/toast";
 import { availableQuestLetterRanks } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { isRetryableTrpcError } from "@/utils/error";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 
 interface MissionHallProps {
   userData: NonNullable<UserWithRelations>;

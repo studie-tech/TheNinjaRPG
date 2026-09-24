@@ -102,7 +102,7 @@ import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { CreateAuctionListingSchema } from "@/validators/auction";
 import { createAuctionListingSchema } from "@/validators/auction";

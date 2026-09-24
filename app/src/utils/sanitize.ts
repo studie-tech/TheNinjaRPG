@@ -127,7 +127,3 @@ export const stripBlockquotes = (html: string) =>
     ...sanitizeOptions,
     exclusiveFilter: (frame) => frame.tag === "blockquote",
   });
-
-export const capitalizeFirstLetter = (string: string) => {
-  return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
-};

@@ -23,7 +23,7 @@ import type {
 } from "@/drizzle/schema";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { getReducedGainsDays } from "@/libs/train";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { getStrucBoost } from "@/utils/village";
 import type { StatSchemaType } from "@/validators/combat";
 

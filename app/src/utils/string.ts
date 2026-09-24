@@ -14,6 +14,10 @@ export const insertComponentsIntoText = (
   });
 };
 
+export const capitalizeFirstLetter = (string: string) => {
+  return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+};
+
 /**
  * Also removes thousands and replace with k, m, b, t, etc.
  * @param number

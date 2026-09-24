@@ -21,7 +21,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { AppRouter } from "@/server/api/root";
 import { pushToCombat } from "@/utils/routing";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
 
 type ShrineBattleData =

@@ -33,7 +33,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
 import { parseHtml } from "@/utils/parse";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";

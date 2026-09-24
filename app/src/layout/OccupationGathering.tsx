@@ -16,7 +16,7 @@ import {
   getGatheringRankProgress,
   getNextRankExperience,
 } from "@/libs/gathering";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function OccupationGathering() {

@@ -5,7 +5,7 @@ import type React from "react";
 import { Button } from "@/components/ui/button";
 import AvatarImage from "@/layout/Avatar";
 import { cn } from "@/libs/shadui";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsPassed } from "@/utils/time";
 
 export type ColumnDefinitionType<T, K extends keyof T> = {

@@ -10,7 +10,7 @@ import Link from "@/layout/Link";
 import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { resolveTavernColorClasses } from "@/libs/tavernColors";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 
 export interface PostProps {
   user?: {

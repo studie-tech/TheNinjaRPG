@@ -5,7 +5,7 @@ import type { UserRank, UserRequestState } from "@/drizzle/constants";
 import type { UserRequest } from "@/drizzle/schema";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 
 type RequestUser = {
