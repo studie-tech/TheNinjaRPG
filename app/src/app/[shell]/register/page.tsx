@@ -62,18 +62,42 @@ import {
  */
 const Register: React.FC = () => {
   const router = useRouter();
-  const { data: userData, status: userStatus } = useUserData();
+  const utils = api.useUtils();
+  const {
+    data: userData,
+    status: userStatus,
+    isClerkLoaded,
+    isSignedIn,
+  } = useUserData();
 
   // Redirect authenticated users away from register page
   useEffect(() => {
-    if (userStatus === "success" && userData) {
+    if (isClerkLoaded && !isSignedIn) {
+      void router.replace("/login");
+    } else if (userStatus === "success" && userData) {
       void router.push("/");
     }
-  }, [router, userStatus, userData]);
+  }, [router, userStatus, userData, isClerkLoaded, isSignedIn]);
 
   // Show loader while checking auth status or if user is authenticated
-  if (userStatus === "pending" || (userStatus === "success" && userData)) {
+  if (
+    !isClerkLoaded ||
+    !isSignedIn ||
+    userStatus === "pending" ||
+    (userStatus === "success" && userData)
+  ) {
     return <Loader explanation="Loading page..." />;
+  }
+
+  if (userStatus === "error") {
+    return (
+      <ContentBox title="Connection interrupted">
+        <p className="p-4">We couldn&apos;t load your account. Please try again.</p>
+        <Button className="m-4" onClick={() => void utils.profile.getUser.invalidate()}>
+          Try again
+        </Button>
+      </ContentBox>
+    );
   }
 
   // Only render the form when we're sure the user should see it

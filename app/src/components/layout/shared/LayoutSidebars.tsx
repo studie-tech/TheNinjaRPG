@@ -76,6 +76,15 @@ const RightSidebarLoadingSkeleton: React.FC = () => (
   </div>
 );
 
+const CharacterSetupPrompt: React.FC = () => (
+  <div className="p-2 text-sm">
+    <p>Create your character to unlock the game menus.</p>
+    <Link href="/register" className="font-semibold underline">
+      Create character
+    </Link>
+  </div>
+);
+
 const GithubStar: React.FC = () => (
   <div className="flex justify-center pt-6 pl-2 align-center">
     <iframe
@@ -92,6 +101,8 @@ interface LayoutLeftSidebarProps {
   variant: LayoutVariant;
   isClerkLoaded: boolean;
   isSignedInLayout: boolean;
+  isCharacterLoading: boolean;
+  isCreatingCharacter: boolean;
   userData?: UserWithRelations | null;
 }
 
@@ -99,6 +110,8 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
   variant,
   isClerkLoaded,
   isSignedInLayout,
+  isCharacterLoading,
+  isCreatingCharacter,
   userData,
 }) => {
   return (
@@ -116,7 +129,7 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
           <MenuBoxProfile />
         </>
       )}
-      {variant === "beta" && isClerkLoaded && !userData && (
+      {variant === "beta" && isClerkLoaded && !isSignedInLayout && (
         <>
           <SideBannerTitle>Participate</SideBannerTitle>
           <div className="flex flex-row gap-4 pt-3">
@@ -141,10 +154,8 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
           </div>
         </>
       )}
-      {variant === "beta" && !isClerkLoaded && <SidebarLoadingSkeleton />}
-      {variant === "pixel" && isSignedInLayout && !userData && (
-        <SidebarLoadingSkeleton />
-      )}
+      {isCharacterLoading && <SidebarLoadingSkeleton />}
+      {isCreatingCharacter && <CharacterSetupPrompt />}
     </div>
   );
 };
@@ -153,6 +164,8 @@ interface LayoutRightSidebarContentProps {
   variant: LayoutVariant;
   isClerkLoaded: boolean;
   isSignedInLayout: boolean;
+  isCharacterLoading: boolean;
+  isCreatingCharacter: boolean;
   userData?: UserWithRelations | null;
   systems: NavBarDropdownLink[];
   notifications?: NavBarDropdownLink[];
@@ -163,6 +176,8 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
   variant,
   isClerkLoaded,
   isSignedInLayout,
+  isCharacterLoading,
+  isCreatingCharacter,
   userData,
   systems,
   notifications,
@@ -179,7 +194,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
           location={location}
         />
       )}
-      {variant === "beta" && isClerkLoaded && !userData && (
+      {variant === "beta" && isClerkLoaded && !isSignedInLayout && (
         <>
           <SideBannerTitle>Welcome</SideBannerTitle>
           <p className="hidden px-1 text-orange-100 italic md:block">Socials Login</p>
@@ -221,10 +236,8 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
           </Link>
         </>
       )}
-      {variant === "beta" && !isClerkLoaded && <RightSidebarLoadingSkeleton />}
-      {variant === "pixel" && isSignedInLayout && !userData && (
-        <RightSidebarLoadingSkeleton />
-      )}
+      {isCharacterLoading && <RightSidebarLoadingSkeleton />}
+      {isCreatingCharacter && <CharacterSetupPrompt />}
       <GithubStar />
     </>
   );
@@ -232,6 +245,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
 
 interface SignedInIconsProps {
   variant: LayoutVariant;
+  isSignedIn: boolean;
   userData?: UserWithRelations | null;
   updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
   onEventClick: () => void;
@@ -240,6 +254,7 @@ interface SignedInIconsProps {
 
 export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   variant,
+  isSignedIn,
   userData,
   updateUser,
   onEventClick,
@@ -247,7 +262,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
 }) => {
   return (
     <div className="flex flex-row items-center">
-      {userData && (
+      {isSignedIn && (
         <span
           data-sidebar-keep-open="true"
           data-clerk-element="true"
