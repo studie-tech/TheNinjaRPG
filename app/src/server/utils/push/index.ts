@@ -20,7 +20,13 @@ import { secondsFromNow } from "@/utils/time";
 import * as apns from "./apns";
 import * as fcm from "./fcm";
 import type { PushSendSummary } from "./types";
-import { emptySummary, type PushMessage, type PushResult, summarise } from "./types";
+import {
+  emptySummary,
+  type PushMessage,
+  type PushResult,
+  shouldReportPushFailures,
+  summarise,
+} from "./types";
 
 export { announcement, deliveryTest, toPlainText } from "./messages";
 export type { PushMessage, PushSendSummary } from "./types";
@@ -82,7 +88,9 @@ export const sendPushToUsers = async (
 
     const summary = summarise([...iosResults, ...androidResults]);
     await pruneExpiredTokens(client, summary.expiredTokens);
-    reportFailures([...iosResults, ...androidResults], message.category);
+    if (shouldReportPushFailures(message)) {
+      reportFailures([...iosResults, ...androidResults], message.category);
+    }
     return summary;
   } catch (error) {
     Sentry.captureException(error, {

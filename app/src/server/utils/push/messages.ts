@@ -70,4 +70,5 @@ export const deliveryTest = (): PushMessage => ({
   category: "system",
   url: "/profile",
   collapseId: "push-delivery-test",
+  suppressFailureReport: true,
 });
