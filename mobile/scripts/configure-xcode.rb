@@ -22,10 +22,9 @@ APP_TARGET = "App"
 WIDGET_TARGET = "TNRWidgets"
 BUNDLE_ID = ENV.fetch("TNR_APP_ID", "com.theninjarpg.app")
 APP_GROUP = "group.#{BUNDLE_ID}"
-# Capacitor 8's generated CapApp-SPM package requires iOS 16. Keep the application target
-# aligned with that package; declaring iOS 15 links code built for a newer deployment target.
-APP_DEPLOYMENT_TARGET = "16.0"
-WIDGET_DEPLOYMENT_TARGET = "16.1"
+# The embedded site and its authentication UI require a supported WebKit release.
+APP_DEPLOYMENT_TARGET = "18.0"
+WIDGET_DEPLOYMENT_TARGET = "18.0"
 
 abort "No Xcode project at #{PROJECT_PATH}. Run `bun run add:ios` first." unless Dir.exist?(PROJECT_PATH)
 
