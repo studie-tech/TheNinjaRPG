@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { ensureDom } from "../../../../../tests/setup-dom.mjs";
 import ShinobiStruggleClient from "./ShinobiStruggleClient";
 
 vi.mock("next/dynamic", () => ({
@@ -21,12 +22,14 @@ afterEach(() => {
 });
 
 it("keeps account linking hidden until enabled", () => {
+  ensureDom();
   process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED = "false";
   const view = render(<ShinobiStruggleClient />);
   expect(view.queryByRole("button", { name: /Link an existing/ })).toBeNull();
 });
 
 it("redeems a code through the same-origin route and keeps a conflict recoverable", async () => {
+  ensureDom();
   process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED = "true";
   let status = 409;
   const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
@@ -36,12 +39,15 @@ it("redeems a code through the same-origin route and keeps a conflict recoverabl
   );
   globalThis.fetch = fetcher;
   const view = render(<ShinobiStruggleClient />);
-  fireEvent.click(view.getByRole("button", { name: /Link an existing/ }));
-  const input = view.getByRole("textbox", { name: "Block Struggle link code" });
-  fireEvent.change(input, { target: { value: "c".repeat(43) } });
-  fireEvent.click(view.getByRole("button", { name: "Link accounts" }));
+  const form = within(
+    view.getByRole("region", { name: "Block Struggle account linking" }),
+  );
+  fireEvent.click(form.getByRole("button", { name: /Link an existing/ }));
+  const input = form.getByRole("textbox", { name: "Block Struggle link code" });
+  fireEvent.input(input, { target: { value: "c".repeat(43) } });
+  fireEvent.click(form.getByRole("button", { name: "Link accounts" }));
   await waitFor(() =>
-    expect(view.getByRole("alert").textContent).toContain("cannot be merged"),
+    expect(form.getByRole("alert").textContent).toContain("cannot be merged"),
   );
   expect(fetcher.mock.calls[0]?.[0]).toBe(
     "/api/minigames/blockstruggle/identity-link/redeem",
@@ -53,7 +59,7 @@ it("redeems a code through the same-origin route and keeps a conflict recoverabl
     body: JSON.stringify({ code: "c".repeat(43) }),
   });
   status = 200;
-  fireEvent.click(view.getByRole("button", { name: "Link accounts" }));
+  fireEvent.click(form.getByRole("button", { name: "Link accounts" }));
   await waitFor(() =>
     expect(view.getByText("Accounts linked. Your game is reconnecting.")).toBeTruthy(),
   );
