@@ -16,7 +16,16 @@ export interface PushMessage {
   badge?: number;
   /** Extra values handed to the app; must be JSON-serialisable and small. */
   data?: Record<string, string>;
+  /**
+   * Player-initiated checks already return the failure to the caller. Keep those out of
+   * Sentry; a real fan-out still reports.
+   */
+  suppressFailureReport?: boolean;
 }
+
+/** Token rejections for a player-initiated test stay in the response instead of Sentry. */
+export const shouldReportPushFailures = (message: PushMessage): boolean =>
+  message.suppressFailureReport !== true;
 
 export interface PushTarget {
   token: string;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { announcement, deliveryTest, toPlainText } from "@/server/utils/push/messages";
-import { summarise } from "@/server/utils/push/types";
+import { shouldReportPushFailures, summarise } from "@/server/utils/push/types";
 
 describe("toPlainText", () => {
   it("strips the markup announcements carry", () => {
@@ -34,6 +34,16 @@ describe("toPlainText", () => {
   it("strips to a fixpoint, so a nested tag cannot reassemble itself", () => {
     expect(toPlainText("<<b>b>bold<<\/b>\/b>")).toBe("bold");
     expect(toPlainText("<<script>script>alert(1)")).toBe("alert(1)");
+  });
+});
+
+describe("delivery failure reporting", () => {
+  it("keeps a rejected test token out of Sentry", () => {
+    expect(shouldReportPushFailures(deliveryTest())).toBe(false);
+  });
+
+  it("still reports a rejected announcement", () => {
+    expect(shouldReportPushFailures(announcement("The gate is open."))).toBe(true);
   });
 });
 
