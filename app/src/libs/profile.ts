@@ -21,7 +21,7 @@ import type {
   Village,
   VillageStructure,
 } from "@/drizzle/schema";
-import { getGameSettingBoost } from "@/libs/gamesettings";
+import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { getReducedGainsDays } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { getStrucBoost } from "@/utils/village";

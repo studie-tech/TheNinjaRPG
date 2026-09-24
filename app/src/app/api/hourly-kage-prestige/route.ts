@@ -15,7 +15,7 @@ import {
 import { fetchActiveWars } from "@/server/api/routers/war";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
-import { calculateDailyLockedTime } from "@/utils/kage";
+import { calculateDailyLockedTime } from "@/server/utils/kage";
 
 const ENDPOINT_NAME = "hourly-kage-prestige";
 

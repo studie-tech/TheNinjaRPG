@@ -59,12 +59,13 @@ import {
   prepareExclusiveRaidActivation,
 } from "@/libs/raids";
 import { battleItemExp, battleJutsuExp } from "@/libs/train";
-import { extendWarParticipantSql, findWarsWithUser } from "@/libs/war";
+import { findWarsWithUser } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { reduceActiveFarmPlotTimers } from "@/server/utils/farming";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
+import { extendWarParticipantSql } from "@/server/utils/war";
 
 type DataBattleAction = {
   type: (typeof BattleDataEntryType)[number];

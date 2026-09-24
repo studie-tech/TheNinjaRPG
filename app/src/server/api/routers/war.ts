@@ -35,12 +35,7 @@ import {
 } from "@/drizzle/schema";
 import { castElderVoteEntry, fetchElderVote, fetchElderVotes } from "@/libs/elder";
 import { findActiveExclusiveRaidForSector } from "@/libs/raids";
-import {
-  canJoinWar,
-  getShrineHpByLevel,
-  handleWarEnd,
-  isVillageInvolvedInAnyWar,
-} from "@/libs/war";
+import { canJoinWar, getShrineHpByLevel, isVillageInvolvedInAnyWar } from "@/libs/war";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import {
   fetchRequest,
@@ -63,6 +58,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { handleWarEnd } from "@/server/utils/war";
 import { findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSeeSecretData } from "@/utils/permissions";

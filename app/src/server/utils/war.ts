@@ -1,0 +1,501 @@
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import type { WarState } from "@/drizzle/constants";
+import {
+  BRACKET_IMMUNITY_LIFT_SECS,
+  TERR_BOT_ID,
+  WAR_ATTACKER_EXHAUSTION_MULTIPLIER,
+  WAR_DEFEAT_STRUCTURE_PENALTY_DAYS,
+  WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
+  WAR_LOSING_COOLDOWN_DAYS,
+  WAR_PARTICIPANT_SECS,
+  WAR_SECTOR_LOSS_TOWNHALL_DAMAGE,
+  WAR_VICTORY_BOOSTED_STRUCTURES,
+  WAR_VICTORY_STRUCTURE_BOOST_DAYS,
+  WAR_VICTORY_STRUCTURE_BOOST_LEVELS,
+  WAR_VICTORY_TOKEN_BONUS,
+  WAR_WINNING_BOOST_DAYS,
+  WAR_WINNING_BOOST_REGEN_PERC,
+  WAR_WINNING_BOOST_TRAINING_PERC,
+  WAR_WINNING_COOLDOWN_DAYS,
+} from "@/drizzle/constants";
+import {
+  gameSetting,
+  mpvpBattleQueue,
+  notification,
+  sector,
+  userData,
+  userRequest,
+  village,
+  villageStructure,
+  war,
+} from "@/drizzle/schema";
+import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
+import { drizzleDB } from "@/server/db";
+import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
+
+/**
+ * SQL fragment that extends `userData.warParticipantUntil` to the larger of its current
+ * value and `NOW() + WAR_PARTICIPANT_SECS`, so an existing longer stamp is never shortened.
+ */
+export const extendWarParticipantSql = () =>
+  sql`GREATEST(${userData.warParticipantUntil}, NOW() + INTERVAL ${WAR_PARTICIPANT_SECS} SECOND)`;
+
+/**
+ * SQL fragment that lifts `userData.bracketImmunityLiftedUntil` to the larger of its current
+ * value and `NOW() + BRACKET_IMMUNITY_LIFT_SECS`, so an existing longer lift is never shortened.
+ */
+export const liftBracketImmunitySql = () =>
+  sql`GREATEST(${userData.bracketImmunityLiftedUntil}, NOW() + INTERVAL ${BRACKET_IMMUNITY_LIFT_SECS} SECOND)`;
+
+/**
+ * Handles the end of a war. Assumes the village with tokens <= 0 is the loser.
+ * @param war - The war to handle
+ * @returns
+ */
+export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
+  // Timer calculations
+  const endedAt = new Date();
+  const losingCooldownEnd = secondsFromDate(WAR_LOSING_COOLDOWN_DAYS * DAY_S, endedAt);
+  const winningCooldownEnd = secondsFromDate(
+    WAR_WINNING_COOLDOWN_DAYS * DAY_S,
+    endedAt,
+  );
+  // Attackers get 10% more exhaustion across all tiers
+  const attackerLosingCooldownEnd = secondsFromDate(
+    Math.round(WAR_LOSING_COOLDOWN_DAYS * WAR_ATTACKER_EXHAUSTION_MULTIPLIER * DAY_S),
+    endedAt,
+  );
+  const attackerWinningCooldownEnd = secondsFromDate(
+    Math.round(WAR_WINNING_COOLDOWN_DAYS * WAR_ATTACKER_EXHAUSTION_MULTIPLIER * DAY_S),
+    endedAt,
+  );
+  const boostEndAt = secondsFromNow(WAR_WINNING_BOOST_DAYS * DAY_S);
+  const involvedVillageIds = [
+    activeWar.attackerVillageId,
+    activeWar.defenderVillageId,
+    ...activeWar.warAllies.map((ally) => ally.villageId),
+  ];
+
+  // Check if war should end based on tokens OR war health
+  // War ends when either side's tokens OR war health reaches 0
+  const attackerLost =
+    activeWar.attackerVillage.tokens <= 0 || activeWar.attackerWarHealth <= 0;
+  const defenderLost =
+    activeWar.defenderVillage.tokens <= 0 || activeWar.defenderWarHealth <= 0;
+
+  // Determine winner - handles normal end (tokens/health <= 0) and 14-day auto-resolution
+  let isDraw = false;
+  let winnerVillageId: string;
+  let loserVillageId: string;
+
+  if (attackerLost && defenderLost) {
+    // Both sides lost simultaneously - draw
+    isDraw = true;
+    winnerVillageId = activeWar.attackerVillage.id;
+    loserVillageId = activeWar.defenderVillage.id;
+  } else if (attackerLost) {
+    // Attacker lost
+    winnerVillageId = activeWar.defenderVillage.id;
+    loserVillageId = activeWar.attackerVillage.id;
+  } else if (defenderLost) {
+    // Defender lost
+    winnerVillageId = activeWar.attackerVillage.id;
+    loserVillageId = activeWar.defenderVillage.id;
+  } else {
+    // Neither side lost (14-day auto-resolution) - determine winner by war health
+    if (activeWar.attackerWarHealth === activeWar.defenderWarHealth) {
+      // Equal health - draw
+      isDraw = true;
+      winnerVillageId = activeWar.attackerVillage.id;
+      loserVillageId = activeWar.defenderVillage.id;
+    } else if (activeWar.attackerWarHealth > activeWar.defenderWarHealth) {
+      // Attacker has more health - attacker wins
+      winnerVillageId = activeWar.attackerVillage.id;
+      loserVillageId = activeWar.defenderVillage.id;
+    } else {
+      // Defender has more health - defender wins
+      winnerVillageId = activeWar.defenderVillage.id;
+      loserVillageId = activeWar.attackerVillage.id;
+    }
+  }
+
+  const status: WarState = isDraw
+    ? "DRAW"
+    : winnerVillageId === activeWar.attackerVillage.id
+      ? "ATTACKER_VICTORY"
+      : "DEFENDER_VICTORY";
+
+  // Calculate winning tokens
+  let winningPoints = isDraw ? 0 : WAR_VICTORY_TOKEN_BONUS;
+  let winningAllies: string[] = [];
+  if (!isDraw && winnerVillageId && activeWar.warAllies.length > 0) {
+    winningAllies = activeWar.warAllies
+      .filter((f) => f.villageId === winnerVillageId)
+      .map((f) => f.villageId);
+    winningPoints = WAR_VICTORY_TOKEN_BONUS / (winningAllies.length + 1);
+  }
+
+  let notificationContent = "";
+  if (["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
+    notificationContent = `War between ${activeWar.attackerVillage.name} and ${activeWar.defenderVillage.name} has ended. `;
+    if (isDraw) {
+      notificationContent += `The result was a draw.`;
+    } else if (status === "ATTACKER_VICTORY") {
+      notificationContent += `${activeWar.attackerVillage.name} won the war and received ${winningPoints} tokens. `;
+    } else {
+      notificationContent += `${activeWar.defenderVillage.name} won the war and received ${winningPoints} tokens. `;
+    }
+  } else if (activeWar.type === "SECTOR_WAR" && status === "ATTACKER_VICTORY") {
+    notificationContent = `Sector ${activeWar.sector} has been claimed by ${activeWar.attackerVillage.name}. `;
+  }
+
+  // Run all mutations in parallel
+  await Promise.all([
+    // General updates
+    drizzleDB
+      .update(war)
+      .set({ status, endedAt })
+      .where(and(eq(war.id, activeWar.id), isNull(war.endedAt))),
+    // Clear war participant status only for users whose village is no longer in any other
+    // active war. Without this scoping, ending one of several concurrent wars would strip
+    // cross-bracket exemption from the remaining wars. Use epoch (new Date(0)) rather than
+    // now() to be unambiguously in the past regardless of JS-to-DB clock skew.
+    drizzleDB
+      .update(userData)
+      .set({ warParticipantUntil: new Date(0) })
+      .where(
+        and(
+          inArray(userData.villageId, involvedVillageIds),
+          sql`NOT EXISTS (
+            SELECT 1 FROM War w
+            WHERE w.endedAt IS NULL
+              AND w.id != ${activeWar.id}
+              AND (w.attackerVillageId = ${userData.villageId} OR w.defenderVillageId = ${userData.villageId})
+          )`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM WarAlly wa
+            INNER JOIN War w ON wa.warId = w.id
+            WHERE w.endedAt IS NULL
+              AND w.id != ${activeWar.id}
+              AND wa.villageId = ${userData.villageId}
+          )`,
+        ),
+      ),
+    drizzleDB.insert(notification).values({
+      userId: TERR_BOT_ID,
+      content: notificationContent,
+    }),
+    drizzleDB
+      .update(userData)
+      .set({ unreadNotifications: sql`unreadNotifications + 1` })
+      .where(inArray(userData.villageId, [loserVillageId, winnerVillageId])),
+    drizzleDB
+      .delete(userRequest)
+      .where(
+        and(
+          eq(userRequest.type, "WAR_ALLY"),
+          or(
+            inArray(userRequest.senderId, [
+              activeWar.attackerVillage.kageId,
+              activeWar.defenderVillage.kageId,
+            ]),
+            inArray(userRequest.receiverId, [
+              activeWar.attackerVillage.kageId,
+              activeWar.defenderVillage.kageId,
+            ]),
+          ),
+        ),
+      ),
+    // Handle sector wars
+    ...(activeWar.type === "SECTOR_WAR"
+      ? [
+          // Update sector ownership
+          drizzleDB
+            .update(sector)
+            .set({
+              villageId: winnerVillageId,
+              shrineLevel: 1,
+              capturedAt: endedAt,
+            })
+            .where(
+              and(
+                eq(sector.sector, activeWar.sector),
+                ne(sector.villageId, winnerVillageId),
+              ),
+            ),
+          // End other wars for this sector
+          drizzleDB
+            .update(war)
+            .set({ status: "DEFENDER_VICTORY", endedAt })
+            .where(
+              and(
+                ne(war.id, activeWar.id),
+                eq(war.sector, activeWar.sector),
+                isNull(war.endedAt),
+              ),
+            ),
+          // Damage loser's townhall when losing a sector
+          drizzleDB
+            .update(villageStructure)
+            .set({
+              curSp: sql`GREATEST(curSp - ${WAR_SECTOR_LOSS_TOWNHALL_DAMAGE}, 0)`,
+            })
+            .where(
+              and(
+                eq(villageStructure.villageId, loserVillageId),
+                eq(villageStructure.route, "/townhall"),
+              ),
+            ),
+        ]
+      : []),
+    // Handle village wars
+    ...(["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)
+      ? isDraw
+        ? [
+            // In a draw, attacker gets 10% more exhaustion
+            drizzleDB
+              .update(village)
+              .set({
+                warExhaustionEndedAt: attackerLosingCooldownEnd,
+                lastWarEndedAt: endedAt,
+              })
+              .where(eq(village.id, activeWar.attackerVillage.id)),
+            drizzleDB
+              .update(village)
+              .set({
+                warExhaustionEndedAt: losingCooldownEnd,
+                lastWarEndedAt: endedAt,
+              })
+              .where(eq(village.id, activeWar.defenderVillage.id)),
+            // Enhanced punishment: -3 temporary levels on structures for both sides in a draw
+            // VILLAGE_WAR: ALL structures, WAR_RAID: only targeted structure
+            drizzleDB
+              .update(villageStructure)
+              .set({
+                temporaryLevelBonus: -WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
+                temporaryLevelBonusExpiresAt: secondsFromDate(
+                  WAR_DEFEAT_STRUCTURE_PENALTY_DAYS * DAY_S,
+                  endedAt,
+                ),
+              })
+              .where(
+                activeWar.type === "WAR_RAID"
+                  ? and(
+                      inArray(villageStructure.villageId, [
+                        loserVillageId,
+                        winnerVillageId,
+                      ]),
+                      eq(villageStructure.route, activeWar.targetStructureRoute),
+                    )
+                  : inArray(villageStructure.villageId, [
+                      loserVillageId,
+                      winnerVillageId,
+                    ]),
+              ),
+          ]
+        : [
+            // Winner gets tokens
+            drizzleDB
+              .update(village)
+              .set({
+                tokens: sql`tokens + ${winningPoints}`,
+              })
+              .where(inArray(village.id, [...winningAllies, winnerVillageId])),
+            // Winner gets regen boost
+            drizzleDB
+              .update(gameSetting)
+              .set({
+                value: WAR_WINNING_BOOST_REGEN_PERC,
+                time: boostEndAt,
+              })
+              .where(
+                inArray(
+                  gameSetting.name,
+                  [...winningAllies, winnerVillageId].map((id) => `war-${id}-regen`),
+                ),
+              ),
+            // Winner gets training boost
+            drizzleDB
+              .update(gameSetting)
+              .set({
+                value: WAR_WINNING_BOOST_TRAINING_PERC,
+                time: boostEndAt,
+              })
+              .where(eq(gameSetting.name, `war-${winnerVillageId}-train`)),
+            // Enhanced rewards: +3 temporary levels on specific structures for winner
+            drizzleDB
+              .update(villageStructure)
+              .set({
+                temporaryLevelBonus: WAR_VICTORY_STRUCTURE_BOOST_LEVELS,
+                temporaryLevelBonusExpiresAt: secondsFromDate(
+                  WAR_VICTORY_STRUCTURE_BOOST_DAYS * DAY_S,
+                  endedAt,
+                ),
+              })
+              .where(
+                and(
+                  eq(villageStructure.villageId, winnerVillageId),
+                  inArray(
+                    villageStructure.route,
+                    WAR_VICTORY_BOOSTED_STRUCTURES as unknown as string[],
+                  ),
+                ),
+              ),
+            // Loser gets war exhaustion (attacker gets 10% more)
+            drizzleDB
+              .update(village)
+              .set({
+                warExhaustionEndedAt:
+                  loserVillageId === activeWar.attackerVillage.id
+                    ? attackerLosingCooldownEnd
+                    : losingCooldownEnd,
+                lastWarEndedAt: endedAt,
+              })
+              .where(eq(village.id, loserVillageId)),
+            // Winner gets shorter exhaustion (attacker gets 10% more)
+            drizzleDB
+              .update(village)
+              .set({
+                warExhaustionEndedAt:
+                  winnerVillageId === activeWar.attackerVillage.id
+                    ? attackerWinningCooldownEnd
+                    : winningCooldownEnd,
+                lastWarEndedAt: endedAt,
+              })
+              .where(eq(village.id, winnerVillageId)),
+            // Enhanced punishment: -3 temporary levels on structures for loser
+            // VILLAGE_WAR: ALL structures, WAR_RAID: only targeted structure
+            drizzleDB
+              .update(villageStructure)
+              .set({
+                temporaryLevelBonus: -WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
+                temporaryLevelBonusExpiresAt: secondsFromDate(
+                  WAR_DEFEAT_STRUCTURE_PENALTY_DAYS * DAY_S,
+                  endedAt,
+                ),
+              })
+              .where(
+                activeWar.type === "WAR_RAID"
+                  ? and(
+                      eq(villageStructure.villageId, loserVillageId),
+                      eq(villageStructure.route, activeWar.targetStructureRoute),
+                    )
+                  : eq(villageStructure.villageId, loserVillageId),
+              ),
+          ]
+      : []),
+  ]);
+
+  // Clean up incomplete war quests and pending shrine battles
+  // Run separately after other operations to avoid deadlock (these queries join multiple tables)
+  await Promise.all([
+    // Clean up incomplete war quests for users in villages involved in this war
+    // Players can re-accept war missions from the Mission Hall if still in another war
+    drizzleDB.execute(sql`
+      DELETE qh FROM QuestHistory qh
+      INNER JOIN UserData ud ON qh.userId = ud.userId
+      WHERE qh.questType = 'war'
+        AND qh.completed = 0
+        AND ud.villageId IN (${sql.join(
+          involvedVillageIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+    `),
+    // Reset users queued for shrine battles to AWAKE - runs in parallel with quest cleanup
+    ...(activeWar.type === "SECTOR_WAR" && activeWar.sector
+      ? [
+          drizzleDB.execute(sql`
+            UPDATE UserData ud
+            INNER JOIN MpvpBattleUser mbu ON ud.userId = mbu.userId
+            INNER JOIN MpvpBattleQueue mbq ON mbu.clanBattleId = mbq.id
+            SET ud.status = 'AWAKE'
+            WHERE mbq.battleType = 'SHRINE_BATTLE'
+              AND mbq.sector = ${activeWar.sector}
+              AND mbq.battleId IS NULL
+              AND ud.status = 'QUEUED'
+          `),
+        ]
+      : []),
+    ...(["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)
+      ? [
+          drizzleDB.execute(sql`
+            UPDATE UserData ud
+            INNER JOIN MpvpBattleUser mbu ON ud.userId = mbu.userId
+            INNER JOIN MpvpBattleQueue mbq ON mbu.clanBattleId = mbq.id
+            SET ud.status = 'AWAKE'
+            WHERE mbq.battleType = 'SHRINE_BATTLE'
+              AND mbq.battleId IS NULL
+              AND (
+                mbq.attackerEntityId IN (${sql.join(
+                  involvedVillageIds.map((id) => sql`${id}`),
+                  sql`, `,
+                )})
+                OR mbq.defenderEntityId IN (${sql.join(
+                  involvedVillageIds.map((id) => sql`${id}`),
+                  sql`, `,
+                )})
+              )
+              AND ud.status = 'QUEUED'
+          `),
+        ]
+      : []),
+  ]);
+
+  // Delete battle user records then queue records sequentially after the UPDATE above since:
+  // 1. The UPDATE uses JOIN on MpvpBattleUser to find users to reset
+  // 2. The MpvpBattleUser DELETE uses JOIN on MpvpBattleQueue to find records to delete
+  if (activeWar.type === "SECTOR_WAR" && activeWar.sector) {
+    // Delete battle user records for pending shrine battles
+    await drizzleDB.execute(sql`
+      DELETE mbu FROM MpvpBattleUser mbu
+      INNER JOIN MpvpBattleQueue mbq ON mbu.clanBattleId = mbq.id
+      WHERE mbq.battleType = 'SHRINE_BATTLE'
+        AND mbq.sector = ${activeWar.sector}
+        AND mbq.battleId IS NULL
+    `);
+    // Delete pending shrine battle queue records
+    await drizzleDB
+      .delete(mpvpBattleQueue)
+      .where(
+        and(
+          eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+          eq(mpvpBattleQueue.sector, activeWar.sector),
+          isNull(mpvpBattleQueue.battleId),
+        ),
+      );
+  } else if (["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
+    // Delete battle user records for pending shrine battles
+    await drizzleDB.execute(sql`
+      DELETE mbu FROM MpvpBattleUser mbu
+      INNER JOIN MpvpBattleQueue mbq ON mbu.clanBattleId = mbq.id
+      WHERE mbq.battleType = 'SHRINE_BATTLE'
+        AND mbq.battleId IS NULL
+        AND (
+          mbq.attackerEntityId IN (${sql.join(
+            involvedVillageIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})
+          OR mbq.defenderEntityId IN (${sql.join(
+            involvedVillageIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})
+        )
+    `);
+    // Delete pending shrine battle queue records
+    await drizzleDB
+      .delete(mpvpBattleQueue)
+      .where(
+        and(
+          eq(mpvpBattleQueue.battleType, "SHRINE_BATTLE"),
+          isNull(mpvpBattleQueue.battleId),
+          or(
+            inArray(mpvpBattleQueue.attackerEntityId, involvedVillageIds),
+            inArray(mpvpBattleQueue.defenderEntityId, involvedVillageIds),
+          ),
+        ),
+      );
+  }
+
+  // Return updated war
+  return { ...activeWar, status, endedAt } as FetchActiveWarsReturnType;
+};

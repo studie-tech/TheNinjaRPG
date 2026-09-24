@@ -99,11 +99,8 @@ import {
 } from "@/drizzle/schema";
 import { getReskinnedBloodline } from "@/libs/bloodline";
 import { getWorldCyclePosition } from "@/libs/dayNight";
-import {
-  getGameSetting,
-  getGameSettingBoost,
-  updateGameSetting,
-} from "@/libs/gamesettings";
+import { getGameSettingBoost } from "@/libs/gameSettingBoost";
+import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { moderateContent, validateUserUpdateReason } from "@/libs/moderator";
@@ -151,6 +148,7 @@ import {
   adjustSeichiSilverAtomically,
   claimUserSnapshot,
 } from "@/server/utils/concurrency";
+import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { getFarmCollectionCount } from "@/server/utils/farming";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
@@ -185,7 +183,6 @@ import {
   secondsFromNow,
   secondsPassed,
 } from "@/utils/time";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { getShrineBoost } from "@/utils/village";
 import { createStatSchema } from "@/validators/combat";
 import { mutateContentSchema } from "@/validators/comments";

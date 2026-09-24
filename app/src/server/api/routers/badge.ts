@@ -14,9 +14,9 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { BadgeValidator } from "@/validators/badge";
 import { idSchema } from "@/validators/misc";
 

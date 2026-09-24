@@ -56,7 +56,6 @@ import type {
 } from "@/validators/towerDefense";
 import {
   characterAssetConfigSchema,
-  insertTowerDefenseCharacterSchema,
   playerBonusesSchema,
   purchaseUpgradeInputSchema,
   signedEnemyDefinitionSchema,
@@ -64,6 +63,7 @@ import {
   towerDefenseAbilitySchema,
   updateTowerDefenseUpgradeSchema,
 } from "@/validators/towerDefense";
+import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefenseCharacter";
 
 /**
  * Tower Defense tRPC Router

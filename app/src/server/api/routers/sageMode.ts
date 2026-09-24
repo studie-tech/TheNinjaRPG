@@ -19,9 +19,9 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent, canEditBloodline } from "@/utils/permissions";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import type { ZodAllTags } from "@/validators/combat";
 import { SageModeValidator } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";

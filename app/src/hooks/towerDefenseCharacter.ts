@@ -9,10 +9,12 @@ import {
   type CharacterAnimationState,
   type CharacterAssetConfig,
   characterAnimationStates,
+} from "@/validators/towerDefense";
+import {
   type InsertTowerDefenseCharacter,
   type InsertTowerDefenseCharacterInput,
   insertTowerDefenseCharacterSchema,
-} from "@/validators/towerDefense";
+} from "@/validators/towerDefenseCharacter";
 
 /**
  * Hook used when creating frontend forms for editing Tower Defense characters
