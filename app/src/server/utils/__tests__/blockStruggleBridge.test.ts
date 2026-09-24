@@ -301,6 +301,53 @@ describe("TheNinjaRPG same-origin puzzle bridge", () => {
     expect(exchanges).toBe(2);
   });
 
+  it("keeps the puzzle session available to retry a failed upstream logout", async () => {
+    let exchanges = 0;
+    let revokes = 0;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith("/exchange")) {
+          exchanges++;
+          return issued("r".repeat(43));
+        }
+        if (init?.method === "DELETE") {
+          revokes++;
+          if (revokes === 1) throw new TypeError("Transport unavailable");
+          if (revokes === 2)
+            return Response.json({ error: "Unavailable" }, { status: 503 });
+          return new Response(null, { status: 204 });
+        }
+        return Response.json({ playerId: "p_player" });
+      }),
+    );
+    const signedIn = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity()),
+    );
+    const cookie = signedIn.cookie?.value;
+    expect(cookie).toBeTruthy();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const failed = await Effect.runPromise(
+        Effect.either(
+          bridge.handle(request("session", "DELETE"), ["session"], identity(), cookie),
+        ),
+      );
+      expect(Either.isLeft(failed) && failed.left.status).toBe(502);
+      const stillSignedIn = await Effect.runPromise(
+        bridge.handle(request("session"), ["session"], identity(), cookie),
+      );
+      expect(stillSignedIn.response.status).toBe(200);
+      expect(stillSignedIn.cookie).toBeUndefined();
+    }
+    const logout = await Effect.runPromise(
+      bridge.handle(request("session", "DELETE"), ["session"], identity(), cookie),
+    );
+    expect(logout.response.status).toBe(204);
+    expect(logout.clearCookie).toBe(true);
+    expect(exchanges).toBe(1);
+    expect(revokes).toBe(3);
+  });
+
   it("retains a newly issued session when the first proxied response is lost", async () => {
     let exchanges = 0;
     let failProxy = true;
