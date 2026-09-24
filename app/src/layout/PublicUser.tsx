@@ -31,8 +31,6 @@ import type { UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import { NewConversationPrompt } from "@/app/[shell]/inbox/page";
-import { TransactionHistory } from "@/app/[shell]/points/page";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -99,12 +97,14 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { ModerationSummary } from "@/layout/ModerationSummary";
+import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
 import Post from "@/layout/Post";
 import ReportUser from "@/layout/Report";
 import RichInput from "@/layout/RichInput";
 import StatusBar from "@/layout/StatusBar";
 import { publicUserIntro } from "@/layout/seoTexts";
 import Table from "@/layout/Table";
+import { TransactionHistory } from "@/layout/TransactionHistory";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { canAttackBracket, getExpBracket, showUserRank } from "@/libs/profile";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
