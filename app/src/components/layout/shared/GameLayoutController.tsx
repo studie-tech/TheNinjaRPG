@@ -160,7 +160,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const leftSideBar = (
     <LayoutLeftSidebar
       variant={variant}
-      isClerkLoaded={isClerkLoaded}
       isSignedInLayout={isSignedInLayout}
       accountState={accountState}
       userData={userData}
@@ -170,7 +169,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const rightSideBar = (
     <LayoutRightSidebarContent
       variant={variant}
-      isClerkLoaded={isClerkLoaded}
       isSignedInLayout={isSignedInLayout}
       accountState={accountState}
       userData={userData}

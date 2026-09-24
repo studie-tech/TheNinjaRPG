@@ -68,7 +68,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
       {children}
     </LayoutCore4Pixel>
   ) : (
-    <LayoutCore4Beta>{children}</LayoutCore4Beta>
+    <LayoutCore4Beta initialIsSignedIn={initialIsSignedIn}>{children}</LayoutCore4Beta>
   );
 
   return (
