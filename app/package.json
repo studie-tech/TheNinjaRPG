@@ -48,7 +48,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.99",
     "@ai-sdk/react": "^4.0.152",
-    "@blockstruggle/game-ui": "file:../vendor/blockstruggle/blockstruggle-game-ui-0.1.6.tgz",
+    "@blockstruggle/game-ui": "file:../vendor/blockstruggle/blockstruggle-game-ui-0.1.7.tgz",
     "@clerk/backend": "^3.26.1",
     "@clerk/mcp-tools": "^0.6.0",
     "@clerk/nextjs": "^7.9.19",
