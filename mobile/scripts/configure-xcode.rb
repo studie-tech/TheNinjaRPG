@@ -214,6 +214,17 @@ SWIFT_PACKAGES.each do |spec|
   end
 end
 
+# Capacitor writes `.v18` while retaining Swift tools 5.9, which cannot parse that
+# enum case. The string form supports the exact deployment target on that toolchain.
+package_path = File.join(ROOT, "ios/App/CapApp-SPM/Package.swift")
+if File.exist?(package_path)
+  package = File.read(package_path)
+  platform = "platforms: [.iOS(\"#{APP_DEPLOYMENT_TARGET}\")]"
+  configured = package.sub(/platforms: \[\.iOS\([^)]+\)\]/, platform)
+  abort "No iOS platform in #{package_path}" unless configured.include?(platform)
+  File.write(package_path, configured) unless configured == package
+end
+
 # --- Capabilities ------------------------------------------------------------------------
 
 # Xcode reads these from the target attributes; without them it shows the capability as
