@@ -1,24 +1,19 @@
-import { decodeHTML } from "entities";
 import { X } from "lucide-react";
 import type * as React from "react";
-import { renderToString } from "react-dom/server";
 import { cn } from "@/libs/shadui";
 import { parseHtml } from "@/utils/parse";
 
-interface QuoteProps extends React.HTMLAttributes<HTMLQuoteElement> {
+interface QuoteProps extends Omit<React.HTMLAttributes<HTMLQuoteElement>, "children"> {
   author?: string;
   date?: string;
   onRemove?: () => void;
   ref?: React.Ref<HTMLQuoteElement>;
-}
-
-// Quoted content arrives as an already-sanitized HTML string that parseHtml turns
-// back into elements below. Anything else is serialized first. Decoding runs through
-// `entities` rather than DOMParser, which does not exist while /news, /forum and the
-// conversation pages render on the server.
-function toHtmlString(children: React.ReactNode) {
-  if (typeof children === "string") return children;
-  return decodeHTML(renderToString(children));
+  /**
+   * The quoted post as an already-sanitized HTML string, which parseHtml turns back
+   * into elements. A string rather than React nodes, because serializing nodes needs
+   * react-dom/server, which would then ship to the browser on every page.
+   */
+  children?: string;
 }
 
 const Quote = ({
@@ -30,7 +25,6 @@ const Quote = ({
   onRemove,
   ...props
 }: QuoteProps) => {
-  const content = toHtmlString(children);
   return (
     <blockquote
       ref={ref}
@@ -46,7 +40,7 @@ const Quote = ({
           {date && ` on ${date}`}
         </div>
       )}
-      <div className="text-foreground italic">{parseHtml(content || "")}</div>
+      <div className="text-foreground italic">{parseHtml(children ?? "")}</div>
       {onRemove && (
         <button
           type="button"
