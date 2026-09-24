@@ -33,6 +33,8 @@ public class TNRAppleAuthPlugin: CAPPlugin, CAPBridgedPlugin,
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let request = ASAuthorizationAppleIDProvider().createRequest()
+            // Clerk requires a fresh nonce in each Apple identity token.
+            request.nonce = UUID().uuidString
             // Apple only ever supplies these on the very first authorisation, and only if
             // the player agrees to share them.
             request.requestedScopes = [.fullName, .email]
