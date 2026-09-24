@@ -28,6 +28,70 @@ const issued = (token: string) =>
   });
 
 describe("TheNinjaRPG same-origin puzzle bridge", () => {
+  it("redeems an account link with a fresh Ninja Clerk proof without provisioning a game session", async () => {
+    const paths: string[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        paths.push(new URL(String(url)).pathname);
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer signed.clerk.proof",
+        );
+        expect(init?.body?.toString()).toBe(JSON.stringify({ code: "c".repeat(43) }));
+        return Response.json({ playerId: "p_block" });
+      }),
+    );
+    const result = await Effect.runPromise(
+      bridge.handle(
+        new Request(
+          "https://rpg.example/api/minigames/blockstruggle/identity-link/redeem",
+          {
+            method: "POST",
+            headers: {
+              Origin: "https://rpg.example",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ code: "c".repeat(43) }),
+          },
+        ),
+        ["identity-link", "redeem"],
+        identity(),
+      ),
+    );
+    expect(result.response.status).toBe(200);
+    expect(result.clearCookie).toBe(true);
+    expect(result.cookie).toBeUndefined();
+    expect(paths).toEqual(["/api/ninja/identity-link/redeem"]);
+  });
+
+  it("keeps the existing puzzle session after a link conflict", async () => {
+    let exchanges = 0;
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url) => {
+        if (new URL(String(url)).pathname.endsWith("/exchange")) {
+          exchanges++;
+          return issued("a".repeat(43));
+        }
+        if (new URL(String(url)).pathname.endsWith("/identity-link/redeem"))
+          return Response.json({ error: "Conflict" }, { status: 409 });
+        return Response.json({ playerId: "p_ninja" });
+      }),
+    );
+    const first = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity()),
+    );
+    const conflict = await Effect.runPromise(
+      bridge.handle(
+        request("identity-link/redeem", "POST"),
+        ["identity-link", "redeem"],
+        identity(),
+        first.cookie?.value,
+      ),
+    );
+    expect(conflict.response.status).toBe(409);
+    expect(conflict.clearCookie).toBeUndefined();
+    expect(exchanges).toBe(1);
+  });
+
   it("sends a short-lived Vercel identity only to the configured BlockStruggle host", async () => {
     const token = "header.payload.signature";
     const urls: string[] = [];

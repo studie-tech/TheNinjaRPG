@@ -69,6 +69,8 @@ const allowedPath = (segments: readonly string[], method: string) => {
   if (root === "leaderboards" && segments.length === 1) return method === "GET";
   if (root === "friends" && segments.length === 1)
     return method === "GET" || method === "POST";
+  if (root === "identity-link" && segments.length === 2 && id === "redeem")
+    return method === "POST";
   if (root !== "matches") return false;
   if (segments.length === 1) return method === "GET" || method === "POST";
   if (!id) return false;
@@ -308,6 +310,30 @@ export const makeBlockStruggleBridge = (
             method === "POST" || method === "PUT"
               ? yield* readBody(request)
               : undefined;
+          if (segments[0] === "identity-link") {
+            const proof = yield* Effect.tryPromise({
+              try: () => identity.getToken(),
+              catch: () => fail(503, "ClerkUnavailable"),
+            });
+            if (!proof) return yield* fail(401, "Unauthorized");
+            const upstream = yield* call(
+              "/api/ninja/identity-link/redeem",
+              "POST",
+              proof,
+              body,
+            );
+            return {
+              response: new Response(upstream.body, {
+                status: upstream.status,
+                headers: {
+                  "Cache-Control": "private, no-store",
+                  "Content-Type": "application/json",
+                  "X-Content-Type-Options": "nosniff",
+                },
+              }),
+              ...(upstream.status === 200 ? { clearCookie: true } : {}),
+            };
+          }
           const now = yield* Clock.currentTimeMillis;
           const decoded = yield* decryptCookie(cookieValue);
           const existing =
