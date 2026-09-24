@@ -39,7 +39,7 @@ import {
   LAYOUT_PREFERENCE_COOKIE,
   persistLayoutPreferenceCookie,
 } from "@/libs/layoutPreference";
-import { audioSession } from "@/libs/native";
+import { audioSession, platform } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
@@ -112,9 +112,10 @@ export const GlobalAudioProvider: React.FC<{
 }> = ({ children, userData }) => {
   // Mount flag to keep SSR/CSR output in sync
   const [isClient, setIsClient] = useState(false);
-  // Bridge calls are asynchronous. Serialising them guarantees that a late activation can
-  // never overtake the deactivation queued by a subsequent pause.
+  // Bridge calls are asynchronous. Serialising them keeps a music-off deactivation from
+  // being overtaken by an earlier activation.
   const audioSessionQueue = useRef<Promise<void>>(Promise.resolve());
+  const hasActiveAudioSession = useRef(false);
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -200,31 +201,41 @@ export const GlobalAudioProvider: React.FC<{
     }
   }, [isClient, savedButtonSfxOn]);
 
-  // Claim the native media session only while the soundtrack is actually playing. On the
-  // web these bridge methods are no-ops.
+  // Claim the native media session once playback starts. iOS keeps it through incidental
+  // WebView pauses so the player can resume without repeatedly changing the audio route.
   useEffect(() => {
     if (!isClient) return;
     audioSessionQueue.current = audioSessionQueue.current
       .catch(() => undefined)
       .then(async () => {
-        if (!isPlaying) {
-          await audioSession.deactivate();
+        if (!audioEnabled || (!isPlaying && platform() !== "ios")) {
+          if (hasActiveAudioSession.current) {
+            await audioSession.deactivate();
+            hasActiveAudioSession.current = false;
+          }
           return;
         }
-        await audioSession.activate();
+        if (!isPlaying) return;
+        if (!hasActiveAudioSession.current) {
+          await audioSession.activate();
+          hasActiveAudioSession.current = true;
+        }
         await audioSession.setNowPlaying({
           title: "TheNinja-RPG",
           artist: userData?.village?.name ?? "Seichi",
         });
       });
-  }, [isClient, isPlaying, userData?.village?.name]);
+  }, [audioEnabled, isClient, isPlaying, userData?.village?.name]);
 
   useEffect(
     () => () => {
       audioSessionQueue.current = audioSessionQueue.current
         .catch(() => undefined)
         .then(async () => {
-          await audioSession.deactivate();
+          if (hasActiveAudioSession.current) {
+            await audioSession.deactivate();
+            hasActiveAudioSession.current = false;
+          }
         });
     },
     [],
