@@ -4,6 +4,7 @@ export const BlockStruggleBridgeConfig = Schema.Struct({
   apiOrigin: Schema.String,
   siteOrigin: Schema.String,
   cookieKey: Schema.String,
+  previewBypassSecret: Schema.optional(Schema.String),
 });
 
 export const BlockStruggleSession = Schema.Struct({
