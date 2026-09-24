@@ -15,6 +15,7 @@ const environmentNames = [
   "BLOCKSTRUGGLE_RPG_ORIGIN",
   "BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY",
   "BLOCKSTRUGGLE_CLERK_JWT_TEMPLATE",
+  "BLOCKSTRUGGLE_PREVIEW_BYPASS_SECRET",
 ] as const;
 const originalEnvironment = environmentNames.map((name) => process.env[name]);
 const originalFetch = globalThis.fetch;

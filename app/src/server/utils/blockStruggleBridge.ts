@@ -129,6 +129,21 @@ export const makeBlockStruggleBridge = (
       }),
       catch: () => fail(503, "NotConfigured"),
     });
+    const previewBypassSecret = yield* Effect.try({
+      try: () => {
+        const secret = config.previewBypassSecret;
+        if (secret === undefined) return undefined;
+        const host = new URL(origins.api).hostname;
+        if (
+          !host.startsWith("blockstruggle-") ||
+          !host.endsWith("-the-ninja-rpg.vercel.app") ||
+          !/^[A-Za-z0-9_-]{32,256}$/.test(secret)
+        )
+          throw new Error("Invalid preview bypass configuration");
+        return secret;
+      },
+      catch: () => fail(503, "NotConfigured"),
+    });
     const key = yield* Effect.try({
       try: () => {
         if (!/^[A-Za-z0-9_-]{43}$/.test(config.cookieKey)) throw new Error();
@@ -196,6 +211,9 @@ export const makeBlockStruggleBridge = (
               Authorization: `Bearer ${bearer}`,
               Origin: origins.site,
               Accept: "application/json",
+              ...(previewBypassSecret === undefined
+                ? {}
+                : { "x-vercel-protection-bypass": previewBypassSecret }),
               ...(body === undefined ? {} : { "Content-Type": "application/json" }),
             },
             body: body === undefined ? undefined : Buffer.from(body),
