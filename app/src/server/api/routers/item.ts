@@ -50,6 +50,7 @@ import {
   itemVariant,
   quest,
   questHistory,
+  sageMode,
   sageModeRolls,
   userData,
   userItem,
@@ -90,11 +91,7 @@ import {
   postProcessRewards,
 } from "@/libs/quest";
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
-import {
-  fetchSageModeRolls,
-  fetchSageModes,
-  filterRollableSageModes,
-} from "@/libs/sageMode";
+import { filterRollableSageModes } from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
 import { hasRequiredLevel } from "@/libs/train";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
@@ -120,6 +117,7 @@ import {
   updateUserItemQuantityAtomically,
   userItemMergeQuantityCase,
 } from "@/server/utils/concurrency";
+import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import {
   applyLoadoutRename,
   backfillLoadouts,
@@ -136,7 +134,6 @@ import {
 } from "@/utils/permissions";
 import { sanitizeVariantText } from "@/utils/sanitize";
 import type { QueryCondition } from "@/utils/typeutils";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { getStrucBoost } from "@/utils/village";
 import type { ZodAllTags } from "@/validators/combat";
 import { HealTag, ItemValidator, NonCombatGainSkill } from "@/validators/combat";
@@ -4048,3 +4045,26 @@ async function executeMergeStacksForItem(
     message: `Merged stacks of ${info.name}`,
   };
 }
+
+/**
+ * Item and quest acquisition share this history so a mode cannot be rolled twice.
+ *
+ * @param client - Drizzle client.
+ * @param userId - Player whose `SageModeRolls` rows to load.
+ */
+export const fetchSageModeRolls = async (client: DrizzleClient, userId: string) => {
+  return await client.query.sageModeRolls.findMany({
+    where: eq(sageModeRolls.userId, userId),
+    with: { sageMode: true },
+  });
+};
+
+/**
+ * Visible catalog rows for item-roll pooling. Hidden modes are staff-only and
+ * are never granted by `rollsagemode`.
+ *
+ * @param client - Drizzle client.
+ */
+export const fetchSageModes = async (client: DrizzleClient) => {
+  return await client.query.sageMode.findMany({ where: eq(sageMode.hidden, false) });
+};

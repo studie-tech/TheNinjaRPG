@@ -60,6 +60,7 @@ import {
   removeBloodlineFromPoolAtomically,
   reservePityCredit,
 } from "@/server/utils/concurrency";
+import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -77,7 +78,6 @@ import {
   secondsFromDate,
   secondsPassed,
 } from "@/utils/time";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import type { BloodlineFilteringSchema } from "@/validators/bloodline";
 import {
   bloodlineFilteringSchema,

@@ -49,7 +49,8 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { calculateDailyLockedTime, canChallengeKage } from "@/utils/kage";
+import { calculateDailyLockedTime } from "@/server/utils/kage";
+import { canChallengeKage } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";

@@ -1,4 +1,3 @@
-import { eq, inArray, isNull, or } from "drizzle-orm";
 import type { SAGE_MASTERY_RANK } from "@/drizzle/constants";
 import {
   IMG_MANUAL_SAGE_MODE,
@@ -11,8 +10,6 @@ import {
   SAGE_MODE_MAX_LEVEL,
 } from "@/drizzle/constants";
 import type { Jutsu, SageMode, UserData } from "@/drizzle/schema";
-import { quest, sageMode, sageModeRolls } from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
 import type { ZodAllTags } from "@/validators/combat";
 
 /**
@@ -101,30 +98,6 @@ export const getSageMasteryDisplayRank = (
 ): SAGE_MASTERY_RANK => (hasSageMode ? getSageMasteryRank(exp) : "NONE");
 
 /**
- * SQL predicates shared by mission-hall and uncompleted-quest fetches: exact
- * `requiredSageModeId` (or unset) and minimum `requiredSageRank` (or unset).
- *
- * @param user - Equipped mode and mastery experience from the questing player.
- */
-export const sageQuestFilters = (
-  user: Pick<UserData, "sageModeId" | "sageMasteryExperience">,
-) => [
-  or(
-    isNull(quest.requiredSageModeId),
-    eq(quest.requiredSageModeId, user.sageModeId ?? ""),
-  ),
-  or(
-    isNull(quest.requiredSageRank),
-    inArray(
-      quest.requiredSageRank,
-      sageRanksAtOrBelow(
-        getSageMasteryDisplayRank(user.sageMasteryExperience, !!user.sageModeId),
-      ),
-    ),
-  ),
-];
-
-/**
  * Daily activation allowance at the user's experience-mapped rank
  * (`SAGE_MASTERY_DAILY_ACTIVATIONS`). NONE and INITIATE share the same cap.
  *
@@ -168,29 +141,6 @@ export const getActiveSageLevel = (
   sageMode.requiredSageMastery > 0 && exp >= sageMode.requiredSageMastery
     ? SAGE_MODE_MAX_LEVEL
     : 1;
-
-/**
- * Item and quest acquisition share this history so a mode cannot be rolled twice.
- *
- * @param client - Drizzle client.
- * @param userId - Player whose `SageModeRolls` rows to load.
- */
-export const fetchSageModeRolls = async (client: DrizzleClient, userId: string) => {
-  return await client.query.sageModeRolls.findMany({
-    where: eq(sageModeRolls.userId, userId),
-    with: { sageMode: true },
-  });
-};
-
-/**
- * Visible catalog rows for item-roll pooling. Hidden modes are staff-only and
- * are never granted by `rollsagemode`.
- *
- * @param client - Drizzle client.
- */
-export const fetchSageModes = async (client: DrizzleClient) => {
-  return await client.query.sageMode.findMany({ where: eq(sageMode.hidden, false) });
-};
 
 /**
  * Synthetic jutsu stuffed into `extraState.jutsus` at battle start. Combat only

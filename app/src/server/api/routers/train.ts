@@ -7,7 +7,7 @@ import {
 } from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
-import { getGameSettingBoost } from "@/libs/gamesettings";
+import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { energyPerSecond, trainEfficiency, trainingMultiplier } from "@/libs/train";
 import { calcIsInVillage } from "@/libs/travel";

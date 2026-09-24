@@ -86,10 +86,9 @@ import {
   isAvailableUserQuests,
   verifyQuestContentForSave,
 } from "@/libs/quest";
-import { sageQuestFilters } from "@/libs/sageMode";
+import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
-import { extendWarParticipantSql } from "@/libs/war";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
 import type { UserWithRelations } from "@/routers/profile";
@@ -111,10 +110,12 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import {
   getFarmCollectionCount,
   reduceActiveFarmPlotTimers,
 } from "@/server/utils/farming";
+import { extendWarParticipantSql } from "@/server/utils/war";
 import { chunkArray, getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -127,7 +128,6 @@ import {
 } from "@/utils/permissions";
 import { periodStart, secondsFromNow } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { canAccessStructure } from "@/utils/village";
 import { idSchema } from "@/validators/misc";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
@@ -3355,3 +3355,27 @@ const prepareOverworldBindings = async (
     ? { success: true, objectives: derived }
     : { success: false, message: friendlyCheck.message };
 };
+
+/**
+ * SQL predicates shared by mission-hall and uncompleted-quest fetches: exact
+ * `requiredSageModeId` (or unset) and minimum `requiredSageRank` (or unset).
+ *
+ * @param user - Equipped mode and mastery experience from the questing player.
+ */
+export const sageQuestFilters = (
+  user: Pick<UserData, "sageModeId" | "sageMasteryExperience">,
+) => [
+  or(
+    isNull(quest.requiredSageModeId),
+    eq(quest.requiredSageModeId, user.sageModeId ?? ""),
+  ),
+  or(
+    isNull(quest.requiredSageRank),
+    inArray(
+      quest.requiredSageRank,
+      sageRanksAtOrBelow(
+        getSageMasteryDisplayRank(user.sageMasteryExperience, !!user.sageModeId),
+      ),
+    ),
+  ),
+];

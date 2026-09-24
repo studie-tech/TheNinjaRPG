@@ -30,9 +30,9 @@ import { useUploadThing } from "@/utils/uploadthing";
 import type {
   CharacterAnimationState,
   CharacterAssetConfig,
-  InsertTowerDefenseCharacter,
 } from "@/validators/towerDefense";
-import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefense";
+import type { InsertTowerDefenseCharacter } from "@/validators/towerDefenseCharacter";
+import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefenseCharacter";
 
 export default function TowerDefenseCharacterEdit(props: {
   params: Promise<{ characterid: string }>;

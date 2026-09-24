@@ -4,18 +4,15 @@ import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { and, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { DMG_SETTING_DEFAULTS, DMG_SETTING_NAMES } from "@/drizzle/constants";
-import type { GameSetting } from "@/drizzle/schema";
 import { gameSetting } from "@/drizzle/schema";
 import type { DmgConfig } from "@/libs/combat/constants";
 import type { DrizzleClient } from "@/server/db";
-import { round } from "@/utils/math";
 import {
   addDays,
   getDaysHoursMinutesSeconds,
   getTimeLeftStr,
   getWeekNumber,
   isDifferentDay,
-  secondsPassed,
 } from "@/utils/time";
 
 /**
@@ -240,24 +237,6 @@ const checkGameTimerDuration = async (
     );
   }
   return false;
-};
-
-/**
- * Convenience method for fetching a current value boost from the settings if still active,
- * otherwise return null
- * @param settingName
- * @param settings
- */
-export const getGameSettingBoost = (settingName: string, settings: GameSetting[]) => {
-  const setting = settings.find((s) => s.name === settingName);
-  if (setting) {
-    const secondsLeft = -secondsPassed(setting.time);
-    const daysLeft = round(secondsLeft / (24 * 3600), 1);
-    if (secondsLeft > 0 && setting.value > 0) {
-      return { value: setting.value, daysLeft, secondsLeft };
-    }
-  }
-  return null;
 };
 
 /**

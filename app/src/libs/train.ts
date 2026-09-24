@@ -33,6 +33,7 @@ import type {
   UserRank,
 } from "@/drizzle/schema";
 import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
+import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 
 type UserStatData = Pick<
   UserData,
@@ -544,22 +545,9 @@ export const battleItemExp = (
   return Math.floor(applyExpMultiplierSetting(baseExp, "itemExpMultiplier", settings));
 };
 
-/**
- * Multiply exp by an active gain-multiplier game setting. Mirrors the activity
- * window used by getGameSettingBoost (which lives in the server-side
- * gamesettings lib and cannot be imported into this client-shared module).
- */
+/** Multiply exp by an active gain-multiplier game setting. */
 const applyExpMultiplierSetting = (
   baseExp: number,
   settingName: string,
   settings?: GameSetting[],
-): number => {
-  const setting = settings?.find((s) => s.name === settingName);
-  if (setting) {
-    const secondsLeft = -secondsPassed(setting.time);
-    if (secondsLeft > 0 && setting.value > 0) {
-      return baseExp * setting.value;
-    }
-  }
-  return baseExp;
-};
+): number => baseExp * (getGameSettingBoost(settingName, settings ?? [])?.value ?? 1);

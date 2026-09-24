@@ -177,11 +177,7 @@ import {
   checkJutsuItems,
 } from "@/libs/train";
 import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
-import {
-  extendWarParticipantSql,
-  findWarsWithUser,
-  liftBracketImmunitySql,
-} from "@/libs/war";
+import { findWarsWithUser } from "@/libs/war";
 import { fetchAiProfileById } from "@/routers/ai";
 import { fetchSectorVillage } from "@/routers/village";
 import { fetchActiveWars } from "@/routers/war";
@@ -207,6 +203,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
+import { extendWarParticipantSql, liftBracketImmunitySql } from "@/server/utils/war";
 import { findRelationship } from "@/utils/alliance";
 import { getRandomElement } from "@/utils/array";
 import { randomInt } from "@/utils/math";

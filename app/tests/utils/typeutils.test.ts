@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { item, jutsu } from "@/drizzle/schema";
-import { setEmptyStringsToNulls, setNullsToEmptyStrings } from "@/utils/typeutils";
+import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
+import { setNullsToEmptyStrings } from "@/utils/typeutils";
 
 describe("setEmptyStringsToNulls", () => {
   it("nulls empty strings when no table is given", () => {

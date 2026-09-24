@@ -14,10 +14,10 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { moderateUserText } from "@/utils/profanity";
-import { setEmptyStringsToNulls } from "@/utils/typeutils";
 import { GuideArticleValidator, GuideListFilterSchema } from "@/validators/guide";
 import { idSchema } from "@/validators/misc";
 

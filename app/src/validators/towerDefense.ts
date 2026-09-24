@@ -1,7 +1,5 @@
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { TD_ENEMY_DIRECTIONS, TowerDefenseUpgradeTypes } from "@/drizzle/constants";
-import { towerDefenseCharacter } from "@/drizzle/schema";
 
 // ============================================
 // Position & Coordinates
@@ -285,39 +283,6 @@ export const characterAssetConfigSchema = z.object({
   animations: z.array(characterAnimationSchema),
 });
 export type CharacterAssetConfig = z.infer<typeof characterAssetConfigSchema>;
-
-// ============================================
-// Character Definition
-// ============================================
-export const insertTowerDefenseCharacterSchema = createInsertSchema(
-  towerDefenseCharacter,
-  {
-    name: z.string().min(1).max(191),
-    isPlayer: z.boolean(),
-    baseHealth: z.int().min(1),
-    baseSpeed: z.number().min(0.01),
-    baseDamage: z.int().min(0),
-    attackCooldown: z.number().min(0.1),
-    healthScaling: z.number().min(0),
-    speedScaling: z.number().min(0),
-    damageScaling: z.number().min(0),
-    firstAppearWave: z.int().min(1),
-    baseCount: z.int().min(1),
-    countScaling: z.number().min(0),
-    scaleFactor: z.number().min(0.1),
-    assetConfig: characterAssetConfigSchema.nullable(),
-  },
-).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-export type InsertTowerDefenseCharacter = z.output<
-  typeof insertTowerDefenseCharacterSchema
->;
-export type InsertTowerDefenseCharacterInput = z.input<
-  typeof insertTowerDefenseCharacterSchema
->;
 
 export const updateTowerDefenseUpgradeSchema = z.object({
   name: z.string().min(1).max(191),

@@ -27,12 +27,13 @@ import {
   lockWithHourlyTimer,
   updateGameSetting,
 } from "@/libs/gamesettings";
-import { handleWarEnd, isVillageInvolvedInAnyWar } from "@/libs/war";
+import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import { fetchKageReplacement } from "@/server/api/routers/kage";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { fetchActiveWars } from "@/server/api/routers/war";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
+import { handleWarEnd } from "@/server/utils/war";
 
 const ENDPOINT_NAME = "hourly-war";
 const DAILY_DECAY_TIMER = "daily-war-decay";
