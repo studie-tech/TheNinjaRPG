@@ -18,6 +18,7 @@ enum TNRStyle {
 }
 
 extension View {
+    /// Lets the system style the widget background as a container.
     func tnrWidgetBackground(_ color: Color) -> some View {
         containerBackground(color, for: .widget)
     }
