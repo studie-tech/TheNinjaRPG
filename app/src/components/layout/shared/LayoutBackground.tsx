@@ -118,9 +118,16 @@ export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
   // All three layers are decorative backdrops rather than content, so they carry an
   // empty alt and are hidden from assistive technology.
   if (variant === "beta") {
+    // Below md this is a banner across the top rather than a full-viewport backdrop, so
+    // on a phone it is usually a game page's largest contentful paint. The shell preloads
+    // the seasonal image, and once getUser resolves a village's wallpaperOverwrite takes
+    // its place. Village art is taller than 2:1, so at its natural height it would paint
+    // a larger image a round-trip later, which Chrome reports as a new, slower LCP. A
+    // fixed 2:1 box gives every wallpaper the same painted area, so the swap is never
+    // larger than what the preload already painted.
     return (
       <Wallpaper
-        className="fixed z-[-1] select-none object-contain md:top-0 md:left-0 md:h-full md:w-full md:object-cover"
+        className="fixed z-[-1] aspect-[2/1] w-full select-none object-cover md:top-0 md:left-0 md:h-full md:w-full"
         src={imageset.wallpaper}
         alt=""
         priority
