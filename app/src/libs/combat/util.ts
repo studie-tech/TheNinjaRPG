@@ -15,6 +15,7 @@ import {
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
   HEX_ASPECT_RATIO,
+  HEX_STACKING_DISPLACEMENT,
   KAGE_CHALLENGE_WIN_PRESTIGE,
   KAGE_PRESTIGE_COST,
   KILLING_NOTORIETY_GAIN,
@@ -71,7 +72,6 @@ import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
 import {
   allState,
   BARRIER_DAMAGE_TAG_TYPES,
-  damageReductionTypes,
   POST_PIERCE_TAGS,
   publicState,
 } from "./constants";
@@ -759,6 +759,12 @@ export const actionHasSharedCooldown = (action: {
 };
 
 /**
+ * Height of the rendered battlefield as a fraction of its width, for a grid of the given size
+ */
+export const getBattlefieldHeightRatio = (width: number, height: number) =>
+  ((height + 2) * HEX_ASPECT_RATIO) / (width - HEX_STACKING_DISPLACEMENT * (width - 1));
+
+/**
  * Gets the default width and height of the battle grid based on the type of battle and the level of the user
  * @param battleType - The type of battle
  * @param userLevel - The level of the user
@@ -1126,7 +1132,7 @@ export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
  * Damage increases use staged base damage.
  */
 export const getBaseDamageForModifier = (
-  effect: UserEffect,
+  _effect: UserEffect,
   consequence: {
     damage?: number;
     residual?: number;

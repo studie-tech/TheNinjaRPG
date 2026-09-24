@@ -19,7 +19,10 @@ import Loader from "@/layout/Loader";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import { availableUserActions } from "@/libs/combat/actions";
 import type { BattleState } from "@/libs/combat/types";
-import { resolveControlledActorId } from "@/libs/combat/util";
+import {
+  getBattlefieldHeightRatio,
+  resolveControlledActorId,
+} from "@/libs/combat/util";
 import { showMutationToast } from "@/libs/toast";
 import {
   combatActionIdAtom,
@@ -198,7 +201,10 @@ export default function CombatPage() {
 
   // Component renderers
   const renderTimer = useCallback(() => {
-    if (!battle || !user || !isInBattle || !battleState) return null;
+    if (!battle || !user || !isInBattle || !battleState) {
+      // Hold the timer's height while the battle loads, so nothing below it moves.
+      return isInBattle ? <div className="h-16" /> : null;
+    }
     return (
       <div
         className="flex flex-row items-center gap-2"
@@ -230,8 +236,19 @@ export default function CombatPage() {
   ]);
 
   const renderBattlefield = useCallback(() => {
+    // Reserve the canvas's height from the moment the battle's grid size is known, which
+    // is also when the actions below first render, so the WebGL scene lands in place.
     return (
-      <div className="relative overflow-hidden rounded-lg border bg-card text-card-foreground shadow-lg">
+      <div
+        className="relative box-content overflow-hidden rounded-lg border bg-card text-card-foreground shadow-lg"
+        style={
+          battle
+            ? {
+                aspectRatio: `1 / ${getBattlefieldHeightRatio(battle.width, battle.height)}`,
+              }
+            : undefined
+        }
+      >
         {!isLoading && combat}
         {!userData && <Loader explanation="Loading User Data" />}
         {isLoading && <Loader explanation="Loading Battle Data" />}
@@ -240,7 +257,7 @@ export default function CombatPage() {
         )}
       </div>
     );
-  }, [isLoading, combat, userData, results]);
+  }, [isLoading, combat, userData, results, battle]);
 
   const renderActions = useCallback(() => {
     if (!isInBattle || !battle) return null;
@@ -438,7 +455,7 @@ export default function CombatPage() {
           </div>
         )}
         <div className="grow"></div>
-        <div className="text-xs">
+        <div className="hidden text-xs md:block">
           <p className="text-orange-700">Hotkey &quot;W&quot;: End turn</p>
           <p className="text-orange-700">Hotkey &quot;M&quot;: Move</p>
         </div>
