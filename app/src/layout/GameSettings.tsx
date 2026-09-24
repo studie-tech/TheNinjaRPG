@@ -217,8 +217,8 @@ export const GlobalAudioProvider: React.FC<{
         }
         if (!isPlaying) return;
         if (!hasActiveAudioSession.current) {
-          await audioSession.activate();
-          hasActiveAudioSession.current = true;
+          hasActiveAudioSession.current = await audioSession.activate();
+          if (!hasActiveAudioSession.current) return;
         }
         await audioSession.setNowPlaying({
           title: "TheNinja-RPG",

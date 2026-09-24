@@ -7,7 +7,7 @@
  * the iOS requirement that the first play follow a user gesture.
  */
 
-import { addNativeListener, getPlatform, invokeSafe } from "./bridge";
+import { addNativeListener, getPlatform, invoke, invokeSafe, isNative } from "./bridge";
 
 const PLUGIN = "TNRAudioSession";
 
@@ -18,9 +18,15 @@ export interface NowPlaying {
   artworkUrl?: string;
 }
 
-/** Claim the audio session. Call this before the first play, not at launch. */
-export const activate = async (): Promise<void> => {
-  await invokeSafe(PLUGIN, "activate");
+/** Claim the audio session and report whether the native plugin accepted it. */
+export const activate = async (): Promise<boolean> => {
+  if (!isNative()) return false;
+  try {
+    await invoke(PLUGIN, "activate");
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 /**
