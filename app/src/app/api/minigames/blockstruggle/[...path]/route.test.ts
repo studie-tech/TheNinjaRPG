@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getVercelOidcToken } from "@vercel/oidc";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GET, POST } from "./route";
+import { DELETE, GET, POST } from "./route";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
 vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: vi.fn() }));
@@ -111,6 +111,45 @@ describe("Block Struggle Next.js route boundary", () => {
     const response = await GET(request(), context);
     expect(response.status).toBe(503);
     expect(getToken).not.toHaveBeenCalled();
+  });
+
+  it("retains the encrypted cookie when upstream logout fails so it can be retried", async () => {
+    mockAuth.mockResolvedValue({
+      userId: "rpg-user",
+      sessionId: "rpg-session",
+      getToken: async () => "clerk.proof",
+    } as unknown as Awaited<ReturnType<typeof auth>>);
+    let revokeSucceeds = false;
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input)).pathname;
+      if (path.endsWith("/exchange"))
+        return Response.json({
+          token: "a".repeat(43),
+          playerId: "p_player",
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        });
+      if (init?.method === "DELETE")
+        return revokeSucceeds
+          ? new Response(null, { status: 204 })
+          : Response.json({ error: "Unavailable" }, { status: 503 });
+      return Response.json({ playerId: "p_player" });
+    };
+    const signedIn = await GET(request(), context);
+    const cookie = signedIn.headers.get("set-cookie")?.split(";")[0] ?? "";
+    expect(cookie).toBeTruthy();
+    const logoutRequest = () =>
+      new NextRequest(route, {
+        method: "DELETE",
+        headers: { Origin: "https://rpg.example", Cookie: cookie },
+      });
+    const failed = await DELETE(logoutRequest(), context);
+    expect(failed.status).toBe(502);
+    expect(failed.headers.get("set-cookie")).toBeNull();
+    expect((await GET(request(cookie), context)).status).toBe(200);
+    revokeSucceeds = true;
+    const retried = await DELETE(logoutRequest(), context);
+    expect(retried.status).toBe(204);
+    expect(retried.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 
   it("clears the bridge cookie only after successful account-link redemption", async () => {
