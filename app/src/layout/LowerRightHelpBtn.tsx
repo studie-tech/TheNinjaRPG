@@ -18,8 +18,8 @@ import { type TicketType, TicketTypes } from "@/validators/misc";
 
 /**
  * ChatBox brings the AI SDK (`ai`, `@ai-sdk/react` and its swr dependency), and this button sits
- * in every layout, so a static import put that stack in every page's initial JS. The chat only
- * renders once the popover is open on its tab, so it loads then.
+ * in every layout, so a static import would put that stack in every page's initial JS. The chat
+ * renders only once the popover is open on its tab, so it loads then.
  */
 const ChatBox = dynamic(() => import("@/layout/ChatBox"), {
   ssr: false,
