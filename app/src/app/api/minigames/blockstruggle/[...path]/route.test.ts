@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getVercelOidcToken } from "@vercel/oidc";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GET } from "./route";
+import { GET, POST } from "./route";
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: vi.fn() }));
 vi.mock("@vercel/oidc", () => ({ getVercelOidcToken: vi.fn() }));
@@ -111,6 +111,48 @@ describe("Block Struggle Next.js route boundary", () => {
     const response = await GET(request(), context);
     expect(response.status).toBe(503);
     expect(getToken).not.toHaveBeenCalled();
+  });
+
+  it("clears the bridge cookie only after successful account-link redemption", async () => {
+    mockAuth.mockResolvedValue({
+      userId: "rpg-user",
+      sessionId: "rpg-session",
+      getToken: async () => "clerk.proof",
+    } as unknown as Awaited<ReturnType<typeof auth>>);
+    let status = 409;
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(new URL(String(input)).pathname).toBe("/api/ninja/identity-link/redeem");
+      expect(new Headers(init?.headers).get("authorization")).toBe(
+        "Bearer clerk.proof",
+      );
+      return Response.json(
+        status === 200 ? { playerId: "p_block" } : { error: "Conflict" },
+        { status },
+      );
+    };
+    const linkRequest = () =>
+      new NextRequest(
+        "https://rpg.example/api/minigames/blockstruggle/identity-link/redeem",
+        {
+          method: "POST",
+          headers: {
+            Origin: "https://rpg.example",
+            "Content-Type": "application/json",
+            Cookie: "tnr-blockstruggle-session=old",
+          },
+          body: JSON.stringify({ code: "c".repeat(43) }),
+        },
+      );
+    const linkContext = {
+      params: Promise.resolve({ path: ["identity-link", "redeem"] }),
+    };
+    const conflict = await POST(linkRequest(), linkContext);
+    expect(conflict.status).toBe(409);
+    expect(conflict.headers.get("set-cookie")).toBeNull();
+    status = 200;
+    const linked = await POST(linkRequest(), linkContext);
+    expect(linked.status).toBe(200);
+    expect(linked.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 
   it("forwards a Vercel OIDC token only to the protected game preview", async () => {
