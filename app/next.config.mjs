@@ -28,6 +28,9 @@ const config = {
     globalNotFound: true,
     nextScriptWorkers: true,
     optimizePackageImports: ["three"],
+    // Hard loads get the entry stylesheets as <style> in the document, so first paint
+    // does not wait for a render-blocking CSS request; client navigations still link them.
+    inlineCss: true,
   },
   turbopack: {
     resolveExtensions: [".tsx", ".ts", ".jsx", ".js"],
