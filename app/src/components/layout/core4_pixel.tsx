@@ -315,16 +315,12 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                   className={cn(
                     "p-3 pb-28 md:pb-3",
                     // The footer bar below sits in normal flow under this wrapper, so it
-                    // starts wherever the page's first paint ends -- often a spinner a few
-                    // hundred pixels tall -- and then travels the full height of the loaded
-                    // page once the query resolves. Speed Insights measured that bar as the
-                    // site's largest layout shift on phones (0.36 over 23 visits). On
-                    // desktop the same growth is when the document first overflows: a
-                    // classic scrollbar appears, the viewport narrows, and the centred
-                    // container moves sideways with it. Holding the wrapper to one viewport
-                    // at every width keeps the bar below the fold and the page scrollable
-                    // from first paint, so neither the bar nor the viewport width changes
-                    // when the content above grows.
+                    // starts wherever first paint ends -- often a short spinner -- and
+                    // travels down as the page loads. On desktop that growth is also when
+                    // the document first overflows: the scrollbar styled in globals.css
+                    // takes its width and the centred layout shifts sideways. One viewport
+                    // of minimum height keeps the bar below the fold, where its movement
+                    // cannot register as a shift, and the scrollbar present from first paint.
                     isSignedInLayout && "min-h-svh p-0 pb-28 md:pb-8",
                     isAnonymousLayout && "p-5 pb-8 md:p-7",
                   )}
