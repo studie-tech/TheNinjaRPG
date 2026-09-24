@@ -47,6 +47,7 @@ const handle = async (request: NextRequest, context: Context) => {
           apiOrigin: process.env.BLOCKSTRUGGLE_API_ORIGIN,
           siteOrigin: process.env.BLOCKSTRUGGLE_RPG_ORIGIN,
           cookieKey: process.env.BLOCKSTRUGGLE_BRIDGE_COOKIE_KEY,
+          previewBypassSecret: process.env.BLOCKSTRUGGLE_PREVIEW_BYPASS_SECRET,
         }).pipe(
           Effect.flatMap((service) =>
             service.handle(

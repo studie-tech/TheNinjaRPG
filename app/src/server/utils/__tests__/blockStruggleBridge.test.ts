@@ -28,6 +28,66 @@ const issued = (token: string) =>
   });
 
 describe("TheNinjaRPG same-origin puzzle bridge", () => {
+  it("sends the preview bypass only to the configured BlockStruggle Vercel host", async () => {
+    const secret = "s".repeat(43);
+    const urls: string[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(
+        {
+          ...config(),
+          apiOrigin: "https://blockstruggle-git-codex-rebuild-the-ninja-rpg.vercel.app",
+          previewBypassSecret: secret,
+        },
+        async (url, init) => {
+          urls.push(String(url));
+          expect(new Headers(init?.headers).get("x-vercel-protection-bypass")).toBe(
+            secret,
+          );
+          return new URL(String(url)).pathname.endsWith("/exchange")
+            ? issued("a".repeat(43))
+            : Response.json({ playerId: "p_player" });
+        },
+      ),
+    );
+    const result = await Effect.runPromise(
+      bridge.handle(request("session"), ["session"], identity()),
+    );
+    expect(result.response.status).toBe(200);
+    expect(result.response.headers.has("x-vercel-protection-bypass")).toBe(false);
+    expect(urls).toHaveLength(2);
+    expect(
+      urls.every((url) =>
+        url.startsWith(
+          "https://blockstruggle-git-codex-rebuild-the-ninja-rpg.vercel.app/",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects preview bypass secrets for non-BlockStruggle or non-Vercel origins", async () => {
+    for (const apiOrigin of [
+      "https://puzzle.example",
+      "https://other-project.vercel.app",
+      "https://blockstruggle-attacker.vercel.app",
+      "https://blockstruggle-attacker.example",
+    ]) {
+      let calls = 0;
+      const result = await Effect.runPromise(
+        Effect.either(
+          makeBlockStruggleBridge(
+            { ...config(), apiOrigin, previewBypassSecret: "s".repeat(43) },
+            async () => {
+              calls++;
+              return issued("a".repeat(43));
+            },
+          ),
+        ),
+      );
+      expect(Either.isLeft(result) && result.left.code).toBe("NotConfigured");
+      expect(calls).toBe(0);
+    }
+  });
+
   it("exchanges once, reuses an encrypted cookie, and binds it to the Clerk session", async () => {
     let exchanges = 0;
     const puzzleTokens: string[] = [];
