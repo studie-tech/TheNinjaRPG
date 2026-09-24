@@ -117,6 +117,7 @@ const readBody = (request: Request) =>
 export const makeBlockStruggleBridge = (
   input: unknown,
   transport: typeof fetch = fetch,
+  getTrustedToken?: () => Promise<string | undefined>,
 ) =>
   Effect.gen(function* () {
     const config = yield* Schema.decodeUnknown(BlockStruggleBridgeConfig, {
@@ -129,21 +130,29 @@ export const makeBlockStruggleBridge = (
       }),
       catch: () => fail(503, "NotConfigured"),
     });
-    const previewBypassSecret = yield* Effect.try({
-      try: () => {
-        const secret = config.previewBypassSecret;
-        if (secret === undefined) return undefined;
-        const host = new URL(origins.api).hostname;
-        if (
-          !host.startsWith("blockstruggle-") ||
-          !host.endsWith("-the-ninja-rpg.vercel.app") ||
-          !/^[A-Za-z0-9_-]{32,256}$/.test(secret)
-        )
-          throw new Error("Invalid preview bypass configuration");
-        return secret;
-      },
-      catch: () => fail(503, "NotConfigured"),
-    });
+    const trustedToken =
+      config.trustedVercelSource === "true"
+        ? yield* Effect.tryPromise({
+            try: async () => {
+              const host = new URL(origins.api).hostname;
+              if (
+                !host.startsWith("blockstruggle-") ||
+                !host.endsWith("-the-ninja-rpg.vercel.app") ||
+                !getTrustedToken
+              )
+                throw new Error("Invalid trusted source configuration");
+              const token = await getTrustedToken();
+              if (
+                !token ||
+                token.length > 8192 ||
+                !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)
+              )
+                throw new Error("Missing trusted source token");
+              return token;
+            },
+            catch: () => fail(503, "NotConfigured"),
+          })
+        : undefined;
     const key = yield* Effect.try({
       try: () => {
         if (!/^[A-Za-z0-9_-]{43}$/.test(config.cookieKey)) throw new Error();
@@ -211,9 +220,9 @@ export const makeBlockStruggleBridge = (
               Authorization: `Bearer ${bearer}`,
               Origin: origins.site,
               Accept: "application/json",
-              ...(previewBypassSecret === undefined
+              ...(trustedToken === undefined
                 ? {}
-                : { "x-vercel-protection-bypass": previewBypassSecret }),
+                : { "x-vercel-trusted-oidc-idp-token": trustedToken }),
               ...(body === undefined ? {} : { "Content-Type": "application/json" }),
             },
             body: body === undefined ? undefined : Buffer.from(body),
