@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle } from "lucide-react";
+import dynamic from "next/dynamic";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -8,12 +9,22 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocalStorage } from "@/hooks/localstorage";
-import ChatBox from "@/layout/ChatBox";
 import { GameSettingsPanel } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
+import Loader from "@/layout/Loader";
 import { cn } from "@/libs/shadui";
 import { useUserData } from "@/utils/UserContext";
 import { type TicketType, TicketTypes } from "@/validators/misc";
+
+/**
+ * ChatBox brings the AI SDK (`ai`, `@ai-sdk/react` and its swr dependency), and this button sits
+ * in every layout, so a static import put that stack in every page's initial JS. The chat only
+ * renders once the popover is open on its tab, so it loads then.
+ */
+const ChatBox = dynamic(() => import("@/layout/ChatBox"), {
+  ssr: false,
+  loading: () => <Loader explanation="Loading chat" />,
+});
 
 interface LowerRightHelpProps {
   className?: string;
