@@ -85,6 +85,20 @@ const CharacterSetupPrompt: React.FC = () => (
   </div>
 );
 
+const AccountLoadError: React.FC = () => {
+  const utils = api.useUtils();
+  return (
+    <div className="p-2 text-sm">
+      <p>We couldn&apos;t load your account.</p>
+      <Button variant="outline" onClick={() => void utils.profile.getUser.invalidate()}>
+        Try again
+      </Button>
+    </div>
+  );
+};
+
+export type AccountMenuState = "loading" | "create-character" | "error" | null;
+
 const GithubStar: React.FC = () => (
   <div className="flex justify-center pt-6 pl-2 align-center">
     <iframe
@@ -101,8 +115,7 @@ interface LayoutLeftSidebarProps {
   variant: LayoutVariant;
   isClerkLoaded: boolean;
   isSignedInLayout: boolean;
-  isCharacterLoading: boolean;
-  isCreatingCharacter: boolean;
+  accountState: AccountMenuState;
   userData?: UserWithRelations | null;
 }
 
@@ -110,8 +123,7 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
   variant,
   isClerkLoaded,
   isSignedInLayout,
-  isCharacterLoading,
-  isCreatingCharacter,
+  accountState,
   userData,
 }) => {
   return (
@@ -154,8 +166,9 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
           </div>
         </>
       )}
-      {isCharacterLoading && <SidebarLoadingSkeleton />}
-      {isCreatingCharacter && <CharacterSetupPrompt />}
+      {accountState === "loading" && <SidebarLoadingSkeleton />}
+      {accountState === "create-character" && <CharacterSetupPrompt />}
+      {accountState === "error" && <AccountLoadError />}
     </div>
   );
 };
@@ -164,8 +177,7 @@ interface LayoutRightSidebarContentProps {
   variant: LayoutVariant;
   isClerkLoaded: boolean;
   isSignedInLayout: boolean;
-  isCharacterLoading: boolean;
-  isCreatingCharacter: boolean;
+  accountState: AccountMenuState;
   userData?: UserWithRelations | null;
   systems: NavBarDropdownLink[];
   notifications?: NavBarDropdownLink[];
@@ -176,8 +188,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
   variant,
   isClerkLoaded,
   isSignedInLayout,
-  isCharacterLoading,
-  isCreatingCharacter,
+  accountState,
   userData,
   systems,
   notifications,
@@ -236,8 +247,9 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
           </Link>
         </>
       )}
-      {isCharacterLoading && <RightSidebarLoadingSkeleton />}
-      {isCreatingCharacter && <CharacterSetupPrompt />}
+      {accountState === "loading" && <RightSidebarLoadingSkeleton />}
+      {accountState === "create-character" && <CharacterSetupPrompt />}
+      {accountState === "error" && <AccountLoadError />}
       <GithubStar />
     </>
   );
