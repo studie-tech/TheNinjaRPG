@@ -23,7 +23,7 @@ import type { NavBarDropdownLink } from "@/libs/menus";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { secondsFromDate } from "@/utils/time";
-import { canAccessStructure } from "@/utils/village";
+import { canAccessStructure, getOwnSectorVillage } from "@/utils/village";
 
 /**
  * Atom for storing combat action¨
@@ -274,15 +274,18 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
   // being truthy, which skipped the query entirely for anyone standing in sector 0.
   // isLoading rather than isPending: a disabled query never stops being pending, which
   // would keep the access check below from ever running.
-  const { data: sectorVillage, isLoading: isLoadingSector } =
+  const { data: queriedSectorVillage, isLoading: isLoadingSector } =
     api.travel.getVillageInSector.useQuery(
       { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
       { enabled: userData?.sector != null },
     );
+  const ownSectorVillage = getOwnSectorVillage(userData);
+  const sectorVillage = queriedSectorVillage ?? ownSectorVillage;
+  const isSectorKnown = !isLoadingSector || !!ownSectorVillage;
   const ownVillage = userData?.village?.sector === sectorVillage?.sector;
   const router = useRouter();
   useEffect(() => {
-    if (userData && !isLoadingSector) {
+    if (userData && isSectorKnown) {
       if (!userData.isOutlaw) {
         // Check structure access
         const access = canAccessStructure(userData, structureRoute, sectorVillage);
@@ -296,7 +299,7 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
         setAccess(true);
       }
     }
-  }, [userData, sectorVillage, router, isLoadingSector, structureRoute, ownVillage]);
+  }, [userData, sectorVillage, router, isSectorKnown, structureRoute, ownVillage]);
   return {
     userData,
     notifications,

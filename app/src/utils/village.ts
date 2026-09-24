@@ -19,6 +19,33 @@ import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { getUserFederalStatus } from "@/utils/paypal";
 
+/** A village with the relations that sector and structure checks read. */
+export type SectorVillage = Village & {
+  relationshipA: VillageAlliance[];
+  relationshipB: VillageAlliance[];
+  structures: VillageStructure[];
+};
+
+/**
+ * The player's own village while they stand in its sector, read from the user data that
+ * `profile.getUser` already returned. It is the row `travel.getVillageInSector` resolves
+ * for that sector, so the sidebar and structure checks need not wait for that request.
+ * Outlaws get undefined: their sector village comes from a different lookup.
+ * @param userData - The user data.
+ * @returns The user's village, or undefined outside its sector.
+ */
+export const getOwnSectorVillage = (
+  userData?: UserWithRelations | null,
+): SectorVillage | undefined => {
+  const village = userData?.village;
+  if (!userData || userData.isOutlaw || village?.type !== "VILLAGE") return undefined;
+  if (village.sector !== userData.sector) return undefined;
+  if (!village.structures || !village.relationshipA || !village.relationshipB) {
+    return undefined;
+  }
+  return village as SectorVillage;
+};
+
 /**
  * Checks if a user can access a specific structure in a village.
  * @param userData - The user data.
@@ -29,13 +56,7 @@ import { getUserFederalStatus } from "@/utils/paypal";
 export const canAccessStructure = (
   userData: NonNullable<UserWithRelations>,
   structureRoute?: StructureRoute,
-  sectorVillage?:
-    | (Village & {
-        relationshipA: VillageAlliance[];
-        relationshipB: VillageAlliance[];
-        structures: VillageStructure[];
-      })
-    | null,
+  sectorVillage?: SectorVillage | null,
 ) => {
   let structureAccess = true;
   const ownVillage = userData?.village?.sector === sectorVillage?.sector;

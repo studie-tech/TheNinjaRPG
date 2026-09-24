@@ -30,6 +30,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship } from "@/utils/alliance";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
+import { getOwnSectorVillage } from "@/utils/village";
 
 export interface NavBarDropdownLink {
   id?: string;
@@ -196,12 +197,13 @@ export const useGameMenu = (userData?: UserWithRelations | null) => {
   ];
 
   // Get information from the sector the user is currently in. No stale time
-  const { data: sector } = api.travel.getVillageInSector.useQuery(
+  const { data: sectorVillage } = api.travel.getVillageInSector.useQuery(
     { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
     // A loaded user without a sector would otherwise send the -1 placeholder, which
     // the sector schema rejects. Sector 0 is real, so test for presence, not truth.
     { enabled: userData?.sector != null },
   );
+  const sector = sectorVillage ?? getOwnSectorVillage(userData);
 
   // Based on user status, update href of systems
   if (userData) {
