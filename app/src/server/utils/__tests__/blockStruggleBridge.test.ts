@@ -28,32 +28,33 @@ const issued = (token: string) =>
   });
 
 describe("TheNinjaRPG same-origin puzzle bridge", () => {
-  it("sends the preview bypass only to the configured BlockStruggle Vercel host", async () => {
-    const secret = "s".repeat(43);
+  it("sends a short-lived Vercel identity only to the configured BlockStruggle host", async () => {
+    const token = "header.payload.signature";
     const urls: string[] = [];
     const bridge = await Effect.runPromise(
       makeBlockStruggleBridge(
         {
           ...config(),
           apiOrigin: "https://blockstruggle-git-codex-rebuild-the-ninja-rpg.vercel.app",
-          previewBypassSecret: secret,
+          trustedVercelSource: "true",
         },
         async (url, init) => {
           urls.push(String(url));
-          expect(new Headers(init?.headers).get("x-vercel-protection-bypass")).toBe(
-            secret,
-          );
+          expect(
+            new Headers(init?.headers).get("x-vercel-trusted-oidc-idp-token"),
+          ).toBe(token);
           return new URL(String(url)).pathname.endsWith("/exchange")
             ? issued("a".repeat(43))
             : Response.json({ playerId: "p_player" });
         },
+        async () => token,
       ),
     );
     const result = await Effect.runPromise(
       bridge.handle(request("session"), ["session"], identity()),
     );
     expect(result.response.status).toBe(200);
-    expect(result.response.headers.has("x-vercel-protection-bypass")).toBe(false);
+    expect(result.response.headers.has("x-vercel-trusted-oidc-idp-token")).toBe(false);
     expect(urls).toHaveLength(2);
     expect(
       urls.every((url) =>
@@ -64,7 +65,7 @@ describe("TheNinjaRPG same-origin puzzle bridge", () => {
     ).toBe(true);
   });
 
-  it("rejects preview bypass secrets for non-BlockStruggle or non-Vercel origins", async () => {
+  it("rejects trusted identity for non-BlockStruggle or non-Vercel origins", async () => {
     for (const apiOrigin of [
       "https://puzzle.example",
       "https://other-project.vercel.app",
@@ -75,17 +76,41 @@ describe("TheNinjaRPG same-origin puzzle bridge", () => {
       const result = await Effect.runPromise(
         Effect.either(
           makeBlockStruggleBridge(
-            { ...config(), apiOrigin, previewBypassSecret: "s".repeat(43) },
+            { ...config(), apiOrigin, trustedVercelSource: "true" },
             async () => {
               calls++;
               return issued("a".repeat(43));
             },
+            async () => "header.payload.signature",
           ),
         ),
       );
       expect(Either.isLeft(result) && result.left.code).toBe("NotConfigured");
       expect(calls).toBe(0);
     }
+  });
+
+  it("fails closed when trusted identity is enabled but unavailable", async () => {
+    let calls = 0;
+    const result = await Effect.runPromise(
+      Effect.either(
+        makeBlockStruggleBridge(
+          {
+            ...config(),
+            apiOrigin:
+              "https://blockstruggle-git-codex-rebuild-the-ninja-rpg.vercel.app",
+            trustedVercelSource: "true",
+          },
+          async () => {
+            calls++;
+            return issued("a".repeat(43));
+          },
+          async () => undefined,
+        ),
+      ),
+    );
+    expect(Either.isLeft(result) && result.left.code).toBe("NotConfigured");
+    expect(calls).toBe(0);
   });
 
   it("exchanges once, reuses an encrypted cookie, and binds it to the Clerk session", async () => {
