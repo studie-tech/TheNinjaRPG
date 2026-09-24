@@ -131,8 +131,8 @@ import {
   isStaffMember,
   isStaffRole,
 } from "@/utils/permissions";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
 import { useUserSearch } from "@/utils/search";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { UploadButton } from "@/utils/uploadthing";

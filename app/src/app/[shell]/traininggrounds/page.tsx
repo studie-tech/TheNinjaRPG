@@ -92,7 +92,7 @@ import {
 } from "@/libs/train";
 import { isTutorialJutsuPickStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import {
   getDaysHoursMinutesSeconds,
   getTimeLeftStr,

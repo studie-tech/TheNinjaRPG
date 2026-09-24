@@ -1,6 +1,6 @@
 import type { ElementDefinition } from "cytoscape";
 import type { Quest } from "@/drizzle/schema";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import {
   type AllObjectivesType,
   objectiveImageMap,

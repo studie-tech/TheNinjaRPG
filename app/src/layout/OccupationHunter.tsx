@@ -16,7 +16,7 @@ import {
   getHuntingRankProgress,
   getNextRankExperience,
 } from "@/libs/hunting";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function OccupationHunter() {

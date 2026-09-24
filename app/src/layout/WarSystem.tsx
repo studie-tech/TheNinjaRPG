@@ -71,7 +71,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { calculateEnemyConsequences, findRelationship } from "@/utils/alliance";
 import { canAdministrateWars } from "@/utils/permissions";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {

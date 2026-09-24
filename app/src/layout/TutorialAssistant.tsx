@@ -49,7 +49,7 @@ import {
 import { getMobileOperatingSystem } from "@/utils/hardware";
 import { parseHtml } from "@/utils/parse";
 import { usePublicPathname } from "@/utils/routing";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 

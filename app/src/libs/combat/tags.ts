@@ -34,7 +34,7 @@ import {
   selectTransferEffects,
 } from "@/libs/combat/util";
 import { calcHP, scaleUserStats } from "@/libs/profile";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import type {
   PreventTagType,
   ShieldTagType,

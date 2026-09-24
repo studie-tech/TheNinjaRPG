@@ -40,7 +40,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsPassed } from "@/utils/time";
 import { idSchema } from "@/validators/misc";
 import { rankedLoadoutSchema, rankedSeasonSchema } from "@/validators/pvpRank";

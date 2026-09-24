@@ -24,7 +24,7 @@ import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Profile() {

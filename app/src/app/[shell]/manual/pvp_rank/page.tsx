@@ -31,7 +31,7 @@ import { RankedRankDistributionHistogram } from "@/layout/RankedRankDistribution
 import { SeasonManager } from "@/layout/SeasonManager";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { UnclaimedSeasonRewards } from "@/layout/UnclaimedSeasonRewards";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 
 export default function RankedManualPage() {

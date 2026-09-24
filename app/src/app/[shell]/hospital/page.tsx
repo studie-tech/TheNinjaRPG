@@ -24,7 +24,7 @@ import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
 import { calcIsInVillage } from "@/libs/travel";
 import type { UserWithRelations } from "@/routers/profile";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequireInVillage } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";

@@ -31,7 +31,7 @@ import { needsInventoryRepair } from "@/libs/repair";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
 import { canChangeContent } from "@/utils/permissions";
-import { capitalizeFirstLetter } from "@/utils/sanitize";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function OccupationCrafting() {
