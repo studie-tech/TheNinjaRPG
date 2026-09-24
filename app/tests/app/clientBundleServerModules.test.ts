@@ -23,6 +23,10 @@ const SOURCE_ROOT = join(APP_ROOT, "src");
 const SERVER_ONLY_FILES = ["drizzle/schema.ts", "src/server/db.ts", "src/env/server.mjs"];
 const SERVER_ONLY_PACKAGES = /^(?:drizzle-orm(?:\/.*)?|drizzle-zod|@planetscale\/database)$/;
 const RUNTIME_IMPORT_KINDS = new Set(["import-statement", "dynamic-import", "require-call"]);
+const CODE_FILE = /\.[cm]?[jt]sx?$/;
+
+/** Next bundles this for every page without a "use client" directive. */
+const DIRECTIVELESS_CLIENT_ENTRIES = ["instrumentation-client.ts"];
 
 /**
  * Staff-only content-management forms validated with drizzle-zod insert schemas, which
@@ -35,25 +39,21 @@ const EXEMPT_CLIENT_ENTRIES = [
 
 // Typed locally: importing "bun" would load its global types into the whole program.
 const { Transpiler, resolveSync } = (globalThis as unknown as { Bun: BunRuntime }).Bun;
-const transpilers = {
-  ts: new Transpiler({ loader: "ts" }),
-  tsx: new Transpiler({ loader: "tsx" }),
-  js: new Transpiler({ loader: "js" }),
-};
+const transpiler = new Transpiler();
 
 const sourceFiles = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) return sourceFiles(path);
-    return /\.(?:tsx?|mjs)$/.test(entry.name) ? [path] : [];
+    return CODE_FILE.test(entry.name) ? [path] : [];
   });
 
 const isClientModule = (file: string) =>
-  /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*["']use client["']/.test(readFileSync(file, "utf8"));
+  /^(?:\s|\/\/[^\n]*\n|\/\*(?:[^*]|\*(?!\/))*\*\/)*["']use client["']/.test(readFileSync(file, "utf8"));
 
 const runtimeImports = (file: string) =>
-  transpilers[file.endsWith(".tsx") ? "tsx" : file.endsWith(".ts") ? "ts" : "js"]
-    .scanImports(readFileSync(file, "utf8"))
+  transpiler
+    .scanImports(readFileSync(file, "utf8"), /\.[cm]?ts$/.test(file) ? "ts" : "tsx")
     .filter((entry) => RUNTIME_IMPORT_KINDS.has(entry.kind))
     .map((entry) => entry.path);
 
@@ -67,7 +67,10 @@ const resolveFrom = (file: string, specifier: string) => {
 
 describe("client bundle", () => {
   it("never reaches the drizzle schema, drizzle or the database client", () => {
-    const entries = sourceFiles(SOURCE_ROOT).filter(isClientModule);
+    const entries = [
+      ...sourceFiles(SOURCE_ROOT).filter(isClientModule),
+      ...DIRECTIVELESS_CLIENT_ENTRIES.map((path) => join(APP_ROOT, path)),
+    ];
     const exempt = new Set(EXEMPT_CLIENT_ENTRIES.map((path) => join(APP_ROOT, path)));
     const serverOnlyFiles = new Set(SERVER_ONLY_FILES.map((path) => join(APP_ROOT, path)));
 
@@ -91,7 +94,9 @@ describe("client bundle", () => {
           continue;
         }
         const target = resolveFrom(file, specifier);
-        if (!target?.startsWith(APP_ROOT) || target.includes("/node_modules/")) continue;
+        if (!target?.startsWith(APP_ROOT) || target.includes("/node_modules/") || !CODE_FILE.test(target)) {
+          continue;
+        }
         if (serverOnlyFiles.has(target)) {
           offenders.push(`${chain(file)} > ${relative(APP_ROOT, target)}`);
           continue;
@@ -104,18 +109,14 @@ describe("client bundle", () => {
     }
 
     expect(entries.length).toBeGreaterThan(100);
+    for (const path of exempt) expect(entries).toContain(path);
     expect(offenders).toEqual([]);
-  });
-
-  it("exempts only files that exist", () => {
-    const files = new Set(sourceFiles(SOURCE_ROOT).map((file) => relative(APP_ROOT, file)));
-    for (const path of EXEMPT_CLIENT_ENTRIES) expect(files.has(path)).toBe(true);
   });
 });
 
 type BunRuntime = {
-  Transpiler: new (options: { loader: "ts" | "tsx" | "js" }) => {
-    scanImports: (code: string) => { kind: string; path: string }[];
+  Transpiler: new () => {
+    scanImports: (code: string, loader: "ts" | "tsx") => { kind: string; path: string }[];
   };
   resolveSync: (specifier: string, from: string) => string;
 };
