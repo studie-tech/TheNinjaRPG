@@ -52,6 +52,7 @@ export { getImageSet } from "./shared/layoutVariants";
 
 export interface LayoutProps {
   children: React.ReactNode;
+  initialIsSignedIn?: boolean;
 }
 
 const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
@@ -390,9 +391,13 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
   );
 };
 
-const LayoutCore4Beta: React.FC<LayoutProps> = ({ children }) => {
+const LayoutCore4Beta: React.FC<LayoutProps> = ({ children, initialIsSignedIn }) => {
   return (
-    <GameLayoutController variant="beta" renderer={BetaGameLayout}>
+    <GameLayoutController
+      variant="beta"
+      renderer={BetaGameLayout}
+      initialIsSignedIn={initialIsSignedIn}
+    >
       {children}
     </GameLayoutController>
   );

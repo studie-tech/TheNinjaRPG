@@ -50,9 +50,16 @@ export const SideBannerTitle: React.FC<{
   );
 };
 
-const SidebarLoadingSkeleton: React.FC = () => (
-  <div>
-    <Skeleton className="mt-6 h-6 w-full bg-muted/70" />
+// On desktop the default layout stacks StrongestUsersBanner under the left sidebar. While
+// the account loads, its skeletons hold the height the loaded sidebars take at the default
+// font scale (in rem, to follow the font scale), so nothing under them moves when it
+// arrives. The right one stops above the location card, which a later query fills in.
+const BETA_LEFT_SIDEBAR_RESERVATION = "md:min-h-[48.5rem]";
+const BETA_RIGHT_SIDEBAR_RESERVATION = "md:min-h-[29rem]";
+
+const SidebarLoadingSkeleton: React.FC<{ className?: string }> = ({ className }) => (
+  <div className={cn("pt-6", className)}>
+    <Skeleton className="h-6 w-full bg-muted/70" />
     <div className="flex flex-row gap-4 pt-4">
       <Skeleton className="h-16 w-full bg-muted/70" />
       <Skeleton className="h-16 w-full bg-muted/70" />
@@ -60,8 +67,10 @@ const SidebarLoadingSkeleton: React.FC = () => (
   </div>
 );
 
-const RightSidebarLoadingSkeleton: React.FC = () => (
-  <div>
+const RightSidebarLoadingSkeleton: React.FC<{ className?: string }> = ({
+  className,
+}) => (
+  <div className={className}>
     <div className="flex flex-col gap-2 pt-5">
       <Skeleton className="h-6 w-3/4 bg-muted/70" />
       <Skeleton className="h-6 w-4/5 bg-muted/70" />
@@ -113,7 +122,6 @@ const GithubStar: React.FC = () => (
 
 interface LayoutLeftSidebarProps {
   variant: LayoutVariant;
-  isClerkLoaded: boolean;
   isSignedInLayout: boolean;
   accountState: AccountMenuState;
   userData?: UserWithRelations | null;
@@ -121,7 +129,6 @@ interface LayoutLeftSidebarProps {
 
 export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
   variant,
-  isClerkLoaded,
   isSignedInLayout,
   accountState,
   userData,
@@ -141,7 +148,7 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
           <MenuBoxProfile />
         </>
       )}
-      {variant === "beta" && isClerkLoaded && !isSignedInLayout && (
+      {variant === "beta" && !isSignedInLayout && (
         <>
           <SideBannerTitle>Participate</SideBannerTitle>
           <div className="flex flex-row gap-4 pt-3">
@@ -166,7 +173,11 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
           </div>
         </>
       )}
-      {accountState === "loading" && <SidebarLoadingSkeleton />}
+      {accountState === "loading" && (
+        <SidebarLoadingSkeleton
+          className={variant === "beta" ? BETA_LEFT_SIDEBAR_RESERVATION : undefined}
+        />
+      )}
       {accountState === "create-character" && <CharacterSetupPrompt />}
       {accountState === "error" && <AccountLoadError />}
     </div>
@@ -175,7 +186,6 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
 
 interface LayoutRightSidebarContentProps {
   variant: LayoutVariant;
-  isClerkLoaded: boolean;
   isSignedInLayout: boolean;
   accountState: AccountMenuState;
   userData?: UserWithRelations | null;
@@ -186,7 +196,6 @@ interface LayoutRightSidebarContentProps {
 
 export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps> = ({
   variant,
-  isClerkLoaded,
   isSignedInLayout,
   accountState,
   userData,
@@ -205,7 +214,7 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
           location={location}
         />
       )}
-      {variant === "beta" && isClerkLoaded && !isSignedInLayout && (
+      {variant === "beta" && !isSignedInLayout && (
         <>
           <SideBannerTitle>Welcome</SideBannerTitle>
           <p className="hidden px-1 text-orange-100 italic md:block">Socials Login</p>
@@ -247,7 +256,11 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
           </Link>
         </>
       )}
-      {accountState === "loading" && <RightSidebarLoadingSkeleton />}
+      {accountState === "loading" && (
+        <RightSidebarLoadingSkeleton
+          className={variant === "beta" ? BETA_RIGHT_SIDEBAR_RESERVATION : undefined}
+        />
+      )}
       {accountState === "create-character" && <CharacterSetupPrompt />}
       {accountState === "error" && <AccountLoadError />}
       <GithubStar />
