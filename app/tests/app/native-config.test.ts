@@ -6,12 +6,13 @@ const REPO_ROOT = join(import.meta.dirname, "../../..");
 const readRepoFile = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 
 describe("native release configuration", () => {
-  it("keeps the iOS app target aligned with Capacitor 8", () => {
+  it("requires iOS 18 for the app and widgets", () => {
     const configuration = readRepoFile("mobile/scripts/configure-xcode.rb");
     const project = readRepoFile("mobile/ios/App/App.xcodeproj/project.pbxproj");
 
-    expect(configuration).toContain('APP_DEPLOYMENT_TARGET = "16.0"');
-    expect(project).not.toContain("IPHONEOS_DEPLOYMENT_TARGET = 15.0;");
+    expect(configuration).toContain('APP_DEPLOYMENT_TARGET = "18.0"');
+    expect(configuration).toContain('WIDGET_DEPLOYMENT_TARGET = "18.0"');
+    expect(project.match(/IPHONEOS_DEPLOYMENT_TARGET = 18.0;/g)).toHaveLength(6);
   });
 
   it("does not back up device credentials", () => {
