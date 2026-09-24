@@ -18,16 +18,8 @@ enum TNRStyle {
 }
 
 extension View {
-    /// `containerBackground` is iOS 17, and this extension deploys to 16.1. On 17 and
-    /// later the system needs the container form to lay the widget out correctly; before
-    /// that a plain background is the equivalent.
-    @ViewBuilder
     func tnrWidgetBackground(_ color: Color) -> some View {
-        if #available(iOS 17.0, *) {
-            containerBackground(color, for: .widget)
-        } else {
-            background(color)
-        }
+        containerBackground(color, for: .widget)
     }
 }
 
