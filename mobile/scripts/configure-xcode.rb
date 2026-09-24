@@ -23,8 +23,8 @@ WIDGET_TARGET = "TNRWidgets"
 BUNDLE_ID = ENV.fetch("TNR_APP_ID", "com.theninjarpg.app")
 APP_GROUP = "group.#{BUNDLE_ID}"
 # The embedded site and its authentication UI require a supported WebKit release.
-APP_DEPLOYMENT_TARGET = "18.0"
-WIDGET_DEPLOYMENT_TARGET = "18.0"
+APP_DEPLOYMENT_TARGET = "18.1"
+WIDGET_DEPLOYMENT_TARGET = "18.1"
 
 abort "No Xcode project at #{PROJECT_PATH}. Run `bun run add:ios` first." unless Dir.exist?(PROJECT_PATH)
 
