@@ -21,6 +21,7 @@ import {
 import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 import {
+  type AccountMenuState,
   LayoutLeftSidebar,
   LayoutMainMenu,
   LayoutRightSidebarContent,
@@ -128,10 +129,12 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const isSignedInLayout =
     !!userData || !!userId || (!isClerkLoaded && initialIsSignedIn);
   const isAnonymousLayout = !isSignedInLayout;
-  const isCharacterLoading =
-    isSignedInLayout && !userData && (!isClerkLoaded || userStatus === "pending");
-  const isCreatingCharacter =
-    isClerkLoaded && !!userId && !userData && userStatus === "success";
+  let accountState: AccountMenuState = null;
+  if (isSignedInLayout && !userData) {
+    if (!isClerkLoaded || userStatus === "pending") accountState = "loading";
+    else if (userStatus === "error") accountState = "error";
+    else if (userId && userStatus === "success") accountState = "create-character";
+  }
   const showMobileNotifications = pathname !== "/combat";
   const mobileNotificationCount = shownNotifications?.length ?? 0;
   const imageset = getImageSet(userData);
@@ -159,8 +162,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       isClerkLoaded={isClerkLoaded}
       isSignedInLayout={isSignedInLayout}
-      isCharacterLoading={isCharacterLoading}
-      isCreatingCharacter={isCreatingCharacter}
+      accountState={accountState}
       userData={userData}
     />
   );
@@ -170,8 +172,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       isClerkLoaded={isClerkLoaded}
       isSignedInLayout={isSignedInLayout}
-      isCharacterLoading={isCharacterLoading}
-      isCreatingCharacter={isCreatingCharacter}
+      accountState={accountState}
       userData={userData}
       systems={systems}
       notifications={shownNotifications}
