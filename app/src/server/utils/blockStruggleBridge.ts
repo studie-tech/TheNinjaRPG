@@ -343,10 +343,19 @@ export const makeBlockStruggleBridge = (
               ? decoded
               : undefined;
           if (method === "DELETE" && segments[0] === "session") {
-            if (existing)
-              yield* call("/api/ninja/session", "DELETE", existing.token).pipe(
-                Effect.ignore,
+            if (existing) {
+              const revoked = yield* call(
+                "/api/ninja/session",
+                "DELETE",
+                existing.token,
               );
+              if (!revoked.ok && revoked.status !== 401)
+                return yield* fail(
+                  revoked.status === 429 ? 429 : 502,
+                  revoked.status === 429 ? "RateLimited" : "UpstreamUnavailable",
+                  revoked.headers.get("retry-after") ?? undefined,
+                );
+            }
             return {
               response: new Response(null, {
                 status: 204,
