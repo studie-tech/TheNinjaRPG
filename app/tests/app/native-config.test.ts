@@ -10,9 +10,11 @@ describe("native release configuration", () => {
     const configuration = readRepoFile("mobile/scripts/configure-xcode.rb");
     const project = readRepoFile("mobile/ios/App/App.xcodeproj/project.pbxproj");
 
-    expect(configuration).toContain('APP_DEPLOYMENT_TARGET = "18.0"');
-    expect(configuration).toContain('WIDGET_DEPLOYMENT_TARGET = "18.0"');
-    expect(project.match(/IPHONEOS_DEPLOYMENT_TARGET = 18.0;/g)).toHaveLength(6);
+    expect(configuration).toContain('APP_DEPLOYMENT_TARGET = "18.1"');
+    expect(configuration).toContain('WIDGET_DEPLOYMENT_TARGET = "18.1"');
+    expect(project.match(/IPHONEOS_DEPLOYMENT_TARGET = [^;]+;/g)).toEqual(
+      Array(6).fill("IPHONEOS_DEPLOYMENT_TARGET = 18.1;"),
+    );
   });
 
   it("does not back up device credentials", () => {
