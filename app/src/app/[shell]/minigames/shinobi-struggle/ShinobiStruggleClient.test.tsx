@@ -2,27 +2,19 @@
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ensureDom } from "../../../../../tests/setup-dom.mjs";
-import ShinobiStruggleClient from "./ShinobiStruggleClient";
+import ShinobiStruggleClient, { ninjaSignInUrl } from "./ShinobiStruggleClient";
 
-const push = vi.fn();
 vi.mock("next/dynamic", () => ({
-  default:
-    () =>
-    ({ onSignIn }: { onSignIn: () => void }) => (
-      <button type="button" onClick={onSignIn}>
-        Sign in to play
-      </button>
-    ),
+  default: () => () => <div>Shinobi game</div>,
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 const originalFlag = process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED;
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   cleanup();
-  push.mockClear();
   if (originalFlag === undefined)
     delete process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED;
   else process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED = originalFlag;
@@ -30,13 +22,15 @@ afterEach(() => {
 });
 
 it("returns to the same Ninja match after sign-in", () => {
-  ensureDom();
-  const view = render(<ShinobiStruggleClient initialMatchId="match_7" />);
-  fireEvent.click(view.getByRole("button", { name: "Sign in to play" }));
-  const destination = new URL(push.mock.calls[0]?.[0], window.location.origin);
+  const origin = "https://rpg.example";
+  const destination = new URL(ninjaSignInUrl("match_7", origin), origin);
   expect(destination.pathname).toBe("/login");
   expect(destination.searchParams.get("redirect_url")).toBe(
-    `${window.location.origin}/minigames/shinobi-struggle?match=match_7`,
+    `${origin}/minigames/shinobi-struggle?match=match_7`,
+  );
+  const lobby = new URL(ninjaSignInUrl(undefined, origin), origin);
+  expect(lobby.searchParams.get("redirect_url")).toBe(
+    `${origin}/minigames/shinobi-struggle`,
   );
 });
 
