@@ -458,12 +458,12 @@ const RegisterForm: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid w-full grid-cols-3 items-center gap-4 px-3">
+                    <div className="grid w-full grid-cols-1 gap-4 px-3 sm:grid-cols-3">
                       <FormField
                         control={form.control}
                         name="hair_color"
                         render={({ field }) => (
-                          <FormItem className="basis-1/3">
+                          <FormItem className="min-w-0">
                             <FormLabel>Hair color</FormLabel>
                             <Select
                               onValueChange={field.onChange}
@@ -489,7 +489,7 @@ const RegisterForm: React.FC = () => {
                         control={form.control}
                         name="eye_color"
                         render={({ field }) => (
-                          <FormItem className="basis-1/3">
+                          <FormItem className="min-w-0">
                             <FormLabel>Eye color</FormLabel>
                             <Select
                               onValueChange={field.onChange}
@@ -515,7 +515,7 @@ const RegisterForm: React.FC = () => {
                         control={form.control}
                         name="skin_color"
                         render={({ field }) => (
-                          <FormItem className="basis-1/3">
+                          <FormItem className="min-w-0">
                             <FormLabel>Skin color</FormLabel>
                             <Select
                               onValueChange={field.onChange}
@@ -538,12 +538,12 @@ const RegisterForm: React.FC = () => {
                         )}
                       />
                     </div>
-                    <div className="grid w-full grid-cols-3 items-center gap-4 px-3">
+                    <div className="grid w-full grid-cols-1 gap-4 px-3 sm:grid-cols-3">
                       <FormField
                         control={form.control}
                         name="attribute_1"
                         render={({ field }) => (
-                          <FormItem className="basis-1/3">
+                          <FormItem className="min-w-0">
                             <FormLabel>Attribute #1</FormLabel>
                             <Select
                               onValueChange={field.onChange}
@@ -580,7 +580,7 @@ const RegisterForm: React.FC = () => {
                         control={form.control}
                         name="attribute_2"
                         render={({ field }) => (
-                          <FormItem className="basis-1/3">
+                          <FormItem className="min-w-0">
                             <FormLabel>Attribute #2</FormLabel>
                             <Select
                               onValueChange={field.onChange}
@@ -617,7 +617,7 @@ const RegisterForm: React.FC = () => {
                         control={form.control}
                         name="attribute_3"
                         render={({ field }) => (
-                          <FormItem className="basis-1/3">
+                          <FormItem className="min-w-0">
                             <FormLabel>Attribute #3</FormLabel>
                             <Select
                               onValueChange={field.onChange}
@@ -809,7 +809,7 @@ const RegisterForm: React.FC = () => {
                 <CarouselNext className="animate-[wiggle_1s_ease-in-out_infinite]" />
               </Carousel>
               {canShowNextSmall && current < count && (
-                <div className="absolute right-2 bottom-2 sm:right-4 sm:bottom-4">
+                <div className="flex justify-end p-3 sm:p-4">
                   <Button
                     type="button"
                     onClick={() => cApi?.scrollNext()}
