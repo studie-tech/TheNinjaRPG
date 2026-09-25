@@ -94,7 +94,10 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
       </div>
       <LayoutBackground variant="beta" userData={userData} />
       <div className="relative top-0 bottom-0 mr-auto ml-auto w-full max-w-[1280px] md:relative">
-        <div className="relative top-3 z-2 z-50 flex w-full select-none justify-center">
+        <div
+          className="relative top-3 z-2 z-50 flex w-full select-none justify-center"
+          data-compact-header
+        >
           {!lightLayout && (
             <Link href="/">
               <Image
@@ -133,7 +136,10 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
           </button>
         </div>
         {!lightLayout && (
-          <div className="relative top-[-10px] left-[50%] z-1 hidden translate-x-[-50%] font-bold text-lg text-orange-100 md:block lg:text-2xl">
+          <div
+            className="relative top-[-10px] left-[50%] z-1 hidden translate-x-[-50%] font-bold text-lg text-orange-100 md:block lg:text-2xl"
+            data-compact-header
+          >
             <Image
               className="select-none"
               src={imageset.navbar}
@@ -187,6 +193,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
         )}
         <Image
           className="relative top-[-120px] left-[50%] z-10 hidden translate-x-[-50%] select-none md:block"
+          data-compact-header
           src={imageset.handsign}
           width={127}
           height={112}
@@ -197,7 +204,10 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
           className="relative top-[70px] h-[15px] w-full shrink-0 bg-fill bg-repeat-x md:hidden"
           style={{ backgroundImage: `url(${IMG_LAYOUT_MOBILE_TOP})` }}
         ></div>
-        <div className="relative top-[70px] z-10 flex h-full flex-row md:top-[-122px]">
+        <div
+          className="relative top-[70px] z-10 flex h-full flex-row md:top-[-122px]"
+          data-compact-content
+        >
           <div className="relative hidden w-[200px] shrink-0 md:block lg:w-[250px]">
             <div className="relative">
               <Image

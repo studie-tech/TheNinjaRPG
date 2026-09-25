@@ -67,6 +67,37 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   }, [pathname]);
 
   useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    let frame = 0;
+    const keepEditorVisible = () => {
+      const field = document.activeElement;
+      const isEditing =
+        field instanceof HTMLElement &&
+        field.matches("input, textarea, [contenteditable='true']");
+      // A landscape keyboard can leave less room than the decorative game masthead.
+      document.body.classList.toggle(
+        "game-keyboard-compact",
+        isEditing && viewport.height < 220 && window.innerWidth > window.innerHeight,
+      );
+      cancelAnimationFrame(frame);
+      if (isEditing) {
+        frame = requestAnimationFrame(() => field.scrollIntoView({ block: "nearest" }));
+      }
+    };
+    viewport.addEventListener("resize", keepEditorVisible);
+    document.addEventListener("focusin", keepEditorVisible);
+    document.addEventListener("focusout", keepEditorVisible);
+    return () => {
+      viewport.removeEventListener("resize", keepEditorVisible);
+      document.removeEventListener("focusin", keepEditorVisible);
+      document.removeEventListener("focusout", keepEditorVisible);
+      cancelAnimationFrame(frame);
+      document.body.classList.remove("game-keyboard-compact");
+    };
+  }, []);
+
+  useEffect(() => {
     if (variant === "pixel") {
       document.documentElement.classList.add("dark");
     } else {
