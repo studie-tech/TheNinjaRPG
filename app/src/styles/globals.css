@@ -223,6 +223,14 @@
     font-size: calc(12px * var(--font-scale, 1));
   }
 
+  .game-keyboard-compact [data-compact-header] {
+    display: none;
+  }
+
+  .game-keyboard-compact [data-compact-content] {
+    top: 0;
+  }
+
   .tnr-pixel-clip {
     clip-path: polygon(
       0 10px,
