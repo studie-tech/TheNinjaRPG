@@ -17,11 +17,6 @@ export default function ShinobiStruggleClient({
 }) {
   const router = useRouter();
   const [linkedVersion, setLinkedVersion] = useState(0);
-  const signIn = () => {
-    const returnUrl = new URL("/minigames/shinobi-struggle", window.location.origin);
-    if (initialMatchId) returnUrl.searchParams.set("match", initialMatchId);
-    router.push(`/login?redirect_url=${encodeURIComponent(returnUrl.href)}`);
-  };
   return (
     <>
       {process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED === "true" && (
@@ -31,7 +26,9 @@ export default function ShinobiStruggleClient({
         key={`${initialMatchId ?? "lobby"}:${linkedVersion}`}
         initialMatchId={initialMatchId}
         onExit={() => router.push("/minigames")}
-        onSignIn={signIn}
+        onSignIn={() =>
+          router.push(ninjaSignInUrl(initialMatchId, window.location.origin))
+        }
       />
     </>
   );
@@ -135,4 +132,10 @@ const IdentityLinkForm = ({ onLinked }: { onLinked: () => void }) => {
       )}
     </section>
   );
+};
+
+export const ninjaSignInUrl = (matchId: string | undefined, origin: string) => {
+  const returnUrl = new URL("/minigames/shinobi-struggle", origin);
+  if (matchId) returnUrl.searchParams.set("match", matchId);
+  return `/login?redirect_url=${encodeURIComponent(returnUrl.href)}`;
 };
