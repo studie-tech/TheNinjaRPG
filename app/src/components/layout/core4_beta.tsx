@@ -96,7 +96,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
       <div className="relative top-0 bottom-0 mr-auto ml-auto w-full max-w-[1280px] md:relative">
         <div
           className="relative top-3 z-2 z-50 flex w-full select-none justify-center"
-          data-compact-header
+          data-compact-hide
         >
           {!lightLayout && (
             <Link href="/">
@@ -138,7 +138,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
         {!lightLayout && (
           <div
             className="relative top-[-10px] left-[50%] z-1 hidden translate-x-[-50%] font-bold text-lg text-orange-100 md:block lg:text-2xl"
-            data-compact-header
+            data-compact-hide
           >
             <Image
               className="select-none"
@@ -193,7 +193,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
         )}
         <Image
           className="relative top-[-120px] left-[50%] z-10 hidden translate-x-[-50%] select-none md:block"
-          data-compact-header
+          data-compact-hide
           src={imageset.handsign}
           width={127}
           height={112}
@@ -202,6 +202,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
         />
         <div
           className="relative top-[70px] h-[15px] w-full shrink-0 bg-fill bg-repeat-x md:hidden"
+          data-compact-hide
           style={{ backgroundImage: `url(${IMG_LAYOUT_MOBILE_TOP})` }}
         ></div>
         <div
@@ -250,7 +251,10 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
                 style={{ backgroundImage: `url(${IMG_LAYOUT_SIDESCROLL})` }}
               ></div>
             </div>
-            <div className="fixed bottom-0 flex h-20 max-h-28 w-full flex-col md:relative">
+            <div
+              className="fixed bottom-0 flex h-20 max-h-28 w-full flex-col md:relative"
+              data-compact-hide
+            >
               <div className="absolute top-0 right-0 left-[-20px] -z-30 md:right-[-20px]">
                 <div className="h-5 bg-linear-to-b from-rose-950 to-rose-800"></div>
                 <div className="h-8 bg-rose-800"></div>
@@ -313,7 +317,10 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
             ></Image>
           </div>
         </div>
-        <div className="absolute top-4 left-4 z-50 flex items-center gap-2 md:hidden">
+        <div
+          className="absolute top-4 left-4 z-50 flex items-center gap-2 md:hidden"
+          data-compact-hide
+        >
           <Sheet open={leftSideBarOpen} onOpenChange={setLeftSideBarOpen}>
             <SheetTrigger className="block" aria-label="homeBtn">
               {userData ? (
@@ -357,7 +364,10 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
           )}
         </div>
 
-        <div className="absolute top-4 right-4 block grid grid-cols-2 gap-2 md:hidden">
+        <div
+          className="absolute top-4 right-4 block grid grid-cols-2 gap-2 md:hidden"
+          data-compact-hide
+        >
           <div className="flex justify-center">
             <LowerRightHelpBtn className="block md:hidden">
               {userData ? (

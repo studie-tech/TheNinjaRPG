@@ -223,7 +223,7 @@
     font-size: calc(12px * var(--font-scale, 1));
   }
 
-  .game-keyboard-compact [data-compact-header] {
+  .game-keyboard-compact [data-compact-hide] {
     display: none;
   }
 
