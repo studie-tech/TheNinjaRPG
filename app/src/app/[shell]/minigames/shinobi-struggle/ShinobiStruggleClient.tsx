@@ -17,6 +17,11 @@ export default function ShinobiStruggleClient({
 }) {
   const router = useRouter();
   const [linkedVersion, setLinkedVersion] = useState(0);
+  const signIn = () => {
+    const returnUrl = new URL("/minigames/shinobi-struggle", window.location.origin);
+    if (initialMatchId) returnUrl.searchParams.set("match", initialMatchId);
+    router.push(`/login?redirect_url=${encodeURIComponent(returnUrl.href)}`);
+  };
   return (
     <>
       {process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED === "true" && (
@@ -26,7 +31,7 @@ export default function ShinobiStruggleClient({
         key={`${initialMatchId ?? "lobby"}:${linkedVersion}`}
         initialMatchId={initialMatchId}
         onExit={() => router.push("/minigames")}
-        onSignIn={() => router.push("/login")}
+        onSignIn={signIn}
       />
     </>
   );
