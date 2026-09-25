@@ -394,6 +394,10 @@ const Combat: React.FC<CombatProps> = (props) => {
     onSettled: () => {
       document.body.style.cursor = "default";
     },
+    onError: () => {
+      setBattleState({ battle: battleRef.current, result: null, isPending: false });
+      void utils.combat.getBattle.invalidate();
+    },
     onSuccess: async (data) => {
       // Clear the selected action only when control actually hands off to (or
       // away from) another actor — e.g. to/from a piloted summon. On the
@@ -419,7 +423,12 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
       // Notifications (if any)
       if (data.notification) {
-        showMutationToast({ success: true, message: data.notification });
+        showMutationToast({ success: false, message: data.notification });
+      }
+      if (!data.battleUpdate) {
+        setBattleState({ battle: battleRef.current, result: null, isPending: false });
+        if (data.updateClient) void utils.combat.getBattle.invalidate();
+        return;
       }
       if (data?.result?.notifications.length !== 0) {
         data?.result?.notifications.forEach((notification) => {

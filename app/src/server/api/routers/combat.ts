@@ -333,7 +333,7 @@ export const combatRouter = createTRPCRouter({
             // keep the fetched value: the next timeout poll reads updatedAt > roundStartAt
             // as "the actor already acted" and would skip the idle actor's effects tick.
             if (!shouldTickEffects) settledBattle.updatedAt = fetchedUpdatedAt;
-            const { finishBattle } = await updateBattle(
+            const claim = await updateBattle(
               ctx.drizzle,
               result,
               ctx.userId,
@@ -341,6 +341,9 @@ export const combatRouter = createTRPCRouter({
               fetchedVersion,
               pusher,
             );
+            if (!claim && attempts < 3) continue;
+            if (!claim) throw new Error("Battle version changed");
+            const { finishBattle } = claim;
             await Promise.all([
               finishBattle(),
               ...(history.length
@@ -806,7 +809,7 @@ export const combatRouter = createTRPCRouter({
             // updateBattle returns the authoritative battleOver — it covers raid
             // boss defeats where surviving teammates exist as friends, which the
             // simple friendsLeft + targetsLeft check would miss.
-            const { battleOver, finishBattle } = await updateBattle(
+            const claim = await updateBattle(
               db,
               result,
               suid,
@@ -814,6 +817,8 @@ export const combatRouter = createTRPCRouter({
               battle.version,
               pusher,
             );
+            if (!claim) return { updateClient: true };
+            const { battleOver, finishBattle } = claim;
             const [logEntries, { updatedQuestIds }] = await Promise.all([
               createAction(db, newBattle, history),
               updateUser(db, pusher, newBattle, result, suid),
@@ -859,7 +864,8 @@ export const combatRouter = createTRPCRouter({
           } catch (e) {
             console.error("Error updating battle state:", e);
             return {
-              notification: `Seems like the battle was out of sync with server, please try again`,
+              notification: "Unable to update battle. Please try again.",
+              updateClient: true,
             };
           }
         }
