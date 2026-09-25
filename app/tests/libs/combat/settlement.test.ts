@@ -68,7 +68,7 @@ const settle = async (snapshot: CompleteBattle, userId = "winner", fail = false)
   const result = calcBattleResult(snapshot, userId, []);
   if (!result) return null;
   result.money = userId === "winner" ? 9600 : -9600;
-  const { finishBattle } = await updateBattle(
+  const claim = await updateBattle(
     client,
     result,
     userId,
@@ -76,6 +76,8 @@ const settle = async (snapshot: CompleteBattle, userId = "winner", fail = false)
     snapshot.version,
     pusher,
   );
+  if (!claim) return null;
+  const { finishBattle } = claim;
   await Promise.all([
     finishBattle(),
     updateUser(client, pusher, snapshot, result, userId),
@@ -382,7 +384,7 @@ describeWithDatabase("CAS combat settlement", () => {
         settle(structuredClone(snapshot)),
         settle(structuredClone(snapshot)),
       ]);
-      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(results.filter((r) => r.status === "fulfilled" && r.value)).toHaveLength(1);
       expect(await balance()).toBe(109600);
       const saved = await persisted();
       if (final) {
@@ -407,9 +409,7 @@ describeWithDatabase("CAS combat settlement", () => {
         "Later reward failed",
       );
       expect(await balance()).toBe(109600);
-      await expect(settle(structuredClone(snapshot))).rejects.toThrow(
-        "Failure. Version:",
-      );
+      expect(await settle(structuredClone(snapshot))).toBeNull();
       expect(await balance()).toBe(109600);
       if (final) expect(await persisted()).toBeUndefined();
       else expect((await persisted())?.usersState[0]?.leftBattle).toBe(true);

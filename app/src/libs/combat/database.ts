@@ -142,7 +142,7 @@ export const updateBattle = async (
         .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion))),
     );
     if (deleted.rowsAffected === 0) {
-      throw new Error(`Failure. Version: ${fetchedVersion}, Battle: ${newBattle.id}`);
+      return null;
     }
   } else {
     newBattle.version = Math.max(newBattle.version, fetchedVersion + 1);
@@ -163,7 +163,7 @@ export const updateBattle = async (
         .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion))),
     );
     if (result.rowsAffected === 0) {
-      throw new Error(`Failure. Version: ${fetchedVersion}, Battle: ${newBattle.id}`);
+      return null;
     }
   }
 
