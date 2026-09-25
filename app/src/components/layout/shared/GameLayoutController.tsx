@@ -88,6 +88,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     viewport.addEventListener("resize", keepEditorVisible);
     document.addEventListener("focusin", keepEditorVisible);
     document.addEventListener("focusout", keepEditorVisible);
+    keepEditorVisible();
     return () => {
       viewport.removeEventListener("resize", keepEditorVisible);
       document.removeEventListener("focusin", keepEditorVisible);
