@@ -549,6 +549,7 @@ const PixelWelcome: React.FC = () => {
           autoPlay
           loop
           preload="metadata"
+          poster={TRANSPARENT_POSTER}
           src="/layouts/pixel/tnr-hero.mp4"
         />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,14,.68),rgba(8,13,22,.35)_35%,rgba(7,10,18,.9)),radial-gradient(ellipse_at_center,transparent_0_35%,rgba(4,7,13,.72)_85%)]" />
@@ -1128,6 +1129,16 @@ const textSEO = (
 );
 
 /**
+ * A transparent 1x1 GIF for the hero <video>'s poster. Chrome counts a poster-less
+ * video's first frame as a contentful paint, larger than the still beneath it (an image
+ * counts no more than its rendition's own pixels), so LCP waited seconds for the video
+ * on phones. With a poster Chrome counts the poster instead, and a transparent one keeps
+ * the still showing without a download. Posters load under `img-src`, which allows data:.
+ */
+const TRANSPARENT_POSTER =
+  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+/**
  * Renditions of the hero still, keyed by the viewport range that should receive each.
  *
  * The still used to be the <video>'s poster attribute, which is a single URL: every
@@ -1145,9 +1156,9 @@ const HERO_POSTER_RENDITIONS = [
 ] as const;
 
 /**
- * The hero still, sitting behind the <video>. Without a poster attribute the video paints
- * nothing until its first frame decodes, so the image shows through until then and the
- * playing video covers it. Decorative: the heading beside it carries the meaning.
+ * The hero still, sitting behind the <video>. The video's poster is transparent, so the
+ * image shows through until the first frame decodes and the playing video covers it.
+ * Decorative: the heading beside it carries the meaning.
  */
 const HeroPoster: React.FC = () => {
   for (const { media, width } of HERO_POSTER_RENDITIONS) {
