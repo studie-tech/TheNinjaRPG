@@ -79,14 +79,21 @@ const Register: React.FC = () => {
     }
   }, [router, userStatus, userData, isClerkLoaded, isSignedIn]);
 
-  // Show loader while checking auth status or if user is authenticated
+  // Show loader while checking auth status or if user is authenticated. The first step's
+  // banner, the page's largest image, renders with it so the prerendered HTML carries it
+  // and it paints without waiting for clerk-js and the user query.
   if (
     !isClerkLoaded ||
     !isSignedIn ||
     userStatus === "pending" ||
     (userStatus === "success" && userData)
   ) {
-    return <Loader explanation="Loading page..." />;
+    return (
+      <ContentBox {...REGISTER_BOX}>
+        <StepBanner alt="step1" src={IMG_REGISTRATIN_STEP1} />
+        <Loader explanation="Loading page..." />
+      </ContentBox>
+    );
   }
 
   if (userStatus === "error") {
@@ -103,6 +110,21 @@ const Register: React.FC = () => {
   // Only render the form when we're sure the user should see it
   return <RegisterForm />;
 };
+
+const REGISTER_BOX = {
+  title: "Create your Ninja",
+  subtitle: "And unlock the mysteries of Seichi",
+  padding: false,
+} as const;
+
+/** Banner heading one step of the registration carousel */
+const StepBanner: React.FC<{ alt: string; src: string }> = ({ alt, src }) => (
+  <div className="flex w-full justify-center">
+    <div className="relative aspect-[491/89] w-full">
+      <Image alt={alt} src={src} fill className="object-contain" priority={true} />
+    </div>
+  </div>
+);
 
 /** Helper to get boolean from localStorage with default */
 const getLocalStorageBoolean = (key: string, defaultValue: boolean): boolean => {
@@ -360,11 +382,7 @@ const RegisterForm: React.FC = () => {
   );
 
   return (
-    <ContentBox
-      title="Create your Ninja"
-      subtitle="And unlock the mysteries of Seichi"
-      padding={false}
-    >
+    <ContentBox {...REGISTER_BOX}>
       {!isPending && (
         <>
           <Form {...form}>
@@ -372,17 +390,7 @@ const RegisterForm: React.FC = () => {
               <Carousel setApi={setCApi}>
                 <CarouselContent>
                   <CarouselItem className="flex flex-col gap-4">
-                    <div className="flex w-full justify-center">
-                      <div className="relative aspect-[491/89] w-full">
-                        <Image
-                          alt="step1"
-                          src={IMG_REGISTRATIN_STEP1}
-                          fill
-                          className="object-contain"
-                          priority={true}
-                        />
-                      </div>
-                    </div>
+                    <StepBanner alt="step1" src={IMG_REGISTRATIN_STEP1} />
                     <div className="flex w-full flex-wrap items-center gap-4 px-10">
                       <p className="w-full basis-full text-center font-bold">
                         You can only have two accounts per person.
@@ -446,17 +454,7 @@ const RegisterForm: React.FC = () => {
                     </div>
                   </CarouselItem>
                   <CarouselItem className="relative flex flex-col gap-4">
-                    <div className="flex w-full justify-center">
-                      <div className="relative aspect-[491/89] w-full">
-                        <Image
-                          alt="step2"
-                          src={IMG_REGISTRATIN_STEP2}
-                          fill
-                          className="object-contain"
-                          priority={true}
-                        />
-                      </div>
-                    </div>
+                    <StepBanner alt="step2" src={IMG_REGISTRATIN_STEP2} />
 
                     <div className="grid w-full grid-cols-1 gap-4 px-3 sm:grid-cols-3">
                       <FormField
@@ -653,17 +651,7 @@ const RegisterForm: React.FC = () => {
                     </div>
                   </CarouselItem>
                   <CarouselItem className="flex flex-col gap-4">
-                    <div className="flex w-full justify-center">
-                      <div className="relative aspect-[491/89] w-full">
-                        <Image
-                          alt="step3"
-                          src={IMG_REGISTRATIN_STEP8}
-                          fill
-                          className="object-contain"
-                          priority={true}
-                        />
-                      </div>
-                    </div>
+                    <StepBanner alt="step3" src={IMG_REGISTRATIN_STEP8} />
                     <div className="flex flex-col gap-4 px-10">
                       <div className="font-semibold text-lg">
                         Pick a starting bloodline
@@ -701,17 +689,7 @@ const RegisterForm: React.FC = () => {
                     </div>
                   </CarouselItem>
                   <CarouselItem className="flex flex-col items-center gap-4">
-                    <div className="flex w-full justify-center">
-                      <div className="relative aspect-[491/89] w-full">
-                        <Image
-                          alt="step4"
-                          src={IMG_REGISTRATIN_STEP9}
-                          fill
-                          className="object-contain"
-                          priority={true}
-                        />
-                      </div>
-                    </div>
+                    <StepBanner alt="step4" src={IMG_REGISTRATIN_STEP9} />
                     <div className="px-10">
                       <FormField
                         control={form.control}
