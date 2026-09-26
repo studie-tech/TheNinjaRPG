@@ -139,6 +139,7 @@ export const NativeAccountDeletion = () => {
   return (
     <ContentBox
       id="account-deletion"
+      className="scroll-mt-24"
       title="Delete account permanently"
       subtitle="Applies to the app and website"
     >

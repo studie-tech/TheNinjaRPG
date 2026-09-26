@@ -4,6 +4,7 @@ import { ChevronsLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { cn } from "@/libs/shadui";
 
 export interface ContentBoxProps {
   children: React.ReactNode;
@@ -19,6 +20,7 @@ export interface ContentBoxProps {
   noRightAlign?: boolean;
   alreadyHasH1?: boolean;
   id?: string;
+  className?: string;
   onBack?: () => void;
   backDisabled?: boolean;
 }
@@ -67,7 +69,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   return (
     <>
       {props.initialBreak && <div className="h-4"></div>}
-      <div className="sm:container" data-content-box id={props.id}>
+      <div className={cn("sm:container", props.className)} data-content-box id={props.id}>
         <div
           className={`flex ${props.topRightCorntentBreakpoint ? `flex-col ${props.topRightCorntentBreakpoint}:flex-row ${props.topRightCorntentBreakpoint}:items-center` : "flex-row items-center"}`}
         >
