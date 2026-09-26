@@ -114,7 +114,12 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
     // Handle play/pause events
     const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePause = () => {
+      setIsPlaying(false);
+      // iOS pauses WebView audio when another app takes the audio session. Leaving it
+      // enabled would immediately replay and interrupt that app in return.
+      if (isSafariOrIOS()) setAudioEnabled(false);
+    };
     const handleEnded = () => setIsPlaying(false);
 
     // Safari fallback: track if canPlay has been handled to avoid stale closure issues
