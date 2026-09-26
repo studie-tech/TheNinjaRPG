@@ -309,99 +309,105 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
   // Render
   return (
     <div className="relative">
-      {/* Show Students */}
-      {showStudents && (
-        <ContentBox title="Students" subtitle={`Past and present`} initialBreak={true}>
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
-            {students.map((user) => (
-              <div className="relative" key={user.userId}>
-                <Link href={`/userid/${user.userId}`} className="text-center">
-                  <AvatarImage
-                    href={user.avatar}
-                    alt={user.username}
-                    userId={user.userId}
-                    hover_effect={true}
-                    priority={true}
-                    size={100}
-                  />
-                  {user.rank === "GENIN" && (
-                    <Confirm
-                      title="Remove Student"
-                      button={
-                        <XCircle className="absolute top-[3%] right-[13%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
-                      }
-                      onAccept={(e) => {
-                        e.preventDefault();
-                        remove({ studentId: user.userId });
-                      }}
-                    >
-                      You are about to remove this user as your student. Confirm?
-                    </Confirm>
-                  )}
-                  <div>
-                    <div className="font-bold">{user.username}</div>
+      <div inert={isPending}>
+        {/* Show Students */}
+        {showStudents && (
+          <ContentBox
+            title="Students"
+            subtitle={`Past and present`}
+            initialBreak={true}
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
+              {students.map((user) => (
+                <div className="relative" key={user.userId}>
+                  <Link href={`/userid/${user.userId}`} className="text-center">
+                    <AvatarImage
+                      href={user.avatar}
+                      alt={user.username}
+                      userId={user.userId}
+                      hover_effect={true}
+                      priority={true}
+                      size={100}
+                    />
+                    {user.rank === "GENIN" && (
+                      <Confirm
+                        title="Remove Student"
+                        button={
+                          <XCircle className="absolute top-[3%] right-[13%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
+                        }
+                        onAccept={(e) => {
+                          e.preventDefault();
+                          remove({ studentId: user.userId });
+                        }}
+                      >
+                        You are about to remove this user as your student. Confirm?
+                      </Confirm>
+                    )}
                     <div>
-                      Lvl. {user.level} {capitalizeFirstLetter(user.rank)}
+                      <div className="font-bold">{user.username}</div>
+                      <div>
+                        Lvl. {user.level} {capitalizeFirstLetter(user.rank)}
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              </div>
-            ))}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </ContentBox>
+        )}
+        {/* Show Sensei */}
+        {showSensei && (
+          <div className="flex flex-col gap-2">
+            <PublicUserComponent initialBreak userId={showSensei} title="Your Sensei" />
+            <Button onClick={() => leaveSensei()}>
+              <DoorOpen className="mr-2 h-6 w-6" />
+              Leave Sensei
+            </Button>
           </div>
-        </ContentBox>
-      )}
-      {/* Show Sensei */}
-      {showSensei && (
-        <div className="flex flex-col gap-2">
-          <PublicUserComponent initialBreak userId={showSensei} title="Your Sensei" />
-          <Button onClick={() => leaveSensei()}>
-            <DoorOpen className="mr-2 h-6 w-6" />
-            Leave Sensei
-          </Button>
-        </div>
-      )}
-      {/* Show Requests */}
-      {showRequestSystem && (
-        <ContentBox
-          title="Sensei"
-          subtitle="Requests from and to"
-          initialBreak={true}
-          padding={false}
-        >
-          <div className="p-3">
-            <p className="pb-2">{message}</p>
-            <p className="pb-2">{reward}</p>
-            <UserSearchSelect
-              useFormMethods={userSearchMethods}
-              selectedUsers={[]}
-              showYourself={false}
-              showAi={false}
-              inline={true}
-              maxUsers={maxUsers}
-            />
-            {targetUser && (
-              <Button
-                id="send"
-                className="mt-2 w-full"
-                onClick={() => create({ targetId: targetUser.userId })}
-              >
-                <Handshake className="mr-2 h-5 w-5" />
-                Send Request
-              </Button>
+        )}
+        {/* Show Requests */}
+        {showRequestSystem && (
+          <ContentBox
+            title="Sensei"
+            subtitle="Requests from and to"
+            initialBreak={true}
+            padding={false}
+          >
+            <div className="p-3">
+              <p className="pb-2">{message}</p>
+              <p className="pb-2">{reward}</p>
+              <UserSearchSelect
+                useFormMethods={userSearchMethods}
+                selectedUsers={[]}
+                showYourself={false}
+                showAi={false}
+                inline={true}
+                maxUsers={maxUsers}
+              />
+              {targetUser && (
+                <Button
+                  id="send"
+                  className="mt-2 w-full"
+                  onClick={() => create({ targetId: targetUser.userId })}
+                >
+                  <Handshake className="mr-2 h-5 w-5" />
+                  Send Request
+                </Button>
+              )}
+            </div>
+            {requests && requests.length > 0 && (
+              <UserRequestSystem
+                isLoading={isAccepting || isRejecting || isCancelling}
+                requests={requests}
+                userId={userData.userId}
+                onAccept={accept}
+                onReject={reject}
+                onCancel={cancel}
+              />
             )}
-          </div>
-          {requests && requests.length > 0 && (
-            <UserRequestSystem
-              isLoading={isAccepting || isRejecting || isCancelling}
-              requests={requests}
-              userId={userData.userId}
-              onAccept={accept}
-              onReject={reject}
-              onCancel={cancel}
-            />
-          )}
-        </ContentBox>
-      )}
+          </ContentBox>
+        )}
+      </div>
       {/* Overlay rather than replace the sections, so nothing around them moves */}
       {isPending && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
@@ -545,121 +551,126 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
         />
       }
     >
-      <div className="grid grid-cols-4 text-center font-bold">
-        {UserStatNames.map((stat, i) => {
-          const part = stat.match(/[a-z]+/g)?.[0] ?? "";
-          const label = part.charAt(0).toUpperCase() + part.slice(1);
-          const { stats_cap, gens_cap } = getUserCaps(userData.rank);
-          const cap =
-            stat.includes("Offence") || stat.includes("Defence") ? stats_cap : gens_cap;
-          const overCap = userData[stat] >= cap;
-          const icon = stat.includes("Offence") ? (
-            <Swords className={iconClassName} />
-          ) : stat.includes("Defence") ? (
-            <ShieldAlert className={iconClassName} />
-          ) : (
-            <Fingerprint className={iconClassName} />
-          );
+      {/* Inert while pending: the overlay hides the controls from pointers only */}
+      <div inert={isPending}>
+        <div className="grid grid-cols-4 text-center font-bold">
+          {UserStatNames.map((stat, i) => {
+            const part = stat.match(/[a-z]+/g)?.[0] ?? "";
+            const label = part.charAt(0).toUpperCase() + part.slice(1);
+            const { stats_cap, gens_cap } = getUserCaps(userData.rank);
+            const cap =
+              stat.includes("Offence") || stat.includes("Defence")
+                ? stats_cap
+                : gens_cap;
+            const overCap = userData[stat] >= cap;
+            const icon = stat.includes("Offence") ? (
+              <Swords className={iconClassName} />
+            ) : stat.includes("Defence") ? (
+              <ShieldAlert className={iconClassName} />
+            ) : (
+              <Fingerprint className={iconClassName} />
+            );
 
-          return (
-            <button
-              type="button"
-              id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
-              key={`${stat}-${i}`}
-              onClick={() =>
-                overCap
-                  ? showMutationToast({ success: false, message: "Already capped" })
-                  : startTraining({ stat })
-              }
-              className="relative"
-            >
-              <div
-                className={cn(
-                  trainItemClassName,
-                  overCap ? "opacity-50 grayscale" : "",
-                )}
+            return (
+              <button
+                type="button"
+                id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
+                key={`${stat}-${i}`}
+                onClick={() =>
+                  overCap
+                    ? showMutationToast({ success: false, message: "Already capped" })
+                    : startTraining({ stat })
+                }
+                className="relative"
               >
-                <Image src={getImage(stat)} alt={label} width={256} height={256} />
-                {icon}
-                {label}
-              </div>
-              {overCap && (
-                <UserRoundCheck className="absolute top-[50%] left-[50%] h-10 w-10 translate-x-[-50%] translate-y-[-50%] text-slate-100 hover:cursor-pointer" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-      {userData.currentlyTraining && (
-        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
-          <div className="m-auto flex flex-col items-center text-center text-white">
-            <p className="p-5 text-2xl">Training {userData.currentlyTraining}</p>
-            <Image
-              src={getImage(userData.currentlyTraining)}
-              alt={userData.currentlyTraining}
-              width={128}
-              height={128}
-            />
-            <div className="w-2/3">
-              {userData.trainingStartedAt && (
-                <p className="text-2xl">
-                  Time Left:{" "}
-                  <Countdown
-                    targetDate={secondsFromDate(
-                      trainingSpeedSeconds(userData.trainingSpeed),
-                      userData.trainingStartedAt,
-                    )}
-                    timeDiff={timeDiff}
-                  />
-                </p>
-              )}
-              {!showCaptcha && (
-                <XCircle
-                  id="tutorial-traininggrounds-stopTraining"
-                  className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-                  onClick={() => stopTraining({ villageId: userData.villageId })}
-                />
-              )}
-              {showCaptcha && !captcha && <Loader explanation="Loading captcha" />}
-              {showCaptcha && captcha && (
-                <Popover>
-                  <PopoverTrigger>
-                    <XCircle className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
-                  </PopoverTrigger>
-                  <PopoverContent>
-                    <p className="font-bold text-lg">Verify Humanity</p>
-                    {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
-                    <img
-                      alt="captcha"
-                      className="mb-2"
-                      src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
+                <div
+                  className={cn(
+                    trainItemClassName,
+                    overCap ? "opacity-50 grayscale" : "",
+                  )}
+                >
+                  <Image src={getImage(stat)} alt={label} width={256} height={256} />
+                  {icon}
+                  {label}
+                </div>
+                {overCap && (
+                  <UserRoundCheck className="absolute top-[50%] left-[50%] h-10 w-10 translate-x-[-50%] translate-y-[-50%] text-slate-100 hover:cursor-pointer" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {userData.currentlyTraining && (
+          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
+            <div className="m-auto flex flex-col items-center text-center text-white">
+              <p className="p-5 text-2xl">Training {userData.currentlyTraining}</p>
+              <Image
+                src={getImage(userData.currentlyTraining)}
+                alt={userData.currentlyTraining}
+                width={128}
+                height={128}
+              />
+              <div className="w-2/3">
+                {userData.trainingStartedAt && (
+                  <p className="text-2xl">
+                    Time Left:{" "}
+                    <Countdown
+                      targetDate={secondsFromDate(
+                        trainingSpeedSeconds(userData.trainingSpeed),
+                        userData.trainingStartedAt,
+                      )}
+                      timeDiff={timeDiff}
                     />
-                    <Form {...captchaForm}>
-                      <form className="relative" onSubmit={onSubmit}>
-                        <FormField
-                          control={captchaForm.control}
-                          name="guess"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input placeholder="Enter captcha" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <Button className="absolute top-0 right-0" type="submit">
-                          <CheckCheck className="h-5 w-5" />
-                        </Button>
-                      </form>
-                    </Form>
-                  </PopoverContent>
-                </Popover>
-              )}
+                  </p>
+                )}
+                {!showCaptcha && (
+                  <XCircle
+                    id="tutorial-traininggrounds-stopTraining"
+                    className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
+                    onClick={() => stopTraining({ villageId: userData.villageId })}
+                  />
+                )}
+                {showCaptcha && !captcha && <Loader explanation="Loading captcha" />}
+                {showCaptcha && captcha && (
+                  <Popover>
+                    <PopoverTrigger>
+                      <XCircle className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
+                    </PopoverTrigger>
+                    <PopoverContent>
+                      <p className="font-bold text-lg">Verify Humanity</p>
+                      {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
+                      <img
+                        alt="captcha"
+                        className="mb-2"
+                        src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
+                      />
+                      <Form {...captchaForm}>
+                        <form className="relative" onSubmit={onSubmit}>
+                          <FormField
+                            control={captchaForm.control}
+                            name="guess"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input placeholder="Enter captcha" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <Button className="absolute top-0 right-0" type="submit">
+                            <CheckCheck className="h-5 w-5" />
+                          </Button>
+                        </form>
+                      </Form>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
       {/* Overlay rather than replace the box, so the sections below keep their place */}
       {isPending && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
