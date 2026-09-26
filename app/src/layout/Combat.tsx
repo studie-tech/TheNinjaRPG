@@ -1005,10 +1005,40 @@ const Combat: React.FC<CombatProps> = (props) => {
       scene.add(group_users);
       scene.add(group_effects);
 
-      // Capture clicks to update move direction
-      // On mobile, we validate tiles on-the-fly since canClick may be stale
-      // (touch events don't always update mouse position before click fires)
-      const onClick = (e: MouseEvent) => {
+      // Pointer-up handles taps on native WebViews, where a touch need not
+      // synthesize a click. Ignore drags and pinches used to navigate the map.
+      const TAP_SLOP_PX = 10;
+      const tapGesture = { x: 0, y: 0, active: false, navigated: false };
+      const onPointerDown = (e: PointerEvent) => {
+        if (!e.isPrimary) {
+          tapGesture.navigated = true;
+          return;
+        }
+        tapGesture.active = e.pointerType !== "mouse" || e.button === 0;
+        tapGesture.navigated = false;
+        tapGesture.x = e.clientX;
+        tapGesture.y = e.clientY;
+      };
+      const onPointerMove = (e: PointerEvent) => {
+        if (
+          tapGesture.active &&
+          Math.hypot(e.clientX - tapGesture.x, e.clientY - tapGesture.y) > TAP_SLOP_PX
+        ) {
+          tapGesture.navigated = true;
+        }
+      };
+      const onPointerCancel = () => {
+        tapGesture.active = false;
+      };
+      const onPointerUp = (e: PointerEvent) => {
+        if (!e.isPrimary || !tapGesture.active) return;
+        tapGesture.active = false;
+        if (
+          tapGesture.navigated ||
+          Math.hypot(e.clientX - tapGesture.x, e.clientY - tapGesture.y) > TAP_SLOP_PX
+        ) {
+          return;
+        }
         setRaycasterFromMouse(raycaster, sceneRef, e, camera);
         const intersects = raycaster.intersectObjects(scene.children);
         intersects
@@ -1064,7 +1094,10 @@ const Combat: React.FC<CombatProps> = (props) => {
           });
       };
       const rendererElement = renderer.domElement;
-      rendererElement.addEventListener("click", onClick, true);
+      rendererElement.addEventListener("pointerdown", onPointerDown);
+      rendererElement.addEventListener("pointermove", onPointerMove);
+      rendererElement.addEventListener("pointerup", onPointerUp);
+      rendererElement.addEventListener("pointercancel", onPointerCancel);
 
       // Sprite mixer for sprite animations
       const spriteMixer = new SpriteMixer();
@@ -1307,7 +1340,10 @@ const Combat: React.FC<CombatProps> = (props) => {
           sceneRef.removeEventListener("mouseleave", onDocumentMouseLeave);
           sceneRef.removeEventListener("touchstart", onDocumentTouchStart);
           controls.removeEventListener("change", onZoomChange);
-          rendererElement.removeEventListener("click", onClick, true);
+          rendererElement.removeEventListener("pointerdown", onPointerDown);
+          rendererElement.removeEventListener("pointermove", onPointerMove);
+          rendererElement.removeEventListener("pointerup", onPointerUp);
+          rendererElement.removeEventListener("pointercancel", onPointerCancel);
           renderer.domElement.removeEventListener(
             "webglcontextlost",
             handleContextLost,
