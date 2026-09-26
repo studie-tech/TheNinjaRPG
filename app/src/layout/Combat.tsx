@@ -134,6 +134,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const actionRef = useRef<CombatAction | undefined>(props.action);
   const userIdRef = useRef<string>(props.userId);
   const precomputedActionsRef = useRef<CombatAction[]>([]);
+  const resultRef = useRef(result);
   const mountRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const mouse = new Vector2();
@@ -190,6 +191,9 @@ const Combat: React.FC<CombatProps> = (props) => {
   useEffect(() => {
     precomputedActionsRef.current = precomputedActions;
   }, [precomputedActions]);
+  useEffect(() => {
+    resultRef.current = result;
+  }, [result]);
 
   // Precompute maps for ground effects, user effects, and user positions
   const battleMaps = useBattleMaps(battleState.battle ?? null);
@@ -668,7 +672,8 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Handle key-presses
   const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (battleRef.current && suid) {
+    // A finished battle takes no actions; the result screen stays until the player leaves.
+    if (battleRef.current && suid && !resultRef.current) {
       // Read the refs rather than render-scope state: this listener only
       // re-registers on [suid, timeDiff], so a captured value would go stale.
       // Both refs are kept current, which also lets the precompute be reused on
