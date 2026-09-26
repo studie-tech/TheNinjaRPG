@@ -57,8 +57,9 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);
   const rightSideBarRef = React.useRef<HTMLDivElement | null>(null);
   // Opening or closing a sheet mounts or unmounts its whole menu; as a
-  // transition that render no longer blocks the tap's next paint. A link
-  // tapped inside a sheet closes it together with the navigation it starts.
+  // transition that render no longer blocks the tap's next paint. Links
+  // inside a sheet close it directly instead: a close sharing a transition
+  // with the navigation it starts would keep the sheet up until the page loads.
   const onLeftSideBarOpenChange = (open: boolean) =>
     startTransition(() => setLeftSideBarOpen(open));
   const onRightSideBarOpenChange = (open: boolean) =>
@@ -191,7 +192,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       isSignedIn={!!userId}
       userData={userData}
       updateUser={updateUser}
-      onEventClick={() => onLeftSideBarOpenChange(false)}
+      onEventClick={() => setLeftSideBarOpen(false)}
       onThemeToggle={toggleTheme}
     />
   );
@@ -222,13 +223,13 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       navbarMenuItems={navbarMenuItems}
       signedInIcons={signedInIcons}
-      onNavigate={() => onLeftSideBarOpenChange(false)}
+      onNavigate={() => setLeftSideBarOpen(false)}
     />
   );
 
   const handleRightSidebarClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (shouldCloseRightSidebar(e.target as HTMLElement)) {
-      onRightSideBarOpenChange(false);
+      setRightSideBarOpen(false);
     }
   };
 
