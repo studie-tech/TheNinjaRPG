@@ -77,7 +77,10 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
   pageSize = 5,
   showBasicActions = true,
 }) => {
-  const [selected, setSelected] = useState<BattleAction | null>(null);
+  const [selected, setSelected] = useState<{
+    entry: BattleAction;
+    actionItem: GenericObject;
+  } | null>(null);
   const [limit, setLimit] = useState(pageSize);
   const [userFilter, setUserFilter] = useLocalStorage<UserFilter>(
     "timeline-user-filter",
@@ -299,7 +302,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                           "group relative flex w-20 flex-none flex-col items-center rounded-lg px-1 py-1 text-xs transition",
                           "hover:bg-slate-200",
                         )}
-                        onClick={() => setSelected(entry)}
+                        onClick={() => setSelected({ entry, actionItem })}
                         aria-label="View action details"
                       >
                         <div className="flex flex-col items-center">
@@ -378,23 +381,19 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                 <DialogTitle className="flex flex-col gap-1">
                   <span>Action details</span>
                   <span className="font-medium text-muted-foreground text-xs">
-                    Round {selected.battleRound}
+                    Round {selected.entry.battleRound}
                   </span>
                   <span className="font-normal text-muted-foreground text-sm">
-                    {parseHtml(selected.description ?? "")}
+                    {parseHtml(selected.entry.description ?? "")}
                   </span>
                 </DialogTitle>
               </DialogHeader>
               {(() => {
-                const resolved = resolvedEntries.find(
-                  (r) => r.entry.id === selected.id,
-                );
-                const actionItem = resolved?.actionItem ?? placeholderObj;
-                const effects = (selected.appliedEffects ?? []) as ActionEffect[];
+                const effects = (selected.entry.appliedEffects ?? []) as ActionEffect[];
                 return (
                   <div className="space-y-4">
                     <ItemWithEffects
-                      item={actionItem}
+                      item={selected.actionItem}
                       hideDetails={false}
                       hideDates={true}
                       hideData={true}
