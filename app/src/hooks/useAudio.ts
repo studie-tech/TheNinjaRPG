@@ -116,9 +116,10 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => {
       setIsPlaying(false);
-      // iOS pauses WebView audio when another app takes the audio session. Leaving it
-      // enabled would immediately replay and interrupt that app in return.
-      if (isSafariOrIOS()) setAudioEnabled(false);
+      // Yield when another app takes audio in the background. A foreground pause can
+      // also occur while our native audio session starts; keep the user's choice so
+      // the player can retry once that session is ready.
+      if (isSafariOrIOS() && document.hidden) setAudioEnabled(false);
     };
     const handleEnded = () => setIsPlaying(false);
 
