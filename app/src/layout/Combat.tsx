@@ -42,7 +42,7 @@ import {
   resolveControlledActorId,
 } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
-import { haptics } from "@/libs/native";
+import { appEvents, haptics, isNative } from "@/libs/native";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import {
   drawCombatBackground,
@@ -745,10 +745,16 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
   };
 
+  // A native WebView follows the app lifecycle rather than browser-tab focus.
+  useEffect(() => {
+    if (!isNative()) return;
+    return appEvents.onStateChange(setHasFocus);
+  }, []);
+
   // If user has no actions left / round is over, propagate battle & potentially - perform AI actions
   useEffect(() => {
     const interval = setInterval(() => {
-      const focusCheck = document.hasFocus();
+      const focusCheck = isNative() || document.hasFocus();
       if (!focusCheck && process.env.NODE_ENV !== "development") setHasFocus(false);
       if (!hasFocus || !focusCheck) return;
       if (suid && battleRef.current && userIdRef.current && !isPending && !result) {
@@ -797,7 +803,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [isPending, timeDiff, result, suid, controlledActorId]);
+  }, [hasFocus, isPending, timeDiff, result, suid, controlledActorId]);
 
   useEffect(() => {
     actionRef.current = props.action;
