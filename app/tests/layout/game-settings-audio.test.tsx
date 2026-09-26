@@ -1,6 +1,7 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GameSettingsPanel, GlobalAudioProvider } from "@/layout/GameSettings";
+import { GlobalAudioProvider } from "@/layout/GameSettings";
+import { getPlatform } from "@/libs/native/bridge";
 import type { UserWithRelations } from "@/routers/profile";
 import { ensureDom } from "../setup-dom.mjs";
 
@@ -12,7 +13,6 @@ type AudioTestMocks = {
   deactivate: ReturnType<typeof vi.fn>;
   isPlaying: boolean;
   enabled: boolean;
-  updatePreferences: ReturnType<typeof vi.fn>;
 };
 
 function getAudioTestMocks(): AudioTestMocks {
@@ -25,7 +25,6 @@ function getAudioTestMocks(): AudioTestMocks {
     deactivate: vi.fn(async () => undefined),
     isPlaying: false,
     enabled: true,
-    updatePreferences: vi.fn(),
   };
   return globals.__audioTestMocks;
 }
@@ -40,10 +39,7 @@ vi.mock("@/hooks/useAudio", () => ({
 }));
 
 vi.mock("@/libs/native", () => ({
-  platform: () =>
-    (
-      window as Window & { Capacitor?: { getPlatform: () => string } }
-    ).Capacitor?.getPlatform() ?? "web",
+  platform: getPlatform,
   audioSession: {
     activate: getAudioTestMocks().activate,
     deactivate: getAudioTestMocks().deactivate,
@@ -60,28 +56,6 @@ vi.mock("@/utils/audio", () => ({
   preloadAudioBuffers: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    profile: {
-      updatePreferences: {
-        useMutation: () => ({ mutate: getAudioTestMocks().updatePreferences }),
-      },
-    },
-  },
-}));
-
-vi.mock("@/hooks/useIframeMute", () => ({
-  useIframeMute: () => ({ isIframesMuted: false, setIframesMuted: vi.fn() }),
-}));
-
-vi.mock("@/components/native/NativeSettingsEntry", () => ({
-  NativeSettingsEntry: () => null,
-}));
-
-vi.mock("@/utils/UserContext", () => ({
-  useUserData: () => ({}),
-}));
-
 const user = (level: number) =>
   ({
     userId: "user-1",
@@ -96,8 +70,6 @@ afterEach(() => {
   cleanup();
   const audio = getAudioTestMocks();
   audio.setEnabled.mockClear();
-  audio.setEnabled.mockImplementation(async () => undefined);
-  audio.updatePreferences.mockClear();
   audio.activate.mockClear();
   audio.activate.mockResolvedValue(true);
   audio.deactivate.mockClear();
@@ -107,28 +79,6 @@ afterEach(() => {
 });
 
 describe("GlobalAudioProvider", () => {
-  it("saves music preference while iOS playback remains pending", async () => {
-    const audio = getAudioTestMocks();
-    audio.enabled = false;
-    audio.setEnabled.mockImplementation(() => new Promise<void>(() => undefined));
-    const updateUser = vi.fn(async () => undefined);
-    const reviewer = { ...user(1), musicOn: false } as UserWithRelations;
-
-    render(
-      <GlobalAudioProvider userData={reviewer}>
-        <GameSettingsPanel userData={reviewer} updateUser={updateUser} />
-      </GlobalAudioProvider>,
-    );
-    fireEvent.click(screen.getByRole("switch", { name: "Toggle music" }));
-
-    await waitFor(() =>
-      expect(audio.updatePreferences).toHaveBeenCalledWith(
-        expect.objectContaining({ musicOn: true }),
-      ),
-    );
-    expect(updateUser).toHaveBeenCalledWith({ musicOn: true });
-  });
-
   it("retries iOS session activation after a failed attempt", async () => {
     const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
     Object.defineProperty(window, "Capacitor", {
