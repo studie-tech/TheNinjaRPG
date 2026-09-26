@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { startTransition, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import {
   safeLocalStorageGetItem,
@@ -56,6 +56,13 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const [leftSideBarOpen, setLeftSideBarOpen] = useState(false);
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);
   const rightSideBarRef = React.useRef<HTMLDivElement | null>(null);
+  // Opening or closing a sheet mounts or unmounts its whole menu; as a
+  // transition that render no longer blocks the tap's next paint. A link
+  // tapped inside a sheet closes it together with the navigation it starts.
+  const onLeftSideBarOpenChange = (open: boolean) =>
+    startTransition(() => setLeftSideBarOpen(open));
+  const onRightSideBarOpenChange = (open: boolean) =>
+    startTransition(() => setRightSideBarOpen(open));
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [lightLayout, setLightLayout] = useLocalStorage<boolean>("lightLayout", false);
   const [isMounted, setIsMounted] = useState(false);
@@ -184,7 +191,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       isSignedIn={!!userId}
       userData={userData}
       updateUser={updateUser}
-      onEventClick={() => setLeftSideBarOpen(false)}
+      onEventClick={() => onLeftSideBarOpenChange(false)}
       onThemeToggle={toggleTheme}
     />
   );
@@ -215,13 +222,13 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
       variant={variant}
       navbarMenuItems={navbarMenuItems}
       signedInIcons={signedInIcons}
-      onNavigate={() => setLeftSideBarOpen(false)}
+      onNavigate={() => onLeftSideBarOpenChange(false)}
     />
   );
 
   const handleRightSidebarClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (shouldCloseRightSidebar(e.target as HTMLElement)) {
-      setRightSideBarOpen(false);
+      onRightSideBarOpenChange(false);
     }
   };
 
@@ -240,9 +247,9 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     systems,
     location,
     leftSideBarOpen,
-    setLeftSideBarOpen,
+    onLeftSideBarOpenChange,
     rightSideBarOpen,
-    setRightSideBarOpen,
+    onRightSideBarOpenChange,
     rightSideBarRef,
     mobileNavConfig,
     signedInIcons,

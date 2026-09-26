@@ -65,9 +65,9 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
   shownNotifications,
   location,
   leftSideBarOpen,
-  setLeftSideBarOpen,
+  onLeftSideBarOpenChange,
   rightSideBarOpen,
-  setRightSideBarOpen,
+  onRightSideBarOpenChange,
   rightSideBarRef,
   mobileNavConfig,
   signedInIcons,
@@ -322,7 +322,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
           className="absolute top-4 left-4 z-50 flex items-center gap-2 md:hidden"
           data-compact-hide
         >
-          <Sheet open={leftSideBarOpen} onOpenChange={setLeftSideBarOpen}>
+          <Sheet open={leftSideBarOpen} onOpenChange={onLeftSideBarOpenChange}>
             <SheetTrigger className="block" aria-label="homeBtn">
               {userData ? (
                 <House className={cn(variantClasses.yellowButton)} />
@@ -378,7 +378,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
               )}
             </LowerRightHelpBtn>
           </div>
-          <Sheet open={rightSideBarOpen} onOpenChange={setRightSideBarOpen}>
+          <Sheet open={rightSideBarOpen} onOpenChange={onRightSideBarOpenChange}>
             <SheetTrigger aria-label="gameBtn" id="tutorial-gameBtn">
               {userData ? (
                 <Earth className={cn(variantClasses.yellowButton)} />
