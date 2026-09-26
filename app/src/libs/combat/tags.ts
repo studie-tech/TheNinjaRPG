@@ -18,6 +18,7 @@ import {
   TRANSFER_EXCLUDED_SOURCE_TYPES,
 } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
+import { getPotencyDescription } from "@/libs/combat/potency";
 import {
   isClone,
   isLiveSummon,
@@ -829,6 +830,33 @@ const adjustBasicAction = (
     effect,
     `basic action${affected && "s"} [${affected}] ${verb}`,
   );
+};
+
+/** Activate a potency buff/debuff; its power is consumed by subsequent casts. */
+export const potency = (
+  effect: Extract<UserEffect, { type: "increasepotency" | "decreasepotency" }>,
+  usersEffects: UserEffect[],
+  target: BattleUserState,
+): ActionEffect | undefined => {
+  if (!effect.isNew) return undefined;
+  const isIncrease = effect.type === "increasepotency";
+  const { pass } = preventCheck(
+    usersEffects,
+    isIncrease ? "buffprevent" : "debuffprevent",
+    target,
+    effect,
+  );
+  if (!pass) {
+    return preventResponse(
+      effect,
+      target,
+      isIncrease ? "cannot be buffed" : "cannot be debuffed",
+    );
+  }
+  return {
+    txt: getPotencyDescription(effect, getPower(effect).power, `${target.username}'s`),
+    color: isIncrease ? "blue" : "red",
+  };
 };
 
 /** Increase range of basic actions */

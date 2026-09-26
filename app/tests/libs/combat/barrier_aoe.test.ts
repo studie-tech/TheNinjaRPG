@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 /**
  * Regression test for the AOE-vs-barrier damage scaling bug.
@@ -9,19 +9,6 @@ import { describe, expect, it, vi } from "vitest";
  * integer directly. That made AOE hits deal ~100x the intended damage to barriers,
  * instantly destroying them. This test pins the AOE path to the fractional contract.
  */
-
-/** Avoid executing real db/env when transitive imports touch `@/server/db`. */
-/**
- * insertAction only needs `checkFriendlyFire` (force pass) from process; it never calls
- * applyEffects. Override ONLY checkFriendlyFire — do NOT stub applyEffects. Under `bun test`
- * vi.mock merges the factory over the real module and the override is process-global, so stubbing
- * applyEffects here leaks into sibling suites that drive the real applyEffects (summon/poison/
- * used_tag_types damage-credit tests) and crashes them (newBattle.usersState undefined). Leaving
- * applyEffects real is inert here since this suite never calls it.
- */
-vi.mock("@/libs/combat/process", () => ({
-  checkFriendlyFire: vi.fn(() => true),
-}));
 
 import { insertAction } from "@/libs/combat/actions";
 import { getBattleGrid } from "@/libs/combat/util";

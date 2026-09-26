@@ -586,6 +586,19 @@ export type BattleEffect = ZodAllTags & {
   castThisRound: boolean;
   createdRound: number;
   villageId?: string | null;
+  fromType?:
+    | "jutsu"
+    | "armor"
+    | "accessory"
+    | "keystone"
+    | "item"
+    | "basic"
+    | "bloodline"
+    | "village"
+    | "skill"
+    | "ranked"
+    | "sageMode"
+    | "sageModeAfter";
   targetType?: "user" | "barrier";
   power?: number;
   highestOffence?: (typeof StatNames)[number];
@@ -613,19 +626,6 @@ export type UserEffect = BattleEffect & {
   targetId: string;
   fromEffectId?: string;
   fromGround?: boolean;
-  fromType?:
-    | "jutsu"
-    | "armor"
-    | "accessory"
-    | "keystone"
-    | "item"
-    | "basic"
-    | "bloodline"
-    | "village"
-    | "skill"
-    | "ranked"
-    | "sageMode"
-    | "sageModeAfter";
   elements?: ElementName[];
   cpSpent?: number;
   spSpent?: number;

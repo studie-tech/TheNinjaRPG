@@ -1,16 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 // Does using a GROUND-targeted item (e.g. Smoke Bomb) record it in `usedActions`? That array
 // is what buildCombatTrackerTasks reads for the use_specific_item_combat tracker. The reported
 // "used the item but it didn't count" objective targets a GROUND consumable, so this pins down
 // whether the real action pipeline captures such usage.
-
-// Override ONLY checkFriendlyFire — do NOT stub applyEffects (it leaks process-globally under
-// `bun test` into the real-applyEffects damage-credit suites and crashes them). insertAction
-// never calls applyEffects here, so leaving it real is inert.
-vi.mock("@/libs/combat/process", () => ({
-  checkFriendlyFire: vi.fn(() => true),
-}));
 
 import { insertAction } from "@/libs/combat/actions";
 import { getBattleGrid } from "@/libs/combat/util";

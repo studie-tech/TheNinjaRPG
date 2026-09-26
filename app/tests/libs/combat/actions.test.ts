@@ -1,16 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-/**
- * Keep AP helpers testable by forcing checkFriendlyFire to pass. Override ONLY checkFriendlyFire —
- * do NOT stub applyEffects. Under `bun test` vi.mock overrides the module process-globally, so
- * stubbing applyEffects here leaks into sibling suites that drive the real applyEffects (summon/
- * poison/used_tag_types damage-credit tests) and crashes them. These AP helpers never call
- * applyEffects, so leaving it real is inert.
- */
-vi.mock("@/libs/combat/process", () => ({
-  checkFriendlyFire: vi.fn(() => true),
-}));
-
 vi.mock("@/libs/hexgrid", () => ({
   getPossibleActionTiles: vi.fn((_action, _userHex, grid) => grid),
   PathCalculator: vi.fn(() => ({
