@@ -434,6 +434,7 @@ export default function MyJutsu() {
       <ContentBox
         title="Jutsu Management"
         subtitle={subtitle}
+        topRightCorntentBreakpoint="sm"
         bottomRightContent={
           <Button onClick={() => unequipAll()} disabled={isUnequipping}>
             <OctagonX className="mr-2 h-6 w-6" />
