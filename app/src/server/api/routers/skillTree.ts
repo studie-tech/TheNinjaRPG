@@ -30,6 +30,7 @@ import type { DrizzleClient } from "@/server/db";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUserFederalStatus } from "@/utils/paypal";
 import {
+  canAccessHiddenSkillTree,
   canChangeContent,
   canUnequipAllUsers,
   isStaffMember,
@@ -47,20 +48,33 @@ export const skillTreeRouter = createTRPCRouter({
   getAllNames: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get all skill names for selectors" } })
     .query(async ({ ctx }) => {
-      return await ctx.drizzle.query.skillTree.findMany({
-        columns: { id: true, name: true, skillType: true },
-        orderBy: (table, { asc }) => [asc(table.name)],
-      });
+      const [user, skills] = await Promise.all([
+        fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.skillTree.findMany({
+          columns: { id: true, name: true, skillType: true, hidden: true },
+          with: { folder: true },
+          orderBy: (table, { asc }) => [asc(table.name)],
+        }),
+      ]);
+      return skills
+        .filter((skill) => isSkillVisible(skill, canAccessHiddenSkillTree(user?.role)))
+        .map(({ id, name, skillType }) => ({ id, name, skillType }));
     }),
   // Get single skill by ID
   get: publicProcedure
     .meta({ mcp: { enabled: true, description: "Get a skill by ID" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
-      const skill = await ctx.drizzle.query.skillTree.findFirst({
-        where: eq(skillTree.id, input.id),
-      });
-      return skill;
+      const [user, skill] = await Promise.all([
+        fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.skillTree.findFirst({
+          where: eq(skillTree.id, input.id),
+          with: { folder: true },
+        }),
+      ]);
+      return skill && isSkillVisible(skill, canAccessHiddenSkillTree(user?.role))
+        ? skill
+        : undefined;
     }),
 
   // Get all skills for tree view
@@ -83,13 +97,17 @@ export const skillTreeRouter = createTRPCRouter({
       // Build where conditions using the generalized filter function
       const baseFilters = skillTreeDatabaseFilter(input || {});
 
-      const results = await ctx.drizzle.query.skillTree.findMany({
-        where: and(...baseFilters),
-        orderBy: [skillTree.tier, skillTree.name],
-        limit: limit,
-        offset: skip,
-        with: { folder: true },
-      });
+      const [user, skills] = await Promise.all([
+        fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.skillTree.findMany({
+          where: and(...baseFilters),
+          orderBy: [skillTree.tier, skillTree.name],
+          with: { folder: true },
+        }),
+      ]);
+      const results = skills
+        .filter((skill) => isSkillVisible(skill, canAccessHiddenSkillTree(user?.role)))
+        .slice(skip, skip + limit);
 
       const nextCursor = results.length < limit ? null : currentCursor + 1;
       return {
@@ -102,7 +120,19 @@ export const skillTreeRouter = createTRPCRouter({
   getUserSkills: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Get user's purchased skills" } })
     .query(async ({ ctx }) => {
-      return await fetchUserSkills(ctx.drizzle, ctx.userId);
+      const [user, skills] = await Promise.all([
+        fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
+      ]);
+      return {
+        skills: skills.filter((entry) =>
+          isSkillVisible(entry.skill, canAccessHiddenSkillTree(user?.role)),
+        ),
+        // Hidden activated skills still consume points even when their details are inaccessible.
+        usedSkillPoints: skills
+          .filter((entry) => entry.activated)
+          .reduce((total, entry) => total + entry.skill.costSkillPoints, 0),
+      };
     }),
 
   // Purchase a skill or activate an unlocked skill
@@ -118,13 +148,16 @@ export const skillTreeRouter = createTRPCRouter({
           userId: ctx.userId,
         }),
         ctx.drizzle.query.skillTree.findFirst({
-          where: and(eq(skillTree.id, input.skillId), eq(skillTree.hidden, false)),
+          where: eq(skillTree.id, input.skillId),
+          with: { folder: true },
         }),
         fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
 
       if (!user) return errorResponse("User not found");
-      if (!skill) return errorResponse("Skill not found");
+      if (!skill || !isSkillVisible(skill, canAccessHiddenSkillTree(user.role))) {
+        return errorResponse("Skill not found");
+      }
 
       // Get activated skill IDs (shared logic)
       const activatedSkillIds = userSkills
@@ -530,18 +563,13 @@ export const skillTreeRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Get all skill tree folders" } })
     .input(z.object({ includeHidden: z.boolean().optional() }).nullish())
     .query(async ({ ctx, input }) => {
-      // Run queries in parallel for efficiency
-      const [userResult, folders] = await Promise.all([
-        ctx.userId
-          ? fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId })
-          : Promise.resolve({ user: null }),
+      const [user, folders] = await Promise.all([
+        fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.skillTreeFolder.findMany({
           orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
         }),
       ]);
-
-      // Check if user is staff before honoring includeHidden
-      const isStaff = userResult.user ? canChangeContent(userResult.user.role) : false;
+      const isStaff = canAccessHiddenSkillTree(user?.role);
 
       // Filter out hidden folders unless staff requested them
       if (!input?.includeHidden || !isStaff) {
@@ -555,17 +583,25 @@ export const skillTreeRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Get skill folder progress stats" } })
     .query(async ({ ctx }) => {
       // Fetch all data in parallel for efficiency
-      const [folders, allSkills, userSkillsData] = await Promise.all([
+      const [allFolders, skills, userSkillsData, user] = await Promise.all([
         ctx.drizzle.query.skillTreeFolder.findMany({
-          where: eq(skillTreeFolder.hidden, false),
           orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
         }),
         ctx.drizzle.query.skillTree.findMany({
-          where: eq(skillTree.hidden, false),
-          columns: { id: true, folderId: true },
+          columns: { id: true, folderId: true, hidden: true, skillType: true },
+          with: { folder: true },
         }),
         fetchUserSkills(ctx.drizzle, ctx.userId),
+        fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
       ]);
+      const includeHidden = canAccessHiddenSkillTree(user?.role);
+      const folders = allFolders.filter((folder) => includeHidden || !folder.hidden);
+      const ownedIds = new Set(userSkillsData.map((entry) => entry.skillId));
+      const allSkills = skills.filter(
+        (skill) =>
+          isSkillVisible(skill, includeHidden) &&
+          (skill.skillType !== "SPECIAL" || ownedIds.has(skill.id)),
+      );
 
       // Get activated skill IDs (only activated skills count toward progression)
       const ownedSkillIds = new Set(
@@ -758,11 +794,9 @@ export const skillTreeDatabaseFilter = (input: SkillTreeFilteringSchema) => {
     filters.push(eq(skillTree.costSkillPoints, input.costSkillPoints));
   }
 
-  // Default to false if hidden is undefined (show non-hidden skills by default)
+  // Viewer permissions are enforced separately from the requested hidden filter.
   if (input.hidden !== undefined) {
     filters.push(eq(skillTree.hidden, input.hidden));
-  } else {
-    filters.push(eq(skillTree.hidden, false));
   }
 
   // Filter by folder ID
@@ -834,6 +868,22 @@ export const getFreeResetAmount = (user: UserData) => {
 export const fetchUserSkills = async (client: DrizzleClient, userId: string) => {
   return await client.query.userSkill.findMany({
     where: eq(userSkill.userId, userId),
-    with: { skill: true },
+    with: { skill: { with: { folder: true } } },
   });
 };
+
+const fetchSkillTreeViewer = async (
+  client: DrizzleClient,
+  userId: string | null | undefined,
+) =>
+  userId
+    ? client.query.userData.findFirst({
+        where: eq(userData.userId, userId),
+        columns: { role: true },
+      })
+    : undefined;
+
+const isSkillVisible = (
+  skill: { hidden: boolean; folder: { hidden: boolean } | null },
+  includeHidden: boolean,
+) => includeHidden || (!skill.hidden && !skill.folder?.hidden);

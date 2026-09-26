@@ -27,6 +27,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { useRequiredUserData } from "@/utils/UserContext";
+import { canAccessHiddenSkillTree } from "@/utils/permissions";
 import { getUserElements } from "@/validators/user";
 
 // Main StrengthWeaknesses Component
@@ -411,6 +412,7 @@ interface SkillsTabProps {
 }
 
 export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
+  const includeHidden = canAccessHiddenSkillTree(userData.role);
   // State for folder UI
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -429,9 +431,10 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
     enabled: !!userData,
   });
 
-  const { data: folders } = api.skillTree.getAllFolders.useQuery(undefined, {
-    enabled: !!userData,
-  });
+  const { data: folders } = api.skillTree.getAllFolders.useQuery(
+    { includeHidden },
+    { enabled: !!userData },
+  );
 
   const { data: folderStats } = api.skillTree.getFolderStats.useQuery(undefined, {
     enabled: !!userData,
@@ -455,13 +458,10 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
 
   // Skill tree derived data
   const allSkillsData = allSkills?.data ?? [];
-  const ownedSkills = userSkills || [];
+  const ownedSkills = userSkills?.skills ?? [];
   const activatedSkills = ownedSkills.filter((us) => us.activated);
   const totalSkillPoints = userData?.skillPoints || 0;
-  const usedSkillPoints = activatedSkills.reduce(
-    (total, userSkill) => total + userSkill.skill.costSkillPoints,
-    0,
-  );
+  const usedSkillPoints = userSkills?.usedSkillPoints ?? 0;
 
   // Get selected folder
   const selectedFolder = folders?.find((f) => f.id === selectedFolderId) ?? null;
@@ -540,12 +540,13 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
 
       {/* Folder Modal */}
       <SkillTreeFolderModal
+        includeHidden={includeHidden}
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
         folder={selectedFolder}
         folders={folders ?? []}
         allSkills={allSkillsData}
-        userSkills={userSkills ?? []}
+        userSkills={ownedSkills}
         userSkillPoints={totalSkillPoints - usedSkillPoints}
         onPurchaseSkill={(skillId) => purchaseSkill({ skillId })}
         onNavigateToFolder={handleNavigateToFolder}

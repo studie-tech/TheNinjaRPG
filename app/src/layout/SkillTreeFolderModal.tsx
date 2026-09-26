@@ -10,6 +10,7 @@ import Modal from "@/layout/Modal";
 import { parseHtml } from "@/utils/parse";
 
 interface SkillTreeFolderModalProps {
+  includeHidden?: boolean;
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   folder: SkillTreeFolder | null;
@@ -24,6 +25,7 @@ interface SkillTreeFolderModalProps {
 }
 
 export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
+  includeHidden = false,
   isOpen,
   setIsOpen,
   folder,
@@ -51,7 +53,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
   const folderSkills = allSkills.filter((s) => {
     if (!folder) return false;
     if (s.folderId !== folder.id) return false;
-    if (s.hidden) return false;
+    if (!includeHidden && (s.hidden || folder.hidden)) return false;
     // Hide SPECIAL skills unless user owns them
     if (s.skillType === "SPECIAL" && !ownedSkillIds.includes(s.id)) return false;
     // Apply effect filter if selected

@@ -32,6 +32,18 @@ jobs:
       - name: run tests
         run: bun test
         working-directory: ./app
+        env:
+          # Test preloads validate app configuration before any suite runs. Use local
+          # values so pull requests without repository secrets can initialize it.
+          NODE_ENV: test
+          NEXT_PUBLIC_BASE_URL: "http://localhost:3000"
+          NEXT_PUBLIC_PUSHER_APP_KEY: "test-key"
+          NEXT_PUBLIC_PUSHER_APP_CLUSTER: "mt1"
+          # Moderator imports construct the SDK client before tests can stub calls.
+          OPENAI_API_KEY: "test-placeholder-not-a-real-key"
+          # The shared test database proxy routes SQL to TEST_MYSQL_URL; this URL
+          # only initializes the otherwise unused PlanetScale client.
+          DATABASE_URL: "http://127.0.0.1:1"
       - name: run build
         run: bun run build
         working-directory: ./app
