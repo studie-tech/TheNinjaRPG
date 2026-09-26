@@ -438,7 +438,8 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
   };
 
   const handleMusicToggle = async (checked: boolean) => {
-    await setAudioEnabled(checked);
+    // iOS can leave audio.play() pending; preference saving must not wait for it.
+    void setAudioEnabled(checked);
     if (userData) {
       updatePreferences({
         preferredStat: userData.preferredStat ?? null,
