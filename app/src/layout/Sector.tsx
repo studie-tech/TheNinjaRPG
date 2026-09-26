@@ -2102,11 +2102,13 @@ const Sector: React.FC<SectorProps> = (props) => {
       camera.updateProjectionMatrix();
       cameraRef.current = camera;
 
-      // Draw every sector of the 3x3 window with the full pipeline, each
+      // Draw the sectors of the 3x3 window with the full pipeline, each
       // wrapped in a group offset by whole-sector spans so the world reads
-      // as one continuous map. Later window changes patch this world
-      // incrementally (applyWindowToScene); a full rebuild only happens on
-      // mount, attack-mode toggles or a re-anchor after global travel.
+      // as one continuous map. Only the character's sector and the window
+      // center are drawn here; applyWindowToScene adds the neighbors one per
+      // task, so a build never blocks input for the whole window. Later
+      // window changes patch this world the same way; a full rebuild only
+      // happens on mount, attack-mode toggles or a re-anchor after global travel.
       const registry = worldRegistryRef.current;
       const buildWindow = sectorWindowRef.current;
       registry.wrappers.clear();
@@ -2124,7 +2126,10 @@ const Sector: React.FC<SectorProps> = (props) => {
       )?.map;
       if (centerMapNow) registry.setBackground(centerMapNow);
       buildWindow.sectors.forEach((entry) => {
-        buildSectorIntoWorld(entry, null);
+        const isCenter = entry.dx === 0 && entry.dy === 0;
+        if (isCenter || entry.sector === sectorRef.current) {
+          buildSectorIntoWorld(entry, null);
+        }
       });
       const centerRender =
         registry.entries.get(sectorRef.current) ??
@@ -2139,6 +2144,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       pathFinderRef.current = new PathCalculator(gridRef.current);
       refreshRenderCollections();
       rebuildWindowNav();
+      const neighborsTimer = setTimeout(() => void applyWindowToScene(), 0);
 
       // Intersections & highlights from interactions
       let highlights = new Set<string>();
@@ -2601,6 +2607,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       // Remove the mouseover listener
       activeSceneTeardownRef.current = () => {
         performanceMonitor.cancelFrame(animationId);
+        clearTimeout(neighborsTimer);
         if (zoomTimeout) clearTimeout(zoomTimeout);
 
         // Remove event listeners safely

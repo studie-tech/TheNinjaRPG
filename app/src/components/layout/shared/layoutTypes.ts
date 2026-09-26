@@ -27,9 +27,9 @@ export interface GameLayoutRenderProps {
   systems: NavBarDropdownLink[];
   location?: NavBarDropdownLink;
   leftSideBarOpen: boolean;
-  setLeftSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  onLeftSideBarOpenChange: (open: boolean) => void;
   rightSideBarOpen: boolean;
-  setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  onRightSideBarOpenChange: (open: boolean) => void;
   rightSideBarRef: React.RefObject<HTMLDivElement | null>;
   mobileNavConfig: MobileNavConfig;
   signedInIcons: React.ReactNode;

@@ -45,9 +45,9 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   shownNotifications,
   location,
   leftSideBarOpen,
-  setLeftSideBarOpen,
+  onLeftSideBarOpenChange,
   rightSideBarOpen,
-  setRightSideBarOpen,
+  onRightSideBarOpenChange,
   rightSideBarRef,
   mobileNavConfig,
   signedInIcons,
@@ -144,7 +144,7 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
             <div className="fixed inset-x-0 top-0 z-50 border-sky-200/15 border-b bg-black/55 shadow-2xl shadow-black/35 backdrop-blur-md md:hidden">
               <div className="relative mx-auto flex min-h-[72px] w-[calc(100%-24px)] items-center justify-between gap-3">
                 <div className="z-10 flex shrink-0 justify-start gap-2">
-                  <Sheet open={leftSideBarOpen} onOpenChange={setLeftSideBarOpen}>
+                  <Sheet open={leftSideBarOpen} onOpenChange={onLeftSideBarOpenChange}>
                     <SheetTrigger
                       className={PIXEL_MOBILE_HEADER_BUTTON_STYLE}
                       aria-label="Open player menu"
@@ -207,7 +207,10 @@ const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                       <CircleHelp className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
                     </span>
                   </LowerRightHelpBtn>
-                  <Sheet open={rightSideBarOpen} onOpenChange={setRightSideBarOpen}>
+                  <Sheet
+                    open={rightSideBarOpen}
+                    onOpenChange={onRightSideBarOpenChange}
+                  >
                     <SheetTrigger
                       className={PIXEL_MOBILE_HEADER_BUTTON_STYLE}
                       aria-label="Open game menu"
