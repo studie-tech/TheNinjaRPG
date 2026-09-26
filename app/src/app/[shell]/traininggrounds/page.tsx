@@ -306,12 +306,9 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
   const showSensei = userData.rank === "GENIN" && userData.senseiId;
   const showStudents = canSensei && students && students.length > 0;
 
-  // If loading
-  if (isPending) return <Loader explanation="Processing..." />;
-
   // Render
   return (
-    <>
+    <div className="relative">
       {/* Show Students */}
       {showStudents && (
         <ContentBox title="Students" subtitle={`Past and present`} initialBreak={true}>
@@ -405,7 +402,13 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
           )}
         </ContentBox>
       )}
-    </>
+      {/* Overlay rather than replace the sections, so nothing around them moves */}
+      {isPending && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
+          <Loader explanation="Processing..." />
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -493,7 +496,6 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
   const isPending = isStarting || isStopping || isChaning;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
-  if (isPending) return <Loader explanation="Processing..." />;
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
   const iconClassName = "w-5 h-5 absolute top-1 right-1 text-blue-500";
@@ -537,7 +539,9 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
         <NavTabs
           current={userData.trainingSpeed}
           options={TrainingSpeeds}
-          setValue={(value) => changeSpeed({ speed: value as TrainingSpeed })}
+          setValue={(value) => {
+            if (!isPending) changeSpeed({ speed: value as TrainingSpeed });
+          }}
         />
       }
     >
@@ -654,6 +658,12 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               )}
             </div>
           </div>
+        </div>
+      )}
+      {/* Overlay rather than replace the box, so the sections below keep their place */}
+      {isPending && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
+          <Loader explanation="Processing..." />
         </div>
       )}
     </ContentBox>

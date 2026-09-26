@@ -329,7 +329,8 @@ const Combat: React.FC<CombatProps> = (props) => {
       onSuccess: (result) => {
         if (result.success && result.battleId) {
           setBattleAtom(undefined);
-          setBattleState({ battle: undefined, result: null, isPending: true });
+          // The finished battle and its result stay in place until the next battle
+          // loads, so the battlefield keeps its reserved size and nothing turns live.
           void updateUser({
             status: "BATTLE",
             battleId: result.battleId,

@@ -23,6 +23,7 @@ import {
   getBattlefieldHeightRatio,
   resolveControlledActorId,
 } from "@/libs/combat/util";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import {
   combatActionIdAtom,
@@ -87,7 +88,13 @@ export default function CombatPage() {
     : "grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]";
   const actionAspect = config.useSmallActions ? "aspect-square" : undefined;
   const showActionLabels = !config.useSmallActions;
-  const isInBattle = userData?.status === "BATTLE";
+  // A finished battle keeps its timer and actions in place, dimmed and inert, until the
+  // player leaves: neither the result nor the status leaving BATTLE after it moves the page.
+  const isInBattle = userData?.status === "BATTLE" || !!results;
+  // After "Go Again" the finished battle is held in state until the next one's data is
+  // applied; keep the scene back until then rather than remount the finished battle.
+  const isBattleLoading =
+    isLoading || (!!data?.battle && data.battle.id !== battle?.id);
 
   // Calculate number of unread actions
   const unreadActions = battle?.version
@@ -207,8 +214,9 @@ export default function CombatPage() {
     }
     return (
       <div
-        className="flex flex-row items-center gap-2"
+        className={cn("flex flex-row items-center gap-2", results && "opacity-50")}
         id="tutorial-combat-action-timer"
+        inert={!!results}
       >
         <ActionTimer
           action={actions.find((a) => a.id === actionId)}
@@ -227,6 +235,7 @@ export default function CombatPage() {
     user,
     isInBattle,
     battleState,
+    results,
     actions,
     actionId,
     userId,
@@ -249,60 +258,61 @@ export default function CombatPage() {
             : undefined
         }
       >
-        {!isLoading && combat}
+        {!isBattleLoading && combat}
         {!userData && <Loader explanation="Loading User Data" />}
-        {isLoading && <Loader explanation="Loading Battle Data" />}
+        {isBattleLoading && <Loader explanation="Loading Battle Data" />}
         {userData && !results && !userData.battleId && (
           <p className="p-3">You are not in any battle</p>
         )}
       </div>
     );
-  }, [isLoading, combat, userData, results, battle]);
+  }, [isBattleLoading, combat, userData, results, battle]);
 
   const renderActions = useCallback(() => {
     if (!isInBattle || !battle) return null;
-    if (isAutoCombatActive && !results) {
-      return (
-        <AutoCombatPanel
-          isToggling={isTogglingAutoCombat}
-          onTakeControl={() =>
-            toggleAutoCombat({ battleId: battle.id, enabled: false })
-          }
-        />
-      );
-    }
     return (
-      <>
-        <ActionSelector
-          showInfoIcon={true}
-          items={actions}
-          currentRound={battle.round}
-          className="p-1"
-          showBgColor={true}
-          eagerImages={true}
-          showLabels={showActionLabels}
-          selectedId={actionId}
-          combatMode={true}
-          userActionPoints={user?.actionPoints}
-          battle={battle}
-          userId={controlledActorId}
-          gridClassNameOverwrite={actionGridClass}
-          aspectRatioClass={actionAspect}
-          onClick={handleActionClick}
-        />
-        {canToggleAutoCombat && !isAutoCombatActive && !results && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-muted-foreground"
-            disabled={isTogglingAutoCombat}
-            onClick={() => toggleAutoCombat({ battleId: battle.id, enabled: true })}
-          >
-            <Bot className="mr-2 h-4 w-4" />
-            Let my AI profile finish this battle
-          </Button>
+      <div className={cn(results && "opacity-50")} inert={!!results}>
+        {isAutoCombatActive ? (
+          <AutoCombatPanel
+            isToggling={isTogglingAutoCombat}
+            onTakeControl={() =>
+              toggleAutoCombat({ battleId: battle.id, enabled: false })
+            }
+          />
+        ) : (
+          <>
+            <ActionSelector
+              showInfoIcon={true}
+              items={actions}
+              currentRound={battle.round}
+              className="p-1"
+              showBgColor={true}
+              eagerImages={true}
+              showLabels={showActionLabels}
+              selectedId={actionId}
+              combatMode={true}
+              userActionPoints={user?.actionPoints}
+              battle={battle}
+              userId={controlledActorId}
+              gridClassNameOverwrite={actionGridClass}
+              aspectRatioClass={actionAspect}
+              onClick={handleActionClick}
+            />
+            {canToggleAutoCombat && !results && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-muted-foreground"
+                disabled={isTogglingAutoCombat}
+                onClick={() => toggleAutoCombat({ battleId: battle.id, enabled: true })}
+              >
+                <Bot className="mr-2 h-4 w-4" />
+                Let my AI profile finish this battle
+              </Button>
+            )}
+          </>
         )}
-      </>
+      </div>
     );
   }, [
     isInBattle,
