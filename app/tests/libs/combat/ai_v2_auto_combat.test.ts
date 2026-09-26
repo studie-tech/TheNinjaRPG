@@ -119,10 +119,25 @@ describe("performAIaction auto combat", () => {
 
   it("meditates back to fighting shape when attacks are unaffordable", () => {
     const grid = new Grid(TerrainHex, rectangle({ width: 10, height: 10 }));
-    // Out of stamina (attacks unaffordable) but enough chakra to meditate
+    // Out of stamina, so attacks are unaffordable.
     const human = mkHuman({ isAutoCombat: true, curStamina: 0, curHealth: 5000 });
     const { nextActionId } = performAIaction(mkBattle(human), grid, "user_h1");
     expect(nextActionId).toBe("meditate");
+  });
+
+  it("recovers an exhausted Student rather than idling indefinitely", () => {
+    const grid = new Grid(TerrainHex, rectangle({ width: 10, height: 10 }));
+    const human = mkHuman({
+      isAutoCombat: true,
+      rank: "STUDENT",
+      curChakra: 0,
+      curStamina: 0,
+    });
+    const { nextBattle, nextActionId } = performAIaction(mkBattle(human), grid, "user_h1");
+    const after = nextBattle.usersState.find((u) => u.userId === "user_h1");
+    expect(nextActionId).toBe("meditate");
+    expect(after?.curChakra).toBeGreaterThan(0);
+    expect(after?.curStamina).toBeGreaterThan(0);
   });
 
   it("survives a turn taken after the last opponent has died", () => {
