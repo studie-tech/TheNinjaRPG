@@ -112,11 +112,11 @@ export const availableUserActions = (
   // Concatenate all actions
   let availableActions = [
     ...(basicMoves && !isStealth ? [basicActions.basicAttack] : []),
+    ...(basicMoves && !isStealth ? [basicActions.basicMeditate] : []),
     ...(!isImmobilized ? [basicActions.basicMove] : []),
     ...(basicMoves && !isStealth && !isStudent
       ? [
           basicActions.basicHeal,
-          basicActions.basicMeditate,
           basicActions.basicClear,
           basicActions.basicCleanse,
           basicActions.basicOffensiveStance,
@@ -565,7 +565,7 @@ export const getDefaultBasicActions = (
       target: "SELF" as const,
       method: "SINGLE" as const,
       healthCost: 0,
-      chakraCost: 10,
+      chakraCost: 0,
       staminaCost: 0,
       actionCostPerc: 20,
       range: 0,
