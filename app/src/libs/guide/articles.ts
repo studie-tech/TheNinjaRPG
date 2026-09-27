@@ -87,7 +87,7 @@ export const SYSTEM_GUIDE_ARTICLES: GuideSeedArticle[] = [
       ),
       h2("Train and spend ryo"),
       ul([
-        `Train offensive taijutsu (or another offence) in short 15-minute bouts when you can.`,
+        `Train Offence in short 15-minute bouts when you can, and a mastery such as Taijutsu alongside it to unlock jutsu and gear of that type.`,
         `Train a first jutsu from the training grounds list. Rank and elements gate later techniques.`,
         `Buy starter weapons such as shuriken in the village item shop.`,
         `Bank spare ryo so it is not lost if you are defeated.`,

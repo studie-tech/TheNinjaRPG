@@ -199,3 +199,56 @@ WHERE JSON_CONTAINS_PATH(
 	'$.defender.ninjutsuOffence', '$.defender.genjutsuOffence', '$.defender.taijutsuOffence', '$.defender.bukijutsuOffence',
 	'$.defender.ninjutsuDefence', '$.defender.genjutsuDefence', '$.defender.taijutsuDefence', '$.defender.bukijutsuDefence'
 );
+-- Seeded guide articles and content are never overwritten, so text describing the per-type
+-- stats is corrected here. Each update is guarded on the old wording and leaves a row that
+-- was edited since untouched.
+UPDATE `GuideArticle`
+SET `content` = REPLACE(`content`, 'Train offensive taijutsu (or another offence) in short 15-minute bouts when you can.', 'Train Offence in short 15-minute bouts when you can, and a mastery such as Taijutsu alongside it to unlock jutsu and gear of that type.')
+WHERE `slug` = 'getting-started' AND `content` LIKE '%Train offensive taijutsu (or another offence) in short 15-minute bouts when you can.%';
+-- Jutsu text that names a removed per-type stat, or credits a per-type stat buff or debuff
+-- to that type although it now moves the shared Offence.
+UPDATE `Jutsu`
+SET `description` = REPLACE(`description`, 'crippling their taijutsu and bukijutsu power', 'crippling their Offence, Strength and Speed')
+WHERE `id` = 'hdlYuZCWCXn02GUPBEzBk' AND `description` LIKE '%crippling their taijutsu and bukijutsu power%';
+UPDATE `Jutsu`
+SET `description` = REPLACE(`description`, 'reducing their Genjutsu capabilities', 'reducing their Offence, Intelligence and Willpower')
+WHERE `id` = '_bb_t15T2F8E6OBEk-S3U' AND `description` LIKE '%reducing their Genjutsu capabilities%';
+UPDATE `Jutsu`
+SET `battleDescription` = REPLACE(`battleDescription`, 'diminishing their Genjutsu prowess', 'diminishing their Offence, Intelligence and Willpower')
+WHERE `id` = '_bb_t15T2F8E6OBEk-S3U' AND `battleDescription` LIKE '%diminishing their Genjutsu prowess%';
+UPDATE `Jutsu`
+SET `description` = REPLACE(`description`, 'genjutsu offense, intelligence, and willpower', 'Offence, Intelligence and Willpower')
+WHERE `id` = 'i_tI_-M-GUfQNn25E7dte' AND `description` LIKE '%genjutsu offense, intelligence, and willpower%';
+UPDATE `Jutsu`
+SET `battleDescription` = REPLACE(`battleDescription`, 'genjutsu offense, intelligence, and willpower', 'Offence, Intelligence and Willpower')
+WHERE `id` = 'i_tI_-M-GUfQNn25E7dte' AND `battleDescription` LIKE '%genjutsu offense, intelligence, and willpower%';
+UPDATE `Jutsu`
+SET `battleDescription` = REPLACE(`battleDescription`, 'boosting their ninjutsu potency', 'boosting their Offence')
+WHERE `id` = '8762uSiA_XClK36cuE9Cw' AND `battleDescription` LIKE '%boosting their ninjutsu potency%';
+UPDATE `Jutsu`
+SET `description` = REPLACE(`description`, 'Bukijutsu, Strength, and Speed', 'Offence, Strength and Speed')
+WHERE `id` = 'sBc4_bIw5xCB-39X6FcJy' AND `description` LIKE '%Bukijutsu, Strength, and Speed%';
+UPDATE `Jutsu`
+SET `battleDescription` = REPLACE(`battleDescription`, 'heightening their Bukijutsu might, strength, and speed', 'heightening their Offence, Strength and Speed')
+WHERE `id` = 'sBc4_bIw5xCB-39X6FcJy' AND `battleDescription` LIKE '%heightening their Bukijutsu might, strength, and speed%';
+UPDATE `Jutsu`
+SET `description` = REPLACE(`description`, 'hand-to-hand power', 'Offence, Strength and Speed')
+WHERE `id` = 'x5FfBkac3YfROuNojxU8k' AND `description` LIKE '%hand-to-hand power%';
+UPDATE `Jutsu`
+SET `battleDescription` = REPLACE(`battleDescription`, 'sharpening their Taijutsu ability', 'sharpening their Offence')
+WHERE `id` = 'x5FfBkac3YfROuNojxU8k' AND `battleDescription` LIKE '%sharpening their Taijutsu ability%';
+UPDATE `Jutsu`
+SET `description` = REPLACE(`description`, 'bukijutsu offense', 'bukijutsu damage')
+WHERE `id` = '_BTsbIMz0WUWczPp9iRyW' AND `description` LIKE '%bukijutsu offense%';
+UPDATE `Jutsu`
+SET `description` = REPLACE(`description`, 'genjutsu defense, intelligence, and willpower', 'defenses')
+WHERE `id` = 'eJISnE5IrvC09FuoeuQ5X' AND `description` LIKE '%genjutsu defense, intelligence, and willpower%';
+UPDATE `Jutsu`
+SET `battleDescription` = REPLACE(`battleDescription`, 'weakening their Bukijutsu defenses', 'weakening their defenses')
+WHERE `id` = 'iioSrLkg_-jlX5xIycMYr' AND `battleDescription` LIKE '%weakening their Bukijutsu defenses%';
+UPDATE `Jutsu`
+SET `battleDescription` = REPLACE(`battleDescription`, ' by weakening their ninjutsu defense, intelligence, and willpower', '')
+WHERE `id` = 'mdIWNxovAIVj_8esBaYGX' AND `battleDescription` LIKE '% by weakening their ninjutsu defense, intelligence, and willpower%';
+UPDATE `Jutsu`
+SET `battleDescription` = REPLACE(`battleDescription`, ' by weakening their intelligence, willpower, and ninjutsu defenses', '')
+WHERE `id` = 'TI1JQAG1ltx_uLHE9-UUs' AND `battleDescription` LIKE '% by weakening their intelligence, willpower, and ninjutsu defenses%';
