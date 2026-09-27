@@ -54,14 +54,24 @@ export const meetsEvolutionStatRequirements = (
 /**
  * Every stat gate a jutsu/item can carry, with a bare display name. The single source for
  * the content editors and for the requirement lists on the jutsu and item detail views;
- * callers add their own prefix ("Req. ", "Required ").
+ * callers add their own prefix ("Req. ", "Required "). Mastery gates also gate use; the
+ * `evolveOnly` general gates are checked only when evolving into the content.
  */
 export const EVOLUTION_STAT_FIELDS: {
   id: MasteryRequirementField | GeneralRequirementField;
   label: string;
+  evolveOnly: boolean;
 }[] = [
-  ...MASTERY_REQUIREMENT_FIELDS.map(([id, , label]) => ({ id, label })),
-  ...GENERAL_REQUIREMENT_FIELDS.map(([id, , label]) => ({ id, label })),
+  ...MASTERY_REQUIREMENT_FIELDS.map(([id, , label]) => ({
+    id,
+    label,
+    evolveOnly: false,
+  })),
+  ...GENERAL_REQUIREMENT_FIELDS.map(([id, , label]) => ({
+    id,
+    label,
+    evolveOnly: true,
+  })),
 ];
 
 export type EvolutionGraphValidation = { ok: true } | { ok: false; message: string };

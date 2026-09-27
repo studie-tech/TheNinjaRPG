@@ -424,6 +424,10 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   // `userData.sageMasteryExperience`, which is a different thing from the Sage Mastery
   // stat requirement of the same name on Item/Jutsu. Discriminate before rendering either.
   const isSageMode = "activationRounds" in item;
+  // General stat gates are listed only where evolving checks them
+  const isEvolutionRow =
+    ("parentJutsuId" in item && !!item.parentJutsuId) ||
+    ("parentItemId" in item && !!item.parentItemId);
   const { data: jutsuEvolutions } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: item.id },
     { enabled: isJutsuItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
@@ -1000,14 +1004,22 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Evolution</b>: Yes (evolves from a parent item)
                 </p>
               )}
-              {EVOLUTION_STAT_FIELDS.filter(({ id }) => {
+              {EVOLUTION_STAT_FIELDS.filter(({ id, evolveOnly }) => {
                 if (id === "requiredSageMastery" && isSageMode) return false;
+                if (evolveOnly && !isEvolutionRow) return false;
                 return (item as unknown as Record<string, unknown>)[id] != null;
-              }).map(({ id, label }) => (
-                <p key={id}>
-                  <b>Req. {label}</b>: {(item as unknown as Record<string, number>)[id]}
-                </p>
-              ))}
+              }).map(({ id, label, evolveOnly }) => {
+                const value = (item as unknown as Record<string, number>)[id];
+                return evolveOnly ? (
+                  <p key={id}>
+                    <b>Req. to evolve</b>: {value} {label}
+                  </p>
+                ) : (
+                  <p key={id}>
+                    <b>Req. {label}</b>: {value}
+                  </p>
+                );
+              })}
               {"maxLevel" in item && item.maxLevel && (
                 <p>
                   <b>Max Level</b>: {item.maxLevel}

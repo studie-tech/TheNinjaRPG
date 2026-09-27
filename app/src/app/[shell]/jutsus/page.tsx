@@ -761,11 +761,17 @@ export default function MyJutsu() {
                         userjutsu.finishTraining && userjutsu.finishTraining > now
                           ? userjutsu.level - 1
                           : userjutsu.level;
+                      // No userItems: evolveJutsu does not check the weapon
+                      const evolveWarning = !userData
+                        ? ""
+                        : jutsuRequirementWarning(evo, userData) ||
+                          (canEvolveJutsu(evo, userData)
+                            ? ""
+                            : "You do not meet the stat requirements for this evolution.");
                       const canEvolve =
                         !!userData &&
                         effectiveLevel >= JUTSU_TRAIN_LEVEL_CAP &&
-                        canEvolveJutsu(evo, userData) &&
-                        !jutsuRequirementWarning(evo, userData, userItems);
+                        !evolveWarning;
                       return (
                         <Confirm
                           key={evo.id}
@@ -828,6 +834,9 @@ export default function MyJutsu() {
                               Required {label}: <b>{evo[id]}</b>
                             </p>
                           ))}
+                          {evolveWarning && (
+                            <p className="text-destructive text-sm">{evolveWarning}</p>
+                          )}
                         </Confirm>
                       );
                     })}

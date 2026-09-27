@@ -1441,6 +1441,7 @@ export const item = mysqlTable(
     requiredBukijutsuMastery: int("requiredBukijutsuMastery"),
     requiredBloodlineMastery: int("requiredBloodlineMastery"),
     requiredSageMastery: int("requiredSageMastery"),
+    // General stat gates, checked only when evolving into this item
     requiredStrength: int("requiredStrength"),
     requiredSpeed: int("requiredSpeed"),
     requiredIntelligence: int("requiredIntelligence"),
@@ -1680,6 +1681,7 @@ export const jutsu = mysqlTable(
     requiredBukijutsuMastery: int("requiredBukijutsuMastery"),
     requiredBloodlineMastery: int("requiredBloodlineMastery"),
     requiredSageMastery: int("requiredSageMastery"),
+    // General stat gates, checked only when evolving into this jutsu
     requiredStrength: int("requiredStrength"),
     requiredSpeed: int("requiredSpeed"),
     requiredIntelligence: int("requiredIntelligence"),
