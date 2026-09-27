@@ -1689,6 +1689,23 @@ export const actSchema = z.object({
   generalTypes: z.array(z.enum(GeneralTypes)).prefault(["Strength"]),
 });
 
+/** A player's real level and experience, which can exceed what their stats sum to */
+export const loadedProgressSchema = z.object({
+  level: z.number().int().min(1),
+  experience: z.number().min(0),
+});
+export type LoadedProgress = z.infer<typeof loadedProgressSchema>;
+
+/** Saved damage simulator state; progress is present when a player loaded their own stats */
+export const damageSimulationStateSchema = z.object({
+  attacker: statSchema,
+  defender: statSchema,
+  action: actSchema,
+  attackerProgress: loadedProgressSchema.optional(),
+  defenderProgress: loadedProgressSchema.optional(),
+});
+export type DamageSimulationState = z.infer<typeof damageSimulationStateSchema>;
+
 export const confSchema = z
   .object({
     stats_scaling: z.coerce.number().min(0),

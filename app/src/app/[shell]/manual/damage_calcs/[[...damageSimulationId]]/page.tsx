@@ -34,7 +34,13 @@ import { calcHP, calcLevel } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import { canModifyCombatSettings } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import { actSchema, confSchema, statSchema } from "@/validators/combat";
+import {
+  actSchema,
+  confSchema,
+  type DamageSimulationState,
+  type LoadedProgress,
+  statSchema,
+} from "@/validators/combat";
 
 // Default user
 type StatSchemaInput = z.input<typeof statSchema>;
@@ -245,12 +251,12 @@ export default function Simulator(props: {
             })
             .filter((e) => e.active === 1)
             .map((entry, i) => {
-              const { attacker, defender, action } = entry.state as {
-                attacker: StatSchemaOutput;
-                defender: StatSchemaOutput;
-                action: ActSchemaOutput;
-              };
-              const stateDmg = getDamage(attacker, defender, action);
+              const { attacker, defender, action, attackerProgress, defenderProgress } =
+                entry.state as DamageSimulationState;
+              const stateDmg = getDamage(attacker, defender, action, {
+                attacker: attackerProgress,
+                defender: defenderProgress,
+              });
               return {
                 data: [{ x: i + 1, y: stateDmg }],
                 backgroundColor: colors[entry.colorId % colors.length],
@@ -287,21 +293,20 @@ export default function Simulator(props: {
         attacker: attValues,
         defender: defValues,
         action: actValues,
+        attackerProgress: attProgress,
+        defenderProgress: defProgress,
       }),
     (errors) => console.error(errors),
   );
 
   // Handle inserting historical entry into form
   const activateEntry = (entry: DamageSimulation) => {
-    const { attacker, defender, action } = entry.state as {
-      attacker: StatSchemaOutput;
-      defender: StatSchemaOutput;
-      action: ActSchemaOutput;
-    };
+    const { attacker, defender, action, attackerProgress, defenderProgress } =
+      entry.state as DamageSimulationState;
     let statKey: keyof typeof attacker;
     let actKey: keyof typeof action;
-    setAttProgress(undefined);
-    setDefProgress(undefined);
+    setAttProgress(attackerProgress);
+    setDefProgress(defenderProgress);
     for (statKey in attacker) {
       attForm.setValue(statKey, attacker[statKey]);
     }
@@ -719,7 +724,3 @@ const UserInput: React.FC<UserInputProps> = (props) => {
     });
   return <Form {...selectForm}>{fields}</Form>;
 };
-
-/** A player's real level and experience, kept from loading their own stats until a
- * saved calculation replaces the form. */
-type LoadedProgress = { level: number; experience: number };
