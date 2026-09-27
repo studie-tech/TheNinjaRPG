@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Jutsu } from "@/drizzle/schema";
-import { effectiveMasteries } from "@/libs/mastery";
-import { canTrainJutsu } from "@/libs/train";
+import { jutsuRequirementWarning } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import type { ZodAllTags } from "@/validators/combat";
+
+// Goes through jutsuRequirementWarning, not canUseJutsu: tests/libs/jutsu.test.ts stubs
+// canUseJutsu for the whole bun run.
 
 const jutsu = {
   id: "gated",
@@ -43,17 +45,13 @@ const ninjutsuBuff = {
   calculation: "static",
 } as unknown as ZodAllTags;
 
-describe("canTrainJutsu mastery gate", () => {
+describe("jutsu mastery gate", () => {
   it("rejects a jutsu whose mastery requirement the stored value misses", () => {
-    expect(canTrainJutsu(jutsu, user)).toBe(false);
+    expect(jutsuRequirementWarning(jutsu, user)).toContain("mastery");
   });
 
-  it("counts skill and gear buffs when the caller passes effective masteries", () => {
-    const masteries = effectiveMasteries({
-      ...user,
-      items: [],
-      userSkills: [{ skill: { target: "SELF", effects: [ninjutsuBuff] } }],
-    });
-    expect(canTrainJutsu(jutsu, user, masteries)).toBe(true);
+  it("counts activated skill buffs toward the requirement", () => {
+    const skills = [{ skill: { target: "SELF" as const, effects: [ninjutsuBuff] } }];
+    expect(jutsuRequirementWarning(jutsu, user, [], skills)).toBe("");
   });
 });
