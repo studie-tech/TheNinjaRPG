@@ -420,11 +420,6 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
   );
 };
 
-/**
- * Component for stats training
- * @param props
- * @returns
- */
 /** Each tile gets its own art; the per-type images are matched by look, not by name */
 const getTrainingImage = (stat: CombatStatName | MasteryName) => {
   switch (stat) {
@@ -478,6 +473,11 @@ const getTrainingLabel = (stat: CombatStatName | MasteryName) => {
   }
 };
 
+/**
+ * Component for stats training
+ * @param props
+ * @returns
+ */
 const StatsTraining: React.FC<TrainingProps> = (props) => {
   // Settings
   const { userData, updateUser, timeDiff } = props;
@@ -541,6 +541,9 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               userData[result.data.currentlyTraining] + result.data.experience,
             questData: result.data.questData,
           });
+        } else if (!result.success) {
+          // The session may have ended elsewhere; refetch so the slot stops showing it
+          await utils.profile.getUser.invalidate();
         }
       },
     });
@@ -562,6 +565,8 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           if (result.data.creditedMinutes > 0) {
             await utils.profile.getUser.invalidate();
           }
+        } else if (!result.success) {
+          await utils.profile.getUser.invalidate();
         }
       },
     });
