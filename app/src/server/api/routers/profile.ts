@@ -111,7 +111,7 @@ import {
   calcHP,
   calcLevelRequirements,
   calcSP,
-  capUserStats,
+  getAssignedCombatStatTotal,
   scaleUserStats,
 } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
@@ -1758,33 +1758,34 @@ export const profileRouter = createTRPCRouter({
       if (inputSum > user.earnedExperience) {
         return errorResponse("Trying to assign more stats than available");
       }
-      // Mutate & cap
-      user.offence += Math.floor(input.offence);
-      user.defence += Math.floor(input.defence);
-      user.strength += Math.floor(input.strength);
-      user.speed += Math.floor(input.speed);
-      user.intelligence += Math.floor(input.intelligence);
-      user.willpower += Math.floor(input.willpower);
-      capUserStats(user);
+      // Mutate: points stop at the rank cap and only the points that land are spent. A
+      // stat already stored above its cap keeps its value; it counts again after a rank-up.
+      const { stats_cap, gens_cap } = getUserCaps(user.rank);
+      const assign = (current: number, points: number, cap: number) =>
+        Math.max(current, Math.min(current + Math.floor(points), cap));
+      const stats = {
+        offence: assign(user.offence, input.offence, stats_cap),
+        defence: assign(user.defence, input.defence, stats_cap),
+        strength: assign(user.strength, input.strength, gens_cap),
+        speed: assign(user.speed, input.speed, gens_cap),
+        intelligence: assign(user.intelligence, input.intelligence, gens_cap),
+        willpower: assign(user.willpower, input.willpower, gens_cap),
+      };
+      const spent = Math.round(
+        getAssignedCombatStatTotal(stats) - getAssignedCombatStatTotal(user),
+      );
+      if (spent <= 0) return errorResponse("Those stats are already capped");
       // Update
       const data = {
-        offence: user.offence,
-        defence: user.defence,
-        strength: user.strength,
-        speed: user.speed,
-        intelligence: user.intelligence,
-        willpower: user.willpower,
-        experience: user.experience + inputSum,
-        earnedExperience: user.earnedExperience - inputSum,
+        ...stats,
+        experience: user.experience + spent,
+        earnedExperience: user.earnedExperience - spent,
       };
       const result = await ctx.drizzle
         .update(userData)
         .set(data)
         .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            gte(userData.earnedExperience, inputSum),
-          ),
+          and(eq(userData.userId, ctx.userId), gte(userData.earnedExperience, spent)),
         );
       if (result.rowsAffected === 0) {
         return errorResponse("Could not update user");

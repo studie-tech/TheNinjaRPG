@@ -22,6 +22,10 @@ describe("hasMasteryRequirements", () => {
   it("allows use when no mastery requirements are set", () => {
     expect(hasMasteryRequirements(emptyMasteries(10), {})).toBe(true);
     expect(hasMasteryRequirements(emptyMasteries(10), null)).toBe(true);
+    // Unset requirement columns come back from the database as null, not absent
+    expect(
+      hasMasteryRequirements(emptyMasteries(10), { requiredNinjutsuMastery: null }),
+    ).toBe(true);
   });
 
   it("allows use when the user meets every required mastery", () => {
