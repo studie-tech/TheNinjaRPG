@@ -79,7 +79,7 @@ export const commentsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.id, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
-      if (!report) throw new Error("Report not found");
+      if (!report) throw serverError("NOT_FOUND", "Report not found");
       // Get comments
       const currentCursor = input.cursor ? input.cursor : 0;
       const skip = currentCursor * input.limit;
@@ -135,7 +135,7 @@ export const commentsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
-      if (!report) throw new Error("Report not found");
+      if (!report) return errorResponse("Report not found");
       if (!canPostReportComment(report)) return errorResponse("Already resolved");
       if (!canSeeReport(user, report)) return errorResponse("No access to report");
       // Update
