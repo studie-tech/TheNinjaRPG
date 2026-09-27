@@ -12,7 +12,6 @@ type AudioTestMocks = {
   deactivate: ReturnType<typeof vi.fn>;
   isPlaying: boolean;
   enabled: boolean;
-  src: string;
 };
 
 function getAudioTestMocks(): AudioTestMocks {
@@ -20,26 +19,22 @@ function getAudioTestMocks(): AudioTestMocks {
     __audioTestMocks?: AudioTestMocks;
   };
   globals.__audioTestMocks ??= {
-    setEnabled: vi.fn(async (_enabled: boolean) => undefined),
+    setEnabled: vi.fn(async (_enabled: boolean, _isPreferenceChange?: boolean) => undefined),
     activate: vi.fn(async () => true),
     deactivate: vi.fn(async () => undefined),
     isPlaying: false,
     enabled: true,
-    src: "",
   };
   return globals.__audioTestMocks;
 }
 
 vi.mock("@/hooks/useAudio", () => ({
-  useAudio: ({ src }: { src: string }) => {
-    getAudioTestMocks().src = src;
-    return {
-      isPlaying: getAudioTestMocks().isPlaying,
-      requiresInteraction: false,
-      enabled: getAudioTestMocks().enabled,
-      setEnabled: getAudioTestMocks().setEnabled,
-    };
-  },
+  useAudio: () => ({
+    isPlaying: getAudioTestMocks().isPlaying,
+    requiresInteraction: false,
+    enabled: getAudioTestMocks().enabled,
+    setEnabled: getAudioTestMocks().setEnabled,
+  }),
 }));
 
 vi.mock("@/libs/native", () => ({
@@ -86,7 +81,6 @@ afterEach(() => {
   audio.deactivate.mockClear();
   audio.isPlaying = false;
   audio.enabled = true;
-  audio.src = "";
   audio.remoteCommand = undefined;
 });
 
@@ -176,7 +170,6 @@ describe("GlobalAudioProvider", () => {
     );
 
     await waitFor(() => expect(audio.remoteCommand).toBeTypeOf("function"));
-    await waitFor(() => expect(audio.src).not.toBe(""));
     audio.setEnabled.mockClear();
 
     act(() => audio.remoteCommand?.("pause"));
@@ -192,23 +185,23 @@ describe("GlobalAudioProvider", () => {
 
     await act(async () => undefined);
     expect(audio.setEnabled).not.toHaveBeenCalled();
-    expect(audio.src).not.toBe("");
   });
 
-  it("unloads the soundtrack when the saved music preference is off", async () => {
+  it("releases the soundtrack when the saved music preference is off", async () => {
     const audio = getAudioTestMocks();
     const view = render(
       <GlobalAudioProvider userData={user(1)}>
         <span>child</span>
       </GlobalAudioProvider>,
     );
-    await waitFor(() => expect(audio.src).not.toBe(""));
+    await waitFor(() => expect(audio.setEnabled).toHaveBeenCalledWith(true, true));
+    audio.setEnabled.mockClear();
 
     view.rerender(
       <GlobalAudioProvider userData={user(1, false)}>
         <span>child</span>
       </GlobalAudioProvider>,
     );
-    await waitFor(() => expect(audio.src).toBe(""));
+    await waitFor(() => expect(audio.setEnabled).toHaveBeenCalledWith(false, true));
   });
 });
