@@ -129,9 +129,15 @@ const LoadoutSelector = <T extends LoadoutData>(
   const slots = (data ?? []).slice(0, maxLoadouts);
   const selectedIndex = slots.findIndex((loadout) => loadout.id === selectedId);
   const selected = selectedIndex >= 0 ? slots[selectedIndex] : undefined;
-  const selectedName = selected
-    ? getDisplayName(selected, selectedIndex)
-    : props.label || "Loadout";
+  const selectedName = selected ? getDisplayName(selected, selectedIndex) : "Loadout";
+  // getDisplayName already starts unnamed slots with the label ("Jutsu 1").
+  // Prefix only names that do not, so the chip does not read "Jutsu · Jutsu 1".
+  const chipText =
+    props.label &&
+    selectedName !== props.label &&
+    !selectedName.startsWith(`${props.label} `)
+      ? `${props.label} · ${selectedName}`
+      : selectedName;
   const chipClass =
     props.size === "small" ? "h-8 gap-2 px-2 text-xs" : "h-9 gap-3 px-3 text-sm";
 
@@ -150,10 +156,7 @@ const LoadoutSelector = <T extends LoadoutData>(
             className={`flex min-w-0 items-center justify-between rounded-md border border-input bg-background text-left ${chipClass} ${isPending ? "opacity-50" : ""}`}
             disabled={isPending}
           >
-            <span className="min-w-0 truncate">
-              {props.label ? `${props.label} · ` : ""}
-              {selectedName}
-            </span>
+            <span className="min-w-0 truncate">{chipText}</span>
             <span className="shrink-0 text-muted-foreground text-xs">
               {open ? "Close" : "Change"}
             </span>
