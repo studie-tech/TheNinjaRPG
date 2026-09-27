@@ -8,6 +8,7 @@ import {
   Eye,
   Fingerprint,
   Handshake,
+  Medal,
   Search,
   ShieldAlert,
   Swords,
@@ -34,6 +35,7 @@ import type { CombatStatName, MasteryName, TrainingSpeed } from "@/drizzle/const
 import {
   CombatStatNames,
   getUserCaps,
+  IMG_TRAIN_BUKI_DEF,
   IMG_TRAIN_BUKI_OFF,
   IMG_TRAIN_GEN_DEF,
   IMG_TRAIN_GEN_OFF,
@@ -42,6 +44,7 @@ import {
   IMG_TRAIN_NIN_OFF,
   IMG_TRAIN_SPEED,
   IMG_TRAIN_STRENGTH,
+  IMG_TRAIN_TAI_DEF,
   IMG_TRAIN_TAI_OFF,
   IMG_TRAIN_WILLPOWER,
   JUTSU_LEVEL_CAP,
@@ -422,6 +425,7 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
  * @param props
  * @returns
  */
+/** Each tile gets its own art; the per-type images are matched by look, not by name */
 const getTrainingImage = (stat: CombatStatName | MasteryName) => {
   switch (stat) {
     case "intelligence":
@@ -433,7 +437,7 @@ const getTrainingImage = (stat: CombatStatName | MasteryName) => {
     case "speed":
       return IMG_TRAIN_SPEED;
     case "offence":
-      return IMG_TRAIN_NIN_OFF;
+      return IMG_TRAIN_TAI_DEF;
     case "defence":
       return IMG_TRAIN_NIN_DEF;
     case "ninjutsuMastery":
@@ -447,7 +451,7 @@ const getTrainingImage = (stat: CombatStatName | MasteryName) => {
     case "bloodlineMastery":
       return IMG_TRAIN_GEN_DEF;
     case "sageMastery":
-      return IMG_TRAIN_INTELLIGENCE;
+      return IMG_TRAIN_BUKI_DEF;
   }
 };
 
@@ -699,7 +703,15 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
             current={userData.trainingSpeed}
             options={TrainingSpeeds}
             setValue={(value) => {
-              if (!isPending) changeSpeed({ speed: value as TrainingSpeed });
+              if (isPending) return;
+              if (userData.currentlyTraining || userData.currentlyTrainingMastery) {
+                showMutationToast({
+                  success: false,
+                  message: "Cannot change training speed while training",
+                });
+                return;
+              }
+              changeSpeed({ speed: value as TrainingSpeed });
             }}
           />
         }
@@ -797,7 +809,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
                       width={256}
                       height={256}
                     />
-                    <Swords className={iconClassName} />
+                    <Medal className={iconClassName} />
                     {label}
                   </div>
                   {overCap && (

@@ -20,10 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
-  IMG_TRAIN_BUKI_OFF,
-  IMG_TRAIN_GEN_OFF,
-  IMG_TRAIN_NIN_OFF,
-  IMG_TRAIN_TAI_OFF,
+  IMG_TRAIN_INTELLIGENCE,
+  IMG_TRAIN_SPEED,
+  IMG_TRAIN_STRENGTH,
+  IMG_TRAIN_WILLPOWER,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -202,33 +202,34 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   );
   const defaultValues = statSchema.parse(isRedistribution ? cappedUser : {});
 
+  // Presets are named by their general stats: jutsu disciplines come from masteries
   const specializationOptions = [
     {
-      id: "ninjutsu",
-      name: "Ninjutsu",
-      image: IMG_TRAIN_NIN_OFF,
-      description: "Master chakra manipulation",
+      id: "mind",
+      name: "Mind",
+      image: IMG_TRAIN_INTELLIGENCE,
+      description: "Willpower and intelligence",
       stats: ["willpower", "intelligence", "offence", "defence"] as const,
     },
     {
-      id: "taijutsu",
-      name: "Taijutsu",
-      image: IMG_TRAIN_TAI_OFF,
-      description: "Master of martial arts",
+      id: "body",
+      name: "Body",
+      image: IMG_TRAIN_STRENGTH,
+      description: "Strength and speed",
       stats: ["strength", "speed", "offence", "defence"] as const,
     },
     {
-      id: "genjutsu",
-      name: "Genjutsu",
-      image: IMG_TRAIN_GEN_OFF,
-      description: "Master of illusions",
+      id: "resolve",
+      name: "Resolve",
+      image: IMG_TRAIN_WILLPOWER,
+      description: "Willpower and speed",
       stats: ["willpower", "speed", "offence", "defence"] as const,
     },
     {
-      id: "bukijutsu",
-      name: "Bukijutsu",
-      image: IMG_TRAIN_BUKI_OFF,
-      description: "Weapons mastery",
+      id: "tactics",
+      name: "Tactics",
+      image: IMG_TRAIN_SPEED,
+      description: "Intelligence and speed",
       stats: ["intelligence", "speed", "offence", "defence"] as const,
     },
   ];
@@ -301,6 +302,8 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
         const isAssigning = pendingSpecialization === option.id;
         const cappedStats = getCappedStats(option);
         const split = getSpecializationSplit(option);
+        const placed = round(Object.values(split).reduce((a, b) => a + b, 0));
+        const isCapLimited = placed < round(availableStats);
 
         return (
           <Confirm
@@ -349,8 +352,9 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
           >
             <div>
               <p className="mb-2">
-                This will distribute {availableStats.toLocaleString()} stat points
-                across:
+                {isCapLimited
+                  ? `This will distribute ${placed.toLocaleString()} of ${availableStats.toLocaleString()} stat points across:`
+                  : `This will distribute ${availableStats.toLocaleString()} stat points across:`}
               </p>
               <ul className="mb-2 list-inside list-disc">
                 {option.stats.map((stat, index) => {
@@ -367,10 +371,19 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
                   );
                 })}
               </ul>
+              {isCapLimited && (
+                <p>
+                  Rank caps leave the other{" "}
+                  {round(availableStats - placed).toLocaleString()} points unassigned.
+                </p>
+              )}
             </div>
           </Confirm>
         );
       })}
+      <p className="col-span-2 mt-2 text-center text-muted-foreground text-xs sm:col-span-4">
+        Jutsu disciplines unlock through mastery training at the Training Grounds.
+      </p>
     </div>
   );
 };
