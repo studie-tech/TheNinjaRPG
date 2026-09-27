@@ -1,12 +1,5 @@
 import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
-import { z } from "zod";
-import {
-  CombatStatNames,
-  getUserCaps,
-  MAX_DAILY_TRAININGS,
-  MasteryNames,
-  TrainingSpeeds,
-} from "@/drizzle/constants";
+import { getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
@@ -22,22 +15,23 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { getShrineBoost, getStrucBoost } from "@/utils/village";
-import { QuestTracker } from "@/validators/objectives";
+import {
+  startMasteryTrainingDataSchema,
+  startMasteryTrainingInputSchema,
+  startTrainingDataSchema,
+  startTrainingInputSchema,
+  stopMasteryTrainingDataSchema,
+  stopTrainingDataSchema,
+  stopTrainingInputSchema,
+  trainingLogInputSchema,
+  updateTrainingSpeedInputSchema,
+} from "@/validators/train";
 
 export const trainRouter = createTRPCRouter({
   startTraining: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Start training a combat stat" } })
-    .input(z.object({ stat: z.enum(CombatStatNames) }))
-    .output(
-      baseServerResponse.extend({
-        data: z
-          .object({
-            currentlyTraining: z.enum(CombatStatNames),
-            trainingStartedAt: z.date(),
-          })
-          .optional(),
-      }),
-    )
+    .input(startTrainingInputSchema)
+    .output(baseServerResponse.extend({ data: startTrainingDataSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       const { user } = await fetchUpdatedUser({
         client: ctx.drizzle,
@@ -66,16 +60,9 @@ export const trainRouter = createTRPCRouter({
     }),
   startMasteryTraining: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Start training a mastery" } })
-    .input(z.object({ stat: z.enum(MasteryNames) }))
+    .input(startMasteryTrainingInputSchema)
     .output(
-      baseServerResponse.extend({
-        data: z
-          .object({
-            currentlyTrainingMastery: z.enum(MasteryNames),
-            masteryTrainingStartedAt: z.date(),
-          })
-          .optional(),
-      }),
+      baseServerResponse.extend({ data: startMasteryTrainingDataSchema.optional() }),
     )
     .mutation(async ({ ctx, input }) => {
       const { user } = await fetchUpdatedUser({
@@ -113,26 +100,14 @@ export const trainRouter = createTRPCRouter({
         description: "Stop combat stat training and collect gains",
       },
     })
-    .input(z.object({ guess: z.string().optional(), villageId: z.string().nullable() }))
-    .output(
-      baseServerResponse.extend({
-        data: z
-          .object({
-            experience: z.number(),
-            currentlyTraining: z.enum(CombatStatNames),
-            questData: z.array(QuestTracker),
-          })
-          .optional(),
-      }),
-    )
+    .input(stopTrainingInputSchema)
+    .output(baseServerResponse.extend({ data: stopTrainingDataSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
-      const [{ user, settings }] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        }),
-      ]);
+      const { user, settings } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+      });
       // Guard
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
@@ -227,26 +202,16 @@ export const trainRouter = createTRPCRouter({
     .meta({
       mcp: { enabled: true, description: "Stop mastery training and collect gains" },
     })
-    .input(z.object({ guess: z.string().optional(), villageId: z.string().nullable() }))
+    .input(stopTrainingInputSchema)
     .output(
-      baseServerResponse.extend({
-        data: z
-          .object({
-            amount: z.number(),
-            currentlyTrainingMastery: z.enum(MasteryNames),
-            questData: z.array(QuestTracker),
-          })
-          .optional(),
-      }),
+      baseServerResponse.extend({ data: stopMasteryTrainingDataSchema.optional() }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [{ user, settings }] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        }),
-      ]);
+      const { user, settings } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+      });
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
       if (!user.masteryTrainingStartedAt) {
@@ -324,7 +289,7 @@ export const trainRouter = createTRPCRouter({
     }),
   updateTrainingSpeed: protectedProcedure
     .meta({ mcp: { enabled: true, description: "Update training speed interval" } })
-    .input(z.object({ speed: z.enum(TrainingSpeeds) }))
+    .input(updateTrainingSpeedInputSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const { user } = await fetchUpdatedUser({
@@ -354,7 +319,7 @@ export const trainRouter = createTRPCRouter({
         description: "Get user training history from last 24 hours",
       },
     })
-    .input(z.object({ userId: z.string() }))
+    .input(trainingLogInputSchema)
     .query(async ({ ctx, input }) => {
       return ctx.drizzle.query.trainingLog.findMany({
         where: and(
