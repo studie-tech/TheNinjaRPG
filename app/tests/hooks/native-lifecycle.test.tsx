@@ -175,6 +175,34 @@ afterEach(() => {
 });
 
 describe("native push ownership", () => {
+  it("waits for both native listeners before requesting a push token", async () => {
+    const plugin = capacitorWindow.Capacitor?.Plugins.PushNotifications;
+    if (!plugin) throw new Error("PushNotifications mock is missing");
+    const addListener = plugin.addListener as (
+      event: string,
+      callback: unknown,
+    ) => { remove: () => Promise<void> };
+    const finishAttach: Array<() => void> = [];
+    plugin.addListener = (event: string, callback: unknown) => {
+      if (event !== "registration" && event !== "registrationError") {
+        return addListener(event, callback);
+      }
+      return new Promise((resolve) => {
+        finishAttach.push(() => resolve(addListener(event, callback)));
+      });
+    };
+
+    const current = renderHook(() =>
+      useNativePush({ enabled: true, accountId: "account-a" }),
+    );
+    await waitFor(() => expect(finishAttach).toHaveLength(2));
+    expect(mocks.pushRegister).not.toHaveBeenCalled();
+
+    act(() => finishAttach.forEach((finish) => finish()));
+    await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(1));
+    current.unmount();
+  });
+
   it("exposes a persisted widget token only to its recorded account", async () => {
     localStorage.setItem("native-widget-token", "account-a-widget-token");
     localStorage.setItem("native-widget-token-owner", "account-a");
@@ -304,6 +332,29 @@ describe("native push ownership", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+
+    act(() => {
+      for (const listener of mocks.stateListeners) listener({ isActive: true });
+    });
+    await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not cache a token rejected by the server", async () => {
+    mocks.sendToken.mockResolvedValueOnce({
+      success: false,
+      message: "Character no longer exists",
+      widgetToken: null,
+    });
+    renderHook(() => useNativePush({ enabled: true, accountId: "account-a" }));
+    await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
+
+    act(() => mocks.registrationListeners[0]?.({ value: TOKEN }));
+    await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(localStorage.getItem("native-push-token")).toBeNull();
 
     act(() => {
       for (const listener of mocks.stateListeners) listener({ isActive: true });

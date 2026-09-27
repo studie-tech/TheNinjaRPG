@@ -253,6 +253,10 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
         })
         .then((result) => {
           if (!result) return;
+          if (!result.success) {
+            if (epoch === registrationEpoch) registeredToken.current = null;
+            return;
+          }
           // Persist the conditional cleanup proof even if the session changed while the
           // server bind was in flight. The detach queued behind this operation needs it to
           // remove the now-stale row; it is never exposed as a replacement account's widget
@@ -269,9 +273,10 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
             setWidgetTokenOwner(accountId);
           }
         })
-        .catch(() => {
+        .catch((error) => {
           // Leave the ref cleared so the next resume retries the handoff.
           if (epoch === registrationEpoch) registeredToken.current = null;
+          console.warn("Push device registration failed", error);
         });
       registrationQueue = pending.then(
         () => undefined,
@@ -290,8 +295,12 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
     });
 
     const requestRegistration = async () => {
-      const state = await push.checkPermissions();
-      if (state === "granted") await push.register();
+      try {
+        const state = await push.checkPermissions();
+        if (state === "granted") await push.register();
+      } catch (error) {
+        console.warn("Push registration failed", error);
+      }
     };
 
     void requestRegistration();
