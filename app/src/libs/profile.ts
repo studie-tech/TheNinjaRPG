@@ -156,8 +156,10 @@ export type StatScale = "ai" | "player";
  * the base 10 scale by `share * levelBudget / (share * experience + points beyond
  * experience)`: stats the experience paid for stay exact at their own level however
  * uneven, and unpaid ones (a new AI at 0 experience) land on the budget and then stay.
- * Masteries keep their ratio to the combat stats.
+ * Masteries scale by the level budget over the experience, apart from the combat stats.
  * @param statScale - "ai" takes SCALED_AI_STAT_BUDGET_SHARE of the budget, "player" all.
+ * @param options.reweight - treat the combat stats as unpaid weights, so the whole
+ *   budget is spread by their points above the base.
  */
 export function scaleUserStats(
   user: Pick<
@@ -176,6 +178,7 @@ export function scaleUserStats(
     | MasteryName
   >,
   statScale: StatScale,
+  options: { reweight?: boolean } = {},
 ) {
   // Multipliers
   const poolMod = user.poolsMultiplier ?? 1;
@@ -195,7 +198,8 @@ export function scaleUserStats(
   const budget = share * levelBudget;
   const combatSum = CombatStatNames.reduce((sum, stat) => sum + (user[stat] ?? 0), 0);
   const earned = combatSum / statMod - CombatStatNames.length * 10;
-  const divisor = share * experience + Math.max(0, earned - experience);
+  const paid = options.reweight ? 0 : experience;
+  const divisor = share * paid + Math.max(0, earned - paid);
   for (const stat of CombatStatNames) {
     const points =
       earned > 0
@@ -204,12 +208,9 @@ export function scaleUserStats(
     user[stat] = (10 + roundCombatStat(points)) * statMod;
   }
   // Masteries
-  const scaledSum = CombatStatNames.reduce((sum, stat) => sum + user[stat], 0);
+  const masteryFactor = experience > 0 ? levelBudget / experience : 1;
   for (const mastery of MasteryNames) {
-    user[mastery] =
-      combatSum > 0
-        ? Math.max(10, roundCombatStat(((user[mastery] ?? 0) * scaledSum) / combatSum))
-        : 10 * statMod;
+    user[mastery] = Math.max(10, roundCombatStat((user[mastery] ?? 0) * masteryFactor));
   }
 }
 

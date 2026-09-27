@@ -28,6 +28,7 @@ import {
   ALLIANCEHALL_LONG,
   BasicElementName,
   COST_CHANGE_USERNAME,
+  CombatStatNames,
   getTavernColorChangeCost,
   getUserCaps,
   IMG_AVATAR_DEFAULT,
@@ -1543,7 +1544,7 @@ export const profileRouter = createTRPCRouter({
       const newAi = { ...ai, ...input.data } as UserData;
 
       // Level-based stats / pools
-      scaleUserStats(newAi, "ai");
+      scaleEditedAi(ai, newAi);
 
       // Calculate diff
       const oldContent = Object.fromEntries(
@@ -3510,6 +3511,22 @@ export const fetchAttributes = async (client: DrizzleClient, userId: string) => 
   return await client.query.userAttribute.findMany({
     where: eq(userAttribute.userId, userId),
   });
+};
+
+/**
+ * Scale an edited AI row to its level before it is saved. Changed combat stats are the
+ * editor's focus weights and spread the whole AI budget; otherwise the stored experience
+ * makes a save the identity at the same level and a proportional rescale on a level
+ * change, and a new stats multiplier applies to the stored stats.
+ */
+export const scaleEditedAi = (stored: UserData, edited: UserData) => {
+  const reweight = CombatStatNames.some((stat) => edited[stat] !== stored[stat]);
+  if (!reweight && edited.statsMultiplier !== stored.statsMultiplier) {
+    for (const stat of CombatStatNames) {
+      edited[stat] = (stored[stat] / stored.statsMultiplier) * edited.statsMultiplier;
+    }
+  }
+  scaleUserStats(edited, "ai", { reweight });
 };
 
 export type UserWithRelations =
