@@ -1402,7 +1402,8 @@ export const damageCalc = (
   let dmg = power;
 
   if (effect.calculation === "formula" && origin) {
-    // Accumulate attack and defense power from stat types
+    // Any statTypes add one offence-versus-defence term; the listed types only matter
+    // when other tags are matched against this damage.
     let atkPowerFromStats = 0;
     let defPowerFromStats = 0;
 

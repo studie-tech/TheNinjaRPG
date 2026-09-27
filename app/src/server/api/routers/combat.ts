@@ -2916,9 +2916,10 @@ export const processUsersForBattle = async (
       Bukijutsu: user.bukijutsuMastery,
     } as const;
     if (!user.preferredStat || user.preferredStat === "Highest") {
+      // A tie keeps the earlier type, in MasteryTypes order.
       user.highestMasteryType = (
         Object.keys(masteries) as (keyof typeof masteries)[]
-      ).reduce((prev, cur) => (masteries[prev] > masteries[cur] ? prev : cur));
+      ).reduce((prev, cur) => (masteries[cur] > masteries[prev] ? cur : prev));
     } else {
       user.highestMasteryType = user.preferredStat;
     }
