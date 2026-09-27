@@ -116,6 +116,7 @@ export const GlobalAudioProvider: React.FC<{
   // being overtaken by an earlier activation.
   const audioSessionQueue = useRef<Promise<void>>(Promise.resolve());
   const hasActiveAudioSession = useRef(false);
+  const [isRemotePaused, setIsRemotePaused] = useState(false);
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -208,7 +209,19 @@ export const GlobalAudioProvider: React.FC<{
     audioSessionQueue.current = audioSessionQueue.current
       .catch(() => undefined)
       .then(async () => {
-        if (!audioEnabled || (!isPlaying && platform() !== "ios")) {
+        if (!audioEnabled) {
+          if (isRemotePaused && platform() === "ios") {
+            if (!isPlaying && hasActiveAudioSession.current) {
+              await audioSession.deactivate(true);
+              hasActiveAudioSession.current = false;
+            }
+          } else {
+            await audioSession.deactivate();
+            hasActiveAudioSession.current = false;
+          }
+          return;
+        }
+        if (!isPlaying && platform() !== "ios") {
           if (hasActiveAudioSession.current) {
             await audioSession.deactivate();
             hasActiveAudioSession.current = false;
@@ -225,17 +238,15 @@ export const GlobalAudioProvider: React.FC<{
           artist: userData?.village?.name ?? "Seichi",
         });
       });
-  }, [audioEnabled, isClient, isPlaying, userData?.village?.name]);
+  }, [audioEnabled, isClient, isPlaying, isRemotePaused, userData?.village?.name]);
 
   useEffect(
     () => () => {
       audioSessionQueue.current = audioSessionQueue.current
         .catch(() => undefined)
         .then(async () => {
-          if (hasActiveAudioSession.current) {
-            await audioSession.deactivate();
-            hasActiveAudioSession.current = false;
-          }
+          await audioSession.deactivate();
+          hasActiveAudioSession.current = false;
         });
     },
     [],
@@ -245,9 +256,25 @@ export const GlobalAudioProvider: React.FC<{
   useEffect(() => {
     if (!isClient) return;
     return audioSession.onRemoteCommand((command) => {
-      if (command === "play") void setAudioEnabled(true);
-      else if (command === "pause") void setAudioEnabled(false);
-      else void setAudioEnabled(!audioEnabled);
+      if (platform() !== "ios") {
+        if (command === "play") void setAudioEnabled(true);
+        else if (command === "pause") void setAudioEnabled(false);
+        else void setAudioEnabled(!audioEnabled);
+        return;
+      }
+      if (command === "pause" || (command === "toggle" && audioEnabled)) {
+        setIsRemotePaused(true);
+        void setAudioEnabled(false);
+      } else {
+        // Restore the native session before asking the backgrounded WebView to play.
+        audioSessionQueue.current = audioSessionQueue.current
+          .catch(() => undefined)
+          .then(async () => {
+            hasActiveAudioSession.current = await audioSession.activate();
+            setIsRemotePaused(false);
+            void setAudioEnabled(true);
+          });
+      }
     });
   }, [audioEnabled, isClient, setAudioEnabled]);
 
@@ -273,7 +300,10 @@ export const GlobalAudioProvider: React.FC<{
 
   const contextValue: AudioContextValue = {
     audioEnabled,
-    setAudioEnabled,
+    setAudioEnabled: (enabled) => {
+      setIsRemotePaused(false);
+      return setAudioEnabled(enabled);
+    },
     buttonSfxOn,
     setButtonSfxOn,
     sfxVolume,

@@ -55,13 +55,15 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
                 false,
                 options: [.notifyOthersOnDeactivation]
             )
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-            // An artwork download started before this can still complete, and it re-reads
-            // nowPlayingInfo — leaving the Lock Screen showing an image with no title
-            // after audio was released. Bumping the version drops that completion.
-            artworkTask?.cancel()
-            artworkRequestId += 1
-            setRemoteCommands(enabled: false)
+            // A lock-screen Pause releases audio focus but keeps the Play command and
+            // metadata available. Turning Music off in the app clears both.
+            if call.getBool("preserveControls") != true {
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+                // A pending artwork request must not restore stale metadata.
+                artworkTask?.cancel()
+                artworkRequestId += 1
+                setRemoteCommands(enabled: false)
+            }
             call.resolve()
         } catch {
             call.reject("Could not release the audio session", nil, error)

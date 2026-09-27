@@ -30,12 +30,12 @@ export const activate = async (): Promise<boolean> => {
 };
 
 /**
- * Release the session so other apps regain audio focus. Call whenever the player turns
- * music off — holding a `.playback` session with nothing playing keeps other apps ducked.
+ * Release audio focus so other apps can resume. Keep the transport and metadata only
+ * for a lock-screen pause; turning Music off clears them as well.
  */
-export const deactivate = async (): Promise<void> => {
-  await invokeSafe(PLUGIN, "deactivate");
-  if (getPlatform() === "ios" && "mediaSession" in navigator) {
+export const deactivate = async (preserveControls = false): Promise<void> => {
+  await invokeSafe(PLUGIN, "deactivate", { preserveControls });
+  if (!preserveControls && getPlatform() === "ios" && "mediaSession" in navigator) {
     navigator.mediaSession.metadata = null;
   }
 };
