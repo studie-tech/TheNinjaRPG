@@ -254,7 +254,9 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
         .then((result) => {
           if (!result) return;
           if (!result.success) {
-            if (epoch === registrationEpoch) registeredToken.current = null;
+            if (epoch === registrationEpoch && registeredToken.current === token) {
+              registeredToken.current = null;
+            }
             return;
           }
           // Persist the conditional cleanup proof even if the session changed while the
@@ -275,7 +277,9 @@ export const useNativePush = ({ enabled, accountId }: UseNativePushOptions) => {
         })
         .catch((error) => {
           // Leave the ref cleared so the next resume retries the handoff.
-          if (epoch === registrationEpoch) registeredToken.current = null;
+          if (epoch === registrationEpoch && registeredToken.current === token) {
+            registeredToken.current = null;
+          }
           console.warn("Push device registration failed", error);
         });
       registrationQueue = pending.then(

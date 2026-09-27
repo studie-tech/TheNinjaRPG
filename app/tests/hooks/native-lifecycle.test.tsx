@@ -198,7 +198,9 @@ describe("native push ownership", () => {
     await waitFor(() => expect(finishAttach).toHaveLength(2));
     expect(mocks.pushRegister).not.toHaveBeenCalled();
 
-    act(() => finishAttach.forEach((finish) => finish()));
+    act(() => finishAttach[0]?.());
+    expect(mocks.pushRegister).not.toHaveBeenCalled();
+    act(() => finishAttach[1]?.());
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(1));
     current.unmount();
   });
@@ -360,6 +362,25 @@ describe("native push ownership", () => {
       for (const listener of mocks.stateListeners) listener({ isActive: true });
     });
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps a newer token when an earlier bind fails", async () => {
+    let rejectFirst: ((error: Error) => void) | undefined;
+    mocks.sendToken.mockImplementationOnce(
+      () => new Promise((_, reject) => (rejectFirst = reject)),
+    );
+    renderHook(() => useNativePush({ enabled: true, accountId: "account-a" }));
+    await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
+
+    act(() => {
+      mocks.registrationListeners[0]?.({ value: TOKEN });
+      mocks.registrationListeners[0]?.({ value: "b".repeat(64) });
+    });
+    await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
+    rejectFirst?.(new Error("offline"));
+    await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(2));
+    act(() => mocks.registrationListeners[0]?.({ value: "b".repeat(64) }));
+    expect(mocks.sendToken).toHaveBeenCalledTimes(2);
   });
 
   it("retries a failed sign-out detach on signed-out resume before clearing proof", async () => {
