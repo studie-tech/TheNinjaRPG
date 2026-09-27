@@ -627,7 +627,7 @@ export const blackMarketRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const cost = canChangeContent(user.role) ? 0 : COST_RESET_STATS;
       if (user.reputationPoints < cost) {
-        return { success: false, message: "Not enough reputation points" };
+        return errorResponse("Not enough reputation points");
       }
       const { stats_cap, gens_cap } = getUserCaps(user.rank);
       if (input.offence > stats_cap || input.defence > stats_cap) {
@@ -650,8 +650,9 @@ export const blackMarketRouter = createTRPCRouter({
       // Points above the rank cap never count in battle, so they are not redistributable
       const availableStats = round(getAssignedCombatStatTotal(withCappedStats(user)));
       if (inputSum !== availableStats) {
-        const message = `Requested points ${inputSum} do not match your ${availableStats} assigned combat stat points`;
-        return { success: false, message };
+        return errorResponse(
+          `Requested points ${inputSum} do not match your ${availableStats} assigned combat stat points`,
+        );
       }
       const result = await ctx.drizzle
         .update(userData)
@@ -664,9 +665,11 @@ export const blackMarketRouter = createTRPCRouter({
           willpower: input.willpower,
           reputationPoints: sql`reputationPoints - ${cost}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(eq(userData.userId, ctx.userId), gte(userData.reputationPoints, cost)),
+        );
       if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
+        return errorResponse("Not enough reputation points");
       } else {
         await ctx.drizzle.insert(actionLog).values({
           id: nanoid(),

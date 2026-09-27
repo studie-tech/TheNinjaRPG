@@ -317,17 +317,14 @@ export const trainRouter = createTRPCRouter({
       });
       if (!user) return errorResponse("User not found");
       if (user.currentlyTraining || user.currentlyTrainingMastery) {
-        return {
-          success: false,
-          message: "Cannot change training speed while training",
-        };
+        return errorResponse("Cannot change training speed while training");
       }
       const result = await ctx.drizzle
         .update(userData)
         .set({ trainingSpeed: input.speed })
         .where(eq(userData.userId, ctx.userId));
       if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
+        return errorResponse("Could not update user");
       }
       return { success: true, message: "Training speed updated" };
     }),
@@ -388,7 +385,10 @@ const assertCanStartTraining = (
   if (user.trainingSpeed !== "8hrs" && user.isBanned) {
     return errorResponse("Only 8hrs training interval allowed when banned");
   }
-  if (user.dailyTrainings >= MAX_DAILY_TRAININGS) {
+  // A session still running in either slot will spend one training when it stops
+  const inFlight =
+    Number(!!user.currentlyTraining) + Number(!!user.currentlyTrainingMastery);
+  if (user.dailyTrainings + inFlight >= MAX_DAILY_TRAININGS) {
     return errorResponse(
       `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`,
     );
