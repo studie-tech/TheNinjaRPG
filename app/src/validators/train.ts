@@ -42,7 +42,9 @@ export const stopTrainingDataSchema = z.object({
 });
 
 export const stopMasteryTrainingDataSchema = z.object({
+  /** Mastery actually added, after the rank cap */
   amount: z.number(),
   currentlyTrainingMastery: z.enum(MasteryNames),
-  questData: z.array(QuestTracker),
+  /** minutes_training credited to quests; the stored questData changed when above 0 */
+  creditedMinutes: z.number(),
 });

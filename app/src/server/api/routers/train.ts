@@ -1,5 +1,5 @@
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
-import { getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { CombatStatNames, getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
@@ -204,11 +204,21 @@ export const trainRouter = createTRPCRouter({
       baseServerResponse.extend({ data: stopMasteryTrainingDataSchema.optional() }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { user, settings } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        forceRegen: true,
-      });
+      const [{ user, settings }, lastCombatSession] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          forceRegen: true,
+        }),
+        ctx.drizzle.query.trainingLog.findFirst({
+          columns: { trainingFinishedAt: true },
+          where: and(
+            eq(trainingLog.userId, ctx.userId),
+            inArray(trainingLog.stat, [...CombatStatNames]),
+          ),
+          orderBy: desc(trainingLog.trainingFinishedAt),
+        }),
+      ]);
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
       const trained = user.currentlyTrainingMastery;
@@ -225,10 +235,28 @@ export const trainRouter = createTRPCRouter({
       const { trainingAmount } = calcTrainingAmount(user, settings, startedAt);
       const { mastery_cap } = getUserCaps(user.rank);
       const gained = Math.max(0, Math.min(trainingAmount, mastery_cap - user[trained]));
-      // No minutes_training credit here: both slots run over the same wall clock, so
-      // crediting each would count every minute twice. The combat slot owns that tracker.
-      const { trackers } = getNewTrackers(user, []);
-      const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
+      // Both slots share the wall clock and the combat slot credits all of its minutes,
+      // so only minutes it has not credited count: none while it runs, and none before
+      // its last credited session ended.
+      const creditFrom = Math.max(
+        startedAt.getTime(),
+        lastCombatSession?.trainingFinishedAt.getTime() ?? 0,
+      );
+      const creditedMinutes =
+        gained > 0 && !user.currentlyTraining
+          ? Math.max(0, (Date.now() - creditFrom) / 60_000)
+          : 0;
+      // questData is written only when minutes are credited: the combat slot is idle
+      // then, so no concurrent combat stop can be overwritten by this snapshot.
+      const questData =
+        creditedMinutes > 0
+          ? filterQuestTrackersForDbPersist(
+              getNewTrackers(user, [
+                { task: "minutes_training", increment: creditedMinutes },
+              ]).trackers,
+              user,
+            )
+          : undefined;
       // Claims exactly the session read above, as stopTraining does
       const result = await ctx.drizzle
         .update(userData)
@@ -242,9 +270,9 @@ export const trainRouter = createTRPCRouter({
                 // already above it (kept for a rank-up) from being lowered. Nothing else
                 // clamps stored masteries: capUserStats only caps in-memory copies.
                 [trained]: sql`GREATEST(${userData[trained]}, LEAST(${userData[trained]} + ${trainingAmount}, ${mastery_cap}))`,
-                questData: questDataForDb,
               }
             : {}),
+          ...(questData ? { questData } : {}),
         })
         .where(
           and(
@@ -274,7 +302,7 @@ export const trainRouter = createTRPCRouter({
         data: {
           amount: gained,
           currentlyTrainingMastery: trained,
-          questData: trackers,
+          creditedMinutes,
         },
       };
     }),

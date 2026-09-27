@@ -531,7 +531,8 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
             currentlyTraining: null,
             trainingStartedAt: null,
             experience: userData.experience + result.data.experience,
-            dailyTrainings: userData.dailyTrainings + 1,
+            dailyTrainings:
+              userData.dailyTrainings + (result.data.experience > 0 ? 1 : 0),
             [result.data.currentlyTraining]:
               userData[result.data.currentlyTraining] + result.data.experience,
             questData: result.data.questData,
@@ -552,8 +553,11 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
             dailyTrainings: userData.dailyTrainings + (result.data.amount > 0 ? 1 : 0),
             [result.data.currentlyTrainingMastery]:
               userData[result.data.currentlyTrainingMastery] + result.data.amount,
-            questData: result.data.questData,
           });
+          // Quest trackers are rebuilt server-side, so refetch them rather than guess
+          if (result.data.creditedMinutes > 0) {
+            await utils.profile.getUser.invalidate();
+          }
         }
       },
     });
@@ -761,7 +765,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
       </ContentBox>
       <ContentBox
         title="Masteries"
-        subtitle="Unlock jutsu, items and armor. Trains alongside combat stats; no experience or damage."
+        subtitle={`Unlock jutsu, items and armor; no experience or damage. Trains alongside combat stats and shares their daily limit [${userData.dailyTrainings} / ${MAX_DAILY_TRAININGS}].`}
         initialBreak={true}
       >
         <div inert={isPending}>
