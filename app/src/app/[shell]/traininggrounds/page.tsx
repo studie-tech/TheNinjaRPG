@@ -705,7 +705,8 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           <div className="grid grid-cols-3 text-center font-bold">
             {CombatStatNames.map((stat, i) => {
               const label = getTrainingLabel(stat);
-              const cap = stat === "offence" || stat === "defence" ? stats_cap : gens_cap;
+              const cap =
+                stat === "offence" || stat === "defence" ? stats_cap : gens_cap;
               const overCap = userData[stat] >= cap;
               const icon =
                 stat === "offence" ? (
@@ -760,7 +761,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
       </ContentBox>
       <ContentBox
         title="Masteries"
-        subtitle="Train in parallel with combat stats. Masteries do not grant experience."
+        subtitle="Unlock jutsu, items and armor. Trains alongside combat stats; no experience or damage."
         initialBreak={true}
       >
         <div inert={isPending}>

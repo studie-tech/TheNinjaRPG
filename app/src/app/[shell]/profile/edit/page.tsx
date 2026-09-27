@@ -743,8 +743,10 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                 </Button>
               </form>
               <FormDescription>
-                This will be used as your highest offense type in combat instead of
-                automatically choosing the highest stat.
+                Preferred Mastery is the jutsu type your &quot;Highest&quot;-typed
+                attacks, such as the basic attack, count as for type-specific effects
+                like reflects and damage modifiers; Highest uses your top jutsu mastery.
+                Generals 1 and 2 are the generals those attacks scale with.
               </FormDescription>
             </Form>
           </TabsContent>

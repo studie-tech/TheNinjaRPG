@@ -69,11 +69,18 @@ This document outlines various screens, menus, and gameplay systems available in
 - **Associations (Bottom Right):**  
   - Lists your Village, Bloodline, Clan, ANBU Squad, Medical Ninja Rank, and Marital Status.
 - **Strengths and Weaknesses (Character Stats):**  
-  - **Offenses:**  
-    - Ninjutsu, Taijutsu, Genjutsu, Bukijutsu (damage output for each jutsu type).
-  - **Defenses:**  
-    - Damage reduction corresponding to each offense.
-  - **General Stats and Elemental Proficiency:**  
+  - **Offence:**
+    - A single stat for how hard all of your attacks hit, whatever the jutsu type.
+  - **Defence:**
+    - A single stat for how much incoming damage you resist.
+  - **Generals:**
+    - Strength, Intelligence, Willpower and Speed. Together with Offence and Defence, these are the only stats that affect damage.
+  - **Masteries:**
+    - Ninjutsu, Genjutsu, Taijutsu, Bukijutsu, Bloodline and Sage Mastery.
+    - They unlock jutsu, items and armor: content shows e.g. "Req. Ninjutsu Mastery", and cannot be equipped or used in combat while your mastery is below it.
+    - They grant no experience and do not change damage dealt or taken.
+    - Equipped bloodlines, armor and skill tree skills can raise them.
+  - **Elemental Proficiency:**
     - Further details provided in later sections.
 
 ---
@@ -112,21 +119,12 @@ This document outlines various screens, menus, and gameplay systems available in
   - 1 hour: 90% efficiency.  
   - 4 hours: 80% efficiency.  
   - 8 hours: 70% efficiency.
-- **Stat Explanations:**  
-  - **Ninjutsu:**  
-    - Manipulate elements and nature.  
-    - *Primary:* Intelligence, *Secondary:* Willpower.
-  - **Taijutsu:**  
-    - Enhance martial arts and physical strength.  
-    - *Primary:* Strength, *Secondary:* Speed.
-  - **Genjutsu:**  
-    - Create illusions by manipulating chakra flow.  
-    - *Primary:* Willpower, *Secondary:* Intelligence.
-  - **Bukijutsu:**  
-    - Mastery of weapon-based techniques.  
-    - *Primary:* Speed, *Secondary:* Strength.
-- **Offensive Specialization:**  
-  Focus on one offensive area initially to maximize effectiveness.
+- **Training (combat stats):**
+  - Train Offence, Defence, Strength, Intelligence, Willpower or Speed.
+  - These grant experience and determine your damage.
+- **Masteries:**
+  - Train one mastery at the same time as a combat stat.
+  - Masteries grant no experience and do not affect damage; train the ones that unlock the jutsu, items and armor you want to use.
 - **Jutsu Training:**  
   Available later (not for Academy Students).
 
@@ -218,7 +216,7 @@ This document outlines various screens, menus, and gameplay systems available in
     - The turn automatically ends if AP drops below 20%.
 - **Basic Actions:**  
   - **Basic Attack:**  
-    - Costs 20 AP and 10 SP; has a 1-round cooldown; scales with Highest offense.
+    - Costs 20 AP and 10 SP; has a 1-round cooldown; scales with Offence and your highest generals.
   - **Offensive Stance:**  
     - Costs 20 AP; has a 1-round cooldown; increases all offence damage by 5% for 1 round.
   - **Defensive Stance:**  
