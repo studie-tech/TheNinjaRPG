@@ -277,6 +277,8 @@ export const GlobalAudioProvider: React.FC<{
         else void setAudioEnabled(!audioEnabled);
         return;
       }
+      // A delayed transport command must not undo an explicit Music-off preference.
+      if (isMusicTurnedOff.current) return;
       if (command === "pause" || (command === "toggle" && audioEnabled)) {
         isRemotePaused.current = true;
         isMusicTurnedOff.current = false;
