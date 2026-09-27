@@ -1350,11 +1350,17 @@ const Character: React.FC<CharacterProps> = (props) => {
   const [variantItem, setVariantItem] = useState<UserItemWithVariants | undefined>(
     undefined,
   );
+  const { data: userSkills } = api.skillTree.getUserSkills.useQuery(undefined, {
+    enabled: !!userData,
+  });
 
-  // The item on the current slot
-
-  // Battles unequip worn gear and hide weapons whose mastery gate is unmet
-  const wearer = { ...userData, items: useritems ?? [] };
+  // Battles unequip worn gear and hide weapons whose mastery gate is unmet; activated
+  // skills count toward masteries as they do there
+  const wearer = {
+    ...userData,
+    items: useritems ?? [],
+    userSkills: userSkills?.filter((userSkill) => userSkill.activated),
+  };
   const masteryWarning = (useritem: UserItemWithRelations) => {
     if (useritem.equipped === "NONE") return undefined;
     const missing = gearMissingMastery(useritem, wearer);

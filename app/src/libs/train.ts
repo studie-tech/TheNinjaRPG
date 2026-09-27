@@ -34,7 +34,7 @@ import type {
 } from "@/drizzle/schema";
 import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
-import type { MasteryStatSource } from "@/libs/mastery";
+import type { MasterySources, MasteryStatSource } from "@/libs/mastery";
 import { effectiveMasteries, hasMasteryRequirements } from "@/libs/mastery";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -284,7 +284,9 @@ const jutsuRequirementChecks = (
      */
     userItems?: UserItemWithItem[];
     ignoreBloodlineItem?: boolean;
-    /** Masteries to gate on; defaults to effectiveMasteries over the bloodline and `userItems`. */
+    /** Activated skills, counted toward masteries as the server gates count them. */
+    userSkills?: MasterySources["userSkills"];
+    /** Masteries to gate on; defaults to effectiveMasteries over the bloodline, `userItems` and `userSkills`. */
     masteries?: MasteryStatSource;
   },
 ): { ok: boolean; warning: string }[] => {
@@ -292,7 +294,11 @@ const jutsuRequirementChecks = (
   const userElements = new Set(getUserElements(userdata));
   const masteries =
     opts?.masteries ??
-    effectiveMasteries({ ...userdata, items: opts?.userItems ?? [] });
+    effectiveMasteries({
+      ...userdata,
+      items: opts?.userItems ?? [],
+      userSkills: opts?.userSkills,
+    });
   return [
     {
       ok: hasRequiredRank(userdata.rank, jutsu.requiredRank),
@@ -362,9 +368,11 @@ export const jutsuRequirementWarning = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
   userItems?: UserItemWithItem[],
+  userSkills?: MasterySources["userSkills"],
 ): string =>
-  jutsuRequirementChecks(jutsu, userdata, { userItems }).find(({ ok }) => !ok)
-    ?.warning ?? "";
+  jutsuRequirementChecks(jutsu, userdata, { userItems, userSkills }).find(
+    ({ ok }) => !ok,
+  )?.warning ?? "";
 
 export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5;
 

@@ -45,6 +45,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFreeTransfers } from "@/libs/jutsu";
+import type { MasterySources } from "@/libs/mastery";
 import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import {
@@ -135,6 +136,9 @@ export default function MyJutsu() {
     undefined,
     { enabled: !!userData },
   );
+  const { data: userSkills } = api.skillTree.getUserSkills.useQuery(undefined, {
+    enabled: !!userData,
+  });
   const { data: userReskins } = api.jutsu.getUserReskins.useQuery(undefined, {
     enabled: !!userData,
   });
@@ -347,18 +351,24 @@ export default function MyJutsu() {
     isReordering;
   const isFetching = l1 || l2;
 
+  // Activated skills raise masteries as the server's equip gate counts them
+  const activeSkills = useMemo(
+    () => userSkills?.filter((userSkill) => userSkill.activated),
+    [userSkills],
+  );
+
   // Categorize jutsu for organized display
   const categorizedJutsus = useMemo(() => {
     if (!userData) return null;
-    return categorizeJutsus(userJutsus, userData, userItems);
-  }, [userJutsus, userData, userItems]);
+    return categorizeJutsus(userJutsus, userData, userItems, activeSkills);
+  }, [userJutsus, userData, userItems, activeSkills]);
 
   // Transform jutsu to action items with warnings
   const transformToActionItems = useCallback(
     (jutsus: UserJutsuWithRelations[]) => {
       return jutsus.map((uj) => {
         const warning = userData
-          ? jutsuRequirementWarning(uj.jutsu, userData, userItems)
+          ? jutsuRequirementWarning(uj.jutsu, userData, userItems, activeSkills)
           : "";
         return {
           ...uj.jutsu,
@@ -370,7 +380,7 @@ export default function MyJutsu() {
         };
       });
     },
-    [userData, userItems],
+    [userData, userItems, activeSkills],
   );
 
   // Derived calculations
@@ -1256,6 +1266,7 @@ const categorizeJutsus = (
   userJutsus: UserJutsuWithRelations[] | undefined,
   userData: NonNullable<UserWithRelations>,
   userItems: UserItemWithItem[] | undefined,
+  userSkills: MasterySources["userSkills"],
 ): CategorizedJutsus => {
   const result: CategorizedJutsus = {
     equipped: [],
@@ -1277,7 +1288,7 @@ const categorizeJutsus = (
 
     // Same predicate as the per-jutsu warning label. Stricter than toggleEquip, which
     // does not require the jutsu's weapon to be equipped.
-    if (jutsuRequirementWarning(uj.jutsu, userData, userItems)) {
+    if (jutsuRequirementWarning(uj.jutsu, userData, userItems, userSkills)) {
       result.unavailable.push(uj);
       continue;
     }
