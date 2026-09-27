@@ -123,6 +123,7 @@ const GithubStar: React.FC = () => (
 interface LayoutLeftSidebarProps {
   variant: LayoutVariant;
   isSignedInLayout: boolean;
+  isSignedIn: boolean;
   accountState: AccountMenuState;
   userData?: UserWithRelations | null;
 }
@@ -130,11 +131,18 @@ interface LayoutLeftSidebarProps {
 export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
   variant,
   isSignedInLayout,
+  isSignedIn,
   accountState,
   userData,
 }) => {
   return (
     <div>
+      {isSignedIn && (
+        <div className="flex items-center gap-3 px-1 py-3 text-sm md:hidden">
+          <AccountButton mobile />
+          <span>Account</span>
+        </div>
+      )}
       {userData && (
         <>
           <SideBannerTitle>
@@ -288,20 +296,8 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   return (
     <div className="flex flex-row items-center">
       {isSignedIn && (
-        <span
-          data-sidebar-keep-open="true"
-          data-clerk-element="true"
-          className="inline-flex items-center [color-scheme:light]"
-        >
-          <UserButton
-            appearance={{
-              elements: {
-                rootBox: "[color-scheme:light]",
-                userButtonPopoverCard: "[color-scheme:light] [pointer-events:initial]",
-                userButtonPopoverMain: "[color-scheme:light]",
-              },
-            }}
-          />
+        <span className="hidden md:inline-flex">
+          <AccountButton />
         </span>
       )}
       <Link href="/event" onClick={onEventClick} aria-label="Event Notifications">
@@ -320,6 +316,25 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
     </div>
   );
 };
+
+const AccountButton: React.FC<{ mobile?: boolean }> = ({ mobile = false }) => (
+  <span
+    data-sidebar-keep-open="true"
+    data-clerk-element="true"
+    className="inline-flex items-center [color-scheme:light]"
+  >
+    <UserButton
+      appearance={{
+        elements: {
+          rootBox: "[color-scheme:light]",
+          userButtonAvatarBox: mobile ? { width: "44px", height: "44px" } : undefined,
+          userButtonPopoverCard: "[color-scheme:light] [pointer-events:initial]",
+          userButtonPopoverMain: "[color-scheme:light]",
+        },
+      }}
+    />
+  </span>
+);
 
 interface LayoutMainMenuProps {
   variant: LayoutVariant;

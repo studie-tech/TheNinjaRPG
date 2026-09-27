@@ -201,6 +201,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     <LayoutLeftSidebar
       variant={variant}
       isSignedInLayout={isSignedInLayout}
+      isSignedIn={!!userId}
       accountState={accountState}
       userData={userData}
     />
