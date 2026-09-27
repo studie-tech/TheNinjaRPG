@@ -1012,11 +1012,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 const value = (item as unknown as Record<string, number>)[id];
                 return evolveOnly ? (
                   <p key={id}>
-                    <b>Req. to evolve</b>: {value} {label}
+                    <b>Req. to evolve</b>: {value?.toLocaleString()} {label}
                   </p>
                 ) : (
                   <p key={id}>
-                    <b>Req. {label}</b>: {value}
+                    <b>Req. {label}</b>: {value?.toLocaleString()}
                   </p>
                 );
               })}
@@ -1477,8 +1477,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                           parsedEffect.reward_sage_mastery_experience &&
                           parsedEffect.reward_sage_mastery_experience > 0 && (
                             <p>
-                              <b>Reward Sage Mastery</b>:{" "}
-                              {parsedEffect.reward_sage_mastery_experience}
+                              <b>Reward Sage Mode Exp</b>:{" "}
+                              {parsedEffect.reward_sage_mastery_experience.toLocaleString()}
                             </p>
                           )}
                         {"reward_seichi_silver" in parsedEffect &&

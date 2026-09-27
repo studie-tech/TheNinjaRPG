@@ -831,7 +831,7 @@ export default function MyJutsu() {
                             ({ id }) => evo[id] != null,
                           ).map(({ id, label }) => (
                             <p key={id} className="text-sm">
-                              Required {label}: <b>{evo[id]}</b>
+                              Required {label}: <b>{evo[id]?.toLocaleString()}</b>
                             </p>
                           ))}
                           {evolveWarning && (
