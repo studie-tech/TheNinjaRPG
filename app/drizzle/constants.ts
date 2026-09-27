@@ -913,6 +913,7 @@ export const SP_PER_LVL = 50;
 export const CP_PER_LVL = 50;
 export const MAX_ATTRIBUTES = 5;
 export const RYO_CAP = 3000000000;
+// Offence/Defence, generals and mastery caps from #1277
 export const MAX_STATS_CAP = 1322420;
 export const MAX_GENS_CAP = 400000;
 export const MAX_MASTERY_CAP = 1500000;
@@ -2003,6 +2004,7 @@ export const RANKED_DIVISIONS = [
 ] as const;
 export const RANKED_LEGEND_LP_REQUIREMENT =
   RANKED_DIVISIONS.find((d) => d.key === "LEGEND")?.rankedLp ?? 900;
+/** Masteries are maxed on purpose, because ranked waives progression gates. */
 export const RANKED_PVP_STATS = {
   strength: MAX_GENS_CAP,
   intelligence: MAX_GENS_CAP,

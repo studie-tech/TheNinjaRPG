@@ -333,8 +333,9 @@ export const canUseJutsu = (
   ignoreBloodlineItem = false,
 ): boolean => {
   if (userdata.isAi) return true;
-  // No userItems passed, so the weapon requirement is left to the callers that have them
-  // (equipping via jutsuRequirementWarning, combat via checkJutsuItems).
+  // No userItems passed, so the weapon requirement is not checked: toggleEquip allows
+  // equipping without the weapon, and non-ranked battles drop such jutsu via
+  // checkJutsuItems.
   return jutsuRequirementChecks(jutsu, userdata, { ignoreBloodlineItem }).every(
     ({ ok }) => ok,
   );
@@ -342,8 +343,8 @@ export const canUseJutsu = (
 
 /**
  * The first unmet requirement as a user-facing message, or "" when the jutsu is usable.
- * Passing `userItems` also evaluates the weapon requirement, making this the
- * "can this be equipped" predicate for the jutsu management page.
+ * Passing `userItems` also evaluates the weapon requirement, which toggleEquip does not,
+ * so the jutsu management page also flags jutsu whose weapon is not equipped.
  */
 export const jutsuRequirementWarning = (
   jutsu: Jutsu,

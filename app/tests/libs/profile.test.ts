@@ -102,7 +102,7 @@ test("getAssignedCombatStatTotal rounds each combat stat before summing", () => 
   ).toBeCloseTo(60.06, 2);
 });
 
-test("manuallyAssignUserStats applies ranked mastery caps", () => {
+test("manuallyAssignUserStats assigns the ranked combat stats and masteries", () => {
   const user = {
     offence: 10,
     defence: 10,

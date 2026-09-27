@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { ElementName } from "@/drizzle/constants";
 import {
   COST_EXTRA_JUTSU_SLOT,
   COST_RESKIN_JUTSU,
@@ -61,7 +60,6 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import { UploadButton } from "@/utils/uploadthing";
 import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
-import { getUserElements } from "@/validators/user";
 
 export default function MyJutsu() {
   // tRPC utility
@@ -349,9 +347,6 @@ export default function MyJutsu() {
     isReordering;
   const isFetching = l1 || l2;
 
-  // Collapse UserItem and Item
-  const userElements = useMemo(() => new Set(getUserElements(userData)), [userData]);
-
   // Categorize jutsu for organized display
   const categorizedJutsus = useMemo(() => {
     if (!userData) return null;
@@ -375,7 +370,7 @@ export default function MyJutsu() {
         };
       });
     },
-    [userData, userItems, userElements],
+    [userData, userItems],
   );
 
   // Derived calculations
@@ -1271,7 +1266,8 @@ const categorizeJutsus = (
       continue;
     }
 
-    // Same predicate the equip mutation and the per-jutsu warning label use
+    // Same predicate as the per-jutsu warning label. Stricter than toggleEquip, which
+    // does not require the jutsu's weapon to be equipped.
     if (jutsuRequirementWarning(uj.jutsu, userData, userItems)) {
       result.unavailable.push(uj);
       continue;

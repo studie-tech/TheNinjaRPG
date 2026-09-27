@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 import { availableUserActions } from "@/libs/combat/actions";
 import { applyEffects } from "@/libs/combat/process";
 import {
+  damageCalc,
   decreaseMastery,
   increaseMastery,
   increaseStats,
   updateStatUsage,
 } from "@/libs/combat/tags";
-import { damageCalc } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";
 import type { CompleteBattle } from "@/libs/combat/types";
 import {
