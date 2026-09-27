@@ -40,7 +40,10 @@ export default function Report(props: { params: Promise<{ reportid: string }> })
         subtitle="This report could not be opened"
         defaultBackHref="/profile"
       >
-        {error?.message ?? REPORT_ACCESS_DENIED_MESSAGE}
+        <p>{error?.message ?? REPORT_ACCESS_DENIED_MESSAGE}</p>
+        <Link href="/profile" className="mt-2 inline-block hover:text-orange-700">
+          Back to profile
+        </Link>
       </ContentBox>
     );
   }

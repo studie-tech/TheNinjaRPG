@@ -19,8 +19,9 @@ Sentry.init({
     "Unauthorized for tRPC endpoint",
     "You are acting too fast",
     // A player opened a report they cannot read. The report page shows this message
-    // and a way back to the profile, and the client toasts it. The query stops loading.
-    REPORT_ACCESS_DENIED_MESSAGE,
+    // and a way back, and the client toasts it. The query stops loading. Anchored so a
+    // different exception that merely contains the sentence is still reported.
+    new RegExp(`^${REPORT_ACCESS_DENIED_MESSAGE}$`),
     // Stale client after a deployment: the router state tree's last element used
     // to be a boolean and is now a number, so a browser still running the
     // previous build fails Next's schema check on every RSC request. UX: the
