@@ -120,12 +120,12 @@ export const GlobalAudioProvider: React.FC<{
   const isRemotePaused = useRef(false);
   const isMusicTurnedOff = useRef(false);
   const pauseVersion = useRef(0);
-  // A saved or in-game Music-off preference can arrive when playback is already paused.
-  const clearAudioSession = () => {
+  // Release focus when playback is already stopped; transport Pause keeps Play available.
+  const releaseAudioSession = (preserveControls = false) => {
     audioSessionQueue.current = audioSessionQueue.current
       .catch(() => undefined)
       .then(async () => {
-        await audioSession.deactivate();
+        await audioSession.deactivate(preserveControls);
         hasActiveAudioSession.current = false;
       });
   };
@@ -203,7 +203,7 @@ export const GlobalAudioProvider: React.FC<{
     isMusicTurnedOff.current = !shouldPlay;
     if (!shouldPlay) {
       pauseVersion.current += 1;
-      if (!audioEnabled && !isPlaying) clearAudioSession();
+      if (!audioEnabled && !isPlaying) releaseAudioSession();
     }
     void setAudioEnabled(shouldPlay);
   }, [isClient, savedMusicOn]);
@@ -283,6 +283,7 @@ export const GlobalAudioProvider: React.FC<{
         isRemotePaused.current = true;
         isMusicTurnedOff.current = false;
         pauseVersion.current += 1;
+        if (!audioEnabled && !isPlaying) releaseAudioSession(true);
         void setAudioEnabled(false);
       } else {
         const requestedPauseVersion = pauseVersion.current;
@@ -337,7 +338,7 @@ export const GlobalAudioProvider: React.FC<{
     isMusicTurnedOff.current = !enabled;
     if (!enabled) {
       pauseVersion.current += 1;
-      if (!audioEnabled && !isPlaying) clearAudioSession();
+      if (!audioEnabled && !isPlaying) releaseAudioSession();
     }
     return setAudioEnabled(enabled);
   };
