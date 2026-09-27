@@ -120,6 +120,15 @@ export const GlobalAudioProvider: React.FC<{
   const isRemotePaused = useRef(false);
   const isMusicTurnedOff = useRef(false);
   const pauseVersion = useRef(0);
+  // A saved or in-game Music-off preference can arrive when playback is already paused.
+  const clearAudioSession = () => {
+    audioSessionQueue.current = audioSessionQueue.current
+      .catch(() => undefined)
+      .then(async () => {
+        await audioSession.deactivate();
+        hasActiveAudioSession.current = false;
+      });
+  };
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -189,15 +198,14 @@ export const GlobalAudioProvider: React.FC<{
   // the local play/pause state they selected.
   useEffect(() => {
     if (!isClient) return;
+    const shouldPlay = savedMusicOn ?? getInitialMusicState();
     isRemotePaused.current = false;
-    isMusicTurnedOff.current =
-      savedMusicOn === undefined ? !getInitialMusicState() : !savedMusicOn;
-    if (isMusicTurnedOff.current) pauseVersion.current += 1;
-    if (savedMusicOn !== undefined) {
-      void setAudioEnabled(savedMusicOn);
-    } else {
-      void setAudioEnabled(getInitialMusicState());
+    isMusicTurnedOff.current = !shouldPlay;
+    if (!shouldPlay) {
+      pauseVersion.current += 1;
+      clearAudioSession();
     }
+    void setAudioEnabled(shouldPlay);
   }, [isClient, savedMusicOn]);
 
   useEffect(() => {
@@ -325,7 +333,10 @@ export const GlobalAudioProvider: React.FC<{
     // The in-game switch is a preference change, not a transport pause.
     isRemotePaused.current = false;
     isMusicTurnedOff.current = !enabled;
-    if (!enabled) pauseVersion.current += 1;
+    if (!enabled) {
+      pauseVersion.current += 1;
+      clearAudioSession();
+    }
     return setAudioEnabled(enabled);
   };
 
