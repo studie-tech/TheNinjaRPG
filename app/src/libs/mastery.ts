@@ -2,6 +2,7 @@ import type {
   MasteryName,
   MasteryType,
   SkillTreeTarget,
+  StatType,
   UserRank,
 } from "@/drizzle/constants";
 import {
@@ -145,6 +146,27 @@ export const effectiveMasteries = (
     addMasteryTags(result, stored, wornGearTags(ui), user.isAi ? user.level : ui.level);
   }
   return result;
+};
+
+/**
+ * The jutsu type "Highest"-typed tags resolve to: the greatest of the four jutsu masteries,
+ * with a tie keeping the earlier type in MasteryTypes order.
+ */
+export const highestJutsuMasteryType = (
+  user: Pick<
+    MasteryStatSource,
+    "ninjutsuMastery" | "genjutsuMastery" | "taijutsuMastery" | "bukijutsuMastery"
+  >,
+): Exclude<StatType, "Highest"> => {
+  const masteries = {
+    Ninjutsu: user.ninjutsuMastery,
+    Genjutsu: user.genjutsuMastery,
+    Taijutsu: user.taijutsuMastery,
+    Bukijutsu: user.bukijutsuMastery,
+  } as const;
+  return (Object.keys(masteries) as (keyof typeof masteries)[]).reduce((prev, cur) =>
+    masteries[cur] > masteries[prev] ? cur : prev,
+  );
 };
 
 /**

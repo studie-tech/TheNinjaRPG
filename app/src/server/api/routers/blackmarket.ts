@@ -22,7 +22,7 @@ import {
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { actionLog, ryoTrade, userData } from "@/drizzle/schema";
-import { getAssignedCombatStatTotal, withCappedStats } from "@/libs/profile";
+import { getRedistributableStatTotal } from "@/libs/profile";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import { fetchVillages } from "@/routers/village";
 import {
@@ -647,8 +647,7 @@ export const blackMarketRouter = createTRPCRouter({
         );
       }
       const inputSum = round(Object.values(input).reduce((a, b) => a + b, 0));
-      // Points above the rank cap never count in battle, so they are not redistributable
-      const availableStats = round(getAssignedCombatStatTotal(withCappedStats(user)));
+      const availableStats = round(getRedistributableStatTotal(user));
       if (inputSum !== availableStats) {
         return errorResponse(
           `Requested points ${inputSum} do not match your ${availableStats} assigned combat stat points`,

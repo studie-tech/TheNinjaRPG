@@ -14,9 +14,8 @@ import {
 } from "../../setup/testDatabase";
 
 /**
- * A paid stat reset must move exactly the points the client showed: the rank-capped total.
- * Stats stored above the rank cap (training adds without a clamp) used to make the client's
- * capped total and the server's raw total disagree, so every reset was rejected.
+ * A paid stat reset moves every assigned point, including points stored above a rank cap,
+ * and places them within the rank caps.
  */
 const USER_ID = "resetter";
 const { stats_cap: GENIN_STATS_CAP, gens_cap: GENIN_GENS_CAP } = getUserCaps("GENIN");
@@ -53,10 +52,30 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
     await resetTables(actionLog, userData);
   });
 
-  it("accepts a redistribution of the rank-capped total", async () => {
+  it("redistributes the points stored above the rank cap instead of dropping them", async () => {
     await resetter();
     const api = await callerFor(blackMarketRouter, USER_ID);
-    // Capped total: 60,000 + 5 x 1,000; the 500 above the cap never counted in battle
+    // Stored total: 60,500 + 5 x 1,000; the 500 above the cap moves to willpower
+    const result = await api.updateStats({
+      offence: 30_000,
+      defence: 30_000,
+      strength: 1_000,
+      speed: 1_000,
+      intelligence: 1_000,
+      willpower: 2_500,
+    });
+
+    expect(result.success).toBe(true);
+    const user = await readUser();
+    expect(user.offence).toBe(30_000);
+    expect(user.defence).toBe(30_000);
+    expect(user.willpower).toBe(2_500);
+    expect(user.reputationPoints).toBe(0);
+  });
+
+  it("rejects a redistribution that leaves the above-cap points out", async () => {
+    await resetter();
+    const api = await callerFor(blackMarketRouter, USER_ID);
     const result = await api.updateStats({
       offence: 30_000,
       defence: 30_000,
@@ -66,25 +85,23 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
       willpower: 2_000,
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     const user = await readUser();
-    expect(user.offence).toBe(30_000);
-    expect(user.defence).toBe(30_000);
-    expect(user.willpower).toBe(2_000);
-    expect(user.reputationPoints).toBe(0);
+    expect(user.offence).toBe(GENIN_STATS_CAP + 500);
+    expect(user.reputationPoints).toBe(COST_RESET_STATS);
   });
 
   it("rejects a stat placed above the rank cap without charging", async () => {
     await resetter();
     const api = await callerFor(blackMarketRouter, USER_ID);
-    // Sums to the capped total, so only the rank cap can reject it
+    // Sums to the stored total, so only the rank cap can reject it
     const result = await api.updateStats({
       offence: 10,
       defence: 10,
       strength: GENIN_GENS_CAP + 10,
       speed: 10,
       intelligence: 10,
-      willpower: 4_950,
+      willpower: 5_450,
     });
 
     expect(result.success).toBe(false);

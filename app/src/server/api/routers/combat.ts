@@ -149,7 +149,12 @@ import {
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
-import { effectiveMasteries, isWornGear, isWornGearDisabled } from "@/libs/mastery";
+import {
+  effectiveMasteries,
+  highestJutsuMasteryType,
+  isWornGear,
+  isWornGearDisabled,
+} from "@/libs/mastery";
 import {
   calcActiveUserRegen,
   calcCP,
@@ -2267,8 +2272,11 @@ export const initiateBattle = async (
       manuallyAssignUserStats(user, info?.userStatDistribution);
     }
 
-    // Apply caps to user stats. Ranked distributions max every mastery on purpose, as ranked
-    // waives progression gates, so masteries cap at the ELITE JONIN rank ranked play assigns.
+    // Resolve "Highest" before rank caps, which can tie masteries the stored values separate
+    Object.assign(user, { highestMasteryType: highestJutsuMasteryType(user) });
+
+    // Apply caps to user stats. Ranked waives progression gates and plays everyone as an
+    // ELITE JONIN, so its distributions cap at that rank rather than the player's own.
     const isRankedBattle =
       battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING";
     capUserStats(user, isRankedBattle ? "ELITE JONIN" : user.rank);
@@ -2925,17 +2933,9 @@ export const processUsersForBattle = async (
     }
 
     // Add preferred (or highest) mastery type to user, used for tag efficiency matching
-    const masteries = {
-      Ninjutsu: user.ninjutsuMastery,
-      Genjutsu: user.genjutsuMastery,
-      Taijutsu: user.taijutsuMastery,
-      Bukijutsu: user.bukijutsuMastery,
-    } as const;
     if (!user.preferredStat || user.preferredStat === "Highest") {
-      // A tie keeps the earlier type, in MasteryTypes order.
-      user.highestMasteryType = (
-        Object.keys(masteries) as (keyof typeof masteries)[]
-      ).reduce((prev, cur) => (masteries[cur] > masteries[prev] ? cur : prev));
+      user.highestMasteryType =
+        inputUser.highestMasteryType ?? highestJutsuMasteryType(user);
     } else {
       user.highestMasteryType = user.preferredStat;
     }

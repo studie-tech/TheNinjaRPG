@@ -115,6 +115,8 @@ export type CombatQueryUser = UserData & {
   sageModeActivatedRound?: number | null;
   sageModeExpiresRound?: number | null;
   sageModeUsedThisBattle?: boolean;
+  // Resolved by initiateBattle before rank caps, or carried over from live BattleUserState
+  highestMasteryType?: Exclude<StatType, "Highest">;
   village: CombatQueryVillage | null;
   loadout?: { jutsuIds: string[] } | null;
   clan?: Clan | null;

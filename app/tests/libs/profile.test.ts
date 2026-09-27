@@ -1,12 +1,17 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { RANKED_PVP_STATS, SCALED_AI_STAT_BUDGET_SHARE } from "@/drizzle/constants";
+import {
+  getUserCaps,
+  RANKED_PVP_STATS,
+  SCALED_AI_STAT_BUDGET_SHARE,
+} from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import {
   calcLevel,
   calcLevelRequirements,
   canAttackBracket,
+  capUserStats,
   getAssignedCombatStatTotal,
   getExpBracket,
   manuallyAssignUserStats,
@@ -321,3 +326,40 @@ const readSeededAiRows = () => {
   }
   return rows;
 };
+
+test("capUserStats caps every stat at the given rank, the user's own by default", () => {
+  const { stats_cap, gens_cap, mastery_cap } = getUserCaps("GENIN");
+  const over = () =>
+    ({
+      rank: "GENIN",
+      offence: stats_cap + 1000,
+      defence: 10,
+      strength: gens_cap + 1000,
+      speed: 10,
+      intelligence: 10,
+      willpower: 10,
+      ninjutsuMastery: mastery_cap + 1000,
+      genjutsuMastery: 10,
+      taijutsuMastery: 10,
+      bukijutsuMastery: 10,
+      bloodlineMastery: 10,
+      sageMastery: 10,
+    }) as UserData;
+
+  const own = over();
+  capUserStats(own);
+  expect([own.offence, own.strength, own.ninjutsuMastery]).toEqual([
+    stats_cap,
+    gens_cap,
+    mastery_cap,
+  ]);
+
+  // Ranked plays everyone as an ELITE JONIN
+  const ranked = over();
+  capUserStats(ranked, "ELITE JONIN");
+  expect([ranked.offence, ranked.strength, ranked.ninjutsuMastery]).toEqual([
+    stats_cap + 1000,
+    gens_cap + 1000,
+    mastery_cap + 1000,
+  ]);
+});

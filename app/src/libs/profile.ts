@@ -126,14 +126,13 @@ export const withCappedStats = <T extends UserData>(user: T): T => {
 };
 
 /**
- * Cap user stats to the user's rank's caps
+ * Cap user stats to a rank's caps
  * @param user - the user to cap the stats of
- * @param masteryRank - the rank whose mastery cap applies
+ * @param rank - the rank whose caps apply, the user's own by default
  * @returns void
  */
-export function capUserStats(user: UserData, masteryRank: UserRank = user.rank) {
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  const { mastery_cap } = getUserCaps(masteryRank);
+export function capUserStats(user: UserData, rank: UserRank = user.rank) {
+  const { stats_cap, gens_cap, mastery_cap } = getUserCaps(rank);
   if (user.offence > stats_cap) user.offence = stats_cap;
   if (user.defence > stats_cap) user.defence = stats_cap;
   if (user.strength > gens_cap) user.strength = gens_cap;
@@ -229,6 +228,20 @@ export const getAssignedCombatStatTotal = (
   roundCombatStat(user.speed) +
   roundCombatStat(user.intelligence) +
   roundCombatStat(user.willpower);
+
+/**
+ * Points a paid stat reset redistributes: every assigned point, including any stored above
+ * a rank cap (it counts again after a rank-up), limited to what the rank's caps can hold.
+ */
+export const getRedistributableStatTotal = (
+  user: Pick<
+    UserData,
+    "rank" | "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
+  >,
+) => {
+  const { stats_cap, gens_cap } = getUserCaps(user.rank);
+  return Math.min(getAssignedCombatStatTotal(user), 2 * stats_cap + 4 * gens_cap);
+};
 
 /** Assign stats of user, meant for the training dummy and ranked equalization */
 export function manuallyAssignUserStats(user: UserData, stats: AssignableUserStats) {
