@@ -1,7 +1,6 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
-import { getPlatform } from "@/libs/native/bridge";
 import type { UserWithRelations } from "@/routers/profile";
 import { ensureDom } from "../setup-dom.mjs";
 
@@ -13,6 +12,7 @@ type AudioTestMocks = {
   deactivate: ReturnType<typeof vi.fn>;
   isPlaying: boolean;
   enabled: boolean;
+  src: string;
 };
 
 function getAudioTestMocks(): AudioTestMocks {
@@ -25,21 +25,30 @@ function getAudioTestMocks(): AudioTestMocks {
     deactivate: vi.fn(async () => undefined),
     isPlaying: false,
     enabled: true,
+    src: "",
   };
   return globals.__audioTestMocks;
 }
 
 vi.mock("@/hooks/useAudio", () => ({
-  useAudio: () => ({
-    isPlaying: getAudioTestMocks().isPlaying,
-    requiresInteraction: false,
-    enabled: getAudioTestMocks().enabled,
-    setEnabled: getAudioTestMocks().setEnabled,
-  }),
+  useAudio: ({ src }: { src: string }) => {
+    getAudioTestMocks().src = src;
+    return {
+      isPlaying: getAudioTestMocks().isPlaying,
+      requiresInteraction: false,
+      enabled: getAudioTestMocks().enabled,
+      setEnabled: getAudioTestMocks().setEnabled,
+    };
+  },
 }));
 
 vi.mock("@/libs/native", () => ({
-  platform: getPlatform,
+  platform: () => {
+    const reported = (
+      window as typeof window & { Capacitor?: { getPlatform: () => string } }
+    ).Capacitor?.getPlatform();
+    return reported === "ios" || reported === "android" ? reported : "web";
+  },
   audioSession: {
     activate: getAudioTestMocks().activate,
     deactivate: getAudioTestMocks().deactivate,
@@ -56,10 +65,10 @@ vi.mock("@/utils/audio", () => ({
   preloadAudioBuffers: vi.fn(async () => undefined),
 }));
 
-const user = (level: number) =>
+const user = (level: number, musicOn = true) =>
   ({
     userId: "user-1",
-    musicOn: true,
+    musicOn,
     buttonSfxOn: true,
     level,
   }) as UserWithRelations;
@@ -75,6 +84,7 @@ afterEach(() => {
   audio.deactivate.mockClear();
   audio.isPlaying = false;
   audio.enabled = true;
+  audio.src = "";
   audio.remoteCommand = undefined;
 });
 
@@ -164,6 +174,7 @@ describe("GlobalAudioProvider", () => {
     );
 
     await waitFor(() => expect(audio.remoteCommand).toBeTypeOf("function"));
+    await waitFor(() => expect(audio.src).not.toBe(""));
     audio.setEnabled.mockClear();
 
     act(() => audio.remoteCommand?.("pause"));
@@ -179,5 +190,23 @@ describe("GlobalAudioProvider", () => {
 
     await act(async () => undefined);
     expect(audio.setEnabled).not.toHaveBeenCalled();
+    expect(audio.src).not.toBe("");
+  });
+
+  it("unloads the soundtrack when the saved music preference is off", async () => {
+    const audio = getAudioTestMocks();
+    const view = render(
+      <GlobalAudioProvider userData={user(1)}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    await waitFor(() => expect(audio.src).not.toBe(""));
+
+    view.rerender(
+      <GlobalAudioProvider userData={user(1, false)}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    await waitFor(() => expect(audio.src).toBe(""));
   });
 });

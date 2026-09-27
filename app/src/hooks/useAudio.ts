@@ -78,6 +78,8 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
   // Initialize audio element
   useEffect(() => {
+    setIsPlaying(false);
+    setCanPlay(false);
     if (!src) return;
 
     const audio = new Audio();
@@ -183,7 +185,9 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
       audio.removeEventListener("ended", handleEnded);
 
       audio.pause();
-      audio.src = "";
+      audio.removeAttribute("src");
+      audio.load();
+      audioRef.current = null;
     };
   }, [src, loop, volume, effectivePreload]);
 

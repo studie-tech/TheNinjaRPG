@@ -112,6 +112,7 @@ export const GlobalAudioProvider: React.FC<{
 }> = ({ children, userData }) => {
   // Mount flag to keep SSR/CSR output in sync
   const [isClient, setIsClient] = useState(false);
+  const [isMusicPreferredOn, setIsMusicPreferredOn] = useState(false);
   // Bridge calls are asynchronous. Serialising them keeps a music-off deactivation from
   // being overtaken by an earlier activation.
   const audioSessionQueue = useRef<Promise<void>>(Promise.resolve());
@@ -182,7 +183,7 @@ export const GlobalAudioProvider: React.FC<{
     enabled: audioEnabled,
     setEnabled: setAudioEnabled,
   } = useAudio({
-    src: musicSrc,
+    src: isMusicPreferredOn ? musicSrc : "",
     loop: true,
     volume: 0.5,
     preload: "metadata",
@@ -199,6 +200,7 @@ export const GlobalAudioProvider: React.FC<{
   useEffect(() => {
     if (!isClient) return;
     const shouldPlay = savedMusicOn ?? getInitialMusicState();
+    setIsMusicPreferredOn(shouldPlay);
     isRemotePaused.current = false;
     isMusicTurnedOff.current = !shouldPlay;
     if (!shouldPlay) {
@@ -336,6 +338,7 @@ export const GlobalAudioProvider: React.FC<{
 
   const setMusicEnabled = (enabled: boolean) => {
     // The in-game switch is a preference change, not a transport pause.
+    setIsMusicPreferredOn(enabled);
     isRemotePaused.current = false;
     isMusicTurnedOff.current = !enabled;
     if (!enabled) {
