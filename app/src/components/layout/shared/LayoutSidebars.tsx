@@ -138,9 +138,8 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
   return (
     <div>
       {isSignedIn && (
-        <div className="flex items-center gap-3 px-1 py-3 text-sm md:hidden">
+        <div className="px-1 py-3 md:hidden">
           <AccountButton mobile />
-          <span>Account</span>
         </div>
       )}
       {userData && (
@@ -321,13 +320,35 @@ const AccountButton: React.FC<{ mobile?: boolean }> = ({ mobile = false }) => (
   <span
     data-sidebar-keep-open="true"
     data-clerk-element="true"
-    className="inline-flex items-center [color-scheme:light]"
+    className={
+      mobile
+        ? "block w-full [color-scheme:light]"
+        : "inline-flex items-center [color-scheme:light]"
+    }
   >
     <UserButton
+      showName={mobile}
       appearance={{
         elements: {
-          rootBox: "[color-scheme:light]",
+          rootBox: mobile
+            ? { width: "100%", colorScheme: "light" }
+            : "[color-scheme:light]",
+          userButtonTrigger: mobile
+            ? {
+                display: "flex",
+                width: "100%",
+                minHeight: "44px",
+                justifyContent: "flex-start",
+                color: "inherit",
+              }
+            : undefined,
+          userButtonBox: mobile
+            ? { flexDirection: "row-reverse", gap: "12px", color: "inherit" }
+            : undefined,
           userButtonAvatarBox: mobile ? { width: "44px", height: "44px" } : undefined,
+          userButtonOuterIdentifier: mobile
+            ? { color: "inherit", fontSize: "14px" }
+            : undefined,
           userButtonPopoverCard: "[color-scheme:light] [pointer-events:initial]",
           userButtonPopoverMain: "[color-scheme:light]",
         },
