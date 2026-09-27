@@ -31,7 +31,7 @@ export const activate = async (): Promise<boolean> => {
 
 /**
  * Release audio focus so other apps can resume. Keep the transport and metadata only
- * for a lock-screen pause; turning Music off clears them as well.
+ * for a remote Pause; turning Music off clears them as well.
  */
 export const deactivate = async (preserveControls = false): Promise<void> => {
   await invokeSafe(PLUGIN, "deactivate", { preserveControls });

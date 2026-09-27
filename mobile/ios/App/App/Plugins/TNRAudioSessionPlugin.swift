@@ -55,7 +55,7 @@ public class TNRAudioSessionPlugin: CAPPlugin, CAPBridgedPlugin {
                 false,
                 options: [.notifyOthersOnDeactivation]
             )
-            // A lock-screen Pause releases audio focus but keeps the Play command and
+            // A remote Pause releases audio focus but keeps the Play command and
             // metadata available. Turning Music off in the app clears both.
             if call.getBool("preserveControls") != true {
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
