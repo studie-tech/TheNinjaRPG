@@ -116,7 +116,6 @@ export const GlobalAudioProvider: React.FC<{
   // being overtaken by an earlier activation.
   const audioSessionQueue = useRef<Promise<void>>(Promise.resolve());
   const hasActiveAudioSession = useRef(false);
-  const [isRemotePaused, setIsRemotePaused] = useState(false);
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -210,15 +209,12 @@ export const GlobalAudioProvider: React.FC<{
       .catch(() => undefined)
       .then(async () => {
         if (!audioEnabled) {
-          if (isRemotePaused && platform() === "ios") {
-            if (!isPlaying && hasActiveAudioSession.current) {
-              await audioSession.deactivate(true);
-              hasActiveAudioSession.current = false;
-            }
-          } else {
-            await audioSession.deactivate();
-            hasActiveAudioSession.current = false;
-          }
+          // WebKit can fire the background pause before our remote-command callback.
+          // Keep Play available for either order, while releasing audio focus.
+          const preserveControls = platform() === "ios" && document.hidden;
+          if (preserveControls && isPlaying) return;
+          await audioSession.deactivate(preserveControls);
+          hasActiveAudioSession.current = false;
           return;
         }
         if (!isPlaying && platform() !== "ios") {
@@ -238,7 +234,7 @@ export const GlobalAudioProvider: React.FC<{
           artist: userData?.village?.name ?? "Seichi",
         });
       });
-  }, [audioEnabled, isClient, isPlaying, isRemotePaused, userData?.village?.name]);
+  }, [audioEnabled, isClient, isPlaying, userData?.village?.name]);
 
   useEffect(
     () => () => {
@@ -263,15 +259,15 @@ export const GlobalAudioProvider: React.FC<{
         return;
       }
       if (command === "pause" || (command === "toggle" && audioEnabled)) {
-        setIsRemotePaused(true);
         void setAudioEnabled(false);
       } else {
         // Restore the native session before asking the backgrounded WebView to play.
         audioSessionQueue.current = audioSessionQueue.current
           .catch(() => undefined)
           .then(async () => {
-            hasActiveAudioSession.current = await audioSession.activate();
-            setIsRemotePaused(false);
+            const activated = await audioSession.activate();
+            if (!activated) return;
+            hasActiveAudioSession.current = true;
             void setAudioEnabled(true);
           });
       }
@@ -300,10 +296,7 @@ export const GlobalAudioProvider: React.FC<{
 
   const contextValue: AudioContextValue = {
     audioEnabled,
-    setAudioEnabled: (enabled) => {
-      setIsRemotePaused(false);
-      return setAudioEnabled(enabled);
-    },
+    setAudioEnabled,
     buttonSfxOn,
     setButtonSfxOn,
     sfxVolume,
