@@ -34,7 +34,8 @@ import type {
 } from "@/drizzle/schema";
 import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
-import { hasMasteryRequirements } from "@/libs/mastery";
+import type { MasteryStatSource } from "@/libs/mastery";
+import { effectiveMasteries, hasMasteryRequirements } from "@/libs/mastery";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
@@ -283,10 +284,15 @@ const jutsuRequirementChecks = (
      */
     userItems?: UserItemWithItem[];
     ignoreBloodlineItem?: boolean;
+    /** Masteries to gate on; defaults to effectiveMasteries over the bloodline and `userItems`. */
+    masteries?: MasteryStatSource;
   },
 ): { ok: boolean; warning: string }[] => {
   const bloodlineItems = opts?.userItems ?? userdata.items;
   const userElements = new Set(getUserElements(userdata));
+  const masteries =
+    opts?.masteries ??
+    effectiveMasteries({ ...userdata, items: opts?.userItems ?? [] });
   return [
     {
       ok: hasRequiredRank(userdata.rank, jutsu.requiredRank),
@@ -309,7 +315,7 @@ const jutsuRequirementChecks = (
       warning: "You do not have the required bloodline to use this jutsu.",
     },
     {
-      ok: hasMasteryRequirements(userdata, jutsu),
+      ok: hasMasteryRequirements(masteries, jutsu),
       warning: "You do not have the required mastery to use this jutsu.",
     },
     {
@@ -327,24 +333,30 @@ const jutsuRequirementChecks = (
   ];
 };
 
+/**
+ * @param masteries - effectiveMasteries over every source the caller loaded; without it only
+ *   the bloodline counts
+ */
 export const canUseJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
   ignoreBloodlineItem = false,
+  masteries?: MasteryStatSource,
 ): boolean => {
   if (userdata.isAi) return true;
   // No userItems passed, so the weapon requirement is not checked: toggleEquip allows
   // equipping without the weapon, and non-ranked battles drop such jutsu via
   // checkJutsuItems.
-  return jutsuRequirementChecks(jutsu, userdata, { ignoreBloodlineItem }).every(
-    ({ ok }) => ok,
-  );
+  return jutsuRequirementChecks(jutsu, userdata, {
+    ignoreBloodlineItem,
+    masteries,
+  }).every(({ ok }) => ok);
 };
 
 /**
  * The first unmet requirement as a user-facing message, or "" when the jutsu is usable.
  * Passing `userItems` also evaluates the weapon requirement, which toggleEquip does not,
- * so the jutsu management page also flags jutsu whose weapon is not equipped.
+ * and counts worn gear toward masteries.
  */
 export const jutsuRequirementWarning = (
   jutsu: Jutsu,

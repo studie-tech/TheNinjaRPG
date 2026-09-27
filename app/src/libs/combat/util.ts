@@ -17,12 +17,14 @@ import type {
 } from "@/drizzle/constants";
 import {
   AutoBattleTypes,
+  BATTLE_TAG_STACKING,
   CLAN_BATTLE_REWARD_POINTS,
   CombatStatTypes,
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
   HEX_ASPECT_RATIO,
   HEX_STACKING_DISPLACEMENT,
+  isPreBattleGearFromType,
   KAGE_CHALLENGE_WIN_PRESTIGE,
   KAGE_PRESTIGE_COST,
   KILLING_NOTORIETY_GAIN,
@@ -84,7 +86,7 @@ import {
   publicState,
 } from "./constants";
 import { checkFriendlyFire } from "./process";
-import { getPower } from "./tags";
+import { decreaseMastery, getPower, increaseMastery, sealCheck } from "./tags";
 import type {
   BattleRoundContext,
   BattleUserState,
@@ -1127,6 +1129,15 @@ export const getEffectStackKey = (effect: UserEffect) => {
   }
   return key;
 };
+
+/** Whether an effect may apply in a pass that has already applied the `applied` stack keys. */
+export const canStackEffect = (effect: UserEffect, applied: Set<string>) =>
+  BATTLE_TAG_STACKING ||
+  !applied.has(getEffectStackKey(effect)) ||
+  effect.fromType === "bloodline" ||
+  effect.fromType === "sageMode" ||
+  effect.fromType === "sageModeAfter" ||
+  isPreBattleGearFromType(effect.fromType);
 
 /**
  * Determines the processing stage for a damage modifier effect.
@@ -2609,6 +2620,8 @@ export const alignBattle = (
       }
       return true; // Keep active effects
     });
+    // Tags that expired or landed last round change what the next actor may use
+    refreshMasteries(battle.usersState, battle.usersEffects);
     // Sage exhaustion + clearing `sageModeActivated` runs in `applySageModeAfterRoundTransition`
     // (called from combat router when `progressRound` — avoids util ↔ process circular imports).
     // Note: Pool adjustments are handled centrally in applyEffects post-pass
@@ -3137,4 +3150,40 @@ export const resetMasteriesToBase = (user: BattleUserState) => {
       user[key] = stored;
     }
   }
+};
+
+/**
+ * Re-derive masteries from their bases and the mastery tags active now, with applyEffects'
+ * seal, stacking and prevent rules, for state that is read before the next applyEffects: a
+ * new battle, or a new round whose expired or newly landed tags change what is usable.
+ */
+export const refreshMasteries = (
+  usersState: BattleUserState[],
+  usersEffects: UserEffect[],
+) => {
+  usersState.forEach(resetMasteriesToBase);
+  const sealEffects = usersEffects.filter(
+    (e) => e.type === "seal" && !e.isNew && isEffectActive(e),
+  );
+  const applied = new Set<string>();
+  usersEffects
+    .filter(
+      (e) =>
+        (e.type === "increasemastery" || e.type === "decreasemastery") &&
+        e.targetType === "user" &&
+        isEffectActive(e),
+    )
+    .sort(sortEffects)
+    .forEach((effect) => {
+      const creator = usersState.find((u) => u.userId === effect.creatorId);
+      const target = usersState.find((u) => u.userId === effect.targetId);
+      if (!creator || !target || !canStackEffect(effect, applied)) return;
+      if (sealCheck(effect, sealEffects)) return;
+      applied.add(getEffectStackKey(effect));
+      if (effect.type === "increasemastery") {
+        increaseMastery(effect, usersEffects, target);
+      } else {
+        decreaseMastery(effect, usersEffects, target);
+      }
+    });
 };

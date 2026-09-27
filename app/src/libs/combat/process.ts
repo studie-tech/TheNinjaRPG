@@ -1,6 +1,5 @@
 import { nanoid } from "nanoid";
 import {
-  BATTLE_TAG_STACKING,
   DMG_REDUCTION_CAP,
   DURABILITY_USABILITY_THR,
   ID_ANIMATION_SMOKE,
@@ -124,6 +123,7 @@ import {
   applyPoolAdjustmentsToBase,
   calcApplyRatio,
   calcEffectRoundInfo,
+  canStackEffect,
   collapseConsequences,
   creditDamageDealt,
   findBarrier,
@@ -1118,13 +1118,7 @@ export const applySingleEffect = (
   // Remember the effect
   const idx = getEffectStackKey(effect);
   // Determine whether the tags should stack
-  const cacheCheck = BATTLE_TAG_STACKING
-    ? true
-    : !appliedEffects.has(idx) ||
-      effect.fromType === "bloodline" ||
-      effect.fromType === "sageMode" ||
-      effect.fromType === "sageModeAfter" ||
-      isPreBattleGearFromType(effect.fromType);
+  const cacheCheck = canStackEffect(effect, appliedEffects);
   // Special cases
   if (
     BARRIER_DAMAGE_TAG_TYPES.has(effect.type) &&

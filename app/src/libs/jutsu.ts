@@ -22,6 +22,7 @@ import {
   RANKED_LOADOUT_MAX_SUMMON_JUTSUS,
 } from "@/drizzle/constants";
 import type { Jutsu, UserJutsuWithRelations } from "@/drizzle/schema";
+import type { MasteryStatSource } from "@/libs/mastery";
 import { calcJutsuEquipLimit, canUseJutsu } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { canChangeContent } from "@/utils/permissions";
@@ -343,8 +344,10 @@ export const computeJutsuLoadoutAssignments = (args: {
   jutsuIds: string[];
   userjutsus: UserJutsuWithRelations[];
   user: NonNullable<UserWithRelations>;
+  /** effectiveMasteries of the user; see canUseJutsu */
+  masteries?: MasteryStatSource;
 }): ComputedJutsuLoadout => {
-  const { jutsuIds, userjutsus, user } = args;
+  const { jutsuIds, userjutsus, user, masteries } = args;
   return computeJutsuLoadoutCapAssignments({
     jutsuIds,
     userjutsus,
@@ -353,7 +356,7 @@ export const computeJutsuLoadoutAssignments = (args: {
       if (jutsu.hidden && !canChangeContent(user.role)) {
         return `${jutsu.name} is hidden`;
       }
-      if (!canUseJutsu(jutsu, user)) {
+      if (!canUseJutsu(jutsu, user, false, masteries)) {
         return `${jutsu.name}: missing requirements`;
       }
       return undefined;

@@ -10,8 +10,12 @@ import {
   updateStatUsage,
 } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";
-import type { CompleteBattle } from "@/libs/combat/types";
+import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
+import { alignBattle, refreshMasteries } from "@/libs/combat/util";
+import { effectiveMasteries } from "@/libs/mastery";
+import type { ZodAllTags } from "@/validators/combat";
 import {
+  makeBattleUserItem,
   makeDamageEffect,
   makeEffect,
   makeUser,
@@ -117,52 +121,190 @@ describe("increaseStats", () => {
   });
 });
 
+
+const GATED_JUTSU = "gated-jutsu";
+const GATED_BLADE = "gated-blade";
+
+/** A player holding a jutsu and a weapon that both require 500 Ninjutsu Mastery. */
+const makeActor = (overrides: Partial<BattleUserState> = {}) =>
+  makeUser({
+    userId: "actor",
+    ninjutsuMastery: 1000,
+    jutsus: [
+      {
+        id: "user-jutsu-1",
+        jutsuId: GATED_JUTSU,
+        level: 1,
+        equipped: true,
+        experience: 0,
+        lastUsedRound: -10,
+        originalCooldown: 0,
+        origin: "user",
+      },
+    ],
+    items: [makeBattleUserItem({ id: "user-blade", itemId: GATED_BLADE })],
+    ...overrides,
+  });
+
+const makeBattle = (
+  users: BattleUserState[],
+  usersEffects: UserEffect[] = [],
+  round = 1,
+): CompleteBattle =>
+  ({
+    id: "battle-1",
+    battleType: "COMBAT",
+    width: 5,
+    height: 5,
+    round,
+    activeUserId: users[0]?.userId,
+    createdAt: new Date("2020-01-01T00:00:00Z"),
+    updatedAt: new Date("2020-01-01T00:00:00Z"),
+    roundStartAt: new Date("2020-01-01T00:00:00Z"),
+    usersState: users,
+    usersEffects,
+    groundEffects: [],
+    extraState: {
+      dmgConfig,
+      jutsus: {
+        [GATED_JUTSU]: {
+          id: GATED_JUTSU,
+          name: "Gated Jutsu",
+          image: "/jutsu.png",
+          battleDescription: "test",
+          target: "OTHER_USER",
+          method: "SINGLE",
+          range: 1,
+          healthCost: 0,
+          chakraCost: 0,
+          staminaCost: 0,
+          healthCostReducePerLvl: 0,
+          chakraCostReducePerLvl: 0,
+          staminaCostReducePerLvl: 0,
+          actionCostPerc: 10,
+          battleUsageType: "ANY",
+          jutsuWeapon: "NONE",
+          requiredNinjutsuMastery: 500,
+          effects: [],
+        },
+      },
+      jutsuReskins: {},
+      items: {
+        [GATED_BLADE]: {
+          id: GATED_BLADE,
+          name: "Gated Blade",
+          image: "/blade.png",
+          battleDescription: "test",
+          itemType: "WEAPON",
+          target: "OTHER_USER",
+          method: "SINGLE",
+          range: 1,
+          healthCost: 0,
+          chakraCost: 0,
+          staminaCost: 0,
+          healthCostReducePerLvl: 0,
+          chakraCostReducePerLvl: 0,
+          staminaCostReducePerLvl: 0,
+          actionCostPerc: 10,
+          cooldown: 0,
+          maxDurability: 100,
+          battleUsageType: "BOTH",
+          requiredNinjutsuMastery: 500,
+          effects: [],
+        },
+      },
+      bloodlines: {},
+      villages: {},
+      anbuSquads: {},
+      keystoneItems: {},
+      wars: {},
+      aiProfiles: {},
+      relations: {},
+      clans: {},
+      userQuests: {},
+      completedQuests: {},
+      questData: {},
+      bounties: {},
+      bountySignups: {},
+    },
+  }) as unknown as CompleteBattle;
+
+/** A residual Ninjutsu mastery tag on `targetId`, as applyEffects stores it once cast. */
+const masteryEffect = (
+  type: "increasemastery" | "decreasemastery",
+  runtime: Partial<UserEffect> & Record<string, unknown>,
+  tag: { power?: number; calculation?: "static" | "percentage"; rounds?: number } = {},
+) =>
+  makeEffect(
+    type,
+    {
+      masteryTypes: ["Ninjutsu"],
+      calculation: "static",
+      power: 250,
+      powerPerLevel: 0,
+      rounds: 5,
+      ...tag,
+    },
+    {
+      id: `${type}-effect`,
+      creatorId: "actor",
+      targetId: "actor",
+      targetType: "user",
+      isNew: false,
+      castThisRound: false,
+      createdRound: 0,
+      ...runtime,
+    },
+  );
+
+const canUse = (battle: CompleteBattle, userId: string, actionId: string) =>
+  availableUserActions(battle, userId, false).some((action) => action.id === actionId);
+
+const actorOf = (battle: CompleteBattle, userId = "actor") =>
+  battle.usersState.find((u) => u.userId === userId);
+
 describe("applyEffects mastery persistence", () => {
   it("persists increasemastery onto the returned usersState without stacking", () => {
-    const user = makeUser({
-      userId: "actor",
-      ninjutsuMastery: 1000,
-    });
-    const effect = makeEffect(
-      "increasemastery",
-      {
-        masteryTypes: ["Ninjutsu"],
-        calculation: "static",
-        power: 250,
-        powerPerLevel: 0,
-        rounds: 5,
-      },
-      {
-        creatorId: "actor",
-        targetId: "actor",
-        targetType: "user",
-        isNew: false,
-        castThisRound: false,
-        createdRound: 0,
-      },
+    const battle = makeBattle(
+      [makeActor({ ninjutsuMastery: 1000 })],
+      [masteryEffect("increasemastery", {})],
+      2,
     );
-    const battle = {
-      id: "battle-1",
-      battleType: "COMBAT",
-      width: 5,
-      height: 5,
-      round: 2,
-      createdAt: new Date("2020-01-01T00:00:00Z"),
-      updatedAt: new Date("2020-01-01T00:00:00Z"),
-      roundStartAt: new Date("2020-01-01T00:00:00Z"),
-      usersState: [user],
-      usersEffects: [effect],
-      groundEffects: [],
-      extraState: { dmgConfig },
-    } as unknown as CompleteBattle;
 
     const first = applyEffects(battle, "actor");
-    const firstUser = first.newBattle.usersState[0];
-    expect(firstUser?.ninjutsuMastery).toBe(1250);
+    expect(actorOf(first.newBattle)?.ninjutsuMastery).toBe(1250);
 
     const second = applyEffects(first.newBattle, "actor");
-    const secondUser = second.newBattle.usersState[0];
-    expect(secondUser?.ninjutsuMastery).toBe(1250);
+    expect(actorOf(second.newBattle)?.ninjutsuMastery).toBe(1250);
+  });
+
+  it("applies percentage tags to the unbuffed base", () => {
+    const battle = makeBattle(
+      [makeActor({ ninjutsuMastery: 1000 })],
+      [masteryEffect("increasemastery", {}, { power: 20, calculation: "percentage" })],
+      2,
+    );
+
+    const first = applyEffects(battle, "actor");
+    expect(actorOf(first.newBattle)?.ninjutsuMastery).toBe(1200);
+
+    const second = applyEffects(first.newBattle, "actor");
+    expect(actorOf(second.newBattle)?.ninjutsuMastery).toBe(1200);
+  });
+
+  it("restores the base mastery once the tag expires", () => {
+    const battle = makeBattle(
+      [makeActor({ ninjutsuMastery: 1000 })],
+      [masteryEffect("increasemastery", {}, { rounds: 1 })],
+      2,
+    );
+    const first = applyEffects(battle, "actor");
+    expect(actorOf(first.newBattle)?.ninjutsuMastery).toBe(1250);
+
+    const tag = first.newBattle.usersEffects.find((e) => e.type === "increasemastery");
+    if (tag) tag.rounds = 0;
+    const second = applyEffects(first.newBattle, "actor");
+    expect(actorOf(second.newBattle)?.ninjutsuMastery).toBe(1000);
   });
 });
 
@@ -186,94 +328,132 @@ describe("damage ignores mastery", () => {
 });
 
 describe("availableUserActions mastery gating", () => {
-  const makeBattle = (mastery: number): CompleteBattle => {
-    const user = makeUser({
-      userId: "actor",
-      ninjutsuMastery: mastery,
-      jutsus: [
-        {
-          id: "user-jutsu-1",
-          jutsuId: "gated-jutsu",
-          level: 1,
-          equipped: true,
-          experience: 0,
-          lastUsedRound: -10,
-          originalCooldown: 0,
-          origin: "user",
-        },
-      ],
-    });
-    return {
-      id: "battle-1",
-      battleType: "COMBAT",
-      width: 5,
-      height: 5,
-      round: 1,
-      createdAt: new Date("2020-01-01T00:00:00Z"),
-      updatedAt: new Date("2020-01-01T00:00:00Z"),
-      roundStartAt: new Date("2020-01-01T00:00:00Z"),
-      usersState: [user],
-      usersEffects: [],
-      groundEffects: [],
-      extraState: {
-        jutsus: {
-          "gated-jutsu": {
-            id: "gated-jutsu",
-            name: "Gated Jutsu",
-            image: "/jutsu.png",
-            battleDescription: "test",
-            target: "OTHER_USER",
-            method: "SINGLE",
-            range: 1,
-            healthCost: 0,
-            chakraCost: 0,
-            staminaCost: 0,
-            healthCostReducePerLvl: 0,
-            chakraCostReducePerLvl: 0,
-            staminaCostReducePerLvl: 0,
-            actionCostPerc: 10,
-            battleUsageType: "ANY",
-            jutsuWeapon: "NONE",
-            requiredNinjutsuMastery: 500,
-            effects: [],
-          },
-        },
-        jutsuReskins: {},
-        items: {},
-        bloodlines: {},
-        villages: {},
-        anbuSquads: {},
-        keystoneItems: {},
-        wars: {},
-        aiProfiles: {},
-        relations: {},
-        clans: {},
-        userQuests: {},
-        completedQuests: {},
-        questData: {},
-        bounties: {},
-        bountySignups: {},
-      },
-    } as unknown as CompleteBattle;
-  };
-
-  it("hides jutsu the user cannot meet mastery requirements for", () => {
-    const actions = availableUserActions(makeBattle(100), "actor", false);
-    expect(actions.some((action) => action.id === "gated-jutsu")).toBe(false);
+  it("hides jutsu and items the user cannot meet mastery requirements for", () => {
+    const battle = makeBattle([makeActor({ ninjutsuMastery: 100 })]);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(false);
+    expect(canUse(battle, "actor", GATED_BLADE)).toBe(false);
   });
 
-  it("shows jutsu once the user meets mastery requirements", () => {
-    const actions = availableUserActions(makeBattle(500), "actor", false);
-    expect(actions.some((action) => action.id === "gated-jutsu")).toBe(true);
+  it("shows jutsu and items once the user meets mastery requirements", () => {
+    const battle = makeBattle([makeActor({ ninjutsuMastery: 500 })]);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
+    expect(canUse(battle, "actor", GATED_BLADE)).toBe(true);
   });
 
   it("keeps gated jutsu visible when masteries are masked off the user", () => {
-    const battle = makeBattle(100);
-    const actor = battle.usersState[0];
+    const battle = makeBattle([makeActor({ ninjutsuMastery: 100 })]);
+    const actor = actorOf(battle);
     if (actor) {
       delete (actor as { ninjutsuMastery?: number }).ninjutsuMastery;
     }
-    const actions = availableUserActions(battle, "actor", false);
-    expect(actions.some((action) => action.id === "gated-jutsu")).toBe(true);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
+  });
+
+  it("exempts AI from mastery gates", () => {
+    const battle = makeBattle([makeActor({ ninjutsuMastery: 100, isAi: true })]);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
+    expect(canUse(battle, "actor", GATED_BLADE)).toBe(true);
+  });
+
+  it("locks gated actions once a decreasemastery lands", () => {
+    const battle = makeBattle(
+      [makeActor({ ninjutsuMastery: 600 })],
+      [masteryEffect("decreasemastery", {}, { power: 300 })],
+      2,
+    );
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
+
+    const { newBattle } = applyEffects(battle, "actor");
+    expect(actorOf(newBattle)?.ninjutsuMastery).toBe(300);
+    expect(canUse(newBattle, "actor", GATED_JUTSU)).toBe(false);
+    expect(canUse(newBattle, "actor", GATED_BLADE)).toBe(false);
+  });
+});
+
+describe("mastery tags from pre-battle sources", () => {
+  const gearBuff = (power: number) =>
+    ({
+      type: "increasemastery",
+      masteryTypes: ["Ninjutsu"],
+      calculation: "static",
+      power,
+      powerPerLevel: 0,
+    }) as ZodAllTags;
+
+  it("unlock gated actions before and from the first action of the battle", () => {
+    const stored = makeActor({ ninjutsuMastery: 400 });
+    const armor = {
+      id: "user-armor",
+      equipped: "CHEST",
+      durability: 100,
+      level: 1,
+      item: {
+        itemType: "ARMOR",
+        maxDurability: 100,
+        bloodlineId: null,
+        canBeImbued: false,
+        effects: [gearBuff(200)],
+      },
+    };
+    // Pre-battle gates: the armor lifts the stored 400 over the 500 requirement
+    expect(effectiveMasteries({ ...stored, items: [armor] }).ninjutsuMastery).toBe(600);
+
+    // processUsersForBattle realizes the armor's tag; battle creation applies it at once
+    const realized = masteryEffect(
+      "increasemastery",
+      { fromType: "armor", actionId: "armor" },
+      { power: 200, rounds: undefined },
+    );
+    const battle = makeBattle([stored], [realized]);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(false);
+    refreshMasteries(battle.usersState, battle.usersEffects);
+    expect(actorOf(battle)?.ninjutsuMastery).toBe(600);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
+
+    // applyEffects restarts from the seeded base, so the buff does not stack
+    const { newBattle } = applyEffects(battle, "actor");
+    expect(actorOf(newBattle)?.ninjutsuMastery).toBe(600);
+  });
+});
+
+describe("alignBattle mastery refresh", () => {
+  /** Two players whose round is over, so the next alignBattle starts a new round. */
+  const endOfRound = (effect: UserEffect) => {
+    const round = 5;
+    const actor = makeActor({ ninjutsuMastery: 600, round });
+    const other = makeUser({ userId: "other", longitude: 1, round });
+    return makeBattle([actor, other], [effect], round);
+  };
+
+  it("applies a decreasemastery cast last round to the next round's first action", () => {
+    const debuff = masteryEffect(
+      "decreasemastery",
+      { creatorId: "other", createdRound: 5, castThisRound: true },
+      { power: 300, rounds: 2 },
+    );
+    const battle = endOfRound(debuff);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
+
+    const { progressRound } = alignBattle(battle, [], "actor");
+    expect(progressRound).toBe(true);
+    expect(actorOf(battle)?.ninjutsuMastery).toBe(300);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(false);
+  });
+
+  it("releases the gate in the round the decreasemastery expires", () => {
+    const debuff = masteryEffect(
+      "decreasemastery",
+      { creatorId: "other", createdRound: 3 },
+      { power: 300, rounds: 1 },
+    );
+    const battle = endOfRound(debuff);
+    refreshMasteries(battle.usersState, battle.usersEffects);
+    expect(actorOf(battle)?.ninjutsuMastery).toBe(300);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(false);
+
+    alignBattle(battle, [], "actor");
+    expect(debuff.rounds).toBe(0);
+    expect(actorOf(battle)?.ninjutsuMastery).toBe(600);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
   });
 });

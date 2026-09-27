@@ -20,7 +20,7 @@ import { nanoid } from "nanoid";
 import { after } from "next/server";
 import { z } from "zod";
 import * as mapData from "@/data/hexasphere.json";
-import type { BattleType } from "@/drizzle/constants";
+import type { BattleType, BattleUsageType } from "@/drizzle/constants";
 import {
   AdjustableBasicActions,
   AutoBattleTypes,
@@ -30,7 +30,6 @@ import {
   BattleTypes,
   COMBAT_BIOMES,
   type CombatBiome,
-  DURABILITY_USABILITY_THR,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
   ID_ANIMATION_SMOKE,
@@ -144,11 +143,13 @@ import {
   isEffectActive,
   maskBattle,
   maskBattleDynamic,
+  refreshMasteries,
+  resetMasteriesToBase,
   rollInitiative,
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
-import { hasMasteryRequirements } from "@/libs/mastery";
+import { effectiveMasteries, isWornGear, isWornGearDisabled } from "@/libs/mastery";
 import {
   calcActiveUserRegen,
   calcCP,
@@ -1054,6 +1055,13 @@ export const combatRouter = createTRPCRouter({
         return errorResponse("You already have this loadout selected");
       }
 
+      // The battle copy carries this battle's mastery tags; gates start from stored values
+      resetMasteriesToBase(user);
+      const bloodline = user.bloodlineId
+        ? userBattle.extraState.bloodlines?.[user.bloodlineId]
+        : null;
+      const activatedSkills = userSkills.filter((us) => us.activated);
+
       // Apply the item loadout first, then the jutsu loadout. selectItemLoadout mutates
       // `useritems` in place to the post-switch equipped state, and selectJutsuLoadout
       // validates each gated jutsu's required bloodline item against that same array.
@@ -1063,7 +1071,11 @@ export const combatRouter = createTRPCRouter({
       const itemLoadoutResult =
         user.itemLoadout === iId || !iId
           ? { success: true, message: "Item loadout already selected" }
-          : await selectItemLoadout(ctx.drizzle, iId, itemLoadouts, useritems, user);
+          : await selectItemLoadout(ctx.drizzle, iId, itemLoadouts, useritems, {
+              ...user,
+              bloodline,
+              userSkills: activatedSkills,
+            });
       const jutsuLoadoutResult =
         user.jutsuLoadout === jId || !jId
           ? { success: true, message: "Jutsu loadout already selected" }
@@ -1215,9 +1227,6 @@ export const combatRouter = createTRPCRouter({
       const village = user.villageId
         ? userBattle.extraState.villages?.[user.villageId]
         : null;
-      const bloodline = user.bloodlineId
-        ? userBattle.extraState.bloodlines?.[user.bloodlineId]
-        : null;
       const equippedSageMode = user.sageModeId
         ? userBattle.extraState.sageModes?.[user.sageModeId]
         : null;
@@ -1236,7 +1245,7 @@ export const combatRouter = createTRPCRouter({
         itemLoadout: iId ?? user.itemLoadout,
         jutsus: hydratedJutsus,
         items: hydratedItems,
-        userSkills: userSkills.filter((us) => us.activated),
+        userSkills: activatedSkills,
         village: village ?? null,
         aiProfile: aiProfile ?? null,
         questData: questData ?? [],
@@ -1273,6 +1282,7 @@ export const combatRouter = createTRPCRouter({
         ...preservedSageEffects,
         ...userEffects,
       ];
+      refreshMasteries(userBattle.usersState, userBattle.usersEffects);
 
       // Merge extraState: add new jutsus/items from the updated loadout to existing extraState
       // This ensures new jutsus/items can be looked up by ID during battle
@@ -2257,8 +2267,11 @@ export const initiateBattle = async (
       manuallyAssignUserStats(user, info?.userStatDistribution);
     }
 
-    // Apply caps to user stats
-    capUserStats(user);
+    // Apply caps to user stats. Ranked distributions max every mastery on purpose, as ranked
+    // waives progression gates, so masteries cap at the ELITE JONIN rank ranked play assigns.
+    const isRankedBattle =
+      battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING";
+    capUserStats(user, isRankedBattle ? "ELITE JONIN" : user.rank);
 
     // Add achievements to users for tracking
     // Ensure userQuests and completedQuests are initialized for mockAchievementHistoryEntries
@@ -2339,6 +2352,9 @@ export const initiateBattle = async (
       applyPoolAdjustmentsToBase(user, userEffects);
     }
   });
+
+  // Mastery tags from the bloodline, skills and gear count from the first action
+  refreshMasteries(usersState, userEffects);
 
   // Set attacker to be the agressor
   if (usersState[0]) usersState[0].isAggressor = true;
@@ -3022,6 +3038,35 @@ export const processUsersForBattle = async (
     const ownSector = user.sector === user.village?.sector;
     const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
 
+    // Quest battles exclude PVP-only content, all other battles PVE-only content
+    const isQuestBattle = QuestBattleTypes.includes(battleType);
+    const fitsBattle = (usage: BattleUsageType) =>
+      isQuestBattle ? usage !== "PVP" : usage !== "PVE";
+
+    // The mastery sources this battle applies; ranked battles skip bloodline and skills
+    const isRankedBattle =
+      battleType === "RANKED_PVP" || battleType === "RANKED_SPARRING";
+    const wearer = {
+      ...user,
+      bloodline: isRankedBattle ? null : user.bloodline,
+      userSkills: isRankedBattle ? [] : user.userSkills,
+      items: user.items.filter((ui) => fitsBattle(ui.item.battleUsageType)),
+    };
+    // Unequip worn gear that cannot work this battle before the jutsu filter and the
+    // keystone read the equipped state; left equipped, it would lose durability for nothing.
+    // Never saved, so repairing it or training the mastery restores it.
+    user.items
+      .filter(
+        (ui) =>
+          ui.equipped !== "NONE" &&
+          isWornGear(ui.item) &&
+          isWornGearDisabled(ui, wearer),
+      )
+      .forEach((ui) => {
+        ui.equipped = "NONE";
+      });
+    const gateMasteries = effectiveMasteries(wearer);
+
     // Add bloodline efects
     if (
       user.bloodline?.effects &&
@@ -3109,8 +3154,6 @@ export const processUsersForBattle = async (
       user.effects = []; // Reset to avoid storing in battle table
     }
 
-    // Set jutsus updatedAt to now (we use it for determining usage cooldowns)
-    const isQuestBattle = QuestBattleTypes.includes(battleType);
     // Filter and process jutsus - DO NOT apply reskins here, they are applied dynamically
     // in userJutsuToAction to ensure each user sees their own reskin
     const processedJutsus = user.jutsus
@@ -3124,13 +3167,7 @@ export const processUsersForBattle = async (
         if (!userjutsu.jutsu) {
           return false;
         }
-        // Filter by battleUsageType
-        // If quest battle, exclude PVP-only jutsus
-        if (isQuestBattle && userjutsu.jutsu.battleUsageType === "PVP") {
-          return false;
-        }
-        // If non-quest battle, exclude PVE-only jutsus
-        if (!isQuestBattle && userjutsu.jutsu.battleUsageType === "PVE") {
+        if (!fitsBattle(userjutsu.jutsu.battleUsageType)) {
           return false;
         }
         // Not if cannot train jutsu
@@ -3145,7 +3182,10 @@ export const processUsersForBattle = async (
             completedQuests: user.completedQuests ?? [],
           };
           // Bloodline item is enforced separately below (all battle types), so skip it here
-          if (!canUseJutsu(userjutsu.jutsu, userForCheck, true) && !user.isAi) {
+          if (
+            !canUseJutsu(userjutsu.jutsu, userForCheck, true, gateMasteries) &&
+            !user.isAi
+          ) {
             return false;
           }
         }
@@ -3203,15 +3243,7 @@ export const processUsersForBattle = async (
     user.items
       .filter((ui) => {
         if (!ui.item) return false;
-        // Filter by battleUsageType
-        // If quest battle, exclude PVP-only items
-        if (isQuestBattle && ui.item.battleUsageType === "PVP") {
-          return false;
-        }
-        // If non-quest battle, exclude PVE-only items
-        if (!isQuestBattle && ui.item.battleUsageType === "PVE") {
-          return false;
-        }
+        if (!fitsBattle(ui.item.battleUsageType)) return false;
         // Always include equipment (ARMOR, ACCESSORY, KEYSTONE) and consumables (WEAPON, CONSUMABLE) as they need to be processed for effects
         if (
           ["ARMOR", "ACCESSORY", "KEYSTONE", "WEAPON", "CONSUMABLE"].includes(
@@ -3247,43 +3279,33 @@ export const processUsersForBattle = async (
           itemType === "ACCESSORY" ||
           itemType === "KEYSTONE"
         ) {
-          if (ui.item.effects && ui.equipped !== "NONE") {
-            const currentDurability = Math.min(ui.durability, ui.item.maxDurability);
-            // Unequip rather than merely skipping the effects: gear left equipped keeps
-            // taking durability damage every round while granting nothing. Mastery gates
-            // are enforced on equip too, so this only catches gear equipped before the
-            // requirement was added or before the wearer's masteries were reset.
-            if (
-              currentDurability <= DURABILITY_USABILITY_THR ||
-              !hasMasteryRequirements(user, ui.item)
-            ) {
-              ui.equipped = "NONE" as const;
-            } else {
-              // Add item effects to user (only if user has required bloodline)
-              if (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId) {
-                effects.forEach((effect) => {
-                  const realized = realizeTag({
-                    tag: effect,
-                    user: user,
-                    actionId: ui.itemId,
-                    target: user,
-                    // AI gear can never earn item XP; keep character-level scaling
-                    // for AI so boss/raid content is not silently nerfed to level 1.
-                    level: user.isAi ? user.level : ui.level,
-                  });
-                  realized.isNew = false;
-                  realized.fromType =
-                    itemType === "ACCESSORY"
-                      ? "accessory"
-                      : itemType === "KEYSTONE"
-                        ? "keystone"
-                        : "armor";
-                  realized.castThisRound = false;
-                  realized.targetId = user.userId;
-                  userEffects.push(realized);
-                });
-              }
-            }
+          // Add item effects to user (only if user has required bloodline)
+          if (
+            ui.item.effects &&
+            ui.equipped !== "NONE" &&
+            (!ui.item.bloodlineId || ui.item.bloodlineId === user.bloodlineId)
+          ) {
+            effects.forEach((effect) => {
+              const realized = realizeTag({
+                tag: effect,
+                user: user,
+                actionId: ui.itemId,
+                target: user,
+                // AI gear can never earn item XP; keep character-level scaling
+                // for AI so boss/raid content is not silently nerfed to level 1.
+                level: user.isAi ? user.level : ui.level,
+              });
+              realized.isNew = false;
+              realized.fromType =
+                itemType === "ACCESSORY"
+                  ? "accessory"
+                  : itemType === "KEYSTONE"
+                    ? "keystone"
+                    : "armor";
+              realized.castThisRound = false;
+              realized.targetId = user.userId;
+              userEffects.push(realized);
+            });
           }
         }
         // If droppable, action type, or equipment/consumable type (ARMOR/ACCESSORY/KEYSTONE/WEAPON/CONSUMABLE), keep in battle row (only if user has required bloodline)

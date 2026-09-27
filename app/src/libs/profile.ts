@@ -128,10 +128,12 @@ export const withCappedStats = <T extends UserData>(user: T): T => {
 /**
  * Cap user stats to the user's rank's caps
  * @param user - the user to cap the stats of
+ * @param masteryRank - the rank whose mastery cap applies
  * @returns void
  */
-export function capUserStats(user: UserData) {
-  const { stats_cap, gens_cap, mastery_cap } = getUserCaps(user.rank);
+export function capUserStats(user: UserData, masteryRank: UserRank = user.rank) {
+  const { stats_cap, gens_cap } = getUserCaps(user.rank);
+  const { mastery_cap } = getUserCaps(masteryRank);
   if (user.offence > stats_cap) user.offence = stats_cap;
   if (user.defence > stats_cap) user.defence = stats_cap;
   if (user.strength > gens_cap) user.strength = gens_cap;

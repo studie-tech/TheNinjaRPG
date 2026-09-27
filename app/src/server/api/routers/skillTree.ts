@@ -1,4 +1,17 @@
-import { and, asc, eq, gte, inArray, isNull, like, lt, not, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  like,
+  lt,
+  ne,
+  not,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -14,8 +27,10 @@ import {
   skillTree,
   skillTreeFolder,
   userData,
+  userItem,
   userSkill,
 } from "@/drizzle/schema";
+import type { MasterySources } from "@/libs/mastery";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
@@ -836,4 +851,58 @@ export const fetchUserSkills = async (client: DrizzleClient, userId: string) => 
     where: eq(userSkill.userId, userId),
     with: { skill: true },
   });
+};
+
+/**
+ * The sources of a user's out-of-battle mastery tags, for effectiveMasteries: the equipped
+ * bloodline, activated skills and equipped items.
+ * @param client - The database client
+ * @param userId - The user ID
+ */
+export const fetchMasterySources = async (
+  client: DrizzleClient,
+  userId: string,
+): Promise<Required<MasterySources>> => {
+  const sources = await client.query.userData.findFirst({
+    columns: { userId: true },
+    where: eq(userData.userId, userId),
+    with: {
+      bloodline: { columns: { effects: true } },
+      userSkills: {
+        columns: { id: true },
+        where: eq(userSkill.activated, true),
+        with: { skill: { columns: { target: true, effects: true } } },
+      },
+      items: {
+        columns: { id: true, equipped: true, durability: true, level: true },
+        where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
+        with: {
+          item: {
+            columns: {
+              itemType: true,
+              maxDurability: true,
+              bloodlineId: true,
+              canBeImbued: true,
+              effects: true,
+              requiredNinjutsuMastery: true,
+              requiredGenjutsuMastery: true,
+              requiredTaijutsuMastery: true,
+              requiredBukijutsuMastery: true,
+              requiredBloodlineMastery: true,
+              requiredSageMastery: true,
+            },
+          },
+          imbuements: {
+            columns: { craftingFinishedAt: true },
+            with: { item: { columns: { effects: true } } },
+          },
+        },
+      },
+    },
+  });
+  return {
+    bloodline: sources?.bloodline ?? null,
+    userSkills: sources?.userSkills ?? [],
+    items: sources?.items ?? [],
+  };
 };

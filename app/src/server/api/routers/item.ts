@@ -83,7 +83,12 @@ import {
   decideRename,
   resolveSelectableLoadout,
 } from "@/libs/loadout";
-import { missingMasteryRequirement } from "@/libs/mastery";
+import type { MasteryBuffUser, MasterySources } from "@/libs/mastery";
+import {
+  effectiveMasteries,
+  gearMissingMastery,
+  missingMasteryRequirement,
+} from "@/libs/mastery";
 import {
   collapseRewards,
   filterQuestTrackersForDbPersist,
@@ -97,7 +102,7 @@ import { callDiscordContent } from "@/libs/socials";
 import { hasRequiredLevel } from "@/libs/train";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
-import { fetchUserSkills } from "@/routers/skillTree";
+import { fetchMasterySources, fetchUserSkills } from "@/routers/skillTree";
 import { fetchStructures } from "@/routers/village";
 import {
   baseServerResponse,
@@ -1647,17 +1652,18 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [useritems, user, loadouts] = await Promise.all([
+      const [useritems, user, loadouts, masterySources] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
+        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
       // Mutate
       const result = await toggleEquipItem(
         ctx.drizzle,
         input.userItemId,
         useritems,
-        user,
+        { ...user, ...masterySources },
         input.slot,
       );
       // If anything happened
@@ -2525,12 +2531,14 @@ export const itemRouter = createTRPCRouter({
       // Read userData before inventory so the transactional updatedAt CAS below
       // detects any capacity mutation that commits between these snapshots.
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const [info, useritems, structures, questState] = await Promise.all([
-        fetchItem(ctx.drizzle, iid),
-        fetchUserItems(ctx.drizzle, uid),
-        fetchStructures(ctx.drizzle, input.villageId),
-        fetchUserQuestState(ctx.drizzle, ctx.userId),
-      ]);
+      const [info, useritems, structures, questState, masterySources] =
+        await Promise.all([
+          fetchItem(ctx.drizzle, iid),
+          fetchUserItems(ctx.drizzle, uid),
+          fetchStructures(ctx.drizzle, input.villageId),
+          fetchUserQuestState(ctx.drizzle, ctx.userId),
+          fetchMasterySources(ctx.drizzle, uid),
+        ]);
       // Derived — capacity counts carried stacks by dedicated inventory bucket
       const carriedItems = useritems?.filter((ui) => !ui.storedAtHome) ?? [];
       const bucketCounts = {
@@ -2593,6 +2601,10 @@ export const itemRouter = createTRPCRouter({
         instancesEquipped < info.maxEquips &&
         user.level >= info.requiredLevel &&
         (!info.bloodlineId || info.bloodlineId === user.bloodlineId) &&
+        !missingMasteryRequirement(
+          effectiveMasteries({ ...user, ...masterySources }),
+          info,
+        ) &&
         canEquipAdditional(
           info,
           useritems
@@ -2709,9 +2721,10 @@ export const itemRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Auto-equip best items by cost" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
-      const [useritems, user] = await Promise.all([
+      const [useritems, user, masterySources] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
+        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
 
       // Slot exclusivity and category / maxEquips limits are decided against one
@@ -2720,8 +2733,9 @@ export const itemRouter = createTRPCRouter({
       // a row that moves home / auction / crafting / imbue after the snapshot
       // is not equipped.
       const now = new Date();
+      const masteries = effectiveMasteries({ ...user, ...masterySources });
       const { assignments, hasUnequipped, hasAvailableSlots } =
-        computeAutoEquipAssignments(useritems, user, now);
+        computeAutoEquipAssignments(useritems, { ...user, ...masteries }, now);
 
       if (!hasUnequipped) {
         return errorResponse("No unequipped items available");
@@ -2817,14 +2831,18 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [loadouts, user, useritems] = await Promise.all([
+      const [loadouts, user, useritems, masterySources] = await Promise.all([
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
+        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
       // Mutate & return result
       const id = input.id;
-      return await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, user);
+      return await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, {
+        ...user,
+        ...masterySources,
+      });
     }),
 
   renameLoadout: protectedProcedure
@@ -2868,7 +2886,7 @@ export const itemRouter = createTRPCRouter({
  * @param loadoutId - The ID of the loadout to select
  * @param loadouts - The loadouts to select from
  * @param useritems - The user items to select from
- * @param user - The user data
+ * @param user - The user data with the sources of their mastery tags
  * @returns A promise that resolves to the result of the select
  */
 export const selectItemLoadout = async (
@@ -2876,10 +2894,8 @@ export const selectItemLoadout = async (
   loadoutId: string,
   loadouts: ItemLoadout[],
   useritems: UserItemWithRelations[],
-  user: Pick<
-    UserData,
-    "userId" | "federalStatus" | "staffAccount" | "level" | "bloodlineId"
-  >,
+  user: Pick<UserData, "userId" | "federalStatus" | "staffAccount"> &
+    Omit<MasteryBuffUser, "items">,
 ) => {
   // Guard: only loadouts within the user's current allowance are selectable, so
   // a downgraded user can't reach an out-of-range loadout by guessing its
@@ -3247,7 +3263,7 @@ export const fetchVariantOwnership = async (
  * @param client - The database client
  * @param userItemId - The ID of the user item to toggle
  * @param useritems - The user items to toggle
- * @param user - The user data
+ * @param user - The user data with the sources of their mastery tags
  * @param slot - The slot to toggle (optional)
  * @returns A promise that resolves to the result of the toggle
  */
@@ -3255,7 +3271,7 @@ export const toggleEquipItem = async (
   client: DrizzleClient,
   userItemId: string,
   useritems: UserItemWithRelations[],
-  user: UserData,
+  user: UserData & Required<MasterySources>,
   slot?: ItemSlot,
 ) => {
   // Create a clone to be returned
@@ -3276,14 +3292,6 @@ export const toggleEquipItem = async (
     }
     if (useritem.item.bloodlineId && useritem.item.bloodlineId !== user.bloodlineId) {
       return errorResponse(`This item requires a specific bloodline to equip`);
-    }
-    // Without this the item equips fine but processUsersForBattle skips its effects,
-    // leaving the player wearing gear that does nothing while still losing durability.
-    const missingMastery = missingMasteryRequirement(user, useritem.item);
-    if (missingMastery) {
-      return errorResponse(
-        `This item requires ${missingMastery.required.toLocaleString()} ${missingMastery.label} to equip`,
-      );
     }
     if (useritem.craftingFinishedAt && useritem.craftingFinishedAt > new Date()) {
       return errorResponse("Cannot equip crafting item");
@@ -3343,6 +3351,19 @@ export const toggleEquipItem = async (
   }
   // We need to have a slot
   if (!newEquipSlot) return errorResponse("No slot found");
+  // Gated on the gear worn after the swap, so the item it displaces unlocks nothing
+  if (doEquip) {
+    const targetSlot = newEquipSlot;
+    const missingMastery = gearMissingMastery(useritem, {
+      ...user,
+      items: user.items.filter((ui) => ui.equipped !== targetSlot),
+    });
+    if (missingMastery) {
+      return errorResponse(
+        `This item requires ${missingMastery.required.toLocaleString()} ${missingMastery.label} to equip`,
+      );
+    }
+  }
   // Response info
   let message = "";
   let promises: Promise<{ rowsAffected: number }>[] = [];
