@@ -112,14 +112,10 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
         sameSite: "lax",
         secure,
       })
-      .catch((error: unknown) => {
-        // Chrome rejects this mirror write with a malformed-cookie TypeError in some
-        // profiles, and document.cookie above has already persisted the preference, so
-        // that one is noise. Anything else is unexpected and is rethrown so it still
-        // surfaces as an unhandled rejection.
-        const isMalformedCookie =
-          error instanceof TypeError && error.message.includes("Cookie was malformed");
-        if (!isMalformedCookie) throw error;
+      .catch(() => {
+        // document.cookie above is what the next reload reads. Chrome's Cookie Store
+        // mirror separately rejects with UnknownError, or a malformed-cookie TypeError,
+        // on some profiles. The chosen layout is already stored, so the page continues.
       });
   }
 };

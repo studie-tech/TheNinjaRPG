@@ -55,6 +55,7 @@ import {
   canSilenceUsers,
   canTimeoutUsers,
   canWarnUsers,
+  REPORT_ACCESS_DENIED_MESSAGE,
 } from "@/utils/permissions";
 import sanitize from "@/utils/sanitize";
 import { getMillisecondsFromTimeUnit, secondsFromNow } from "@/utils/time";
@@ -411,7 +412,7 @@ export const reportsRouter = createTRPCRouter({
     ]);
     // Guard
     if (!canSeeReport(user, report)) {
-      throw serverError("UNAUTHORIZED", "You have no access to the report");
+      throw serverError("UNAUTHORIZED", REPORT_ACCESS_DENIED_MESSAGE);
     }
     // Get previous reports
     const prevReports = canSeeSecretData(user.role)

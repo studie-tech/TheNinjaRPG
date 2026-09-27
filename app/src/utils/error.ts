@@ -135,6 +135,18 @@ export const isExtensionExecutorEvent = (
   stacks: Array<Array<string | undefined>>,
 ): boolean => stacks.length > 0 && stacks.every(isExtensionExecutorStack);
 
+/**
+ * Wallet extensions reject with a plain object when a wallet is injected but has no
+ * account. The game has no Web3 surface, so the page keeps working.
+ */
+export const isInjectedWalletRejection = (reason: unknown): boolean => {
+  if (!reason || typeof reason !== "object") return false;
+  const record = reason as { code?: unknown; message?: unknown };
+  const message = typeof record.message === "string" ? record.message : "";
+  if (message.includes("wallet must has at least one account")) return true;
+  return record.code === 4001 && /wallet/i.test(message);
+};
+
 export const isNetworkError = createErrorPatternMatcher([
   "Load failed",
   "fetch failed",

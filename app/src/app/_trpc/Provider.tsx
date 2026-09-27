@@ -19,6 +19,7 @@ import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
+import { REPORT_ACCESS_DENIED_MESSAGE } from "@/utils/permissions";
 import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
@@ -180,6 +181,16 @@ const handleTrpcError = (error: unknown) => {
     // Handle rate limiting errors with a softer toast (not logged to Sentry, not destructive)
     if (errorCode === "TOO_MANY_REQUESTS") {
       showMutationToast({ success: false, message: error.message });
+      return;
+    }
+    // The report page renders this message and offers a way back. It is an expected
+    // authorization result, so it is toasted here and not sent to Sentry.
+    if (error.message === REPORT_ACCESS_DENIED_MESSAGE) {
+      toast({
+        variant: "destructive",
+        title: error?.data?.code ?? "Unauthorized",
+        description: error.message,
+      });
       return;
     }
     Sentry.captureException(error, { extra: { message: "TRPC Client Error" } });

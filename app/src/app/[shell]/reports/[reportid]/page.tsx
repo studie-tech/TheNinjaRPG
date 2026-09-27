@@ -8,6 +8,7 @@ import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import ParsedReportJson from "@/layout/ReportReason";
 import DisplayUserReport from "@/layout/UserReport";
+import { REPORT_ACCESS_DENIED_MESSAGE } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Report(props: { params: Promise<{ reportid: string }> }) {
@@ -16,14 +17,32 @@ export default function Report(props: { params: Promise<{ reportid: string }> })
 
   const report_id = params.reportid;
 
-  const { data } = api.reports.get.useQuery(
+  const { data, isError, error } = api.reports.get.useQuery(
     { id: report_id },
     { enabled: !!report_id && !!userData },
   );
   const { report, prevReports } = data || {};
 
-  if (!userData || !report) {
+  if (!userData) {
     return <Loader explanation="Loading data..." />;
+  }
+
+  if (!isError && !report) {
+    return <Loader explanation="Loading data..." />;
+  }
+
+  // Access denial is an expected outcome. Show the server message and a way back
+  // instead of leaving the loader up after the query has failed.
+  if (isError || !report) {
+    return (
+      <ContentBox
+        title="Report"
+        subtitle="This report could not be opened"
+        defaultBackHref="/profile"
+      >
+        {error?.message ?? REPORT_ACCESS_DENIED_MESSAGE}
+      </ContentBox>
+    );
   }
 
   return (

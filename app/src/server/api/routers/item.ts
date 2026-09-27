@@ -147,6 +147,7 @@ import {
   ItemVariantValidator,
   itemBuySchema,
   itemFilteringSchema,
+  resolveItemListFilter,
   UserUnlockedVariantResponseSchema,
 } from "@/validators/item";
 import { renameLoadoutSchema } from "@/validators/loadout";
@@ -3415,30 +3416,31 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
 export const itemDatabaseFilter = (
   input?: Partial<ItemFilteringSchema>,
 ): QueryCondition[] => {
+  const resolved = resolveItemListFilter(input ?? {});
   return [
     // Name filter
-    ...(input?.name ? [like(item.name, `%${input.name}%`)] : []),
+    ...(resolved.name ? [like(item.name, `%${resolved.name}%`)] : []),
 
     // Item type filter
-    ...(input?.itemType ? [eq(item.itemType, input.itemType)] : []),
+    ...(resolved.itemType ? [eq(item.itemType, resolved.itemType)] : []),
 
     // Rarity filter
-    ...(input?.itemRarity ? [eq(item.rarity, input.itemRarity)] : []),
+    ...(resolved.itemRarity ? [eq(item.rarity, resolved.itemRarity)] : []),
 
-    // Slot filter
-    ...(input?.slot ? [eq(item.slot, input.slot)] : []),
+    // Slot filter. Equipped positions and item types sent as `slot` are mapped first.
+    ...(resolved.slot ? [eq(item.slot, resolved.slot)] : []),
 
     // Method filter
-    ...(input?.method ? [eq(item.method, input.method)] : []),
+    ...(resolved.method ? [eq(item.method, resolved.method)] : []),
 
     // Target filter
-    ...(input?.target ? [eq(item.target, input.target)] : []),
+    ...(resolved.target ? [eq(item.target, resolved.target)] : []),
 
     // Effect filter
-    ...(input?.effect && input.effect.length > 0
+    ...(resolved.effect && resolved.effect.length > 0
       ? [
           or(
-            ...input.effect.map(
+            ...resolved.effect.map(
               (effect: string) =>
                 sql`JSON_SEARCH(${item.effects},'one',${effect}) IS NOT NULL`,
             ),

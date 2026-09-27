@@ -38,6 +38,57 @@ export const adjustUserItemSchema = z.object({
   level: z.number().int().min(1).max(ITEM_LEVEL_CAP),
 });
 
+/**
+ * Catalog slot, plus the equipped positions and item types callers send in `slot`.
+ * Equipped positions collapse to the catalog family; a type sent as slot is filtered
+ * as `itemType` instead.
+ */
+export const ItemFilterSlots = [
+  ...ItemSlotTypes,
+  "HAND_1",
+  "HAND_2",
+  "ITEM_1",
+  "ITEM_2",
+  "ITEM_3",
+  "ITEM_4",
+  "ITEM_5",
+  "ITEM_6",
+  "ITEM_7",
+  "WEAPON",
+  "CONSUMABLE",
+  "ARMOR",
+  "ACCESSORY",
+  "MATERIAL",
+  "COOKING",
+  "CRYSTAL",
+  "OTHER",
+] as const;
+
+const catalogSlots = new Set<string>(ItemSlotTypes);
+
+export const resolveItemListFilter = <T extends { slot?: string; itemType?: string }>(
+  input: T,
+): Omit<T, "slot" | "itemType"> & {
+  slot?: (typeof ItemSlotTypes)[number];
+  itemType?: (typeof ItemTypes)[number];
+} => {
+  const raw = input.slot;
+  let itemType = input.itemType as (typeof ItemTypes)[number] | undefined;
+  let slot: (typeof ItemSlotTypes)[number] | undefined;
+  if (typeof raw === "string" && raw.length > 0) {
+    if ((ItemTypes as readonly string[]).includes(raw) && !catalogSlots.has(raw)) {
+      itemType = itemType ?? (raw as (typeof ItemTypes)[number]);
+    } else if (raw === "HAND_1" || raw === "HAND_2") {
+      slot = "HAND";
+    } else if (/^ITEM_\d+$/.test(raw)) {
+      slot = "ITEM";
+    } else if (catalogSlots.has(raw)) {
+      slot = raw as (typeof ItemSlotTypes)[number];
+    }
+  }
+  return { ...input, slot, itemType };
+};
+
 export const itemFilteringSchema = z.object({
   limit: z.number().min(1).max(500),
   name: z.string().optional(),
@@ -53,7 +104,7 @@ export const itemFilteringSchema = z.object({
   /** Drop rows whose store listing date has passed. Shop catalogs page on this. */
   excludeExpiredFromStore: z.boolean().optional(),
   eventItems: z.boolean().optional(),
-  slot: z.enum(ItemSlotTypes).optional(),
+  slot: z.enum(ItemFilterSlots).optional(),
   target: z.enum(AttackTargets).optional(),
   method: z.enum(AttackMethods).optional(),
   hidden: z.boolean().optional(),
