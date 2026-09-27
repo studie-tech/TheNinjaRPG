@@ -1,3 +1,13 @@
+-- Apply by hand as one SQL script, never with `make dbpush` or `drizzle-kit push`: a push
+-- adds and drops the columns without the backfills below, wiping every player's stats.
+-- The script is not idempotent and fails on its first statement if run twice.
+--
+-- The old and new builds cannot share a schema, because fetchUser selects every column by
+-- name. Cut over in this order:
+--   1. Build the new production deployment without promoting it.
+--   2. Apply this script at low traffic, or behind a brief write freeze.
+--   3. Promote the new deployment immediately.
+--   4. Apply the same script to tnr/development and to the theninja-ai database.
 ALTER TABLE `Item` ADD `requiredNinjutsuMastery` int;
 ALTER TABLE `Item` ADD `requiredGenjutsuMastery` int;
 ALTER TABLE `Item` ADD `requiredTaijutsuMastery` int;
