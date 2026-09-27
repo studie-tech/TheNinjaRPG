@@ -1543,7 +1543,7 @@ export const profileRouter = createTRPCRouter({
       const newAi = { ...ai, ...input.data } as UserData;
 
       // Level-based stats / pools
-      scaleUserStats(newAi);
+      scaleUserStats(newAi, "ai");
 
       // Calculate diff
       const oldContent = Object.fromEntries(

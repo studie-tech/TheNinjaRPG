@@ -1,15 +1,18 @@
-import type { UserRank } from "@/drizzle/constants";
+import type { CombatStatName, MasteryName, UserRank } from "@/drizzle/constants";
 import {
   CLAN_BOOST_MAX_LEVEL,
   CLAN_BOOST_PERCENT_PER_LEVEL,
+  CombatStatNames,
   CP_PER_LVL,
   getUserCaps,
   HomeTypeDetails,
   HP_PER_LVL,
+  MasteryNames,
   PLAYER_LEVEL_XP_BASE_FACTOR,
   PLAYER_LEVEL_XP_HIGH_FACTOR,
   PLAYER_LEVEL_XP_HIGH_THRESHOLD,
   RANKS_RESTRICTED_FROM_PVP,
+  SCALED_AI_STAT_BUDGET_SHARE,
   SP_PER_LVL,
   XP_BRACKETS,
 } from "@/drizzle/constants";
@@ -115,24 +118,6 @@ export const calcCP = (level: number) => {
   return 100 + CP_PER_LVL * (level - 1);
 };
 
-type CombatStatDistribution = {
-  offence: number;
-  defence: number;
-  strength: number;
-  intelligence: number;
-  willpower: number;
-  speed: number;
-};
-
-type MasteryDistribution = {
-  ninjutsuMastery: number;
-  genjutsuMastery: number;
-  taijutsuMastery: number;
-  bukijutsuMastery: number;
-  bloodlineMastery: number;
-  sageMastery: number;
-};
-
 /** Copy of the user with stats capped to its rank; the original stays untouched */
 export const withCappedStats = <T extends UserData>(user: T): T => {
   const capped = { ...user };
@@ -161,7 +146,16 @@ export function capUserStats(user: UserData) {
   if (user.sageMastery > mastery_cap) user.sageMastery = mastery_cap;
 }
 
-/** Scale stats of user, and return total number of experience / stat points */
+/** Which scale a unit's stored stats are on; see scaleUserStats. */
+export type StatScale = "ai" | "player";
+
+/**
+ * Scale pools, combat stats and masteries to the user's level. Each combat stat keeps
+ * its share of the level budget, and masteries keep their ratio to the combat stats.
+ * @param statScale - "ai" spends SCALED_AI_STAT_BUDGET_SHARE of the budget. "player"
+ *   takes shares over at least the stat total the player's experience bought, so a
+ *   player whose stats sum below it (unassigned or merged points) scales to about 1x.
+ */
 export function scaleUserStats(
   user: Pick<
     UserData,
@@ -175,19 +169,10 @@ export function scaleUserStats(
     | "curChakra"
     | "maxChakra"
     | "experience"
-    | "offence"
-    | "defence"
-    | "ninjutsuMastery"
-    | "genjutsuMastery"
-    | "taijutsuMastery"
-    | "bukijutsuMastery"
-    | "bloodlineMastery"
-    | "sageMastery"
-    | "strength"
-    | "intelligence"
-    | "willpower"
-    | "speed"
+    | CombatStatName
+    | MasteryName
   >,
+  statScale: StatScale,
 ) {
   // Multipliers
   const poolMod = user.poolsMultiplier ?? 1;
@@ -199,47 +184,30 @@ export function scaleUserStats(
   user.maxStamina = calcSP(user.level) * poolMod;
   user.curChakra = calcCP(user.level) * poolMod;
   user.maxChakra = calcCP(user.level) * poolMod;
-  // Combat stats + generals scale from experience. Masteries are scaled separately
-  // so AI can use gated content, but they never contribute to experience.
-  const exp = calcLevelRequirements(user.level) - 500;
-  user.experience = exp;
-  const combatSum = [
-    user.offence ?? 0,
-    user.defence ?? 0,
-    user.strength ?? 0,
-    user.intelligence ?? 0,
-    user.willpower ?? 0,
-    user.speed ?? 0,
-  ].reduce((a, b) => a + b, 0);
-  const calcCombatStat = (stat: keyof CombatStatDistribution) => {
-    if (combatSum <= 0) return 10;
-    return 10 + Math.floor(((user[stat] ?? 0) / combatSum) * exp * 100) / 100;
-  };
-  user.offence = calcCombatStat("offence") * statMod;
-  user.defence = calcCombatStat("defence") * statMod;
-  user.strength = calcCombatStat("strength") * statMod;
-  user.intelligence = calcCombatStat("intelligence") * statMod;
-  user.willpower = calcCombatStat("willpower") * statMod;
-  user.speed = calcCombatStat("speed") * statMod;
-
-  const masterySum = [
-    user.ninjutsuMastery ?? 0,
-    user.genjutsuMastery ?? 0,
-    user.taijutsuMastery ?? 0,
-    user.bukijutsuMastery ?? 0,
-    user.bloodlineMastery ?? 0,
-    user.sageMastery ?? 0,
-  ].reduce((a, b) => a + b, 0);
-  const calcMastery = (stat: keyof MasteryDistribution) => {
-    if (masterySum <= 0) return 10;
-    return 10 + Math.floor(((user[stat] ?? 0) / masterySum) * exp * 100) / 100;
-  };
-  user.ninjutsuMastery = calcMastery("ninjutsuMastery") * statMod;
-  user.genjutsuMastery = calcMastery("genjutsuMastery") * statMod;
-  user.taijutsuMastery = calcMastery("taijutsuMastery") * statMod;
-  user.bukijutsuMastery = calcMastery("bukijutsuMastery") * statMod;
-  user.bloodlineMastery = calcMastery("bloodlineMastery") * statMod;
-  user.sageMastery = calcMastery("sageMastery") * statMod;
+  // Combat stats
+  const levelBudget = calcLevelRequirements(user.level) - 500;
+  const earnedStats = (user.experience ?? 0) + CombatStatNames.length * 10;
+  user.experience = levelBudget;
+  const combatSum = CombatStatNames.reduce((sum, stat) => sum + (user[stat] ?? 0), 0);
+  const budget =
+    statScale === "ai" ? levelBudget * SCALED_AI_STAT_BUDGET_SHARE : levelBudget;
+  const divisor = statScale === "ai" ? combatSum : Math.max(combatSum, earnedStats);
+  for (const stat of CombatStatNames) {
+    const share =
+      divisor > 0 ? Math.floor(((user[stat] ?? 0) * budget * 100) / divisor) / 100 : 0;
+    user[stat] = (10 + share) * statMod;
+  }
+  // Masteries
+  const scaledSum = CombatStatNames.reduce((sum, stat) => sum + user[stat], 0);
+  for (const mastery of MasteryNames) {
+    user[mastery] =
+      combatSum > 0
+        ? Math.max(
+            10,
+            Math.floor(((user[mastery] ?? 0) * scaledSum * 100) / combatSum) / 100,
+          )
+        : 10 * statMod;
+  }
 }
 
 const roundCombatStat = (stat: number) => Math.round(stat * 100) / 100;

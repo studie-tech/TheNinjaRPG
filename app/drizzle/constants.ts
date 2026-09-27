@@ -921,6 +921,8 @@ export const RYO_CAP = 3000000000;
 export const MAX_STATS_CAP = 1322420;
 export const MAX_GENS_CAP = 400000;
 export const MAX_MASTERY_CAP = 1500000;
+// AI rows keep the pre-#1277 12-stat scale: half the level budget over 6 stats is 1/12 each.
+export const SCALED_AI_STAT_BUDGET_SHARE = 0.5;
 export const MAX_DAILY_AI_CALLS = 100;
 
 export const ROLL_CHANCE_PERCENTAGE = {

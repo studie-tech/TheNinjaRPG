@@ -37,7 +37,7 @@ import {
   storeMasteryBases,
 } from "@/libs/combat/util";
 import { MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
-import { calcHP, scaleUserStats } from "@/libs/profile";
+import { calcHP, type StatScale, scaleUserStats } from "@/libs/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type {
   PreventTagType,
@@ -1237,6 +1237,14 @@ export const cleanse = (
 };
 
 /**
+ * AI rows and their summons carry AI-scale stats; players, auto-battle players and
+ * clones (isOriginal false) carry player-scale ones. A clone of an AI caster is the one
+ * misread, which only affects its damage to barriers.
+ */
+const statScaleOf = (user: BattleUserState): StatScale =>
+  user.isAi && user.isOriginal ? "ai" : "player";
+
+/**
  * Clone the caster onto the battlefield. The clone does not inherit sage mode
  * (no `sageModeId`, Activation jutsu stripped, `sageModeUsedThisBattle` set) so
  * it cannot activate or continue the original's sage window.
@@ -1288,7 +1296,7 @@ export const clone = (
     // Set level to summoner level
     newAi.level = user.level;
     // Scale to level
-    scaleUserStats(newAi);
+    scaleUserStats(newAi, statScaleOf(user));
     // Set stats
     newAi.offence = newAi.offence * perc;
     newAi.defence = newAi.defence * perc;
@@ -1547,7 +1555,7 @@ export const damageBarrier = (
   // Create barrier target user stats
   const target = structuredClone(origin);
   target.level = power;
-  scaleUserStats(target);
+  scaleUserStats(target, statScaleOf(origin));
   // Calculate damage
   const damage = damageCalc(effect, origin, target, config) * effect.barrierAbsorb;
   barrier.curHealth -= damage;
@@ -3105,7 +3113,7 @@ export const summon = (
         // Set level to summoner level
         newAi.level = user.level;
         // Scale to level
-        scaleUserStats(newAi);
+        scaleUserStats(newAi, "ai");
         // Set pools
         newAi.maxHealth = effect.aiHp;
         newAi.curHealth = newAi.maxHealth;

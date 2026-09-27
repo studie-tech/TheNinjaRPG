@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { RANKED_PVP_STATS } from "@/drizzle/constants";
+import { RANKED_PVP_STATS, SCALED_AI_STAT_BUDGET_SHARE } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import {
   calcLevel,
@@ -123,34 +123,124 @@ test("manuallyAssignUserStats assigns the ranked combat stats and masteries", ()
   expect(user.sageMastery).toBe(RANKED_PVP_STATS.sageMastery);
 });
 
-test("scaleUserStats keeps combat stats finite when the combat sum is zero", () => {
-  const user = {
-    level: 10,
-    poolsMultiplier: 1,
-    statsMultiplier: 1,
-    curHealth: 0,
-    maxHealth: 0,
-    curStamina: 0,
-    maxStamina: 0,
-    curChakra: 0,
-    maxChakra: 0,
-    experience: 0,
-    offence: 0,
-    defence: 0,
-    ninjutsuMastery: 0,
-    genjutsuMastery: 0,
-    taijutsuMastery: 0,
-    bukijutsuMastery: 0,
-    bloodlineMastery: 0,
-    sageMastery: 0,
-    strength: 0,
-    intelligence: 0,
-    willpower: 0,
-    speed: 0,
+test.each(["ai", "player"] as const)(
+  "scaleUserStats keeps %s stats finite when the combat sum is zero",
+  (statScale) => {
+    const user = makeScalableUser({ level: 10 });
+    scaleUserStats(user, statScale);
+    expect(user.offence).toBe(10);
+    expect(user.defence).toBe(10);
+    expect(user.ninjutsuMastery).toBe(10);
+    expect(Number.isFinite(user.offence)).toBe(true);
+  },
+);
+
+test("scaleUserStats keeps the seeded Clown of Chaos AI row as a fixed point", () => {
+  // Row _m-X2hsSTRRqwmUZXI2mj in data/ai.sql.
+  const clown = makeScalableUser({
+    level: 100,
+    poolsMultiplier: 3,
+    statsMultiplier: 3,
+    curHealth: 15_150,
+    maxHealth: 15_150,
+    curStamina: 15_150,
+    maxStamina: 15_150,
+    curChakra: 15_150,
+    maxChakra: 15_150,
+    experience: 3_339_000,
+    ...uniformCombatStats(834_780),
+    ninjutsuMastery: 834_780,
+    genjutsuMastery: 834_780,
+    taijutsuMastery: 834_780,
+    bukijutsuMastery: 834_780,
+    bloodlineMastery: 10,
+    sageMastery: 10,
+  });
+  const stored = { ...clown };
+  scaleUserStats(clown, "ai");
+  expect(clown).toEqual(stored);
+  scaleUserStats(clown, "ai");
+  expect(clown).toEqual(stored);
+});
+
+test("scaleUserStats leaves a fresh player's stat shares unchanged", () => {
+  // Every experience point assigned: the stats sum to experience plus the base 10 each.
+  const stats = {
+    offence: 40_010,
+    defence: 30_010,
+    strength: 10_010,
+    intelligence: 10_010,
+    willpower: 7_260,
+    speed: 7_260,
   };
-  scaleUserStats(user);
-  expect(user.offence).toBe(10);
-  expect(user.defence).toBe(10);
-  expect(user.ninjutsuMastery).toBe(10);
-  expect(Number.isFinite(user.offence)).toBe(true);
+  const sum = Object.values(stats).reduce((a, b) => a + b, 0);
+  const user = makeScalableUser({ level: 20, experience: sum - 60, ...stats });
+  const budget = calcLevelRequirements(20) - 500;
+  scaleUserStats(user, "player");
+  for (const [stat, value] of Object.entries(stats)) {
+    const expected = 10 + Math.floor((value * budget * 100) / sum) / 100;
+    expect(user[stat as keyof typeof stats]).toBe(expected);
+  }
+});
+
+test("scaleUserStats scales a migrated veteran to at most their own stats", () => {
+  // Level 100 with the experience of 8 x 450k per-type stats and 4 x 200k generals,
+  // merged into one 450k offence and defence.
+  const veteran = makeScalableUser({
+    level: 100,
+    experience: 8 * 450_000 + 4 * 200_000 - 120,
+    offence: 450_000,
+    defence: 450_000,
+    strength: 200_000,
+    intelligence: 200_000,
+    willpower: 200_000,
+    speed: 200_000,
+    ninjutsuMastery: 450_000,
+  });
+  const stored = { ...veteran };
+  scaleUserStats(veteran, "player");
+  expect(veteran.offence).toBeLessThanOrEqual(stored.offence);
+  expect(veteran.defence).toBeLessThanOrEqual(stored.defence);
+  expect(veteran.strength).toBeLessThanOrEqual(stored.strength);
+  // Masteries follow the combat stats by the same factor.
+  const factor = veteran.offence / stored.offence;
+  expect(veteran.ninjutsuMastery / stored.ninjutsuMastery).toBeCloseTo(factor, 3);
+});
+
+test("scaleUserStats spends the AI budget share on AI stats", () => {
+  const ai = makeScalableUser({ level: 20, ...uniformCombatStats(10) });
+  scaleUserStats(ai, "ai");
+  const budget = calcLevelRequirements(20) - 500;
+  expect(ai.offence).toBeCloseTo(10 + (budget * SCALED_AI_STAT_BUDGET_SHARE) / 6, 2);
+});
+
+/** A scaleUserStats input with every stat and pool at zero unless overridden. */
+const makeScalableUser = (overrides: Partial<Parameters<typeof scaleUserStats>[0]>) => ({
+  level: 1,
+  poolsMultiplier: 1,
+  statsMultiplier: 1,
+  curHealth: 0,
+  maxHealth: 0,
+  curStamina: 0,
+  maxStamina: 0,
+  curChakra: 0,
+  maxChakra: 0,
+  experience: 0,
+  ...uniformCombatStats(0),
+  ninjutsuMastery: 0,
+  genjutsuMastery: 0,
+  taijutsuMastery: 0,
+  bukijutsuMastery: 0,
+  bloodlineMastery: 0,
+  sageMastery: 0,
+  ...overrides,
+});
+
+const uniformCombatStats = (value: number) => ({
+  offence: value,
+  defence: value,
+  strength: value,
+  intelligence: value,
+  willpower: value,
+  speed: value,
 });

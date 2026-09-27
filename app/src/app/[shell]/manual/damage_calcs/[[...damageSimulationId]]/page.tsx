@@ -87,6 +87,8 @@ export default function Simulator(props: {
   // Page state
   const [selectedDmg, setSelectedDmg] = useState<number | undefined>(undefined);
   const [showAll, setShowAll] = useState<boolean | undefined>(undefined);
+  const [attProgress, setAttProgress] = useState<LoadedProgress | undefined>();
+  const [defProgress, setDefProgress] = useState<LoadedProgress | undefined>();
 
   // Forms setup
   const conf1 = { defaultValues: defaultsStats, mode: "all" as const };
@@ -162,12 +164,13 @@ export default function Simulator(props: {
     return assigned - statNames.length * 10;
   };
 
-  // Extract information from schema to use for showing forms
-  const attExp = calcExperience(attValues);
-  const attLevel = calcLevel(attExp);
+  // Extract information from schema to use for showing forms. A player's own stats
+  // carry their real level, since experience can exceed what the stats sum to.
+  const attExp = attProgress?.experience ?? calcExperience(attValues);
+  const attLevel = attProgress?.level ?? calcLevel(attExp);
   const attHp = calcHP(attLevel);
-  const defExp = calcExperience(defValues);
-  const defLevel = calcLevel(defExp);
+  const defExp = defProgress?.experience ?? calcExperience(defValues);
+  const defLevel = defProgress?.level ?? calcLevel(defExp);
   const defHp = calcHP(defLevel);
 
   // Monkey-wrap the damage function
@@ -175,11 +178,12 @@ export default function Simulator(props: {
     attValues: StatSchemaOutput,
     defValues: StatSchemaOutput,
     actValues: ActSchemaOutput,
+    progress?: { attacker?: LoadedProgress; defender?: LoadedProgress },
   ) => {
-    const attackerExp = calcExperience(attValues);
-    const attackerLevel = calcLevel(attackerExp);
-    const defenderExp = calcExperience(defValues);
-    const defenderLevel = calcLevel(defenderExp);
+    const attackerExp = progress?.attacker?.experience ?? calcExperience(attValues);
+    const attackerLevel = progress?.attacker?.level ?? calcLevel(attackerExp);
+    const defenderExp = progress?.defender?.experience ?? calcExperience(defValues);
+    const defenderLevel = progress?.defender?.level ?? calcLevel(defenderExp);
     const attacker = {
       ...attValues,
       level: attackerLevel,
@@ -268,8 +272,13 @@ export default function Simulator(props: {
 
   // Handle updating damage whenever form changes
   useEffect(() => {
-    setSelectedDmg(getDamage(attValues, defValues, actValues));
-  }, [attValues, defValues, actValues]);
+    setSelectedDmg(
+      getDamage(attValues, defValues, actValues, {
+        attacker: attProgress,
+        defender: defProgress,
+      }),
+    );
+  }, [attValues, defValues, actValues, attProgress, defProgress]);
 
   // Handle simulation
   const onSubmit = attForm.handleSubmit(
@@ -291,6 +300,8 @@ export default function Simulator(props: {
     };
     let statKey: keyof typeof attacker;
     let actKey: keyof typeof action;
+    setAttProgress(undefined);
+    setDefProgress(undefined);
     for (statKey in attacker) {
       attForm.setValue(statKey, attacker[statKey]);
     }
@@ -305,10 +316,14 @@ export default function Simulator(props: {
   // Handle setting user data into form
   const setUserData = (
     form: UseFormReturn<StatSchemaInput, unknown, StatSchemaOutput>,
+    setProgress: (progress: LoadedProgress | undefined) => void,
   ) => {
     statNames.forEach((stat) => {
       form.setValue(stat, userData?.[stat] ?? 0);
     });
+    setProgress(
+      userData ? { level: userData.level, experience: userData.experience } : undefined,
+    );
   };
 
   return (
@@ -348,7 +363,7 @@ export default function Simulator(props: {
               <div className="grow"></div>
               <Users
                 className="mt-3 mr-3 h-5 w-5"
-                onClick={() => setUserData(attForm)}
+                onClick={() => setUserData(attForm, setAttProgress)}
               />
             </div>
             <p className="px-3 text-sm italic">Experience: {attExp}</p>
@@ -367,7 +382,7 @@ export default function Simulator(props: {
               <div className="grow"></div>
               <Users
                 className="mt-3 mr-3 h-5 w-5"
-                onClick={() => setUserData(defForm)}
+                onClick={() => setUserData(defForm, setDefProgress)}
               />
             </div>
             <p className="px-3 text-sm italic">Experience: {defExp}</p>
@@ -704,3 +719,7 @@ const UserInput: React.FC<UserInputProps> = (props) => {
     });
   return <Form {...selectForm}>{fields}</Form>;
 };
+
+/** A player's real level and experience, kept from loading their own stats until a
+ * saved calculation replaces the form. */
+type LoadedProgress = { level: number; experience: number };

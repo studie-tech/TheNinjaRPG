@@ -2246,7 +2246,7 @@ export const initiateBattle = async (
     // Scale targets
     if (info?.scaleTarget && targetIds.includes(user.userId) && users[0]) {
       user.level = users[0].level;
-      scaleUserStats(user);
+      scaleUserStats(user, user.isAi ? "ai" : "player");
     }
 
     // Manually Assign Stats
