@@ -144,6 +144,17 @@ ALTER TABLE `UserData` DROP COLUMN `bukijutsuOffence`;
 UPDATE `UserData`
 SET `battleId` = NULL, `status` = 'AWAKE', `travelFinishAt` = NULL
 WHERE `battleId` IS NOT NULL;
+-- Open raid, shrine and clan queues whose battle is deleted would still count as started and
+-- lock their members out of every queue, and undecided tournament matches would keep their
+-- fight button hidden. Remove those queues and reopen those matches.
+DELETE `u` FROM `MpvpBattleUser` `u`
+JOIN `MpvpBattleQueue` `q` ON `q`.`id` = `u`.`clanBattleId`
+WHERE `q`.`winnerId` IS NULL AND `q`.`battleId` IN (SELECT `id` FROM `Battle`);
+DELETE FROM `MpvpBattleQueue`
+WHERE `winnerId` IS NULL AND `battleId` IN (SELECT `id` FROM (SELECT `id` FROM `Battle`) `b`);
+UPDATE `TournamentMatch`
+SET `battleId` = NULL
+WHERE `winnerId` IS NULL AND `battleId` IN (SELECT `id` FROM `Battle`);
 DELETE FROM `Battle`;
 -- Saved simulator state is a JSON blob keyed by the old per-type stat names. Nothing maps
 -- it onto offence/defence, so stale rows would render as NaN damage and silently reload
