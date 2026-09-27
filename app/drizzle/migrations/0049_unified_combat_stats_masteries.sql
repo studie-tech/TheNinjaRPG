@@ -41,47 +41,21 @@ SET
 	`bloodlineMastery` = 10,
 	`sageMastery` = 10;
 ALTER TABLE `UserData` MODIFY COLUMN `currentlyTraining` enum('ninjutsuOffence','taijutsuOffence','genjutsuOffence','bukijutsuOffence','ninjutsuDefence','taijutsuDefence','genjutsuDefence','bukijutsuDefence','intelligence','speed','willpower','strength','offence','defence');
+-- Sessions in flight on a per-type stat keep running, with their start time, on the stat
+-- it merged into, so they still pay experience when stopped.
 UPDATE `UserData`
-SET
-	`currentlyTrainingMastery` = CASE `currentlyTraining`
-		WHEN 'ninjutsuOffence' THEN 'ninjutsuMastery'
-		WHEN 'genjutsuOffence' THEN 'genjutsuMastery'
-		WHEN 'taijutsuOffence' THEN 'taijutsuMastery'
-		WHEN 'bukijutsuOffence' THEN 'bukijutsuMastery'
-		ELSE `currentlyTrainingMastery`
-	END,
-	`masteryTrainingStartedAt` = CASE
-		WHEN `currentlyTraining` IN ('ninjutsuOffence', 'genjutsuOffence', 'taijutsuOffence', 'bukijutsuOffence') THEN `trainingStartedAt`
-		ELSE `masteryTrainingStartedAt`
-	END,
-	`trainingStartedAt` = CASE
-		WHEN `currentlyTraining` IN ('ninjutsuOffence', 'genjutsuOffence', 'taijutsuOffence', 'bukijutsuOffence') THEN NULL
-		ELSE `trainingStartedAt`
-	END,
-	`currentlyTraining` = CASE `currentlyTraining`
-		WHEN 'ninjutsuOffence' THEN NULL
-		WHEN 'genjutsuOffence' THEN NULL
-		WHEN 'taijutsuOffence' THEN NULL
-		WHEN 'bukijutsuOffence' THEN NULL
-		WHEN 'ninjutsuDefence' THEN 'defence'
-		WHEN 'genjutsuDefence' THEN 'defence'
-		WHEN 'taijutsuDefence' THEN 'defence'
-		WHEN 'bukijutsuDefence' THEN 'defence'
-		ELSE `currentlyTraining`
-	END;
+SET `currentlyTraining` = CASE
+	WHEN `currentlyTraining` IN ('ninjutsuOffence', 'genjutsuOffence', 'taijutsuOffence', 'bukijutsuOffence') THEN 'offence'
+	ELSE 'defence'
+END
+WHERE `currentlyTraining` IN ('ninjutsuOffence', 'genjutsuOffence', 'taijutsuOffence', 'bukijutsuOffence', 'ninjutsuDefence', 'genjutsuDefence', 'taijutsuDefence', 'bukijutsuDefence');
 ALTER TABLE `TrainingLog` MODIFY COLUMN `stat` enum('ninjutsuOffence','taijutsuOffence','genjutsuOffence','bukijutsuOffence','ninjutsuDefence','taijutsuDefence','genjutsuDefence','bukijutsuDefence','intelligence','speed','willpower','strength','offence','defence','ninjutsuMastery','genjutsuMastery','taijutsuMastery','bukijutsuMastery','bloodlineMastery','sageMastery');
 UPDATE `TrainingLog`
-SET `stat` = CASE `stat`
-	WHEN 'ninjutsuOffence' THEN 'ninjutsuMastery'
-	WHEN 'genjutsuOffence' THEN 'genjutsuMastery'
-	WHEN 'taijutsuOffence' THEN 'taijutsuMastery'
-	WHEN 'bukijutsuOffence' THEN 'bukijutsuMastery'
-	WHEN 'ninjutsuDefence' THEN 'defence'
-	WHEN 'genjutsuDefence' THEN 'defence'
-	WHEN 'taijutsuDefence' THEN 'defence'
-	WHEN 'bukijutsuDefence' THEN 'defence'
-	ELSE `stat`
-END;
+SET `stat` = CASE
+	WHEN `stat` IN ('ninjutsuOffence', 'genjutsuOffence', 'taijutsuOffence', 'bukijutsuOffence') THEN 'offence'
+	ELSE 'defence'
+END
+WHERE `stat` IN ('ninjutsuOffence', 'genjutsuOffence', 'taijutsuOffence', 'bukijutsuOffence', 'ninjutsuDefence', 'genjutsuDefence', 'taijutsuDefence', 'bukijutsuDefence');
 ALTER TABLE `TrainingLog` MODIFY COLUMN `stat` enum('offence','defence','intelligence','speed','willpower','strength','ninjutsuMastery','genjutsuMastery','taijutsuMastery','bukijutsuMastery','bloodlineMastery','sageMastery');
 ALTER TABLE `UserData` MODIFY COLUMN `currentlyTraining` enum('offence','defence','intelligence','speed','willpower','strength');
 UPDATE `Jutsu`
