@@ -128,7 +128,6 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
           userData={userData}
           availableStats={availableStats}
           onAccept={handleAcceptWithTutorial}
-          isRedistribution={isRedistribution}
           isPending={isPending}
           pendingLabel={pendingLabel}
         />
@@ -171,17 +170,16 @@ interface SimpleDistributionProps {
   userData: NonNullable<UserWithRelations>;
   availableStats: number;
   onAccept: (data: StatSchemaType) => void;
-  isRedistribution?: boolean;
   isPending: boolean;
   pendingLabel?: string;
 }
 
+/** Presets only assign unused experience; redistribution always uses the advanced form. */
 const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   const {
     userData,
     availableStats,
     onAccept,
-    isRedistribution,
     isPending,
     pendingLabel = "Assigning",
   } = props;
@@ -193,14 +191,13 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
     if (!isPending) setPendingSpecialization(null);
   }, [isPending]);
 
-  // Create stat schema to get caps
-  const cappedUser = withCappedStats(userData);
+  // Caps as the room left above each stat, which the preset split fills
   const { schema: statSchema, maxValues } = createStatSchema(
-    isRedistribution ? 10 : 0,
-    isRedistribution ? 10 : 0,
-    isRedistribution ? { rank: userData.rank } : cappedUser,
+    0,
+    0,
+    withCappedStats(userData),
   );
-  const defaultValues = statSchema.parse(isRedistribution ? cappedUser : {});
+  const defaultValues = statSchema.parse({});
 
   // Presets are named by their general stats: jutsu disciplines come from masteries
   const specializationOptions = [
