@@ -331,7 +331,7 @@ export const showRewardToast = (
           )}
           {rewards.reward_sage_mastery_experience > 0 && (
             <span className="whitespace-nowrap">
-              <b>Sage mastery experience:</b> {rewards.reward_sage_mastery_experience}
+              <b>Sage mode experience:</b> {rewards.reward_sage_mastery_experience}
             </span>
           )}
           {rewards.reward_items.length > 0 && (

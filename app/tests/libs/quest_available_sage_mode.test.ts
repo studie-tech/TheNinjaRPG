@@ -98,7 +98,7 @@ describe("isAvailableUserQuests - requiredSageRank", () => {
     const user = makeUser("sage-fire", 150_000);
     const result = isAvailableUserQuests(quest, user);
     expect(result.check).toBe(false);
-    expect(result.message).toContain("Quest requires a higher sage mastery rank");
+    expect(result.message).toContain("Quest requires a higher sage mode rank");
   });
 
   it("is met when the quest requires MASTER and the user has reached MASTER", () => {
@@ -106,7 +106,7 @@ describe("isAvailableUserQuests - requiredSageRank", () => {
     const user = makeUser("sage-fire", 250_000);
     const result = isAvailableUserQuests(quest, user);
     expect(result.check).toBe(true);
-    expect(result.message).not.toContain("Quest requires a higher sage mastery rank");
+    expect(result.message).not.toContain("Quest requires a higher sage mode rank");
   });
 
   it("is unmet when the quest requires INITIATE and the user has no sage mode", () => {
@@ -114,6 +114,6 @@ describe("isAvailableUserQuests - requiredSageRank", () => {
     const user = makeUser(null);
     const result = isAvailableUserQuests(quest, user);
     expect(result.check).toBe(false);
-    expect(result.message).toContain("Quest requires a higher sage mastery rank");
+    expect(result.message).toContain("Quest requires a higher sage mode rank");
   });
 });

@@ -3,11 +3,11 @@ import { getRewardArray } from "@/libs/objectives";
 import { ObjectiveReward, hasReward } from "@/validators/rewards";
 
 describe("getRewardArray sage mastery experience", () => {
-  it("includes sage mastery experience in the reward summary", () => {
+  it("includes sage mode experience in the reward summary", () => {
     const reward = {
       reward_sage_mastery_experience: 100,
     } as unknown as Parameters<typeof getRewardArray>[0];
-    expect(getRewardArray(reward)).toContain("100 sage mastery experience");
+    expect(getRewardArray(reward)).toContain("100 sage mode experience");
   });
 });
 

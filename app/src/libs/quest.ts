@@ -1810,7 +1810,7 @@ export const isAvailableUserQuests = (
   if (!villageCheck) message += "Quest is not available in your village\n";
   if (!bloodlineCheck) message += "Quest requires a specific bloodline\n";
   if (!sageModeCheck) message += "Quest requires a specific sage mode\n";
-  if (!sageRankCheck) message += "Quest requires a higher sage mastery rank\n";
+  if (!sageRankCheck) message += "Quest requires a higher sage mode rank\n";
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
   if (!medicalRankCheck)
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;

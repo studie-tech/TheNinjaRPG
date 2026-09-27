@@ -259,7 +259,7 @@ export const Reward: React.FC<RewardProps> = (props) => {
     rewards += `${rewards ? ", " : ""} ${info.reward_gathering_experience} Gathering Experience`;
   }
   if (info?.reward_sage_mastery_experience) {
-    rewards += `${rewards ? ", " : ""} ${info.reward_sage_mastery_experience} Sage Mastery Exp`;
+    rewards += `${rewards ? ", " : ""} ${info.reward_sage_mastery_experience} Sage Mode Exp`;
   }
   if (info?.reward_war_damage) {
     rewards += `${rewards ? ", " : ""} ${info.reward_war_damage} War Damage to Enemy`;
