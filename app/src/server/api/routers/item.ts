@@ -28,7 +28,6 @@ import {
   IMG_AVATAR_DEFAULT,
   ITEM_LEVEL_CAP,
   ItemSlots,
-  ItemSlotTypes,
   ItemTypes,
   MAX_EXTRA_RESKIN_SLOTS,
   MAX_ITEM_VARIANTS,
@@ -78,6 +77,7 @@ import {
   getInventoryBucketFullMessage,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
+  readItemListFilterSlot,
 } from "@/libs/item";
 import {
   buildMissingLoadouts,
@@ -3416,17 +3416,7 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
 export const itemDatabaseFilter = (
   input?: Partial<ItemFilteringSchema>,
 ): QueryCondition[] => {
-  // Equipped positions are named catalogSlot_n, so HAND_1 filters HAND.
-  const slotName = input?.slot?.split("_")[0];
-  const slot = (ItemSlotTypes as readonly string[]).includes(slotName ?? "")
-    ? (slotName as (typeof ItemSlotTypes)[number])
-    : undefined;
-  // A type with no underscore, such as ACCESSORY, is not a catalog slot.
-  const itemType =
-    input?.itemType ??
-    (slotName && !slot && (ItemTypes as readonly string[]).includes(slotName)
-      ? (slotName as (typeof ItemTypes)[number])
-      : undefined);
+  const { slot, itemType } = readItemListFilterSlot(input?.slot, input?.itemType);
   return [
     // Name filter
     ...(input?.name ? [like(item.name, `%${input.name}%`)] : []),

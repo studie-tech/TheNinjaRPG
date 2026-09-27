@@ -54,7 +54,7 @@ export const itemFilteringSchema = z.object({
   /** Drop rows whose store listing date has passed. Shop catalogs page on this. */
   excludeExpiredFromStore: z.boolean().optional(),
   eventItems: z.boolean().optional(),
-  // Catalog slots, equipped positions (HAND_1), and item types (ACCESSORY).
+  /** Catalog slot, equipped position, or item type. See `readItemListFilterSlot`. */
   slot: z
     .union([z.enum(ItemSlotTypes), z.enum(ItemSlots), z.enum(ItemTypes)])
     .optional(),

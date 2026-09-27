@@ -17,6 +17,8 @@ import {
   FED_SILVER_INVENTORY_SLOTS,
   type ItemSlot,
   ItemSlots,
+  ItemSlotTypes,
+  ItemTypes,
   MATERIALS_BASE_SLOTS,
   MEDNIN_HEAL_ITEM_DISCOUNT_PERC,
 } from "@/drizzle/constants";
@@ -453,6 +455,34 @@ export const isCompatibleEquipSlot = (
   !!slotType &&
   slotType !== "NONE" &&
   candidate.includes(slotType);
+
+/**
+ * Catalog slot and item type for an item-list filter. Equipped positions are
+ * named `catalogSlot_n` (`HAND_1`, `ITEM_2`), the same rule `isCompatibleEquipSlot`
+ * uses, so the catalog slot is the text before `_`. A value that is an item type
+ * rather than a catalog slot (`ACCESSORY`) filters item type instead, and does
+ * not replace an item type the caller already sent.
+ */
+export const readItemListFilterSlot = (
+  slot: string | undefined,
+  itemType: (typeof ItemTypes)[number] | undefined,
+): {
+  slot?: (typeof ItemSlotTypes)[number];
+  itemType?: (typeof ItemTypes)[number];
+} => {
+  const slotName = slot?.split("_")[0];
+  const catalogSlot = (ItemSlotTypes as readonly string[]).includes(slotName ?? "")
+    ? (slotName as (typeof ItemSlotTypes)[number])
+    : undefined;
+  return {
+    slot: catalogSlot,
+    itemType:
+      itemType ??
+      (slotName && !catalogSlot && (ItemTypes as readonly string[]).includes(slotName)
+        ? (slotName as (typeof ItemTypes)[number])
+        : undefined),
+  };
+};
 
 export interface LoadoutAssignment {
   userItemId: string;
