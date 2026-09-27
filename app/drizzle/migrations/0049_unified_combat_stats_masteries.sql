@@ -40,6 +40,29 @@ SET
 	`bukijutsuMastery` = GREATEST(`bukijutsuOffence`, `bukijutsuDefence`),
 	`bloodlineMastery` = 10,
 	`sageMastery` = 10;
+-- "Highest" damage takes the type of the highest combat mastery. Merging each type's offence
+-- and defence ties those masteries for players who trained their defences evenly, so keep
+-- the mastery of a player's single highest offence strictly on top where it would tie.
+UPDATE `UserData`
+SET `ninjutsuMastery` = `ninjutsuMastery` + 1
+WHERE (`preferredStat` IS NULL OR `preferredStat` = 'Highest')
+	AND `ninjutsuOffence` > GREATEST(`genjutsuOffence`, `taijutsuOffence`, `bukijutsuOffence`)
+	AND `ninjutsuMastery` = GREATEST(`genjutsuMastery`, `taijutsuMastery`, `bukijutsuMastery`);
+UPDATE `UserData`
+SET `genjutsuMastery` = `genjutsuMastery` + 1
+WHERE (`preferredStat` IS NULL OR `preferredStat` = 'Highest')
+	AND `genjutsuOffence` > GREATEST(`ninjutsuOffence`, `taijutsuOffence`, `bukijutsuOffence`)
+	AND `genjutsuMastery` = GREATEST(`ninjutsuMastery`, `taijutsuMastery`, `bukijutsuMastery`);
+UPDATE `UserData`
+SET `taijutsuMastery` = `taijutsuMastery` + 1
+WHERE (`preferredStat` IS NULL OR `preferredStat` = 'Highest')
+	AND `taijutsuOffence` > GREATEST(`ninjutsuOffence`, `genjutsuOffence`, `bukijutsuOffence`)
+	AND `taijutsuMastery` = GREATEST(`ninjutsuMastery`, `genjutsuMastery`, `bukijutsuMastery`);
+UPDATE `UserData`
+SET `bukijutsuMastery` = `bukijutsuMastery` + 1
+WHERE (`preferredStat` IS NULL OR `preferredStat` = 'Highest')
+	AND `bukijutsuOffence` > GREATEST(`ninjutsuOffence`, `genjutsuOffence`, `taijutsuOffence`)
+	AND `bukijutsuMastery` = GREATEST(`ninjutsuMastery`, `genjutsuMastery`, `taijutsuMastery`);
 ALTER TABLE `UserData` MODIFY COLUMN `currentlyTraining` enum('ninjutsuOffence','taijutsuOffence','genjutsuOffence','bukijutsuOffence','ninjutsuDefence','taijutsuDefence','genjutsuDefence','bukijutsuDefence','intelligence','speed','willpower','strength','offence','defence');
 -- Sessions in flight on a per-type stat keep running, with their start time, on the stat
 -- it merged into, so they still pay experience when stopped.
