@@ -979,7 +979,7 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [data, info, userjutsus, students] = await Promise.all([
+      const [data, info, userjutsus, students, masterySources] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -987,9 +987,12 @@ export const jutsuRouter = createTRPCRouter({
         fetchJutsu(ctx.drizzle, input.jutsuId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchStudents(ctx.drizzle, ctx.userId),
+        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
+      // Gear and skill mastery buffs count, as they do for equipping
+      const masteries = effectiveMasteries({ ...user, ...masterySources });
 
       // Derived
       const userjutsuObj = userjutsus.find((j) => j.jutsuId === input.jutsuId);
@@ -999,7 +1002,7 @@ export const jutsuRouter = createTRPCRouter({
       const equippedCapCounts = countEquippedByCap(equippedJutsus);
 
       if (!info) return errorResponse("Jutsu not found");
-      if (!canTrainJutsu(info, user) && !info.parentJutsuId)
+      if (!canTrainJutsu(info, user, masteries) && !info.parentJutsuId)
         return errorResponse("Jutsu not for you");
       if (!userjutsuObj && isJutsuTrainToLearnRestricted(info.jutsuType)) {
         return errorResponse("This jutsu cannot be learned through training");
@@ -1008,7 +1011,11 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse(
           "Evolution jutsus can only be obtained by evolving the parent jutsu",
         );
-      if (info.parentJutsuId && userjutsuObj && !canUseJutsu(info, user, true))
+      if (
+        info.parentJutsuId &&
+        userjutsuObj &&
+        !canUseJutsu(info, user, true, masteries)
+      )
         return errorResponse("Jutsu not for you");
       if (
         userjutsus.some(

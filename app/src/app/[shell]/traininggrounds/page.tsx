@@ -75,6 +75,7 @@ import PublicUserComponent from "@/layout/PublicUser";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showTrainingCapcha } from "@/libs/captcha";
+import { effectiveMasteries } from "@/libs/mastery";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import { getStealthStatus } from "@/libs/stealth";
@@ -883,6 +884,19 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     { enabled: !!userData },
   );
 
+  // Worn gear and activated skills raise masteries, as the server's training gate counts
+  const { data: userItems } = api.item.getUserItems.useQuery(undefined, {
+    enabled: !!userData,
+  });
+  const { data: userSkills } = api.skillTree.getUserSkills.useQuery(undefined, {
+    enabled: !!userData,
+  });
+  const masteries = effectiveMasteries({
+    ...userData,
+    items: userItems ?? [],
+    userSkills: userSkills?.filter((userSkill) => userSkill.activated),
+  });
+
   // User Jutsus
   const { data: userJutsus, isPending: isRefetchingUserJutsu } =
     api.jutsu.getUserJutsus.useQuery(getFilter(state), {
@@ -982,10 +996,10 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         if (j.parentJutsuId)
           return (
             // Training/leveling is item-free, so ignore the bloodline item requirement here
-            canUseJutsu(j, userData, true) &&
+            canUseJutsu(j, userData, true, masteries) &&
             (userJutsuOwnership?.some((uj) => uj.jutsuId === j.id) ?? false)
           );
-        return canTrainJutsu(j, userData);
+        return canTrainJutsu(j, userData, masteries);
       })
       .filter((j) => !evolvedAncestorIds.has(j.id))
       .filter((j) => {
@@ -1008,7 +1022,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   if (
     isJutsuPickStep &&
     tutorialJutsu &&
-    canTrainJutsu(tutorialJutsu, userData) &&
+    canTrainJutsu(tutorialJutsu, userData, masteries) &&
     // The list drops capped jutsu; pinning one back would show a tile whose
     // confirm modal can only say "Level capped".
     tutorialJutsuLevel < getJutsuLevelCap(tutorialJutsu) &&

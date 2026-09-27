@@ -255,11 +255,12 @@ export const remainingXpToLevel = (xpToLevel: number, experience: number): numbe
 export const canTrainJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
+  masteries?: MasteryStatSource,
 ): boolean => {
   if (isJutsuEvolution(jutsu)) return false;
   // Learning a jutsu is intentionally allowed without the required bloodline item;
   // the item only gates equipping and in-combat use, so skip that check here.
-  return canUseJutsu(jutsu, userdata, true);
+  return canUseJutsu(jutsu, userdata, true, masteries);
 };
 
 /** True for jutsu types that cannot be initially learned via training (owned ones can still be leveled). */
