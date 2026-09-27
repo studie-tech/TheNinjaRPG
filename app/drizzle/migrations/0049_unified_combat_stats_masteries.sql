@@ -156,7 +156,46 @@ UPDATE `TournamentMatch`
 SET `battleId` = NULL
 WHERE `winnerId` IS NULL AND `battleId` IN (SELECT `id` FROM `Battle`);
 DELETE FROM `Battle`;
--- Saved simulator state is a JSON blob keyed by the old per-type stat names. Nothing maps
--- it onto offence/defence, so stale rows would render as NaN damage and silently reload
--- with default stats. Drop them like the in-flight battles above.
-DELETE FROM `DamageCalculation`;
+-- Saved damage simulations keep each side's stats as JSON under the old per-type names.
+-- Merge them the way the UserData columns were merged, defaulting a missing stat to 10.
+UPDATE `DamageCalculation`
+SET `state` = JSON_REMOVE(
+	JSON_SET(
+		`state`,
+		'$.attacker.offence', GREATEST(
+			COALESCE(JSON_EXTRACT(`state`, '$.attacker.ninjutsuOffence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.attacker.genjutsuOffence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.attacker.taijutsuOffence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.attacker.bukijutsuOffence') + 0, 10)
+		),
+		'$.attacker.defence', GREATEST(
+			COALESCE(JSON_EXTRACT(`state`, '$.attacker.ninjutsuDefence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.attacker.genjutsuDefence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.attacker.taijutsuDefence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.attacker.bukijutsuDefence') + 0, 10)
+		),
+		'$.defender.offence', GREATEST(
+			COALESCE(JSON_EXTRACT(`state`, '$.defender.ninjutsuOffence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.defender.genjutsuOffence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.defender.taijutsuOffence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.defender.bukijutsuOffence') + 0, 10)
+		),
+		'$.defender.defence', GREATEST(
+			COALESCE(JSON_EXTRACT(`state`, '$.defender.ninjutsuDefence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.defender.genjutsuDefence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.defender.taijutsuDefence') + 0, 10),
+			COALESCE(JSON_EXTRACT(`state`, '$.defender.bukijutsuDefence') + 0, 10)
+		)
+	),
+	'$.attacker.ninjutsuOffence', '$.attacker.genjutsuOffence', '$.attacker.taijutsuOffence', '$.attacker.bukijutsuOffence',
+	'$.attacker.ninjutsuDefence', '$.attacker.genjutsuDefence', '$.attacker.taijutsuDefence', '$.attacker.bukijutsuDefence',
+	'$.defender.ninjutsuOffence', '$.defender.genjutsuOffence', '$.defender.taijutsuOffence', '$.defender.bukijutsuOffence',
+	'$.defender.ninjutsuDefence', '$.defender.genjutsuDefence', '$.defender.taijutsuDefence', '$.defender.bukijutsuDefence'
+)
+WHERE JSON_CONTAINS_PATH(
+	`state`, 'one',
+	'$.attacker.ninjutsuOffence', '$.attacker.genjutsuOffence', '$.attacker.taijutsuOffence', '$.attacker.bukijutsuOffence',
+	'$.attacker.ninjutsuDefence', '$.attacker.genjutsuDefence', '$.attacker.taijutsuDefence', '$.attacker.bukijutsuDefence',
+	'$.defender.ninjutsuOffence', '$.defender.genjutsuOffence', '$.defender.taijutsuOffence', '$.defender.bukijutsuOffence',
+	'$.defender.ninjutsuDefence', '$.defender.genjutsuDefence', '$.defender.taijutsuDefence', '$.defender.bukijutsuDefence'
+);
