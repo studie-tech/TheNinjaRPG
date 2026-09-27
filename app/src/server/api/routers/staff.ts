@@ -240,16 +240,38 @@ export const staffRouter = createTRPCRouter({
       };
       const tableName = tableMap[backup.type];
 
-      // Clear table content and push backup in parallel across all target databases
+      // Replace the table content in parallel across all target databases. Each target runs
+      // its delete and insert in one transaction: the insert names the columns the table had
+      // when the backup was taken, and one that no longer fits must not leave it empty.
       const deleteQuery =
         backup.type === "ai"
           ? `DELETE FROM \`${tableName}\` WHERE isAi = 1`
           : `DELETE FROM \`${tableName}\``;
+      const { sqlText } = backup;
+      const results = await Promise.allSettled(
+        clients.map(({ client }) =>
+          client.transaction(async (tx) => {
+            await tx.execute(deleteQuery);
+            await tx.execute(sqlText);
+          }),
+        ),
+      );
 
-      await Promise.all(clients.map(({ client }) => client.execute(deleteQuery)));
-
-      if (backup.sqlText && !backup.sqlText.startsWith("/* Empty backup")) {
-        await Promise.all(clients.map(({ client }) => client.execute(backup.sqlText)));
+      const pushed = clients.filter((_, i) => results[i]?.status === "fulfilled");
+      // Database errors can echo the whole insert statement, so keep only their head
+      const failed = results.flatMap((result, i) => {
+        if (result.status !== "rejected") return [];
+        const { reason } = result;
+        const message = reason instanceof Error ? reason.message : String(reason);
+        return [`${clients[i]?.name}: ${message.slice(0, 200)}`];
+      });
+      if (failed.length > 0) {
+        const pushedNote = pushed.length
+          ? ` Pushed to ${pushed.map(({ name }) => name).join(" + ")}.`
+          : "";
+        return errorResponse(
+          `Push failed and was rolled back on ${failed.join("; ")}.${pushedNote}`,
+        );
       }
 
       const targets = clients.map(({ name }) => name).join(" + ");
