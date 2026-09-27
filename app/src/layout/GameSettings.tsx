@@ -260,7 +260,9 @@ export const GlobalAudioProvider: React.FC<{
       audioSessionQueue.current = audioSessionQueue.current
         .catch(() => undefined)
         .then(async () => {
-          await audioSession.deactivate();
+          await audioSession.deactivate(
+            platform() === "ios" && isRemotePaused.current && !isMusicTurnedOff.current,
+          );
           hasActiveAudioSession.current = false;
         });
     },
