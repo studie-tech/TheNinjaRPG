@@ -1189,7 +1189,7 @@ export default function MyJutsu() {
           </Modal>
         )}
       </ContentBox>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap gap-2">
           {!isOpen && <JutsuLoadoutSelector />}
         </div>

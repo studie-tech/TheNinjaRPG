@@ -1,8 +1,8 @@
 "use client";
 
-import { Folder, Pencil } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -40,8 +40,8 @@ interface LoadoutSelectorConfig<T extends LoadoutData> {
 interface LoadoutSelectorProps<T extends LoadoutData> {
   size?: "small" | "large";
   label?: string;
-  /** "icons" shows folder buttons; "dropdown" uses a compact select */
-  variant?: "icons" | "dropdown";
+  /** "sheet" lists named loadouts under a chip; "dropdown" uses a compact select */
+  variant?: "sheet" | "dropdown";
   onSelectOverride?: (loadoutId: string, displayName: string) => void;
   selectedOverrideId?: string | null;
   config: LoadoutSelectorConfig<T>;
@@ -55,13 +55,12 @@ const LoadoutSelector = <T extends LoadoutData>(
   const { data, isFetching } = props.config.getQuery();
   const { mutate: selectLoadout, isPending } = props.config.selectMutation();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const renameMutation = props.config.renameMutation?.();
-  const variant = props.variant ?? "icons";
+  const variant = props.variant ?? "sheet";
 
   // Derived values (calculated after all hooks)
   const maxLoadouts = userData ? props.config.maxLoadoutsFn(userData) : 0;
-  const iconSize = props?.size === "small" ? "h-6 w-6" : "h-10 w-10";
-  const textSize = props?.size === "small" ? "text-xs" : "text-sm mt-1";
   const selectedId =
     props.selectedOverrideId !== undefined && props.selectedOverrideId !== null
       ? props.selectedOverrideId
@@ -127,74 +126,114 @@ const LoadoutSelector = <T extends LoadoutData>(
     }
   };
 
-  // Show loadout selectors
+  const slots = (data ?? []).slice(0, maxLoadouts);
+  const selectedIndex = slots.findIndex((loadout) => loadout.id === selectedId);
+  const selected = selectedIndex >= 0 ? slots[selectedIndex] : undefined;
+  const selectedName = selected
+    ? getDisplayName(selected, selectedIndex)
+    : props.label || "Loadout";
+  const chipClass =
+    props.size === "small" ? "h-8 gap-2 px-2 text-xs" : "h-9 gap-3 px-3 text-sm";
+
   return (
-    <div>
-      {props.label && <p className="text-sm">{props.label}</p>}
-      <div className="flex flex-wrap gap-1">
-        {data?.map((loadout, index) => {
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setEditingId(null);
+      }}
+    >
+      <div className="inline-flex min-w-0 max-w-full self-start">
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={`flex min-w-0 items-center justify-between rounded-md border border-input bg-background text-left ${chipClass} ${isPending ? "opacity-50" : ""}`}
+            disabled={isPending}
+          >
+            <span className="min-w-0 truncate">
+              {props.label ? `${props.label} · ` : ""}
+              {selectedName}
+            </span>
+            <span className="shrink-0 text-muted-foreground text-xs">
+              {open ? "Close" : "Change"}
+            </span>
+          </button>
+        </PopoverTrigger>
+      </div>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={8}
+        collisionPadding={{ top: 72, right: 8, bottom: 88, left: 8 }}
+        className="w-auto min-w-56 p-2"
+      >
+        <p className="mb-1 font-medium text-sm">Loadouts</p>
+        {slots.map((loadout, index) => {
           const isSelected = selectedId === loadout.id;
           const displayName = getDisplayName(loadout, index);
           const isEditing = editingId === loadout.id;
+          if (isEditing) {
+            return (
+              <input
+                key={loadout.id}
+                // biome-ignore lint/a11y/noAutofocus: Inline rename input must focus immediately on edit activation for usability
+                autoFocus
+                aria-label={`Rename ${displayName}`}
+                defaultValue={loadout.name ?? ""}
+                maxLength={LOADOUT_NAME_MAX_LENGTH}
+                className="w-full rounded border bg-background px-2 py-1 text-sm"
+                onBlur={(e) => submitRename(loadout.id, e.target.value, loadout.name)}
+                onKeyDown={(e) => {
+                  // Commit on Enter via the single onBlur path (no double
+                  // submit); Escape clears first so the blur-commit no-ops.
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.value = "";
+                    e.currentTarget.blur();
+                  }
+                }}
+              />
+            );
+          }
           return (
-            <div key={loadout.id} className="flex flex-col items-center">
+            <div
+              key={loadout.id}
+              className="flex items-center justify-between gap-3 border-border border-t py-1.5"
+            >
               <button
                 type="button"
-                className="relative"
-                onClick={() => handleSelect(loadout.id)}
-                disabled={isPending}
-                aria-label={`${displayName}${isSelected ? " (selected)" : ""}`}
-                aria-pressed={isSelected}
+                className={`min-w-0 flex-1 truncate text-left text-sm ${isSelected ? "font-medium" : ""}`}
+                aria-current={isSelected ? "true" : undefined}
+                onClick={() => {
+                  if (!isSelected) handleSelect(loadout.id);
+                  setOpen(false);
+                }}
               >
-                <Folder
-                  className={`${iconSize} ${isSelected ? "fill-primary" : "hover:cursor-pointer hover:fill-primary"} ${isPending ? "opacity-50" : ""}`}
-                />
-                <div
-                  className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-bold ${textSize}`}
-                  aria-hidden="true"
-                >
-                  {isPending ? "..." : index + 1}
-                </div>
+                {displayName}
               </button>
-              {renameMutation &&
-                (isEditing ? (
-                  <input
-                    // biome-ignore lint/a11y/noAutofocus: Inline rename input must focus immediately on edit activation for usability
-                    autoFocus
-                    aria-label={`Rename ${displayName}`}
-                    defaultValue={loadout.name ?? ""}
-                    maxLength={LOADOUT_NAME_MAX_LENGTH}
-                    className="mt-1 w-16 rounded border bg-background px-1 text-center text-xs"
-                    onBlur={(e) =>
-                      submitRename(loadout.id, e.target.value, loadout.name)
-                    }
-                    onKeyDown={(e) => {
-                      // Commit on Enter via the single onBlur path (no double
-                      // submit); Escape clears first so the blur-commit no-ops.
-                      if (e.key === "Enter") e.currentTarget.blur();
-                      if (e.key === "Escape") {
-                        e.currentTarget.value = "";
-                        e.currentTarget.blur();
-                      }
-                    }}
-                  />
-                ) : (
+              <span className="flex shrink-0 items-center gap-2">
+                {isSelected && (
+                  <span className="text-muted-foreground text-xs">Active</span>
+                )}
+                {renameMutation && (
                   <button
                     type="button"
-                    className="mt-1 flex items-center gap-0.5 text-xs hover:text-primary disabled:opacity-50"
+                    className="text-muted-foreground text-xs hover:text-foreground disabled:opacity-50"
                     aria-label={`Rename ${displayName}`}
-                    disabled={renameMutation?.isPending}
+                    disabled={renameMutation.isPending}
                     onClick={() => setEditingId(loadout.id)}
                   >
-                    <span className="max-w-16 truncate">{displayName}</span>
-                    <Pencil className="h-3 w-3 shrink-0" />
+                    Rename
                   </button>
-                ))}
+                )}
+              </span>
             </div>
           );
         })}
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 };
 

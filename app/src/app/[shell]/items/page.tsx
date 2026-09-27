@@ -372,8 +372,8 @@ export default function MyItems() {
           </div>
         </div>
       </ContentBox>
-      <div className="mt-1 flex w-full flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mt-1 flex w-full flex-wrap items-start justify-between gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           <ItemLoadoutSelector />
           <Confirm
             title="Unequip all items"

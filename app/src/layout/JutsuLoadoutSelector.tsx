@@ -10,7 +10,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 interface JutsuLoadoutSelectorProps {
   size?: "small" | "large";
   label?: string;
-  variant?: "icons" | "dropdown";
+  variant?: "sheet" | "dropdown";
   onSelectOverride?: (loadoutId: string, displayName: string) => void;
   selectedOverrideId?: string | null;
 }
