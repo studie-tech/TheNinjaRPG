@@ -404,7 +404,7 @@ export default function Simulator(props: {
                 name="statTypes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Set Stats</FormLabel>
+                    <FormLabel>Stat Types (any adds Offence vs Defence)</FormLabel>
                     <MultiSelect
                       selected={field.value ? field.value : []}
                       options={StatTypes.map((o) => ({ label: o, value: o }))}
