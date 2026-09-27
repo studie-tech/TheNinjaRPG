@@ -290,6 +290,10 @@ export const MasteryTypes = [
 ] as const;
 export type MasteryType = (typeof MasteryTypes)[number];
 
+/** Display names of the unified combat stats that increasestat/decreasestat move. */
+export const CombatStatTypes = ["Offence", "Defence"] as const;
+export type CombatStatType = (typeof CombatStatTypes)[number];
+
 export const GeneralTypes = [
   "Highest",
   "Strength",

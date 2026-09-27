@@ -29,8 +29,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type {
+  CombatStatType,
   ElementName,
   GeneralType,
+  MasteryType,
   StatType,
   UserStatuses,
 } from "@/drizzle/constants";
@@ -60,7 +62,11 @@ import Link from "@/layout/Link";
 import StatusBar from "@/layout/StatusBar";
 import { sealCheck } from "@/libs/combat/tags";
 import type { GroundEffect, UserEffect } from "@/libs/combat/types";
-import { getPreventTypeName, isEffectActive } from "@/libs/combat/util";
+import {
+  getPreventTypeName,
+  getStatTypeLabels,
+  isEffectActive,
+} from "@/libs/combat/util";
 import { useGameMenu } from "@/libs/menus";
 import { calcLevelRequirements, getExpBracket } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
@@ -782,7 +788,13 @@ const Cooldown: React.FC<CooldownProps> = (props) => {
   return counter ? <>[{counter}]</> : null;
 };
 
-type EffectCategory = GeneralType | StatType | ElementName | "All";
+type EffectCategory =
+  | GeneralType
+  | StatType
+  | CombatStatType
+  | MasteryType
+  | ElementName
+  | "All";
 
 type CollapsedEffect = {
   type: string;
@@ -863,8 +875,10 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
       .filter((e) => e.targetId === userId)
       .filter((e) => e.rounds === undefined || e.rounds > 0)
       .reduce((acc, val) => {
+        const masteryTypes = ("masteryTypes" in val && val?.masteryTypes) || [];
         const stats = [
-          ...(("statTypes" in val && val?.statTypes) || []),
+          ...getStatTypeLabels(val),
+          ...masteryTypes,
           ...(("generalTypes" in val && val?.generalTypes) || []),
           ...(("elements" in val && val?.elements) || []),
           ...(("actionsAffected" in val && val?.actionsAffected) || []),
@@ -873,7 +887,8 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         const isSealed = sealCheck(val, sealEffects);
         let cats = stats.length === 0 ? ["All"] : stats;
         const JUTSU_CATS = ["Taijutsu", "Ninjutsu", "Genjutsu", "Bukijutsu"];
-        if (JUTSU_CATS.every((jc) => cats.includes(jc))) {
+        // Masteries also span Bloodline and Sage, so four jutsu masteries are not "All".
+        if (masteryTypes.length === 0 && JUTSU_CATS.every((jc) => cats.includes(jc))) {
           cats = cats.filter((c) => !JUTSU_CATS.includes(c));
           cats.push("All");
         }
@@ -1076,6 +1091,7 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   const damageGivenEffects = collapsedEffects.filter((e) => e.type === "damagegiven");
   const damageTakenEffects = collapsedEffects.filter((e) => e.type === "damagetaken");
   const statEffects = collapsedEffects.filter((e) => e.type === "stat");
+  const masteryEffects = collapsedEffects.filter((e) => e.type === "mastery");
   const damageEffects = collapsedEffects.filter(
     (e) => e.type === "damage" || e.type === "wound",
   );
@@ -1240,6 +1256,15 @@ export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
         <div>
           <div className="mb-1 font-semibold">Stats</div>
           <div className="grid grid-cols-2 gap-1">{statEffects.map(renderCompact)}</div>
+        </div>
+      )}
+
+      {masteryEffects.length > 0 && (
+        <div>
+          <div className="mb-1 font-semibold">Masteries</div>
+          <div className="grid grid-cols-2 gap-1">
+            {masteryEffects.map(renderCompact)}
+          </div>
         </div>
       )}
 

@@ -23,9 +23,9 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { getPotencyDescription, POTENCY_TAG_LABELS } from "@/libs/combat/potency";
-import { getPreventTypeName } from "@/libs/combat/util";
-import { getFarmPlantExperience } from "@/libs/farming";
+import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
+import { getFarmPlantExperience } from "@/libs/farming";
 import { getRewardArray } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -1330,7 +1330,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                           parsedEffect.statTypes.length > 0 && (
                             <span>
                               <b>Stats: </b>
-                              {parsedEffect.statTypes.join(", ")}
+                              {getStatTypeLabels(parsedEffect).join(", ")}
                             </span>
                           )}
                         {"masteryTypes" in parsedEffect &&

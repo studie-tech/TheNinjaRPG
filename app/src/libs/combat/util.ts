@@ -8,10 +8,17 @@ import {
   ring,
   spiral,
 } from "honeycomb-grid";
-import type { AvatarFacing, BattleType, PoolType } from "@/drizzle/constants";
+import type {
+  AvatarFacing,
+  BattleType,
+  CombatStatType,
+  PoolType,
+  StatType,
+} from "@/drizzle/constants";
 import {
   AutoBattleTypes,
   CLAN_BATTLE_REWARD_POINTS,
+  CombatStatTypes,
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
   HEX_ASPECT_RATIO,
@@ -2994,6 +3001,27 @@ export const getDistanceToClosestEnemy = (
  */
 export const getPreventTypeName = (preventType: string): string => {
   return preventType.replace(/prevent$/, "");
+};
+
+/**
+ * What an effect's statTypes stand for. increasestat/decreasestat move the unified
+ * Offence/Defence, picked by direction, and any statTypes only switch that on; every
+ * other tag uses them to match jutsu types.
+ */
+export const getStatTypeLabels = (effect: {
+  type: string;
+  statTypes?: readonly StatType[] | null;
+  direction?: string;
+}): (StatType | CombatStatType)[] => {
+  const statTypes = effect.statTypes ?? [];
+  if (effect.type !== "increasestat" && effect.type !== "decreasestat") {
+    return [...statTypes];
+  }
+  if (statTypes.length === 0) return [];
+  const direction = effect.direction ?? "both";
+  return CombatStatTypes.filter(
+    (stat) => direction === "both" || direction === stat.toLowerCase(),
+  );
 };
 
 /**

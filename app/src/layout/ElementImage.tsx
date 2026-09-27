@@ -12,6 +12,7 @@ import {
   HeartPulse,
   LoaderPinwheel,
   Rabbit,
+  Shield,
   Sparkles,
   SquarePlus,
   Sword,
@@ -21,6 +22,7 @@ import {
 import type React from "react";
 import type {
   AdjustableBasicAction,
+  CombatStatType,
   ElementName,
   GeneralType,
   MasteryType,
@@ -29,6 +31,7 @@ import type {
 } from "@/drizzle/constants";
 import {
   AdjustableBasicActions,
+  CombatStatTypes,
   ElementNames,
   GeneralTypes,
   IMG_ELEMENT_BOIL,
@@ -65,6 +68,7 @@ interface ElementImageProps {
   element:
     | GeneralType
     | StatType
+    | CombatStatType
     | MasteryType
     | ElementName
     | PoolType
@@ -141,6 +145,7 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
   } else if (
     isInArray(element, [
       ...StatTypes,
+      ...CombatStatTypes,
       ...MasteryTypes,
       ...GeneralTypes,
       ...PoolTypes,
@@ -258,6 +263,16 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
       case "Bukijutsu":
         image = (
           <Sword strokeWidth={3} className={cn(base, props.className, "bg-red-600")} />
+        );
+        break;
+      case "Offence":
+        image = (
+          <Swords strokeWidth={3} className={cn(base, props.className, "bg-red-700")} />
+        );
+        break;
+      case "Defence":
+        image = (
+          <Shield strokeWidth={3} className={cn(base, props.className, "bg-sky-700")} />
         );
         break;
       case "Bloodline":
