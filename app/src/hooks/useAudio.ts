@@ -272,11 +272,13 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
         if (audio) {
           audio.src = src;
           audio.load();
-          // Start during the switch gesture; waiting for canplay loses iOS permission.
-          try {
-            await playAudio(true);
-          } catch {
-            // Audio failed to start; the interaction listener can retry.
+          if (autoPlay) {
+            // Start during the switch gesture; waiting for canplay loses iOS permission.
+            try {
+              await playAudio(true);
+            } catch {
+              // Audio failed to start; the interaction listener can retry.
+            }
           }
         }
         return;
