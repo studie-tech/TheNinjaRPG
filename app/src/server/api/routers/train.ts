@@ -74,6 +74,8 @@ export const trainRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       const guard = assertCanStartTraining(user);
       if (guard) return guard;
+      const { mastery_cap } = getUserCaps(user.rank);
+      if (user[input.stat] >= mastery_cap) return errorResponse("Already capped");
       const data = {
         masteryTrainingStartedAt: new Date(),
         currentlyTrainingMastery: input.stat,
@@ -222,6 +224,7 @@ export const trainRouter = createTRPCRouter({
       }
       const { trainingAmount } = calcTrainingAmount(user, settings, startedAt);
       const { mastery_cap } = getUserCaps(user.rank);
+      const gained = Math.max(0, Math.min(trainingAmount, mastery_cap - user[trained]));
       // No minutes_training credit here: both slots run over the same wall clock, so
       // crediting each would count every minute twice. The combat slot owns that tracker.
       const { trackers } = getNewTrackers(user, []);
@@ -232,14 +235,13 @@ export const trainRouter = createTRPCRouter({
         .set({
           masteryTrainingStartedAt: null,
           currentlyTrainingMastery: null,
-          ...(trainingAmount > 0
+          ...(gained > 0
             ? {
                 dailyTrainings: sql`dailyTrainings + 1`,
-                // LEAST keeps the gain inside the rank cap in the same statement, the way
-                // covert training does. Nothing else ever clamps masteries: capUserStats
-                // only touches the in-memory battle copy, and assignStats does not write
-                // mastery columns back.
-                [trained]: sql`LEAST(${userData[trained]} + ${trainingAmount}, ${mastery_cap})`,
+                // LEAST keeps the gain inside the rank cap, and GREATEST keeps a value
+                // already above it (kept for a rank-up) from being lowered. Nothing else
+                // clamps stored masteries: capUserStats only caps in-memory copies.
+                [trained]: sql`GREATEST(${userData[trained]}, LEAST(${userData[trained]} + ${trainingAmount}, ${mastery_cap}))`,
                 questData: questDataForDb,
               }
             : {}),
@@ -255,20 +257,22 @@ export const trainRouter = createTRPCRouter({
       if (result.rowsAffected !== 1) {
         return errorResponse("This mastery training session has already ended");
       }
-      if (trainingAmount > 0) {
+      if (gained > 0) {
         await ctx.drizzle.insert(trainingLog).values({
           userId: ctx.userId,
-          amount: trainingAmount,
+          amount: gained,
           stat: trained,
           speed: user.trainingSpeed,
           trainingFinishedAt: new Date(),
         });
       }
+      const capNote =
+        gained < trainingAmount ? ` (capped at ${mastery_cap.toLocaleString()})` : "";
       return {
         success: true,
-        message: `You gained ${trainingAmount.toFixed(2)} ${trained}`,
+        message: `You gained ${gained.toFixed(2)} ${trained}${capNote}`,
         data: {
-          amount: trainingAmount,
+          amount: gained,
           currentlyTrainingMastery: trained,
           questData: trackers,
         },
