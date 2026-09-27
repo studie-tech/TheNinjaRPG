@@ -1,4 +1,4 @@
-import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
@@ -111,82 +111,77 @@ export const trainRouter = createTRPCRouter({
       // Guard
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
-      if (!user.trainingStartedAt) return errorResponse("Not currently training");
-      if (!user.currentlyTraining) return errorResponse("Not currently training");
+      const trained = user.currentlyTraining;
+      const startedAt = user.trainingStartedAt;
+      if (!trained || !startedAt) return errorResponse("Not currently training");
       if (showTrainingCapcha(user)) {
         if (!input.guess) return errorResponse("Captcha required");
         if (!(await validateCaptcha(ctx.drizzle, ctx.userId, input.guess))) {
           return errorResponse("Invalid captcha");
         }
       }
-      const { trainingAmount, minutes } = calcTrainingAmount(
-        user,
-        settings,
-        user.trainingStartedAt,
-      );
+      const { trainingAmount, minutes } = calcTrainingAmount(user, settings, startedAt);
       const { trackers } = getNewTrackers(user, [
         { task: "stats_trained", increment: trainingAmount },
         { task: "minutes_training", increment: minutes },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
-      const trained = user.currentlyTraining;
-      const [result] = await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set({
-            trainingStartedAt: null,
-            currentlyTraining: null,
-            ...(trainingAmount > 0
-              ? {
-                  experience: sql`experience + ${trainingAmount}`,
-                  dailyTrainings: sql`dailyTrainings + 1`,
-                  offence:
-                    trained === "offence"
-                      ? sql`offence + ${trainingAmount}`
-                      : sql`offence`,
-                  defence:
-                    trained === "defence"
-                      ? sql`defence + ${trainingAmount}`
-                      : sql`defence`,
-                  strength:
-                    trained === "strength"
-                      ? sql`strength + ${trainingAmount}`
-                      : sql`strength`,
-                  intelligence:
-                    trained === "intelligence"
-                      ? sql`intelligence + ${trainingAmount}`
-                      : sql`intelligence`,
-                  willpower:
-                    trained === "willpower"
-                      ? sql`willpower + ${trainingAmount}`
-                      : sql`willpower`,
-                  speed:
-                    trained === "speed" ? sql`speed + ${trainingAmount}` : sql`speed`,
-                  questData: questDataForDb,
-                }
-              : {}),
-          })
-          .where(
-            and(
-              eq(userData.userId, ctx.userId),
-              isNotNull(userData.currentlyTraining),
-              eq(userData.status, "AWAKE"),
-            ),
+      // Claims exactly the session read above: a stale stop must not credit it twice
+      // or end a session started after it
+      const result = await ctx.drizzle
+        .update(userData)
+        .set({
+          trainingStartedAt: null,
+          currentlyTraining: null,
+          ...(trainingAmount > 0
+            ? {
+                experience: sql`experience + ${trainingAmount}`,
+                dailyTrainings: sql`dailyTrainings + 1`,
+                offence:
+                  trained === "offence"
+                    ? sql`offence + ${trainingAmount}`
+                    : sql`offence`,
+                defence:
+                  trained === "defence"
+                    ? sql`defence + ${trainingAmount}`
+                    : sql`defence`,
+                strength:
+                  trained === "strength"
+                    ? sql`strength + ${trainingAmount}`
+                    : sql`strength`,
+                intelligence:
+                  trained === "intelligence"
+                    ? sql`intelligence + ${trainingAmount}`
+                    : sql`intelligence`,
+                willpower:
+                  trained === "willpower"
+                    ? sql`willpower + ${trainingAmount}`
+                    : sql`willpower`,
+                speed:
+                  trained === "speed" ? sql`speed + ${trainingAmount}` : sql`speed`,
+                questData: questDataForDb,
+              }
+            : {}),
+        })
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.currentlyTraining, trained),
+            eq(userData.trainingStartedAt, startedAt),
+            eq(userData.status, "AWAKE"),
           ),
-        ...(trainingAmount > 0
-          ? [
-              ctx.drizzle.insert(trainingLog).values({
-                userId: ctx.userId,
-                amount: trainingAmount,
-                stat: trained,
-                speed: user.trainingSpeed,
-                trainingFinishedAt: new Date(),
-              }),
-            ]
-          : []),
-      ]);
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "You are not training" };
+        );
+      if (result.rowsAffected !== 1) {
+        return errorResponse("This training session has already ended");
+      }
+      if (trainingAmount > 0) {
+        await ctx.drizzle.insert(trainingLog).values({
+          userId: ctx.userId,
+          amount: trainingAmount,
+          stat: trained,
+          speed: user.trainingSpeed,
+          trainingFinishedAt: new Date(),
+        });
       }
       return {
         success: true,
@@ -214,10 +209,9 @@ export const trainRouter = createTRPCRouter({
       });
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
-      if (!user.masteryTrainingStartedAt) {
-        return errorResponse("Not currently training a mastery");
-      }
-      if (!user.currentlyTrainingMastery) {
+      const trained = user.currentlyTrainingMastery;
+      const startedAt = user.masteryTrainingStartedAt;
+      if (!trained || !startedAt) {
         return errorResponse("Not currently training a mastery");
       }
       if (showTrainingCapcha(user)) {
@@ -226,56 +220,49 @@ export const trainRouter = createTRPCRouter({
           return errorResponse("Invalid captcha");
         }
       }
-      const { trainingAmount } = calcTrainingAmount(
-        user,
-        settings,
-        user.masteryTrainingStartedAt,
-      );
+      const { trainingAmount } = calcTrainingAmount(user, settings, startedAt);
       const { mastery_cap } = getUserCaps(user.rank);
       // No minutes_training credit here: both slots run over the same wall clock, so
       // crediting each would count every minute twice. The combat slot owns that tracker.
       const { trackers } = getNewTrackers(user, []);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
-      const trained = user.currentlyTrainingMastery;
-      const [result] = await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set({
-            masteryTrainingStartedAt: null,
-            currentlyTrainingMastery: null,
-            ...(trainingAmount > 0
-              ? {
-                  dailyTrainings: sql`dailyTrainings + 1`,
-                  // LEAST keeps the gain inside the rank cap in the same statement, the way
-                  // covert training does. Nothing else ever clamps masteries: capUserStats
-                  // only touches the in-memory battle copy, and assignStats does not write
-                  // mastery columns back.
-                  [trained]: sql`LEAST(${userData[trained]} + ${trainingAmount}, ${mastery_cap})`,
-                  questData: questDataForDb,
-                }
-              : {}),
-          })
-          .where(
-            and(
-              eq(userData.userId, ctx.userId),
-              isNotNull(userData.currentlyTrainingMastery),
-              eq(userData.status, "AWAKE"),
-            ),
+      // Claims exactly the session read above, as stopTraining does
+      const result = await ctx.drizzle
+        .update(userData)
+        .set({
+          masteryTrainingStartedAt: null,
+          currentlyTrainingMastery: null,
+          ...(trainingAmount > 0
+            ? {
+                dailyTrainings: sql`dailyTrainings + 1`,
+                // LEAST keeps the gain inside the rank cap in the same statement, the way
+                // covert training does. Nothing else ever clamps masteries: capUserStats
+                // only touches the in-memory battle copy, and assignStats does not write
+                // mastery columns back.
+                [trained]: sql`LEAST(${userData[trained]} + ${trainingAmount}, ${mastery_cap})`,
+                questData: questDataForDb,
+              }
+            : {}),
+        })
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.currentlyTrainingMastery, trained),
+            eq(userData.masteryTrainingStartedAt, startedAt),
+            eq(userData.status, "AWAKE"),
           ),
-        ...(trainingAmount > 0
-          ? [
-              ctx.drizzle.insert(trainingLog).values({
-                userId: ctx.userId,
-                amount: trainingAmount,
-                stat: trained,
-                speed: user.trainingSpeed,
-                trainingFinishedAt: new Date(),
-              }),
-            ]
-          : []),
-      ]);
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "You are not training a mastery" };
+        );
+      if (result.rowsAffected !== 1) {
+        return errorResponse("This mastery training session has already ended");
+      }
+      if (trainingAmount > 0) {
+        await ctx.drizzle.insert(trainingLog).values({
+          userId: ctx.userId,
+          amount: trainingAmount,
+          stat: trained,
+          speed: user.trainingSpeed,
+          trainingFinishedAt: new Date(),
+        });
       }
       return {
         success: true,
