@@ -1,5 +1,14 @@
-import type { MasteryName, MasteryType, SkillTreeTarget } from "@/drizzle/constants";
-import { DURABILITY_USABILITY_THR, MasteryNames } from "@/drizzle/constants";
+import type {
+  MasteryName,
+  MasteryType,
+  SkillTreeTarget,
+  UserRank,
+} from "@/drizzle/constants";
+import {
+  DURABILITY_USABILITY_THR,
+  getUserCaps,
+  MasteryNames,
+} from "@/drizzle/constants";
 import type { ZodAllTags } from "@/validators/combat";
 
 export const MASTERY_TYPE_TO_STAT: Record<MasteryType, MasteryName> = {
@@ -55,6 +64,7 @@ export type MasteryGear = {
  */
 export type MasteryBuffUser = MasteryStatSource & {
   level: number;
+  rank?: UserRank;
   bloodlineId: string | null;
   isAi?: boolean;
   bloodline?: { effects: ZodAllTags[] } | null;
@@ -101,7 +111,8 @@ export const missingMasteryRequirement = (
 };
 
 /**
- * Masteries as the pre-battle gates see them: the stored values plus the increasemastery
+ * Masteries as the pre-battle gates see them: the stored values, capped at the user's rank
+ * as battle caps them, plus the increasemastery
  * and decreasemastery tags processUsersForBattle applies from the bloodline, skills and worn
  * gear, sized as the combat tags size them. Gear counts only when it clears its own gates
  * without any gear, so two pieces cannot unlock each other.
@@ -112,8 +123,9 @@ export const effectiveMasteries = (
   user: MasteryBuffUser,
   excludeUserItemId?: string,
 ): MasteryStatSource => {
+  const cap = user.rank ? getUserCaps(user.rank).mastery_cap : Number.POSITIVE_INFINITY;
   const stored = Object.fromEntries(
-    MasteryNames.map((name) => [name, user[name]]),
+    MasteryNames.map((name) => [name, Math.min(user[name], cap)]),
   ) as MasteryStatSource;
   const withoutGear = { ...stored };
   addMasteryTags(withoutGear, stored, user.bloodline?.effects ?? [], user.level);

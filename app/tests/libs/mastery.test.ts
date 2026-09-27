@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MasteryName } from "@/drizzle/constants";
-import { MasteryNames } from "@/drizzle/constants";
+import { getUserCaps, MasteryNames } from "@/drizzle/constants";
 import type { MasteryBuffUser, MasteryGear } from "@/libs/mastery";
 import {
   effectiveMasteries,
@@ -143,6 +143,17 @@ const wearer = (over: Partial<MasteryBuffUser> = {}): MasteryBuffUser & { isAi: 
 describe("effectiveMasteries", () => {
   it("returns the stored masteries when nothing carries a mastery tag", () => {
     expect(effectiveMasteries(wearer())).toEqual(emptyMasteries(1000));
+  });
+
+  it("caps stored masteries at the rank cap, as battle does, before adding buffs", () => {
+    const { mastery_cap } = getUserCaps("GENIN");
+    const user = wearer({
+      ...emptyMasteries(mastery_cap + 5000),
+      rank: "GENIN",
+      bloodline: { effects: [masteryTag({ power: 100 })] },
+    });
+    expect(effectiveMasteries(user).ninjutsuMastery).toBe(mastery_cap + 100);
+    expect(effectiveMasteries(user).genjutsuMastery).toBe(mastery_cap);
   });
 
   it("adds static tags scaled by level and percentages of the stored value", () => {
