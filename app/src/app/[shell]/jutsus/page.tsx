@@ -434,17 +434,9 @@ export default function MyJutsu() {
       <ContentBox
         title="Jutsu Management"
         subtitle={subtitle}
-        topRightCorntentBreakpoint="sm"
-        bottomRightContent={
-          <Button onClick={() => unequipAll()} disabled={isUnequipping}>
-            <OctagonX className="mr-2 h-6 w-6" />
-            {isUnequipping ? "Unequipping" : "Unequip All"}
-          </Button>
-        }
         topRightContent={
           !isOpen && (
             <div className="flex flex-row items-center gap-2">
-              <JutsuLoadoutSelector />
               <JutsuFiltering state={state} />
               {userData.extraJutsuSlots < MAX_EXTRA_JUTSU_SLOTS && (
                 <Confirm
@@ -1197,6 +1189,19 @@ export default function MyJutsu() {
           </Modal>
         )}
       </ContentBox>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2">
+          {!isOpen && <JutsuLoadoutSelector />}
+        </div>
+        <Button
+          className="ml-auto shrink-0"
+          onClick={() => unequipAll()}
+          disabled={isUnequipping}
+        >
+          <OctagonX className="mr-2 h-6 w-6" />
+          {isUnequipping ? "Unequipping" : "Unequip All"}
+        </Button>
+      </div>
       {/* Free Transfer Timer */}
       {freeTransferResetTime &&
         freeTransferResetTime > new Date() &&
