@@ -118,6 +118,8 @@ export const GlobalAudioProvider: React.FC<{
   const hasActiveAudioSession = useRef(false);
   // Remote Pause also works while Control Center is open and the WebView is visible.
   const isRemotePaused = useRef(false);
+  const isMusicTurnedOff = useRef(false);
+  const pauseVersion = useRef(0);
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -188,6 +190,9 @@ export const GlobalAudioProvider: React.FC<{
   useEffect(() => {
     if (!isClient) return;
     isRemotePaused.current = false;
+    isMusicTurnedOff.current =
+      savedMusicOn === undefined ? !getInitialMusicState() : !savedMusicOn;
+    if (isMusicTurnedOff.current) pauseVersion.current += 1;
     if (savedMusicOn !== undefined) {
       void setAudioEnabled(savedMusicOn);
     } else {
@@ -215,7 +220,9 @@ export const GlobalAudioProvider: React.FC<{
           // WebKit can fire the background pause before our remote-command callback.
           // Keep Play available for either order, while releasing audio focus.
           const preserveControls =
-            platform() === "ios" && (isRemotePaused.current || document.hidden);
+            platform() === "ios" &&
+            !isMusicTurnedOff.current &&
+            (isRemotePaused.current || document.hidden);
           if (preserveControls && isPlaying) return;
           await audioSession.deactivate(preserveControls);
           hasActiveAudioSession.current = false;
@@ -264,14 +271,28 @@ export const GlobalAudioProvider: React.FC<{
       }
       if (command === "pause" || (command === "toggle" && audioEnabled)) {
         isRemotePaused.current = true;
+        isMusicTurnedOff.current = false;
+        pauseVersion.current += 1;
         void setAudioEnabled(false);
       } else {
+        const requestedPauseVersion = pauseVersion.current;
         // Restore the native session before asking the backgrounded WebView to play.
         audioSessionQueue.current = audioSessionQueue.current
           .catch(() => undefined)
           .then(async () => {
+            if (pauseVersion.current !== requestedPauseVersion) return;
             const activated = await audioSession.activate();
             if (!activated) return;
+            if (
+              pauseVersion.current !== requestedPauseVersion ||
+              isMusicTurnedOff.current
+            ) {
+              await audioSession.deactivate(
+                isRemotePaused.current && !isMusicTurnedOff.current,
+              );
+              hasActiveAudioSession.current = false;
+              return;
+            }
             hasActiveAudioSession.current = true;
             isRemotePaused.current = false;
             void setAudioEnabled(true);
@@ -303,6 +324,8 @@ export const GlobalAudioProvider: React.FC<{
   const setMusicEnabled = (enabled: boolean) => {
     // The in-game switch is a preference change, not a transport pause.
     isRemotePaused.current = false;
+    isMusicTurnedOff.current = !enabled;
+    if (!enabled) pauseVersion.current += 1;
     return setAudioEnabled(enabled);
   };
 
