@@ -28,6 +28,7 @@ import {
   IMG_AVATAR_DEFAULT,
   ITEM_LEVEL_CAP,
   ItemSlots,
+  ItemSlotTypes,
   ItemTypes,
   MAX_EXTRA_RESKIN_SLOTS,
   MAX_ITEM_VARIANTS,
@@ -147,7 +148,6 @@ import {
   ItemVariantValidator,
   itemBuySchema,
   itemFilteringSchema,
-  resolveItemListFilter,
   UserUnlockedVariantResponseSchema,
 } from "@/validators/item";
 import { renameLoadoutSchema } from "@/validators/loadout";
@@ -3416,31 +3416,41 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
 export const itemDatabaseFilter = (
   input?: Partial<ItemFilteringSchema>,
 ): QueryCondition[] => {
-  const resolved = resolveItemListFilter(input ?? {});
+  // Equipped positions are named catalogSlot_n, so HAND_1 filters HAND.
+  const slotName = input?.slot?.split("_")[0];
+  const slot = (ItemSlotTypes as readonly string[]).includes(slotName ?? "")
+    ? (slotName as (typeof ItemSlotTypes)[number])
+    : undefined;
+  // A type with no underscore, such as ACCESSORY, is not a catalog slot.
+  const itemType =
+    input?.itemType ??
+    (slotName && !slot && (ItemTypes as readonly string[]).includes(slotName)
+      ? (slotName as (typeof ItemTypes)[number])
+      : undefined);
   return [
     // Name filter
-    ...(resolved.name ? [like(item.name, `%${resolved.name}%`)] : []),
+    ...(input?.name ? [like(item.name, `%${input.name}%`)] : []),
 
     // Item type filter
-    ...(resolved.itemType ? [eq(item.itemType, resolved.itemType)] : []),
+    ...(itemType ? [eq(item.itemType, itemType)] : []),
 
     // Rarity filter
-    ...(resolved.itemRarity ? [eq(item.rarity, resolved.itemRarity)] : []),
+    ...(input?.itemRarity ? [eq(item.rarity, input.itemRarity)] : []),
 
-    // Slot filter. Equipped positions and item types sent as `slot` are mapped first.
-    ...(resolved.slot ? [eq(item.slot, resolved.slot)] : []),
+    // Slot filter
+    ...(slot ? [eq(item.slot, slot)] : []),
 
     // Method filter
-    ...(resolved.method ? [eq(item.method, resolved.method)] : []),
+    ...(input?.method ? [eq(item.method, input.method)] : []),
 
     // Target filter
-    ...(resolved.target ? [eq(item.target, resolved.target)] : []),
+    ...(input?.target ? [eq(item.target, input.target)] : []),
 
     // Effect filter
-    ...(resolved.effect && resolved.effect.length > 0
+    ...(input?.effect && input.effect.length > 0
       ? [
           or(
-            ...resolved.effect.map(
+            ...input.effect.map(
               (effect: string) =>
                 sql`JSON_SEARCH(${item.effects},'one',${effect}) IS NOT NULL`,
             ),
