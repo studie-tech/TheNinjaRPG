@@ -1,5 +1,5 @@
-import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import { CombatStatNames, getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
+import { type AnyColumn, and, eq, gt, isNull, sql } from "drizzle-orm";
+import { getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
@@ -14,6 +14,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
 import { getShrineBoost, getStrucBoost } from "@/utils/village";
 import {
   startMasteryTrainingDataSchema,
@@ -51,10 +52,11 @@ export const trainRouter = createTRPCRouter({
             eq(userData.userId, ctx.userId),
             isNull(userData.currentlyTraining),
             eq(userData.status, "AWAKE"),
+            dailyTrainingBudgetRemains(userData.currentlyTrainingMastery),
           ),
         );
       if (result.rowsAffected === 0) {
-        return errorResponse("You are already training a combat stat");
+        return explainRejectedStart(ctx, "combat");
       }
       return { success: true, message: `Started training`, data };
     }),
@@ -88,10 +90,11 @@ export const trainRouter = createTRPCRouter({
             eq(userData.userId, ctx.userId),
             isNull(userData.currentlyTrainingMastery),
             eq(userData.status, "AWAKE"),
+            dailyTrainingBudgetRemains(userData.currentlyTraining),
           ),
         );
       if (result.rowsAffected === 0) {
-        return errorResponse("You are already training a mastery");
+        return explainRejectedStart(ctx, "mastery");
       }
       return { success: true, message: `Started mastery training`, data };
     }),
@@ -123,6 +126,7 @@ export const trainRouter = createTRPCRouter({
         }
       }
       const { trainingAmount, minutes } = calcTrainingAmount(user, settings, startedAt);
+      const finishedAt = new Date();
       const { trackers } = getNewTrackers(user, [
         { task: "stats_trained", increment: trainingAmount },
         { task: "minutes_training", increment: minutes },
@@ -162,6 +166,7 @@ export const trainRouter = createTRPCRouter({
                 speed:
                   trained === "speed" ? sql`speed + ${trainingAmount}` : sql`speed`,
                 questData: questDataForDb,
+                lastCombatTrainingFinishedAt: finishedAt,
               }
             : {}),
         })
@@ -182,7 +187,7 @@ export const trainRouter = createTRPCRouter({
           amount: trainingAmount,
           stat: trained,
           speed: user.trainingSpeed,
-          trainingFinishedAt: new Date(),
+          trainingFinishedAt: finishedAt,
         });
       }
       return {
@@ -204,21 +209,11 @@ export const trainRouter = createTRPCRouter({
       baseServerResponse.extend({ data: stopMasteryTrainingDataSchema.optional() }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [{ user, settings }, lastCombatSession] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          forceRegen: true,
-        }),
-        ctx.drizzle.query.trainingLog.findFirst({
-          columns: { trainingFinishedAt: true },
-          where: and(
-            eq(trainingLog.userId, ctx.userId),
-            inArray(trainingLog.stat, [...CombatStatNames]),
-          ),
-          orderBy: desc(trainingLog.trainingFinishedAt),
-        }),
-      ]);
+      const { user, settings } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+      });
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
       const trained = user.currentlyTrainingMastery;
@@ -237,10 +232,10 @@ export const trainRouter = createTRPCRouter({
       const gained = Math.max(0, Math.min(trainingAmount, mastery_cap - user[trained]));
       // Both slots share the wall clock and the combat slot credits all of its minutes,
       // so only minutes it has not credited count: none while it runs, and none before
-      // its last credited session ended.
+      // the finish time stored on this row with those minutes.
       const creditFrom = Math.max(
         startedAt.getTime(),
-        lastCombatSession?.trainingFinishedAt.getTime() ?? 0,
+        user.lastCombatTrainingFinishedAt?.getTime() ?? 0,
       );
       const creditedMinutes =
         gained > 0 && !user.currentlyTraining
@@ -394,4 +389,40 @@ const assertCanStartTraining = (
     );
   }
   return null;
+};
+
+/**
+ * The other slot, if it is already running, will spend one training when it stops.
+ * Checked in the UPDATE so two starts cannot both pass while one daily training remains.
+ */
+const dailyTrainingBudgetRemains = (otherSlot: AnyColumn) =>
+  sql`${userData.dailyTrainings} + (${otherSlot} IS NOT NULL) < ${MAX_DAILY_TRAININGS}`;
+
+/** The start UPDATE matches slot, status and the daily budget together, so say which one failed. */
+const explainRejectedStart = async (
+  ctx: { drizzle: DrizzleClient; userId: string },
+  slot: "combat" | "mastery",
+) => {
+  const { user } = await fetchUpdatedUser({
+    client: ctx.drizzle,
+    userId: ctx.userId,
+  });
+  if (!user) return errorResponse("User not found");
+  const occupied =
+    slot === "combat" ? user.currentlyTraining : user.currentlyTrainingMastery;
+  if (occupied) {
+    return errorResponse(
+      slot === "combat"
+        ? "You are already training a combat stat"
+        : "You are already training a mastery",
+    );
+  }
+  return (
+    assertCanStartTraining(user) ??
+    errorResponse(
+      slot === "combat"
+        ? "You are already training a combat stat"
+        : "You are already training a mastery",
+    )
+  );
 };

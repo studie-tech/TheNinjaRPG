@@ -365,6 +365,7 @@ const runMcpReset = async () => {
     homeType: "NONE",
     questData: null,
     trainingStartedAt: null,
+    lastCombatTrainingFinishedAt: null,
     currentlyTraining: null,
     currentlyTrainingMastery: null,
     masteryTrainingStartedAt: null,

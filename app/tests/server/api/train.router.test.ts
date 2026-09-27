@@ -2,7 +2,7 @@
 
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getUserCaps } from "@/drizzle/constants";
+import { getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import { quest, questHistory, trainingLog, userData, userVote } from "@/drizzle/schema";
 import { trainRouter } from "@/server/api/routers/train";
 import { SimpleObjective } from "@/validators/objectives";
@@ -98,6 +98,7 @@ describeWithDatabase("train router against a real MySQL", () => {
     expect(afterCombat.offence).toBe(50 + SESSION_GAIN);
     expect(afterCombat.experience).toBe(SESSION_GAIN);
     expect(afterCombat.dailyTrainings).toBe(1);
+    expect(afterCombat.lastCombatTrainingFinishedAt).not.toBeNull();
     // The mastery slot keeps running through a combat stop
     expect(afterCombat.currentlyTrainingMastery).toBe("taijutsuMastery");
 
@@ -116,6 +117,46 @@ describeWithDatabase("train router against a real MySQL", () => {
       ["offence", SESSION_GAIN],
       ["taijutsuMastery", SESSION_GAIN],
     ]);
+  });
+
+  it("allows only one parallel start when a single daily training remains", async () => {
+    await trainee({
+      dailyTrainings: MAX_DAILY_TRAININGS - 1,
+      offence: 50,
+      taijutsuMastery: 10,
+    });
+    const api = await caller();
+    const results = await Promise.all([
+      api.startTraining({ stat: "offence" }),
+      api.startMasteryTraining({ stat: "taijutsuMastery" }),
+    ]);
+
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(results.find((result) => !result.success)?.message).toContain(
+      String(MAX_DAILY_TRAININGS),
+    );
+    const user = await readUser();
+    expect(Number(!!user.currentlyTraining) + Number(!!user.currentlyTrainingMastery)).toBe(
+      1,
+    );
+  });
+
+  it("starts both slots when two daily trainings remain", async () => {
+    await trainee({
+      dailyTrainings: MAX_DAILY_TRAININGS - 2,
+      offence: 50,
+      taijutsuMastery: 10,
+    });
+    const api = await caller();
+    const results = await Promise.all([
+      api.startTraining({ stat: "offence" }),
+      api.startMasteryTraining({ stat: "taijutsuMastery" }),
+    ]);
+
+    expect(results.every((result) => result.success)).toBe(true);
+    const user = await readUser();
+    expect(user.currentlyTraining).toBe("offence");
+    expect(user.currentlyTrainingMastery).toBe("taijutsuMastery");
   });
 
   it("clamps a mastery gain at the rank cap and reports only what landed", async () => {
@@ -279,11 +320,12 @@ describeWithDatabase("train router against a real MySQL", () => {
       await insertQuestHistory([{ userId: USER_ID, questId: "q-train", questType: "daily" }]);
     });
 
-    it("credits only the minutes after the last combat session that credited its own", async () => {
+    it("credits only the minutes after the combat finish stored on the user", async () => {
       await trainee({
         taijutsuMastery: 10,
         currentlyTrainingMastery: "taijutsuMastery",
         masteryTrainingStartedAt: minutesAgo(60),
+        lastCombatTrainingFinishedAt: minutesAgo(20),
       });
       const database = await getTestDatabase();
       await database.insert(trainingLog).values({
@@ -291,13 +333,32 @@ describeWithDatabase("train router against a real MySQL", () => {
         amount: SESSION_GAIN,
         stat: "offence",
         speed: "15min",
-        trainingFinishedAt: minutesAgo(20),
+        trainingFinishedAt: minutesAgo(50),
       });
       const result = await (await caller()).stopMasteryTraining({ villageId: null });
 
       expect(result.success).toBe(true);
       expect(result.data?.creditedMinutes).toBeCloseTo(20, 0);
       expect(await trackedMinutes()).toBeCloseTo(20, 0);
+    });
+
+    it("does not credit the combat session again when mastery stops after it", async () => {
+      await trainee({
+        offence: 50,
+        taijutsuMastery: 10,
+        currentlyTraining: "offence",
+        trainingStartedAt: minutesAgo(30),
+        currentlyTrainingMastery: "taijutsuMastery",
+        masteryTrainingStartedAt: minutesAgo(30),
+      });
+      const api = await caller();
+
+      expect((await api.stopTraining({ villageId: null })).success).toBe(true);
+      const mastery = await api.stopMasteryTraining({ villageId: null });
+
+      expect(mastery.success).toBe(true);
+      expect(mastery.data?.creditedMinutes ?? 0).toBeLessThan(1);
+      expect(await trackedMinutes()).toBeCloseTo(30, 0);
     });
 
     it("credits nothing while the combat slot is still running", async () => {

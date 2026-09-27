@@ -13230,6 +13230,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "lastCombatTrainingFinishedAt": {
+          "name": "lastCombatTrainingFinishedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "trainingSpeed": {
           "name": "trainingSpeed",
           "type": "enum('15min','1hr','4hrs','8hrs','12hrs','24hrs')",

@@ -81,6 +81,17 @@ END
 WHERE `stat` IN ('ninjutsuOffence', 'genjutsuOffence', 'taijutsuOffence', 'bukijutsuOffence', 'ninjutsuDefence', 'genjutsuDefence', 'taijutsuDefence', 'bukijutsuDefence');
 ALTER TABLE `TrainingLog` MODIFY COLUMN `stat` enum('offence','defence','intelligence','speed','willpower','strength','ninjutsuMastery','genjutsuMastery','taijutsuMastery','bukijutsuMastery','bloodlineMastery','sageMastery');
 ALTER TABLE `UserData` MODIFY COLUMN `currentlyTraining` enum('offence','defence','intelligence','speed','willpower','strength');
+-- Mastery training excludes minutes a combat session already credited. The cutoff has to
+-- land in this update, not in TrainingLog, which is inserted afterwards.
+ALTER TABLE `UserData` ADD `lastCombatTrainingFinishedAt` datetime(3);
+UPDATE `UserData` AS `user`
+INNER JOIN (
+	SELECT `userId`, MAX(`trainingFinishedAt`) AS `finishedAt`
+	FROM `TrainingLog`
+	WHERE `stat` IN ('offence', 'defence', 'intelligence', 'speed', 'willpower', 'strength')
+	GROUP BY `userId`
+) AS `latest` ON `latest`.`userId` = `user`.`userId`
+SET `user`.`lastCombatTrainingFinishedAt` = `latest`.`finishedAt`;
 UPDATE `Jutsu`
 SET
 	`requiredNinjutsuMastery` = CASE

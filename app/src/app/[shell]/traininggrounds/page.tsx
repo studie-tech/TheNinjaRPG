@@ -175,7 +175,10 @@ export default function Training() {
 interface TrainingProps {
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
-  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
+  updateUser: (
+    data: Partial<UserWithRelations>,
+    adjustment?: { dailyTrainingsDelta?: number },
+  ) => Promise<void>;
   /** Whichever box comes second carries this: it spaces the boxes apart and
    *  demotes the heading, so the leading box is the one titling the page. */
   initialBreak?: boolean;
@@ -532,16 +535,17 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           if (currentStep?.title === "Training") {
             handleNextStep();
           }
-          await updateUser({
-            currentlyTraining: null,
-            trainingStartedAt: null,
-            experience: userData.experience + result.data.experience,
-            dailyTrainings:
-              userData.dailyTrainings + (result.data.experience > 0 ? 1 : 0),
-            [result.data.currentlyTraining]:
-              userData[result.data.currentlyTraining] + result.data.experience,
-            questData: result.data.questData,
-          });
+          await updateUser(
+            {
+              currentlyTraining: null,
+              trainingStartedAt: null,
+              experience: userData.experience + result.data.experience,
+              [result.data.currentlyTraining]:
+                userData[result.data.currentlyTraining] + result.data.experience,
+              questData: result.data.questData,
+            },
+            { dailyTrainingsDelta: result.data.experience > 0 ? 1 : 0 },
+          );
         } else if (!result.success) {
           // The session may have ended elsewhere; refetch so the slot stops showing it
           await utils.profile.getUser.invalidate();
@@ -555,13 +559,15 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
         showMutationToast(result);
         await utils.misc.getCaptcha.invalidate();
         if (result.success && result.data) {
-          await updateUser({
-            currentlyTrainingMastery: null,
-            masteryTrainingStartedAt: null,
-            dailyTrainings: userData.dailyTrainings + (result.data.amount > 0 ? 1 : 0),
-            [result.data.currentlyTrainingMastery]:
-              userData[result.data.currentlyTrainingMastery] + result.data.amount,
-          });
+          await updateUser(
+            {
+              currentlyTrainingMastery: null,
+              masteryTrainingStartedAt: null,
+              [result.data.currentlyTrainingMastery]:
+                userData[result.data.currentlyTrainingMastery] + result.data.amount,
+            },
+            { dailyTrainingsDelta: result.data.amount > 0 ? 1 : 0 },
+          );
           // Quest trackers are rebuilt server-side, so refetch them rather than guess
           if (result.data.creditedMinutes > 0) {
             await utils.profile.getUser.invalidate();

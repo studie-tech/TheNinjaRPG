@@ -2422,6 +2422,12 @@ export const userData = mysqlTable(
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
     trainingStartedAt: datetime("trainingStartedAt", { mode: "date", fsp: 3 }),
+    // Written in the same update that records a combat session's quest minutes, so mastery
+    // training can exclude that window without reading TrainingLog in a second query.
+    lastCombatTrainingFinishedAt: datetime("lastCombatTrainingFinishedAt", {
+      mode: "date",
+      fsp: 3,
+    }),
     trainingSpeed: mysqlEnum("trainingSpeed", consts.TrainingSpeeds)
       .default("15min")
       .notNull(),
@@ -2590,6 +2596,7 @@ export const userData = mysqlTable(
 export const insertAiSchema = createInsertSchema(userData)
   .omit({
     trainingStartedAt: true,
+    lastCombatTrainingFinishedAt: true,
     occupationSignupAt: true,
     currentlyTraining: true,
     masteryTrainingStartedAt: true,
