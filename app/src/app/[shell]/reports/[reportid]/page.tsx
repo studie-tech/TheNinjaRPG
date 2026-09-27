@@ -8,7 +8,6 @@ import Loader from "@/layout/Loader";
 import Post from "@/layout/Post";
 import ParsedReportJson from "@/layout/ReportReason";
 import DisplayUserReport from "@/layout/UserReport";
-import { REPORT_ACCESS_DENIED_MESSAGE } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Report(props: { params: Promise<{ reportid: string }> }) {
@@ -17,30 +16,32 @@ export default function Report(props: { params: Promise<{ reportid: string }> })
 
   const report_id = params.reportid;
 
-  const { data, isError, error } = api.reports.get.useQuery(
+  const { data, isPending, isError } = api.reports.get.useQuery(
     { id: report_id },
     { enabled: !!report_id && !!userData },
   );
   const { report, prevReports } = data || {};
 
-  if (!userData) {
+  if (!userData || isPending) {
     return <Loader explanation="Loading data..." />;
   }
 
-  if (!isError && !report) {
-    return <Loader explanation="Loading data..." />;
-  }
-
-  // Access denial is an expected outcome. Show the server message and a way back
-  // instead of leaving the loader up after the query has failed.
-  if (isError || !report) {
+  // A missing report and one this player cannot read both come back as null.
+  // A failed query is already toasted by the client; this panel just stops the loader.
+  if (!report) {
     return (
       <ContentBox
         title="Report"
-        subtitle="This report could not be opened"
+        subtitle={
+          isError ? "This report could not be opened" : "This report is not available"
+        }
         defaultBackHref="/profile"
       >
-        <p>{error?.message ?? REPORT_ACCESS_DENIED_MESSAGE}</p>
+        <p>
+          {isError
+            ? "This report could not be opened."
+            : "This report is not available to you."}
+        </p>
         <Link href="/profile" className="mt-2 inline-block hover:text-orange-700">
           Back to profile
         </Link>

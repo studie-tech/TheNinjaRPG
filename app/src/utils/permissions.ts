@@ -305,9 +305,6 @@ export const canCreateNews = (role: UserRole) => {
   return isStaffRole(role);
 };
 
-/** Shown when a signed-in player opens a report they are not allowed to read. */
-export const REPORT_ACCESS_DENIED_MESSAGE = "You have no access to the report";
-
 export const canSeeReport = (user: UserData, report: UserReport) => {
   if (report.reporterUserId === user.userId || report.reportedUserId === user.userId)
     return true;

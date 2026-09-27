@@ -19,7 +19,6 @@ import superjson from "superjson";
 import { toast } from "@/components/ui/use-toast";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
-import { REPORT_ACCESS_DENIED_MESSAGE } from "@/utils/permissions";
 import {
   api,
   SIGN_IN_REQUIRED_MUTATION_MESSAGE,
@@ -183,12 +182,12 @@ const handleTrpcError = (error: unknown) => {
       showMutationToast({ success: false, message: error.message });
       return;
     }
-    // The report page renders this message and offers a way back. It is an expected
-    // authorization result, so it is toasted here and not sent to Sentry.
-    if (error.message === REPORT_ACCESS_DENIED_MESSAGE) {
+    // Expected authorization result. The screen that issued the query is responsible
+    // for its empty state; this toast is the feedback, and it is not a defect to report.
+    if (errorCode === "UNAUTHORIZED") {
       toast({
         variant: "destructive",
-        title: error?.data?.code ?? "Unauthorized",
+        title: "Unauthorized",
         description: error.message,
       });
       return;

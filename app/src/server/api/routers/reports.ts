@@ -55,7 +55,6 @@ import {
   canSilenceUsers,
   canTimeoutUsers,
   canWarnUsers,
-  REPORT_ACCESS_DENIED_MESSAGE,
 } from "@/utils/permissions";
 import sanitize from "@/utils/sanitize";
 import { getMillisecondsFromTimeUnit, secondsFromNow } from "@/utils/time";
@@ -405,15 +404,15 @@ export const reportsRouter = createTRPCRouter({
     }),
   // Get a single report
   get: protectedProcedure.input(idSchema).query(async ({ ctx, input }) => {
-    // Query
+    // Query. A missing report is the same result as one this player cannot read.
     const [user, report] = await Promise.all([
       fetchUser(ctx.drizzle, ctx.userId),
-      fetchUserReport(ctx.drizzle, input.id, ctx.userId),
+      fetchUserReport(ctx.drizzle, input.id, ctx.userId).catch((error: unknown) => {
+        if (error instanceof Error && error.message === "Report not found") return null;
+        throw error;
+      }),
     ]);
-    // Guard
-    if (!canSeeReport(user, report)) {
-      throw serverError("UNAUTHORIZED", REPORT_ACCESS_DENIED_MESSAGE);
-    }
+    if (!report || !canSeeReport(user, report)) return null;
     // Get previous reports
     const prevReports = canSeeSecretData(user.role)
       ? await getRelatedReports(ctx.drizzle, report.aiInterpretation)
