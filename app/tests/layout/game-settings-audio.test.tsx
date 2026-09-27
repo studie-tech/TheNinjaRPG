@@ -45,8 +45,10 @@ vi.mock("@/hooks/useAudio", () => ({
 vi.mock("@/libs/native", () => ({
   platform: () => {
     const reported = (
-      window as typeof window & { Capacitor?: { getPlatform: () => string } }
-    ).Capacitor?.getPlatform();
+      globalThis as typeof globalThis & {
+        window?: Window & { Capacitor?: { getPlatform: () => string } };
+      }
+    ).window?.Capacitor?.getPlatform();
     return reported === "ios" || reported === "android" ? reported : "web";
   },
   audioSession: {
