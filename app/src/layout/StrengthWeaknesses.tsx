@@ -1,7 +1,7 @@
 "use client";
 
 import { Chart as ChartJS } from "chart.js/auto";
-import { CircleHelp, Eye, Lock, Search, Sparkles } from "lucide-react";
+import { CircleHelp, Eye, Leaf, Lock, Search } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
+  getUserCaps,
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
@@ -195,10 +196,10 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
             </div>
           </div>
           <div>
-            <b>Mastery</b>
+            <b>Sage Mode</b>
             <div className="flex flex-row items-center">
-              <Sparkles className="mr-1 mb-1 h-6 w-6" />
-              Sage Mastery:{" "}
+              <Leaf className="mr-1 mb-1 h-6 w-6" />
+              Rank:{" "}
               {getSageMasteryDisplayRank(
                 userData.sageMasteryExperience ?? 0,
                 !!userData.sageModeId,
@@ -360,8 +361,30 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
     }
   }, [activeLayout, userData]);
 
+  const { stats_cap } = getUserCaps(userData.rank);
+  const combatStats = [
+    { label: "Offence", value: userData.offence ?? 0 },
+    { label: "Defence", value: userData.defence ?? 0 },
+  ];
+
   return (
     <div className="grid grid-cols-1 pt-3 sm:grid-cols-2">
+      <div className="sm:col-span-2">
+        <p className="font-bold">Combat</p>
+        <div className="grid grid-cols-2 gap-3 p-3">
+          {combatStats.map(({ label, value }) => (
+            <div key={label}>
+              <p className="text-sm">
+                {label}: <b>{Math.floor(value).toLocaleString()}</b>
+              </p>
+              <Progress value={Math.min(100, (value / stats_cap) * 100)} />
+              <p className="text-muted-foreground text-xs">
+                of {stats_cap.toLocaleString()} cap
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
       <div>
         <p className="font-bold">Generals</p>
         <div className="relative w-[99%] p-3">
@@ -370,6 +393,7 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
       </div>
       <div>
         <p className="font-bold">Masteries</p>
+        <p className="text-muted-foreground text-xs">Gates content, no damage</p>
         <div className="relative w-[99%]">
           <canvas ref={statsChartRef} id="statsChartRef"></canvas>
         </div>
