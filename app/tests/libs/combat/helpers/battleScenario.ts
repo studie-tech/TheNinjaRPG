@@ -123,6 +123,12 @@ export const battleUserSchema = z
   .object({
     ...numberFields(StatNames, 450_000),
     ...numberFields(GenNames, 100_000),
+    ninjutsuMastery: num(450_000),
+    genjutsuMastery: num(450_000),
+    taijutsuMastery: num(450_000),
+    bukijutsuMastery: num(450_000),
+    bloodlineMastery: num(450_000),
+    sageMastery: num(450_000),
     ...shapeFromDefaults(battleUserNumberDefaults, num),
     ...shapeFromDefaults(battleUserBooleanDefaults, bool),
     userId: str("user"),
@@ -131,8 +137,9 @@ export const battleUserSchema = z
     gender: str("Male"),
     villageId: str("village-1"),
     direction: z.enum(["left", "right"]).prefault("left"),
-    highestOffence: statNameSchema.prefault("ninjutsuOffence"),
-    highestDefence: statNameSchema.prefault("ninjutsuDefence"),
+    highestMasteryType: z
+      .enum(["Ninjutsu", "Genjutsu", "Taijutsu", "Bukijutsu"])
+      .prefault("Ninjutsu"),
     highestGenerals: z.array(genNameSchema).prefault(["strength", "intelligence"]),
     usedGenerals: z.record(genNameSchema, num()).prefault(usedGeneralDefaults),
     usedStats: z.record(statNameSchema, num()).prefault(usedStatDefaults),

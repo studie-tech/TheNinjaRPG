@@ -119,6 +119,7 @@ export const isBloodlineEffectBeneficial = (effect: ZodAllTags) => {
       "increasedamagetaken",
       "decreaseheal",
       "decreasestat",
+      "decreasemastery",
       "damage",
     ].includes(effect.type)
   )

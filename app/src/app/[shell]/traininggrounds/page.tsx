@@ -30,10 +30,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
-import type { TrainingSpeed, UserStatName } from "@/drizzle/constants";
+import type { CombatStatName, MasteryName, TrainingSpeed } from "@/drizzle/constants";
 import {
+  CombatStatNames,
   getUserCaps,
-  IMG_TRAIN_BUKI_DEF,
   IMG_TRAIN_BUKI_OFF,
   IMG_TRAIN_GEN_DEF,
   IMG_TRAIN_GEN_OFF,
@@ -42,18 +42,17 @@ import {
   IMG_TRAIN_NIN_OFF,
   IMG_TRAIN_SPEED,
   IMG_TRAIN_STRENGTH,
-  IMG_TRAIN_TAI_DEF,
   IMG_TRAIN_TAI_OFF,
   IMG_TRAIN_WILLPOWER,
   JUTSU_LEVEL_CAP,
   MAX_DAILY_TRAININGS,
+  MasteryNames,
   SENSEI_RANKS,
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
   TrainingSpeeds,
   TUTORIAL_JUTSU_ID,
-  UserStatNames,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -423,6 +422,58 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
  * @param props
  * @returns
  */
+const getTrainingImage = (stat: CombatStatName | MasteryName) => {
+  switch (stat) {
+    case "intelligence":
+      return IMG_TRAIN_INTELLIGENCE;
+    case "willpower":
+      return IMG_TRAIN_WILLPOWER;
+    case "strength":
+      return IMG_TRAIN_STRENGTH;
+    case "speed":
+      return IMG_TRAIN_SPEED;
+    case "offence":
+      return IMG_TRAIN_NIN_OFF;
+    case "defence":
+      return IMG_TRAIN_NIN_DEF;
+    case "ninjutsuMastery":
+      return IMG_TRAIN_NIN_OFF;
+    case "genjutsuMastery":
+      return IMG_TRAIN_GEN_OFF;
+    case "taijutsuMastery":
+      return IMG_TRAIN_TAI_OFF;
+    case "bukijutsuMastery":
+      return IMG_TRAIN_BUKI_OFF;
+    case "bloodlineMastery":
+      return IMG_TRAIN_GEN_DEF;
+    case "sageMastery":
+      return IMG_TRAIN_INTELLIGENCE;
+  }
+};
+
+const getTrainingLabel = (stat: CombatStatName | MasteryName) => {
+  switch (stat) {
+    case "offence":
+      return "Offence";
+    case "defence":
+      return "Defence";
+    case "ninjutsuMastery":
+      return "Ninjutsu";
+    case "genjutsuMastery":
+      return "Genjutsu";
+    case "taijutsuMastery":
+      return "Taijutsu";
+    case "bukijutsuMastery":
+      return "Bukijutsu";
+    case "bloodlineMastery":
+      return "Bloodline";
+    case "sageMastery":
+      return "Sage";
+    default:
+      return stat.charAt(0).toUpperCase() + stat.slice(1);
+  }
+};
+
 const StatsTraining: React.FC<TrainingProps> = (props) => {
   // Settings
   const { userData, updateUser, timeDiff } = props;
@@ -456,6 +507,17 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
+  const { mutate: startMasteryTraining, isPending: isStartingMastery } =
+    api.train.startMasteryTraining.useMutation({
+      onSuccess: async (result) => {
+        showMutationToast(result);
+        if (result.success && result.data) {
+          await updateUser(result.data);
+          sendGTMEvent({ event: "mastery_training" });
+        }
+      },
+    });
+
   const { mutate: stopTraining, isPending: isStopping } =
     api.train.stopTraining.useMutation({
       onSuccess: async (result) => {
@@ -478,7 +540,25 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
-  const { mutate: changeSpeed, isPending: isChaning } =
+  const { mutate: stopMasteryTraining, isPending: isStoppingMastery } =
+    api.train.stopMasteryTraining.useMutation({
+      onSuccess: async (result) => {
+        showMutationToast(result);
+        await utils.misc.getCaptcha.invalidate();
+        if (result.success && result.data) {
+          await updateUser({
+            currentlyTrainingMastery: null,
+            masteryTrainingStartedAt: null,
+            dailyTrainings: userData.dailyTrainings + 1,
+            [result.data.currentlyTrainingMastery]:
+              userData[result.data.currentlyTrainingMastery] + result.data.amount,
+            questData: result.data.questData,
+          });
+        }
+      },
+    });
+
+  const { mutate: changeSpeed, isPending: isChanging } =
     api.train.updateTrainingSpeed.useMutation({
       onSuccess: async (data, variables) => {
         showMutationToast(data);
@@ -488,196 +568,250 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
-  // Captcha form
+  // Captcha form, shared by both slots; captchaTarget records which stop it submits
   const captchaForm = useForm<CaptchaVerifySchema>({
     resolver: zodResolver(captchaVerifySchema),
     defaultValues: { guess: "" },
   });
+  const [captchaTarget, setCaptchaTarget] = useState<"combat" | "mastery">("combat");
 
   // Form handlers
   const onSubmit = captchaForm.handleSubmit((data) => {
-    stopTraining({ ...data, villageId: userData.villageId });
+    if (captchaTarget === "mastery") {
+      stopMasteryTraining({ ...data, villageId: userData.villageId });
+    } else {
+      stopTraining({ ...data, villageId: userData.villageId });
+    }
   });
 
-  const isPending = isStarting || isStopping || isChaning;
+  const isPending =
+    isStarting || isStartingMastery || isStopping || isStoppingMastery || isChanging;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
   const iconClassName = "w-5 h-5 absolute top-1 right-1 text-blue-500";
+  const { stats_cap, gens_cap, mastery_cap } = getUserCaps(userData.rank);
 
-  const getImage = (stat: UserStatName) => {
-    switch (stat) {
-      case "intelligence":
-        return IMG_TRAIN_INTELLIGENCE;
-      case "willpower":
-        return IMG_TRAIN_WILLPOWER;
-      case "strength":
-        return IMG_TRAIN_STRENGTH;
-      case "speed":
-        return IMG_TRAIN_SPEED;
-      case "genjutsuOffence":
-        return IMG_TRAIN_GEN_OFF;
-      case "genjutsuDefence":
-        return IMG_TRAIN_GEN_DEF;
-      case "taijutsuDefence":
-        return IMG_TRAIN_TAI_DEF;
-      case "taijutsuOffence":
-        return IMG_TRAIN_TAI_OFF;
-      case "bukijutsuOffence":
-        return IMG_TRAIN_BUKI_OFF;
-      case "bukijutsuDefence":
-        return IMG_TRAIN_BUKI_DEF;
-      case "ninjutsuOffence":
-        return IMG_TRAIN_NIN_OFF;
-      case "ninjutsuDefence":
-        return IMG_TRAIN_NIN_DEF;
+  const renderCaptchaStop = (target: "combat" | "mastery") => {
+    if (!showCaptcha) {
+      return (
+        <XCircle
+          id={target === "combat" ? "tutorial-traininggrounds-stopTraining" : undefined}
+          className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
+          onClick={() =>
+            target === "combat"
+              ? stopTraining({ villageId: userData.villageId })
+              : stopMasteryTraining({ villageId: userData.villageId })
+          }
+        />
+      );
     }
+    if (!captcha) return <Loader explanation="Loading captcha" />;
+    return (
+      <Popover>
+        <PopoverTrigger
+          onClick={() => setCaptchaTarget(target)}
+          className="absolute top-4 right-4 z-30"
+        >
+          <XCircle className="h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
+        </PopoverTrigger>
+        <PopoverContent>
+          <p className="font-bold text-lg">Verify Humanity</p>
+          {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
+          <img
+            alt="captcha"
+            className="mb-2"
+            src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
+          />
+          <Form {...captchaForm}>
+            <form className="relative" onSubmit={onSubmit}>
+              <FormField
+                control={captchaForm.control}
+                name="guess"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input placeholder="Enter captcha" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button className="absolute top-0 right-0" type="submit">
+                <CheckCheck className="h-5 w-5" />
+              </Button>
+            </form>
+          </Form>
+        </PopoverContent>
+      </Popover>
+    );
   };
 
-  return (
-    <ContentBox
-      title="Training"
-      subtitle={`${efficiency}% efficiency [${userData.dailyTrainings} / ${MAX_DAILY_TRAININGS}]`}
-      defaultBackHref="/village"
-      initialBreak={props.initialBreak}
-      topRightContent={
-        <NavTabs
-          current={userData.trainingSpeed}
-          options={TrainingSpeeds}
-          setValue={(value) => {
-            if (!isPending) changeSpeed({ speed: value as TrainingSpeed });
-          }}
-        />
-      }
-    >
-      {/* Inert while pending: the overlay hides the controls from pointers only */}
-      <div inert={isPending}>
-        <div className="grid grid-cols-4 text-center font-bold">
-          {UserStatNames.map((stat, i) => {
-            const part = stat.match(/[a-z]+/g)?.[0] ?? "";
-            const label = part.charAt(0).toUpperCase() + part.slice(1);
-            const { stats_cap, gens_cap } = getUserCaps(userData.rank);
-            const cap =
-              stat.includes("Offence") || stat.includes("Defence")
-                ? stats_cap
-                : gens_cap;
-            const overCap = userData[stat] >= cap;
-            const icon = stat.includes("Offence") ? (
-              <Swords className={iconClassName} />
-            ) : stat.includes("Defence") ? (
-              <ShieldAlert className={iconClassName} />
-            ) : (
-              <Fingerprint className={iconClassName} />
-            );
-
-            return (
-              <button
-                type="button"
-                id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
-                key={`${stat}-${i}`}
-                onClick={() =>
-                  overCap
-                    ? showMutationToast({ success: false, message: "Already capped" })
-                    : startTraining({ stat })
-                }
-                className="relative"
-              >
-                <div
-                  className={cn(
-                    trainItemClassName,
-                    overCap ? "opacity-50 grayscale" : "",
-                  )}
-                >
-                  <Image src={getImage(stat)} alt={label} width={256} height={256} />
-                  {icon}
-                  {label}
-                </div>
-                {overCap && (
-                  <UserRoundCheck className="absolute top-[50%] left-[50%] h-10 w-10 translate-x-[-50%] translate-y-[-50%] text-slate-100 hover:cursor-pointer" />
+  const renderTrainingOverlay = (
+    stat: CombatStatName | MasteryName,
+    startedAt: Date | null,
+    target: "combat" | "mastery",
+  ) => (
+    <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
+      <div className="m-auto flex flex-col items-center text-center text-white">
+        <p className="p-5 text-2xl">Training {getTrainingLabel(stat)}</p>
+        <Image src={getTrainingImage(stat)} alt={stat} width={128} height={128} />
+        <div className="w-2/3">
+          {startedAt && (
+            <p className="text-2xl">
+              Time Left:{" "}
+              <Countdown
+                targetDate={secondsFromDate(
+                  trainingSpeedSeconds(userData.trainingSpeed),
+                  startedAt,
                 )}
-              </button>
-            );
-          })}
-        </div>
-        {userData.currentlyTraining && (
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
-            <div className="m-auto flex flex-col items-center text-center text-white">
-              <p className="p-5 text-2xl">Training {userData.currentlyTraining}</p>
-              <Image
-                src={getImage(userData.currentlyTraining)}
-                alt={userData.currentlyTraining}
-                width={128}
-                height={128}
+                timeDiff={timeDiff}
               />
-              <div className="w-2/3">
-                {userData.trainingStartedAt && (
-                  <p className="text-2xl">
-                    Time Left:{" "}
-                    <Countdown
-                      targetDate={secondsFromDate(
-                        trainingSpeedSeconds(userData.trainingSpeed),
-                        userData.trainingStartedAt,
-                      )}
-                      timeDiff={timeDiff}
-                    />
-                  </p>
-                )}
-                {!showCaptcha && (
-                  <XCircle
-                    id="tutorial-traininggrounds-stopTraining"
-                    className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-                    onClick={() => stopTraining({ villageId: userData.villageId })}
-                  />
-                )}
-                {showCaptcha && !captcha && <Loader explanation="Loading captcha" />}
-                {showCaptcha && captcha && (
-                  <Popover>
-                    <PopoverTrigger>
-                      <XCircle className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
-                    </PopoverTrigger>
-                    <PopoverContent>
-                      <p className="font-bold text-lg">Verify Humanity</p>
-                      {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
-                      <img
-                        alt="captcha"
-                        className="mb-2"
-                        src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
-                      />
-                      <Form {...captchaForm}>
-                        <form className="relative" onSubmit={onSubmit}>
-                          <FormField
-                            control={captchaForm.control}
-                            name="guess"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <Input placeholder="Enter captcha" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <Button className="absolute top-0 right-0" type="submit">
-                            <CheckCheck className="h-5 w-5" />
-                          </Button>
-                        </form>
-                      </Form>
-                    </PopoverContent>
-                  </Popover>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      {/* Overlay rather than replace the box, so the sections below keep their place */}
-      {isPending && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
-          <Loader explanation="Processing..." />
+            </p>
+          )}
+          {renderCaptchaStop(target)}
         </div>
-      )}
-    </ContentBox>
+      </div>
+    </div>
+  );
+
+  // Overlay rather than replace each box, so the sections below keep their place
+  const pendingOverlay = isPending && (
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
+      <Loader explanation="Processing..." />
+    </div>
+  );
+
+  return (
+    <>
+      <ContentBox
+        title="Training"
+        subtitle={`${efficiency}% efficiency [${userData.dailyTrainings} / ${MAX_DAILY_TRAININGS}]`}
+        defaultBackHref="/village"
+        initialBreak={props.initialBreak}
+        topRightContent={
+          <NavTabs
+            current={userData.trainingSpeed}
+            options={TrainingSpeeds}
+            setValue={(value) => {
+              if (!isPending) changeSpeed({ speed: value as TrainingSpeed });
+            }}
+          />
+        }
+      >
+        {/* Inert while pending: the overlay hides the controls from pointers only */}
+        <div inert={isPending}>
+          <div className="grid grid-cols-3 text-center font-bold">
+            {CombatStatNames.map((stat, i) => {
+              const label = getTrainingLabel(stat);
+              const cap = stat === "offence" || stat === "defence" ? stats_cap : gens_cap;
+              const overCap = userData[stat] >= cap;
+              const icon =
+                stat === "offence" ? (
+                  <Swords className={iconClassName} />
+                ) : stat === "defence" ? (
+                  <ShieldAlert className={iconClassName} />
+                ) : (
+                  <Fingerprint className={iconClassName} />
+                );
+              return (
+                <button
+                  type="button"
+                  id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
+                  key={`${stat}-${i}`}
+                  onClick={() =>
+                    overCap
+                      ? showMutationToast({ success: false, message: "Already capped" })
+                      : startTraining({ stat })
+                  }
+                  className="relative"
+                >
+                  <div
+                    className={cn(
+                      trainItemClassName,
+                      overCap ? "opacity-50 grayscale" : "",
+                    )}
+                  >
+                    <Image
+                      src={getTrainingImage(stat)}
+                      alt={label}
+                      width={256}
+                      height={256}
+                    />
+                    {icon}
+                    {label}
+                  </div>
+                  {overCap && (
+                    <UserRoundCheck className="absolute top-[50%] left-[50%] h-10 w-10 translate-x-[-50%] translate-y-[-50%] text-slate-100 hover:cursor-pointer" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {userData.currentlyTraining &&
+            renderTrainingOverlay(
+              userData.currentlyTraining,
+              userData.trainingStartedAt,
+              "combat",
+            )}
+        </div>
+        {pendingOverlay}
+      </ContentBox>
+      <ContentBox
+        title="Masteries"
+        subtitle="Train in parallel with combat stats. Masteries do not grant experience."
+        initialBreak={true}
+      >
+        <div inert={isPending}>
+          <div className="grid grid-cols-3 text-center font-bold">
+            {MasteryNames.map((stat, i) => {
+              const label = getTrainingLabel(stat);
+              const overCap = userData[stat] >= mastery_cap;
+              return (
+                <button
+                  type="button"
+                  id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
+                  key={`${stat}-${i}`}
+                  onClick={() =>
+                    overCap
+                      ? showMutationToast({ success: false, message: "Already capped" })
+                      : startMasteryTraining({ stat })
+                  }
+                  className="relative"
+                >
+                  <div
+                    className={cn(
+                      trainItemClassName,
+                      overCap ? "opacity-50 grayscale" : "",
+                    )}
+                  >
+                    <Image
+                      src={getTrainingImage(stat)}
+                      alt={label}
+                      width={256}
+                      height={256}
+                    />
+                    <Swords className={iconClassName} />
+                    {label}
+                  </div>
+                  {overCap && (
+                    <UserRoundCheck className="absolute top-[50%] left-[50%] h-10 w-10 translate-x-[-50%] translate-y-[-50%] text-slate-100 hover:cursor-pointer" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {userData.currentlyTrainingMastery &&
+            renderTrainingOverlay(
+              userData.currentlyTrainingMastery,
+              userData.masteryTrainingStartedAt,
+              "mastery",
+            )}
+        </div>
+        {pendingOverlay}
+      </ContentBox>
+    </>
   );
 };
 

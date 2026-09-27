@@ -23,6 +23,7 @@ import type {
   AdjustableBasicAction,
   ElementName,
   GeneralType,
+  MasteryType,
   PoolType,
   StatType,
 } from "@/drizzle/constants";
@@ -51,6 +52,7 @@ import {
   IMG_ELEMENT_WIND,
   IMG_ELEMENT_WOOD,
   IMG_ELEMENT_YINYANG,
+  MasteryTypes,
   PoolTypes,
   StatTypes,
 } from "@/drizzle/constants";
@@ -63,6 +65,7 @@ interface ElementImageProps {
   element:
     | GeneralType
     | StatType
+    | MasteryType
     | ElementName
     | PoolType
     | AdjustableBasicAction
@@ -138,6 +141,7 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
   } else if (
     isInArray(element, [
       ...StatTypes,
+      ...MasteryTypes,
       ...GeneralTypes,
       ...PoolTypes,
       ...AdjustableBasicActions,
@@ -254,6 +258,19 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
       case "Bukijutsu":
         image = (
           <Sword strokeWidth={3} className={cn(base, props.className, "bg-red-600")} />
+        );
+        break;
+      case "Bloodline":
+        image = (
+          <Heart strokeWidth={3} className={cn(base, props.className, "bg-rose-600")} />
+        );
+        break;
+      case "Sage":
+        image = (
+          <Sparkles
+            strokeWidth={3}
+            className={cn(base, props.className, "bg-emerald-600")}
+          />
         );
         break;
       case "Strength":

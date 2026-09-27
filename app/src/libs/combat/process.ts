@@ -52,6 +52,7 @@ import {
   decreaseDamageGiven,
   decreaseDamageTaken,
   decreaseHealGiven,
+  decreaseMastery,
   decreaseMaxPools,
   decreasepoolcost,
   decreaseStats,
@@ -71,6 +72,7 @@ import {
   increaseDamageGiven,
   increaseDamageTaken,
   increaseHealGiven,
+  increaseMastery,
   increaseMaxPools,
   increasepoolcost,
   increaseRange,
@@ -131,6 +133,7 @@ import {
   getItem,
   isEffectActive,
   recordUsedTag,
+  resetMasteriesToBase,
   resolveDamageCreditUser,
   sortEffects,
 } from "./util";
@@ -290,6 +293,13 @@ export const applyEffects = (
 
   // Things we wish to return
   const newUsersState = structuredClone(usersState);
+  // Mastery tags deliberately work differently from increasestat/decreasestat. Stat tags
+  // are applied to `usersState`, the transient pre-round copy, so they vanish when the round
+  // ends and never need undoing. Masteries must persist into `newUsersState`, because
+  // availableUserActions reads the saved state to decide which gated jutsu and items are
+  // usable next round. Persisting them means a buff would compound every round, so reset to
+  // the remembered unbuffed values here and let the still-active tags reapply below.
+  newUsersState.forEach(resetMasteriesToBase);
   const newGroundEffects: GroundEffect[] = [];
   const newUsersEffects: UserEffect[] = [];
   const actionEffects: ActionEffect[] = [];
@@ -1209,6 +1219,10 @@ export const applySingleEffect = (
           info = absorb(effect, usersEffects, consequences, curTarget);
         } else if (effect.type === "increasestat") {
           info = increaseStats(effect, newUsersEffects, curTarget);
+        } else if (effect.type === "increasemastery") {
+          info = increaseMastery(effect, newUsersEffects, newTarget);
+        } else if (effect.type === "decreasemastery") {
+          info = decreaseMastery(effect, newUsersEffects, newTarget);
         } else if (effect.type === "increasemaxpools") {
           info = increaseMaxPools(effect, newUsersEffects, newTarget);
         } else if (effect.type === "decreasemaxpools") {

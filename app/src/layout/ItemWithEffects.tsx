@@ -25,6 +25,7 @@ import Modal from "@/layout/Modal";
 import { getPotencyDescription, POTENCY_TAG_LABELS } from "@/libs/combat/potency";
 import { getPreventTypeName } from "@/libs/combat/util";
 import { getFarmPlantExperience } from "@/libs/farming";
+import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getRewardArray } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -419,6 +420,10 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   const farmExtractSeedItemName = itemNames?.find(
     (itemName) => itemName.id === farmExtractSeedItemId,
   )?.name;
+  // SageMode rows carry a `requiredSageMastery` that gates their level-2 effects behind
+  // `userData.sageMasteryExperience`, which is a different thing from the Sage Mastery
+  // stat requirement of the same name on Item/Jutsu. Discriminate before rendering either.
+  const isSageMode = "activationRounds" in item;
   const { data: jutsuEvolutions } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: item.id },
     { enabled: isJutsuItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
@@ -769,16 +774,18 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"level" in item &&
                 item.level !== undefined &&
                 item.level > 0 &&
-                !("requiredSageMastery" in item) && (
+                !isSageMode && (
                   <p>
                     <b>Level</b>: {item.level}
                   </p>
                 )}
-              {"requiredSageMastery" in item && item.requiredSageMastery > 0 && (
-                <p>
-                  <b>Lvl 2 Mastery</b>: {item.requiredSageMastery.toLocaleString()}
-                </p>
-              )}
+              {isSageMode &&
+                "requiredSageMastery" in item &&
+                item.requiredSageMastery > 0 && (
+                  <p>
+                    <b>Lvl 2 Mastery</b>: {item.requiredSageMastery.toLocaleString()}
+                  </p>
+                )}
               {"activationRounds" in item && item.activationRounds > 0 && (
                 <p>
                   <b>Active Duration</b>: {item.activationRounds} rounds
@@ -993,31 +1000,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Evolution</b>: Yes (evolves from a parent item)
                 </p>
               )}
-              {(
-                [
-                  ["requiredNinjutsuOffence", "Req. Nin. Offence"],
-                  ["requiredNinjutsuDefence", "Req. Nin. Defence"],
-                  ["requiredGenjutsuOffence", "Req. Gen. Offence"],
-                  ["requiredGenjutsuDefence", "Req. Gen. Defence"],
-                  ["requiredTaijutsuOffence", "Req. Tai. Offence"],
-                  ["requiredTaijutsuDefence", "Req. Tai. Defence"],
-                  ["requiredBukijutsuOffence", "Req. Buki. Offence"],
-                  ["requiredBukijutsuDefence", "Req. Buki. Defence"],
-                  ["requiredStrength", "Req. Strength"],
-                  ["requiredSpeed", "Req. Speed"],
-                  ["requiredIntelligence", "Req. Intelligence"],
-                  ["requiredWillpower", "Req. Willpower"],
-                ] as const
-              )
-                .filter(([key]) => {
-                  const value = (item as unknown as Record<string, unknown>)[key];
-                  return value != null;
-                })
-                .map(([key, label]) => (
-                  <p key={key}>
-                    <b>{label}</b>: {(item as unknown as Record<string, number>)[key]}
-                  </p>
-                ))}
+              {EVOLUTION_STAT_FIELDS.filter(({ id }) => {
+                if (id === "requiredSageMastery" && isSageMode) return false;
+                return (item as unknown as Record<string, unknown>)[id] != null;
+              }).map(({ id, label }) => (
+                <p key={id}>
+                  <b>Req. {label}</b>: {(item as unknown as Record<string, number>)[id]}
+                </p>
+              ))}
               {"maxLevel" in item && item.maxLevel && (
                 <p>
                   <b>Max Level</b>: {item.maxLevel}
@@ -1341,6 +1331,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             <span>
                               <b>Stats: </b>
                               {parsedEffect.statTypes.join(", ")}
+                            </span>
+                          )}
+                        {"masteryTypes" in parsedEffect &&
+                          parsedEffect.masteryTypes &&
+                          parsedEffect.masteryTypes.length > 0 && (
+                            <span>
+                              <b>Masteries: </b>
+                              {parsedEffect.masteryTypes.join(", ")}
                             </span>
                           )}
                         {"elements" in parsedEffect &&

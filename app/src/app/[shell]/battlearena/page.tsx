@@ -797,7 +797,7 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
         >
           <fieldset disabled={isAttacking} className="contents">
             {statNames
-              .filter((x) => !x.includes("Offence"))
+              .filter((x) => x !== "offence")
               .map((stat, i) => {
                 const maxValue = maxValues[stat];
                 if (maxValue && maxValue > 0) {

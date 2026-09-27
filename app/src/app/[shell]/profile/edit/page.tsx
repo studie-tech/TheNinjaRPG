@@ -111,6 +111,7 @@ import {
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
+import { getAssignedCombatStatTotal } from "@/libs/profile";
 import {
   getTavernTitleClass,
   getTavernUsernameClass,
@@ -302,9 +303,9 @@ export default function EditProfile() {
         <Accordion
           title="Reset Stats"
           selectedTitle={activeElement}
-          unselectedSubtitle="Redistribute your experience points"
+          unselectedSubtitle="Redistribute your combat stat points"
           selectedSubtitle={`You can redistribute your stats for ${COST_RESET_STATS} reputation points. You
-          have ${userData.reputationPoints} reputation points. You have ${userData.experience + 120} experience points to distribute.`}
+          have ${userData.reputationPoints} reputation points. You have ${round(getAssignedCombatStatTotal(userData))} combat stat points to distribute.`}
           icon={BarChart3}
           onClick={setActiveElement}
         >
@@ -641,7 +642,7 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                   name="preferredStat"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Offense</FormLabel>
+                      <FormLabel>Preferred Mastery</FormLabel>
                       <Select
                         disabled={isUpdatingPreferences}
                         onValueChange={(value) =>
@@ -1523,19 +1524,7 @@ const ResetStats: React.FC = () => {
   if (!userData) return <Loader explanation="Loading user" />;
 
   // Calculate total stats available for redistribution
-  const totalStats =
-    userData.ninjutsuOffence +
-    userData.taijutsuOffence +
-    userData.genjutsuOffence +
-    userData.bukijutsuOffence +
-    userData.ninjutsuDefence +
-    userData.taijutsuDefence +
-    userData.genjutsuDefence +
-    userData.bukijutsuDefence +
-    userData.strength +
-    userData.speed +
-    userData.intelligence +
-    userData.willpower;
+  const totalStats = getAssignedCombatStatTotal(userData);
 
   const cost = canChangeContent(userData.role) ? 0 : COST_RESET_STATS;
   const canAfford = userData.reputationPoints >= cost;
@@ -1544,8 +1533,8 @@ const ResetStats: React.FC = () => {
   return (
     <div className="flex flex-col gap-3">
       <p>
-        Redistribute all your stats ({totalStats} total points). This will cost {cost}{" "}
-        reputation points.
+        Redistribute all your stats ({round(totalStats)} total points). This will cost{" "}
+        {cost} reputation points.
       </p>
       {!canAfford && (
         <p className="font-bold text-red-500">
@@ -1556,7 +1545,7 @@ const ResetStats: React.FC = () => {
       {canAfford && (
         <DistributeStatsForm
           userData={userData}
-          availableStats={round(userData.experience + 120)}
+          availableStats={round(totalStats)}
           onAccept={submitStatRedistribution}
           forceUseAll={true}
           isRedistribution={true}
