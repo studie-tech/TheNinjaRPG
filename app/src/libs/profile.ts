@@ -150,11 +150,12 @@ export function capUserStats(user: UserData) {
 export type StatScale = "ai" | "player";
 
 /**
- * Scale pools, combat stats and masteries to the user's level. Each combat stat keeps
- * its share of the level budget, and masteries keep their ratio to the combat stats.
- * @param statScale - "ai" spends SCALED_AI_STAT_BUDGET_SHARE of the budget. "player"
- *   takes shares over at least the stat total the player's experience bought, so a
- *   player whose stats sum below it (unassigned or merged points) scales to about 1x.
+ * Scale pools, combat stats and masteries to the user's level. Each stat's points above
+ * the base 10 scale by `share * levelBudget / (share * experience + points beyond
+ * experience)`: stats the experience paid for stay exact at their own level however
+ * uneven, and unpaid ones (a new AI at 0 experience) land on the budget and then stay.
+ * Masteries keep their ratio to the combat stats.
+ * @param statScale - "ai" takes SCALED_AI_STAT_BUDGET_SHARE of the budget, "player" all.
  */
 export function scaleUserStats(
   user: Pick<
@@ -186,26 +187,26 @@ export function scaleUserStats(
   user.maxChakra = calcCP(user.level) * poolMod;
   // Combat stats
   const levelBudget = calcLevelRequirements(user.level) - 500;
-  const earnedStats = (user.experience ?? 0) + CombatStatNames.length * 10;
+  const experience = user.experience ?? 0;
   user.experience = levelBudget;
+  const share = statScale === "ai" ? SCALED_AI_STAT_BUDGET_SHARE : 1;
+  const budget = share * levelBudget;
   const combatSum = CombatStatNames.reduce((sum, stat) => sum + (user[stat] ?? 0), 0);
-  const budget =
-    statScale === "ai" ? levelBudget * SCALED_AI_STAT_BUDGET_SHARE : levelBudget;
-  const divisor = statScale === "ai" ? combatSum : Math.max(combatSum, earnedStats);
+  const earned = combatSum / statMod - CombatStatNames.length * 10;
+  const divisor = share * experience + Math.max(0, earned - experience);
   for (const stat of CombatStatNames) {
-    const share =
-      divisor > 0 ? Math.floor(((user[stat] ?? 0) * budget * 100) / divisor) / 100 : 0;
-    user[stat] = (10 + share) * statMod;
+    const points =
+      earned > 0
+        ? (Math.max(0, (user[stat] ?? 0) / statMod - 10) * budget) / divisor
+        : budget / CombatStatNames.length;
+    user[stat] = (10 + roundCombatStat(points)) * statMod;
   }
   // Masteries
   const scaledSum = CombatStatNames.reduce((sum, stat) => sum + user[stat], 0);
   for (const mastery of MasteryNames) {
     user[mastery] =
       combatSum > 0
-        ? Math.max(
-            10,
-            Math.floor(((user[mastery] ?? 0) * scaledSum * 100) / combatSum) / 100,
-          )
+        ? Math.max(10, roundCombatStat(((user[mastery] ?? 0) * scaledSum) / combatSum))
         : 10 * statMod;
   }
 }
