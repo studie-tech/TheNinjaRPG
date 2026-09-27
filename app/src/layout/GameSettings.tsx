@@ -203,7 +203,7 @@ export const GlobalAudioProvider: React.FC<{
     isMusicTurnedOff.current = !shouldPlay;
     if (!shouldPlay) {
       pauseVersion.current += 1;
-      clearAudioSession();
+      if (!audioEnabled && !isPlaying) clearAudioSession();
     }
     void setAudioEnabled(shouldPlay);
   }, [isClient, savedMusicOn]);
@@ -337,7 +337,7 @@ export const GlobalAudioProvider: React.FC<{
     isMusicTurnedOff.current = !enabled;
     if (!enabled) {
       pauseVersion.current += 1;
-      clearAudioSession();
+      if (!audioEnabled && !isPlaying) clearAudioSession();
     }
     return setAudioEnabled(enabled);
   };
