@@ -111,7 +111,7 @@ import {
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
-import { getAssignedCombatStatTotal } from "@/libs/profile";
+import { getAssignedCombatStatTotal, withCappedStats } from "@/libs/profile";
 import {
   getTavernTitleClass,
   getTavernUsernameClass,
@@ -305,7 +305,7 @@ export default function EditProfile() {
           selectedTitle={activeElement}
           unselectedSubtitle="Redistribute your combat stat points"
           selectedSubtitle={`You can redistribute your stats for ${COST_RESET_STATS} reputation points. You
-          have ${userData.reputationPoints} reputation points. You have ${round(getAssignedCombatStatTotal(userData))} combat stat points to distribute.`}
+          have ${userData.reputationPoints} reputation points. You have ${round(getAssignedCombatStatTotal(withCappedStats(userData)))} combat stat points to distribute.`}
           icon={BarChart3}
           onClick={setActiveElement}
         >
@@ -1525,8 +1525,8 @@ const ResetStats: React.FC = () => {
   // Only show if we have userData
   if (!userData) return <Loader explanation="Loading user" />;
 
-  // Calculate total stats available for redistribution
-  const totalStats = getAssignedCombatStatTotal(userData);
+  // Redistribution budget: the rank-capped total the server checks against
+  const totalStats = getAssignedCombatStatTotal(withCappedStats(userData));
 
   const cost = canChangeContent(userData.role) ? 0 : COST_RESET_STATS;
   const canAfford = userData.reputationPoints >= cost;

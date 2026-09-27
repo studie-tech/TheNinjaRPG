@@ -1605,7 +1605,17 @@ const roundStat = (stat: number) => {
  * stat changes, or stat differences
  * @returns - zod schema and max values for each stat
  */
-export const createStatSchema = (min = 10, start = 10, user?: UserData) => {
+export const createStatSchema = (
+  min = 10,
+  start = 10,
+  user?: Pick<UserData, "rank"> &
+    Partial<
+      Pick<
+        UserData,
+        "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
+      >
+    >,
+) => {
   const { gens_cap, stats_cap } = getUserCaps(user?.rank);
 
   // Calculate max values for each stat

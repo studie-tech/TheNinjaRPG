@@ -133,6 +133,13 @@ type MasteryDistribution = {
   sageMastery: number;
 };
 
+/** Copy of the user with stats capped to its rank; the original stays untouched */
+export const withCappedStats = <T extends UserData>(user: T): T => {
+  const capped = { ...user };
+  capUserStats(capped);
+  return capped;
+};
+
 /**
  * Cap user stats to the user's rank's caps
  * @param user - the user to cap the stats of

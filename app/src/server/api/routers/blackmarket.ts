@@ -12,6 +12,7 @@ import {
   COST_REROLL_ELEMENT,
   COST_RESET_STATS,
   ElementNames,
+  getUserCaps,
   MAX_EXTRA_JUTSU_SLOTS,
   REP_TRADE_MIN_LEVEL,
   RYO_CAP,
@@ -21,7 +22,7 @@ import {
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { actionLog, ryoTrade, userData } from "@/drizzle/schema";
-import { getAssignedCombatStatTotal } from "@/libs/profile";
+import { getAssignedCombatStatTotal, withCappedStats } from "@/libs/profile";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import { fetchVillages } from "@/routers/village";
 import {
@@ -628,8 +629,26 @@ export const blackMarketRouter = createTRPCRouter({
       if (user.reputationPoints < cost) {
         return { success: false, message: "Not enough reputation points" };
       }
+      const { stats_cap, gens_cap } = getUserCaps(user.rank);
+      if (input.offence > stats_cap || input.defence > stats_cap) {
+        return errorResponse(
+          `Offence and defence cannot exceed ${stats_cap.toLocaleString()} at your rank`,
+        );
+      }
+      const generals = [
+        input.strength,
+        input.speed,
+        input.intelligence,
+        input.willpower,
+      ];
+      if (generals.some((value) => value > gens_cap)) {
+        return errorResponse(
+          `General stats cannot exceed ${gens_cap.toLocaleString()} at your rank`,
+        );
+      }
       const inputSum = round(Object.values(input).reduce((a, b) => a + b, 0));
-      const availableStats = round(getAssignedCombatStatTotal(user));
+      // Points above the rank cap never count in battle, so they are not redistributable
+      const availableStats = round(getAssignedCombatStatTotal(withCappedStats(user)));
       if (inputSum !== availableStats) {
         const message = `Requested points ${inputSum} do not match your ${availableStats} assigned combat stat points`;
         return { success: false, message };

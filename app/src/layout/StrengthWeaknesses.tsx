@@ -19,7 +19,7 @@ import ElementImage from "@/layout/ElementImage";
 import NavTabs from "@/layout/NavTabs";
 import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
 import SkillTreeFolderModal from "@/layout/SkillTreeFolderModal";
-import { capUserStats } from "@/libs/profile";
+import { withCappedStats } from "@/libs/profile";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { getStealthStatus } from "@/libs/stealth";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
@@ -36,11 +36,11 @@ const StrengthWeaknesses: React.FC = () => {
 
   // State
   type TabOptions = (typeof tabOptions)[number];
-  const { data: userData } = useRequiredUserData();
+  const { data: storedUserData } = useRequiredUserData();
   const [currentTab, setCurrentTab] = useState<TabOptions>("Graphs");
 
-  // Implement stats cap
-  if (userData) capUserStats(userData);
+  // Show rank-capped stats from a copy; the cached user keeps its stored values
+  const userData = storedUserData ? withCappedStats(storedUserData) : undefined;
 
   // Render info button for Stats and Graphs tabs
   const renderInfoButton = () => (

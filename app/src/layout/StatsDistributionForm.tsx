@@ -32,7 +32,7 @@ import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import NavTabs from "@/layout/NavTabs";
 import SliderField from "@/layout/SliderField";
-import { capUserStats } from "@/libs/profile";
+import { withCappedStats } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { round } from "@/utils/math";
@@ -194,12 +194,13 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   }, [isPending]);
 
   // Create stat schema to get caps
+  const cappedUser = withCappedStats(userData);
   const { schema: statSchema, maxValues } = createStatSchema(
     isRedistribution ? 10 : 0,
     isRedistribution ? 10 : 0,
-    isRedistribution ? undefined : userData,
+    isRedistribution ? { rank: userData.rank } : cappedUser,
   );
-  const defaultValues = statSchema.parse(isRedistribution ? userData : {});
+  const defaultValues = statSchema.parse(isRedistribution ? cappedUser : {});
 
   const specializationOptions = [
     {
@@ -404,15 +405,15 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
     false,
   );
 
-  if (userData) capUserStats(userData);
-
-  // Stats Schema
+  // Stats Schema: redistribution works in absolute rank caps, assignment in remaining room.
+  // Only a copy is capped, so the cached user keeps its stored values.
+  const cappedUser = withCappedStats(userData);
   const { schema: statSchema, maxValues } = createStatSchema(
     isRedistribution ? 10 : 0,
     isRedistribution ? 10 : 0,
-    isRedistribution ? undefined : userData,
+    isRedistribution ? { rank: userData.rank } : cappedUser,
   );
-  const defaultValues = statSchema.parse(isRedistribution ? userData : {});
+  const defaultValues = statSchema.parse(isRedistribution ? cappedUser : {});
   const statNames = Object.keys(defaultValues) as (keyof typeof defaultValues)[];
 
   // Form setup
