@@ -1,7 +1,8 @@
 // @vitest-environment node
 
+import { setSystemTime } from "bun:test";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { RYO_CAP } from "@/drizzle/constants";
 import { dailyBankInterest, userData } from "@/drizzle/schema";
 import { bankRouter, claimBankInterest } from "@/server/api/routers/bank";
@@ -28,8 +29,7 @@ describe("bank interest UTC window", () => {
 
 describeWithDatabase("bank interest claims", () => {
   beforeEach(async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-09-27T12:00:00Z"));
+    setSystemTime(new Date("2026-09-27T12:00:00Z"));
     await resetTables(dailyBankInterest, userData);
     await insertUsers([
       {
@@ -40,7 +40,7 @@ describeWithDatabase("bank interest claims", () => {
       },
     ]);
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => setSystemTime());
 
   const seedInterest = async (days: number) => {
     const db = await getTestDatabase();
@@ -129,7 +129,7 @@ describeWithDatabase("bank interest claims", () => {
 
   it("expires records at the next UTC midnight", async () => {
     const db = await seedInterest(8);
-    vi.setSystemTime(new Date("2026-09-28T00:00:00Z"));
+    setSystemTime(new Date("2026-09-28T00:00:00Z"));
     expect(await claimBankInterest(db, "interest-user")).toMatchObject({
       success: true,
       data: { claimedAmount: 700 },
