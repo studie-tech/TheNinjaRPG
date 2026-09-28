@@ -55,6 +55,12 @@ describe("user-embedded iframes", () => {
 });
 
 describe("toPrivacyEnhancedEmbedUrl", () => {
+  it("moves bare youtube-nocookie.com embeds to the www host the CSP allows", () => {
+    expect(toPrivacyEnhancedEmbedUrl("https://youtube-nocookie.com/embed/abc")).toBe(
+      "https://www.youtube-nocookie.com/embed/abc",
+    );
+  });
+
   it("moves YouTube embeds to youtube-nocookie.com", () => {
     expect(toPrivacyEnhancedEmbedUrl("https://youtube.com/embed/abc?start=5")).toBe(
       "https://www.youtube-nocookie.com/embed/abc?start=5",

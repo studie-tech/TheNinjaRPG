@@ -378,14 +378,16 @@ export const getIframeProviderName = (src: string): string => {
 };
 
 /**
- * Serve YouTube embeds from youtube-nocookie.com, which does not set YouTube's tracking
- * cookies until the viewer plays the video
+ * Serve YouTube embeds from www.youtube-nocookie.com, which does not set YouTube's
+ * tracking cookies until the viewer plays the video and is the no-cookie host the CSP
+ * allows
  */
 export const toPrivacyEnhancedEmbedUrl = (src: string): string => {
   try {
     const url = new URL(src);
     const host = url.hostname.replace(/^www\./, "");
-    if (host !== "youtube.com" || !url.pathname.startsWith("/embed/")) return src;
+    const isYouTube = host === "youtube.com" || host === "youtube-nocookie.com";
+    if (!isYouTube || !url.pathname.startsWith("/embed/")) return src;
     url.hostname = "www.youtube-nocookie.com";
     return url.toString();
   } catch {

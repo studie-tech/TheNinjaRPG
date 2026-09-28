@@ -27,6 +27,7 @@ import { useCookieConsent } from "@/hooks/useCookieConsent";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import { readCampaignSource, storeCampaignSource } from "@/libs/campaignSource";
 import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { cn } from "@/libs/shadui";
 import { bunnyImageUrl } from "@/utils/image";
@@ -1060,17 +1061,14 @@ const SetReferal = () => {
     // Recruiter whose referral link the visitor followed, credited at registration
     const ref = searchParams?.get("ref");
     if (ref) safeLocalStorageSetItem("ref", ref);
-    // Campaign source for registration attribution. Keeping it on the device needs
-    // statistics consent; without it, registration falls back to the logged visit.
+    // Campaign source for registration attribution; reruns once consent arrives
     const utmSource = searchParams?.get("utm_source") ?? undefined;
-    if (utmSource && hasStatisticsConsent) {
-      safeLocalStorageSetItem("utm_source", utmSource);
-    }
+    if (utmSource && hasStatisticsConsent) storeCampaignSource(utmSource);
     if (!isVisitReported && isLoaded && !isSignedIn) {
       isVisitReported = true;
       trackVisitor({
         ref: safeLocalStorageGetItem("ref") ?? undefined,
-        utmSource: utmSource ?? safeLocalStorageGetItem("utm_source") ?? undefined,
+        utmSource: utmSource ?? readCampaignSource(),
       });
     }
   }, [searchParams, hasStatisticsConsent, isLoaded, isSignedIn, trackVisitor]);

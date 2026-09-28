@@ -46,6 +46,7 @@ import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { readCampaignSource } from "@/libs/campaignSource";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 import {
@@ -349,7 +350,7 @@ const RegisterForm: React.FC = () => {
       form.setValue("recruiter_userid", referrer);
     }
     // Source
-    const source = safeLocalStorageGetItem("utm_source");
+    const source = readCampaignSource();
     if (source) {
       form.setValue("utm_source", source);
     }

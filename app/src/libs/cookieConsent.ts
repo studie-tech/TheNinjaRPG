@@ -9,6 +9,7 @@ export type ConsentCategory = "preferences" | "statistics" | "marketing";
 
 interface CookiebotApi {
   consent?: Partial<Record<ConsentCategory, boolean>>;
+  hasResponse?: boolean;
   renew?: () => void;
 }
 
@@ -29,6 +30,16 @@ const CONSENT_EVENTS = [
 export const hasCookieConsent = (category: ConsentCategory): boolean => {
   if (typeof window === "undefined") return false;
   return window.Cookiebot?.consent?.[category] === true;
+};
+
+/**
+ * Whether the visitor has answered the consent dialog without opting into the category.
+ * Unlike `!hasCookieConsent`, this is false while Cookiebot is still loading or absent.
+ */
+export const hasDeclinedCookieConsent = (category: ConsentCategory): boolean => {
+  if (typeof window === "undefined") return false;
+  const cookiebot = window.Cookiebot;
+  return cookiebot?.hasResponse === true && cookiebot.consent?.[category] !== true;
 };
 
 export const subscribeToCookieConsent = (onChange: () => void): (() => void) => {
