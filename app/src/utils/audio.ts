@@ -358,6 +358,38 @@ export const isAllowedIframeUrl = (src: string): boolean => {
 };
 
 /**
+ * Name of the service behind an allowed iframe URL, shown on its click-to-load placeholder
+ */
+export const getIframeProviderName = (src: string): string => {
+  try {
+    const host = new URL(src).hostname.replace(/^www\./, "");
+    if (host.startsWith("youtube") || host === "youtu.be") return "YouTube";
+    if (host.endsWith("vimeo.com")) return "Vimeo";
+    if (host.endsWith("soundcloud.com")) return "SoundCloud";
+    if (host.endsWith("spotify.com")) return "Spotify";
+  } catch {
+    // Unparseable URLs never pass isAllowedIframeUrl; fall through to a generic label
+  }
+  return "an external site";
+};
+
+/**
+ * Serve YouTube embeds from youtube-nocookie.com, which does not set YouTube's tracking
+ * cookies until the viewer plays the video
+ */
+export const toPrivacyEnhancedEmbedUrl = (src: string): string => {
+  try {
+    const url = new URL(src);
+    const host = url.hostname.replace(/^www\./, "");
+    if (host !== "youtube.com" || !url.pathname.startsWith("/embed/")) return src;
+    url.hostname = "www.youtube-nocookie.com";
+    return url.toString();
+  } catch {
+    return src;
+  }
+};
+
+/**
  * Remove autoplay permission from an iframe
  * @param iframe - The iframe element to remove autoplay permission from
  * @returns void

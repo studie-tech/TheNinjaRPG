@@ -4,9 +4,10 @@ import type { Transform } from "react-html-parser";
 import ReactHtmlParser from "react-html-parser";
 import { Quote } from "@/components/ui/quote";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { ConsentGatedIframe } from "@/layout/ConsentGatedIframe";
 import EmbeddedConceptArt from "@/layout/EmbeddedConceptArt";
 import { randomString } from "@/libs/random";
-import { isAllowedIframeUrl } from "@/utils/audio";
+import { isAllowedIframeUrl, toPrivacyEnhancedEmbedUrl } from "@/utils/audio";
 import { isPlainObject } from "@/utils/typeutils";
 
 // Default length for randomly generated alt text when images lack alt attributes
@@ -225,7 +226,7 @@ const transformIframeNode = (iframeNode: HtmlNode): React.ReactElement | undefin
   const props: React.IframeHTMLAttributes<HTMLIFrameElement> & {
     "data-user-iframe"?: string;
   } = {
-    src: sourceUrl,
+    src: toPrivacyEnhancedEmbedUrl(sourceUrl),
     width,
     height,
     title,
@@ -236,15 +237,23 @@ const transformIframeNode = (iframeNode: HtmlNode): React.ReactElement | undefin
     allowFullScreen,
     frameBorder,
     sandbox: "allow-scripts allow-same-origin",
-    referrerPolicy: "no-referrer",
+    // YouTube rejects embeds without a referrer (player error 153); the origin alone
+    // satisfies it without exposing the page path
+    referrerPolicy: "strict-origin-when-cross-origin",
     "data-user-iframe": "true",
   };
 
   const filteredProperties = Object.fromEntries(
     Object.entries(props).filter(([, value]) => value !== undefined),
-  ) as React.IframeHTMLAttributes<HTMLIFrameElement> & { "data-user-iframe"?: string };
+  ) as React.IframeHTMLAttributes<HTMLIFrameElement> & {
+    src: string;
+    "data-user-iframe"?: string;
+  };
 
-  return React.createElement("iframe", { ...filteredProperties, key: sourceUrl });
+  return React.createElement(ConsentGatedIframe, {
+    ...filteredProperties,
+    key: sourceUrl,
+  });
 };
 
 /**

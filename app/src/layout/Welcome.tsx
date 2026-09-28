@@ -23,6 +23,7 @@ import {
 } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { useCookieConsent } from "@/hooks/useCookieConsent";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -1049,6 +1050,9 @@ const VISITOR_TRACKED_KEY = "visitor_tracked_v2";
 const SetReferal = () => {
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded } = useUser();
+  // VisitorLog stores the visitor's IP and user agent, which is analytics the visitor has
+  // to opt into; the effect reruns when Cookiebot reports the consent.
+  const hasStatisticsConsent = useCookieConsent("statistics");
   const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation({
     onSuccess: (result) => {
       if (result.success) safeLocalStorageSetItem(VISITOR_TRACKED_KEY, "1");
@@ -1063,12 +1067,12 @@ const SetReferal = () => {
     if (utm_source) safeLocalStorageSetItem("utm_source", utm_source);
     // Track anonymous visitor once
     const alreadyTracked = safeLocalStorageGetItem(VISITOR_TRACKED_KEY);
-    if (!alreadyTracked && isLoaded && !isSignedIn) {
+    if (!alreadyTracked && hasStatisticsConsent && isLoaded && !isSignedIn) {
       const savedRef = safeLocalStorageGetItem("ref") ?? undefined;
       const savedUtm = safeLocalStorageGetItem("utm_source") ?? undefined;
       trackVisitor({ ref: savedRef, utmSource: savedUtm });
     }
-  }, [searchParams, isLoaded, isSignedIn, trackVisitor]);
+  }, [searchParams, hasStatisticsConsent, isLoaded, isSignedIn, trackVisitor]);
   return null;
 };
 
