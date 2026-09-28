@@ -355,8 +355,15 @@
     {
       "idx": 50,
       "version": "5",
-      "when": 1790593709696,
-      "tag": "0050_unified_combat_stats_masteries",
+      "when": 1790594215140,
+      "tag": "0050_secret_sentinels",
+      "breakpoints": false
+    },
+    {
+      "idx": 51,
+      "version": "5",
+      "when": 1790594586083,
+      "tag": "0051_unified_combat_stats_masteries",
       "breakpoints": false
     }
   ]
