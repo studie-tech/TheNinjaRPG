@@ -308,8 +308,11 @@ export const profileRouter = createTRPCRouter({
         .set({ tutorialStep: input.step })
         .where(eq(userData.userId, ctx.userId));
 
-      // AB Test success
-      if (input.step === TUTORIAL_STEPS_COUNT) {
+      // AB Test success. Loaded events are only ever logged with an IP, so without one
+      // there is no visit to attribute the success to.
+      const ipHash =
+        ctx.userIp && ctx.userIp !== "unknown" ? hashIp(ctx.userIp) : undefined;
+      if (input.step === TUTORIAL_STEPS_COUNT && ipHash) {
         const experiments = getLayoutExperimentAssignments({
           abPixelLayoutVariant: ctx.abPixelLayoutVariant,
           abLemuReplacementVariant: ctx.abLemuReplacementVariant,
@@ -318,9 +321,7 @@ export const profileRouter = createTRPCRouter({
           experiments.map(async (experiment) => {
             const abLoadedEvent = await ctx.drizzle.query.abEvent.findFirst({
               where: and(
-                ctx.userIp && ctx.userIp !== "unknown"
-                  ? eq(abEvent.ipHash, hashIp(ctx.userIp))
-                  : isNull(abEvent.ipHash),
+                eq(abEvent.ipHash, ipHash),
                 eq(abEvent.experiment, experiment.experiment),
                 eq(abEvent.event, "loaded"),
               ),
@@ -335,10 +336,7 @@ export const profileRouter = createTRPCRouter({
                 variant: experiment.variant,
                 event: "success",
                 source: abLoadedEvent.source,
-                ipHash:
-                  ctx.userIp && ctx.userIp !== "unknown"
-                    ? hashIp(ctx.userIp)
-                    : undefined,
+                ipHash,
                 userAgent:
                   typeof ctx.userAgent === "string"
                     ? ctx.userAgent.slice(0, 180)
