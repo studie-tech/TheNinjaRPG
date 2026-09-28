@@ -138,7 +138,7 @@ export default async function RootLayout({
                   <PWAManager />
                   <NativeBridge />
                   <InstallPrompt />
-                  <SpeedInsights sampleRate={0.03} />
+                  <SpeedInsights sampleRate={0.2} />
                 </InstallPromptProvider>
               </UserContextProvider>
             </TrpcClientProvider>
