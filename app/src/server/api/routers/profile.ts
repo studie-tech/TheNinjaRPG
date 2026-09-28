@@ -150,6 +150,7 @@ import {
 } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { getFarmCollectionCount } from "@/server/utils/farming";
+import { hashIp } from "@/server/utils/ipHash";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -318,8 +319,8 @@ export const profileRouter = createTRPCRouter({
             const abLoadedEvent = await ctx.drizzle.query.abEvent.findFirst({
               where: and(
                 ctx.userIp && ctx.userIp !== "unknown"
-                  ? eq(abEvent.ip, ctx.userIp)
-                  : isNull(abEvent.ip),
+                  ? eq(abEvent.ipHash, hashIp(ctx.userIp))
+                  : isNull(abEvent.ipHash),
                 eq(abEvent.experiment, experiment.experiment),
                 eq(abEvent.event, "loaded"),
               ),
@@ -334,7 +335,10 @@ export const profileRouter = createTRPCRouter({
                 variant: experiment.variant,
                 event: "success",
                 source: abLoadedEvent.source,
-                ip: ctx.userIp && ctx.userIp !== "unknown" ? ctx.userIp : undefined,
+                ipHash:
+                  ctx.userIp && ctx.userIp !== "unknown"
+                    ? hashIp(ctx.userIp)
+                    : undefined,
                 userAgent:
                   typeof ctx.userAgent === "string"
                     ? ctx.userAgent.slice(0, 180)
@@ -3110,9 +3114,10 @@ const persistPassiveRegenToDb = async ({
           .values({
             userId,
             ip: userIp,
+            ipHash: hashIp(userIp),
           })
           .onDuplicateKeyUpdate({
-            set: { usedAt: new Date() },
+            set: { usedAt: new Date(), ipHash: hashIp(userIp) },
           })
       : Promise.resolve(null);
 

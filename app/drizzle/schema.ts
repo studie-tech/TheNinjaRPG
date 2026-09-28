@@ -2739,6 +2739,8 @@ export const historicalIp = mysqlTable(
     id: int("id").primaryKey().autoincrement().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     ip: varchar("ip", { length: 191 }).notNull(),
+    // hashIp(ip): joins accounts to the pseudonymous VisitorLog and AbEvent rows
+    ipHash: varchar("ipHash", { length: 64 }),
     usedAt: datetime("usedAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -2748,6 +2750,7 @@ export const historicalIp = mysqlTable(
       userIdIpKey: uniqueIndex("HistoricalIp_userId_ip_key").on(table.userId, table.ip),
       userIdIdx: index("HistoricalIp_userId_idx").on(table.userId),
       userIpIdx: index("HistoricalIp_userIp_idx").on(table.ip),
+      ipHashIdx: index("HistoricalIp_ipHash_idx").on(table.ipHash),
       usedAtIdx: index("HistoricalIp_usedAt_idx").on(table.usedAt),
     };
   },
@@ -5059,7 +5062,9 @@ export const abEvent = mysqlTable(
     variant: varchar("variant", { length: 191 }).notNull(),
     event: varchar("event", { length: 191 }).notNull(),
     source: varchar("source", { length: 191 }),
+    // Raw address, present only on rows written before ipHash; nothing writes it any more
     ip: varchar("ip", { length: 191 }),
+    ipHash: varchar("ipHash", { length: 64 }),
     userAgent: varchar("userAgent", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
@@ -5076,6 +5081,11 @@ export const abEvent = mysqlTable(
         table.event,
         table.ip,
       ),
+      experimentEventIpHashUnique: uniqueIndex("AbEvent_experiment_event_ipHash_key").on(
+        table.experiment,
+        table.event,
+        table.ipHash,
+      ),
       createdAtIdx: index("AbEvent_createdAt_idx").on(table.createdAt),
     };
   },
@@ -5087,7 +5097,9 @@ export const visitorLog = mysqlTable(
   "VisitorLog",
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
-    ip: varchar("ip", { length: 191 }).notNull(),
+    // Raw address, present only on rows written before ipHash; nothing writes it any more
+    ip: varchar("ip", { length: 191 }),
+    ipHash: varchar("ipHash", { length: 64 }),
     ref: varchar("ref", { length: 191 }),
     utmSource: varchar("utmSource", { length: 191 }),
     userAgent: varchar("userAgent", { length: 191 }),
@@ -5098,12 +5110,13 @@ export const visitorLog = mysqlTable(
   (table) => {
     return {
       ipUnique: uniqueIndex("VisitorLog_ip_key").on(table.ip),
+      ipHashUnique: uniqueIndex("VisitorLog_ipHash_key").on(table.ipHash),
       refIdx: index("VisitorLog_ref_idx").on(table.ref),
       utmSourceIdx: index("VisitorLog_utmSource_idx").on(table.utmSource),
       createdAtIdx: index("VisitorLog_createdAt_idx").on(table.createdAt),
-      // Composite index for revenue analytics join (ip) + filter (utmSource)
-      ipUtmSourceIdx: index("VisitorLog_ip_utmSource_idx").on(
-        table.ip,
+      // Composite index for revenue analytics join (ipHash) + filter (utmSource)
+      ipHashUtmSourceIdx: index("VisitorLog_ipHash_utmSource_idx").on(
+        table.ipHash,
         table.utmSource,
       ),
     };

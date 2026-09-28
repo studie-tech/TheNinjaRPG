@@ -1042,35 +1042,31 @@ const usePixelHeroVideoPlayback = (
   }, [videoRef, scrollContainerRef]);
 };
 
-// Bumped from "visitor_tracked" so visitors whose flag was set while the mutation was
-// being rejected client-side get one more chance to be counted. Re-tracking an already
-// known visitor is a no-op server-side thanks to the duplicate-key guards.
-const VISITOR_TRACKED_KEY = "visitor_tracked_v2";
+// VisitorLog is keyed on a hash of the IP and deduplicated by the server, so the visit is
+// reported once per page load without keeping a marker on the device
+let isVisitReported = false;
 
 const SetReferal = () => {
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded } = useUser();
-  // VisitorLog stores the visitor's IP and user agent, which is analytics the visitor has
-  // to opt into; the effect reruns when Cookiebot reports the consent.
   const hasStatisticsConsent = useCookieConsent("statistics");
-  const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation({
-    onSuccess: (result) => {
-      if (result.success) safeLocalStorageSetItem(VISITOR_TRACKED_KEY, "1");
-    },
-  });
+  const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation();
   useEffect(() => {
-    // Set reference user
+    // Recruiter whose referral link the visitor followed, credited at registration
     const ref = searchParams?.get("ref");
     if (ref) safeLocalStorageSetItem("ref", ref);
-    // Source
-    const utm_source = searchParams?.get("utm_source");
-    if (utm_source) safeLocalStorageSetItem("utm_source", utm_source);
-    // Track anonymous visitor once
-    const alreadyTracked = safeLocalStorageGetItem(VISITOR_TRACKED_KEY);
-    if (!alreadyTracked && hasStatisticsConsent && isLoaded && !isSignedIn) {
-      const savedRef = safeLocalStorageGetItem("ref") ?? undefined;
-      const savedUtm = safeLocalStorageGetItem("utm_source") ?? undefined;
-      trackVisitor({ ref: savedRef, utmSource: savedUtm });
+    // Campaign source for registration attribution. Keeping it on the device needs
+    // statistics consent; without it, registration falls back to the logged visit.
+    const utmSource = searchParams?.get("utm_source") ?? undefined;
+    if (utmSource && hasStatisticsConsent) {
+      safeLocalStorageSetItem("utm_source", utmSource);
+    }
+    if (!isVisitReported && isLoaded && !isSignedIn) {
+      isVisitReported = true;
+      trackVisitor({
+        ref: safeLocalStorageGetItem("ref") ?? undefined,
+        utmSource: utmSource ?? safeLocalStorageGetItem("utm_source") ?? undefined,
+      });
     }
   }, [searchParams, hasStatisticsConsent, isLoaded, isSignedIn, trackVisitor]);
   return null;

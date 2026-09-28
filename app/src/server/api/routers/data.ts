@@ -242,7 +242,7 @@ export const dataRouter = createTRPCRouter({
             userAgent: visitorLog.userAgent,
           })
           .from(visitorLog)
-          .innerJoin(historicalIp, eq(historicalIp.ip, visitorLog.ip))
+          .innerJoin(historicalIp, eq(historicalIp.ipHash, visitorLog.ipHash))
           .leftJoin(userData, eq(userData.userId, historicalIp.userId))
           .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
           .where(
@@ -264,7 +264,7 @@ export const dataRouter = createTRPCRouter({
             tutorialOn: userData.tutorialOn,
           })
           .from(visitorLog)
-          .innerJoin(historicalIp, eq(historicalIp.ip, visitorLog.ip))
+          .innerJoin(historicalIp, eq(historicalIp.ipHash, visitorLog.ipHash))
           .innerJoin(userData, eq(userData.userId, historicalIp.userId))
           .where(
             and(
@@ -282,7 +282,7 @@ export const dataRouter = createTRPCRouter({
             tutorialOn: userData.tutorialOn,
           })
           .from(visitorLog)
-          .innerJoin(historicalIp, eq(historicalIp.ip, visitorLog.ip))
+          .innerJoin(historicalIp, eq(historicalIp.ipHash, visitorLog.ipHash))
           .innerJoin(userData, eq(userData.userId, historicalIp.userId))
           .where(
             and(
@@ -300,7 +300,7 @@ export const dataRouter = createTRPCRouter({
             userAgent: visitorLog.userAgent,
           })
           .from(visitorLog)
-          .innerJoin(historicalIp, eq(historicalIp.ip, visitorLog.ip))
+          .innerJoin(historicalIp, eq(historicalIp.ipHash, visitorLog.ipHash))
           .innerJoin(userData, eq(userData.userId, historicalIp.userId))
           .where(
             and(
@@ -317,7 +317,7 @@ export const dataRouter = createTRPCRouter({
             userAgent: visitorLog.userAgent,
           })
           .from(visitorLog)
-          .innerJoin(historicalIp, eq(historicalIp.ip, visitorLog.ip))
+          .innerJoin(historicalIp, eq(historicalIp.ipHash, visitorLog.ipHash))
           .innerJoin(userData, eq(userData.userId, historicalIp.userId))
           .where(
             and(
@@ -340,7 +340,7 @@ export const dataRouter = createTRPCRouter({
           .from(paypalTransaction)
           .innerJoin(userData, eq(paypalTransaction.createdById, userData.userId))
           .innerJoin(historicalIp, eq(historicalIp.userId, userData.userId))
-          .innerJoin(visitorLog, eq(visitorLog.ip, historicalIp.ip))
+          .innerJoin(visitorLog, eq(visitorLog.ipHash, historicalIp.ipHash))
           .where(
             and(
               ...(input.utmSource && input.utmSource.length > 0
@@ -356,7 +356,7 @@ export const dataRouter = createTRPCRouter({
             userId: userData.userId,
           })
           .from(visitorLog)
-          .innerJoin(historicalIp, eq(historicalIp.ip, visitorLog.ip))
+          .innerJoin(historicalIp, eq(historicalIp.ipHash, visitorLog.ipHash))
           .leftJoin(userData, eq(userData.userId, historicalIp.userId))
           .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
           .where(
@@ -392,7 +392,7 @@ export const dataRouter = createTRPCRouter({
               .from(questHistory)
               .innerJoin(userData, eq(userData.userId, questHistory.userId))
               .innerJoin(historicalIp, eq(historicalIp.userId, userData.userId))
-              .innerJoin(visitorLog, eq(visitorLog.ip, historicalIp.ip))
+              .innerJoin(visitorLog, eq(visitorLog.ipHash, historicalIp.ipHash))
               .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
               .where(
                 and(
@@ -428,7 +428,7 @@ export const dataRouter = createTRPCRouter({
           .from(questHistory)
           .innerJoin(userData, eq(userData.userId, questHistory.userId))
           .innerJoin(historicalIp, eq(historicalIp.userId, userData.userId))
-          .innerJoin(visitorLog, eq(visitorLog.ip, historicalIp.ip))
+          .innerJoin(visitorLog, eq(visitorLog.ipHash, historicalIp.ipHash))
           .innerJoin(referralSource, eq(referralSource.userId, userData.userId))
           .innerJoin(quest, eq(quest.id, questHistory.questId))
           .where(
@@ -751,7 +751,7 @@ export const dataRouter = createTRPCRouter({
         .from(paypalTransaction)
         .innerJoin(userData, eq(paypalTransaction.createdById, userData.userId))
         .innerJoin(historicalIp, eq(historicalIp.userId, userData.userId))
-        .innerJoin(visitorLog, eq(visitorLog.ip, historicalIp.ip))
+        .innerJoin(visitorLog, eq(visitorLog.ipHash, historicalIp.ipHash))
         .where(and(...whereConditions))
         .groupBy(visitorLog.utmSource)
         .orderBy(asc(visitorLog.utmSource));

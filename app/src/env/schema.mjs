@@ -48,6 +48,8 @@ export const serverSchema = z.object({
   AI_TEST_USER_BROKER_TOKEN: z.string().optional(),
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: z.string().optional(),
+  // Key for the IP hashes in visitor analytics; changing it breaks every stored join
+  IP_HASH_SECRET: z.string().optional(),
   // Apple Push Notification service. APNS_PRIVATE_KEY holds the contents of the .p8
   // key file; newlines may be escaped as \n because most secret stores are single-line.
   APNS_KEY_ID: z.string().optional(),
@@ -113,6 +115,7 @@ export const serverEnv = {
     process.env.NATIVE_CLERK_PROXY_ENABLED
   ),
   AI_TEST_USER_BROKER_TOKEN: process.env.AI_TEST_USER_BROKER_TOKEN,
+  IP_HASH_SECRET: process.env.IP_HASH_SECRET,
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,
   // Apple Push Notification service
