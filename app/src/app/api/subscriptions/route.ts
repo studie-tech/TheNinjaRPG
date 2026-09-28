@@ -34,7 +34,7 @@ export async function GET(request: Request) {
         ),
       ),
     });
-    void paypalSubscriptions.map(async (subscription) => {
+    const paypalUpdates = paypalSubscriptions.map(async (subscription) => {
       const paypalSub = await getPaypalSubscription(subscription.subscriptionId, token);
       if (paypalSub) {
         const paypalStatus = paypalSub.status;
@@ -65,6 +65,8 @@ export async function GET(request: Request) {
       }
     });
 
+    await Promise.all(paypalUpdates);
+
     // Subscriptions without orderIds are from Reputation points
     const repSubscriptions = await drizzleDB.query.paypalSubscription.findMany({
       where: and(
@@ -76,7 +78,7 @@ export async function GET(request: Request) {
         ),
       ),
     });
-    void repSubscriptions.map(async (subscription) => {
+    const repUpdates = repSubscriptions.map(async (subscription) => {
       const isDone =
         new Date(subscription.updatedAt) <
         new Date(Date.now() - 1000 * 60 * 60 * 24 * 31);
@@ -95,6 +97,7 @@ export async function GET(request: Request) {
         isDone ? "NONE" : subscription.federalStatus,
       );
     });
+    await Promise.all(repUpdates);
     return Response.json(`OK`);
   } catch (cause) {
     console.error(cause);
