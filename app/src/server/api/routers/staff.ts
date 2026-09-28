@@ -894,7 +894,7 @@ export const staffRouter = createTRPCRouter({
       if (claim?.newUserId !== input.newUserId) {
         return { success: false, message: "UserId was already renamed to another id" };
       }
-      await Promise.all([
+      const moves = await Promise.allSettled([
         ctx.drizzle
           .update(aiProfile)
           .set({ userId: input.newUserId })
@@ -1167,6 +1167,10 @@ export const staffRouter = createTRPCRouter({
           .set({ userId: input.newUserId })
           .where(eq(userData.userId, input.userId)),
       ]);
+      // Answer only once every move has settled, so the retry a failure invites never
+      // races moves still in flight.
+      const failed = moves.find((move) => move.status === "rejected");
+      if (failed) throw failed.reason;
       return { success: true, message: "UserId updated" };
     }),
   // Delete referral from user
