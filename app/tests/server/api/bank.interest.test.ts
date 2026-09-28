@@ -1,4 +1,4 @@
-// @vitest-environment node
+/// <reference types="bun-types/test" />
 
 import { setSystemTime } from "bun:test";
 import { eq } from "drizzle-orm";
