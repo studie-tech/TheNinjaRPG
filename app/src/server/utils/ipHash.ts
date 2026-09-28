@@ -12,9 +12,11 @@ import { env } from "@/env/server.mjs";
  * value. Length extension is irrelevant: the hash only has to be unguessable, it never
  * authenticates a message.
  */
-export const hashIp = (ip: string): string =>
+export const hashIp = (ip: string): string => hashIpWithKey(ip, getIpHashSecret());
+
+export const hashIpWithKey = (ip: string, key: string): string =>
   createHash("sha256")
-    .update(getIpHashSecret() + ip)
+    .update(key + ip)
     .digest("hex");
 
 const getIpHashSecret = (): string => {

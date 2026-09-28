@@ -31,7 +31,7 @@ export const contentSecurityPolicy = (origin) => {
   const csp = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline' *.google-analytics.com *.analytics.google.com *.googletagmanager.com *.doubleclick.net *.clerk.accounts.dev *.vercel.live *.paypal.com *.paypalobjects.com *.tiny.cloud *.theninja-rpg.com *.theninja-rpg.ai *.opendns.com *.cookiebot.com *.termly.io connect.facebook.net va.vercel-scripts.com *.redditstatic.com analytics.tiktok.com clerk.www.theninja-rpg.ai clerk.www.theninja-rpg.com challenges.cloudflare.com${zone};
-  child-src 'self' *.doubleclick.net *.paypal.com ghbtns.com *.youtube.com www.youtube-nocookie.com *.widgetbot.io *.cookiebot.com *.termly.io *.googletagmanager.com https://fastsvr.com https://www.facebook.com challenges.cloudflare.com;
+  child-src 'self' *.doubleclick.net *.paypal.com ghbtns.com *.youtube.com www.youtube-nocookie.com player.vimeo.com w.soundcloud.com open.spotify.com *.widgetbot.io *.cookiebot.com *.termly.io *.googletagmanager.com https://fastsvr.com https://www.facebook.com challenges.cloudflare.com;
   style-src 'self' 'unsafe-inline' *.googleapis.com *.tiny.cloud${zone};
   img-src * blob: data:;
   media-src 'self' https://uploadthing.b-cdn.net https://*.ufs.sh;

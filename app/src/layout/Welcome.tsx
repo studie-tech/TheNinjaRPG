@@ -1050,7 +1050,12 @@ const SetReferal = () => {
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded } = useUser();
   const hasStatisticsConsent = useCookieConsent("statistics");
-  const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation();
+  const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation({
+    // A failed report may be retried on the next render of the landing page
+    onSettled: (result) => {
+      if (!result?.success) isVisitReported = false;
+    },
+  });
   useEffect(() => {
     // Recruiter whose referral link the visitor followed, credited at registration
     const ref = searchParams?.get("ref");

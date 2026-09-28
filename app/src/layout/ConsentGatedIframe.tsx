@@ -62,10 +62,15 @@ const getPlaceholderStyle = (
 ): React.CSSProperties => {
   const numericWidth = Number(width);
   const numericHeight = Number(height);
-  const hasPixelSize = numericWidth > 0 && numericHeight > 0;
+  const hasWidth = numericWidth > 0;
+  const hasHeight = numericHeight > 0;
+  if (hasHeight && !hasWidth) {
+    return { width: "100%", height: `${numericHeight}px` };
+  }
   return {
-    width: hasPixelSize ? `${numericWidth}px` : "100%",
+    width: hasWidth ? `${numericWidth}px` : "100%",
     maxWidth: "100%",
-    aspectRatio: hasPixelSize ? `${numericWidth} / ${numericHeight}` : "16 / 9",
+    aspectRatio:
+      hasWidth && hasHeight ? `${numericWidth} / ${numericHeight}` : "16 / 9",
   };
 };
