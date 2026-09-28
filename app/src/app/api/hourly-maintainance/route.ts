@@ -2,11 +2,13 @@ import { and, count, eq, gte, lt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
+  abEvent,
   type BountyContribution,
   bounty,
   bountyContribution,
   bountySignup,
   userData,
+  visitorLog,
 } from "@/drizzle/schema";
 import {
   handleEndpointError,
@@ -15,10 +17,12 @@ import {
 } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
-import { secondsFromNow } from "@/utils/time";
+import { MONTH_S, secondsFromNow } from "@/utils/time";
 
 const ENDPOINT_NAME = "hourly-maintainance";
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+// Visitor analytics are pseudonymous first-party statistics, kept for 13 months
+const VISITOR_ANALYTICS_RETENTION_S = 13 * MONTH_S;
 
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
@@ -33,9 +37,10 @@ export async function GET(request: Request) {
 
   try {
     // Expired bounties
-    const [expiredBounties, activeCount] = await Promise.all([
+    const [expiredBounties, activeCount, expiredAnalytics] = await Promise.all([
       bountyExpire(),
       dailyActivePlayers(),
+      deleteExpiredVisitorAnalytics(),
     ]);
 
     // Return response
@@ -44,6 +49,7 @@ export async function GET(request: Request) {
       message: `Expired ${expiredBounties.length} bounties and refunded all contributions and updated active players count to ${activeCount}`,
       expiredBountiesCount: expiredBounties.length,
       activeCount: activeCount,
+      expiredAnalytics,
     });
   } catch (error) {
     return await handleEndpointError(error);
@@ -120,4 +126,16 @@ const dailyActivePlayers = async () => {
   await updateGameSetting(drizzleDB, ENDPOINT_NAME, activeCount, new Date());
 
   return activeCount;
+};
+
+/**
+ * Delete visitor analytics older than their retention period
+ */
+const deleteExpiredVisitorAnalytics = async () => {
+  const cutoff = secondsFromNow(-VISITOR_ANALYTICS_RETENTION_S);
+  const [visits, abEvents] = await Promise.all([
+    drizzleDB.delete(visitorLog).where(lt(visitorLog.createdAt, cutoff)),
+    drizzleDB.delete(abEvent).where(lt(abEvent.createdAt, cutoff)),
+  ]);
+  return { visits: visits.rowsAffected, abEvents: abEvents.rowsAffected };
 };

@@ -7,10 +7,10 @@ import { env } from "@/env/server.mjs";
  * The same IP always yields the same hash, but without IP_HASH_SECRET it cannot be
  * reversed by hashing the IPv4 space.
  *
- * The hash is SHA-256(secret + ip) rather than an HMAC so that stored addresses can be
- * hashed in place with MySQL's `SHA2(CONCAT(secret, ip), 256)`, which yields the identical
- * value. Length extension is irrelevant: the hash only has to be unguessable, it never
- * authenticates a message.
+ * The construction is SHA-256(secret + ip), which MySQL reproduces as
+ * `SHA2(CONCAT(secret, ip), 256)`; stored hashes depend on it, so it cannot change without
+ * breaking every join. Length extension is irrelevant: the hash only has to be
+ * unguessable, it never authenticates a message.
  */
 export const hashIp = (ip: string): string => hashIpWithKey(ip, getIpHashSecret());
 
