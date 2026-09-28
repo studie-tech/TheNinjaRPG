@@ -21,8 +21,6 @@ export async function GET(request: Request) {
 
   // Create context and caller
   try {
-    const token = await getPaypalAccessToken();
-
     // Subscriptions with orderId are from PayPal
     const paypalSubscriptions = await drizzleDB.query.paypalSubscription.findMany({
       where: and(
@@ -34,8 +32,14 @@ export async function GET(request: Request) {
         ),
       ),
     });
+    const token = paypalSubscriptions.length
+      ? getPaypalAccessToken()
+      : Promise.resolve("");
     const paypalUpdates = paypalSubscriptions.map(async (subscription) => {
-      const paypalSub = await getPaypalSubscription(subscription.subscriptionId, token);
+      const paypalSub = await getPaypalSubscription(
+        subscription.subscriptionId,
+        await token,
+      );
       if (paypalSub) {
         const paypalStatus = paypalSub.status;
         const newFedStatus = plan2FedStatus(paypalSub.plan_id);
@@ -64,8 +68,6 @@ export async function GET(request: Request) {
         );
       }
     });
-
-    await Promise.all(paypalUpdates);
 
     // Subscriptions without orderIds are from Reputation points
     const repSubscriptions = await drizzleDB.query.paypalSubscription.findMany({
@@ -97,7 +99,9 @@ export async function GET(request: Request) {
         isDone ? "NONE" : subscription.federalStatus,
       );
     });
-    await Promise.all(repUpdates);
+    const results = await Promise.allSettled([...paypalUpdates, ...repUpdates]);
+    const failedUpdate = results.find((result) => result.status === "rejected");
+    if (failedUpdate?.status === "rejected") throw failedUpdate.reason;
     return Response.json(`OK`);
   } catch (cause) {
     console.error(cause);
