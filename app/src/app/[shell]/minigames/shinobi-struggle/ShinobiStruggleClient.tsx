@@ -4,7 +4,7 @@ import "@blockstruggle/game-ui/style.css";
 import { useAuth } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useCallback, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const NinjaMiniGame = dynamic(
   () => import("@blockstruggle/game-ui").then((module) => module.NinjaMiniGame),
@@ -18,10 +18,14 @@ export default function ShinobiStruggleClient({
 }) {
   const router = useRouter();
   const { getToken, isLoaded, sessionId } = useAuth();
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
   const fetchGame = useCallback(
     (input: RequestInfo | URL, init?: RequestInit) =>
-      fetchAuthenticatedGame(input, init, getToken),
-    [getToken],
+      fetchAuthenticatedGame(input, init, () => getTokenRef.current()),
+    [],
   );
   const [linkedVersion, setLinkedVersion] = useState(0);
   if (!isLoaded) return <p role="status">Connecting to TheNinjaRPG…</p>;
