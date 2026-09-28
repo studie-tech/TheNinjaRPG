@@ -1,9 +1,10 @@
 "use client";
 
 import "@blockstruggle/game-ui/style.css";
+import { useAuth } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useCallback, useState } from "react";
 
 const NinjaMiniGame = dynamic(
   () => import("@blockstruggle/game-ui").then((module) => module.NinjaMiniGame),
@@ -16,14 +17,25 @@ export default function ShinobiStruggleClient({
   initialMatchId?: string;
 }) {
   const router = useRouter();
+  const { getToken, isLoaded, sessionId } = useAuth();
+  const fetchGame = useCallback(
+    (input: RequestInfo | URL, init?: RequestInit) =>
+      fetchAuthenticatedGame(input, init, getToken),
+    [getToken],
+  );
   const [linkedVersion, setLinkedVersion] = useState(0);
+  if (!isLoaded) return <p role="status">Connecting to TheNinjaRPG…</p>;
   return (
     <>
       {process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED === "true" && (
-        <IdentityLinkForm onLinked={() => setLinkedVersion((version) => version + 1)} />
+        <IdentityLinkForm
+          fetchGame={fetchGame}
+          onLinked={() => setLinkedVersion((version) => version + 1)}
+        />
       )}
       <NinjaMiniGame
-        key={`${initialMatchId ?? "lobby"}:${linkedVersion}`}
+        key={`${sessionId ?? "signed-out"}:${initialMatchId ?? "lobby"}:${linkedVersion}`}
+        fetcher={fetchGame}
         initialMatchId={initialMatchId}
         onExit={() => router.push("/minigames")}
         onSignIn={() =>
@@ -34,7 +46,13 @@ export default function ShinobiStruggleClient({
   );
 }
 
-const IdentityLinkForm = ({ onLinked }: { onLinked: () => void }) => {
+const IdentityLinkForm = ({
+  fetchGame,
+  onLinked,
+}: {
+  fetchGame: typeof fetch;
+  onLinked: () => void;
+}) => {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
@@ -51,7 +69,7 @@ const IdentityLinkForm = ({ onLinked }: { onLinked: () => void }) => {
     setPending(true);
     setMessage("");
     try {
-      const response = await fetch(
+      const response = await fetchGame(
         "/api/minigames/blockstruggle/identity-link/redeem",
         {
           method: "POST",
@@ -132,6 +150,21 @@ const IdentityLinkForm = ({ onLinked }: { onLinked: () => void }) => {
       )}
     </section>
   );
+};
+
+/** Clerk development previews can authenticate in the browser without a first-party session cookie. */
+export const fetchAuthenticatedGame = async (
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  getToken: () => Promise<string | null>,
+  transport: typeof fetch = fetch,
+) => {
+  if (typeof input !== "string" || !input.startsWith("/api/minigames/blockstruggle/"))
+    throw new Error("Game requests must use the same-origin bridge");
+  const token = await getToken();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return transport(input, { ...init, headers, credentials: "same-origin" });
 };
 
 export const ninjaSignInUrl = (matchId: string | undefined, origin: string) => {
