@@ -31,7 +31,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { IMG_BUILDING_BANK } from "@/drizzle/constants";
+import { BANK_INTEREST_CLAIM_DAYS, IMG_BUILDING_BANK } from "@/drizzle/constants";
 import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
 import GraphBankLedger from "@/layout/GraphBankLedger";
@@ -319,7 +319,7 @@ export default function Bank() {
       {pendingInterest && pendingInterest.totalPending > 0 && (
         <ContentBox
           title="Pending Interest"
-          subtitle={`Interest older than 7-8 days are discarded!`}
+          subtitle={`Claim interest from today and the previous ${BANK_INTEREST_CLAIM_DAYS - 1} days (UTC). Older interest expires.`}
           initialBreak={true}
           padding={false}
         >

@@ -1,4 +1,5 @@
 import type { RetryQuestDelay, TimeUnit } from "@/drizzle/constants";
+import { BANK_INTEREST_CLAIM_DAYS } from "@/drizzle/constants";
 
 /**
  * Get game time which is the UTC HH:MM:SS timestring
@@ -383,4 +384,14 @@ export const periodStart = (
   const dow = now.getUTCDay();
   const deltaToMonday = (dow + 6) % 7; // Sun→6, Mon→0, Tue→1, ...
   return new Date(Date.UTC(y, m, d - deltaToMonday));
+};
+
+/** Inclusive UTC dates eligible for bank interest: today and the preceding days. */
+export const getBankInterestDateRange = (now = new Date()) => {
+  const oldest = new Date(now);
+  oldest.setUTCDate(oldest.getUTCDate() - (BANK_INTEREST_CLAIM_DAYS - 1));
+  return {
+    oldestDate: oldest.toISOString().slice(0, 10),
+    today: now.toISOString().slice(0, 10),
+  };
 };
