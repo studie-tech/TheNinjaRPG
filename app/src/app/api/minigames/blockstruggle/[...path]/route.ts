@@ -31,6 +31,7 @@ const handle = async (request: NextRequest, context: Context) => {
   try {
     const identity = await auth();
     if (!identity.userId || !identity.sessionId) {
+      console.warn("Block Struggle bridge: Clerk session unavailable");
       const response = NextResponse.json(
         { error: "Unauthorized" },
         { status: 401, headers: { "Cache-Control": "private, no-store" } },
@@ -69,7 +70,8 @@ const handle = async (request: NextRequest, context: Context) => {
         ),
       ),
     );
-    if (Either.isLeft(bridge))
+    if (Either.isLeft(bridge)) {
+      console.warn(`Block Struggle bridge: ${bridge.left.code}`);
       return NextResponse.json(
         { error: bridge.left.code },
         {
@@ -82,7 +84,10 @@ const handle = async (request: NextRequest, context: Context) => {
           },
         },
       );
+    }
     const result = bridge.right;
+    if (result.response.status === 401)
+      console.warn("Block Struggle bridge: upstream session rejected");
     const response = new NextResponse(result.response.body, {
       status: result.response.status,
       headers: result.response.headers,
@@ -98,6 +103,7 @@ const handle = async (request: NextRequest, context: Context) => {
       });
     return response;
   } catch {
+    console.warn("Block Struggle bridge: unavailable");
     return unavailable();
   }
 };
