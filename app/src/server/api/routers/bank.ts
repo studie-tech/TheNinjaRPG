@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import { RYO_CAP } from "@/drizzle/constants";
@@ -12,6 +12,8 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { getBankInterestDateRange } from "@/utils/time";
 
 export const bankRouter = createTRPCRouter({
   toBank: protectedProcedure
@@ -165,10 +167,7 @@ export const bankRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       // Query
       const pendingInterest = await ctx.drizzle.query.dailyBankInterest.findMany({
-        where: and(
-          eq(dailyBankInterest.userId, ctx.userId),
-          eq(dailyBankInterest.claimed, false),
-        ),
+        where: pendingInterestWhere(ctx.userId),
         columns: {
           id: true,
           date: true,
@@ -196,68 +195,7 @@ export const bankRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx }) => {
-      // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-
-      // Guard
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.status === "BATTLE")
-        return errorResponse("Cannot access bank while in combat");
-
-      // Get all pending interest
-      const pendingInterest = await ctx.drizzle.query.dailyBankInterest.findMany({
-        where: and(
-          eq(dailyBankInterest.userId, ctx.userId),
-          eq(dailyBankInterest.claimed, false),
-        ),
-      });
-
-      if (pendingInterest.length === 0) {
-        return errorResponse("No pending interest to claim");
-      }
-
-      // Calculate total amount to claim
-      const totalAmount = pendingInterest.reduce(
-        (sum, record) => sum + record.amount,
-        0,
-      );
-
-      // Check if claiming would exceed RYO_CAP
-      const finalAmount = Math.min(totalAmount, RYO_CAP - user.bank);
-
-      // Guard
-      if (finalAmount <= 0) {
-        return errorResponse("Bank already at capacity");
-      }
-
-      // Update user's bank balance and mark interest as claimed
-      await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set({ bank: sql`${userData.bank} + ${finalAmount}` })
-          .where(eq(userData.userId, ctx.userId)),
-        ctx.drizzle
-          .update(dailyBankInterest)
-          .set({ claimed: true })
-          .where(
-            and(
-              eq(dailyBankInterest.userId, ctx.userId),
-              eq(dailyBankInterest.claimed, false),
-            ),
-          ),
-      ]);
-
-      // Re-fetch user to get accurate bank balance after concurrent updates
-      const updatedUser = await fetchUser(ctx.drizzle, ctx.userId);
-
-      return {
-        success: true,
-        message: `Successfully claimed ${finalAmount} ryo in bank interest!`,
-        data: {
-          bank: updatedUser.bank,
-          claimedAmount: finalAmount,
-        },
-      };
+      return claimBankInterest(ctx.drizzle, ctx.userId);
     }),
 });
 
@@ -335,3 +273,73 @@ export const fetchUserBalances = async (client: DrizzleClient, userId: string) =
   }
   return user;
 };
+
+/** Expiry is enforced on reads and claims independently of background cleanup. */
+const pendingInterestWhere = (userId: string) => {
+  const { oldestDate, today } = getBankInterestDateRange();
+  return and(
+    eq(dailyBankInterest.userId, userId),
+    eq(dailyBankInterest.claimed, false),
+    gte(dailyBankInterest.date, oldestDate),
+    lte(dailyBankInterest.date, today),
+  );
+};
+
+export const claimBankInterest = (client: DrizzleClient, userId: string) =>
+  retryOnDeadlock(() =>
+    client.transaction(async (tx) => {
+      // Serialize claims and balance changes; both the payout and receipts must commit together.
+      const [user] = await tx
+        .select({
+          bank: userData.bank,
+          isBanned: userData.isBanned,
+          status: userData.status,
+        })
+        .from(userData)
+        .where(eq(userData.userId, userId))
+        .for("update");
+      if (!user) return errorResponse("User not found");
+      if (user.isBanned) return errorResponse("You are banned");
+      if (user.status === "BATTLE")
+        return errorResponse("Cannot access bank while in combat");
+
+      const pending = await tx
+        .select({ id: dailyBankInterest.id, amount: dailyBankInterest.amount })
+        .from(dailyBankInterest)
+        .where(pendingInterestWhere(userId))
+        .for("update");
+      if (pending.length === 0) return errorResponse("No pending interest to claim");
+      const total = pending.reduce((sum, record) => sum + record.amount, 0);
+      const amount = Math.min(total, RYO_CAP - user.bank);
+      if (amount <= 0) return errorResponse("Bank already at capacity");
+
+      const claimed = await tx
+        .update(dailyBankInterest)
+        .set({ claimed: true })
+        .where(
+          and(
+            eq(dailyBankInterest.userId, userId),
+            eq(dailyBankInterest.claimed, false),
+            inArray(
+              dailyBankInterest.id,
+              pending.map((record) => record.id),
+            ),
+          ),
+        );
+      if (claimed.rowsAffected !== pending.length) {
+        throw new Error("Bank interest claim changed during transaction");
+      }
+      const credited = await tx
+        .update(userData)
+        .set({ bank: sql`${userData.bank} + ${amount}` })
+        .where(and(eq(userData.userId, userId), eq(userData.bank, user.bank)));
+      if (credited.rowsAffected !== 1) {
+        throw new Error("Bank balance changed during interest claim");
+      }
+      return {
+        success: true,
+        message: `Successfully claimed ${amount} ryo in bank interest!`,
+        data: { bank: user.bank + amount, claimedAmount: amount },
+      };
+    }),
+  );

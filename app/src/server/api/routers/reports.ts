@@ -404,15 +404,12 @@ export const reportsRouter = createTRPCRouter({
     }),
   // Get a single report
   get: protectedProcedure.input(idSchema).query(async ({ ctx, input }) => {
-    // Query
+    // Query. A missing report is the same result as one this player cannot read.
     const [user, report] = await Promise.all([
       fetchUser(ctx.drizzle, ctx.userId),
       fetchUserReport(ctx.drizzle, input.id, ctx.userId),
     ]);
-    // Guard
-    if (!canSeeReport(user, report)) {
-      throw serverError("UNAUTHORIZED", "You have no access to the report");
-    }
+    if (!report || !canSeeReport(user, report)) return null;
     // Get previous reports
     const prevReports = canSeeSecretData(user.role)
       ? await getRelatedReports(ctx.drizzle, report.aiInterpretation)
@@ -533,6 +530,7 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (!report) return errorResponse("Report not found");
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform moderation actions");
       const hasModRights = canModerateReports(user, report);
@@ -581,6 +579,7 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (!report) return errorResponse("Report not found");
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform moderation actions");
       const hasModRights = canModerateReports(user, report);
@@ -627,6 +626,7 @@ export const reportsRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
+      if (!report) return errorResponse("Report not found");
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform moderation actions");
       const hasModRights = canModerateReports(user, report);
@@ -672,6 +672,7 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (!report) return errorResponse("Report not found");
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform moderation actions");
       const hasModRights = canModerateReports(user, report);
@@ -722,6 +723,7 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (!report) return errorResponse("Report not found");
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform moderation actions");
       if (canEscalateBan(user, report)) return errorResponse("You cannot escalate");
@@ -751,6 +753,7 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (!report) return errorResponse("Report not found");
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform moderation actions");
       if (!canClearReport(user, report)) return errorResponse("No permission");
@@ -1029,6 +1032,7 @@ export const reportsRouter = createTRPCRouter({
         fetchUserReport(ctx.drizzle, input.object_id, ctx.userId),
       ]);
       // Guard
+      if (!report) return errorResponse("Report not found");
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform moderation actions");
       const hasModRights = canModerateReports(user, report);
@@ -1102,9 +1106,7 @@ export const fetchUserReport = async (
       },
     },
   });
-  if (!entry) {
-    throw new Error("Report not found");
-  }
+  if (!entry) return null;
   // If fetching report on yourself, hide reporter
   if (fetcherUserId === entry.reportedUserId) {
     entry.reporterUser = null;

@@ -23,9 +23,11 @@ import {
 } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { useCookieConsent } from "@/hooks/useCookieConsent";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import { readCampaignSource, storeCampaignSource } from "@/libs/campaignSource";
 import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { cn } from "@/libs/shadui";
 import { bunnyImageUrl } from "@/utils/image";
@@ -1041,34 +1043,35 @@ const usePixelHeroVideoPlayback = (
   }, [videoRef, scrollContainerRef]);
 };
 
-// Bumped from "visitor_tracked" so visitors whose flag was set while the mutation was
-// being rejected client-side get one more chance to be counted. Re-tracking an already
-// known visitor is a no-op server-side thanks to the duplicate-key guards.
-const VISITOR_TRACKED_KEY = "visitor_tracked_v2";
+// VisitorLog is keyed on a hash of the IP and deduplicated by the server, so the visit is
+// reported once per page load without keeping a marker on the device
+let isVisitReported = false;
 
 const SetReferal = () => {
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded } = useUser();
+  const hasStatisticsConsent = useCookieConsent("statistics");
   const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation({
-    onSuccess: (result) => {
-      if (result.success) safeLocalStorageSetItem(VISITOR_TRACKED_KEY, "1");
+    // A failed report may be retried on the next render of the landing page
+    onSettled: (result) => {
+      if (!result?.success) isVisitReported = false;
     },
   });
   useEffect(() => {
-    // Set reference user
+    // Recruiter whose referral link the visitor followed, credited at registration
     const ref = searchParams?.get("ref");
     if (ref) safeLocalStorageSetItem("ref", ref);
-    // Source
-    const utm_source = searchParams?.get("utm_source");
-    if (utm_source) safeLocalStorageSetItem("utm_source", utm_source);
-    // Track anonymous visitor once
-    const alreadyTracked = safeLocalStorageGetItem(VISITOR_TRACKED_KEY);
-    if (!alreadyTracked && isLoaded && !isSignedIn) {
-      const savedRef = safeLocalStorageGetItem("ref") ?? undefined;
-      const savedUtm = safeLocalStorageGetItem("utm_source") ?? undefined;
-      trackVisitor({ ref: savedRef, utmSource: savedUtm });
+    // Campaign source for registration attribution; reruns once consent arrives
+    const utmSource = searchParams?.get("utm_source") ?? undefined;
+    if (utmSource && hasStatisticsConsent) storeCampaignSource(utmSource);
+    if (!isVisitReported && isLoaded && !isSignedIn) {
+      isVisitReported = true;
+      trackVisitor({
+        ref: safeLocalStorageGetItem("ref") ?? undefined,
+        utmSource: utmSource ?? readCampaignSource(),
+      });
     }
-  }, [searchParams, isLoaded, isSignedIn, trackVisitor]);
+  }, [searchParams, hasStatisticsConsent, isLoaded, isSignedIn, trackVisitor]);
   return null;
 };
 

@@ -16,14 +16,37 @@ export default function Report(props: { params: Promise<{ reportid: string }> })
 
   const report_id = params.reportid;
 
-  const { data } = api.reports.get.useQuery(
+  const { data, isPending, isError } = api.reports.get.useQuery(
     { id: report_id },
     { enabled: !!report_id && !!userData },
   );
   const { report, prevReports } = data || {};
 
-  if (!userData || !report) {
+  if (!userData || isPending) {
     return <Loader explanation="Loading data..." />;
+  }
+
+  // A missing report and one this player cannot read both come back as null.
+  // A failed query is already toasted by the client; this panel just stops the loader.
+  if (!report) {
+    return (
+      <ContentBox
+        title="Report"
+        subtitle={
+          isError ? "This report could not be opened" : "This report is not available"
+        }
+        defaultBackHref="/profile"
+      >
+        <p>
+          {isError
+            ? "This report could not be opened."
+            : "This report is not available to you."}
+        </p>
+        <Link href="/profile" className="mt-2 inline-block hover:text-orange-700">
+          Back to profile
+        </Link>
+      </ContentBox>
+    );
   }
 
   return (

@@ -130,6 +130,23 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
     const database = drizzle(pool, { schema, mode: "default" });
     client = new Proxy(database, {
       get(target, property, receiver) {
+        if (property === "transaction") {
+          return (callback: (tx: unknown) => Promise<unknown>) =>
+            target.transaction(async (tx) =>
+              callback(
+                new Proxy(tx, {
+                  get(transaction, key, txReceiver) {
+                    const value = Reflect.get(transaction, key, txReceiver);
+                    if (key === "insert" || key === "update" || key === "delete") {
+                      return (...args: unknown[]) =>
+                        wrapWriteBuilder(value.apply(transaction, args));
+                    }
+                    return value;
+                  },
+                }),
+              ),
+            );
+        }
         if (property === "execute") {
           const method = Reflect.get(target, property, receiver) as (
             ...args: unknown[]

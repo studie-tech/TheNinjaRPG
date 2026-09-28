@@ -5,6 +5,7 @@ import {
   BattleUsageTypes,
   ITEM_LEVEL_CAP,
   ItemRarities,
+  ItemSlots,
   ItemSlotTypes,
   ItemTypes,
   MAX_ITEM_SHOP_PURCHASE_QUANTITY,
@@ -53,7 +54,10 @@ export const itemFilteringSchema = z.object({
   /** Drop rows whose store listing date has passed. Shop catalogs page on this. */
   excludeExpiredFromStore: z.boolean().optional(),
   eventItems: z.boolean().optional(),
-  slot: z.enum(ItemSlotTypes).optional(),
+  /** Catalog slot, equipped position, or item type. See `readItemListFilterSlot`. */
+  slot: z
+    .union([z.enum(ItemSlotTypes), z.enum(ItemSlots), z.enum(ItemTypes)])
+    .optional(),
   target: z.enum(AttackTargets).optional(),
   method: z.enum(AttackMethods).optional(),
   hidden: z.boolean().optional(),

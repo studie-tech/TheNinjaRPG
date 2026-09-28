@@ -20,7 +20,7 @@ interface UseAudioReturn {
   requiresInteraction: boolean;
   enabled: boolean;
   toggle: () => Promise<void>;
-  setEnabled: (enabled: boolean) => Promise<void>;
+  setEnabled: (enabled: boolean, isPreferenceChange?: boolean) => Promise<void>;
   setVolume: (volume: number) => void;
 }
 
@@ -42,6 +42,7 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
   const effectivePreload = isSafariOrIOS() ? "auto" : preload;
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const isSourceDetached = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -52,23 +53,26 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
   const [audioEnabled, setAudioEnabled] = useState(enabled);
 
   // Internal play function
-  const playAudio = useCallback(async (): Promise<void> => {
-    if (!audioRef.current || !canPlay) return;
+  const playAudio = useCallback(
+    async (allowLoading = false): Promise<void> => {
+      if (!audioRef.current || (!canPlay && !allowLoading)) return;
 
-    try {
-      await audioRef.current.play();
-      setRequiresInteraction(false);
-    } catch (error) {
-      // Check if it's an autoplay restriction
-      if (error instanceof DOMException && error.name === "NotAllowedError") {
-        setRequiresInteraction(true);
-        throw new Error("User interaction required to play audio");
-      } else {
-        setError("Failed to play audio");
-        throw error;
+      try {
+        await audioRef.current.play();
+        setRequiresInteraction(false);
+      } catch (error) {
+        // Check if it's an autoplay restriction
+        if (error instanceof DOMException && error.name === "NotAllowedError") {
+          setRequiresInteraction(true);
+          throw new Error("User interaction required to play audio");
+        } else {
+          setError("Failed to play audio");
+          throw error;
+        }
       }
-    }
-  }, [canPlay]);
+    },
+    [canPlay],
+  );
 
   // Internal pause function
   const pauseAudio = useCallback((): void => {
@@ -78,10 +82,12 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
   // Initialize audio element
   useEffect(() => {
+    setIsPlaying(false);
+    setCanPlay(false);
     if (!src) return;
 
     const audio = new Audio();
-    audio.src = src;
+    if (!isSourceDetached.current) audio.src = src;
     audio.loop = loop;
     audio.volume = volume;
     audio.preload = effectivePreload;
@@ -132,7 +138,7 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
     // Safari fallback: if loading events don't fire within 5 seconds, assume ready
     const safariTimeout = setTimeout(() => {
-      if (isSafariOrIOS() && !canPlayHandled) {
+      if (isSafariOrIOS() && !canPlayHandled && !isSourceDetached.current) {
         canPlayHandled = true;
         setIsLoading(false);
         setCanPlay(true);
@@ -183,7 +189,9 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
       audio.removeEventListener("ended", handleEnded);
 
       audio.pause();
-      audio.src = "";
+      audio.removeAttribute("src");
+      audio.load();
+      audioRef.current = null;
     };
   }, [src, loop, volume, effectivePreload]);
 
@@ -246,8 +254,35 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
   // Set enabled function
   const setEnabled = useCallback(
-    async (enabled: boolean): Promise<void> => {
+    async (enabled: boolean, isPreferenceChange = false): Promise<void> => {
       setAudioEnabled(enabled);
+      const audio = audioRef.current;
+
+      if (!enabled && isPreferenceChange) {
+        isSourceDetached.current = true;
+        audio?.pause();
+        audio?.removeAttribute("src");
+        audio?.load();
+        setCanPlay(false);
+        return;
+      }
+
+      if (enabled && isSourceDetached.current) {
+        isSourceDetached.current = false;
+        if (audio) {
+          audio.src = src;
+          audio.load();
+          if (autoPlay) {
+            // Start during the switch gesture; waiting for canplay loses iOS permission.
+            try {
+              await playAudio(true);
+            } catch {
+              // Audio failed to start; the interaction listener can retry.
+            }
+          }
+        }
+        return;
+      }
 
       // If enabling and we can play, try to start immediately
       if (enabled && canPlay && autoPlay && !isPlaying) {
@@ -258,7 +293,7 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
         }
       }
     },
-    [canPlay, autoPlay, isPlaying, playAudio],
+    [canPlay, autoPlay, isPlaying, playAudio, src],
   );
 
   // Set volume function

@@ -8,9 +8,18 @@
  */
 
 import type { PushPlatform } from "@/drizzle/constants";
-import { addNativeListener, getPlatform, invoke, isNative } from "./bridge";
+import {
+  addNativeListener,
+  getPlatform,
+  invoke,
+  isNative,
+  NativeBridgeError,
+  type NativeListener,
+} from "./bridge";
 
 const PLUGIN = "PushNotifications";
+let registrationListener: NativeListener | undefined;
+let registrationErrorListener: NativeListener | undefined;
 
 export type PermissionState = "prompt" | "prompt-with-rationale" | "granted" | "denied";
 
@@ -64,6 +73,23 @@ export const requestPermissions = async (): Promise<PermissionState> => {
  */
 export const register = async (): Promise<void> => {
   if (!isNative()) return;
+  const tokenListener = registrationListener;
+  const errorListener = registrationErrorListener;
+  if (!tokenListener || !errorListener) {
+    throw new NativeBridgeError("Push registration listeners are unavailable");
+  }
+  const [tokenReady, errorReady] = await Promise.all([
+    tokenListener.ready,
+    errorListener.ready,
+  ]);
+  if (
+    !tokenReady ||
+    !errorReady ||
+    registrationListener !== tokenListener ||
+    registrationErrorListener !== errorListener
+  ) {
+    throw new NativeBridgeError("Push registration listeners are unavailable");
+  }
   await invoke(PLUGIN, "register");
 };
 
@@ -75,8 +101,8 @@ export const clearDelivered = async (): Promise<void> => {
 
 export const onRegistration = (
   callback: (registration: RegistrationToken) => void,
-): (() => void) =>
-  addNativeListener(PLUGIN, "registration", (data) => {
+): (() => void) => {
+  const listener = addNativeListener(PLUGIN, "registration", (data) => {
     const token = (data as { value?: unknown } | null)?.value;
     if (typeof token !== "string" || token.length === 0) return;
     // The event itself carries only the token. Asking the shell which platform it is
@@ -86,12 +112,26 @@ export const onRegistration = (
     if (platform === "web") return;
     callback({ token, platform });
   });
+  registrationListener = listener;
+  return () => {
+    if (registrationListener === listener) registrationListener = undefined;
+    listener();
+  };
+};
 
-export const onRegistrationError = (callback: (error: string) => void): (() => void) =>
-  addNativeListener(PLUGIN, "registrationError", (data) => {
+export const onRegistrationError = (
+  callback: (error: string) => void,
+): (() => void) => {
+  const listener = addNativeListener(PLUGIN, "registrationError", (data) => {
     const error = (data as { error?: unknown } | null)?.error;
     callback(typeof error === "string" ? error : "Unknown push registration error");
   });
+  registrationErrorListener = listener;
+  return () => {
+    if (registrationErrorListener === listener) registrationErrorListener = undefined;
+    listener();
+  };
+};
 
 /** Notification delivered while the app is in the foreground. */
 export const onReceived = (callback: (payload: PushPayload) => void): (() => void) =>

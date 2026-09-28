@@ -30,6 +30,7 @@ import {
   ratelimitMiddleware,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { hashIp } from "@/server/utils/ipHash";
 import {
   canAwardReputation,
   canEnableGlobalTavern,
@@ -69,7 +70,7 @@ export const miscRouter = createTRPCRouter({
           .insert(visitorLog)
           .values({
             id: nanoid(),
-            ip,
+            ipHash: hashIp(ip),
             ref: input.ref,
             utmSource: input.utmSource,
             userAgent: String(ctx.userAgent).slice(0, 180),
@@ -85,7 +86,7 @@ export const miscRouter = createTRPCRouter({
               variant: experiment.variant,
               event: "loaded",
               source: input.utmSource,
-              ip: ctx.userIp && ctx.userIp !== "unknown" ? ctx.userIp : undefined,
+              ipHash: hashIp(ip),
               userAgent:
                 typeof ctx.userAgent === "string"
                   ? ctx.userAgent.slice(0, 180)

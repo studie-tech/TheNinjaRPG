@@ -26,6 +26,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import { hashIp } from "@/server/utils/ipHash";
 import {
   isDeletedStoreUserId,
   settleRecordedLedger,
@@ -56,7 +57,7 @@ export const registerRouter = createTRPCRouter({
         const ip = ctx.userIp ?? "unknown";
         if (ip !== "unknown") {
           const visit = await ctx.drizzle.query.visitorLog.findFirst({
-            where: eq(visitorLog.ip, ip),
+            where: eq(visitorLog.ipHash, hashIp(ip)),
           });
           source = (visit?.utmSource ?? "").trim();
         }
@@ -73,7 +74,9 @@ export const registerRouter = createTRPCRouter({
           where: and(eq(historicalIp.ip, ip), eq(historicalIp.userId, ctx.userId)),
         });
         if (!currentIp) {
-          await ctx.drizzle.insert(historicalIp).values({ userId: ctx.userId, ip });
+          await ctx.drizzle
+            .insert(historicalIp)
+            .values({ userId: ctx.userId, ip, ipHash: hashIp(ip) });
         }
       }
 
@@ -276,6 +279,7 @@ export const registerRouter = createTRPCRouter({
               ctx.drizzle.insert(historicalIp).values({
                 userId: ctx.userId,
                 ip: ctx.userIp,
+                ipHash: hashIp(ctx.userIp),
               }),
             ]
           : []),

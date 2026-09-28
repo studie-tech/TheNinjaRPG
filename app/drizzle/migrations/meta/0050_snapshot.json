@@ -1,8 +1,6 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "f5e48a23-b8cc-45c4-91f8-06e9052758be",
-  "prevId": "3a04b0b3-391f-42b3-b13a-d8a137a29d5f",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -5529,57 +5527,43 @@
           "notNull": false,
           "autoincrement": false
         },
-        "requiredNinjutsuOffence": {
-          "name": "requiredNinjutsuOffence",
+        "requiredNinjutsuMastery": {
+          "name": "requiredNinjutsuMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredNinjutsuDefence": {
-          "name": "requiredNinjutsuDefence",
+        "requiredGenjutsuMastery": {
+          "name": "requiredGenjutsuMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredGenjutsuOffence": {
-          "name": "requiredGenjutsuOffence",
+        "requiredTaijutsuMastery": {
+          "name": "requiredTaijutsuMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredGenjutsuDefence": {
-          "name": "requiredGenjutsuDefence",
+        "requiredBukijutsuMastery": {
+          "name": "requiredBukijutsuMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredTaijutsuOffence": {
-          "name": "requiredTaijutsuOffence",
+        "requiredBloodlineMastery": {
+          "name": "requiredBloodlineMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredTaijutsuDefence": {
-          "name": "requiredTaijutsuDefence",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "requiredBukijutsuOffence": {
-          "name": "requiredBukijutsuOffence",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "requiredBukijutsuDefence": {
-          "name": "requiredBukijutsuDefence",
+        "requiredSageMastery": {
+          "name": "requiredSageMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
@@ -6312,57 +6296,43 @@
           "notNull": false,
           "autoincrement": false
         },
-        "requiredNinjutsuOffence": {
-          "name": "requiredNinjutsuOffence",
+        "requiredNinjutsuMastery": {
+          "name": "requiredNinjutsuMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredNinjutsuDefence": {
-          "name": "requiredNinjutsuDefence",
+        "requiredGenjutsuMastery": {
+          "name": "requiredGenjutsuMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredGenjutsuOffence": {
-          "name": "requiredGenjutsuOffence",
+        "requiredTaijutsuMastery": {
+          "name": "requiredTaijutsuMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredGenjutsuDefence": {
-          "name": "requiredGenjutsuDefence",
+        "requiredBukijutsuMastery": {
+          "name": "requiredBukijutsuMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredTaijutsuOffence": {
-          "name": "requiredTaijutsuOffence",
+        "requiredBloodlineMastery": {
+          "name": "requiredBloodlineMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "requiredTaijutsuDefence": {
-          "name": "requiredTaijutsuDefence",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "requiredBukijutsuOffence": {
-          "name": "requiredBukijutsuOffence",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "requiredBukijutsuDefence": {
-          "name": "requiredBukijutsuDefence",
+        "requiredSageMastery": {
+          "name": "requiredSageMastery",
           "type": "int",
           "primaryKey": false,
           "notNull": false,
@@ -12202,7 +12172,7 @@
         },
         "stat": {
           "name": "stat",
-          "type": "enum('ninjutsuOffence','taijutsuOffence','genjutsuOffence','bukijutsuOffence','ninjutsuDefence','taijutsuDefence','genjutsuDefence','bukijutsuDefence','intelligence','speed','willpower','strength')",
+          "type": "enum('offence','defence','intelligence','speed','willpower','strength','ninjutsuMastery','genjutsuMastery','taijutsuMastery','bukijutsuMastery','bloodlineMastery','sageMastery')",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -12883,64 +12853,64 @@
           "autoincrement": false,
           "default": 10
         },
-        "ninjutsuOffence": {
-          "name": "ninjutsuOffence",
+        "offence": {
+          "name": "offence",
           "type": "double",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 10
         },
-        "ninjutsuDefence": {
-          "name": "ninjutsuDefence",
+        "defence": {
+          "name": "defence",
           "type": "double",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 10
         },
-        "genjutsuOffence": {
-          "name": "genjutsuOffence",
+        "ninjutsuMastery": {
+          "name": "ninjutsuMastery",
           "type": "double",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 10
         },
-        "genjutsuDefence": {
-          "name": "genjutsuDefence",
+        "genjutsuMastery": {
+          "name": "genjutsuMastery",
           "type": "double",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 10
         },
-        "taijutsuOffence": {
-          "name": "taijutsuOffence",
+        "taijutsuMastery": {
+          "name": "taijutsuMastery",
           "type": "double",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 10
         },
-        "taijutsuDefence": {
-          "name": "taijutsuDefence",
+        "bukijutsuMastery": {
+          "name": "bukijutsuMastery",
           "type": "double",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 10
         },
-        "bukijutsuDefence": {
-          "name": "bukijutsuDefence",
+        "bloodlineMastery": {
+          "name": "bloodlineMastery",
           "type": "double",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 10
         },
-        "bukijutsuOffence": {
-          "name": "bukijutsuOffence",
+        "sageMastery": {
+          "name": "sageMastery",
           "type": "double",
           "primaryKey": false,
           "notNull": true,
@@ -13290,6 +13260,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "lastCombatTrainingFinishedAt": {
+          "name": "lastCombatTrainingFinishedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "trainingSpeed": {
           "name": "trainingSpeed",
           "type": "enum('15min','1hr','4hrs','8hrs','12hrs','24hrs')",
@@ -13300,7 +13277,21 @@
         },
         "currentlyTraining": {
           "name": "currentlyTraining",
-          "type": "enum('ninjutsuOffence','taijutsuOffence','genjutsuOffence','bukijutsuOffence','ninjutsuDefence','taijutsuDefence','genjutsuDefence','bukijutsuDefence','intelligence','speed','willpower','strength')",
+          "type": "enum('offence','defence','intelligence','speed','willpower','strength')",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "masteryTrainingStartedAt": {
+          "name": "masteryTrainingStartedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "currentlyTrainingMastery": {
+          "name": "currentlyTrainingMastery",
+          "type": "enum('ninjutsuMastery','genjutsuMastery','taijutsuMastery','bukijutsuMastery','bloodlineMastery','sageMastery')",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -17528,12 +17519,13 @@
   },
   "views": {},
   "_meta": {
-    "schemas": {},
     "tables": {},
     "columns": {}
   },
   "internal": {
     "tables": {},
     "indexes": {}
-  }
+  },
+  "id": "8db4d8a7-a6dd-4531-b22b-ec720dbddfcc",
+  "prevId": "f5e48a23-b8cc-45c4-91f8-06e9052758be"
 }

@@ -179,7 +179,9 @@ describe("addNativeListener", () => {
   it("returns a callable unsubscribe even when nothing was attached", async () => {
     const { addNativeListener } = await load();
     setWindow(undefined);
-    expect(() => addNativeListener("App", "backButton", () => undefined)()).not.toThrow();
+    const unsubscribe = addNativeListener("App", "backButton", () => undefined);
+    expect(await unsubscribe.ready).toBe(false);
+    expect(() => unsubscribe()).not.toThrow();
   });
 
   it("swallows an addListener that rejects", async () => {
@@ -195,9 +197,7 @@ describe("addNativeListener", () => {
       },
     });
     const unsubscribe = addNativeListener("App", "backButton", () => undefined);
-    // The rejection is handled inside the bridge; nothing reaches the caller and no
-    // unhandled rejection is produced.
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(await unsubscribe.ready).toBe(false);
     expect(() => unsubscribe()).not.toThrow();
   });
 
@@ -222,7 +222,7 @@ describe("addNativeListener", () => {
     // Unsubscribing while the attach is still in flight is the common case in React:
     // an effect that mounts and unmounts in the same tick.
     unsubscribe();
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(await unsubscribe.ready).toBe(false);
     expect(removed).toBe(1);
   });
 });

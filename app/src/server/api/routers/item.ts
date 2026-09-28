@@ -77,6 +77,7 @@ import {
   getInventoryBucketFullMessage,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
+  readItemListFilterSlot,
 } from "@/libs/item";
 import {
   buildMissingLoadouts,
@@ -3445,18 +3446,19 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
 export const itemDatabaseFilter = (
   input?: Partial<ItemFilteringSchema>,
 ): QueryCondition[] => {
+  const { slot, itemType } = readItemListFilterSlot(input?.slot, input?.itemType);
   return [
     // Name filter
     ...(input?.name ? [like(item.name, `%${input.name}%`)] : []),
 
     // Item type filter
-    ...(input?.itemType ? [eq(item.itemType, input.itemType)] : []),
+    ...(itemType ? [eq(item.itemType, itemType)] : []),
 
     // Rarity filter
     ...(input?.itemRarity ? [eq(item.rarity, input.itemRarity)] : []),
 
     // Slot filter
-    ...(input?.slot ? [eq(item.slot, input.slot)] : []),
+    ...(slot ? [eq(item.slot, slot)] : []),
 
     // Method filter
     ...(input?.method ? [eq(item.method, input.method)] : []),

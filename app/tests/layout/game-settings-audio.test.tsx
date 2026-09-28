@@ -1,7 +1,6 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
-import { getPlatform } from "@/libs/native/bridge";
 import type { UserWithRelations } from "@/routers/profile";
 import { ensureDom } from "../setup-dom.mjs";
 
@@ -20,7 +19,7 @@ function getAudioTestMocks(): AudioTestMocks {
     __audioTestMocks?: AudioTestMocks;
   };
   globals.__audioTestMocks ??= {
-    setEnabled: vi.fn(async (_enabled: boolean) => undefined),
+    setEnabled: vi.fn(async (_enabled: boolean, _isPreferenceChange?: boolean) => undefined),
     activate: vi.fn(async () => true),
     deactivate: vi.fn(async () => undefined),
     isPlaying: false,
@@ -39,7 +38,14 @@ vi.mock("@/hooks/useAudio", () => ({
 }));
 
 vi.mock("@/libs/native", () => ({
-  platform: getPlatform,
+  platform: () => {
+    const reported = (
+      globalThis as typeof globalThis & {
+        window?: Window & { Capacitor?: { getPlatform: () => string } };
+      }
+    ).window?.Capacitor?.getPlatform();
+    return reported === "ios" || reported === "android" ? reported : "web";
+  },
   audioSession: {
     activate: getAudioTestMocks().activate,
     deactivate: getAudioTestMocks().deactivate,
@@ -56,10 +62,10 @@ vi.mock("@/utils/audio", () => ({
   preloadAudioBuffers: vi.fn(async () => undefined),
 }));
 
-const user = (level: number) =>
+const user = (level: number, musicOn = true) =>
   ({
     userId: "user-1",
-    musicOn: true,
+    musicOn,
     buttonSfxOn: true,
     level,
   }) as UserWithRelations;
@@ -179,5 +185,23 @@ describe("GlobalAudioProvider", () => {
 
     await act(async () => undefined);
     expect(audio.setEnabled).not.toHaveBeenCalled();
+  });
+
+  it("releases the soundtrack when the saved music preference is off", async () => {
+    const audio = getAudioTestMocks();
+    const view = render(
+      <GlobalAudioProvider userData={user(1)}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    await waitFor(() => expect(audio.setEnabled).toHaveBeenCalledWith(true, true));
+    audio.setEnabled.mockClear();
+
+    view.rerender(
+      <GlobalAudioProvider userData={user(1, false)}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    await waitFor(() => expect(audio.setEnabled).toHaveBeenCalledWith(false, true));
   });
 });

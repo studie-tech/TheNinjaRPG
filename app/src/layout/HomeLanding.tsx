@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Welcome from "@/layout/Welcome";
+import { readCampaignSource } from "@/libs/campaignSource";
 import { useUserData } from "@/utils/UserContext";
 
 /**
@@ -33,9 +33,7 @@ export const HomeLanding: React.FC = () => {
   useEffect(() => {
     // When user is signed in (Clerk) but has not created a character yet, set referral immediately
     if (isSignedIn && !userData && userStatus === "success") {
-      // attempt to read utm_source from localStorage if present
-      const utm = safeLocalStorageGetItem("utm_source");
-      setReferral.mutate({ utmSource: utm ?? undefined });
+      setReferral.mutate({ utmSource: readCampaignSource() });
     }
     if (userStatus === "success" && !userData) {
       void router.push("/register");

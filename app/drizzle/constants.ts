@@ -916,6 +916,7 @@ export const HP_PER_LVL = 50;
 export const SP_PER_LVL = 50;
 export const CP_PER_LVL = 50;
 export const MAX_ATTRIBUTES = 5;
+export const BANK_INTEREST_CLAIM_DAYS = 8;
 export const RYO_CAP = 3000000000;
 // Offence/Defence, generals and mastery caps from #1277
 export const MAX_STATS_CAP = 1322420;

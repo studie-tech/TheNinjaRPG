@@ -182,6 +182,16 @@ const handleTrpcError = (error: unknown) => {
       showMutationToast({ success: false, message: error.message });
       return;
     }
+    // Expected authorization result. The screen that issued the query is responsible
+    // for its empty state; this toast is the feedback, and it is not a defect to report.
+    if (errorCode === "UNAUTHORIZED") {
+      toast({
+        variant: "destructive",
+        title: "Unauthorized",
+        description: error.message,
+      });
+      return;
+    }
     Sentry.captureException(error, { extra: { message: "TRPC Client Error" } });
     toast({
       variant: "destructive",

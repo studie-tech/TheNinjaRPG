@@ -394,7 +394,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                   <div className="space-y-4">
                     <ItemWithEffects
                       item={selected.actionItem}
-                      hideDetails={false}
+                      hideDetails={true}
                       hideDates={true}
                       hideData={true}
                       hideEffects={true}

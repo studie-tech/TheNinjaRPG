@@ -11,6 +11,7 @@ import {
   isSafariJsonError as isSafariJsonErrorPattern,
   type StackFrame,
   isExtensionExecutorEvent,
+  isInjectedWalletRejection,
 } from "@/utils/error";
 
 Sentry.init({
@@ -82,6 +83,7 @@ Sentry.init({
     "Can't find variable: DarkReader", // DarkReader browser extension error - dark mode extension may fail to initialize
     "xbrowser is not defined", // Browser extension/password manager autofill error - occurs when third-party autofill scripts (browser extensions, Android WebView bridge) reference undefined xbrowser variable
     "swbrowser.inNightMode is not a function", // Browser extension/Android WebView night mode error - occurs when third-party night mode extensions (Android browser forks) attempt to call swbrowser.inNightMode() but the method is undefined or the object is incomplete during page load. Similar to xbrowser errors. No UX handling needed - error occurs in isolated extension context, application continues normally.
+    "swbrowser is not defined", // Same night-mode injection when the helper object was never created. The page keeps rendering; nothing in the game calls swbrowser.
     "postMessage is not a function", // Clerk internal error - occurs in clerk.browser.js with Web Workers
     "module factory is not available", // Turbopack runtime error - occurs when browser caches stale JS chunks after deployment
     "Cannot assign to read only property 'then' of object", // Turbopack Promise assignment error - occurs when browser extensions freeze Promise objects or stale caches cause conflicts
@@ -1177,6 +1179,16 @@ const isNextJsChunkSyntaxError = (event: Sentry.ErrorEvent): boolean => {
 const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const stackFrames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+
+  // Plain-object rejections ({ code: 4001, message }) are rewrapped by the global
+  // handler, and Sentry also stores the original object on extra.__serialized__.
+  // UX: no wallet UI exists, so the homepage stays usable.
+  if (
+    isInjectedWalletRejection({ message }) ||
+    isInjectedWalletRejection(event.extra?.__serialized__)
+  ) {
+    return true;
+  }
 
   // Check if error originates from wallet extension's injected script
   // - inpage.js is the common name for wallet extension content scripts (MetaMask, etc.)
@@ -2654,6 +2666,13 @@ const ensureBrowserErrorHandler = () => {
     // Skip userscript errors - these are from third-party browser extensions
     // Users who install userscripts accept that these may break when page structure changes
     if (isUserscriptRawError(event.reason)) {
+      event.preventDefault();
+      return;
+    }
+
+    // Skip wallet-extension rejections. The game has no Web3 UI, so a missing
+    // wallet account does not change what the player can do on the page.
+    if (isInjectedWalletRejection(event.reason)) {
       event.preventDefault();
       return;
     }

@@ -47,7 +47,7 @@ import { drizzleDB } from "@/server/db";
 import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/grant";
-import { secondsFromNow } from "@/utils/time";
+import { getBankInterestDateRange, secondsFromNow } from "@/utils/time";
 
 const HOURLY_TIMER_NAME = "cleaner-hourly";
 
@@ -452,10 +452,11 @@ export async function GET(request: Request) {
     // across PayPal and both stores, including downgrades when a higher receipt expires.
     await reconcileFederalStatuses(drizzleDB);
 
-    // Step 34: Clear daily bank interest older than 7 days
+    // Step 34: Clear bank interest outside the claimable UTC date window
+    const { oldestDate } = getBankInterestDateRange();
     await drizzleDB.execute(
       sql`DELETE FROM ${dailyBankInterest}
-          WHERE updatedAt < CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY
+          WHERE date < ${oldestDate}
           ORDER BY updatedAt
           LIMIT ${rangeCleanupBatchSize}`,
     );

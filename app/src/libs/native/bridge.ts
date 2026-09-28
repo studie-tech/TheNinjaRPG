@@ -17,6 +17,8 @@ interface PluginListenerHandle {
   remove: () => Promise<void>;
 }
 
+export type NativeListener = (() => void) & { ready: Promise<boolean> };
+
 type PluginListener = (
   eventName: string,
   callback: (data: unknown) => void,
@@ -109,17 +111,15 @@ export const addNativeListener = (
   pluginName: string,
   eventName: string,
   callback: (data: unknown) => void,
-): (() => void) => {
+): NativeListener => {
   const plugin = getPlugin(pluginName);
   const listen = plugin?.addListener;
-  if (!isNative() || typeof listen !== "function") {
-    return () => undefined;
-  }
   let handle: PluginListenerHandle | undefined;
   let cancelled = false;
-  // Everything in this module is best-effort, so a shell that cannot attach the listener
-  // leaves the caller with a no-op unsubscribe rather than an unhandled rejection.
-  void (async () => {
+  // Most callers need only the unsubscribe. Registration also needs to wait for the
+  // native listener before asking the OS to emit a token.
+  const ready = (async () => {
+    if (!isNative() || typeof listen !== "function") return false;
     try {
       const resolved = await (listen as PluginListener).call(
         plugin,
@@ -128,15 +128,20 @@ export const addNativeListener = (
       );
       if (cancelled) {
         await resolved.remove();
-        return;
+        return false;
       }
       handle = resolved;
+      return true;
     } catch {
       handle = undefined;
+      return false;
     }
   })();
-  return () => {
-    cancelled = true;
-    void handle?.remove().catch(() => undefined);
-  };
+  return Object.assign(
+    () => {
+      cancelled = true;
+      void handle?.remove().catch(() => undefined);
+    },
+    { ready },
+  );
 };

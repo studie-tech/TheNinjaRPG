@@ -151,6 +151,7 @@ import {
 } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { getFarmCollectionCount } from "@/server/utils/farming";
+import { hashIp } from "@/server/utils/ipHash";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -308,8 +309,11 @@ export const profileRouter = createTRPCRouter({
         .set({ tutorialStep: input.step })
         .where(eq(userData.userId, ctx.userId));
 
-      // AB Test success
-      if (input.step === TUTORIAL_STEPS_COUNT) {
+      // AB Test success. Loaded events are only ever logged with an IP, so without one
+      // there is no visit to attribute the success to.
+      const ipHash =
+        ctx.userIp && ctx.userIp !== "unknown" ? hashIp(ctx.userIp) : undefined;
+      if (input.step === TUTORIAL_STEPS_COUNT && ipHash) {
         const experiments = getLayoutExperimentAssignments({
           abPixelLayoutVariant: ctx.abPixelLayoutVariant,
           abLemuReplacementVariant: ctx.abLemuReplacementVariant,
@@ -318,9 +322,7 @@ export const profileRouter = createTRPCRouter({
           experiments.map(async (experiment) => {
             const abLoadedEvent = await ctx.drizzle.query.abEvent.findFirst({
               where: and(
-                ctx.userIp && ctx.userIp !== "unknown"
-                  ? eq(abEvent.ip, ctx.userIp)
-                  : isNull(abEvent.ip),
+                eq(abEvent.ipHash, ipHash),
                 eq(abEvent.experiment, experiment.experiment),
                 eq(abEvent.event, "loaded"),
               ),
@@ -335,7 +337,7 @@ export const profileRouter = createTRPCRouter({
                 variant: experiment.variant,
                 event: "success",
                 source: abLoadedEvent.source,
-                ip: ctx.userIp && ctx.userIp !== "unknown" ? ctx.userIp : undefined,
+                ipHash,
                 userAgent:
                   typeof ctx.userAgent === "string"
                     ? ctx.userAgent.slice(0, 180)
@@ -3088,9 +3090,10 @@ const persistPassiveRegenToDb = async ({
           .values({
             userId,
             ip: userIp,
+            ipHash: hashIp(userIp),
           })
           .onDuplicateKeyUpdate({
-            set: { usedAt: new Date() },
+            set: { usedAt: new Date(), ipHash: hashIp(userIp) },
           })
       : Promise.resolve(null);
 
