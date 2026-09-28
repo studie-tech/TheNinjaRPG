@@ -362,11 +362,15 @@ export const isAllowedIframeUrl = (src: string): boolean => {
  */
 export const getIframeProviderName = (src: string): string => {
   try {
-    const host = new URL(src).hostname.replace(/^www\./, "");
-    if (host.startsWith("youtube") || host === "youtu.be") return "YouTube";
-    if (host.endsWith("vimeo.com")) return "Vimeo";
-    if (host.endsWith("soundcloud.com")) return "SoundCloud";
-    if (host.endsWith("spotify.com")) return "Spotify";
+    const host = new URL(src).hostname;
+    const isOnDomain = (domain: string) =>
+      host === domain || host.endsWith(`.${domain}`);
+    if (["youtube.com", "youtube-nocookie.com", "youtu.be"].some(isOnDomain)) {
+      return "YouTube";
+    }
+    if (isOnDomain("vimeo.com")) return "Vimeo";
+    if (isOnDomain("soundcloud.com")) return "SoundCloud";
+    if (isOnDomain("spotify.com")) return "Spotify";
   } catch {
     // Unparseable URLs never pass isAllowedIframeUrl; fall through to a generic label
   }

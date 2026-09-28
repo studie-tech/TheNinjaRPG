@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseHtml } from "@/utils/parse";
-import { toPrivacyEnhancedEmbedUrl } from "@/utils/audio";
+import { getIframeProviderName, toPrivacyEnhancedEmbedUrl } from "@/utils/audio";
 import { ensureDom } from "../setup-dom.mjs";
 
 ensureDom();
@@ -70,5 +70,17 @@ describe("toPrivacyEnhancedEmbedUrl", () => {
     ]) {
       expect(toPrivacyEnhancedEmbedUrl(url)).toBe(url);
     }
+  });
+});
+
+describe("getIframeProviderName", () => {
+  it("names providers by exact domain or subdomain only", () => {
+    expect(getIframeProviderName("https://www.youtube-nocookie.com/embed/a")).toBe("YouTube");
+    expect(getIframeProviderName("https://player.vimeo.com/video/1")).toBe("Vimeo");
+    expect(getIframeProviderName("https://w.soundcloud.com/player")).toBe("SoundCloud");
+    expect(getIframeProviderName("https://evilvimeo.com/video/1")).toBe("an external site");
+    expect(getIframeProviderName("https://youtube.com.example.org/")).toBe(
+      "an external site",
+    );
   });
 });
