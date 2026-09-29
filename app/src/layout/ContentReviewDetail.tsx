@@ -137,6 +137,8 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
           const next = ContentProposalRejectReasons[Number(key) - 1];
           if (next) setReason(next);
         } else if (key === "enter") {
+          // A focused button, link or the reason select acts on its own Enter.
+          if (target?.closest("button, a, [role='combobox'], [role='listbox']")) return;
           doReject();
         } else if (key === "escape" || key === "r") {
           setRejecting(false);

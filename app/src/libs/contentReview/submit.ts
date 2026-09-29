@@ -489,17 +489,21 @@ const discardUploads = async (keys: string[]) => {
   });
 };
 
+/**
+ * A suggestion's rows span four tables and are only useful together, and a failed save
+ * deletes the candidate files they point at, so they are written in one short transaction.
+ */
 const insertRows = async (client: DrizzleClient, rows: Rows[]) => {
   if (rows.length === 0) return;
   const changes = rows.flatMap((row) => row.changes);
   const basis = rows.flatMap((row) => row.basis);
   const media = rows.flatMap((row) => row.media);
-  await Promise.all([
-    client.insert(contentProposal).values(rows.map((row) => row.proposal)),
-    changes.length ? client.insert(contentProposalChange).values(changes) : null,
-    basis.length ? client.insert(contentProposalBasis).values(basis) : null,
-    media.length ? client.insert(contentProposalMedia).values(media) : null,
-  ]);
+  await client.transaction(async (tx) => {
+    await tx.insert(contentProposal).values(rows.map((row) => row.proposal));
+    if (changes.length) await tx.insert(contentProposalChange).values(changes);
+    if (basis.length) await tx.insert(contentProposalBasis).values(basis);
+    if (media.length) await tx.insert(contentProposalMedia).values(media);
+  });
 };
 
 /** Targets that already have a pending suggestion, keyed by `${type}:${id}`. */

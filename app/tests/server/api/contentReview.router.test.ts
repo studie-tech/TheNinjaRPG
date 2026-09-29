@@ -368,6 +368,61 @@ describeWithDatabase("content review", () => {
     expect(await proposalRows()).toHaveLength(0);
   });
 
+  it("saves a suggestion with all of its rows or none of them", async () => {
+    vi.spyOn(media, "collectCandidates").mockResolvedValue([
+      {
+        source: "GENERATED",
+        kind: "IMAGE",
+        externalId: null,
+        title: "x".repeat(400),
+        url: "https://ui0arpl8sm.ufs.sh/f/too-long",
+        fileKey: "too-long",
+        lengthMs: null,
+        prompt: "a badge",
+      },
+    ]);
+    const removed = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
+    await expect(
+      ingestAgentSubmission(await getTestDatabase(), {
+        agentName: "codex · test",
+        runUrl: null,
+        focus: "visual",
+        proposals: [
+          {
+            title: "Draw a new badge image",
+            category: "VISUAL",
+            rationale: "The badge uses a placeholder image.",
+            confidence: 60,
+            usesUsageData: false,
+            changes: [
+              {
+                entityType: "BADGE",
+                entityId: BADGE,
+                operation: "UPDATE",
+                set: [],
+                media: [
+                  {
+                    kind: "IMAGE",
+                    path: "image",
+                    catalogIds: [],
+                    search: null,
+                    generate: "a badge",
+                  },
+                ],
+              },
+            ],
+            basis: [{ entityType: "BADGE", entityId: BADGE, v: await versionOf(BADGE) }],
+          },
+        ],
+      }),
+    ).rejects.toThrow();
+    expect(await proposalRows()).toHaveLength(0);
+    expect(await (await getTestDatabase()).query.contentProposalChange.findMany()).toHaveLength(
+      0,
+    );
+    expect(removed).toHaveBeenCalledWith(["too-long"]);
+  });
+
   it("applies reviewer edits and leaves out unticked fields", async () => {
     const moderator = await callerFor(contentReviewRouter, MODERATOR);
     await moderator.create({
