@@ -15,7 +15,13 @@ import {
   UserRoundCheck,
   XCircle,
 } from "lucide-react";
-import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  startTransition,
+  useEffect,
+  useState,
+} from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -803,10 +809,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Mutation loading
   const isPending = isStartingTrain || isStoppingTrain;
 
+  // Selecting a jutsu restyles every tile of the grid and mounts or unmounts the confirm
+  // modal; as a transition that render no longer blocks the tap's next paint.
   const setJutsuConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
     const next = typeof open === "function" ? open(isOpen) : open;
-    setIsOpen(next);
-    if (!next) setJutsu(undefined);
+    startTransition(() => {
+      setIsOpen(next);
+      if (!next) setJutsu(undefined);
+    });
   };
 
   // While loading userdata
@@ -931,11 +941,13 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             emptyText="No jutsu available for your rank"
             onClick={(id) => {
               if (id === jutsu?.id) {
-                setJutsu(undefined);
-                setIsOpen(false);
+                setJutsuConfirmOpen(false);
               } else {
-                setJutsu(alljutsus?.find((jutsu) => jutsu.id === id));
-                setIsOpen(true);
+                const selected = alljutsus?.find((jutsu) => jutsu.id === id);
+                startTransition(() => {
+                  setJutsu(selected);
+                  setIsOpen(true);
+                });
               }
             }}
             showBgColor={false}
@@ -951,7 +963,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
               isOpen={isOpen}
               setIsOpen={setJutsuConfirmOpen}
               isValid={false}
-              onClose={() => setJutsu(undefined)}
+              onClose={() => startTransition(() => setJutsu(undefined))}
               onAccept={() => {
                 if (canTrain && !isPending) {
                   train({ jutsuId: jutsu.id });

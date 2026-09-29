@@ -13,7 +13,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { startTransition, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -975,13 +975,16 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         showBgColor={false}
         showLabels={false}
         onClick={(id) => {
-          if (id === useritem?.id) {
-            setUserItem(undefined);
-            setIsOpen(false);
-          } else {
-            setUserItem(items?.find((item) => item.id === id));
-            setIsOpen(true);
-          }
+          // Restyles every tile and mounts the modal; kept off the tap's next paint.
+          startTransition(() => {
+            if (id === useritem?.id) {
+              setUserItem(undefined);
+              setIsOpen(false);
+            } else {
+              setUserItem(items?.find((item) => item.id === id));
+              setIsOpen(true);
+            }
+          });
         }}
       />
       {isOpen && useritem && (

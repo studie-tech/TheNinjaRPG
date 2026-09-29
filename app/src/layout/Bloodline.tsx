@@ -1,5 +1,5 @@
 import { FlaskConical, Scissors, Star } from "lucide-react";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -115,13 +115,16 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
           showBgColor={false}
           showLabels={true}
           onClick={(id) => {
-            if (id === bloodline?.id) {
-              setBloodline(undefined);
-              setIsOpen(false);
-            } else {
-              setBloodline(allBloodlines?.find((b) => b.id === id));
-              setIsOpen(true);
-            }
+            // Restyles every tile and mounts the modal; kept off the tap's next paint.
+            startTransition(() => {
+              if (id === bloodline?.id) {
+                setBloodline(undefined);
+                setIsOpen(false);
+              } else {
+                setBloodline(allBloodlines?.find((b) => b.id === id));
+                setIsOpen(true);
+              }
+            });
           }}
         />
       )}
