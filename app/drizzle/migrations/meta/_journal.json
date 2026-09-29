@@ -362,29 +362,8 @@
     {
       "idx": 51,
       "version": "5",
-      "when": 1790681512154,
-      "tag": "0051_content_review",
-      "breakpoints": false
-    },
-    {
-      "idx": 52,
-      "version": "5",
-      "when": 1791101359303,
-      "tag": "0052_cheerful_big_bertha",
-      "breakpoints": false
-    },
-    {
-      "idx": 53,
-      "version": "5",
-      "when": 1791165137768,
-      "tag": "0053_classy_zzzax",
-      "breakpoints": false
-    },
-    {
-      "idx": 54,
-      "version": "5",
-      "when": 1791285186982,
-      "tag": "0054_concerned_plazm",
+      "when": 1790709551314,
+      "tag": "0051_skill_requirements_pvp_record",
       "breakpoints": false
     }
   ]

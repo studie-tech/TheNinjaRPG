@@ -1187,7 +1187,6 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                   useritem.quantity === 1 &&
                   !useritem.isInAuction &&
                   !isStillCrafting &&
-                  evoSkillStatus === "met" &&
                   meetsEvolutionStatRequirements(evo, userData) &&
                   hasRequiredLevel(userData.level, evo.requiredLevel) &&
                   (!evo.bloodlineId || evo.bloodlineId === userData.bloodlineId);
@@ -1258,9 +1257,10 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                       </p>
                     )}
                     {evoSkillStatus === "unmet" && evoRequiredSkillName && (
-                      <p className="text-destructive text-sm">
-                        Requires active skill: <b>{evoRequiredSkillName}</b>. Activate
-                        it in the Skill Tree first.
+                      <p className="text-muted-foreground text-sm">
+                        Evolving does not require this skill, but the evolved item will
+                        be unequipped. Activate <b>{evoRequiredSkillName}</b> in the
+                        Skill Tree before equipping it.
                       </p>
                     )}
                     {evo.requiredLevel > 1 && (
