@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CONTENT_AUDIT_WEEKDAY_FOCUS } from "@/drizzle/constants";
+import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
 import * as epidemic from "@/libs/contentReview/epidemic";
 import {
   collectCandidates,
@@ -294,5 +295,27 @@ describe("snapshot size", () => {
     const budget = size({ id: "aaaa" }) + size({ id: "bb" }) + 3;
     expect(leadingRowsWithin(rows, budget)).toEqual([{ id: "aaaa" }, { id: "bb" }]);
     expect(leadingRowsWithin(rows, 0)).toEqual([]);
+  });
+});
+
+describe("audit output schema", () => {
+  it("fits a draft that sets every editable field of an item", () => {
+    const set = ENTITY_CONFIG.ITEM.editableKeys.map((path) => ({ path, valueJson: "null" }));
+    const parsed = agentAuditOutputSchema.safeParse({
+      proposals: [
+        {
+          title: "New item draft",
+          category: "NEW_CONTENT",
+          rationale: "A complete item needs every field.",
+          confidence: null,
+          usesUsageData: false,
+          changes: [
+            { entityType: "ITEM", entityId: null, operation: "CREATE", set, media: [] },
+          ],
+          basis: [],
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
   });
 });

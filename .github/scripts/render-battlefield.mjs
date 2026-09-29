@@ -58,8 +58,24 @@ const galleryRequests = () =>
     }));
 
 const lastSegment = (fieldPath) => fieldPath.split(".").pop() ?? "";
-const isVisualPath = (fieldPath) =>
-  VISUAL_FIELDS.includes(lastSegment(fieldPath)) || fieldPath === "avatar";
+
+/** Whether a value, such as a whole effect list, names an asset combat draws. */
+const holdsVisuals = (value) =>
+  Array.isArray(value)
+    ? value.some(holdsVisuals)
+    : value !== null &&
+      typeof value === "object" &&
+      Object.entries(value).some(
+        ([key, entry]) =>
+          (VISUAL_FIELDS.includes(key) && typeof entry === "string" && entry !== "") ||
+          holdsVisuals(entry),
+      );
+
+/** A set operation that changes what the entity draws in battle. */
+const setsVisuals = (op) =>
+  VISUAL_FIELDS.includes(lastSegment(op.path)) ||
+  op.path === "avatar" ||
+  holdsVisuals(JSON.parse(op.valueJson));
 
 const setAtPath = (target, fieldPath, value) => {
   const keys = fieldPath.split(".");
@@ -86,7 +102,7 @@ const verifyRequests = (output) =>
       const media = change.media.filter(
         (request) => request.kind === "ANIMATION" && request.catalogIds.length > 0,
       );
-      if (!change.set.some((op) => isVisualPath(op.path)) && media.length === 0) {
+      if (!change.set.some(setsVisuals) && media.length === 0) {
         return [];
       }
       const entity = snapshot.entities.find(
