@@ -24,8 +24,9 @@ downloaded to `audit/snapshot.json`.
   `imageSharedBy`.
 - `examples`: one full editable record per type, to copy the shape of new content from.
 - `assets[]`: the SFX and animation library (`id`, `name`, `type`, `frames`, `speed`, `usedBy`).
-- `openSuggestions[]`, `recentlyRejected[]`, `recentlyOutdated[]`, `recentlyApplied[]`: what is
-  already queued or decided in the last 10 days, with reject reasons and notes.
+- `openSuggestions[]`: every suggestion still waiting for review, however old.
+- `recentlyRejected[]`, `recentlyOutdated[]`, `recentlyApplied[]`: what was decided in the last
+  10 days, with reject reasons and notes.
 - `capabilities`: whether Epidemic Sound search and generation are available.
 - `proposalSchema`: the JSON schema your answer must match.
 - `visualCheckSchema`: the JSON schema of the battlefield check (see below).
@@ -60,22 +61,29 @@ Only one JSON object: `{ "proposals": [ ... ] }`. Each proposal:
 
 ## Rules
 
-1. Read `recentlyRejected` and `openSuggestions` first. Never repeat a rejected idea unless its
-   entity changed since, and never target an entity that already has an open suggestion.
+1. Read `openSuggestions`, `recentlyRejected` and `recentlyApplied` first. The server refuses
+   a change to an entity that already has an open suggestion, the exact change a reviewer
+   rejected, and new content named like an existing entity or a new entity in
+   `openSuggestions`; each refusal only wastes a slot of today's limit. Do not reword a rejected
+   idea either unless its entity changed since, and do not undo or redo a recent applied change.
 2. One proposal per entity. Put every fix to that entity in the same proposal.
-3. Keep combat text placeholders exactly as they are: `%user`, `%target`, `%user_subject`,
+3. Spread the run across today's focus: entities of different types, ranks and elements, and
+   different kinds of fix. A few varied proposals are worth more than many that repeat one fix
+   on similar entities.
+4. Keep combat text placeholders exactly as they are: `%user`, `%target`, `%user_subject`,
    `%target_posessive` and the rest.
-4. Only link asset ids that exist in `assets[]`. Prefer assets similar content already uses.
-5. Balance: change at most two numbers per proposal, by at most 20%, and compare against content
+5. Only link asset ids that exist in `assets[]`. Prefer assets similar content already uses.
+6. Balance: change at most two numbers per proposal, by at most 20%, and compare against content
    of the same rank and type. Show the comparison in the rationale.
-6. Never change prices, rewards, loot, shop availability, visibility (`hidden`) or crafting
+7. Never change prices, rewards, loot, shop availability, visibility (`hidden`) or crafting
    recipes. The server refuses those fields for the audit. New content starts hidden and free
    instead: whatever a `CREATE` sets there, the server resets prices, shop fields, loot,
    recipes and quest rewards to empty values, and staff price and release it after approval.
-7. Do not invent facts about the game's lore or mechanics. If a fix depends on something you
+8. Do not invent facts about the game's lore or mechanics. If a fix depends on something you
    cannot see in the snapshot, skip it.
-8. Write in the game's voice: plain English, second person for item and jutsu descriptions,
-   no emoji.
+9. Write in the game's voice: plain English, second person for item and jutsu descriptions,
+   no emoji. Rationales call candidates sound or image proposals and never name the service
+   they come from.
 
 ## Focus guides
 

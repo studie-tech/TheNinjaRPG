@@ -1,3 +1,5 @@
+import type { ContentProposalMediaKind } from "@/drizzle/constants";
+
 /**
  * Dotted paths into an entity's editable fields: "description", "effects.0.power",
  * "content.objectives.2.description". The first segment is always a top-level field.
@@ -47,4 +49,17 @@ export const setAtPath = <T>(root: T, path: string, value: unknown): T => {
     return copy;
   };
   return write(root, 0) as T;
+};
+
+/** Fields that hold media of each kind: asset ids for sounds and animations, URLs for images. */
+const MEDIA_FIELDS: Record<ContentProposalMediaKind, readonly string[]> = {
+  SFX: ["appearSfx", "disappearSfx"],
+  ANIMATION: ["appearAnimation", "staticAnimation", "disappearAnimation"],
+  IMAGE: ["image", "avatar"],
+};
+
+/** Whether `path` names a field a media candidate of `kind` may fill. */
+export const isMediaPath = (kind: ContentProposalMediaKind, path: string) => {
+  const last = pathSegments(path).pop() ?? "";
+  return MEDIA_FIELDS[kind].includes(last);
 };

@@ -558,6 +558,49 @@ describeWithDatabase("content review", () => {
     expect(capped.refused[0]?.reason).toContain("limit is reached");
   });
 
+  it("refuses new content named like an existing entity or a draft in the queue", async () => {
+    const database = await getTestDatabase();
+    const draft = (name: string) => ({
+      title: `New badge ${name}`,
+      category: "NEW_CONTENT" as const,
+      rationale: "Players have asked for a badge like this.",
+      confidence: 70,
+      usesUsageData: false,
+      changes: [
+        {
+          entityType: "BADGE" as const,
+          entityId: null,
+          operation: "CREATE" as const,
+          set: [
+            { path: "name", valueJson: JSON.stringify(name) },
+            { path: "image", valueJson: JSON.stringify(badgeRow(name, "").image) },
+            { path: "description", valueJson: JSON.stringify("Awarded for resolve.") },
+          ],
+          media: [],
+        },
+      ],
+      basis: [],
+    });
+    const submission: AgentSubmission = {
+      agentName: "codex · test",
+      runUrl: null,
+      focus: "new_content",
+      proposals: [draft(`BADGE ${BADGE.toUpperCase()}`), draft("Steadfast"), draft("steadfast ")],
+    };
+    const result = await ingestAgentSubmission(database, submission);
+    expect(result.accepted.map((entry) => entry.index)).toEqual([1]);
+    expect(result.refused.map((entry) => entry.reason)).toEqual([
+      expect.stringContaining("already exists or is waiting in the queue"),
+      expect.stringContaining("already exists or is waiting in the queue"),
+    ]);
+    const nextDay = await ingestAgentSubmission(database, {
+      ...submission,
+      proposals: [draft("STEADFAST")],
+    });
+    expect(nextDay.accepted).toHaveLength(0);
+    expect(nextDay.refused[0]?.reason).toContain("already exists or is waiting in the queue");
+  });
+
   it("reuses an Epidemic sound the asset library already holds", async () => {
     const database = await getTestDatabase();
     const id = epidemicAssetId("7c9ac26f-3c04-4fbd-8a70-049cd775c094");

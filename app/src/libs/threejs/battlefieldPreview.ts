@@ -23,6 +23,7 @@ import {
   type BattlefieldViewport,
   battlefieldSceneOf,
   sceneAssetIds,
+  sceneSoundIds,
 } from "@/libs/contentReview/battlefield";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/libs/threejs/combat";
 import { ActionSprite, SpriteMixer } from "@/libs/threejs/SpriteMixer";
 import { cleanUp, loadTexture, setupScene } from "@/libs/threejs/util";
+import { preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { textureImageUrl } from "@/utils/image";
 import { sleep } from "@/utils/time";
 import { VisualTag } from "@/validators/combat";
@@ -49,10 +51,16 @@ export const createBattlefieldPreview = (
 ): BattlefieldPreview | null => {
   const { scene: content, viewport, background } = options;
   const holdMs = options.holdMs ?? 1800;
-  const assets = options.assets.map((asset) => {
-    const suggested = content.assets.find((entry) => entry.id === asset.id);
-    return suggested ? { ...asset, ...suggested } : asset;
-  });
+  const assets = [
+    ...options.assets.map((asset) => {
+      const suggested = content.assets.find((entry) => entry.id === asset.id);
+      return suggested ? { ...asset, ...suggested } : asset;
+    }),
+    // Combat looks a sound up by id and reads only its url.
+    ...Object.entries(options.sounds ?? {}).map(
+      ([id, url]) => ({ id, name: id, type: "SFX", image: "", url }) as GameAsset,
+    ),
+  ];
   const drawn = sceneAssetIds(content).flatMap((id) => {
     const asset = assets.find((entry) => entry.id === id);
     return asset ? [asset] : [];
@@ -125,6 +133,15 @@ export const createBattlefieldPreview = (
   // drawCombatUsers restyles the viewer's own fighter; this viewer has none.
   const viewer = { userId: `${id}-viewer` } as UserData;
 
+  // Sounds play only while the field animates live and the viewer asked for them, never in
+  // captures.
+  let isLive = false;
+  let isSoundOn = false;
+  const sfxVolume = savedSfxVolume();
+  const soundUrls = sceneSoundIds(content).flatMap(
+    (soundId) => assets.find((asset) => asset.id === soundId)?.url ?? [],
+  );
+
   let frame = 0;
   const sync = () => {
     frame += 1;
@@ -147,7 +164,8 @@ export const createBattlefieldPreview = (
       animationId: frame,
       spriteMixer,
       gameAssets: assets,
-      sfxEnabled: false,
+      sfxEnabled: isLive && isSoundOn,
+      sfxVolume,
       isAnyUserMoving: false,
     });
     // Like the player's own fighter in combat, the caster shows its bars; the target would
@@ -166,7 +184,8 @@ export const createBattlefieldPreview = (
   };
 
   // One cycle: effects appear, stay for holdMs after their appear animation, then end and
-  // play their disappear animation where they stood, as combat does when an effect expires.
+  // play their disappear animation and sound where they stood, as combat does when an effect
+  // expires.
   const durationOf = (ids: string[]) =>
     Math.max(
       0,
@@ -208,12 +227,15 @@ export const createBattlefieldPreview = (
     ended = true;
     battle.usersEffects = [];
     battle.groundEffects = content.effects.flatMap((effect, index) =>
-      effect.disappearAnimation
+      effect.disappearAnimation || effect.disappearSfx
         ? [
             visualEffect(
               `${id}-${cycle}-end-${index}`,
               TILES[effect.placement],
-              { appearAnimation: effect.disappearAnimation },
+              {
+                appearAnimation: effect.disappearAnimation,
+                appearSfx: effect.disappearSfx,
+              },
               casterId,
             ),
           ]
@@ -261,15 +283,26 @@ export const createBattlefieldPreview = (
     height,
     play: () => {
       if (raf) return;
+      isLive = true;
+      // With sound on, start over so the appear sounds play as the field comes into view.
+      if (isSoundOn) begin();
       clock.start();
       tick();
     },
     pause: () => {
+      isLive = false;
       cancelAnimationFrame(raf);
       raf = 0;
       clock.stop();
     },
     replay: begin,
+    setSound: (isOn) => {
+      isSoundOn = isOn;
+      if (!isOn) return;
+      void preloadAudioBuffers(soundUrls);
+      // Start over, so the appear sounds play right away.
+      begin();
+    },
     whenLoaded: async (timeoutMs = 6000) => {
       const failed = await preloadImages(drawn.map((asset) => asset.image));
       const deadline = Date.now() + timeoutMs;
@@ -305,6 +338,7 @@ export const createBattlefieldPreview = (
       });
     },
     dispose: () => {
+      isLive = false;
       cancelAnimationFrame(raf);
       battle.usersState = [];
       battle.usersEffects = [];
@@ -493,6 +527,7 @@ const visualEffect = (
     staticAnimation: visuals.staticAnimation ?? "",
     appearAnimation: visuals.appearAnimation ?? "",
     disappearAnimation: visuals.disappearAnimation ?? "",
+    appearSfx: visuals.appearSfx ?? "",
   }),
   actionId: "battlefield-preview",
   id,
@@ -648,6 +683,8 @@ export type BattlefieldPreviewOptions = {
   zoom?: number;
   /** How long effects stay after their appear animation before they end. */
   holdMs?: number;
+  /** URLs of suggested sounds that are not in the catalog yet, by the id the fields hold. */
+  sounds?: Record<string, string>;
 };
 
 export type BattlefieldPreview = {
@@ -660,6 +697,8 @@ export type BattlefieldPreview = {
   pause: () => void;
   /** Start the cycle over, so appear animations play again. */
   replay: () => void;
+  /** Play the effects' appear and disappear sounds, as combat does, while animating. */
+  setSound: (isOn: boolean) => void;
   /** Resolves once the field's textures have loaded, naming assets whose image failed. */
   whenLoaded: (timeoutMs?: number) => Promise<string[]>;
   /**

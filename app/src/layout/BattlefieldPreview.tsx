@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
   type BattlefieldViewport,
   battlefieldSceneOf,
   sceneAssetIds,
+  sceneSoundIds,
 } from "@/libs/contentReview/battlefield";
 import {
   createBattlefieldPreview,
@@ -32,23 +33,33 @@ interface BattlefieldPreviewProps {
   entityType: ContentProposalEntityType;
   entityId: string | null;
   fields: Record<string, unknown>;
+  /** URLs of suggested sounds that are not in the catalog yet, by the id the fields hold. */
+  sounds?: Record<string, string>;
 }
 
 /**
  * An entity's effects drawn by the combat renderer on a small battlefield at the game's own
- * hex size, looping through their appear, active and disappear phases.
+ * hex size, looping through their appear, active and disappear phases, with their sounds on
+ * request.
  */
 export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => {
-  const { entityType, entityId, fields } = props;
+  const { entityType, entityId, fields, sounds } = props;
   const mountRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<FieldPreview | null>(null);
+  // Muted until asked: the field loops, and a desk full of suggestions should stay quiet.
+  const [isSoundOn, setIsSoundOn] = useState(false);
+  const isSoundOnRef = useRef(false);
   const [viewport, setViewport] = useState<BattlefieldViewport>("desktop");
   const [zoom, setZoom] = useState(1);
   const [background, setBackground] = useState<CombatBiome>("ground");
   const [unsupported, setUnsupported] = useState(false);
   const scene = battlefieldSceneOf(entityType, entityId, fields);
   const signature = JSON.stringify(scene);
-  const ids = sceneAssetIds(scene);
+  const soundSignature = JSON.stringify(sounds ?? {});
+  const soundIds = sceneSoundIds(scene);
+  const ids = [...new Set([...sceneAssetIds(scene), ...soundIds])].filter(
+    (assetId) => !sounds?.[assetId],
+  );
   const { data: assets } = api.misc.getAllGameAssetNames.useQuery(
     { ids },
     { enabled: ids.length > 0 },
@@ -64,6 +75,7 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
       viewport,
       background,
       zoom,
+      sounds: JSON.parse(soundSignature),
     });
     if (!preview) {
       setUnsupported(true);
@@ -75,6 +87,7 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
     preview.canvas.style.maxWidth = `${preview.width}px`;
     mount.appendChild(preview.canvas);
     previewRef.current = preview;
+    if (isSoundOnRef.current) preview.setSound(true);
     // Animate only while the field is on screen.
     const observer = new IntersectionObserver(([entry]) =>
       entry?.isIntersecting ? preview.play() : preview.pause(),
@@ -85,7 +98,7 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
       previewRef.current = null;
       preview.dispose();
     };
-  }, [signature, ready, assets, viewport, background, zoom]);
+  }, [signature, soundSignature, ready, assets, viewport, background, zoom]);
 
   if (!scene) {
     return <p className="text-xs opacity-70">Draws nothing on the battlefield.</p>;
@@ -140,6 +153,27 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
         >
           <RotateCcw className="mr-1 h-3 w-3" /> Replay
         </Button>
+        {soundIds.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7"
+            aria-pressed={isSoundOn}
+            onClick={() => {
+              const next = !isSoundOn;
+              isSoundOnRef.current = next;
+              setIsSoundOn(next);
+              previewRef.current?.setSound(next);
+            }}
+          >
+            {isSoundOn ? (
+              <Volume2 className="mr-1 h-3 w-3" />
+            ) : (
+              <VolumeX className="mr-1 h-3 w-3" />
+            )}
+            {isSoundOn ? "Sound on" : "Sound off"}
+          </Button>
+        )}
       </div>
       <div
         ref={mountRef}

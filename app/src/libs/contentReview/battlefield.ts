@@ -15,6 +15,9 @@ export type BattlefieldEffect = {
   staticAnimation: string;
   appearAnimation: string;
   disappearAnimation: string;
+  /** Sounds combat plays as the effect appears and as it ends. */
+  appearSfx: string;
+  disappearSfx: string;
   placement: BattlefieldPlacement;
 };
 
@@ -42,7 +45,7 @@ const WORN_ITEM_TYPES = ["ARMOR", "ACCESSORY", "KEYSTONE"];
  * placed the way `libs/combat/actions.ts` places it: SELF tags land on the caster, and the
  * other tags land on the tile of a ground action or on the target of any other action.
  * Bloodline and worn-item effects sit on their owner, and an AI's own effects on the AI.
- * Returns null when the entity draws nothing on the battlefield.
+ * Returns null when the entity neither draws nor plays anything on the battlefield.
  */
 export const battlefieldSceneOf = (
   entityType: ContentProposalEntityType,
@@ -54,20 +57,31 @@ export const battlefieldSceneOf = (
   const effects = (Array.isArray(fields.effects) ? fields.effects : []).flatMap(
     (effect: unknown) => {
       const tag = (effect ?? {}) as Record<string, unknown>;
-      const visuals = {
+      const media = {
         staticAssetPath: text(tag.staticAssetPath),
         staticAnimation: text(tag.staticAnimation),
         appearAnimation: text(tag.appearAnimation),
         disappearAnimation: text(tag.disappearAnimation),
+        appearSfx: text(tag.appearSfx),
+        disappearSfx: text(tag.disappearSfx),
       };
-      if (!Object.values(visuals).some(Boolean)) return [];
-      return [{ ...visuals, placement: placementOf(text(tag.target) || "INHERIT") }];
+      if (!Object.values(media).some(Boolean)) return [];
+      return [{ ...media, placement: placementOf(text(tag.target) || "INHERIT") }];
     },
   );
   const targetAvatar = entityType === "AI" ? text(fields.avatar) || null : null;
   if (effects.length === 0 && !targetAvatar) return null;
   return { effects, targetAvatar, assets: [] };
 };
+
+/** Sound asset ids a scene plays, as its effects appear and end. */
+export const sceneSoundIds = (scene: BattlefieldScene | null) => [
+  ...new Set(
+    (scene?.effects ?? []).flatMap((effect) =>
+      [effect.appearSfx, effect.disappearSfx].filter(Boolean),
+    ),
+  ),
+];
 
 /** Asset ids a scene draws from the catalog. */
 export const sceneAssetIds = (scene: BattlefieldScene | null) => [
@@ -109,6 +123,8 @@ const assetScene = (
     staticAnimation: "",
     appearAnimation: "",
     disappearAnimation: "",
+    appearSfx: "",
+    disappearSfx: "",
   };
   const image = text(fields.image);
   return {

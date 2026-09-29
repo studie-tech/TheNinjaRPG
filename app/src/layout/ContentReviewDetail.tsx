@@ -40,7 +40,7 @@ import {
   REJECT_REASON_LABELS,
   STATUS_LABELS,
 } from "@/libs/contentReview/labels";
-import { setAtPath, topLevelField } from "@/libs/contentReview/paths";
+import { isMediaPath, setAtPath, topLevelField } from "@/libs/contentReview/paths";
 import { showMutationToast } from "@/libs/toast";
 import { formatSoundLength, formatTimeAgo } from "@/utils/time";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
@@ -188,12 +188,16 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
       const field = topLevelField(path);
       const pick = chosenFor(change, path);
       if (!(field in fields) || !pick) continue;
+      // A sound that is not in the catalog yet keeps the server's `media:` placeholder, now
+      // naming the chosen candidate, so the battlefield can play it from its URL.
       const value =
         pick.kind === "IMAGE"
           ? pick.url
           : pick.source === "CATALOG"
             ? pick.externalId
-            : null;
+            : pick.kind === "SFX"
+              ? mediaPlaceholder(pick.id)
+              : null;
       if (value) fields = setAtPath(fields, path, value);
     }
     return fields;
@@ -327,17 +331,38 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
                     )}
                   </label>
                   <div className={`p-2 text-sm ${off ? "opacity-40" : ""}`}>
-                    <FieldDiff
-                      before={change.before[field] ?? null}
-                      after={edits[key] ?? values[field] ?? null}
-                      hidePaths={mediaPaths
-                        .filter((path) => topLevelField(path) === field)
-                        .map((path) => path.slice(field.length + 1))}
-                      editing={editing && isPendingProposal && !off}
-                      onEdit={(value) =>
-                        setEdits((previous) => ({ ...previous, [key]: value }))
-                      }
-                    />
+                    {isMediaPath("IMAGE", field) ? (
+                      <ImageDiff
+                        before={change.before[field] ?? null}
+                        after={
+                          chosenFor(change, field)?.url ??
+                          edits[key] ??
+                          values[field] ??
+                          null
+                        }
+                        editing={
+                          editing &&
+                          isPendingProposal &&
+                          !off &&
+                          !mediaPaths.includes(field)
+                        }
+                        onEdit={(value) =>
+                          setEdits((previous) => ({ ...previous, [key]: value }))
+                        }
+                      />
+                    ) : (
+                      <FieldDiff
+                        before={change.before[field] ?? null}
+                        after={edits[key] ?? values[field] ?? null}
+                        hidePaths={mediaPaths
+                          .filter((path) => topLevelField(path) === field)
+                          .map((path) => path.slice(field.length + 1))}
+                        editing={editing && isPendingProposal && !off}
+                        onEdit={(value) =>
+                          setEdits((previous) => ({ ...previous, [key]: value }))
+                        }
+                      />
+                    )}
                   </div>
                 </div>
               );
@@ -489,6 +514,13 @@ const InTheGame: React.FC<{
 }> = ({ change, proposed, mode, onMode }) => {
   const current = change.payload;
   const fields = mode === "current" ? current : proposed;
+  const sounds = Object.fromEntries(
+    change.media.flatMap((media) =>
+      media.kind === "SFX" && media.url
+        ? [[mediaPlaceholder(media.id), media.url]]
+        : [],
+    ),
+  );
   const showCard = !!current && change.entityType !== "AI";
   const showField = [current, proposed].some(
     (entry) => entry && battlefieldSceneOf(change.entityType, change.entityId, entry),
@@ -527,6 +559,7 @@ const InTheGame: React.FC<{
               entityType={change.entityType}
               entityId={change.entityId}
               fields={fields}
+              sounds={sounds}
             />
           ) : (
             <p className="text-xs opacity-70">It does not exist yet.</p>
@@ -695,6 +728,48 @@ const FieldDiff: React.FC<{
   );
 };
 
+/** Current and proposed picture of an image field, shown instead of their URLs. */
+const ImageDiff: React.FC<{
+  before: unknown;
+  after: unknown;
+  editing: boolean;
+  onEdit: (value: string) => void;
+}> = ({ before, after, editing, onEdit }) => {
+  const pictures = [
+    ["Current", typeof before === "string" ? before : ""],
+    ["Proposed", typeof after === "string" ? after : ""],
+  ] as const;
+  return (
+    <div className="flex flex-col gap-2">
+      {editing && (
+        <Textarea
+          value={pictures[1][1]}
+          onChange={(e) => onEdit(e.target.value)}
+          className="min-h-12"
+        />
+      )}
+      <div className="flex flex-wrap gap-4">
+        {pictures.map(([label, url]) =>
+          label === "Current" && !url ? null : (
+            <figure key={label} className="flex flex-col gap-1">
+              <figcaption className="font-bold text-xs uppercase opacity-70">
+                {label}
+              </figcaption>
+              {url ? (
+                <div className="h-32 w-32">
+                  <ContentImage image={url} alt={`${label} image`} className="" />
+                </div>
+              ) : (
+                <p className="text-xs opacity-70">No image</p>
+              )}
+            </figure>
+          ),
+        )}
+      </div>
+    </div>
+  );
+};
+
 /** Current asset and the candidates for one media field, each playable, one to pick. */
 const MediaChoice: React.FC<{
   path: string;
@@ -707,12 +782,6 @@ const MediaChoice: React.FC<{
   const kind = candidates[0]?.kind ?? "SFX";
   const currentId = candidates[0]?.currentValue ?? null;
   const current = currentId ? assets[currentId] : undefined;
-  const sourceLabel = (media: Media) =>
-    media.source === "EPIDEMIC"
-      ? "Epidemic Sound"
-      : media.source === "GENERATED"
-        ? "Generated"
-        : "Our catalog";
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-2">
       <h3 className="font-bold text-xs uppercase tracking-wide opacity-70">
@@ -730,7 +799,7 @@ const MediaChoice: React.FC<{
             asset={current}
           />
         </div>
-        {candidates.map((media) => {
+        {candidates.map((media, index) => {
           const asset = media.externalId ? assets[media.externalId] : undefined;
           const isChosen = chosen?.id === media.id;
           return (
@@ -747,7 +816,7 @@ const MediaChoice: React.FC<{
                   onChange={() => onChoose(media.id)}
                 />
                 <span className="font-bold uppercase opacity-70">
-                  {sourceLabel(media)}
+                  {MEDIA_KIND_LABELS[media.kind]} proposal {index + 1}
                 </span>
                 {media.chosen && <Badge variant="outline">Used</Badge>}
               </span>
@@ -760,8 +829,7 @@ const MediaChoice: React.FC<{
               )}
               {media.source === "EPIDEMIC" && (
                 <span className="text-xs opacity-70">
-                  Approving adds it to the asset library with its Epidemic Sound
-                  license.
+                  Approving adds it to the asset library.
                 </span>
               )}
             </label>
@@ -817,10 +885,19 @@ const Kbd: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </kbd>
 );
 
+/** How the server writes a media field whose candidate is not in the catalog yet. */
+const mediaPlaceholder = (mediaId: string) => `media:${mediaId}`;
+
 const formatScalar = (value: unknown) => {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+};
+
+const MEDIA_KIND_LABELS: Record<Media["kind"], string> = {
+  SFX: "SFX",
+  IMAGE: "Image",
+  ANIMATION: "Animation",
 };
 
 const CATEGORY_STYLES: Record<Proposal["category"], string> = {

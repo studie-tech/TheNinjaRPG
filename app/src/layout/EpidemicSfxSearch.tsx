@@ -48,7 +48,7 @@ export const EpidemicSfxSearch: React.FC<EpidemicSfxSearchProps> = ({ onImported
 
   return (
     <div className="space-y-2 border-t pt-3">
-      <h4 className="font-bold text-sm">Epidemic Sound</h4>
+      <h4 className="font-bold text-sm">Find a new sound</h4>
       <div className="flex gap-2">
         <Input
           value={draft}
@@ -65,10 +65,10 @@ export const EpidemicSfxSearch: React.FC<EpidemicSfxSearchProps> = ({ onImported
           <Search className="h-4 w-4" />
         </Button>
       </div>
-      {isFetching && <Loader explanation="Searching Epidemic Sound" />}
+      {isFetching && <Loader explanation="Searching for sounds" />}
       {data && !data.configured && (
         <p className="text-sm opacity-70">
-          Epidemic Sound is not configured on this server.
+          Sound search is not configured on this server.
         </p>
       )}
       {data?.configured && data.results.length === 0 && !isFetching && (

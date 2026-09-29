@@ -23,6 +23,7 @@ import type {
 } from "@/validators/contentReview";
 import {
   type ContentEntity,
+  draftName,
   ENTITY_CONFIG,
   editableOf,
   entityKey,
@@ -34,11 +35,11 @@ import {
   type MediaBudget,
   materializeChoice,
 } from "./media";
+import { isMediaPath } from "./paths";
 import {
   agentChangeViolation,
   applySetOperations,
   changedFields,
-  isMediaPath,
   withCreateBaseline,
 } from "./rules";
 import { sameValue } from "./version";
@@ -120,11 +121,23 @@ export const ingestAgentSubmission = async (
     ),
   ]);
   const targetIds = [...new Set(refs.map((ref) => ref.entityId))];
-  const [quota, entities, open, rejected] = await Promise.all([
+  const createdTypes = [
+    ...new Set(
+      submission.proposals.flatMap((proposal) =>
+        proposal.changes.flatMap((change) =>
+          change.operation === "CREATE" ? [change.entityType] : [],
+        ),
+      ),
+    ),
+  ];
+  const [quota, entities, open, rejected, names] = await Promise.all([
     auditQuota(client),
     loadEntities(client, refs),
     targetIds.length ? openTargets(client, targetIds) : Promise.resolve(new Map()),
     targetIds.length ? rejectedChanges(client, targetIds) : Promise.resolve([]),
+    createdTypes.length
+      ? takenNames(client, createdTypes)
+      : Promise.resolve(new Set<string>()),
   ]);
   const budget: MediaBudget = {
     searches: CONTENT_AUDIT_MAX_SOUND_SEARCHES,
@@ -151,7 +164,7 @@ export const ingestAgentSubmission = async (
       proposal,
       entities,
       budget,
-      { open, rejected, claimed },
+      { open, rejected, claimed, names },
       uploaded,
     ).catch(async (error: unknown) => {
       // Nothing of this submission gets saved, so no suggestion keeps its files.
@@ -181,6 +194,8 @@ type Guards = {
   open: Map<string, string>;
   rejected: Awaited<ReturnType<typeof rejectedChanges>>;
   claimed: Set<string>;
+  /** Names new content cannot take, from `takenNames` and the drafts accepted so far. */
+  names: Set<string>;
 };
 
 const planAgentProposal = async (
@@ -209,6 +224,7 @@ const planAgentProposal = async (
     media: [],
   };
   const targets = new Set<string>();
+  const drafted = new Set<string>();
   for (const [order, change] of proposal.changes.entries()) {
     const config = ENTITY_CONFIG[change.entityType];
     const changeId = nanoid();
@@ -286,9 +302,15 @@ const planAgentProposal = async (
       next = withMedia.editable;
     }
     if (change.operation === "CREATE") {
-      const drafted = withCreateBaseline(change.entityType, next);
-      if (!drafted.ok) return drafted.reason;
-      next = drafted.editable;
+      const baseline = withCreateBaseline(change.entityType, next);
+      if (!baseline.ok) return baseline.reason;
+      next = baseline.editable;
+      const name = draftName(next);
+      const key = nameKey(change.entityType, name);
+      if (guards.names.has(key) || drafted.has(key)) {
+        return `${config.label} ${name} already exists or is waiting in the queue`;
+      }
+      drafted.add(key);
     } else {
       const violation = agentChangeViolation(change.entityType, base, next);
       if (violation) return violation;
@@ -347,6 +369,7 @@ const planAgentProposal = async (
     }
     guards.claimed.add(key);
   }
+  for (const key of drafted) guards.names.add(key);
   return rows;
 };
 
@@ -533,6 +556,49 @@ const openTargets = async (client: DrizzleClient, ids: string[]) => {
     ),
   );
 };
+
+/**
+ * Names new content of these types cannot take: every live entity's and every new entity
+ * still waiting in the queue, compared without case.
+ */
+const takenNames = async (
+  client: DrizzleClient,
+  types: ContentProposalEntityType[],
+) => {
+  const [live, queued] = await Promise.all([
+    Promise.all(
+      types.map(async (type) =>
+        (await ENTITY_CONFIG[type].load(client, null)).map((row) =>
+          nameKey(type, row.name),
+        ),
+      ),
+    ),
+    client
+      .select({
+        entityType: contentProposalChange.entityType,
+        after: contentProposalChange.after,
+      })
+      .from(contentProposalChange)
+      .innerJoin(
+        contentProposal,
+        eq(contentProposal.id, contentProposalChange.proposalId),
+      )
+      .where(
+        and(
+          eq(contentProposal.status, "PENDING"),
+          eq(contentProposalChange.operation, "CREATE"),
+          inArray(contentProposalChange.entityType, types),
+        ),
+      ),
+  ]);
+  return new Set([
+    ...live.flat(),
+    ...queued.map((row) => nameKey(row.entityType, draftName(row.after))),
+  ]);
+};
+
+const nameKey = (type: ContentProposalEntityType, name: string) =>
+  `${type}:${name.trim().toLowerCase()}`;
 
 /** Rejected changes still within retention, so the audit cannot resubmit them unchanged. */
 const rejectedChanges = async (client: DrizzleClient, ids: string[]) =>

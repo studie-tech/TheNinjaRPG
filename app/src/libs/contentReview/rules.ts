@@ -1,19 +1,8 @@
-import type {
-  ContentProposalEntityType,
-  ContentProposalMediaKind,
-  QuestType,
-} from "@/drizzle/constants";
+import type { ContentProposalEntityType, QuestType } from "@/drizzle/constants";
 import { ObjectiveReward } from "@/validators/rewards";
 import { ENTITY_CONFIG } from "./entities";
 import { getAtPath, setAtPath, topLevelField } from "./paths";
 import { canonicalJson, sameValue } from "./version";
-
-/** Effect fields that reference a GameAsset of the matching kind. */
-const MEDIA_FIELDS: Record<ContentProposalMediaKind, readonly string[]> = {
-  SFX: ["appearSfx", "disappearSfx"],
-  ANIMATION: ["appearAnimation", "staticAnimation", "disappearAnimation"],
-  IMAGE: ["image", "avatar"],
-};
 
 /** Every `reward_*` value inside a quest's content, as one comparable string. */
 export const questRewardSignature = (content: unknown) => {
@@ -87,12 +76,6 @@ export const withCreateBaseline = (
   }
   if ("content" in next) next.content = withoutRewards(next.content);
   return { ok: true, editable: next };
-};
-
-/** Whether `path` names a field a media candidate of `kind` may fill. */
-export const isMediaPath = (kind: ContentProposalMediaKind, path: string) => {
-  const last = path.split(".").pop() ?? "";
-  return MEDIA_FIELDS[kind].includes(last);
 };
 
 export type SetOperation = { path: string; value: unknown };

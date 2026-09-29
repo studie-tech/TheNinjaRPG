@@ -1,7 +1,11 @@
 // @vitest-environment node
 
 import { describe, expect, it } from "vitest";
-import { battlefieldSceneOf, sceneAssetIds } from "@/libs/contentReview/battlefield";
+import {
+  battlefieldSceneOf,
+  sceneAssetIds,
+  sceneSoundIds,
+} from "@/libs/contentReview/battlefield";
 
 const tag = (visuals: Record<string, string>, target?: string) => ({
   type: "damage",
@@ -63,7 +67,20 @@ describe("battlefieldSceneOf", () => {
     ).toEqual(["target"]);
   });
 
-  it("skips effects without visuals and entities that draw nothing", () => {
+  it("keeps sound-only effects and lists sounds apart from what it draws", () => {
+    const scene = battlefieldSceneOf("JUTSU", "j4", {
+      target: "OTHER_USER",
+      effects: [
+        tag({ appearAnimation: "zap", appearSfx: "zap-sound" }),
+        tag({ disappearSfx: "fizzle" }, "SELF"),
+      ],
+    });
+    expect(placements(scene)).toEqual(["target", "caster"]);
+    expect(sceneAssetIds(scene)).toEqual(["zap"]);
+    expect(sceneSoundIds(scene)).toEqual(["zap-sound", "fizzle"]);
+  });
+
+  it("skips effects that neither draw nor sound, and entities that draw nothing", () => {
     expect(battlefieldSceneOf("JUTSU", "j3", { target: "SELF", effects: [tag({})] })).toBe(
       null,
     );

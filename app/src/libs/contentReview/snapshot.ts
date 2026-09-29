@@ -1,4 +1,4 @@
-import { and, count, eq, gte, inArray, sum } from "drizzle-orm";
+import { and, count, eq, gte, inArray, or, sum } from "drizzle-orm";
 import { z } from "zod";
 import {
   CONTENT_AUDIT_WEEKDAY_FOCUS,
@@ -409,7 +409,13 @@ const recentSuggestions = async (client: DrizzleClient) => {
       contentProposalChange,
       eq(contentProposalChange.proposalId, contentProposal.id),
     )
-    .where(gte(contentProposal.statusChangedAt, since));
+    // Open suggestions stay listed however old they are; decided ones for the retention window.
+    .where(
+      or(
+        eq(contentProposal.status, "PENDING"),
+        gte(contentProposal.statusChangedAt, since),
+      ),
+    );
   const shape = (status: string) =>
     rows
       .filter((row) => row.status === status)

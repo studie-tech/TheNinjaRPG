@@ -16,7 +16,7 @@ import {
   useAutoCombatSetting,
   useBattleMaps,
 } from "@/hooks/combat";
-import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import { useTutorialStep } from "@/hooks/tutorial";
 import Image from "@/layout/Image";
@@ -67,7 +67,7 @@ import {
   smoothCameraFollow,
 } from "@/libs/threejs/util";
 import { showMutationToast } from "@/libs/toast";
-import { preloadAudioBuffers } from "@/utils/audio";
+import { preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { secondsFromNow } from "@/utils/time";
 import {
   combatActionIdAtom,
@@ -1072,11 +1072,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       // Callback on sprite animations
       // spriteMixer.addEventListener("finished", function (event) {});
 
-      // Get SFX volume from localStorage
-      const sfxVolume = (() => {
-        const saved = safeLocalStorageGetItem("sfxVolume");
-        return saved !== null ? (JSON.parse(saved) as number) : 0.8;
-      })();
+      const sfxVolume = savedSfxVolume();
 
       // PERFORMANCE: Cache dimensions to prevent layout thrashing in render loop
       let cachedWidth = WIDTH;

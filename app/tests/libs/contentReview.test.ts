@@ -12,12 +12,16 @@ import {
 import * as replicate from "@/libs/replicate";
 import type { DrizzleClient } from "@/server/db";
 import { withCreateBaseline } from "@/libs/contentReview/rules";
-import { getAtPath, setAtPath, topLevelField } from "@/libs/contentReview/paths";
+import {
+  getAtPath,
+  isMediaPath,
+  setAtPath,
+  topLevelField,
+} from "@/libs/contentReview/paths";
 import {
   agentChangeViolation,
   applySetOperations,
   changedFields,
-  isMediaPath,
   questRewardSignature,
 } from "@/libs/contentReview/rules";
 import {

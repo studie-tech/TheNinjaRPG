@@ -16,6 +16,7 @@ import {
 } from "@/drizzle/schema";
 import {
   type ContentEntity,
+  draftName,
   ENTITY_CONFIG,
   entityKey,
   loadEntities,
@@ -228,9 +229,7 @@ export const contentReviewRouter = createTRPCRouter({
             entityId: change.entityId,
             operation: change.operation,
             label: config.label,
-            name:
-              entity?.name ??
-              String(change.after.name ?? change.after.username ?? "New"),
+            name: entity?.name ?? (draftName(change.after) || "New"),
             detailHref: change.entityId ? config.detailHref(change.entityId) : null,
             before: change.before,
             after: change.after,
@@ -527,7 +526,7 @@ export const contentReviewRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (!isEpidemicConfigured())
-        return errorResponse("Epidemic Sound is not configured");
+        return errorResponse("Sound search is not configured");
       const { asset, created } = await importEpidemicSfx(
         ctx.drizzle,
         ctx.userId,

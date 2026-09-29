@@ -348,6 +348,12 @@ export const loadEntities = async (
 export const entityKey = (type: ContentProposalEntityType, id: string) =>
   `${type}:${id}`;
 
+/** Name of an entity that does not exist yet, from its drafted fields; AI name it `username`. */
+export const draftName = (fields: Record<string, unknown>) => {
+  const name = fields.name ?? fields.username;
+  return typeof name === "string" ? name.trim() : "";
+};
+
 /** Every entity of one type, for the audit snapshot. */
 export const loadAllEntities = async (
   client: DrizzleClient,
