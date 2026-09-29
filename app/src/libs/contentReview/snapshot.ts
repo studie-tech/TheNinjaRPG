@@ -267,7 +267,6 @@ export const buildAuditSnapshot = async (
         : {}),
     };
   });
-  // Most used first, so a trim for size drops the content that matters least.
   rows.sort((a, b) => (b.casts30d ?? 0) - (a.casts30d ?? 0));
   const snapshot = {
     generatedAt: new Date().toISOString(),
@@ -292,16 +291,28 @@ export const buildAuditSnapshot = async (
     visualCheckSchema: visualCheckJsonSchema(),
     entities: rows,
   };
-  while (
-    snapshot.entities.length > 0 &&
-    Buffer.byteLength(JSON.stringify(snapshot)) > MAX_SNAPSHOT_BYTES
-  ) {
-    snapshot.entities = snapshot.entities.slice(
-      0,
-      Math.floor(snapshot.entities.length * 0.9),
-    );
-  }
+  snapshot.entities = leadingRowsWithin(
+    rows,
+    MAX_SNAPSHOT_BYTES -
+      Buffer.byteLength(JSON.stringify({ ...snapshot, entities: [] })),
+  );
   return snapshot;
+};
+
+/**
+ * The leading rows whose JSON fits in `budget` bytes of an array. Rows come most used first,
+ * so a trim for size drops the content that matters least.
+ */
+export const leadingRowsWithin = <T>(rows: T[], budget: number) => {
+  let left = budget;
+  const kept: T[] = [];
+  for (const row of rows) {
+    const size = Buffer.byteLength(JSON.stringify(row)) + 1;
+    if (size > left) break;
+    left -= size;
+    kept.push(row);
+  }
+  return kept;
 };
 
 type Usage = { casts: number; winRate: number | null };

@@ -19,7 +19,11 @@ import {
   isMediaPath,
   questRewardSignature,
 } from "@/libs/contentReview/rules";
-import { auditJsonSchema, resolveFocus } from "@/libs/contentReview/snapshot";
+import {
+  auditJsonSchema,
+  leadingRowsWithin,
+  resolveFocus,
+} from "@/libs/contentReview/snapshot";
 import { normalizeEditable } from "@/libs/contentReview/submit";
 import { canonicalJson, contentVersion, sameValue } from "@/libs/contentReview/version";
 import { agentAuditOutputSchema } from "@/validators/contentReview";
@@ -280,5 +284,15 @@ describe("candidate collection", () => {
       "jutsu",
     );
     expect(found).toEqual([]);
+  });
+});
+
+describe("snapshot size", () => {
+  it("keeps the leading rows that fit and stops at the first that does not", () => {
+    const rows = [{ id: "aaaa" }, { id: "bb" }, { id: "cccccccc" }, { id: "d" }];
+    const size = (row: { id: string }) => Buffer.byteLength(JSON.stringify(row)) + 1;
+    const budget = size({ id: "aaaa" }) + size({ id: "bb" }) + 3;
+    expect(leadingRowsWithin(rows, budget)).toEqual([{ id: "aaaa" }, { id: "bb" }]);
+    expect(leadingRowsWithin(rows, 0)).toEqual([]);
   });
 });
