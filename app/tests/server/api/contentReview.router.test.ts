@@ -316,6 +316,58 @@ describeWithDatabase("content review", () => {
     expect(removed).toHaveBeenCalledWith(["generated-badge"]);
   });
 
+  it("deletes every planned upload when a later suggestion throws", async () => {
+    const candidate = {
+      source: "GENERATED" as const,
+      kind: "IMAGE" as const,
+      externalId: null,
+      title: "Generated: a badge",
+      url: "https://ui0arpl8sm.ufs.sh/f/first-upload",
+      fileKey: "first-upload",
+      lengthMs: null,
+      prompt: "a badge",
+    };
+    vi.spyOn(media, "collectCandidates")
+      .mockResolvedValueOnce([candidate])
+      .mockRejectedValueOnce(new Error("Storage fell over"));
+    const removed = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
+    const drawing = async (entityId: string) => ({
+      title: `Draw a new image for ${entityId}`,
+      category: "VISUAL" as const,
+      rationale: "The badge uses a placeholder image.",
+      confidence: 60,
+      usesUsageData: false,
+      changes: [
+        {
+          entityType: "BADGE" as const,
+          entityId,
+          operation: "UPDATE" as const,
+          set: [],
+          media: [
+            {
+              kind: "IMAGE" as const,
+              path: "image",
+              catalogIds: [],
+              search: null,
+              generate: "a badge",
+            },
+          ],
+        },
+      ],
+      basis: [{ entityType: "BADGE" as const, entityId, v: await versionOf(entityId) }],
+    });
+    await expect(
+      ingestAgentSubmission(await getTestDatabase(), {
+        agentName: "codex · test",
+        runUrl: null,
+        focus: "visual",
+        proposals: [await drawing(BADGE), await drawing(OTHER_BADGE)],
+      }),
+    ).rejects.toThrow("Storage fell over");
+    expect(removed).toHaveBeenCalledWith(["first-upload"]);
+    expect(await proposalRows()).toHaveLength(0);
+  });
+
   it("applies reviewer edits and leaves out unticked fields", async () => {
     const moderator = await callerFor(contentReviewRouter, MODERATOR);
     await moderator.create({

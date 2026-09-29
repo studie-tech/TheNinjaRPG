@@ -154,7 +154,8 @@ export const ingestAgentSubmission = async (
       { open, rejected, claimed },
       uploaded,
     ).catch(async (error: unknown) => {
-      await discardUploads(uploaded);
+      // Nothing of this submission gets saved, so no suggestion keeps its files.
+      await discardUploads([...uploaded, ...mediaKeys(planned)]);
       throw error;
     });
     if (typeof plan === "string") {
@@ -169,9 +170,7 @@ export const ingestAgentSubmission = async (
     result.accepted.push({ index, id: plan.proposal.id, title: proposal.title });
   }
   await insertRows(client, planned).catch(async (error: unknown) => {
-    await discardUploads(
-      planned.flatMap((rows) => rows.media.flatMap((row) => row.fileKey ?? [])),
-    );
+    await discardUploads(mediaKeys(planned));
     throw error;
   });
   result.summary = submissionSummary(submission, result, quota, planned.length);
@@ -478,6 +477,9 @@ const firstIssue = (error: z.ZodError) => {
   const issue = error.issues[0];
   return issue ? `${issue.path.join(".") || "value"}: ${issue.message}` : "invalid";
 };
+
+const mediaKeys = (planned: Rows[]) =>
+  planned.flatMap((rows) => rows.media.flatMap((row) => row.fileKey ?? []));
 
 /** Best effort: the hourly cleanup never sees files no suggestion recorded. */
 const discardUploads = async (keys: string[]) => {
