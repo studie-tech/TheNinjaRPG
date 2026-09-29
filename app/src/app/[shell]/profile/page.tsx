@@ -45,12 +45,8 @@ export default function Profile() {
   const visibleTabs = tutorialActive ? tutorialProfileTabs : profileTabs;
 
   return (
-    <ContentBox
-      id="tutorial-profile"
-      title="Global Logbook"
-      subtitle="Rewards, current activities, and opportunities"
-      padding={false}
-      topRightContent={
+    <div id="tutorial-profile">
+      <div className="mb-3 flex justify-end">
         <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavTabs
             current={activeTab}
@@ -59,17 +55,21 @@ export default function Profile() {
             fontSize="text-xs"
           />
         </div>
-      }
-    >
-      {activeTab === "Dashboard" && <ProfileDashboard />}
-      {activeTab === "Character" && <CharacterProfile />}
-      {activeTab === "Achievements" && (
-        <div className="p-3">
-          <LogbookAchievements />
-        </div>
+      </div>
+      {activeTab === "Character" ? (
+        <CharacterProfile />
+      ) : (
+        <ContentBox padding={false}>
+          {activeTab === "Dashboard" && <ProfileDashboard />}
+          {activeTab === "Achievements" && (
+            <div className="p-3">
+              <LogbookAchievements />
+            </div>
+          )}
+          {activeTab === "History" && <ProfileHistory />}
+        </ContentBox>
       )}
-      {activeTab === "History" && <ProfileHistory />}
-    </ContentBox>
+    </div>
   );
 }
 
