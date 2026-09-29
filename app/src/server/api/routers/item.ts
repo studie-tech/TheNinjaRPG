@@ -52,6 +52,7 @@ import {
   questHistory,
   sageMode,
   sageModeRolls,
+  skillTree,
   userData,
   userItem,
   userItemImbuement,
@@ -75,6 +76,7 @@ import {
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
+  itemStacksIgnoreLevel,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
   readItemListFilterSlot,
@@ -93,11 +95,12 @@ import {
 } from "@/libs/quest";
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { filterRollableSageModes } from "@/libs/sageMode";
+import { getActivatedSkillIds, meetsRequiredSkill } from "@/libs/skillTree";
 import { callDiscordContent } from "@/libs/socials";
 import { hasRequiredLevel } from "@/libs/train";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
-import { fetchUserSkills } from "@/routers/skillTree";
+import { fetchUserSkills, resolveRequiredSkillName } from "@/routers/skillTree";
 import { fetchStructures } from "@/routers/village";
 import {
   baseServerResponse,
@@ -282,6 +285,7 @@ export const itemRouter = createTRPCRouter({
           target: "CHARACTER",
           effects: [],
           hidden: true,
+          requiredSkillId: null,
         });
         return { success: true, message: id };
       } else {
@@ -435,30 +439,43 @@ export const itemRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       setEmptyStringsToNulls(input.data, item);
       // Query
-      const [user, entry, itemWithName, parent, siblings, evolutionGraph] =
-        await Promise.all([
-          fetchUser(ctx.drizzle, ctx.userId),
-          fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
-          ctx.drizzle.query.item.findFirst({
-            columns: { name: true, id: true },
-            where: eq(item.name, input.data.name),
-          }),
-          input.data.parentItemId
-            ? fetchItem(ctx.drizzle, input.data.parentItemId)
-            : Promise.resolve(null),
-          input.data.parentItemId
-            ? ctx.drizzle.query.item.findMany({
-                columns: { id: true },
-                where: eq(item.parentItemId, input.data.parentItemId),
-              })
-            : Promise.resolve([]),
-          input.data.parentItemId
-            ? ctx.drizzle.query.item.findMany({
-                columns: { id: true, parentItemId: true },
-                where: isNotNull(item.parentItemId),
-              })
-            : Promise.resolve([]),
-        ]);
+      const [
+        user,
+        entry,
+        itemWithName,
+        parent,
+        siblings,
+        evolutionGraph,
+        requiredSkill,
+      ] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchItemWithCraftingRequirements(ctx.drizzle, input.id),
+        ctx.drizzle.query.item.findFirst({
+          columns: { name: true, id: true },
+          where: eq(item.name, input.data.name),
+        }),
+        input.data.parentItemId
+          ? fetchItem(ctx.drizzle, input.data.parentItemId)
+          : Promise.resolve(null),
+        input.data.parentItemId
+          ? ctx.drizzle.query.item.findMany({
+              columns: { id: true },
+              where: eq(item.parentItemId, input.data.parentItemId),
+            })
+          : Promise.resolve([]),
+        input.data.parentItemId
+          ? ctx.drizzle.query.item.findMany({
+              columns: { id: true, parentItemId: true },
+              where: isNotNull(item.parentItemId),
+            })
+          : Promise.resolve([]),
+        input.data.requiredSkillId
+          ? ctx.drizzle.query.skillTree.findFirst({
+              columns: { id: true },
+              where: eq(skillTree.id, input.data.requiredSkillId),
+            })
+          : Promise.resolve(null),
+      ]);
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
@@ -468,6 +485,8 @@ export const itemRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) {
         return errorResponse("Not allowed to edit item");
       }
+      if (input.data.requiredSkillId && !requiredSkill)
+        return errorResponse("Required skill not found");
       if (entry.id === TUTORIAL_ITEM_ID && input?.data?.hidden)
         return errorResponse("Cannot hide tutorial item");
       // Validate evolution chain constraints
@@ -667,12 +686,14 @@ export const itemRouter = createTRPCRouter({
     .input(evolveItemSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, userItems, evolutionItem, loadouts] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-        fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
-        fetchItem(ctx.drizzle, input.evolutionItemId),
-        fetchItemLoadouts(ctx.drizzle, ctx.userId),
-      ]);
+      const [{ user }, userItems, evolutionItem, loadouts, userSkills] =
+        await Promise.all([
+          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+          fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
+          fetchItem(ctx.drizzle, input.evolutionItemId),
+          fetchItemLoadouts(ctx.drizzle, ctx.userId),
+          fetchUserSkills(ctx.drizzle, ctx.userId),
+        ]);
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
         return errorResponse("Must be awake to evolve an item");
@@ -725,9 +746,13 @@ export const itemRouter = createTRPCRouter({
       }
 
       const canKeepEquipped =
-        userItemObj.equipped === "NONE" ||
-        userItemObj.equipped === evolutionItem.slot ||
-        userItemObj.equipped.startsWith(`${evolutionItem.slot}_`);
+        meetsRequiredSkill(
+          evolutionItem.requiredSkillId,
+          getActivatedSkillIds(userSkills),
+        ) &&
+        (userItemObj.equipped === "NONE" ||
+          userItemObj.equipped === evolutionItem.slot ||
+          userItemObj.equipped.startsWith(`${evolutionItem.slot}_`));
 
       let didEvolveThisCall = false;
       if (!alreadyEvolved) {
@@ -1322,7 +1347,7 @@ export const itemRouter = createTRPCRouter({
       // Query — ownership check runs in parallel (variantId known upfront). The
       // token only needs its base item (effects) and quantity, so fetchUserItem
       // (no variant join) suffices here.
-      const [user, tokenItem, variant, ownershipRows, existingUnlock] =
+      const [user, tokenItem, variant, ownershipRows, existingUnlock, userSkills] =
         await Promise.all([
           fetchUser(ctx.drizzle, ctx.userId),
           fetchUserItem(ctx.drizzle, ctx.userId, input.tokenUserItemId),
@@ -1336,6 +1361,7 @@ export const itemRouter = createTRPCRouter({
               eq(userItemVariant.variantId, input.variantId),
             ),
           }),
+          fetchUserSkills(ctx.drizzle, ctx.userId),
         ]);
 
       // Guards — mirror the consume mutation's state checks so a token cannot be
@@ -1347,6 +1373,18 @@ export const itemRouter = createTRPCRouter({
         return errorResponse(`Cannot use items while ${user.status.toLowerCase()}`);
       }
       if (!tokenItem) return errorResponse("Token item not found");
+      if (
+        !meetsRequiredSkill(
+          tokenItem.item.requiredSkillId,
+          getActivatedSkillIds(userSkills),
+        )
+      ) {
+        const requiredSkill = await resolveRequiredSkillName(
+          ctx.drizzle,
+          tokenItem.item.requiredSkillId,
+        );
+        return errorResponse(`Requires active skill: ${requiredSkill}`);
+      }
       if (tokenItem.storedAtHome) {
         return errorResponse("Fetch the Variant Token from home storage first");
       }
@@ -1497,7 +1535,7 @@ export const itemRouter = createTRPCRouter({
       const itemIds = [
         ...new Set(
           userItemsAll
-            .filter((r) => r.item && r.item.stackSize > 1)
+            .filter((r) => r.item?.canStack && r.item.stackSize > 1)
             .map((r) => r.itemId),
         ),
       ];
@@ -1647,10 +1685,11 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [useritems, user, loadouts] = await Promise.all([
+      const [useritems, user, loadouts, userSkills] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       // Mutate
       const result = await toggleEquipItem(
@@ -1659,6 +1698,7 @@ export const itemRouter = createTRPCRouter({
         useritems,
         user,
         input.slot,
+        getActivatedSkillIds(userSkills),
       );
       // If anything happened
       if (result.success && "promises" in result && result.promises.length > 0) {
@@ -1812,6 +1852,18 @@ export const itemRouter = createTRPCRouter({
       }
       if (!nonCombatConsume(useritem.item, user)) {
         return errorResponse("Not consumable");
+      }
+      if (
+        !meetsRequiredSkill(
+          useritem.item.requiredSkillId,
+          getActivatedSkillIds(userSkills),
+        )
+      ) {
+        const requiredSkill = await resolveRequiredSkillName(
+          ctx.drizzle,
+          useritem.item.requiredSkillId,
+        );
+        return errorResponse(`Requires active skill: ${requiredSkill}`);
       }
 
       // Validate the same snapshot used below before consuming any quantity.
@@ -2263,10 +2315,11 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, repairUserItem, targetUserItem] = await Promise.all([
+      const [user, repairUserItem, targetUserItem, userSkills] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.repairItemId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.targetItemId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       // Guard
       if (!user) return errorResponse("User not found");
@@ -2274,6 +2327,18 @@ export const itemRouter = createTRPCRouter({
       if (!targetUserItem) return errorResponse("Target item not found");
       if (repairUserItem.userId !== user.userId)
         return errorResponse("Not your repair item");
+      if (
+        !meetsRequiredSkill(
+          repairUserItem.item.requiredSkillId,
+          getActivatedSkillIds(userSkills),
+        )
+      ) {
+        const requiredSkill = await resolveRequiredSkillName(
+          ctx.drizzle,
+          repairUserItem.item.requiredSkillId,
+        );
+        return errorResponse(`Requires active skill: ${requiredSkill}`);
+      }
       if (targetUserItem.userId !== user.userId)
         return errorResponse("Not your target item");
       if (user.status !== "AWAKE") {
@@ -2382,9 +2447,10 @@ export const itemRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, useritems] = await Promise.all([
+      const [user, useritems, userSkills] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       // Guard
       if (!user) return errorResponse("User not found");
@@ -2397,8 +2463,25 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("No items need repair");
       }
       // Shared kit selection with the inventory preview (lowest power first)
-      const repairKits = getRepairKits(useritems);
+      const activatedSkillIds = getActivatedSkillIds(userSkills);
+      const allRepairKits = getRepairKits(useritems);
+      const repairKits = getRepairKits(
+        useritems.filter((useritem) =>
+          meetsRequiredSkill(useritem.item.requiredSkillId, activatedSkillIds),
+        ),
+      );
       if (repairKits.length === 0) {
+        const gatedKit = allRepairKits.find(
+          ({ userItem: kit }) =>
+            !meetsRequiredSkill(kit.item.requiredSkillId, activatedSkillIds),
+        );
+        if (gatedKit) {
+          const requiredSkill = await resolveRequiredSkillName(
+            ctx.drizzle,
+            gatedKit.userItem.item.requiredSkillId,
+          );
+          return errorResponse(`Requires active skill: ${requiredSkill}`);
+        }
         return errorResponse("You don't have any repair items in your inventory");
       }
       const { kitsToUse, totalDurabilityNeeded, canRepairAll } = calculateKitsToUse(
@@ -2525,11 +2608,12 @@ export const itemRouter = createTRPCRouter({
       // Read userData before inventory so the transactional updatedAt CAS below
       // detects any capacity mutation that commits between these snapshots.
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const [info, useritems, structures, questState] = await Promise.all([
+      const [info, useritems, structures, questState, userSkills] = await Promise.all([
         fetchItem(ctx.drizzle, iid),
         fetchUserItems(ctx.drizzle, uid),
         fetchStructures(ctx.drizzle, input.villageId),
         fetchUserQuestState(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       // Derived — capacity counts carried stacks by dedicated inventory bucket
       const carriedItems = useritems?.filter((ui) => !ui.storedAtHome) ?? [];
@@ -2593,6 +2677,7 @@ export const itemRouter = createTRPCRouter({
         instancesEquipped < info.maxEquips &&
         user.level >= info.requiredLevel &&
         (!info.bloodlineId || info.bloodlineId === user.bloodlineId) &&
+        meetsRequiredSkill(info.requiredSkillId, getActivatedSkillIds(userSkills)) &&
         canEquipAdditional(
           info,
           useritems
@@ -2709,9 +2794,10 @@ export const itemRouter = createTRPCRouter({
     .meta({ mcp: { enabled: true, description: "Auto-equip best items by cost" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
-      const [useritems, user] = await Promise.all([
+      const [useritems, user, userSkills] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
 
       // Slot exclusivity and category / maxEquips limits are decided against one
@@ -2721,7 +2807,12 @@ export const itemRouter = createTRPCRouter({
       // is not equipped.
       const now = new Date();
       const { assignments, hasUnequipped, hasAvailableSlots } =
-        computeAutoEquipAssignments(useritems, user, now);
+        computeAutoEquipAssignments(
+          useritems,
+          user,
+          now,
+          getActivatedSkillIds(userSkills),
+        );
 
       if (!hasUnequipped) {
         return errorResponse("No unequipped items available");
@@ -2817,14 +2908,22 @@ export const itemRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [loadouts, user, useritems] = await Promise.all([
+      const [loadouts, user, useritems, userSkills] = await Promise.all([
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       // Mutate & return result
       const id = input.id;
-      return await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, user);
+      return await selectItemLoadout(
+        ctx.drizzle,
+        id,
+        loadouts,
+        useritems,
+        user,
+        getActivatedSkillIds(userSkills),
+      );
     }),
 
   renameLoadout: protectedProcedure
@@ -2880,6 +2979,7 @@ export const selectItemLoadout = async (
     UserData,
     "userId" | "federalStatus" | "staffAccount" | "level" | "bloodlineId"
   >,
+  activatedSkillIds: ReadonlySet<string>,
 ) => {
   // Guard: only loadouts within the user's current allowance are selectable, so
   // a downgraded user can't reach an out-of-range loadout by guessing its
@@ -2901,6 +3001,7 @@ export const selectItemLoadout = async (
     useritems,
     user,
     now,
+    activatedSkillIds,
   );
 
   // Apply atomically: a single statement equips the loadout and unequips
@@ -3257,6 +3358,7 @@ export const toggleEquipItem = async (
   useritems: UserItemWithRelations[],
   user: UserData,
   slot?: ItemSlot,
+  activatedSkillIds: ReadonlySet<string> = new Set(),
 ) => {
   // Create a clone to be returned
   const newUserItems = structuredClone(useritems);
@@ -3269,6 +3371,13 @@ export const toggleEquipItem = async (
 
   // Only check requirements when equipping (not when unequipping)
   if (doEquip) {
+    if (!meetsRequiredSkill(useritem.item.requiredSkillId, activatedSkillIds)) {
+      const requiredSkill = await resolveRequiredSkillName(
+        client,
+        useritem.item.requiredSkillId,
+      );
+      return errorResponse(`Requires active skill: ${requiredSkill}`);
+    }
     if (useritem.item.requiredLevel > user.level) {
       return errorResponse(
         `You need to be level ${useritem.item.requiredLevel} to equip this item`,
@@ -3744,15 +3853,16 @@ type UserItemMergeBucketRow = Pick<
 // different selected cosmetics never merge into one (which would silently drop
 // one variant). Same-variant stacks share a bucket, so the merged row keeps the
 // correct variant and the per-bucket UPDATE/DELETE need not guard on it.
-// level is part of the key for the same reason: merging a leveled stack into a
-// lower-level one would silently drop its ownership progression.
+// Level is intentionally ignored for stackable items. A stack represents one shared
+// quantity regardless of the legacy ownership levels on the rows being consolidated.
 // Note: a selectVariant call racing between bucket construction and the writes
 // could move a row to a different variant after bucketing — an accepted,
 // pre-existing PlanetScale limitation (no transactions), not a regression here.
 const mergeStacksBucketKey = (
   row: Pick<UserItem, "storedAtHome" | "equipped" | "activeVariantId" | "level">,
+  ignoreLevel: boolean,
 ) =>
-  `${row.storedAtHome ? "home" : "carry"}:${row.equipped}:${row.activeVariantId ?? "none"}:${row.level}`;
+  `${row.storedAtHome ? "home" : "carry"}:${row.equipped}:${row.activeVariantId ?? "none"}:${ignoreLevel ? "unscaled" : row.level}`;
 
 const mergeStackRowGuard = (
   userId: string,
@@ -4005,13 +4115,13 @@ async function executeMergeStacksForItem(
       (!i.craftingFinishedAt || i.craftingFinishedAt < new Date()) &&
       !i.isInAuction,
   );
-  if (!info || filteredUserItems.length === 0) {
+  if (!info?.canStack || filteredUserItems.length === 0) {
     return { success: true, didMerge: false, message: "" };
   }
 
   const buckets = new Map<string, UserItemMergeBucketRow[]>();
   for (const row of filteredUserItems) {
-    const key = mergeStacksBucketKey(row);
+    const key = mergeStacksBucketKey(row, itemStacksIgnoreLevel(info));
     const list = buckets.get(key);
     if (list) {
       list.push(row);

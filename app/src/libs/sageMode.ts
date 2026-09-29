@@ -182,6 +182,7 @@ export const SAGE_MODE_ACTIVATION_JUTSU: Jutsu = {
   range: 0,
   cooldown: 0,
   bloodlineId: null,
+  requiredSkillId: null,
   requiredLevel: 1,
   requiredRank: "STUDENT",
   jutsuType: "SPECIAL",
