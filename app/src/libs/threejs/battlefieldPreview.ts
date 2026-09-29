@@ -35,7 +35,7 @@ import {
 import { ActionSprite, SpriteMixer } from "@/libs/threejs/SpriteMixer";
 import { cleanUp, loadTexture, setupScene } from "@/libs/threejs/util";
 import { preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
-import { textureImageUrl } from "@/utils/image";
+import { isBunnyCdnUrl, textureImageUrl, transformImageUrl } from "@/utils/image";
 import { sleep } from "@/utils/time";
 import { VisualTag } from "@/validators/combat";
 import type { BattlefieldSheetsInput } from "@/validators/contentReview";
@@ -54,7 +54,8 @@ export const createBattlefieldPreview = (
   const assets = [
     ...options.assets.map((asset) => {
       const suggested = content.assets.find((entry) => entry.id === asset.id);
-      return suggested ? { ...asset, ...suggested } : asset;
+      const row = suggested ? { ...asset, ...suggested } : asset;
+      return { ...row, image: textureSource(row.image) };
     }),
     // Combat looks a sound up by id and reads only its url.
     ...Object.entries(options.sounds ?? {}).map(
@@ -87,7 +88,12 @@ export const createBattlefieldPreview = (
   const targetId = `${id}-target`;
   const battle = previewBattle(id, background, [
     fighter(casterId, "Caster", TILES.caster, null),
-    fighter(targetId, "Target", TILES.target, content.targetAvatar),
+    fighter(
+      targetId,
+      "Target",
+      TILES.target,
+      content.targetAvatar ? textureSource(content.targetAvatar) : null,
+    ),
   ]);
   // One seed for every preview, so current and proposed versions share their scenery.
   const field = drawCombatBackground(width, battle, alea("battlefield-preview"), false);
@@ -482,6 +488,23 @@ const previewBattle = (
       bountySignups: {},
     },
   };
+};
+
+/**
+ * An artwork URL with a browser cache entry of its own. The review desk also shows artwork in
+ * plain <img> tags, and S3 answers those without CORS headers or `Vary: Origin`, so a texture
+ * request (made with `crossOrigin`) for the same URL would reuse that answer and fail. The
+ * Bunny CDN always sends CORS headers, and relative paths are same-origin.
+ */
+const textureSource = (url: string) => {
+  if (isBunnyCdnUrl(transformImageUrl(url))) return url;
+  try {
+    const source = new URL(url);
+    source.searchParams.set("texture", "1");
+    return source.toString();
+  } catch {
+    return url;
+  }
 };
 
 /** A full-health fighter; the renderer reads only its tile, pools and artwork. */

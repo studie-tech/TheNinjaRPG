@@ -229,8 +229,8 @@ export const ContentReviewDesk: React.FC = () => {
             </div>
           )}
           <p className="text-xs opacity-70">
-            Shortcuts: J and K move, A approves, R rejects, E edits text. Rejected and
-            outdated suggestions are removed after 10 days.
+            Shortcuts: J and K move, A twice approves, R rejects, E edits text. Rejected
+            and outdated suggestions are removed after 10 days.
           </p>
         </div>
       )}

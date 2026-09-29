@@ -345,7 +345,13 @@ export const createStaffProposal = async (
   if (input.entityId && !entity)
     return { ok: false, reason: `${config.label} not found` };
   const base = normalizeEditable(input.entityType, entity?.editable ?? {});
-  const proposed = editableOf(input.entityType, input.data);
+  // An empty select or input reads "" where the database holds null: a field the author left
+  // empty is not part of the suggestion, so the live value stands and is what gets validated.
+  const proposed = Object.fromEntries(
+    Object.entries(editableOf(input.entityType, input.data)).filter(
+      ([field, value]) => !(entity && value === "" && (base[field] ?? null) === null),
+    ),
+  );
   const parsed = config.validator.safeParse(
     entity ? { ...entity.payload, ...proposed } : proposed,
   );

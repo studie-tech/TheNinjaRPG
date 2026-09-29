@@ -71,6 +71,8 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
     useState<ContentProposalRejectReason>("NOT_AN_IMPROVEMENT");
   const [note, setNote] = useState("");
   const [preview, setPreview] = useState<"proposed" | "current">("proposed");
+  const [isApproveArmed, setIsApproveArmed] = useState(false);
+  const [hasPickedReason, setHasPickedReason] = useState(false);
 
   const refresh = async () => {
     await Promise.all([
@@ -122,8 +124,9 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
     reject.mutate({ id: proposal.id, reason, note: note.trim() || null });
   };
 
-  // Keyboard review: J/K move, A approve, R reject, E edit text. Typing in a field and open
-  // dialogs are left alone.
+  // Keyboard review: J/K move, A twice approves, R then a reason number and Enter rejects, E
+  // edits text. Typing in a field and open dialogs are left alone. Deciding always takes a
+  // deliberate second key, so text typed while no field has focus cannot decide a suggestion.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -131,21 +134,31 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
       if (document.querySelector("[role='dialog']")) return;
       const key = event.key.toLowerCase();
+      if (event.repeat && ["a", "r", "enter"].includes(key)) return;
       // While a rejection is being written, only its own keys act: no approving or moving on.
       if (rejecting) {
         if (/^[1-5]$/.test(key)) {
           const next = ContentProposalRejectReasons[Number(key) - 1];
           if (next) setReason(next);
+          setHasPickedReason(true);
         } else if (key === "enter") {
           // A focused button, link or the reason select acts on its own Enter.
           if (target?.closest("button, a, [role='combobox'], [role='listbox']")) return;
-          doReject();
+          if (hasPickedReason) doReject();
         } else if (key === "escape" || key === "r") {
           setRejecting(false);
+          setHasPickedReason(false);
         } else {
           return;
         }
         event.preventDefault();
+      } else if (isApproveArmed) {
+        // Only a second A confirms; any other key cancels.
+        setIsApproveArmed(false);
+        if (key === "a") {
+          event.preventDefault();
+          doApprove();
+        }
       } else if (key === "escape") {
         setRejecting(false);
         setEditing(false);
@@ -153,8 +166,8 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
         onMove(1);
       } else if (key === "k") {
         onMove(-1);
-      } else if (key === "a") {
-        doApprove();
+      } else if (key === "a" && isPendingProposal) {
+        setIsApproveArmed(true);
       } else if (key === "r" && isPendingProposal) {
         setRejecting((value) => !value);
       } else if (key === "e" && isPendingProposal && hasText) {
@@ -442,19 +455,28 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
             </Button>
           )}
           <span className="grow" />
-          <Button onClick={doApprove} disabled={busy} loading={approve.isPending}>
-            <Check className="mr-1 h-4 w-4" /> Approve and apply <Kbd>A</Kbd>
+          <Button
+            onClick={doApprove}
+            disabled={busy}
+            loading={approve.isPending}
+            className={isApproveArmed ? "ring-2 ring-green-600 ring-offset-2" : ""}
+          >
+            <Check className="mr-1 h-4 w-4" />{" "}
+            {isApproveArmed ? "Press A again to apply" : "Approve and apply"}{" "}
+            <Kbd>A</Kbd>
           </Button>
           {rejecting && (
             <div className="flex w-full flex-col gap-2 rounded-lg border bg-poppopover p-2">
               <Label htmlFor="reject-reason">
-                Why reject? The next audit reads this.
+                Why reject? The next audit reads this. Pick a reason (keys 1 to 5), then
+                press Enter.
               </Label>
               <Select
                 value={reason}
-                onValueChange={(value) =>
-                  setReason(value as ContentProposalRejectReason)
-                }
+                onValueChange={(value) => {
+                  setReason(value as ContentProposalRejectReason);
+                  setHasPickedReason(true);
+                }}
               >
                 <SelectTrigger id="reject-reason">
                   <SelectValue />

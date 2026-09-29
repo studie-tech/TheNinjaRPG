@@ -10,6 +10,7 @@ import {
   contentProposalChange,
   contentProposalMedia,
   gameAsset,
+  item,
   userData,
 } from "@/drizzle/schema";
 import { cleanupContentProposals } from "@/libs/contentReview/cleanup";
@@ -21,7 +22,7 @@ import * as socials from "@/libs/socials";
 import { badgeRouter } from "@/server/api/routers/badge";
 import { contentReviewRouter } from "@/server/api/routers/contentReview";
 import type { AgentSubmission } from "@/validators/contentReview";
-import { insertUsers } from "../../setup/factories";
+import { insertItems, insertUsers } from "../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const EDITOR = "review-editor";
@@ -69,6 +70,7 @@ describeWithDatabase("content review", () => {
       actionLog,
       badge,
       gameAsset,
+      item,
       userData,
     );
     await insertUsers([
@@ -109,6 +111,73 @@ describeWithDatabase("content review", () => {
     await moderator.create({ ...input, data: { ...input.data, name: ` ${input.data.name} ` } });
     const [row] = await proposalRows();
     expect(row?.changes[0]?.after).toEqual({ description: "Awarded for bravery in battle." });
+  });
+
+  it("ignores fields a form leaves empty where the database holds null", async () => {
+    const [row] = await insertItems([
+      {
+        id: "review-item",
+        name: "Review Kunai",
+        image: "https://ui0arpl8sm.ufs.sh/f/kunai.webp",
+        description: "A plain kunai.",
+      },
+    ]);
+    const live = (
+      await loadEntities(await getTestDatabase(), [
+        { entityType: "ITEM", entityId: "review-item" },
+      ])
+    ).get(entityKey("ITEM", "review-item"));
+    const moderator = await callerFor(contentReviewRouter, MODERATOR);
+    const result = await moderator.create({
+      entityType: "ITEM",
+      entityId: row?.id ?? "",
+      category: "GRAMMAR",
+      title: "Sharpen the kunai description",
+      rationale: "The description undersells the item.",
+      data: { ...live?.payload, description: "A well balanced kunai.", bloodlineId: "", parentItemId: "" },
+    });
+    expect(result.success).toBe(true);
+    const [stored] = await proposalRows();
+    expect(stored?.changes[0]?.after).toEqual({ description: "A well balanced kunai." });
+  });
+
+  it("records the defaults an update fills in, so an effect change can be reverted", async () => {
+    const database = await getTestDatabase();
+    const ref = { entityType: "ITEM" as const, entityId: "review-blade" };
+    await insertItems([
+      {
+        id: ref.entityId,
+        name: "Review Blade",
+        image: "https://ui0arpl8sm.ufs.sh/f/blade.webp",
+        hidden: true,
+        // Stored without the defaults the item update fills in, as older rows are.
+        effects: [
+          { type: "damage", power: 10, rounds: 0, description: "Cuts the target" },
+        ] as never,
+      },
+    ]);
+    const live = (await loadEntities(database, [ref])).get(entityKey("ITEM", ref.entityId));
+    const [effect] = live?.editable.effects as Record<string, unknown>[];
+    const moderator = await callerFor(contentReviewRouter, MODERATOR);
+    await moderator.create({
+      ...ref,
+      category: "SOUND",
+      title: "Give the blade a sound",
+      rationale: "The blade makes no sound when it hits.",
+      data: { ...live?.payload, effects: [{ ...effect, appearSfx: "sfx-slash" }] },
+    });
+    const [created] = await proposalRows();
+    const editor = await callerFor(contentReviewRouter, EDITOR);
+    expect((await editor.approve({ id: created?.id ?? "" })).success).toBe(true);
+    const stored = (await loadEntities(database, [ref])).get(entityKey("ITEM", ref.entityId));
+    const [row] = await proposalRows();
+    expect(row?.changes[0]?.applied).toEqual({ effects: stored?.editable.effects });
+    // A record without the filled-in defaults still matches the row they were saved into.
+    await database
+      .update(contentProposalChange)
+      .set({ applied: { effects: [{ ...effect, appearSfx: "sfx-slash" }] } })
+      .where(eq(contentProposalChange.id, row?.changes[0]?.id ?? ""));
+    expect((await editor.revert({ id: created?.id ?? "" })).success).toBe(true);
   });
 
   it("applies an approval through the badge's own update and can revert it", async () => {

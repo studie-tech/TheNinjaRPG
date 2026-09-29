@@ -18,6 +18,7 @@ import {
   type ContentEntity,
   draftName,
   ENTITY_CONFIG,
+  editableOf,
   entityKey,
   loadEntities,
 } from "@/libs/contentReview/entities";
@@ -387,8 +388,13 @@ export const contentReviewRouter = createTRPCRouter({
           return errorResponse(`${label} ${change.entityId} no longer exists`);
         }
         const applied = change.applied ?? {};
+        const live = storedEditable(change.entityType, entity.payload);
+        const expected = storedEditable(change.entityType, {
+          ...entity.payload,
+          ...applied,
+        });
         const edited = Object.keys(applied).some(
-          (field) => !sameValue(entity.editable[field], applied[field]),
+          (field) => !sameValue(live[field], expected[field]),
         );
         if (edited) {
           return errorResponse(
@@ -780,6 +786,20 @@ const rollback = async (
     })),
     startedAt,
   );
+};
+
+/**
+ * Editable fields as the entity's update stores them: its validator fills in defaults (an
+ * effect's `dmgModifier`, for example) and trims text. Revert compares these forms, so a
+ * value the save itself completed never reads as somebody else's edit.
+ */
+const storedEditable = (
+  type: ContentProposalEntityType,
+  payload: Record<string, unknown>,
+) => {
+  const parsed = ENTITY_CONFIG[type].validator.safeParse(payload);
+  const stored = parsed.success ? (parsed.data as Record<string, unknown>) : payload;
+  return normalizeEditable(type, editableOf(type, stored));
 };
 
 const refsOf = (
