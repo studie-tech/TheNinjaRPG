@@ -160,6 +160,30 @@ describeWithDatabase("content review", () => {
     expect((await proposalRows())[0]?.status).toBe("PENDING");
   });
 
+  it("returns the suggestions an undone approval outdated to the queue", async () => {
+    const moderator = await callerFor(contentReviewRouter, MODERATOR);
+    await moderator.create(suggestion("Awarded for bravery in battle."));
+    await moderator.create({
+      ...suggestion("Awarded for braveyr in battle."),
+      title: "Rename the badge",
+      data: { ...badgeRow(BADGE, "Awarded for braveyr in battle."), name: "Brave Heart" },
+    });
+    const first = (await proposalRows()).find(
+      (row) => row.title === "Fix the badge description",
+    );
+    vi.spyOn(socials, "callDiscordContent").mockRejectedValue(new Error("Discord is down"));
+    const editor = await callerFor(contentReviewRouter, EDITOR);
+    await expect(editor.approve({ id: first?.id ?? "" })).rejects.toThrow(
+      "Discord is down",
+    );
+    const rows = await proposalRows();
+    expect(rows.map((row) => [row.title, row.status]).sort()).toEqual([
+      ["Fix the badge description", "PENDING"],
+      ["Rename the badge", "PENDING"],
+    ]);
+    expect(rows.every((row) => row.outdatedReason === null)).toBe(true);
+  });
+
   it("applies reviewer edits and leaves out unticked fields", async () => {
     const moderator = await callerFor(contentReviewRouter, MODERATOR);
     await moderator.create({

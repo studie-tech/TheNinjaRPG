@@ -22,7 +22,10 @@ import {
 } from "@/libs/contentReview/entities";
 import { isEpidemicConfigured, searchEpidemicSfx } from "@/libs/contentReview/epidemic";
 import { importEpidemicSfx, materializeChoice } from "@/libs/contentReview/media";
-import { refreshProposalFreshness } from "@/libs/contentReview/outdate";
+import {
+  refreshProposalFreshness,
+  reinstateProposalsFor,
+} from "@/libs/contentReview/outdate";
 import { getAtPath, setAtPath, topLevelField } from "@/libs/contentReview/paths";
 import {
   createStaffProposal,
@@ -589,6 +592,8 @@ const applyProposal = async (
     plans.push({ change, entity, fields, editable });
   }
   if (plans.length === 0) return errorResponse("Tick at least one change to apply");
+  // Suggestions this approval outdates from here on come back if it is undone.
+  const startedAt = new Date();
   const claim = await ctx.drizzle
     .update(contentProposal)
     .set({
@@ -634,7 +639,7 @@ const applyProposal = async (
         : await createEntity(ctx, type, plan.editable);
       const entityId = plan.entity?.id ?? outcome.id;
       if (!outcome.success || !entityId) {
-        await rollback(ctx, proposal.id, done, added);
+        await rollback(ctx, proposal.id, done, added, startedAt);
         return errorResponse(`${ENTITY_CONFIG[type].label}: ${outcome.message}`);
       }
       done.push({ plan, entityId });
@@ -659,7 +664,7 @@ const applyProposal = async (
     const partial = current?.entity
       ? [{ plan: current, entityId: current.entity.id }]
       : [];
-    await rollback(ctx, proposal.id, [...done, ...partial], added);
+    await rollback(ctx, proposal.id, [...done, ...partial], added, startedAt);
     throw error;
   }
   const names = done.map(({ plan }) => plan.entity?.name ?? "a new entry").join(", ");
@@ -675,6 +680,7 @@ const rollback = async (
     entityId: string;
   }[],
   assets: (typeof gameAsset.$inferInsert)[],
+  startedAt: Date,
 ) => {
   for (const { plan, entityId } of [...done].reverse()) {
     const type = plan.change.entityType;
@@ -705,6 +711,15 @@ const rollback = async (
       .set({ status: "PENDING", reviewedByUserId: null, statusChangedAt: new Date() })
       .where(eq(contentProposal.id, proposalId)),
   ]);
+  // The entities' own updates outdated the other suggestions resting on them.
+  await reinstateProposalsFor(
+    ctx.drizzle,
+    done.map(({ plan, entityId }) => ({
+      entityType: plan.change.entityType,
+      entityId,
+    })),
+    startedAt,
+  );
 };
 
 const updateEntity = (

@@ -1,4 +1,4 @@
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, lt } from "drizzle-orm";
 import {
   CONTENT_PROPOSAL_EVIDENCE_DAYS,
   type ContentProposalEntityType,
@@ -47,6 +47,69 @@ export const outdateProposalsFor = async (
       row.version,
   );
   await markOutdated(client, [...new Set(changed.map((row) => row.id))], reason);
+};
+
+/**
+ * Return to the queue the suggestions an undone approval outdated. Once its writes are rolled
+ * back, a suggestion outdated since `since` that rests on one of these entities is current
+ * again when its whole basis matches the live rows.
+ */
+export const reinstateProposalsFor = async (
+  client: DrizzleClient,
+  refs: { entityType: ContentProposalEntityType; entityId: string }[],
+  since: Date,
+) => {
+  if (refs.length === 0) return;
+  const rows = await client
+    .select({
+      id: contentProposal.id,
+      expiresAt: contentProposal.expiresAt,
+      entityType: contentProposalBasis.entityType,
+      entityId: contentProposalBasis.entityId,
+      version: contentProposalBasis.version,
+    })
+    .from(contentProposal)
+    .innerJoin(
+      contentProposalBasis,
+      eq(contentProposalBasis.proposalId, contentProposal.id),
+    )
+    .where(
+      and(
+        eq(contentProposal.status, "OUTDATED"),
+        gte(contentProposal.statusChangedAt, since),
+      ),
+    );
+  const touched = new Set(refs.map((ref) => entityKey(ref.entityType, ref.entityId)));
+  const byProposal = new Map<string, typeof rows>();
+  for (const row of rows)
+    byProposal.set(row.id, [...(byProposal.get(row.id) ?? []), row]);
+  const candidates = [...byProposal.values()].filter(
+    (basis) =>
+      basis.some((row) => touched.has(entityKey(row.entityType, row.entityId))) &&
+      !basis.some((row) => row.expiresAt && row.expiresAt.getTime() < Date.now()),
+  );
+  if (candidates.length === 0) return;
+  const live = await loadEntities(client, candidates.flat());
+  const current = candidates.filter((basis) =>
+    basis.every(
+      (row) =>
+        (live.get(entityKey(row.entityType, row.entityId))?.version ??
+          MISSING_VERSION) === row.version,
+    ),
+  );
+  if (current.length === 0) return;
+  await client
+    .update(contentProposal)
+    .set({ status: "PENDING", outdatedReason: null, statusChangedAt: new Date() })
+    .where(
+      and(
+        inArray(
+          contentProposal.id,
+          current.map((basis) => basis[0]?.id ?? ""),
+        ),
+        eq(contentProposal.status, "OUTDATED"),
+      ),
+    );
 };
 
 /** Reason shown for an edit made through one of the content editors. */
