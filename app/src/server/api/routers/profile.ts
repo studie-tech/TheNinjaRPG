@@ -67,6 +67,7 @@ import {
   abEvent,
   actionLog,
   battleHistory,
+  contentProposal,
   farmPlot,
   gameSetting,
   historicalIp,
@@ -98,6 +99,11 @@ import {
   war,
 } from "@/drizzle/schema";
 import { getReskinnedBloodline } from "@/libs/bloodline";
+import {
+  deletedReason,
+  editedReason,
+  outdateProposalsFor,
+} from "@/libs/contentReview/outdate";
 import { getWorldCyclePosition } from "@/libs/dayNight";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
@@ -930,47 +936,55 @@ export const profileRouter = createTRPCRouter({
 
         // Get moderation and application counts in parallel for eligible staff.
         const approvalGroup = getApprovalGroup(user.role);
-        if (canModerateRoles.includes(user.role) || approvalGroup) {
-          const [reportCounts, ticketCounts, applicationCounts] = await Promise.all([
-            canModerateRoles.includes(user.role)
-              ? ctx.drizzle
-                  .select({ count: sql`count(*)`.mapWith(Number) })
-                  .from(userReport)
-                  .innerJoin(userData, eq(userData.userId, userReport.reportedUserId))
-                  .where(inArray(userReport.status, ["UNVIEWED", "BAN_ESCALATED"]))
-              : null,
-            canModerateRoles.includes(user.role)
-              ? ctx.drizzle
-                  .select({ count: sql`count(*)`.mapWith(Number) })
-                  .from(supportTicket)
-                  .where(
-                    inArray(supportTicket.status, [
-                      "OPEN",
-                      "IN_PROGRESS",
-                      "WAITING_FOR_STAFF",
-                    ]),
-                  )
-              : null,
-            approvalGroup
-              ? ctx.drizzle
-                  .select({ count: sql`count(*)`.mapWith(Number) })
-                  .from(staffApplication)
-                  .leftJoin(
-                    staffApplicationApproval,
-                    and(
-                      eq(staffApplication.id, staffApplicationApproval.applicationId),
-                      eq(staffApplicationApproval.group, approvalGroup),
-                      eq(staffApplicationApproval.approverUserId, user.userId),
-                    ),
-                  )
-                  .where(
-                    and(
-                      eq(staffApplication.state, "PENDING"),
-                      isNull(staffApplicationApproval.applicationId),
-                    ),
-                  )
-              : null,
-          ]);
+        const reviewsContent = canChangeContent(user.role);
+        if (canModerateRoles.includes(user.role) || approvalGroup || reviewsContent) {
+          const [reportCounts, ticketCounts, applicationCounts, reviewCounts] =
+            await Promise.all([
+              canModerateRoles.includes(user.role)
+                ? ctx.drizzle
+                    .select({ count: sql`count(*)`.mapWith(Number) })
+                    .from(userReport)
+                    .innerJoin(userData, eq(userData.userId, userReport.reportedUserId))
+                    .where(inArray(userReport.status, ["UNVIEWED", "BAN_ESCALATED"]))
+                : null,
+              canModerateRoles.includes(user.role)
+                ? ctx.drizzle
+                    .select({ count: sql`count(*)`.mapWith(Number) })
+                    .from(supportTicket)
+                    .where(
+                      inArray(supportTicket.status, [
+                        "OPEN",
+                        "IN_PROGRESS",
+                        "WAITING_FOR_STAFF",
+                      ]),
+                    )
+                : null,
+              approvalGroup
+                ? ctx.drizzle
+                    .select({ count: sql`count(*)`.mapWith(Number) })
+                    .from(staffApplication)
+                    .leftJoin(
+                      staffApplicationApproval,
+                      and(
+                        eq(staffApplication.id, staffApplicationApproval.applicationId),
+                        eq(staffApplicationApproval.group, approvalGroup),
+                        eq(staffApplicationApproval.approverUserId, user.userId),
+                      ),
+                    )
+                    .where(
+                      and(
+                        eq(staffApplication.state, "PENDING"),
+                        isNull(staffApplicationApproval.applicationId),
+                      ),
+                    )
+                : null,
+              reviewsContent
+                ? ctx.drizzle
+                    .select({ count: sql`count(*)`.mapWith(Number) })
+                    .from(contentProposal)
+                    .where(eq(contentProposal.status, "PENDING"))
+                : null,
+            ]);
 
           const userReports = reportCounts?.[0]?.count ?? 0;
           if (userReports > 0) {
@@ -998,6 +1012,15 @@ export const profileRouter = createTRPCRouter({
               name: `Applications (${adminAppCount})`,
               color: "blue",
               notificationCount: adminAppCount,
+            });
+          }
+          const reviewCount = reviewCounts?.[0]?.count ?? 0;
+          if (reviewCount > 0) {
+            notifications.push({
+              href: "/manual/review",
+              name: `Content review (${reviewCount})`,
+              color: "green",
+              notificationCount: reviewCount,
             });
           }
         }
@@ -1252,6 +1275,12 @@ export const profileRouter = createTRPCRouter({
       const ai = await fetchUser(ctx.drizzle, input.id);
       if (ai?.isAi && canChangeContent(user.role)) {
         await deleteUser(ctx.drizzle, ai.userId);
+        await outdateProposalsFor(
+          ctx.drizzle,
+          "AI",
+          [ai.userId],
+          deletedReason("AI", ai.username, user.username),
+        );
         return { success: true, message: `AI deleted` };
       } else {
         return { success: false, message: `Not allowed to delete AI` };
@@ -1583,6 +1612,12 @@ export const profileRouter = createTRPCRouter({
             .where(and(eq(userItem.userId, ai.userId), eq(userItem.itemId, id))),
         ),
       ]);
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "AI",
+        [ai.userId],
+        editedReason("AI", ai.username, user.username),
+      );
 
       // Update discord channel
       if (process.env.NODE_ENV !== "development") {

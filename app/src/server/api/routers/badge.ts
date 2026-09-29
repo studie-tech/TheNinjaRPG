@@ -3,6 +3,11 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { actionLog, badge, userBadge } from "@/drizzle/schema";
+import {
+  deletedReason,
+  editedReason,
+  outdateProposalsFor,
+} from "@/libs/contentReview/outdate";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUser } from "@/routers/profile";
 import {
@@ -102,6 +107,12 @@ export const badgeRouter = createTRPCRouter({
             relatedImage: entry.image,
           }),
         ]);
+        await outdateProposalsFor(
+          ctx.drizzle,
+          "BADGE",
+          [entry.id],
+          editedReason("BADGE", entry.name, user.username),
+        );
         if (process.env.NODE_ENV !== "development") {
           await callDiscordContent(user.username, entry.name, diff, entry.image);
         }
@@ -147,6 +158,12 @@ export const badgeRouter = createTRPCRouter({
             relatedImage: entry.image,
           }),
         ]);
+        await outdateProposalsFor(
+          ctx.drizzle,
+          "BADGE",
+          [entry.id],
+          deletedReason("BADGE", entry.name, user.username),
+        );
         return { success: true, message: `Badge deleted` };
       } else {
         return { success: false, message: `Not allowed to delete badge` };

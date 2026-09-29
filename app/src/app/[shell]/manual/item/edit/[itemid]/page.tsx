@@ -28,8 +28,9 @@ import ContentImageSelector from "@/layout/ContentImageSelector";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import SuggestChange from "@/layout/SuggestChange";
 import { showMutationToast } from "@/libs/toast";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { ZodAllTags, ZodItemType } from "@/validators/combat";
@@ -60,20 +61,28 @@ export default function ItemEdit(props: { params: Promise<{ itemid: string }> })
 
   // Redirect to profile if not content or admin
   useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
+    if (userData && !isStaffRole(userData.role)) {
       void router.push("/profile");
     }
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
     return <Loader explanation="Loading data" />;
   }
 
-  return <SingleEditItem item={data} refetch={refetch} />;
+  return (
+    <SingleEditItem
+      item={data}
+      refetch={refetch}
+      canSave={canChangeContent(userData.role)}
+    />
+  );
 }
 
 interface SingleEditItemProps {
+  /** Staff who cannot save content still get the editor, to suggest changes. */
+  canSave: boolean;
   item: Item & { craftingRequirements: CraftingRequirement[] };
   refetch: () => Promise<unknown>;
 }
@@ -162,19 +171,29 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
       >
         {!item && <p>Could not find this item</p>}
         {item && (
-          <EditContent
-            schema={ItemValidatorRawSchema}
-            form={form as unknown as UseFormReturn<ZodItemType, any>}
-            formData={formData}
-            showSubmit={true}
-            buttonTxt="Save to Database"
-            type="item"
-            relationId={item.id}
-            allowImageUpload={true}
-            onAccept={handleItemSubmit}
-            submitLoading={isUpdating}
-            submitLoadingText="Saving"
-          />
+          <>
+            <EditContent
+              schema={ItemValidatorRawSchema}
+              form={form as unknown as UseFormReturn<ZodItemType, any>}
+              formData={formData}
+              showSubmit={props.canSave}
+              buttonTxt="Save to Database"
+              type="item"
+              relationId={item.id}
+              allowImageUpload={true}
+              onAccept={handleItemSubmit}
+              submitLoading={isUpdating}
+              submitLoadingText="Saving"
+            />
+            <div className="mt-2 flex justify-end">
+              <SuggestChange
+                entityType="ITEM"
+                entityId={item.id}
+                getData={() => form.getValues()}
+                label={props.canSave ? "Suggest instead" : "Suggest a change"}
+              />
+            </div>
+          </>
         )}
         {item && <ItemVariantsEditor itemId={item.id} />}
       </ContentBox>

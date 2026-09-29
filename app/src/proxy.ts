@@ -114,6 +114,7 @@ export const config = {
     "/api/trpc/((?!cdn/).*)",
     "/api/chat/:path*",
     "/api/uploadthing(.*)",
+    "/api/content-review/sfx-preview",
     // The MCP OAuth discovery documents; isUnshelledPath passes them through untouched.
     "/.well-known/oauth-authorization-server(.*)",
     "/.well-known/oauth-protected-resource(.*)",

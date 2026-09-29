@@ -12,7 +12,8 @@ import ContentBox from "@/layout/ContentBox";
 import { JutsuHelper } from "@/layout/ContentHelp";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
-import { canChangeContent } from "@/utils/permissions";
+import SuggestChange from "@/layout/SuggestChange";
+import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { ZodAllTags, ZodJutsuType } from "@/validators/combat";
@@ -42,20 +43,28 @@ export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> 
 
   // Redirect to profile if not content or admin
   useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
+    if (userData && !isStaffRole(userData.role)) {
       void router.push("/profile");
     }
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
     return <Loader explanation="Loading data" />;
   }
 
-  return <SingleEditJutsu jutsu={data} refetch={refetch} />;
+  return (
+    <SingleEditJutsu
+      jutsu={data}
+      refetch={refetch}
+      canSave={canChangeContent(userData.role)}
+    />
+  );
 }
 
 interface SingleEditJutsuProps {
+  /** Staff who cannot save content still get the editor, to suggest changes. */
+  canSave: boolean;
   jutsu: Jutsu;
   refetch: () => void;
 }
@@ -140,17 +149,27 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
       >
         {!jutsu && <p>Could not find this jutsu</p>}
         {!loading && jutsu && (
-          <EditContent
-            schema={JutsuValidatorRawSchema}
-            form={form as unknown as UseFormReturn<ZodJutsuType, any>}
-            formData={formData}
-            showSubmit={true}
-            buttonTxt="Save to Database"
-            type="jutsu"
-            relationId={jutsu.id}
-            allowImageUpload={true}
-            onAccept={handleJutsuSubmit}
-          />
+          <>
+            <EditContent
+              schema={JutsuValidatorRawSchema}
+              form={form as unknown as UseFormReturn<ZodJutsuType, any>}
+              formData={formData}
+              showSubmit={props.canSave}
+              buttonTxt="Save to Database"
+              type="jutsu"
+              relationId={jutsu.id}
+              allowImageUpload={true}
+              onAccept={handleJutsuSubmit}
+            />
+            <div className="mt-2 flex justify-end">
+              <SuggestChange
+                entityType="JUTSU"
+                entityId={jutsu.id}
+                getData={() => form.getValues()}
+                label={props.canSave ? "Suggest instead" : "Suggest a change"}
+              />
+            </div>
+          </>
         )}
       </ContentBox>
 

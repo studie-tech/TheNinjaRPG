@@ -9,7 +9,8 @@ import { useAssetEditForm } from "@/hooks/asset";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
-import { canChangeContent } from "@/utils/permissions";
+import SuggestChange from "@/layout/SuggestChange";
+import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { ZodGameAssetType } from "@/validators/asset";
 import { gameAssetValidator } from "@/validators/asset";
@@ -28,20 +29,28 @@ export default function AssetEdit(props: { params: Promise<{ assetid: string }> 
 
   // Redirect to profile if not content or admin
   useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
+    if (userData && !isStaffRole(userData.role)) {
       router.push("/profile");
     }
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
     return <Loader explanation="Loading data" />;
   }
 
-  return <SingleEditAsset asset={data} refetch={refetch} />;
+  return (
+    <SingleEditAsset
+      asset={data}
+      refetch={refetch}
+      canSave={canChangeContent(userData.role)}
+    />
+  );
 }
 
 interface SingleEditAssetProps {
+  /** Staff who cannot save content still get the editor, to suggest changes. */
+  canSave: boolean;
   asset: GameAsset;
   refetch: () => Promise<unknown>;
 }
@@ -63,19 +72,29 @@ const SingleEditAsset: React.FC<SingleEditAssetProps> = (props) => {
     >
       {!asset && <p>Could not find this asset</p>}
       {asset && (
-        <EditContent
-          schema={gameAssetValidator}
-          form={form as unknown as UseFormReturn<ZodGameAssetType, unknown>}
-          formData={formData}
-          showSubmit={true}
-          buttonTxt="Save to Database"
-          submitLoading={isUpdating}
-          submitLoadingText="Saving"
-          type="asset"
-          relationId={asset.id}
-          allowImageUpload={true}
-          onAccept={handleAssetSubmit}
-        />
+        <>
+          <EditContent
+            schema={gameAssetValidator}
+            form={form as unknown as UseFormReturn<ZodGameAssetType, unknown>}
+            formData={formData}
+            showSubmit={props.canSave}
+            buttonTxt="Save to Database"
+            submitLoading={isUpdating}
+            submitLoadingText="Saving"
+            type="asset"
+            relationId={asset.id}
+            allowImageUpload={true}
+            onAccept={handleAssetSubmit}
+          />
+          <div className="mt-2 flex justify-end">
+            <SuggestChange
+              entityType="GAME_ASSET"
+              entityId={asset.id}
+              getData={() => form.getValues()}
+              label={props.canSave ? "Suggest instead" : "Suggest a change"}
+            />
+          </div>
+        </>
       )}
     </ContentBox>
   );

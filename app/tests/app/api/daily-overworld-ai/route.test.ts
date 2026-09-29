@@ -1,10 +1,14 @@
 // @vitest-environment node
 
-import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  resetServerModuleStubs,
+  stubCronAuth,
+  stubDatabase,
+} from "../../../setup/serverModules";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 type DailyOverworldTestMocks = {
-  authenticate: ReturnType<typeof vi.fn>;
+  authenticate: Mock<(request: Request) => Response | null>;
   lock: ReturnType<typeof vi.fn>;
   rollback: ReturnType<typeof vi.fn>;
   handleError: ReturnType<typeof vi.fn>;
@@ -22,7 +26,7 @@ function getDailyOverworldTestMocks(): DailyOverworldTestMocks {
     __dailyOverworldTestMocks?: DailyOverworldTestMocks;
   };
   globals.__dailyOverworldTestMocks ??= {
-    authenticate: vi.fn(),
+    authenticate: vi.fn<(request: Request) => Response | null>(),
     lock: vi.fn(),
     rollback: vi.fn(),
     handleError: vi.fn(),
@@ -39,9 +43,6 @@ function getDailyOverworldTestMocks(): DailyOverworldTestMocks {
 const mocks = getDailyOverworldTestMocks();
 
 vi.mock("next/headers", () => ({ cookies: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("@/server/utils/cron", () => ({
-  authenticateCronRequest: getDailyOverworldTestMocks().authenticate,
-}));
 vi.mock("@/libs/gamesettings", () => ({
   lockWithDailyTimer: getDailyOverworldTestMocks().lock,
   updateGameSetting: getDailyOverworldTestMocks().rollback,
@@ -71,6 +72,7 @@ describe("daily-overworld-ai route", () => {
   afterEach(resetServerModuleStubs);
 
   beforeEach(() => {
+    stubCronAuth(mocks.authenticate);
     stubDatabase({
       query: {
         overworldAiPlacement: {

@@ -16,10 +16,11 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NindoChange from "@/layout/NindoChange";
 import StatusBar from "@/layout/StatusBar";
+import SuggestChange from "@/layout/SuggestChange";
 import { useAiEditForm } from "@/libs/ais";
 import { showMutationToast } from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { tagTypes, WeaknessTag, type ZodAllTags } from "@/validators/combat";
@@ -42,20 +43,28 @@ export default function ManualAisEdit(props: { params: Promise<{ aiid: string }>
 
   // Redirect to profile if not content or admin
   useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
+    if (userData && !isStaffRole(userData.role)) {
       router.push("/profile");
     }
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
     return <Loader explanation="Loading data" />;
   }
 
-  return <SingleEditUser user={data} refetch={refetch} />;
+  return (
+    <SingleEditUser
+      user={data}
+      refetch={refetch}
+      canSave={canChangeContent(userData.role)}
+    />
+  );
 }
 
 interface SingleEditUserProps {
+  /** Staff who cannot save content still get the editor, to suggest changes. */
+  canSave: boolean;
   user: AiWithRelations;
   refetch: () => void;
 }
@@ -167,13 +176,21 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
               schema={insertAiSchema}
               form={form as unknown as UseFormReturn<InsertAiSchema, any>}
               formData={formData}
-              showSubmit={true}
+              showSubmit={props.canSave}
               buttonTxt="Save to Database"
               type="ai"
               relationId={processedUser.userId}
               allowImageUpload={true}
               onAccept={handleUserSubmit}
             />
+            <div className="mt-2 flex justify-end">
+              <SuggestChange
+                entityType="AI"
+                entityId={processedUser.userId}
+                getData={() => form.getValues()}
+                label={props.canSave ? "Suggest instead" : "Suggest a change"}
+              />
+            </div>
           </>
         )}
       </ContentBox>

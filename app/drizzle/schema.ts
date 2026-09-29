@@ -5932,3 +5932,173 @@ export const accountDeletion = mysqlTable(
   },
   (table) => ({ pendingIdx: index("AccountDeletion_pending_idx").on(table.phase, table.nextAttemptAt) }),
 );
+
+// A suggested content change awaiting review in /manual/review. `statusChangedAt` marks the
+// last decision so rejected and outdated rows can be removed after the retention window.
+export const contentProposal = mysqlTable(
+  "ContentProposal",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    title: varchar("title", { length: 191 }).notNull(),
+    rationale: text("rationale").notNull(),
+    category: mysqlEnum("category", consts.ContentProposalCategories).notNull(),
+    status: mysqlEnum("status", consts.ContentProposalStatuses)
+      .default("PENDING")
+      .notNull(),
+    source: mysqlEnum("source", consts.ContentProposalSources).notNull(),
+    agentName: varchar("agentName", { length: 191 }),
+    runUrl: varchar("runUrl", { length: 512 }),
+    focus: varchar("focus", { length: 32 }),
+    confidence: tinyint("confidence"),
+    createdByUserId: varchar("createdByUserId", { length: 191 }),
+    reviewedByUserId: varchar("reviewedByUserId", { length: 191 }),
+    rejectReason: mysqlEnum("rejectReason", consts.ContentProposalRejectReasons),
+    reviewNote: text("reviewNote"),
+    outdatedReason: varchar("outdatedReason", { length: 191 }),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    statusChangedAt: datetime("statusChangedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    statusCategoryIdx: index("ContentProposal_status_category_idx").on(
+      table.status,
+      table.category,
+      table.createdAt,
+    ),
+    sourceStatusIdx: index("ContentProposal_source_status_idx").on(
+      table.source,
+      table.status,
+      table.createdAt,
+    ),
+    statusChangedIdx: index("ContentProposal_status_changed_idx").on(
+      table.status,
+      table.statusChangedAt,
+    ),
+  }),
+);
+export type ContentProposal = InferSelectModel<typeof contentProposal>;
+
+// One touched entity per row. `before` and `after` hold only the top-level editable fields
+// that change; the server fills `before` from the live row, never from the submitter.
+export const contentProposalChange = mysqlTable(
+  "ContentProposalChange",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    proposalId: varchar("proposalId", { length: 191 }).notNull(),
+    entityType: mysqlEnum("entityType", consts.ContentProposalEntityTypes).notNull(),
+    entityId: varchar("entityId", { length: 191 }),
+    operation: mysqlEnum("operation", consts.ContentProposalOperations)
+      .default("UPDATE")
+      .notNull(),
+    before: json("before").$type<Record<string, unknown>>().notNull(),
+    after: json("after").$type<Record<string, unknown>>().notNull(),
+    applied: json("applied").$type<Record<string, unknown>>(),
+    sortOrder: tinyint("sortOrder").default(0).notNull(),
+  },
+  (table) => ({
+    proposalIdx: index("ContentProposalChange_proposalId_idx").on(table.proposalId),
+    entityIdx: index("ContentProposalChange_entity_idx").on(
+      table.entityType,
+      table.entityId,
+    ),
+  }),
+);
+export type ContentProposalChange = InferSelectModel<typeof contentProposalChange>;
+
+// The entities a suggestion relied on, with the version it saw. Any later edit to one of
+// them changes its version and outdates the suggestion.
+export const contentProposalBasis = mysqlTable(
+  "ContentProposalBasis",
+  {
+    proposalId: varchar("proposalId", { length: 191 }).notNull(),
+    entityType: mysqlEnum("entityType", consts.ContentProposalEntityTypes).notNull(),
+    entityId: varchar("entityId", { length: 191 }).notNull(),
+    version: varchar("version", { length: 16 }).notNull(),
+    role: mysqlEnum("role", consts.ContentProposalBasisRoles).notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.proposalId, table.entityType, table.entityId] }),
+    entityIdx: index("ContentProposalBasis_entity_idx").on(
+      table.entityType,
+      table.entityId,
+    ),
+  }),
+);
+export type ContentProposalBasis = InferSelectModel<typeof contentProposalBasis>;
+
+// Sound, image and animation candidates for one field of a change. Uploaded files are kept
+// only for the chosen candidate; `fileKey` lets the cleanup delete the rest from storage.
+export const contentProposalMedia = mysqlTable(
+  "ContentProposalMedia",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    proposalId: varchar("proposalId", { length: 191 }).notNull(),
+    changeId: varchar("changeId", { length: 191 }).notNull(),
+    path: varchar("path", { length: 191 }).notNull(),
+    source: mysqlEnum("source", consts.ContentProposalMediaSources).notNull(),
+    kind: mysqlEnum("kind", consts.ContentProposalMediaKinds).notNull(),
+    externalId: varchar("externalId", { length: 191 }),
+    title: varchar("title", { length: 191 }).notNull(),
+    url: varchar("url", { length: 512 }),
+    fileKey: varchar("fileKey", { length: 191 }),
+    lengthMs: int("lengthMs"),
+    prompt: text("prompt"),
+    chosen: boolean("chosen").default(false).notNull(),
+    sortOrder: tinyint("sortOrder").default(0).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    proposalIdx: index("ContentProposalMedia_proposalId_idx").on(table.proposalId),
+    sourceChosenIdx: index("ContentProposalMedia_source_chosen_idx").on(
+      table.source,
+      table.chosen,
+    ),
+  }),
+);
+export type ContentProposalMedia = InferSelectModel<typeof contentProposalMedia>;
+
+export const contentProposalRelations = relations(contentProposal, ({ one, many }) => ({
+  changes: many(contentProposalChange),
+  basis: many(contentProposalBasis),
+  media: many(contentProposalMedia),
+  createdBy: one(userData, {
+    fields: [contentProposal.createdByUserId],
+    references: [userData.userId],
+    relationName: "contentProposalCreatedBy",
+  }),
+  reviewedBy: one(userData, {
+    fields: [contentProposal.reviewedByUserId],
+    references: [userData.userId],
+    relationName: "contentProposalReviewedBy",
+  }),
+}));
+
+export const contentProposalChangeRelations = relations(
+  contentProposalChange,
+  ({ one }) => ({
+    proposal: one(contentProposal, {
+      fields: [contentProposalChange.proposalId],
+      references: [contentProposal.id],
+    }),
+  }),
+);
+
+export const contentProposalBasisRelations = relations(contentProposalBasis, ({ one }) => ({
+  proposal: one(contentProposal, {
+    fields: [contentProposalBasis.proposalId],
+    references: [contentProposal.id],
+  }),
+}));
+
+export const contentProposalMediaRelations = relations(contentProposalMedia, ({ one }) => ({
+  proposal: one(contentProposal, {
+    fields: [contentProposalMedia.proposalId],
+    references: [contentProposal.id],
+  }),
+}));

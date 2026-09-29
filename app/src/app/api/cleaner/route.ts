@@ -37,6 +37,7 @@ import {
   village,
   warKill,
 } from "@/drizzle/schema";
+import { cleanupContentProposals } from "@/libs/contentReview/cleanup";
 import {
   lockWithDailyTimer,
   lockWithHourlyTimer,
@@ -512,6 +513,9 @@ export async function GET(request: Request) {
 
     // Handle expired exclusive raids - return sectors to neutral if raid timed out without boss defeat
     await cleanupExpiredExclusiveRaids(drizzleDB);
+
+    // Remove decided content-review suggestions past retention and unpicked media files
+    await cleanupContentProposals(drizzleDB);
 
     // Finish due permanent-account deletions alongside the other hourly cleanup.
     const deletions = await processAccountDeletions();

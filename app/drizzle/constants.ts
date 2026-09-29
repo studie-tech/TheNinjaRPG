@@ -260,16 +260,100 @@ export const LOG_TYPES = [
   "battleAction",
   "bloodline",
   "clan",
+  "gameAsset",
   "guide",
   "item",
   "jutsu",
   "poll",
+  "quest",
   "user",
   "userjutsu",
   "villageStructure",
   "war",
 ] as const;
 export type LogType = (typeof LOG_TYPES)[number];
+
+// Content review: suggested content changes from the daily audit and staff, decided in
+// /manual/review. See app/src/libs/contentReview/.
+export const ContentProposalCategories = [
+  "GRAMMAR",
+  "BALANCE",
+  "SOUND",
+  "ANIMATION",
+  "VISUAL",
+  "CONSISTENCY",
+  "NEW_CONTENT",
+] as const;
+export type ContentProposalCategory = (typeof ContentProposalCategories)[number];
+export const ContentProposalStatuses = [
+  "PENDING",
+  "APPLIED",
+  "REJECTED",
+  "OUTDATED",
+  "REVERTED",
+] as const;
+export type ContentProposalStatus = (typeof ContentProposalStatuses)[number];
+export const ContentProposalSources = ["AGENT", "STAFF"] as const;
+export type ContentProposalSource = (typeof ContentProposalSources)[number];
+export const ContentProposalEntityTypes = [
+  "JUTSU",
+  "ITEM",
+  "BLOODLINE",
+  "QUEST",
+  "BADGE",
+  "GAME_ASSET",
+  "AI",
+] as const;
+export type ContentProposalEntityType = (typeof ContentProposalEntityTypes)[number];
+export const ContentProposalOperations = ["UPDATE", "CREATE"] as const;
+export type ContentProposalOperation = (typeof ContentProposalOperations)[number];
+export const ContentProposalBasisRoles = ["TARGET", "CONTEXT"] as const;
+export const ContentProposalMediaSources = ["CATALOG", "EPIDEMIC", "GENERATED"] as const;
+export type ContentProposalMediaSource = (typeof ContentProposalMediaSources)[number];
+export const ContentProposalMediaKinds = ["SFX", "ANIMATION", "IMAGE"] as const;
+export type ContentProposalMediaKind = (typeof ContentProposalMediaKinds)[number];
+export const ContentProposalRejectReasons = [
+  "NOT_AN_IMPROVEMENT",
+  "FACTUALLY_WRONG",
+  "STYLE_MISMATCH",
+  "WRONG_CHANGE",
+  "OTHER",
+] as const;
+export type ContentProposalRejectReason = (typeof ContentProposalRejectReasons)[number];
+export const ContentAuditFocuses = [
+  "grammar",
+  "balance",
+  "sound",
+  "animation",
+  "visual",
+  "consistency",
+  "new_content",
+] as const;
+export type ContentAuditFocus = (typeof ContentAuditFocuses)[number];
+/** Focus per UTC weekday, Sunday first, used when the audit is asked to rotate. */
+export const CONTENT_AUDIT_WEEKDAY_FOCUS: readonly ContentAuditFocus[] = [
+  "new_content",
+  "grammar",
+  "balance",
+  "sound",
+  "animation",
+  "consistency",
+  "visual",
+];
+/** Most suggestions the audit may add per UTC day. */
+export const CONTENT_AUDIT_DAILY_LIMIT = 10;
+/** The audit skips a run while this many of its suggestions still wait for review. */
+export const CONTENT_AUDIT_BACKLOG_LIMIT = 50;
+/** Rejected and outdated suggestions are removed this long after they were decided. */
+export const CONTENT_PROPOSAL_RETENTION_DAYS = 10;
+/** Suggestions resting on usage statistics go out of date after this many days. */
+export const CONTENT_PROPOSAL_EVIDENCE_DAYS = 14;
+export const CONTENT_PROPOSAL_MAX_BASIS = 25;
+export const CONTENT_PROPOSAL_MAX_CANDIDATES = 3;
+/** Epidemic Sound searches and Replicate generations are rationed per audit run. */
+export const CONTENT_AUDIT_MAX_SOUND_SEARCHES = 3;
+export const CONTENT_AUDIT_MAX_GENERATIONS = 2;
+export const CONTENT_REVIEW_BULK_LIMIT = 25;
 
 export const StatTypes = [
   "Highest",

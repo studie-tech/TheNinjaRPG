@@ -33,6 +33,7 @@ import {
   canChangeContent,
   canControlBackups,
   canViewRecruitmentAnalytics,
+  isStaffRole,
 } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -75,9 +76,13 @@ export default function ManualMain() {
   const withRecruitment = canSeeRecruitment
     ? [{ name: "recruitment", img: IMG_MANUAL_RECRUITMENT }, ...withWorld]
     : withWorld;
-  const entries = hasBackupAccess
+  const withBackups = hasBackupAccess
     ? [{ name: "content_backups", img: IMG_MANUAL_BACKUP }, ...withRecruitment]
     : withRecruitment;
+  // Staff suggest content changes here; content staff review them.
+  const entries = isStaffRole(role)
+    ? [{ name: "review", img: IMG_MANUAL_STAFF }, ...withBackups]
+    : withBackups;
 
   return (
     <>

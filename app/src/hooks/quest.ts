@@ -110,6 +110,81 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
       },
     });
 
+  // The quest.update payload for validated form values; shared by saving and suggesting.
+  const toQuestPayload = (data: ZodCombinedQuest) => {
+    const newObjectives = data.content.objectives.map((objective) => {
+      if (objective.task === "move_to_location" && data.image) {
+        objective.image = data.image;
+      } else if (objective.task === "collect_item") {
+        objective.image = IMG_AVATAR_DEFAULT;
+        objective.item_name = "Unknown";
+        const subset = items?.filter((i) => objective.collectItemIds.includes(i.id));
+        if (subset && subset.length > 0) {
+          objective.image = subset?.[0]?.image || IMG_AVATAR_DEFAULT;
+          objective.item_name = subset.map((i) => i.name).join(", ");
+        }
+      } else if (objective.task === "deliver_item") {
+        const subset = items?.filter((i) => objective.deliverItemIds.includes(i.id));
+        if (subset && subset.length > 0) {
+          objective.image = subset?.[0]?.image || IMG_AVATAR_DEFAULT;
+          objective.item_name = subset.map((i) => i.name).join(", ");
+        }
+      } else if (objective.task === "defeat_opponents") {
+        const opponentIds = objective.opponentAIs
+          .flatMap((o) => Array(o.number).fill(o.ids).flat() as string[])
+          .filter((id): id is string => id !== undefined);
+        const ai = ais?.find((u) => opponentIds.includes(u.userId));
+        if (ai?.avatar) {
+          objective.image = ai.avatar;
+        }
+      } else if (objective.task === "dialog") {
+        objective.image = IMG_BADGE_DIALOG;
+      }
+      return objective;
+    });
+    const newQuest = {
+      ...quest,
+      ...data,
+      endsAt: data.endsAt ? data.endsAt : null,
+      startsAt: data.startsAt ? data.startsAt : null,
+      content: {
+        sceneBackground: data.sceneBackground,
+        sceneCharacters: data.sceneCharacters,
+        objectives: newObjectives,
+        reward: {
+          reward_money: data.reward_money,
+          reward_seichi_silver: data.reward_seichi_silver,
+          reward_clanpoints: data.reward_clanpoints,
+          reward_anbupoints: data.reward_anbupoints,
+          reward_exp: data.reward_exp,
+          reward_medical_experience: data.reward_medical_experience,
+          reward_hunting_experience: data.reward_hunting_experience,
+          reward_crafting_experience: data.reward_crafting_experience,
+          reward_gathering_experience: data.reward_gathering_experience,
+          reward_sage_mastery_experience: data.reward_sage_mastery_experience,
+          reward_tokens: data.reward_tokens,
+          reward_prestige: data.reward_prestige,
+          reward_reputation: data.reward_reputation,
+          reward_skillpoints: data.reward_skillpoints,
+          reward_jutsus: data.reward_jutsus,
+          reward_badges: data.reward_badges,
+          reward_items: data.reward_items,
+          reward_hunter_items: data.reward_hunter_items,
+          reward_hunter_items_ids: data.reward_hunter_items_ids,
+          reward_gathering_items: data.reward_gathering_items,
+          reward_gathering_items_ids: data.reward_gathering_items_ids,
+          reward_rank: data.reward_rank,
+          reward_village_membership: data.reward_village_membership,
+          reward_bloodlines: data.reward_bloodlines,
+          reward_sage_modes: data.reward_sage_modes,
+          reward_war_damage: data.reward_war_damage,
+          reward_war_healing: data.reward_war_healing,
+        },
+      },
+    };
+    return newQuest;
+  };
+
   // Form submission
   const handleQuestSubmit = form.handleSubmit(
     async (data: ZodCombinedQuest) => {
@@ -117,76 +192,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
       // double-click can never enqueue a second update with the same objective graph.
       if (submitInFlight.current) return;
 
-      const newObjectives = data.content.objectives.map((objective) => {
-        if (objective.task === "move_to_location" && data.image) {
-          objective.image = data.image;
-        } else if (objective.task === "collect_item") {
-          objective.image = IMG_AVATAR_DEFAULT;
-          objective.item_name = "Unknown";
-          const subset = items?.filter((i) => objective.collectItemIds.includes(i.id));
-          if (subset && subset.length > 0) {
-            objective.image = subset?.[0]?.image || IMG_AVATAR_DEFAULT;
-            objective.item_name = subset.map((i) => i.name).join(", ");
-          }
-        } else if (objective.task === "deliver_item") {
-          const subset = items?.filter((i) => objective.deliverItemIds.includes(i.id));
-          if (subset && subset.length > 0) {
-            objective.image = subset?.[0]?.image || IMG_AVATAR_DEFAULT;
-            objective.item_name = subset.map((i) => i.name).join(", ");
-          }
-        } else if (objective.task === "defeat_opponents") {
-          const opponentIds = objective.opponentAIs
-            .flatMap((o) => Array(o.number).fill(o.ids).flat() as string[])
-            .filter((id): id is string => id !== undefined);
-          const ai = ais?.find((u) => opponentIds.includes(u.userId));
-          if (ai?.avatar) {
-            objective.image = ai.avatar;
-          }
-        } else if (objective.task === "dialog") {
-          objective.image = IMG_BADGE_DIALOG;
-        }
-        return objective;
-      });
-      const newQuest = {
-        ...quest,
-        ...data,
-        endsAt: data.endsAt ? data.endsAt : null,
-        startsAt: data.startsAt ? data.startsAt : null,
-        content: {
-          sceneBackground: data.sceneBackground,
-          sceneCharacters: data.sceneCharacters,
-          objectives: newObjectives,
-          reward: {
-            reward_money: data.reward_money,
-            reward_seichi_silver: data.reward_seichi_silver,
-            reward_clanpoints: data.reward_clanpoints,
-            reward_anbupoints: data.reward_anbupoints,
-            reward_exp: data.reward_exp,
-            reward_medical_experience: data.reward_medical_experience,
-            reward_hunting_experience: data.reward_hunting_experience,
-            reward_crafting_experience: data.reward_crafting_experience,
-            reward_gathering_experience: data.reward_gathering_experience,
-            reward_sage_mastery_experience: data.reward_sage_mastery_experience,
-            reward_tokens: data.reward_tokens,
-            reward_prestige: data.reward_prestige,
-            reward_reputation: data.reward_reputation,
-            reward_skillpoints: data.reward_skillpoints,
-            reward_jutsus: data.reward_jutsus,
-            reward_badges: data.reward_badges,
-            reward_items: data.reward_items,
-            reward_hunter_items: data.reward_hunter_items,
-            reward_hunter_items_ids: data.reward_hunter_items_ids,
-            reward_gathering_items: data.reward_gathering_items,
-            reward_gathering_items_ids: data.reward_gathering_items_ids,
-            reward_rank: data.reward_rank,
-            reward_village_membership: data.reward_village_membership,
-            reward_bloodlines: data.reward_bloodlines,
-            reward_sage_modes: data.reward_sage_modes,
-            reward_war_damage: data.reward_war_damage,
-            reward_war_healing: data.reward_war_healing,
-          },
-        },
-      };
+      const newQuest = toQuestPayload(data);
       const diff = calculateContentDiff(quest, newQuest);
       if (diff.length > 0) {
         submitInFlight.current = true;
@@ -456,6 +462,12 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   // Image & description
   formData.unshift({ id: "image", type: "avatar", href: imageUrl });
 
+  // What a suggestion sends: the save payload, or null while the form does not validate.
+  const getSuggestionData = () => {
+    const parsed = schema.safeParse(form.getValues());
+    return parsed.success ? toQuestPayload(parsed.data as ZodCombinedQuest) : null;
+  };
+
   return {
     currentValues,
     objectives,
@@ -464,6 +476,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     loading,
     setObjectives,
     handleQuestSubmit,
+    getSuggestionData,
     isUpdating,
   };
 };
