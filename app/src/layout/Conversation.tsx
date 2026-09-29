@@ -6,7 +6,7 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
-import { api, useGlobalOnMutateProtect } from "@/app/_trpc/client";
+import { api, type RouterOutputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -97,7 +97,17 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   const [quietTime, setQuietTime] = useState<Date>(() =>
     secondsFromNow(CONVERSATION_QUIET_MINS * 60),
   );
-  const silence = new Date() > quietTime;
+  // Silent once a timer confirms the current quiet time passed; any activity sets a
+  // new quiet time, which ends the silence without another state update.
+  const [expiredQuietTime, setExpiredQuietTime] = useState<Date | null>(null);
+  const silence = expiredQuietTime === quietTime;
+  useEffect(() => {
+    const timeout = setTimeout(
+      () => setExpiredQuietTime(quietTime),
+      quietTime.getTime() - Date.now(),
+    );
+    return () => clearTimeout(timeout);
+  }, [quietTime]);
   const composeRestriction = userData ? getMessagingRestriction(userData) : null;
 
   // Typing indicator state
@@ -127,7 +137,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     placeholderData: (previousData) => previousData,
   });
-  const allComments = comments?.pages.flatMap((page) => page.data);
   const conversation = comments?.pages[0]?.convo;
   const canComposeDespiteRestriction =
     !!userData &&
@@ -148,7 +157,9 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         ? RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE
         : RESTRICTED_STAFF_CONVERSATION_MESSAGE
       : composeRestriction;
-  type ReturnedComment = ArrayElement<typeof allComments>;
+  type ReturnedComment = ArrayElement<
+    NonNullable<typeof comments>["pages"][number]["data"]
+  >;
 
   const utils = api.useUtils();
 
@@ -171,24 +182,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         })),
       };
     });
-  };
-
-  // A proven-successful delete remains hidden even if the subsequent
-  // best-effort invalidation fails or briefly returns stale data.
-  const handleConversationCommentDeleted = (commentId: string) => {
-    setDeletedCommentIds((current) => {
-      if (current.has(commentId)) return current;
-      const next = new Set(current);
-      next.add(commentId);
-      return next;
-    });
-    updateCachedComments((data) => data.filter((comment) => comment.id !== commentId));
-    if (quoteIds?.includes(commentId)) {
-      setValue(
-        "quoteIds",
-        quoteIds.filter((id) => id !== commentId),
-      );
-    }
   };
 
   // Search functionality
@@ -371,6 +364,37 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     defaultValue: [],
   });
 
+  // A proven-successful delete remains hidden even if the subsequent
+  // best-effort invalidation fails or briefly returns stale data.
+  const handleConversationCommentDeleted = (commentId: string) => {
+    setDeletedCommentIds((current) => {
+      if (current.has(commentId)) return current;
+      const next = new Set(current);
+      next.add(commentId);
+      return next;
+    });
+    updateCachedComments((data) => data.filter((comment) => comment.id !== commentId));
+    if (quoteIds?.includes(commentId)) {
+      setValue(
+        "quoteIds",
+        quoteIds.filter((id) => id !== commentId),
+      );
+    }
+  };
+
+  const toggleQuoteId = (quoteId: string) => {
+    if (quoteIds?.includes(quoteId)) {
+      setValue(
+        "quoteIds",
+        quoteIds.filter((id) => id !== quoteId),
+      );
+    } else if (quoteIds && quoteIds.length > 0) {
+      setValue("quoteIds", [...quoteIds, quoteId]);
+    } else {
+      setValue("quoteIds", [quoteId]);
+    }
+  };
+
   // Watch comment field for typing indicator
   const commentValue = useWatch({
     control,
@@ -430,11 +454,13 @@ const Conversation: React.FC<ConversationProps> = (props) => {
 
     // Optimistic update
     await utils.comments.getConversationComments.cancel(queryKey);
+    const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
+    const cachedComments = cached?.pages.flatMap((page) => page.data);
 
     const quoteText =
       quoteIds
         ?.map((id) => {
-          const quote = allComments?.find((c) => c.id === id);
+          const quote = cachedComments?.find((c) => c.id === id);
           return quote
             ? `<blockquote author="${quote.username || "Unknown"}" date="${format(quote.createdAt, "MM/dd/yyyy")}">${stripBlockquotes(quote.content)}</blockquote>`
             : "";
@@ -491,8 +517,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     const next: ReturnedComment | undefined =
       optimisticComment ?? ("id" in newMessage ? newMessage : undefined);
     if (!next) return {};
-
-    const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
     if (!cached?.pages[0]?.convo) return {};
 
     updateCachedComments((data, pageIndex) =>
@@ -560,6 +584,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
    */
   useEffect(() => {
     if (conversation && pusher) {
+      const ownUserId = userData?.userId;
       const channel = pusher.subscribe(conversation.id);
       channel.bind(
         "event",
@@ -572,16 +597,16 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         }) => {
           switch (data.message) {
             case "new":
-              if (!silence && data?.fromId !== userData?.userId && data?.commentId) {
+              if (!silence && data.fromId !== ownUserId && data.commentId) {
                 fetchComment({ commentId: data.commentId });
               }
               break;
             case "reaction":
               if (
-                data?.fromId !== userData?.userId &&
-                data?.commentId &&
-                data?.username &&
-                data?.emoji
+                data.fromId !== ownUserId &&
+                data.commentId &&
+                data.username &&
+                data.emoji
               ) {
                 void optimisticReactionUpdate(
                   data.commentId,
@@ -591,7 +616,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               }
               break;
             case "typing":
-              if (data?.fromId && data?.fromId !== userData?.userId && data?.username) {
+              if (data.fromId && data.fromId !== ownUserId && data.username) {
                 const fromId = data.fromId;
                 const username = data.username;
                 setTypingUsers((prev) => {
@@ -646,21 +671,23 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   }, []);
 
   /**
-   * Submit comment
+   * Submit comment. The handler is built on submit, not during render: the compiler
+   * cannot memoize what a render-time `handleSubmit(...)` captures.
    */
-  const handleSubmitComment = handleSubmit((data) => {
-    if (composeRestriction && !canComposeDespiteRestriction) {
-      showMutationToast({
-        success: false,
-        message: composeRestrictionMessage,
+  const handleSubmitComment = (event?: React.BaseSyntheticEvent) =>
+    handleSubmit((data) => {
+      if (composeRestriction && !canComposeDespiteRestriction) {
+        showMutationToast({
+          success: false,
+          message: composeRestrictionMessage,
+        });
+        return;
+      }
+      createComment({
+        ...data,
+        ...(senderUser?.userId ? { senderId: senderUser.userId } : {}),
       });
-      return;
-    }
-    createComment({
-      ...data,
-      ...(senderUser?.userId ? { senderId: senderUser.userId } : {}),
-    });
-  });
+    })(event);
 
   /**
    * Invalidate comments & allow refetches again
@@ -672,15 +699,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     await utils.comments.getConversationComments.invalidate();
   };
 
-  const unique = new Set<string>();
-  const visibleComments = allComments
-    ?.filter((comment) => comment.conversationId === conversation?.id)
-    .filter((comment) => !deletedCommentIds.has(comment.id))
-    .filter((comment) => {
-      const duplicate = unique.has(comment.id);
-      unique.add(comment.id);
-      return !duplicate;
-    });
+  const allComments = comments?.pages.flatMap((page) => page.data);
 
   return (
     <div key={`${props.refreshKey}-${senderUser?.userId}`}>
@@ -809,46 +828,18 @@ const Conversation: React.FC<ConversationProps> = (props) => {
               )}
             </div>
           )}
-          {visibleComments?.map((comment, i) => {
-            return (
-              <div
-                key={comment.id}
-                ref={i === visibleComments.length - 1 ? setLastElement : null}
-              >
-                <CommentOnConversation
-                  user={comment}
-                  hover_effect={false}
-                  comment={comment}
-                  quoteIds={quoteIds}
-                  tavernStyling={props.tavernStyling}
-                  color={
-                    comment.content.includes(`quote author="${userData?.username}`) ||
-                    comment.content.includes(`@${userData?.username}`)
-                      ? "poppopover"
-                      : undefined
-                  }
-                  toggleReaction={(emoji) =>
-                    reactConversationComment({ commentId: comment.id, emoji })
-                  }
-                  setQuoteId={(quoteId) => {
-                    if (quoteIds?.includes(quoteId)) {
-                      setValue(
-                        "quoteIds",
-                        quoteIds.filter((id) => id !== quoteId),
-                      );
-                    } else if (quoteIds && quoteIds.length > 0) {
-                      setValue("quoteIds", [...quoteIds, quoteId]);
-                    } else {
-                      setValue("quoteIds", [quoteId]);
-                    }
-                  }}
-                  onDeleted={handleConversationCommentDeleted}
-                >
-                  {parseHtml(comment.content)}
-                </CommentOnConversation>
-              </div>
-            );
-          })}
+          <ConversationComments
+            pages={comments?.pages}
+            conversationId={conversation?.id}
+            deletedCommentIds={deletedCommentIds}
+            quoteIds={quoteIds}
+            username={userData?.username}
+            tavernStyling={props.tavernStyling}
+            setLastElement={setLastElement}
+            onReact={reactConversationComment}
+            onToggleQuote={toggleQuoteId}
+            onDeleted={handleConversationCommentDeleted}
+          />
           {silence && (
             <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-start bg-black bg-opacity-80">
               <div className="pt-10 text-center text-white">
@@ -869,6 +860,77 @@ const Conversation: React.FC<ConversationProps> = (props) => {
         </ContentBox>
       )}
     </div>
+  );
+};
+
+interface ConversationCommentsProps {
+  pages?: RouterOutputs["comments"]["getConversationComments"][];
+  conversationId?: string;
+  deletedCommentIds: Set<string>;
+  quoteIds: string[] | null;
+  username?: string;
+  tavernStyling?: boolean;
+  setLastElement: (element: HTMLDivElement | null) => void;
+  onReact: (reaction: { commentId: string; emoji: string }) => void;
+  onToggleQuote: (quoteId: string) => void;
+  onDeleted: (commentId: string) => void;
+}
+
+/**
+ * The comment list, memoized on these props alone so that typing a reply or sending
+ * one does not re-render every comment.
+ */
+const ConversationComments: React.FC<ConversationCommentsProps> = ({
+  pages,
+  conversationId,
+  deletedCommentIds,
+  quoteIds,
+  username,
+  tavernStyling,
+  setLastElement,
+  onReact,
+  onToggleQuote,
+  onDeleted,
+}) => {
+  const unique = new Set<string>();
+  const visibleComments = pages
+    ?.flatMap((page) => page.data)
+    .filter((comment) => comment.conversationId === conversationId)
+    .filter((comment) => !deletedCommentIds.has(comment.id))
+    .filter((comment) => {
+      const duplicate = unique.has(comment.id);
+      unique.add(comment.id);
+      return !duplicate;
+    });
+
+  return (
+    <>
+      {visibleComments?.map((comment, i) => (
+        <div
+          key={comment.id}
+          ref={i === visibleComments.length - 1 ? setLastElement : null}
+        >
+          <CommentOnConversation
+            user={comment}
+            hover_effect={false}
+            comment={comment}
+            quoteIds={quoteIds}
+            tavernStyling={tavernStyling}
+            color={
+              comment.content.includes(`quote author="${username}`) ||
+              comment.content.includes(`@${username}`)
+                ? "poppopover"
+                : undefined
+            }
+            toggleReaction={(emoji) => onReact({ commentId: comment.id, emoji })}
+            setQuoteId={onToggleQuote}
+            onDeleted={onDeleted}
+          >
+            {parseHtml(comment.content)}
+          </CommentOnConversation>
+        </div>
+      ))}
+    </>
   );
 };
 
