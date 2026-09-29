@@ -985,8 +985,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           )}
         </div>
       )}
+      {/* Below the in-progress training overlay (z-20), so its countdown and cancel stay usable */}
       {isFetching && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
           <Loader explanation="Loading jutsu" />
         </div>
       )}

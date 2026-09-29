@@ -229,8 +229,9 @@ const ElderHall: React.FC<{
         </p>
       </ContentBox>
       {/* SHOW CURRENT ELDERS: while loading, a row of avatar placeholders holds the
-          height of the loaded grid, so the boxes below do not drop when it arrives */}
-      {((isPending && !!user.villageId) || (elders && elders.length > 0)) && (
+          height of the loaded grid, and a village without elders keeps that height for
+          its empty message, so the boxes below do not move when the query resolves */}
+      {((isPending && !!user.villageId) || elders) && (
         <ContentBox
           title="Current Elders"
           initialBreak={true}
@@ -247,6 +248,18 @@ const ElderHall: React.FC<{
                   </div>
                 </div>
               ))}
+            {elders?.length === 0 && (
+              <div className="relative col-span-3">
+                <div className="invisible w-1/3" aria-hidden>
+                  <AvatarImage size={100} />
+                  <div className="font-bold">&nbsp;</div>
+                  <div>&nbsp;</div>
+                </div>
+                <p className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                  No elders are serving right now
+                </p>
+              </div>
+            )}
             {elders?.map((elder) => (
               <div key={elder.userId} className="relative">
                 <Link href={`/userid/${elder.userId}`} className="text-center">
