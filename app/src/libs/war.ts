@@ -1,5 +1,5 @@
 import type { WarType } from "@/drizzle/constants";
-import { SHRINE_HP_BY_LEVEL } from "@/drizzle/constants";
+import { FACTION_VILLAGE_TYPES, SHRINE_HP_BY_LEVEL } from "@/drizzle/constants";
 import type { Village, VillageAlliance } from "@/drizzle/schema";
 import type { BattleWar } from "@/libs/combat/types";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
@@ -189,3 +189,9 @@ export const isVillageInvolvedInAnyWar = (
     return war.warAllies.some((ally) => ally.villageId === villageId);
   });
 };
+
+/**
+ * Whether a village is a faction's hideout or town rather than a village with elders
+ */
+export const isFactionVillage = (target: Pick<Village, "type">) =>
+  FACTION_VILLAGE_TYPES.some((type) => type === target.type);

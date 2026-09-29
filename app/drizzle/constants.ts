@@ -1170,6 +1170,8 @@ export const VILLAGE_LEAVE_REQUIRED_RANK = "CHUNIN";
 export const VILLAGE_REDUCED_GAINS_DAYS = 7;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
 export const ALLIANCE_VILLAGE_TYPES = ["VILLAGE", "HIDEOUT", "TOWN"] as const;
+/** Village types owned by a faction (clan), led by its leader without an elder council */
+export const FACTION_VILLAGE_TYPES = ["HIDEOUT", "TOWN"] as const;
 export type AllianceVillageType = (typeof ALLIANCE_VILLAGE_TYPES)[number];
 
 // ANBU config
