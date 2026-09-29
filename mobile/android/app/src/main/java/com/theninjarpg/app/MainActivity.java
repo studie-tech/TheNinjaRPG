@@ -23,7 +23,7 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (bridge.getAppUrl().equals(url)) {
+                if (bridge.getAppUrl().equals(url) || (bridge.getAppUrl() + "/").equals(url)) {
                     // A failed remote page must not remain behind the retry screen.
                     view.clearHistory();
                 }
