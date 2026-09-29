@@ -143,6 +143,23 @@ describeWithDatabase("content review", () => {
     expect((await proposalRows())[0]?.status).toBe("REVERTED");
   });
 
+  it("undoes an approval that throws part way and keeps the suggestion pending", async () => {
+    const moderator = await callerFor(contentReviewRouter, MODERATOR);
+    await moderator.create(suggestion("Awarded for bravery in battle."));
+    const [pending] = await proposalRows();
+    // The badge update writes its row, then fails posting to Discord.
+    vi.spyOn(socials, "callDiscordContent").mockRejectedValue(new Error("Discord is down"));
+    const editor = await callerFor(contentReviewRouter, EDITOR);
+    await expect(editor.approve({ id: pending?.id ?? "" })).rejects.toThrow(
+      "Discord is down",
+    );
+    const stored = await (await getTestDatabase()).query.badge.findFirst({
+      where: eq(badge.id, BADGE),
+    });
+    expect(stored?.description).toBe("Awarded for braveyr in battle.");
+    expect((await proposalRows())[0]?.status).toBe("PENDING");
+  });
+
   it("applies reviewer edits and leaves out unticked fields", async () => {
     const moderator = await callerFor(contentReviewRouter, MODERATOR);
     await moderator.create({

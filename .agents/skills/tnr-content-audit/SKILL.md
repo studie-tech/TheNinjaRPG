@@ -69,7 +69,9 @@ Only one JSON object: `{ "proposals": [ ... ] }`. Each proposal:
 5. Balance: change at most two numbers per proposal, by at most 20%, and compare against content
    of the same rank and type. Show the comparison in the rationale.
 6. Never change prices, rewards, loot, shop availability, visibility (`hidden`) or crafting
-   recipes. The server refuses those fields for the audit.
+   recipes. The server refuses those fields for the audit. New content starts hidden and free
+   instead: whatever a `CREATE` sets there, the server resets prices, shop fields, loot,
+   recipes and quest rewards to empty values, and staff price and release it after approval.
 7. Do not invent facts about the game's lore or mechanics. If a fix depends on something you
    cannot see in the snapshot, skip it.
 8. Write in the game's voice: plain English, second person for item and jutsu descriptions,
@@ -93,7 +95,9 @@ Only one JSON object: `{ "proposals": [ ... ] }`. Each proposal:
 - **consistency**: descriptions that contradict their effects (numbers, elements, targets), and
   naming that breaks the pattern of similar content.
 - **new_content**: gaps such as a rank, element or village with little content. Draft one
-  complete entity with `operation: "CREATE"`, copying the structure of `examples[type]`.
+  complete entity with `operation: "CREATE"`, copying the structure of `examples[type]`. Quests
+  may only be `mission`, `errand`, `crime`, `story`, `medical`, `hunting` or `gathering`; assets
+  are never drafted.
 
 ## Battlefield renders
 

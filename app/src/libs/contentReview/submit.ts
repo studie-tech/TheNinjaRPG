@@ -34,6 +34,7 @@ import {
   applySetOperations,
   changedFields,
   isMediaPath,
+  withCreateBaseline,
 } from "./rules";
 import { sameValue } from "./version";
 
@@ -264,8 +265,14 @@ const planAgentProposal = async (
       if (!withMedia.ok) return withMedia.reason;
       next = withMedia.editable;
     }
-    const violation = agentChangeViolation(change.entityType, base, next);
-    if (violation) return violation;
+    if (change.operation === "CREATE") {
+      const drafted = withCreateBaseline(change.entityType, next);
+      if (!drafted.ok) return drafted.reason;
+      next = drafted.editable;
+    } else {
+      const violation = agentChangeViolation(change.entityType, base, next);
+      if (violation) return violation;
+    }
     const diff = changedFields(base, next);
     if (Object.keys(diff.after).length === 0)
       return `${config.label} change has no effect`;

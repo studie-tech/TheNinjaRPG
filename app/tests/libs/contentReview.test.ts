@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { CONTENT_AUDIT_WEEKDAY_FOCUS } from "@/drizzle/constants";
 import { epidemicAssetId, materializeChoice } from "@/libs/contentReview/media";
+import { withCreateBaseline } from "@/libs/contentReview/rules";
 import { getAtPath, setAtPath, topLevelField } from "@/libs/contentReview/paths";
 import {
   agentChangeViolation,
@@ -194,5 +195,56 @@ describe("chosen media", () => {
       url: null,
     };
     expect(materializeChoice(pick, "reviewer")).toEqual({ value: "asset-1", asset: null });
+  });
+});
+
+describe("drafts of new content", () => {
+  it("start hidden and free whatever the draft says", () => {
+    const jutsu = withCreateBaseline("JUTSU", {
+      name: "Tidal Crash",
+      extraBaseCost: 5000,
+      hidden: false,
+    });
+    expect(jutsu).toEqual({
+      ok: true,
+      editable: { name: "Tidal Crash", extraBaseCost: 0, hidden: true },
+    });
+    const item = withCreateBaseline("ITEM", {
+      name: "Storm Kunai",
+      cost: 900,
+      inShop: true,
+      craftingRequirements: [{ ids: ["ore"], number: 2 }],
+    });
+    expect(item.ok && item.editable).toMatchObject({
+      name: "Storm Kunai",
+      cost: 0,
+      inShop: false,
+      craftingRequirements: [],
+      hidden: true,
+    });
+  });
+
+  it("empty every quest reward and refuse quest types staff set up", () => {
+    const quest = withCreateBaseline("QUEST", {
+      questType: "mission",
+      tierLevel: 3,
+      content: {
+        reward: { reward_money: 5000, reward_rank: "JONIN", reward_unknown: 1 },
+        objectives: [{ task: "defeat_opponents", reward_items: [{ ids: ["x"] }] }],
+      },
+    });
+    expect(quest.ok && quest.editable).toEqual({
+      questType: "mission",
+      tierLevel: null,
+      hidden: true,
+      content: {
+        reward: { reward_money: 0, reward_rank: "NONE" },
+        objectives: [{ task: "defeat_opponents", reward_items: [] }],
+      },
+    });
+    expect(withCreateBaseline("QUEST", { questType: "event" })).toMatchObject({
+      ok: false,
+    });
+    expect(withCreateBaseline("GAME_ASSET", { name: "New" })).toMatchObject({ ok: false });
   });
 });

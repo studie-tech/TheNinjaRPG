@@ -602,51 +602,66 @@ const applyProposal = async (
   if (claim.rowsAffected !== 1) {
     return errorResponse("Someone else decided on this suggestion a moment ago");
   }
-  // An Epidemic sound picked before is already in the library; only new assets are added,
-  // and only those are removed again when applying fails.
-  const known = assets.length
-    ? await ctx.drizzle
-        .select({ id: gameAsset.id })
-        .from(gameAsset)
-        .where(
-          inArray(
-            gameAsset.id,
-            assets.map((asset) => asset.id),
-          ),
-        )
-    : [];
-  const added = assets.filter((asset) => !known.some((row) => row.id === asset.id));
-  if (added.length > 0) await ctx.drizzle.insert(gameAsset).values(added);
   const done: { plan: (typeof plans)[number]; entityId: string }[] = [];
-  for (const plan of plans) {
-    const type = plan.change.entityType;
-    const outcome: Outcome & { id?: string } = plan.entity
-      ? await updateEntity(ctx, type, plan.entity.id, {
-          ...plan.entity.payload,
-          ...plan.editable,
-        })
-      : await createEntity(ctx, type, plan.editable);
-    const entityId = plan.entity?.id ?? outcome.id;
-    if (!outcome.success || !entityId) {
-      await rollback(ctx, proposal.id, done, added);
-      return errorResponse(`${ENTITY_CONFIG[type].label}: ${outcome.message}`);
+  let added: (typeof gameAsset.$inferInsert)[] = [];
+  let current: (typeof plans)[number] | undefined;
+  // Whatever stops the approval part way, a refusal or a throw, undoes what it wrote.
+  try {
+    // An Epidemic sound picked before is already in the library; only new assets are
+    // added, and only those are removed again when applying fails.
+    const known = assets.length
+      ? await ctx.drizzle
+          .select({ id: gameAsset.id })
+          .from(gameAsset)
+          .where(
+            inArray(
+              gameAsset.id,
+              assets.map((asset) => asset.id),
+            ),
+          )
+      : [];
+    const fresh = assets.filter((asset) => !known.some((row) => row.id === asset.id));
+    if (fresh.length > 0) await ctx.drizzle.insert(gameAsset).values(fresh);
+    added = fresh;
+    for (const plan of plans) {
+      current = plan;
+      const type = plan.change.entityType;
+      const outcome: Outcome & { id?: string } = plan.entity
+        ? await updateEntity(ctx, type, plan.entity.id, {
+            ...plan.entity.payload,
+            ...plan.editable,
+          })
+        : await createEntity(ctx, type, plan.editable);
+      const entityId = plan.entity?.id ?? outcome.id;
+      if (!outcome.success || !entityId) {
+        await rollback(ctx, proposal.id, done, added);
+        return errorResponse(`${ENTITY_CONFIG[type].label}: ${outcome.message}`);
+      }
+      done.push({ plan, entityId });
+      current = undefined;
     }
-    done.push({ plan, entityId });
+    await Promise.all([
+      ...done.map(({ plan, entityId }) =>
+        ctx.drizzle
+          .update(contentProposalChange)
+          .set({ applied: plan.fields, entityId })
+          .where(eq(contentProposalChange.id, plan.change.id)),
+      ),
+      chosenMedia.length
+        ? ctx.drizzle
+            .update(contentProposalMedia)
+            .set({ chosen: true })
+            .where(inArray(contentProposalMedia.id, chosenMedia))
+        : null,
+    ]);
+  } catch (error) {
+    // An update that threw may have written its row already; restoring it is harmless.
+    const partial = current?.entity
+      ? [{ plan: current, entityId: current.entity.id }]
+      : [];
+    await rollback(ctx, proposal.id, [...done, ...partial], added);
+    throw error;
   }
-  await Promise.all([
-    ...done.map(({ plan, entityId }) =>
-      ctx.drizzle
-        .update(contentProposalChange)
-        .set({ applied: plan.fields, entityId })
-        .where(eq(contentProposalChange.id, plan.change.id)),
-    ),
-    chosenMedia.length
-      ? ctx.drizzle
-          .update(contentProposalMedia)
-          .set({ chosen: true })
-          .where(inArray(contentProposalMedia.id, chosenMedia))
-      : null,
-  ]);
   const names = done.map(({ plan }) => plan.entity?.name ?? "a new entry").join(", ");
   return { success: true, message: `Applied to ${names}` };
 };
@@ -663,9 +678,13 @@ const rollback = async (
 ) => {
   for (const { plan, entityId } of [...done].reverse()) {
     const type = plan.change.entityType;
-    const outcome = plan.entity
-      ? await updateEntity(ctx, type, entityId, plan.entity.payload)
-      : await deleteEntity(ctx, type, entityId);
+    const outcome = await (plan.entity
+      ? updateEntity(ctx, type, entityId, plan.entity.payload)
+      : deleteEntity(ctx, type, entityId)
+    ).catch((error: unknown) => ({
+      success: false,
+      message: error instanceof Error ? error.message : String(error),
+    }));
     if (!outcome.success) {
       console.error(
         `Content review rollback failed for ${type} ${entityId}: ${outcome.message}`,
@@ -763,7 +782,13 @@ const createEntity = async (
     await loadEntities(ctx.drizzle, [{ entityType: type, entityId: id }])
   ).get(entityKey(type, id));
   if (!entity) return { success: false, message: "The new entry could not be loaded" };
-  const updated = await updateEntity(ctx, type, id, { ...entity.payload, ...editable });
+  const updated = await updateEntity(ctx, type, id, {
+    ...entity.payload,
+    ...editable,
+  }).catch(async (error: unknown) => {
+    await deleteEntity(ctx, type, id);
+    throw error;
+  });
   if (!updated.success) {
     await deleteEntity(ctx, type, id);
     return updated;

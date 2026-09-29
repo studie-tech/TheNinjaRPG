@@ -1,7 +1,9 @@
 import type {
   ContentProposalEntityType,
   ContentProposalMediaKind,
+  QuestType,
 } from "@/drizzle/constants";
+import { ObjectiveReward } from "@/validators/rewards";
 import { ENTITY_CONFIG } from "./entities";
 import { getAtPath, setAtPath, topLevelField } from "./paths";
 import { canonicalJson, sameValue } from "./version";
@@ -58,6 +60,35 @@ export const agentChangeViolation = (
   return null;
 };
 
+/**
+ * A new entity drafted by the audit starts hidden and free, without loot, a recipe or
+ * rewards, whatever the draft says: staff price and release it after approving it. Returns
+ * the draft with those fields reset, or the reason it cannot be drafted at all.
+ */
+export const withCreateBaseline = (
+  entityType: ContentProposalEntityType,
+  editable: Record<string, unknown>,
+): { ok: true; editable: Record<string, unknown> } | { ok: false; reason: string } => {
+  if (entityType === "GAME_ASSET") {
+    return { ok: false, reason: "New assets come from media candidates, not drafts" };
+  }
+  if (
+    entityType === "QUEST" &&
+    !DRAFTABLE_QUEST_TYPES.includes(editable.questType as QuestType)
+  ) {
+    return {
+      ok: false,
+      reason: `New ${String(editable.questType)} quests are for staff to set up`,
+    };
+  }
+  const next = { ...editable };
+  for (const field of ENTITY_CONFIG[entityType].agentProtected) {
+    if (field in CREATE_BASELINE) next[field] = CREATE_BASELINE[field];
+  }
+  if ("content" in next) next.content = withoutRewards(next.content);
+  return { ok: true, editable: next };
+};
+
 /** Whether `path` names a field a media candidate of `kind` may fill. */
 export const isMediaPath = (kind: ContentProposalMediaKind, path: string) => {
   const last = path.split(".").pop() ?? "";
@@ -109,4 +140,48 @@ export const changedFields = (
     before: Object.fromEntries(fields.map((field) => [field, before[field] ?? null])),
     after: Object.fromEntries(fields.map((field) => [field, after[field] ?? null])),
   };
+};
+
+/** Protected fields of a new audit draft, as it starts before staff price and release it. */
+const CREATE_BASELINE: Record<string, unknown> = {
+  hidden: true,
+  extraBaseCost: 0,
+  cost: 0,
+  repsCost: 0,
+  seichiSilverCost: 0,
+  inShop: false,
+  isEventItem: false,
+  expireFromStoreAt: null,
+  farmSellValue: 0,
+  farmYieldItemId: null,
+  farmExtractSeedItemId: null,
+  farmExtractSeedCount: 0,
+  craftingRequirements: [],
+  items: [],
+  tierLevel: null,
+};
+
+/** Quest types the audit may draft; the others rank players up, run on schedules or teach. */
+const DRAFTABLE_QUEST_TYPES: QuestType[] = [
+  "mission",
+  "errand",
+  "crime",
+  "story",
+  "medical",
+  "hunting",
+  "gathering",
+];
+
+const EMPTY_REWARD: Record<string, unknown> = ObjectiveReward.parse({});
+
+/** The same content with every `reward_*` value emptied, and unknown ones dropped. */
+const withoutRewards = (node: unknown): unknown => {
+  if (Array.isArray(node)) return node.map(withoutRewards);
+  if (!node || typeof node !== "object") return node;
+  return Object.fromEntries(
+    Object.entries(node).flatMap(([key, value]) => {
+      if (!key.startsWith("reward_")) return [[key, withoutRewards(value)]];
+      return key in EMPTY_REWARD ? [[key, EMPTY_REWARD[key]]] : [];
+    }),
+  );
 };

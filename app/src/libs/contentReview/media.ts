@@ -56,10 +56,14 @@ export const collectCandidates = async (
   const out: MediaCandidate[] = [];
   const room = () => CONTENT_PROPOSAL_MAX_CANDIDATES - out.length;
   if (request.catalogIds.length > 0) {
-    const assets = await client
+    const rows = await client
       .select()
       .from(gameAsset)
       .where(inArray(gameAsset.id, request.catalogIds));
+    // The submitter's order is its preference, and the first candidate is the default pick.
+    const assets = [...new Set(request.catalogIds)].flatMap((id) =>
+      rows.filter((row) => row.id === id),
+    );
     for (const asset of assets) {
       if (room() <= 0) break;
       if (asset.hidden || asset.type !== ASSET_TYPE_FOR[request.kind]) continue;
