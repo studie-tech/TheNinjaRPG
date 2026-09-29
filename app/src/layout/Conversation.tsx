@@ -788,20 +788,23 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                   onClick={invalidateComments}
                 />
               </div>
-              {conversation?.isPublic && typingUsers.size > 0 && (
-                <div className="mt-1 text-muted-foreground text-xs italic">
-                  {(() => {
-                    const names = Array.from(typingUsers.values()).map(
-                      (u) => u.username,
-                    );
-                    if (names.length === 1) {
-                      return `${names[0]} is typing...`;
-                    } else if (names.length === 2) {
-                      return `${names[0]} and ${names[1]} are typing...`;
-                    } else {
-                      return `${names.slice(0, 2).join(", ")} and ${names.length - 2} more are typing...`;
-                    }
-                  })()}
+              {/* The line is kept when nobody is typing: it comes and goes every few
+                  seconds in a busy chat, and each time it moved every message below. */}
+              {conversation?.isPublic && (
+                <div className="mt-1 min-h-4 text-muted-foreground text-xs italic">
+                  {typingUsers.size > 0 &&
+                    (() => {
+                      const names = Array.from(typingUsers.values()).map(
+                        (u) => u.username,
+                      );
+                      if (names.length === 1) {
+                        return `${names[0]} is typing...`;
+                      } else if (names.length === 2) {
+                        return `${names[0]} and ${names[1]} are typing...`;
+                      } else {
+                        return `${names.slice(0, 2).join(", ")} and ${names.length - 2} more are typing...`;
+                      }
+                    })()}
                 </div>
               )}
             </div>

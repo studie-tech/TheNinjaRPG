@@ -922,7 +922,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       }
     >
       {userData && (
-        <div className="max-h-[320px] overflow-y-scroll">
+        // The list fills its 320px cap once loaded; holding that height through the
+        // first load keeps the boxes below from being pushed down when it arrives.
+        <div className={cn("max-h-[320px] overflow-y-scroll", !jutsus && "h-[320px]")}>
           <ActionSelector
             items={alljutsus}
             counts={userJutsuCounts}
@@ -983,7 +985,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           )}
         </div>
       )}
-      {isFetching && <Loader explanation="Loading jutsu" />}
+      {isFetching && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
+          <Loader explanation="Loading jutsu" />
+        </div>
+      )}
       {finishTrainingAt?.finishTraining && (
         <div className="min-h-36">
           <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">

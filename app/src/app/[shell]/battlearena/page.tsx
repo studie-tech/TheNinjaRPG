@@ -52,6 +52,7 @@ import { RankedArenaMain, RankedLoadoutSelector } from "@/layout/PvpRank";
 import QuestPicker from "@/layout/QuestPicker";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
@@ -313,8 +314,15 @@ const ArenaChallenge: React.FC<ArenaChallengeProps> = (props) => {
             {/* Cap against the window, not just a fixed height: the grid always
                 scrolls internally rather than growing the page and pushing
                 "Enter arena" out of sight — and side by side, an uncapped grid
-                would stretch its card far past the setup panel next to it. */}
-            <div className="grid max-h-[min(16rem,26vh)] min-h-0 flex-1 grid-cols-3 content-start gap-2 overflow-y-auto rounded-lg bg-popover/30 p-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-4 2xl:grid-cols-5">
+                would stretch its card far past the setup panel next to it. The
+                opponents fill that cap, so it is also held while they load, keeping
+                the setup panel below from dropping when they arrive. */}
+            <div
+              className={cn(
+                "grid max-h-[min(16rem,26vh)] min-h-0 flex-1 grid-cols-3 content-start gap-2 overflow-y-auto rounded-lg bg-popover/30 p-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-4 2xl:grid-cols-5",
+                !sortedAis && "min-h-[min(16rem,26vh)]",
+              )}
+            >
               {sortedAis?.map((opponent) => {
                 const isSelected = opponent.userId === aiId;
                 return (
