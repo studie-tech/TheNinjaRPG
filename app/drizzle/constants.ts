@@ -253,6 +253,8 @@ export const SHARED_COOLDOWN_TAGS = [
   "summon",
   "vamp",
 ] as const;
+/** Rounds every action sharing a SHARED_COOLDOWN_TAGS tag is locked after one of them is used */
+export const SHARED_COOLDOWN_ROUNDS = 3;
 
 export const LOG_TYPES = [
   "ai",
