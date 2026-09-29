@@ -36,7 +36,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
 import ContentImage from "@/layout/ContentImage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
-import EpidemicSfxSearch from "@/layout/EpidemicSfxSearch";
+import { EpidemicSfxSearch } from "@/layout/EpidemicSfxSearch";
 import Image from "@/layout/Image";
 import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";

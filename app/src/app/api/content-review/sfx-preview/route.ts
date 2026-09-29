@@ -13,8 +13,9 @@ import { sfxPreviewSchema } from "@/validators/contentReview";
 export const dynamic = "force-dynamic";
 
 /**
- * Streams an Epidemic Sound effect for the SFX picker. Served from our own origin because the
- * page's media-src only admits our storage hosts, and the signed Epidemic link stays server-side.
+ * Streams an Epidemic Sound effect to the SFX picker's audio element, which needs a plain URL
+ * rather than a tRPC call. Served from our own origin because the page's media-src only
+ * admits our storage hosts, and the signed Epidemic link stays server-side.
  */
 export async function GET(request: Request) {
   const { userId } = await auth();

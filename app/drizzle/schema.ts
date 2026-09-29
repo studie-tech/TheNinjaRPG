@@ -5933,8 +5933,11 @@ export const accountDeletion = mysqlTable(
   (table) => ({ pendingIdx: index("AccountDeletion_pending_idx").on(table.phase, table.nextAttemptAt) }),
 );
 
-// A suggested content change awaiting review in /manual/review. `statusChangedAt` marks the
-// last decision so rejected and outdated rows can be removed after the retention window.
+/**
+ * A suggested content change, decided in /manual/review. `statusChangedAt` marks the last
+ * status change so rejected and outdated rows can be removed after the retention window;
+ * `expiresAt` is set when the suggestion rests on usage statistics, which go stale.
+ */
 export const contentProposal = mysqlTable(
   "ContentProposal",
   {
@@ -5982,8 +5985,12 @@ export const contentProposal = mysqlTable(
 );
 export type ContentProposal = InferSelectModel<typeof contentProposal>;
 
-// One touched entity per row. `before` and `after` hold only the top-level editable fields
-// that change; the server fills `before` from the live row, never from the submitter.
+/**
+ * One entity a suggestion changes or creates. `before` and `after` hold only the top-level
+ * editable fields that change, and the server fills `before` from the live row, never from
+ * the submitter. On approval, `applied` records what the entity stored (revert compares the
+ * live row against it) and a created entity's id fills `entityId`.
+ */
 export const contentProposalChange = mysqlTable(
   "ContentProposalChange",
   {
@@ -6009,8 +6016,10 @@ export const contentProposalChange = mysqlTable(
 );
 export type ContentProposalChange = InferSelectModel<typeof contentProposalChange>;
 
-// The entities a suggestion relied on, with the version it saw. Any later edit to one of
-// them changes its version and outdates the suggestion.
+/**
+ * The entities a suggestion relied on, with the version it saw. Any later edit to one of
+ * them changes its version and outdates the suggestion.
+ */
 export const contentProposalBasis = mysqlTable(
   "ContentProposalBasis",
   {
@@ -6030,8 +6039,10 @@ export const contentProposalBasis = mysqlTable(
 );
 export type ContentProposalBasis = InferSelectModel<typeof contentProposalBasis>;
 
-// Sound, image and animation candidates for one field of a change. Uploaded files are kept
-// only for the chosen candidate; `fileKey` lets the cleanup delete the rest from storage.
+/**
+ * Sound, image and animation candidates for one field of a change. Uploaded files are kept
+ * only for the chosen candidate; `fileKey` lets the cleanup delete the rest from storage.
+ */
 export const contentProposalMedia = mysqlTable(
   "ContentProposalMedia",
   {

@@ -1,9 +1,3 @@
-export type DiffPart = { op: "same" | "removed" | "added"; text: string };
-
-/** Words, whitespace, punctuation and combat placeholders such as %user as separate tokens. */
-const tokenize = (text: string) =>
-  text.match(/%[a-z_]+|[\p{L}\p{N}']+|\s+|[^\s\p{L}\p{N}']/gu) ?? [];
-
 /**
  * Word-level diff of two texts: longest common subsequence over tokens, with each run of
  * changes reported as its removed text followed by its added text so edits read as phrases.
@@ -109,3 +103,10 @@ export const flattenLeaves = (value: unknown, prefix = ""): Map<string, unknown>
   walk(value, prefix);
   return leaves;
 };
+
+/** Words, whitespace, punctuation and combat placeholders such as %user as separate tokens. */
+const tokenize = (text: string) =>
+  text.match(/%[a-z_]+|[\p{L}\p{N}']+|\s+|[^\s\p{L}\p{N}']/gu) ?? [];
+
+/** A run of text both versions share, or that only the old or only the new one has. */
+export type DiffPart = { op: "same" | "removed" | "added"; text: string };

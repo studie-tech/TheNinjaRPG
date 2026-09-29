@@ -16,7 +16,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import NindoChange from "@/layout/NindoChange";
 import StatusBar from "@/layout/StatusBar";
-import SuggestChange from "@/layout/SuggestChange";
+import { SuggestChange } from "@/layout/SuggestChange";
 import { useAiEditForm } from "@/libs/ais";
 import { showMutationToast } from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
@@ -41,7 +41,7 @@ export default function ManualAisEdit(props: { params: Promise<{ aiid: string }>
   // Convert key null values to empty strings, preparing data for form
   setNullsToEmptyStrings(data);
 
-  // Redirect to profile if not content or admin
+  // Redirect to profile if not staff
   useEffect(() => {
     if (userData && !isStaffRole(userData.role)) {
       router.push("/profile");

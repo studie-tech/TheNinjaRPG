@@ -1,3 +1,4 @@
+import alea from "alea";
 import { and, count, eq, gte, inArray, or, sum } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -16,203 +17,19 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { DAY_S, secondsFromNow } from "@/utils/time";
 import { agentAuditOutputSchema, visualCheckSchema } from "@/validators/contentReview";
 import { type ContentEntity, entityKey, loadAllEntities } from "./entities";
 import { isEpidemicConfigured } from "./epidemic";
 import { expireStaleEvidence } from "./outdate";
 
-/** Vercel caps function responses at 4.5 MB; stay well under it. */
-const MAX_SNAPSHOT_BYTES = 3_800_000;
-
-const MEDIA_KEYS = [
-  "staticAssetPath",
-  "staticAnimation",
-  "appearAnimation",
-  "disappearAnimation",
-  "appearSfx",
-  "disappearSfx",
-];
-
-type View = {
-  types: ContentProposalEntityType[];
-  fields: (entity: ContentEntity) => Record<string, unknown>;
-  stats: boolean;
-  assets: ("SFX" | "ANIMATION" | "STATIC")[];
-};
-
-const pick = (source: Record<string, unknown>, keys: string[]) =>
-  Object.fromEntries(
-    keys.filter((key) => key in source).map((key) => [key, source[key]]),
-  );
-
-const omit = (source: Record<string, unknown>, keys: string[]) =>
-  Object.fromEntries(Object.entries(source).filter(([key]) => !keys.includes(key)));
-
-const withoutMedia = (key: string) =>
-  !MEDIA_KEYS.includes(key) && key !== "description" && key !== "timeTracker";
-
-/** Keep only these keys on every effect, preserving list positions for `effects.N` paths. */
-const effectsWith = (effects: unknown, keep: (key: string) => boolean) =>
-  Array.isArray(effects)
-    ? effects.map((effect) =>
-        Object.fromEntries(
-          Object.entries((effect ?? {}) as Record<string, unknown>).filter(([key]) =>
-            keep(key),
-          ),
-        ),
-      )
-    : effects;
-
-/** Text leaves of a quest's content; objects and list positions stay addressable. */
-const textOnly = (node: unknown): unknown => {
-  if (Array.isArray(node)) return node.map(textOnly);
-  if (node && typeof node === "object") {
-    return Object.fromEntries(
-      Object.entries(node).flatMap(([key, value]) => {
-        if (typeof value === "string") {
-          return /desc|text|dialog|title|name|message|story/i.test(key)
-            ? [[key, value]]
-            : [];
-        }
-        return value && typeof value === "object" ? [[key, textOnly(value)]] : [];
-      }),
-    );
-  }
-  return node;
-};
-
-const TEXT_FIELDS: Record<ContentProposalEntityType, string[]> = {
-  JUTSU: ["name", "description", "battleDescription", "jutsuRank", "jutsuType"],
-  ITEM: ["name", "description", "battleDescription", "rarity", "itemType"],
-  BLOODLINE: ["name", "description", "rank"],
-  QUEST: ["name", "description", "successDescription", "questType", "content"],
-  BADGE: ["name", "description"],
-  GAME_ASSET: ["name"],
-  AI: ["username", "customTitle", "level"],
-};
-
-const VIEWS: Record<ContentAuditFocus, View> = {
-  grammar: {
-    types: ["JUTSU", "ITEM", "BLOODLINE", "QUEST", "BADGE", "AI"],
-    fields: (entity) => {
-      const fields = pick(entity.editable, TEXT_FIELDS[entity.type]);
-      return "content" in fields
-        ? { ...fields, content: textOnly(fields.content) }
-        : fields;
-    },
-    stats: false,
-    assets: [],
-  },
-  balance: {
-    types: ["JUTSU", "ITEM", "BLOODLINE"],
-    fields: (entity) => ({
-      ...omit(entity.editable, ["description", "battleDescription", "image"]),
-      effects: effectsWith(entity.editable.effects, withoutMedia),
-    }),
-    stats: true,
-    assets: [],
-  },
-  sound: {
-    types: ["JUTSU", "ITEM"],
-    fields: (entity) => ({
-      ...pick(entity.editable, [
-        "name",
-        "jutsuRank",
-        "jutsuType",
-        "rarity",
-        "itemType",
-      ]),
-      effects: effectsWith(entity.editable.effects, (key) =>
-        ["type", "appearSfx", "disappearSfx", "elements"].includes(key),
-      ),
-    }),
-    stats: true,
-    assets: ["SFX"],
-  },
-  // Targets decide where combat draws each effect, which the battlefield renders reproduce.
-  animation: {
-    types: ["JUTSU", "ITEM", "BLOODLINE"],
-    fields: (entity) => ({
-      ...pick(entity.editable, [
-        "name",
-        "jutsuRank",
-        "jutsuType",
-        "rarity",
-        "itemType",
-        "rank",
-        "target",
-      ]),
-      effects: effectsWith(entity.editable.effects, (key) =>
-        [
-          "type",
-          "target",
-          "appearAnimation",
-          "staticAnimation",
-          "disappearAnimation",
-          "staticAssetPath",
-          "elements",
-        ].includes(key),
-      ),
-    }),
-    stats: true,
-    assets: ["ANIMATION", "STATIC"],
-  },
-  visual: {
-    types: ["JUTSU", "ITEM", "BLOODLINE", "BADGE", "AI"],
-    fields: (entity) =>
-      pick(entity.editable, [
-        "name",
-        "image",
-        "avatar",
-        "jutsuRank",
-        "rarity",
-        "itemType",
-        "rank",
-      ]),
-    stats: true,
-    assets: [],
-  },
-  consistency: {
-    types: ["JUTSU", "ITEM", "BLOODLINE"],
-    fields: (entity) => ({
-      ...omit(entity.editable, ["image"]),
-      effects: effectsWith(entity.editable.effects, withoutMedia),
-    }),
-    stats: false,
-    assets: [],
-  },
-  new_content: {
-    types: ["JUTSU", "ITEM", "QUEST", "AI"],
-    fields: (entity) =>
-      pick(entity.editable, [
-        "name",
-        "jutsuRank",
-        "jutsuType",
-        "requiredRank",
-        "rarity",
-        "itemType",
-        "questType",
-        "questRank",
-        "requiredLevel",
-        "villageId",
-        "level",
-        "rank",
-        "primaryElement",
-      ]),
-    stats: false,
-    assets: ["SFX", "ANIMATION"],
-  },
-};
-
-export const resolveFocus = (focus: ContentAuditFocus | "rotate", now = new Date()) =>
-  focus === "rotate"
-    ? (CONTENT_AUDIT_WEEKDAY_FOCUS[now.getUTCDay()] as ContentAuditFocus)
-    : focus;
-
 /**
  * Everything the audit reads: visible content of the day's focus with versions and usage,
- * the asset library, the queue budget, recent decisions (so rejected ideas are not
- * repeated) and the JSON schema its answer must match.
+ * the asset library, which media services are available, open suggestions and recent
+ * decisions (so rejected ideas are not repeated), and the JSON schemas its answers must
+ * match. Suggestions whose usage data expired are outdated first. Entities come most used
+ * first when the focus reads usage and in a daily shuffled order otherwise, cut to keep the
+ * response under MAX_SNAPSHOT_BYTES.
  */
 export const buildAuditSnapshot = async (
   client: DrizzleClient,
@@ -223,7 +40,7 @@ export const buildAuditSnapshot = async (
   await expireStaleEvidence(client);
   const [entityLists, stats, owners, assets, recent] = await Promise.all([
     Promise.all(view.types.map((type) => loadAllEntities(client, type))),
-    view.stats ? usageStats(client) : Promise.resolve(new Map<string, Usage>()),
+    view.hasUsage ? usageStats(client) : Promise.resolve(new Map<string, Usage>()),
     focus === "balance"
       ? ownerCounts(client)
       : Promise.resolve(new Map<string, number>()),
@@ -242,7 +59,7 @@ export const buildAuditSnapshot = async (
       : Promise.resolve([]),
     recentSuggestions(client),
   ]);
-  const visible = entityLists.flat().filter((entity) => !entity.hidden);
+  const visible = entityLists.flat().filter((entity) => !entity.isHidden);
   const assetUse = countAssetUse(visible);
   const imageUse = new Map<string, number>();
   for (const entity of visible) {
@@ -265,7 +82,17 @@ export const buildAuditSnapshot = async (
         : {}),
     };
   });
-  rows.sort((a, b) => (b.casts30d ?? 0) - (a.casts30d ?? 0));
+  // Ties, which are every row on a focus without usage, get an order that changes daily, so
+  // a trimmed snapshot shows the audit a different part of the content each day.
+  const day = new Date().toISOString().slice(0, 10);
+  const tieBreak = new Map(
+    rows.map((row) => [row, alea(`${day}:${row.type}:${row.id}`)()]),
+  );
+  rows.sort(
+    (a, b) =>
+      (b.casts30d ?? 0) - (a.casts30d ?? 0) ||
+      (tieBreak.get(a) ?? 0) - (tieBreak.get(b) ?? 0),
+  );
   const snapshot = {
     generatedAt: new Date().toISOString(),
     focus,
@@ -295,9 +122,15 @@ export const buildAuditSnapshot = async (
   return snapshot;
 };
 
+/** The focus of an audit run: "rotate" resolves to the focus of the current UTC weekday. */
+export const resolveFocus = (focus: ContentAuditFocus | "rotate", now = new Date()) =>
+  focus === "rotate"
+    ? (CONTENT_AUDIT_WEEKDAY_FOCUS[now.getUTCDay()] as ContentAuditFocus)
+    : focus;
+
 /**
- * The leading rows whose JSON fits in `budget` bytes of an array. Rows come most used first,
- * so a trim for size drops the content that matters least.
+ * The leading rows whose JSON fits in `budget` bytes as array entries; the first row that
+ * does not fit ends the list.
  */
 export const leadingRowsWithin = <T>(rows: T[], budget: number) => {
   let left = budget;
@@ -311,9 +144,38 @@ export const leadingRowsWithin = <T>(rows: T[], budget: number) => {
   return kept;
 };
 
-type Usage = { casts: number; winRate: number | null };
+/**
+ * JSON schema of the audit's answer, in the subset Codex's strict structured output accepts.
+ * The submission endpoint validates the full zod schema again, so the limits the subset
+ * cannot express still hold.
+ */
+export const auditJsonSchema = () => strict(z.toJSONSchema(agentAuditOutputSchema));
 
-/** Casts and win rate per jutsu, item and bloodline over DataBattleAction's 30 days. */
+/** JSON schema of the audit's verdict on the battlefield renders of its suggestions. */
+const visualCheckJsonSchema = () => strict(z.toJSONSchema(visualCheckSchema));
+
+/**
+ * A JSON schema reduced to the strict structured-output subset: every object property
+ * required, no extra properties, and no string formats, patterns or length limits.
+ */
+const strict = (node: unknown): unknown => {
+  if (Array.isArray(node)) return node.map(strict);
+  if (!node || typeof node !== "object") return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (!DROP_KEYWORDS.has(key)) out[key] = strict(value);
+  }
+  if (out.type === "object" && out.properties && typeof out.properties === "object") {
+    out.required = Object.keys(out.properties);
+    out.additionalProperties = false;
+  }
+  return out;
+};
+
+/**
+ * Casts and win rate per jutsu, item and bloodline over DataBattleAction's 30 days, keyed by
+ * `entityKey`.
+ */
 const usageStats = async (client: DrizzleClient) => {
   const rows = await client
     .select({
@@ -355,7 +217,7 @@ const usageStats = async (client: DrizzleClient) => {
   );
 };
 
-/** How many players hold each jutsu and item: the reach of a balance change. */
+/** How many players hold each jutsu and item, by id: the reach of a balance change. */
 const ownerCounts = async (client: DrizzleClient) => {
   const [jutsus, items] = await Promise.all([
     client
@@ -370,6 +232,7 @@ const ownerCounts = async (client: DrizzleClient) => {
   return new Map([...jutsus, ...items].map((row) => [row.id, row.n]));
 };
 
+/** How often the effects of these entities use each asset id. */
 const countAssetUse = (entities: ContentEntity[]) => {
   const used = new Map<string, number>();
   for (const entity of entities) {
@@ -385,8 +248,12 @@ const countAssetUse = (entities: ContentEntity[]) => {
   return used;
 };
 
+/**
+ * Suggestions the audit should not repeat, one entry per change, by status: every open one
+ * however old, and decided ones within the retention window.
+ */
 const recentSuggestions = async (client: DrizzleClient) => {
-  const since = new Date(Date.now() - CONTENT_PROPOSAL_RETENTION_DAYS * 86_400_000);
+  const since = secondsFromNow(-CONTENT_PROPOSAL_RETENTION_DAYS * DAY_S);
   const rows = await client
     .select({
       id: contentProposal.id,
@@ -405,7 +272,6 @@ const recentSuggestions = async (client: DrizzleClient) => {
       contentProposalChange,
       eq(contentProposalChange.proposalId, contentProposal.id),
     )
-    // Open suggestions stay listed however old they are; decided ones for the retention window.
     .where(
       or(
         eq(contentProposal.status, "PENDING"),
@@ -433,15 +299,185 @@ const recentSuggestions = async (client: DrizzleClient) => {
   };
 };
 
-/**
- * JSON schema for the audit's answer, in the strict structured-output subset Codex uses:
- * every property required, no extra properties, and no string formats or length limits
- * (the server validates those again on submit).
- */
-export const auditJsonSchema = () => strict(z.toJSONSchema(agentAuditOutputSchema));
+/** Keep only these keys on every effect, preserving list positions for `effects.N` paths. */
+const effectsWith = (effects: unknown, keep: (key: string) => boolean) =>
+  Array.isArray(effects)
+    ? effects.map((effect) =>
+        Object.fromEntries(
+          Object.entries((effect ?? {}) as Record<string, unknown>).filter(([key]) =>
+            keep(key),
+          ),
+        ),
+      )
+    : effects;
 
-/** JSON schema for the audit's verdict on the battlefield renders of its suggestions. */
-export const visualCheckJsonSchema = () => strict(z.toJSONSchema(visualCheckSchema));
+/** Effect keys that decide how an effect plays, leaving out media, text and battle state. */
+const isMechanicKey = (key: string) =>
+  !MEDIA_KEYS.includes(key) && key !== "description" && key !== "timeTracker";
+
+/** Text leaves of a quest's content; objects and list positions stay addressable. */
+const textOnly = (node: unknown): unknown => {
+  if (Array.isArray(node)) return node.map(textOnly);
+  if (node && typeof node === "object") {
+    return Object.fromEntries(
+      Object.entries(node).flatMap(([key, value]) => {
+        if (typeof value === "string") {
+          return /desc|text|dialog|title|name|message|story/i.test(key)
+            ? [[key, value]]
+            : [];
+        }
+        return value && typeof value === "object" ? [[key, textOnly(value)]] : [];
+      }),
+    );
+  }
+  return node;
+};
+
+const pick = (source: Record<string, unknown>, keys: string[]) =>
+  Object.fromEntries(
+    keys.filter((key) => key in source).map((key) => [key, source[key]]),
+  );
+
+const omit = (source: Record<string, unknown>, keys: string[]) =>
+  Object.fromEntries(Object.entries(source).filter(([key]) => !keys.includes(key)));
+
+/** Vercel caps function responses at 4.5 MB; stay well under it. */
+const MAX_SNAPSHOT_BYTES = 3_800_000;
+
+/** Effect fields that hold the asset ids of its visuals and sounds. */
+const MEDIA_KEYS = [
+  "staticAssetPath",
+  "staticAnimation",
+  "appearAnimation",
+  "disappearAnimation",
+  "appearSfx",
+  "disappearSfx",
+];
+
+/** Fields the grammar focus reads per type: the texts players see, and what they describe. */
+const TEXT_FIELDS: Record<ContentProposalEntityType, string[]> = {
+  JUTSU: ["name", "description", "battleDescription", "jutsuRank", "jutsuType"],
+  ITEM: ["name", "description", "battleDescription", "rarity", "itemType"],
+  BLOODLINE: ["name", "description", "rank"],
+  QUEST: ["name", "description", "successDescription", "questType", "content"],
+  BADGE: ["name", "description"],
+  GAME_ASSET: ["name"],
+  AI: ["username", "customTitle", "level"],
+};
+
+/** What the audit reads for each focus: only what that focus judges, so the catalog fits. */
+const VIEWS: Record<ContentAuditFocus, View> = {
+  grammar: {
+    types: ["JUTSU", "ITEM", "BLOODLINE", "QUEST", "BADGE", "AI"],
+    fields: (entity) => {
+      const fields = pick(entity.editable, TEXT_FIELDS[entity.type]);
+      return "content" in fields
+        ? { ...fields, content: textOnly(fields.content) }
+        : fields;
+    },
+    hasUsage: false,
+    assets: [],
+  },
+  balance: {
+    types: ["JUTSU", "ITEM", "BLOODLINE"],
+    fields: (entity) => ({
+      ...omit(entity.editable, ["description", "battleDescription", "image"]),
+      effects: effectsWith(entity.editable.effects, isMechanicKey),
+    }),
+    hasUsage: true,
+    assets: [],
+  },
+  sound: {
+    types: ["JUTSU", "ITEM"],
+    fields: (entity) => ({
+      ...pick(entity.editable, [
+        "name",
+        "jutsuRank",
+        "jutsuType",
+        "rarity",
+        "itemType",
+      ]),
+      effects: effectsWith(entity.editable.effects, (key) =>
+        ["type", "appearSfx", "disappearSfx", "elements"].includes(key),
+      ),
+    }),
+    hasUsage: true,
+    assets: ["SFX"],
+  },
+  // Targets decide where combat draws each effect, which the battlefield renders reproduce.
+  animation: {
+    types: ["JUTSU", "ITEM", "BLOODLINE"],
+    fields: (entity) => ({
+      ...pick(entity.editable, [
+        "name",
+        "jutsuRank",
+        "jutsuType",
+        "rarity",
+        "itemType",
+        "rank",
+        "target",
+      ]),
+      effects: effectsWith(entity.editable.effects, (key) =>
+        [
+          "type",
+          "target",
+          "appearAnimation",
+          "staticAnimation",
+          "disappearAnimation",
+          "staticAssetPath",
+          "elements",
+        ].includes(key),
+      ),
+    }),
+    hasUsage: true,
+    assets: ["ANIMATION", "STATIC"],
+  },
+  visual: {
+    types: ["JUTSU", "ITEM", "BLOODLINE", "BADGE", "AI"],
+    fields: (entity) =>
+      pick(entity.editable, [
+        "name",
+        "image",
+        "avatar",
+        "jutsuRank",
+        "rarity",
+        "itemType",
+        "rank",
+      ]),
+    hasUsage: true,
+    assets: [],
+  },
+  consistency: {
+    types: ["JUTSU", "ITEM", "BLOODLINE"],
+    fields: (entity) => ({
+      ...omit(entity.editable, ["image"]),
+      effects: effectsWith(entity.editable.effects, isMechanicKey),
+    }),
+    hasUsage: false,
+    assets: [],
+  },
+  new_content: {
+    types: ["JUTSU", "ITEM", "QUEST", "AI"],
+    fields: (entity) =>
+      pick(entity.editable, [
+        "name",
+        "jutsuRank",
+        "jutsuType",
+        "requiredRank",
+        "rarity",
+        "itemType",
+        "questType",
+        "questRank",
+        "requiredLevel",
+        "villageId",
+        "level",
+        "rank",
+        "primaryElement",
+      ]),
+    hasUsage: false,
+    assets: ["SFX", "ANIMATION"],
+  },
+};
 
 const DROP_KEYWORDS = new Set([
   "$schema",
@@ -451,16 +487,16 @@ const DROP_KEYWORDS = new Set([
   "maxLength",
 ]);
 
-const strict = (node: unknown): unknown => {
-  if (Array.isArray(node)) return node.map(strict);
-  if (!node || typeof node !== "object") return node;
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(node)) {
-    if (!DROP_KEYWORDS.has(key)) out[key] = strict(value);
-  }
-  if (out.type === "object" && out.properties && typeof out.properties === "object") {
-    out.required = Object.keys(out.properties);
-    out.additionalProperties = false;
-  }
-  return out;
+/**
+ * The slice of the catalog one focus reads: its content types, the fields of each entity,
+ * whether rows carry 30-day usage, and which asset types the library listing includes.
+ */
+type View = {
+  types: ContentProposalEntityType[];
+  fields: (entity: ContentEntity) => Record<string, unknown>;
+  hasUsage: boolean;
+  assets: ("SFX" | "ANIMATION" | "STATIC")[];
 };
+
+/** Casts, and the share of decided battles won; null when no battle was decided. */
+type Usage = { casts: number; winRate: number | null };

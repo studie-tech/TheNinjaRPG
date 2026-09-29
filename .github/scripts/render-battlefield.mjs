@@ -11,7 +11,9 @@
  *   BASE_URL, MODE, SNAPSHOT, OUT_DIR, PROPOSALS (verify), VERCEL_BYPASS (previews)
  *
  * Outputs (via GITHUB_OUTPUT):
- *   count — number of sheets written; OUT_DIR/index.json lists the titles on each
+ *   count        number of sheets written; OUT_DIR/index.json lists the titles on each sheet
+ *                and the textures that failed to load
+ *   suggestions  JSON array of the proposal indices drawn in verify mode
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -25,6 +27,7 @@ const VISUAL_FIELDS = [
   "disappearAnimation",
 ];
 const GALLERY_SIZE = 32;
+const FORBIDDEN_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 
 const required = (name) => {
   const value = process.env[name];
@@ -37,6 +40,7 @@ const outDir = required("OUT_DIR");
 const snapshot = JSON.parse(await readFile(required("SNAPSHOT"), "utf8"));
 const assetNames = new Map(snapshot.assets.map((asset) => [asset.id, asset.name]));
 
+/** One block for each of the most used animation and static assets. */
 const galleryRequests = () =>
   snapshot.assets
     .filter((asset) => asset.type === "ANIMATION" || asset.type === "STATIC")
@@ -71,22 +75,42 @@ const holdsVisuals = (value) =>
           holdsVisuals(entry),
       );
 
-/** A set operation that changes what the entity draws in battle. */
-const setsVisuals = (op) =>
-  VISUAL_FIELDS.includes(lastSegment(op.path)) ||
-  op.path === "avatar" ||
-  holdsVisuals(JSON.parse(op.valueJson));
+/** An assignment that changes what the entity draws in battle. */
+const setsVisuals = ([fieldPath, value]) =>
+  VISUAL_FIELDS.includes(lastSegment(fieldPath)) ||
+  fieldPath === "avatar" ||
+  holdsVisuals(value);
 
+const isSafePath = (fieldPath) =>
+  !fieldPath.split(".").some((segment) => FORBIDDEN_SEGMENTS.has(segment));
+
+/**
+ * A change's set operations as [path, value] pairs, or null when a value does not parse or a
+ * path is unsafe. The server refuses such a suggestion, so it is not drawn either.
+ */
+const assignmentsOf = (change) => {
+  if (!change.set.every((op) => isSafePath(op.path))) return null;
+  try {
+    return change.set.map((op) => [op.path, JSON.parse(op.valueJson)]);
+  } catch {
+    return null;
+  }
+};
+
+/** Set a dotted path in place, creating the arrays and objects along it. */
 const setAtPath = (target, fieldPath, value) => {
   const keys = fieldPath.split(".");
   let node = target;
-  for (const key of keys.slice(0, -1)) {
-    if (node[key] === undefined || node[key] === null) node[key] = {};
+  for (const [index, key] of keys.slice(0, -1).entries()) {
+    if (node[key] === undefined || node[key] === null) {
+      node[key] = /^\d+$/.test(keys[index + 1]) ? [] : {};
+    }
     node = node[key];
   }
   node[keys.at(-1)] = value;
 };
 
+/** A copy of `fields` with every [path, value] assignment applied. */
 const withValues = (fields, assignments) => {
   const next = structuredClone(fields);
   for (const [fieldPath, value] of assignments) setAtPath(next, fieldPath, value);
@@ -95,14 +119,22 @@ const withValues = (fields, assignments) => {
 
 const describe = (id) => `${assetNames.get(id) ?? "asset"} (${id})`;
 
+/** Proposal indices that verify mode draws, so verdicts can only touch those. */
+const rendered = new Set();
+
 /** One block per changed entity: its current version, then one version per candidate set. */
 const verifyRequests = (output) =>
   output.proposals.flatMap((proposal, index) =>
     proposal.changes.flatMap((change) => {
+      const assignments = assignmentsOf(change);
+      if (!assignments) return [];
       const media = change.media.filter(
-        (request) => request.kind === "ANIMATION" && request.catalogIds.length > 0,
+        (request) =>
+          request.kind === "ANIMATION" &&
+          request.catalogIds.length > 0 &&
+          isSafePath(request.path),
       );
-      if (!change.set.some(setsVisuals) && media.length === 0) {
+      if (!assignments.some(setsVisuals) && media.length === 0) {
         return [];
       }
       const entity = snapshot.entities.find(
@@ -110,10 +142,8 @@ const verifyRequests = (output) =>
       );
       if (change.entityId && !entity) return [];
       const current = entity?.fields ?? {};
-      const proposed = withValues(
-        current,
-        change.set.map((op) => [op.path, JSON.parse(op.valueJson)]),
-      );
+      const proposed = withValues(current, assignments);
+      rendered.add(index);
       const candidates = Math.max(1, ...media.map((request) => request.catalogIds.length));
       const suggested = Array.from({ length: candidates }, (_, k) => {
         const picks = media.map((request) => [
@@ -133,7 +163,8 @@ const verifyRequests = (output) =>
           title: `Suggestion ${index}: ${proposal.title} · ${change.entityType} ${entity?.fields?.name ?? change.entityId ?? "(new)"}`,
           entityType: change.entityType,
           entityId: change.entityId,
-          // At most 3 candidates per request, so current plus candidates fits the page's 4.
+          // A media request holds at most 3 catalog ids, so current plus candidates stays
+          // within the 4 versions the capture page accepts per block.
           variants: [...(entity ? [{ name: "current", fields: current }] : []), ...suggested],
         },
       ];
@@ -146,6 +177,7 @@ const requests =
     : verifyRequests(JSON.parse(await readFile(required("PROPOSALS"), "utf8")));
 
 await mkdir(outDir, { recursive: true });
+setOutput("suggestions", JSON.stringify([...rendered]));
 if (requests.length === 0) {
   await writeFile(
     path.join(outDir, "index.json"),

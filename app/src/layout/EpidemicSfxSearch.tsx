@@ -24,11 +24,11 @@ export const EpidemicSfxSearch: React.FC<EpidemicSfxSearchProps> = ({ onImported
   const { data: userData } = useUserData();
   const [draft, setDraft] = useState("");
   const [term, setTerm] = useState("");
-  const allowed = !!userData && canChangeContent(userData.role);
+  const canSearch = !!userData && canChangeContent(userData.role);
   const utils = api.useUtils();
   const { data, isFetching } = api.contentReview.searchSfx.useQuery(
     { term },
-    { enabled: allowed && term.length >= 2 },
+    { enabled: canSearch && term.length >= 2 },
   );
   const importSfx = api.contentReview.importSfx.useMutation({
     onSuccess: async (result) => {
@@ -44,7 +44,7 @@ export const EpidemicSfxSearch: React.FC<EpidemicSfxSearchProps> = ({ onImported
     },
   });
 
-  if (!allowed) return null;
+  if (!canSearch) return null;
 
   return (
     <div className="space-y-2 border-t pt-3">
@@ -103,5 +103,3 @@ export const EpidemicSfxSearch: React.FC<EpidemicSfxSearchProps> = ({ onImported
     </div>
   );
 };
-
-export default EpidemicSfxSearch;

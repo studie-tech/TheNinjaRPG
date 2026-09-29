@@ -45,6 +45,7 @@ import type { BattlefieldSheetsInput } from "@/validators/contentReview";
  * audit see an effect exactly as a battle shows it. Hexes keep the size a regular battle gives
  * them on the chosen viewport; only the field is cropped to a 3 by 3 patch inside combat's
  * decorated border, with a caster on the left, a target on the right and a tile between them.
+ * Returns null when WebGL is unavailable; the caller mounts `canvas` and calls `dispose`.
  */
 export const createBattlefieldPreview = (
   options: BattlefieldPreviewOptions,
@@ -208,12 +209,12 @@ export const createBattlefieldPreview = (
   const restartAt = endAt + disappearMs + REST_MS;
   let cycle = 0;
   let clockMs = 0;
-  let ended = false;
+  let hasEnded = false;
 
   const begin = () => {
     cycle += 1;
     clockMs = 0;
-    ended = false;
+    hasEnded = false;
     const stamp = `${id}-${cycle}`;
     const placed = content.effects.map((effect, index) =>
       visualEffect(`${stamp}-${index}`, TILES[effect.placement], effect, casterId),
@@ -230,7 +231,7 @@ export const createBattlefieldPreview = (
     pruneHidden();
   };
   const end = () => {
-    ended = true;
+    hasEnded = true;
     battle.usersEffects = [];
     battle.groundEffects = content.effects.flatMap((effect, index) =>
       effect.disappearAnimation || effect.disappearSfx
@@ -249,15 +250,15 @@ export const createBattlefieldPreview = (
     );
     sync();
   };
-  const advance = (ms: number, loop: boolean) => {
+  const advance = (ms: number, shouldLoop: boolean) => {
     let remaining = ms;
     while (remaining > 0) {
       const step = Math.min(FRAME_MS, remaining);
       remaining -= step;
       clockMs += step;
       spriteMixer.update(step / 1000);
-      if (!ended && clockMs >= endAt) end();
-      else if (loop && ended && clockMs >= restartAt) begin();
+      if (!hasEnded && clockMs >= endAt) end();
+      else if (shouldLoop && hasEnded && clockMs >= restartAt) begin();
     }
   };
   // Effects of an earlier cycle are hidden by the draw after it; drop them for good.
@@ -312,7 +313,10 @@ export const createBattlefieldPreview = (
     whenLoaded: async (timeoutMs = 6000) => {
       const failed = await preloadImages(drawn.map((asset) => asset.image));
       const deadline = Date.now() + timeoutMs;
-      while (pendingTextures(scene) > 0 && Date.now() < deadline) await sleep(100);
+      // A texture whose image failed never loads; stop once only those are left.
+      while (pendingTextures(scene) > failed.size && Date.now() < deadline) {
+        await sleep(100);
+      }
       return drawn
         .filter((asset) => failed.has(asset.image))
         .map((asset) => `${asset.name} (${asset.id})`);
@@ -363,31 +367,34 @@ export const previewHexWidth = (viewport: BattlefieldViewport) =>
   BATTLEFIELD_VIEWPORTS[viewport] / stacked(GAME_COLUMNS);
 
 /**
- * Draw every requested entity version on the battlefield and lay the frames out on labelled
- * PNG sheets: one row per version with frames from its appear, active and disappear phases on
- * a desktop field, then the active phase on a phone field, all drawn at twice the size a
- * player's screen shows them. The content audit reads these.
+ * Draw every requested entity version on the battlefield for the content audit, on labelled
+ * PNG sheets of `perSheet` blocks: one row per version with frames from its appear, active and
+ * disappear phases on a desktop field, then its active phase on a phone field, all at twice
+ * the size a player's screen shows them. Also names the assets whose image failed to load;
+ * throws when WebGL is unavailable.
  */
 export const captureBattlefieldSheets = async (
   input: BattlefieldSheetsInput,
   loadAssets: (ids: string[]) => Promise<GameAsset[]>,
 ) => {
+  const scenes = input.requests.map((request) =>
+    request.variants.map((variant) =>
+      battlefieldSceneOf(request.entityType, request.entityId, variant.fields),
+    ),
+  );
+  // Every version's assets in one request.
+  const ids = [...new Set(scenes.flat().flatMap((scene) => sceneAssetIds(scene)))];
+  const assets = ids.length > 0 ? await loadAssets(ids) : [];
   const missing = new Set<string>();
   const blocks: SheetBlock[] = [];
-  for (const request of input.requests) {
+  for (const [requestIndex, request] of input.requests.entries()) {
     const rows: SheetRow[] = [];
-    for (const variant of request.variants) {
-      const scene = battlefieldSceneOf(
-        request.entityType,
-        request.entityId,
-        variant.fields,
-      );
+    for (const [variantIndex, variant] of request.variants.entries()) {
+      const scene = scenes[requestIndex]?.[variantIndex];
       if (!scene) {
         rows.push({ name: `${variant.name}: draws nothing in battle`, frames: [] });
         continue;
       }
-      const ids = sceneAssetIds(scene);
-      const assets = ids.length > 0 ? await loadAssets(ids) : [];
       const frames: SheetFrame[] = [];
       for (const viewport of ["desktop", "phone"] as const) {
         const preview = createBattlefieldPreview({
@@ -422,29 +429,18 @@ export const captureBattlefieldSheets = async (
   return { sheets, missing: [...missing] };
 };
 
-/** Columns of a regular battle; the preview keeps the hex size those give. */
-const GAME_COLUMNS = getDefaultBattleSizes("COMBAT", 0).width;
-/** Playable 3 by 3 patch plus combat's border: two columns each side and two rows on top. */
-const FIELD = { width: 7, height: 5 };
-const TILES: Record<BattlefieldPlacement, { col: number; row: number }> = {
-  caster: { col: 2, row: 1 },
-  ground: { col: 3, row: 1 },
-  target: { col: 4, row: 1 },
-};
-const FRAME_MS = 16;
-const NO_HOVER: CachedIntersections = { tiles: [], battleTiles: [], ground: [] };
-const REST_MS = 700;
-let previewCount = 0;
-
+/** Hex widths that `columns` columns span, since neighboring columns overlap. */
 const stacked = (columns: number) =>
   columns - HEX_STACKING_DISPLACEMENT * (columns - 1);
 
+/** Size of the field on the viewport in CSS pixels, and its height to width ratio. */
 const fieldSize = (viewport: BattlefieldViewport) => {
   const width = previewHexWidth(viewport) * stacked(FIELD.width);
   const ratio = getBattlefieldHeightRatio(FIELD.width, FIELD.height);
   return { width, height: width * ratio, ratio };
 };
 
+/** A sparring battle on the preview field with the given fighters and no effects yet. */
 const previewBattle = (
   id: string,
   background: CombatBiome,
@@ -586,6 +582,7 @@ const preloadImages = async (urls: string[]) => {
   return failed;
 };
 
+/** Number of material maps in the scene whose image has not loaded yet. */
 const pendingTextures = (scene: Scene) => {
   let pending = 0;
   scene.traverse((node) => {
@@ -604,6 +601,7 @@ const pendingTextures = (scene: Scene) => {
   return pending;
 };
 
+/** Whether a texture's image has pixels: an <img> once decoded, any other once sized. */
 const isLoaded = (texture: Texture) => {
   const image = texture.image as {
     complete?: boolean;
@@ -617,6 +615,7 @@ const isLoaded = (texture: Texture) => {
   return (image.width ?? 0) > 0;
 };
 
+/** A copy of `area` of `source`, with its edges given as fractions of the source's size. */
 const cropCanvas = (
   source: HTMLCanvasElement,
   area: { left: number; right: number; top: number; bottom: number },
@@ -632,16 +631,7 @@ const cropCanvas = (
   return copy;
 };
 
-const SHEET = {
-  gap: 8,
-  title: 28,
-  rowLabel: 22,
-  caption: 20,
-  background: "#161616",
-  text: "#f4f4f4",
-  muted: "#b8b8b8",
-};
-
+/** One sheet as a PNG data URL: each block's title over its rows of captioned frames. */
 const drawSheet = (blocks: SheetBlock[]) => {
   const tallest = (row: SheetRow) =>
     Math.max(0, ...row.frames.map((f) => f.canvas.height));
@@ -694,7 +684,35 @@ const drawSheet = (blocks: SheetBlock[]) => {
   return canvas.toDataURL("image/png");
 };
 
-export type BattlefieldPreviewOptions = {
+/** Columns of a regular battle; the preview keeps the hex size those give. */
+const GAME_COLUMNS = getDefaultBattleSizes("COMBAT", 0).width;
+/** Playable 3 by 3 patch plus combat's border: two columns each side and two rows on top. */
+const FIELD = { width: 7, height: 5 };
+/** The middle row of the playable patch: caster, then the ground tile, then target. */
+const TILES: Record<BattlefieldPlacement, { col: number; row: number }> = {
+  caster: { col: 2, row: 1 },
+  ground: { col: 3, row: 1 },
+  target: { col: 4, row: 1 },
+};
+/** Step the animation clock advances by, about one frame at 60 fps. */
+const FRAME_MS = 16;
+const NO_HOVER: CachedIntersections = { tiles: [], battleTiles: [], ground: [] };
+/** Pause after the disappear animations before a looping cycle starts over. */
+const REST_MS = 700;
+/** Spacing in pixels and colors of a capture sheet. */
+const SHEET = {
+  gap: 8,
+  title: 28,
+  rowLabel: 22,
+  caption: 20,
+  background: "#161616",
+  text: "#f4f4f4",
+  muted: "#b8b8b8",
+};
+/** Keeps fighter and effect ids unique per preview, since combat caches meshes by id. */
+let previewCount = 0;
+
+type BattlefieldPreviewOptions = {
   scene: BattlefieldScene;
   /** Catalog rows of the assets the scene draws; `scene.assets` replaces matching rows. */
   assets: GameAsset[];
@@ -710,6 +728,7 @@ export type BattlefieldPreviewOptions = {
   sounds?: Record<string, string>;
 };
 
+/** One preview field: its canvas, animation and sound controls, and fixed captures. */
 export type BattlefieldPreview = {
   canvas: HTMLCanvasElement;
   /** Size of the field on a player's screen, in CSS pixels. */
@@ -729,6 +748,7 @@ export type BattlefieldPreview = {
    * the caster, the tile and the target. Expects the default zoom.
    */
   captureFrames: () => SheetFrame[];
+  /** Stop animating, release the WebGL context and remove the canvas from the page. */
   dispose: () => void;
 };
 

@@ -110,7 +110,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
       },
     });
 
-  // The quest.update payload for validated form values; shared by saving and suggesting.
+  /** The quest.update payload for validated form values; shared by saving and suggesting. */
   const toQuestPayload = (data: ZodCombinedQuest) => {
     const newObjectives = data.content.objectives.map((objective) => {
       if (objective.task === "move_to_location" && data.image) {
@@ -462,7 +462,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   // Image & description
   formData.unshift({ id: "image", type: "avatar", href: imageUrl });
 
-  // What a suggestion sends: the save payload, or null while the form does not validate.
+  /** What a suggestion sends: the save payload, or null while the form does not validate. */
   const getSuggestionData = () => {
     const parsed = schema.safeParse(form.getValues());
     return parsed.success ? toQuestPayload(parsed.data as ZodCombinedQuest) : null;

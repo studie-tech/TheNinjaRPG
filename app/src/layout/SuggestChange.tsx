@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  CONTENT_PROPOSAL_RATIONALE_LENGTH,
+  CONTENT_PROPOSAL_TITLE_LENGTH,
   ContentProposalCategories,
   type ContentProposalCategory,
   type ContentProposalEntityType,
@@ -31,7 +33,7 @@ interface SuggestChangeProps {
    * differ from the live row become the suggestion.
    */
   getData: () => Record<string, unknown> | null;
-  /** Editors see this as a secondary option next to saving directly. */
+  /** Button text, such as "Suggest instead" beside a save button. */
   label?: string;
 }
 
@@ -62,7 +64,9 @@ export const SuggestChange: React.FC<SuggestChangeProps> = (props) => {
     onError: (err) => setError(err.message),
   });
 
-  const isValid = title.trim().length >= 3 && rationale.trim().length >= 10;
+  const isValid =
+    title.trim().length >= CONTENT_PROPOSAL_TITLE_LENGTH.min &&
+    rationale.trim().length >= CONTENT_PROPOSAL_RATIONALE_LENGTH.min;
 
   return (
     <>
@@ -132,7 +136,7 @@ export const SuggestChange: React.FC<SuggestChangeProps> = (props) => {
             <Input
               id="suggest-title"
               value={title}
-              maxLength={120}
+              maxLength={CONTENT_PROPOSAL_TITLE_LENGTH.max}
               placeholder="Fix the typo in the description"
               onChange={(e) => setTitle(e.target.value)}
             />
@@ -142,7 +146,7 @@ export const SuggestChange: React.FC<SuggestChangeProps> = (props) => {
             <Textarea
               id="suggest-rationale"
               value={rationale}
-              maxLength={4000}
+              maxLength={CONTENT_PROPOSAL_RATIONALE_LENGTH.max}
               placeholder="What is wrong today, and why this change fixes it"
               onChange={(e) => setRationale(e.target.value)}
             />
@@ -153,5 +157,3 @@ export const SuggestChange: React.FC<SuggestChangeProps> = (props) => {
     </>
   );
 };
-
-export default SuggestChange;

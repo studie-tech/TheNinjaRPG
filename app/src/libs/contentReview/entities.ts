@@ -26,49 +26,69 @@ import { ENTITY_LABELS } from "./labels";
 import { contentVersion } from "./version";
 
 /**
- * A content row as the review system sees it. `payload` is exactly what the entity's update
- * procedure receives from the manual editor; `editable` is the part suggestions may change,
- * which is also what the version is computed over.
+ * Load entities of mixed types, one query per type, keyed by `entityKey`. Ids that match no
+ * row are absent from the map.
  */
-export type ContentEntity = {
-  type: ContentProposalEntityType;
-  id: string;
-  name: string;
-  image: string | null;
-  hidden: boolean;
-  payload: Record<string, unknown>;
-  editable: Record<string, unknown>;
-  version: string;
+export const loadEntities = async (
+  client: DrizzleClient,
+  refs: { entityType: ContentProposalEntityType; entityId: string }[],
+) => {
+  const byType = new Map<ContentProposalEntityType, Set<string>>();
+  for (const ref of refs) {
+    const ids = byType.get(ref.entityType) ?? new Set<string>();
+    ids.add(ref.entityId);
+    byType.set(ref.entityType, ids);
+  }
+  const loaded = await Promise.all(
+    [...byType.entries()].map(async ([type, ids]) => {
+      const rows = await ENTITY_CONFIG[type].load(client, [...ids]);
+      return rows.map((row) => toEntity(type, row));
+    }),
+  );
+  return new Map(
+    loaded.flat().map((entity) => [entityKey(entity.type, entity.id), entity]),
+  );
 };
 
-type Loaded = Omit<ContentEntity, "type" | "editable" | "version">;
+/** Every entity of one type, for the audit snapshot. */
+export const loadAllEntities = async (
+  client: DrizzleClient,
+  type: ContentProposalEntityType,
+) => (await ENTITY_CONFIG[type].load(client, null)).map((row) => toEntity(type, row));
 
-type EntityConfig = {
-  label: string;
-  /** Content type used for image generation prompts. */
-  contentType: ContentType;
-  /** ActionLog `tableName` the entity's update procedure writes. */
-  logTable: string;
-  /** Top-level fields suggestions may change. */
-  editableKeys: readonly string[];
-  /** Fields the audit may never change: prices, rewards, loot and visibility. */
-  agentProtected: readonly string[];
-  validator: z.ZodType;
-  detailHref: (id: string) => string;
-  editHref: (id: string) => string;
-  /** Rows by id, or every row of the type when `ids` is null. */
-  load: (client: DrizzleClient, ids: string[] | null) => Promise<Loaded[]>;
-  /** The names among `names` that a row already has, compared the way the column collates. */
-  findNames: (client: DrizzleClient, names: string[]) => Promise<string[]>;
+/** Key of one entity among entities of every type. */
+export const entityKey = (type: ContentProposalEntityType, id: string) =>
+  `${type}:${id}`;
+
+/** Display name of a content type. */
+export const entityLabel = (type: ContentProposalEntityType) =>
+  ENTITY_CONFIG[type].label;
+
+/** The editable fields of a payload, such as an editor form or a validated update. */
+export const editableOf = (
+  type: ContentProposalEntityType,
+  payload: Record<string, unknown>,
+) => pick(payload, ENTITY_CONFIG[type].editableKeys);
+
+/** Trimmed name in drafted fields, or "" when there is none; AIs keep theirs in `username`. */
+export const draftName = (fields: Record<string, unknown>) => {
+  const name = fields.name ?? fields.username;
+  return typeof name === "string" ? name.trim() : "";
 };
 
-const keysOf = (schema: { shape: Record<string, unknown> }) =>
-  Object.keys(schema.shape);
+/** Adds the editable fields and their version to a loaded row. */
+const toEntity = (type: ContentProposalEntityType, loaded: Loaded): ContentEntity => {
+  const editable = pick(loaded.payload, ENTITY_CONFIG[type].editableKeys);
+  return { ...loaded, type, editable, version: contentVersion(editable) };
+};
 
 const pick = (source: Record<string, unknown>, keys: readonly string[]) =>
   Object.fromEntries(
     keys.filter((key) => key in source).map((key) => [key, source[key]]),
   );
+
+const keysOf = (schema: { shape: Record<string, unknown> }) =>
+  Object.keys(schema.shape);
 
 /** AI fields shown by the manual AI editor (libs/ais.ts), plus its effect list. */
 const AI_EDITABLE_KEYS = [
@@ -111,16 +131,18 @@ const AI_EDITABLE_KEYS = [
   "effects",
 ] as const;
 
+/**
+ * How the review system loads, names, validates and links each content type, and which of
+ * its fields suggestions and the audit may change.
+ */
 export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   JUTSU: {
     contentType: "jutsu",
     label: ENTITY_LABELS.JUTSU,
-    logTable: "jutsu",
     editableKeys: keysOf(JutsuValidatorRawSchema),
     agentProtected: ["extraBaseCost", "hidden"],
     validator: JutsuValidator,
     detailHref: (id) => `/manual/jutsu/${id}`,
-    editHref: (id) => `/manual/jutsu/edit/${id}`,
     load: async (client, ids) => {
       const rows = await client
         .select()
@@ -130,7 +152,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         id: row.id,
         name: row.name,
         image: row.image,
-        hidden: row.hidden,
+        isHidden: row.hidden,
         payload: { ...row },
       }));
     },
@@ -145,7 +167,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   ITEM: {
     contentType: "item",
     label: ENTITY_LABELS.ITEM,
-    logTable: "item",
     editableKeys: keysOf(ItemValidatorRawSchema),
     agentProtected: [
       "cost",
@@ -163,7 +184,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     ],
     validator: ItemValidator,
     detailHref: (id) => `/manual/item/${id}`,
-    editHref: (id) => `/manual/item/edit/${id}`,
     load: async (client, ids) => {
       const rows = await client.query.item.findMany({
         where: ids ? inArray(item.id, ids) : undefined,
@@ -175,7 +195,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         id: row.id,
         name: row.name,
         image: row.image,
-        hidden: row.hidden,
+        isHidden: row.hidden,
         payload: {
           ...row,
           expireFromStoreAt: row.expireFromStoreAt
@@ -199,12 +219,10 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   BLOODLINE: {
     contentType: "bloodline",
     label: ENTITY_LABELS.BLOODLINE,
-    logTable: "bloodline",
     editableKeys: keysOf(BloodlineValidator),
     agentProtected: ["hidden"],
     validator: BloodlineValidator,
     detailHref: (id) => `/manual/bloodline/${id}`,
-    editHref: (id) => `/manual/bloodline/edit/${id}`,
     load: async (client, ids) => {
       const rows = await client
         .select()
@@ -214,7 +232,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         id: row.id,
         name: row.name,
         image: row.image,
-        hidden: row.hidden,
+        isHidden: row.hidden,
         payload: { ...row },
       }));
     },
@@ -229,7 +247,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   QUEST: {
     contentType: "quest",
     label: ENTITY_LABELS.QUEST,
-    logTable: "quest",
     // Raid boss health moves during play; it is state, not content.
     editableKeys: keysOf(QuestValidatorRawSchema).filter(
       (key) => key !== "raidBossCurrentHealth",
@@ -237,7 +254,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     agentProtected: ["hidden", "questType", "tierLevel"],
     validator: QuestValidator,
     detailHref: (id) => `/manual/quest/edit/${id}`,
-    editHref: (id) => `/manual/quest/edit/${id}`,
     load: async (client, ids) => {
       const rows = await client
         .select()
@@ -247,7 +263,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         id: row.id,
         name: row.name,
         image: row.image,
-        hidden: row.hidden,
+        isHidden: row.hidden,
         payload: { ...row },
       }));
     },
@@ -262,12 +278,10 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   BADGE: {
     contentType: "badge",
     label: ENTITY_LABELS.BADGE,
-    logTable: "badge",
     editableKeys: keysOf(BadgeValidator),
     agentProtected: [],
     validator: BadgeValidator,
     detailHref: (id) => `/manual/badge/edit/${id}`,
-    editHref: (id) => `/manual/badge/edit/${id}`,
     load: async (client, ids) => {
       const rows = await client
         .select()
@@ -277,7 +291,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         id: row.id,
         name: row.name,
         image: row.image,
-        hidden: false,
+        isHidden: false,
         payload: { ...row },
       }));
     },
@@ -292,12 +306,10 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   GAME_ASSET: {
     contentType: "asset",
     label: ENTITY_LABELS.GAME_ASSET,
-    logTable: "gameAsset",
     editableKeys: keysOf(gameAssetValidator),
     agentProtected: ["hidden", "type", "licenseDetails"],
     validator: gameAssetValidator,
     detailHref: (id) => `/manual/asset/edit/${id}`,
-    editHref: (id) => `/manual/asset/edit/${id}`,
     load: async (client, ids) => {
       const rows = await client
         .select()
@@ -307,7 +319,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         id: row.id,
         name: row.name,
         image: row.image,
-        hidden: row.hidden,
+        isHidden: row.hidden,
         payload: { ...row },
       }));
     },
@@ -322,12 +334,10 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   AI: {
     contentType: "ai",
     label: ENTITY_LABELS.AI,
-    logTable: "ai",
     editableKeys: AI_EDITABLE_KEYS,
     agentProtected: ["items"],
     validator: insertAiSchema,
     detailHref: (id) => `/manual/ai/edit/${id}`,
-    editHref: (id) => `/manual/ai/edit/${id}`,
     load: async (client, ids) => {
       const rows = await client.query.userData.findMany({
         where: and(
@@ -344,7 +354,7 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         id: row.userId,
         name: row.username,
         image: row.avatar,
-        hidden: false,
+        isHidden: false,
         payload: {
           ...row,
           jutsus: jutsus
@@ -372,53 +382,39 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   },
 };
 
-export const entityLabel = (type: ContentProposalEntityType) =>
-  ENTITY_CONFIG[type].label;
-
-/** Load entities of mixed types, one query per type, keyed by `${type}:${id}`. */
-export const loadEntities = async (
-  client: DrizzleClient,
-  refs: { entityType: ContentProposalEntityType; entityId: string }[],
-) => {
-  const byType = new Map<ContentProposalEntityType, Set<string>>();
-  for (const ref of refs) {
-    const ids = byType.get(ref.entityType) ?? new Set<string>();
-    ids.add(ref.entityId);
-    byType.set(ref.entityType, ids);
-  }
-  const loaded = await Promise.all(
-    [...byType.entries()].map(async ([type, ids]) => {
-      const rows = await ENTITY_CONFIG[type].load(client, [...ids]);
-      return rows.map((row) => toEntity(type, row));
-    }),
-  );
-  return new Map(
-    loaded.flat().map((entity) => [entityKey(entity.type, entity.id), entity]),
-  );
+/**
+ * A content row as the review system sees it. `payload` is exactly what the entity's update
+ * procedure receives from the manual editor; `editable` is the part suggestions may change,
+ * which is also what the version is computed over.
+ */
+export type ContentEntity = {
+  type: ContentProposalEntityType;
+  id: string;
+  name: string;
+  image: string | null;
+  isHidden: boolean;
+  payload: Record<string, unknown>;
+  editable: Record<string, unknown>;
+  version: string;
 };
 
-export const entityKey = (type: ContentProposalEntityType, id: string) =>
-  `${type}:${id}`;
-
-/** Name of an entity that does not exist yet, from its drafted fields; AI name it `username`. */
-export const draftName = (fields: Record<string, unknown>) => {
-  const name = fields.name ?? fields.username;
-  return typeof name === "string" ? name.trim() : "";
+type EntityConfig = {
+  label: string;
+  /** Content type used for image generation prompts. */
+  contentType: ContentType;
+  /** Top-level fields suggestions may change. */
+  editableKeys: readonly string[];
+  /** Fields the audit may never change: prices, loot, recipes, visibility and structure. */
+  agentProtected: readonly string[];
+  /** Input validator of the entity's update procedure. */
+  validator: z.ZodType;
+  /** Manual page the review desk links an entity to. */
+  detailHref: (id: string) => string;
+  /** Rows by id, or every row of the type when `ids` is null. */
+  load: (client: DrizzleClient, ids: string[] | null) => Promise<Loaded[]>;
+  /** The names among `names` that a row already has, compared the way the column collates. */
+  findNames: (client: DrizzleClient, names: string[]) => Promise<string[]>;
 };
 
-/** Every entity of one type, for the audit snapshot. */
-export const loadAllEntities = async (
-  client: DrizzleClient,
-  type: ContentProposalEntityType,
-) => (await ENTITY_CONFIG[type].load(client, null)).map((row) => toEntity(type, row));
-
-const toEntity = (type: ContentProposalEntityType, loaded: Loaded): ContentEntity => {
-  const editable = pick(loaded.payload, ENTITY_CONFIG[type].editableKeys);
-  return { ...loaded, type, editable, version: contentVersion(editable) };
-};
-
-/** Editable fields of an arbitrary payload, for suggestions that create content. */
-export const editableOf = (
-  type: ContentProposalEntityType,
-  payload: Record<string, unknown>,
-) => pick(payload, ENTITY_CONFIG[type].editableKeys);
+/** A loaded row, before its editable fields and version are derived. */
+type Loaded = Omit<ContentEntity, "type" | "editable" | "version">;

@@ -7,19 +7,19 @@ import {
   contentProposalMedia,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { DAY_S, secondsFromNow } from "@/utils/time";
 import { deleteStoredFiles } from "./media";
 import { expireStaleEvidence } from "./outdate";
-
-const BATCH = 500;
 
 /**
  * Hourly housekeeping from the cleaner cron: expire suggestions whose usage data is too old,
  * remove rejected and outdated suggestions once the retention window has passed, and delete
  * uploaded candidates nobody picked. Applied and reverted suggestions stay as history.
+ * Returns how many suggestions were removed and how many candidate files were deleted.
  */
 export const cleanupContentProposals = async (client: DrizzleClient) => {
   await expireStaleEvidence(client);
-  const cutoff = new Date(Date.now() - CONTENT_PROPOSAL_RETENTION_DAYS * 86_400_000);
+  const cutoff = secondsFromNow(-CONTENT_PROPOSAL_RETENTION_DAYS * DAY_S);
   const [expired, leftovers] = await Promise.all([
     client
       .select({ id: contentProposal.id })
@@ -65,6 +65,8 @@ export const cleanupContentProposals = async (client: DrizzleClient) => {
       row.fileKey ? [row.fileKey] : [],
     ),
   );
+  // A suggestion's own row goes last: runs select from it, so if a child delete fails, the
+  // next run finds the suggestion again and finishes the job.
   await Promise.all([
     ...(ids.length
       ? [
@@ -77,7 +79,6 @@ export const cleanupContentProposals = async (client: DrizzleClient) => {
           client
             .delete(contentProposalChange)
             .where(inArray(contentProposalChange.proposalId, ids)),
-          client.delete(contentProposal).where(inArray(contentProposal.id, ids)),
         ]
       : []),
     ...(leftovers.length
@@ -91,5 +92,11 @@ export const cleanupContentProposals = async (client: DrizzleClient) => {
         ]
       : []),
   ]);
+  if (ids.length) {
+    await client.delete(contentProposal).where(inArray(contentProposal.id, ids));
+  }
   return { removed: ids.length, filesDeleted: expiredMedia.length + leftovers.length };
 };
+
+/** Suggestions and leftover files handled per run; a bigger backlog clears over later runs. */
+const BATCH = 500;

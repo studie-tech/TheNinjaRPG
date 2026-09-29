@@ -5,7 +5,7 @@ import type {
   ContentProposalStatus,
 } from "@/drizzle/constants";
 
-/** Display names shared by the review desk, the suggest dialog and server messages. */
+/** Display name of each content type, in server messages and on the review desk. */
 export const ENTITY_LABELS: Record<ContentProposalEntityType, string> = {
   JUTSU: "Jutsu",
   ITEM: "Item",
@@ -16,6 +16,7 @@ export const ENTITY_LABELS: Record<ContentProposalEntityType, string> = {
   AI: "AI",
 };
 
+/** Display name of each suggestion category, on the review desk and the suggest dialog. */
 export const CATEGORY_LABELS: Record<ContentProposalCategory, string> = {
   GRAMMAR: "Grammar",
   BALANCE: "Balance",
@@ -26,6 +27,7 @@ export const CATEGORY_LABELS: Record<ContentProposalCategory, string> = {
   NEW_CONTENT: "New content",
 };
 
+/** Display name of each suggestion status. */
 export const STATUS_LABELS: Record<ContentProposalStatus, string> = {
   PENDING: "Pending",
   APPLIED: "Applied",
@@ -34,6 +36,7 @@ export const STATUS_LABELS: Record<ContentProposalStatus, string> = {
   REVERTED: "Reverted",
 };
 
+/** Reasons a reviewer can give for rejecting a suggestion, as the review desk offers them. */
 export const REJECT_REASON_LABELS: Record<ContentProposalRejectReason, string> = {
   NOT_AN_IMPROVEMENT: "Not an improvement",
   FACTUALLY_WRONG: "Factually wrong",

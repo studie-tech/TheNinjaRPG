@@ -6,7 +6,7 @@ import type {
   ContentProposalStatus,
   ItemType,
 } from "@/drizzle/constants";
-import { ItemTypes } from "@/drizzle/constants";
+import { CONTENT_REVIEW_SFX_SEARCH_RESULTS, ItemTypes } from "@/drizzle/constants";
 import type { insertAiSchema, UserData } from "@/drizzle/schema";
 import {
   contentProposal,
@@ -50,6 +50,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
+import { DAY_S, secondsFromNow } from "@/utils/time";
 import type { gameAssetValidator } from "@/validators/asset";
 import type { BadgeValidator } from "@/validators/badge";
 import type {
@@ -72,7 +73,11 @@ import {
 import type { QuestValidator } from "@/validators/objectives";
 
 export const contentReviewRouter = createTRPCRouter({
-  /** One page of a tab in the review desk. Staff who cannot review see their own suggestions. */
+  /**
+   * One page of a review desk tab: pending suggestions oldest first, the other tabs
+   * newest status change first. Reviewers see every suggestion, other staff only their
+   * own, and everyone else an empty page.
+   */
   getQueue: protectedProcedure
     .input(reviewQueueSchema)
     .query(async ({ ctx, input }) => {
@@ -98,7 +103,7 @@ export const contentReviewRouter = createTRPCRouter({
           canReview ? undefined : eq(contentProposal.createdByUserId, ctx.userId),
         ),
         with: {
-          changes: true,
+          changes: { orderBy: (table, { asc }) => [asc(table.sortOrder)] },
           basis: true,
           createdBy: { columns: { username: true } },
           reviewedBy: { columns: { username: true } },
@@ -128,7 +133,10 @@ export const contentReviewRouter = createTRPCRouter({
       };
     }),
 
-  /** Tab counts for the desk and the notification pill. */
+  /**
+   * Suggestions per status for the desk's tabs, and pending ones per category for its
+   * filter. Reviewers count every suggestion, everyone else only their own.
+   */
   getCounts: protectedProcedure.query(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
     const canReview = canChangeContent(user.role);
@@ -158,7 +166,12 @@ export const contentReviewRouter = createTRPCRouter({
     };
   }),
 
-  /** Everything the desk shows for one suggestion, with live values for the preview. */
+  /**
+   * Everything the desk shows for one suggestion: each change with the live values of
+   * its fields, the media candidates with the assets they and the live fields point at,
+   * and the basis with its freshness. Null when it does not exist or the caller may not
+   * see it.
+   */
   getProposal: protectedProcedure
     .input(proposalIdSchema)
     .query(async ({ ctx, input }) => {
@@ -169,20 +182,16 @@ export const contentReviewRouter = createTRPCRouter({
       if (!proposal || !isStaffRole(user.role)) return null;
       const canReview = canChangeContent(user.role);
       if (!canReview && proposal.createdByUserId !== ctx.userId) return null;
-      const outdated =
-        proposal.status === "PENDING" && canReview
-          ? await refreshProposalFreshness(ctx.drizzle, [proposal])
-          : new Map<string, string>();
       const entities = await loadEntities(ctx.drizzle, [
         ...targetRefs([proposal]),
-        ...proposal.basis.map((basis) => ({
-          entityType: basis.entityType,
-          entityId: basis.entityId,
-        })),
+        ...proposal.basis,
       ]);
+      const outdated =
+        proposal.status === "PENDING" && canReview
+          ? await refreshProposalFreshness(ctx.drizzle, [proposal], entities)
+          : new Map<string, string>();
       const status = outdated.has(proposal.id) ? "OUTDATED" : proposal.status;
-      // Assets the media comparisons show: every catalog candidate and the asset each media
-      // field points at today.
+      /** Live value at `path` of a change's entity: an asset id or an image URL. */
       const currentAt = (changeId: string, path: string) => {
         const change = proposal.changes.find((entry) => entry.id === changeId);
         const entity = change?.entityId
@@ -191,6 +200,8 @@ export const contentReviewRouter = createTRPCRouter({
         const value = entity ? getAtPath(entity.editable, path) : undefined;
         return typeof value === "string" && value ? value : null;
       };
+      // Assets the media comparisons show: every catalog candidate and the asset each
+      // sound or animation field points at today. Image fields hold a URL, not an asset.
       const assetIds = new Set(
         proposal.media.flatMap((media) => [
           ...(media.source === "CATALOG" && media.externalId ? [media.externalId] : []),
@@ -235,14 +246,6 @@ export const contentReviewRouter = createTRPCRouter({
             before: change.before,
             after: change.after,
             applied: change.applied,
-            current: entity
-              ? Object.fromEntries(
-                  Object.keys(change.after).map((field) => [
-                    field,
-                    entity.editable[field] ?? null,
-                  ]),
-                )
-              : null,
             payload: entity?.payload ?? null,
             media: proposal.media
               .filter((media) => media.changeId === change.id)
@@ -255,7 +258,6 @@ export const contentReviewRouter = createTRPCRouter({
                 title: media.title,
                 url: media.url,
                 lengthMs: media.lengthMs,
-                prompt: media.prompt,
                 chosen: media.chosen,
                 currentValue: currentAt(change.id, media.path),
               })),
@@ -277,7 +279,7 @@ export const contentReviewRouter = createTRPCRouter({
       };
     }),
 
-  /** A staff suggestion from an editor form or content card. */
+  /** Send a staff suggestion from a manual editor to the review queue. */
   create: protectedProcedure
     .input(staffCreateProposalSchema)
     .output(baseServerResponse)
@@ -292,6 +294,10 @@ export const contentReviewRouter = createTRPCRouter({
       return { success: true, message: "Sent for review" };
     }),
 
+  /**
+   * Apply a pending suggestion with the reviewer's choices: unticked fields, edited values
+   * and picked media candidates.
+   */
   approve: protectedProcedure
     .input(approveProposalSchema)
     .output(baseServerResponse)
@@ -304,7 +310,10 @@ export const contentReviewRouter = createTRPCRouter({
       return applyProposal(ctx, user, proposal, input);
     }),
 
-  /** Approve several suggestions with their defaults: every field, first media candidate. */
+  /**
+   * Approve several suggestions with their defaults: every field, first media candidate.
+   * Succeeds when at least one applied; the message names each failure and its reason.
+   */
   bulkApprove: protectedProcedure
     .input(bulkApproveSchema)
     .output(baseServerResponse)
@@ -334,11 +343,17 @@ export const contentReviewRouter = createTRPCRouter({
       };
     }),
 
+  /**
+   * Reject a pending suggestion with a reason and an optional note, which the next audit
+   * reads. The status guard lets only the first of two simultaneous decisions through.
+   */
   reject: protectedProcedure
     .input(rejectProposalSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       const result = await ctx.drizzle
         .update(contentProposal)
@@ -359,8 +374,11 @@ export const contentReviewRouter = createTRPCRouter({
     }),
 
   /**
-   * Put the previous values back. Refused when someone edited the entity after the
-   * suggestion was applied, since writing old values would silently undo their edit.
+   * Put the previous values back and delete what the suggestion created. Refused when an
+   * entity was edited after the approval, since writing old values would silently undo
+   * that edit. The status is claimed with a compare-and-swap, and a failure part way
+   * re-applies what was already reverted. Suggestions the approval outdated return to the
+   * queue once the old values are back.
    */
   revert: protectedProcedure
     .input(proposalIdSchema)
@@ -370,10 +388,13 @@ export const contentReviewRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchProposal(ctx.drizzle, input.id),
       ]);
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (!proposal) return errorResponse("Suggestion not found");
       if (proposal.status !== "APPLIED")
         return errorResponse("Only applied suggestions can be reverted");
+      const appliedAt = proposal.statusChangedAt;
       const changes = proposal.changes.filter(
         (change) => change.applied && change.entityId,
       );
@@ -393,10 +414,10 @@ export const contentReviewRouter = createTRPCRouter({
           ...entity.payload,
           ...applied,
         });
-        const edited = Object.keys(applied).some(
+        const wasEdited = Object.keys(applied).some(
           (field) => !sameValue(live[field], expected[field]),
         );
-        if (edited) {
+        if (wasEdited) {
           return errorResponse(
             `${label} ${entity.name} was edited after this suggestion was applied, so it cannot be reverted automatically`,
           );
@@ -423,7 +444,8 @@ export const contentReviewRouter = createTRPCRouter({
         );
       const undone: typeof changes = [];
       let current: (typeof changes)[number] | undefined;
-      // Put the applied values back on what was already reverted, and the status with them.
+      // Put the applied values back on what was already reverted, then the APPLIED
+      // status, and return the suggestions the reverted writes outdated to the queue.
       const restore = async (reverted: typeof changes) => {
         for (const change of [...reverted].reverse()) {
           const entity = entities.get(
@@ -447,9 +469,13 @@ export const contentReviewRouter = createTRPCRouter({
         }
         await ctx.drizzle
           .update(contentProposal)
-          .set({ status: "APPLIED" })
+          .set({ status: "APPLIED", statusChangedAt: appliedAt })
           .where(eq(contentProposal.id, proposal.id));
-        await reinstateProposalsFor(ctx.drizzle, refsOf(reverted), startedAt);
+        await reinstateProposalsFor(
+          ctx.drizzle,
+          targetRefs([{ changes: reverted }]),
+          startedAt,
+        );
       };
       try {
         for (const change of ordered) {
@@ -484,10 +510,14 @@ export const contentReviewRouter = createTRPCRouter({
         await restore(current ? [...undone, current] : undone);
         throw error;
       }
+      await reinstateProposalsFor(ctx.drizzle, targetRefs([{ changes }]), appliedAt);
       return { success: true, message: "Reverted. The previous values are back." };
     }),
 
-  /** Decisions per source, agent and category over the retention window. */
+  /**
+   * Suggestions per source, agent, category and status created in the last `days` days,
+   * at most the retention window. Empty for anyone who cannot review.
+   */
   getStats: protectedProcedure
     .input(reviewStatsSchema)
     .query(async ({ ctx, input }) => {
@@ -502,12 +532,7 @@ export const contentReviewRouter = createTRPCRouter({
           n: count(),
         })
         .from(contentProposal)
-        .where(
-          gte(
-            contentProposal.createdAt,
-            new Date(Date.now() - input.days * 86_400_000),
-          ),
-        )
+        .where(gte(contentProposal.createdAt, secondsFromNow(-input.days * DAY_S)))
         .groupBy(
           contentProposal.source,
           contentProposal.agentName,
@@ -516,20 +541,32 @@ export const contentReviewRouter = createTRPCRouter({
         );
     }),
 
-  /** Epidemic Sound search for the SFX picker; results play through /api/content-review/sfx-preview. */
+  /**
+   * Epidemic Sound search for the SFX picker; results play through
+   * /api/content-review/sfx-preview. `configured` is false for anyone who cannot review
+   * and when no API key is set.
+   */
   searchSfx: protectedProcedure.input(sfxSearchSchema).query(async ({ ctx, input }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
     if (!canChangeContent(user.role)) return { configured: false, results: [] };
     if (!isEpidemicConfigured()) return { configured: false, results: [] };
-    return { configured: true, results: await searchEpidemicSfx(input.term, 12) };
+    return {
+      configured: true,
+      results: await searchEpidemicSfx(input.term, CONTENT_REVIEW_SFX_SEARCH_RESULTS),
+    };
   }),
 
-  /** Copy an Epidemic Sound effect into the asset library so an effect can use it. */
+  /**
+   * Copy an Epidemic Sound effect into the asset library so an effect can use it. A sound
+   * the library already holds is returned as it is.
+   */
   importSfx: protectedProcedure
     .input(sfxImportSchema)
     .output(baseServerResponse.extend({ assetId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (!isEpidemicConfigured())
         return errorResponse("Sound search is not configured");
@@ -548,21 +585,14 @@ export const contentReviewRouter = createTRPCRouter({
     }),
 });
 
-type Proposal = NonNullable<Awaited<ReturnType<typeof fetchProposal>>>;
-/** The request context a caller is built from; createCaller also accepts a factory. */
-type Caller = Exclude<
-  Parameters<typeof jutsuRouter.createCaller>[0],
-  (...args: never[]) => unknown
->;
-type Outcome = { success: boolean; message: string };
-
 /**
- * Apply a pending suggestion through the entity's own update procedure, as the reviewer, so
- * every guard, the ActionLog entry and the Discord post of a manual save apply unchanged.
- * The claim is a compare-and-swap on the status; a failed write releases it again.
+ * Apply a pending suggestion through each entity's own update or create procedure, as
+ * the reviewer, so the guards, ActionLog entry and Discord post of a manual save apply
+ * unchanged. All changes are validated before the first write, the claim is a
+ * compare-and-swap on the PENDING status, and a failure part way rolls back.
  */
 const applyProposal = async (
-  ctx: Caller & { userId: string },
+  ctx: CallerContext & { userId: string },
   user: UserData,
   proposal: Proposal,
   choices: ApproveProposalInput,
@@ -574,11 +604,14 @@ const applyProposal = async (
   if (proposal.status !== "PENDING") {
     return errorResponse(`This suggestion is already ${proposal.status.toLowerCase()}`);
   }
-  const outdated = await refreshProposalFreshness(ctx.drizzle, [proposal]);
+  const entities = await loadEntities(ctx.drizzle, [
+    ...targetRefs([proposal]),
+    ...proposal.basis,
+  ]);
+  const outdated = await refreshProposalFreshness(ctx.drizzle, [proposal], entities);
   const staleReason = outdated.get(proposal.id);
   if (staleReason)
     return errorResponse(`This suggestion went out of date: ${staleReason}`);
-  const entities = await loadEntities(ctx.drizzle, targetRefs([proposal]));
   const chosen = new Set(choices.media.map((media) => media.mediaId));
   const plans: {
     change: Proposal["changes"][number];
@@ -655,32 +688,33 @@ const applyProposal = async (
       and(eq(contentProposal.id, proposal.id), eq(contentProposal.status, "PENDING")),
     );
   if (claim.rowsAffected !== 1) {
-    return errorResponse("Someone else decided on this suggestion a moment ago");
+    return errorResponse(
+      "This suggestion was decided or went out of date a moment ago",
+    );
   }
   const done: { plan: (typeof plans)[number]; entityId: string }[] = [];
   let added: (typeof gameAsset.$inferInsert)[] = [];
   let current: (typeof plans)[number] | undefined;
   // Whatever stops the approval part way, a refusal or a throw, undoes what it wrote.
   try {
-    // An Epidemic sound picked before is already in the library; only new assets are
-    // added, and only those are removed again when applying fails.
-    const known = assets.length
-      ? await ctx.drizzle
-          .select({ id: gameAsset.id })
-          .from(gameAsset)
-          .where(
-            inArray(
-              gameAsset.id,
-              assets.map((asset) => asset.id),
-            ),
-          )
-      : [];
-    const fresh = assets.filter((asset) => !known.some((row) => row.id === asset.id));
-    if (fresh.length > 0) await ctx.drizzle.insert(gameAsset).values(fresh);
-    added = fresh;
+    // An Epidemic sound picked before, or by a simultaneous approval, is already in the
+    // library and stays as it is; only rows this approval inserted are removed on failure.
+    const inserted = await Promise.all(
+      assets.map(async (asset) => {
+        const result = await ctx.drizzle
+          .insert(gameAsset)
+          .values(asset)
+          .onDuplicateKeyUpdate({ set: { id: asset.id } });
+        return result.rowsAffected === 1 ? [asset] : [];
+      }),
+    );
+    added = inserted.flat();
     for (const plan of plans) {
       current = plan;
       const type = plan.change.entityType;
+      // The payload was read before the claim, so an editor save landing in between is
+      // overwritten, as two editor saves overwrite each other. The ActionLog keeps both, and
+      // the freshness check above has already refused anything edited earlier.
       const outcome: Outcome & { id?: string } = plan.entity
         ? await updateEntity(ctx, type, plan.entity.id, {
             ...plan.entity.payload,
@@ -737,9 +771,13 @@ const applyProposal = async (
   return { success: true, message: `Applied to ${names}` };
 };
 
-/** Undo the writes of a failed approval and hand the suggestion back to the queue. */
+/**
+ * Undo the writes of a failed approval and hand the suggestion back to the queue: updated
+ * entities get their earlier payload back, while created entities and the assets the
+ * approval added are deleted. A failed step is logged, not thrown, so the rest still runs.
+ */
 const rollback = async (
-  ctx: Caller & { userId: string },
+  ctx: CallerContext & { userId: string },
   proposalId: string,
   done: {
     plan: { change: { entityType: ContentProposalEntityType }; entity?: ContentEntity };
@@ -802,17 +840,9 @@ const storedEditable = (
   return normalizeEditable(type, editableOf(type, stored));
 };
 
-const refsOf = (
-  changes: { entityType: ContentProposalEntityType; entityId: string | null }[],
-) =>
-  changes.flatMap((change) =>
-    change.entityId
-      ? [{ entityType: change.entityType, entityId: change.entityId }]
-      : [],
-  );
-
+/** Save `data`, the entity's whole editor payload, through its own update procedure. */
 const updateEntity = (
-  ctx: Caller,
+  ctx: CallerContext,
   type: ContentProposalEntityType,
   id: string,
   data: Record<string, unknown>,
@@ -851,10 +881,11 @@ const updateEntity = (
 
 /**
  * New content goes through the entity's own create (a placeholder row) and then its update,
- * exactly like pressing "New" and then "Save" in the manual.
+ * exactly like pressing "New" and then "Save" in the manual. The placeholder is deleted
+ * again when the update fails or throws; on success the result carries the new id.
  */
 const createEntity = async (
-  ctx: Caller,
+  ctx: CallerContext,
   type: ContentProposalEntityType,
   editable: Record<string, unknown>,
 ): Promise<Outcome & { id?: string }> => {
@@ -881,27 +912,52 @@ const createEntity = async (
     }
   })();
   if (!created.success) return created;
+  // Every create procedure answers with the new row's id as its message.
   const id = created.message;
   const entity = (
     await loadEntities(ctx.drizzle, [{ entityType: type, entityId: id }])
   ).get(entityKey(type, id));
-  if (!entity) return { success: false, message: "The new entry could not be loaded" };
+  if (!entity) {
+    await discardPlaceholder(ctx, type, id);
+    return { success: false, message: "The new entry could not be loaded" };
+  }
   const updated = await updateEntity(ctx, type, id, {
     ...entity.payload,
     ...editable,
   }).catch(async (error: unknown) => {
-    await deleteEntity(ctx, type, id);
+    await discardPlaceholder(ctx, type, id);
     throw error;
   });
   if (!updated.success) {
-    await deleteEntity(ctx, type, id);
+    await discardPlaceholder(ctx, type, id);
     return updated;
   }
   return { ...updated, id };
 };
 
+/**
+ * Delete the placeholder a failed create left behind. A failure to delete it is logged, not
+ * thrown, so it never hides the error that made the create fail.
+ */
+const discardPlaceholder = async (
+  ctx: CallerContext,
+  type: ContentProposalEntityType,
+  id: string,
+) => {
+  const outcome = await deleteEntity(ctx, type, id).catch((error: unknown) => ({
+    success: false,
+    message: error instanceof Error ? error.message : String(error),
+  }));
+  if (!outcome.success) {
+    console.error(
+      `Content review could not delete placeholder ${type} ${id}: ${outcome.message}`,
+    );
+  }
+};
+
+/** Delete an entity through its own delete procedure. */
 const deleteEntity = (
-  ctx: Caller,
+  ctx: CallerContext,
   type: ContentProposalEntityType,
   id: string,
 ): Promise<Outcome> => {
@@ -923,6 +979,10 @@ const deleteEntity = (
   }
 };
 
+/**
+ * References to the entities the changes of these suggestions target, leaving out new
+ * entries that have no id yet.
+ */
 const targetRefs = (
   proposals: {
     changes: { entityType: ContentProposalEntityType; entityId: string | null }[];
@@ -936,6 +996,10 @@ const targetRefs = (
     ),
   );
 
+/**
+ * A suggestion as a queue card: its metadata, the author's and reviewer's names, and one
+ * entry per change with the live name and image of the entity it targets.
+ */
 const toSummary = (
   row: Pick<
     Proposal,
@@ -987,14 +1051,18 @@ const toSummary = (
       entityId: change.entityId,
       operation: change.operation,
       label: ENTITY_CONFIG[change.entityType].label,
-      name: entity?.name ?? String(change.after.name ?? change.after.username ?? "New"),
+      name: entity?.name ?? (draftName(change.after) || "New"),
       image: entity?.image ?? null,
       fields: Object.keys(change.after),
     };
   }),
 });
 
-export const fetchProposal = async (client: DrizzleClient, id: string) =>
+/**
+ * A suggestion with its changes and media in submission order, its basis, and the author's
+ * and reviewer's usernames; undefined when it does not exist.
+ */
+const fetchProposal = async (client: DrizzleClient, id: string) =>
   client.query.contentProposal.findFirst({
     where: eq(contentProposal.id, id),
     with: {
@@ -1005,3 +1073,17 @@ export const fetchProposal = async (client: DrizzleClient, id: string) =>
       reviewedBy: { columns: { username: true } },
     },
   });
+
+type Proposal = NonNullable<Awaited<ReturnType<typeof fetchProposal>>>;
+
+/**
+ * Request context a server-side caller of another router is built from. `createCaller`
+ * also accepts a factory function, which this type leaves out.
+ */
+type CallerContext = Exclude<
+  Parameters<typeof jutsuRouter.createCaller>[0],
+  (...args: never[]) => unknown
+>;
+
+/** The `baseServerResponse` the entity procedures answer with. */
+type Outcome = { success: boolean; message: string };

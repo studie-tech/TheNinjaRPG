@@ -20,32 +20,11 @@ import {
   searchEpidemicSfx,
 } from "./epidemic";
 
-export type MediaRequest = {
-  kind: ContentProposalMediaKind;
-  path: string;
-  catalogIds: string[];
-  search: string | null;
-  generate: string | null;
-};
-
-/** Searches and generations left in one audit run; both cost money or quota. */
-export type MediaBudget = { searches: number; generations: number };
-
-export type MediaCandidate = Pick<
-  ContentProposalMedia,
-  "source" | "kind" | "externalId" | "title" | "url" | "fileKey" | "lengthMs" | "prompt"
->;
-
-const ASSET_TYPE_FOR: Record<ContentProposalMediaKind, GameAssetType> = {
-  SFX: "SFX",
-  ANIMATION: "ANIMATION",
-  IMAGE: "STATIC",
-};
-
 /**
  * Candidates for one field, in order: catalog assets the submitter picked, Epidemic Sound
- * matches for a described sound, then a generated sound or image. Uploaded candidates are
- * copies on our own storage, so reviewers can listen days later and the CDN serves them.
+ * matches for a described sound, then a generated sound or image. Searches and generations
+ * are taken from `budget`, which the whole run shares. Uploaded candidates are copies on our
+ * own storage, so reviewers can listen days later and the CDN serves them.
  */
 export const collectCandidates = async (
   client: DrizzleClient,
@@ -148,19 +127,9 @@ export const collectCandidates = async (
 };
 
 /**
- * A candidate whose service fails is left out rather than failing the suggestion, which keeps
- * the candidates already copied to storage recorded, and so removable.
- */
-const skipped =
-  <T>(what: string, fallback: T) =>
-  (error: unknown) => {
-    console.error(`${what} failed; leaving it out of the candidates`, error);
-    return fallback;
-  };
-
-/**
- * The value a chosen candidate writes into its field, plus the GameAsset to create when a new
- * sound becomes part of the game. Content image fields hold URLs; effect fields hold asset ids.
+ * The value a chosen candidate writes into its field, plus the GameAsset to create, credited
+ * to `reviewerId`, when a new sound becomes part of the game. Content image fields hold URLs;
+ * effect fields hold asset ids.
  */
 export const materializeChoice = (
   media: Pick<ContentProposalMedia, "source" | "kind" | "externalId" | "title" | "url">,
@@ -198,7 +167,8 @@ export const epidemicAssetId = (epidemicId: string) => `epidemic-${epidemicId}`;
 
 /**
  * Add one Epidemic Sound effect to the asset library for the Epidemic tab of the SFX picker,
- * copying it to our storage unless the library already holds it.
+ * copying it to our storage unless the library already holds it. Returns the library row and
+ * whether this call created it.
  */
 export const importEpidemicSfx = async (
   client: DrizzleClient,
@@ -221,15 +191,25 @@ export const importEpidemicSfx = async (
     reviewerId,
   );
   if (!asset) throw new Error("Epidemic sounds always become assets");
-  // A simultaneous import of the same sound keeps the first row.
-  await client
+  const inserted = await client
     .insert(gameAsset)
     .values(asset)
     .onDuplicateKeyUpdate({ set: { id: asset.id } });
-  return { asset, created: true };
+  if (inserted.rowsAffected === 1) return { asset, created: true };
+  // A simultaneous import of the same sound won; its row stands and this copy goes again.
+  const [kept] = await Promise.all([
+    client.query.gameAsset.findFirst({ where: eq(gameAsset.id, asset.id) }),
+    deleteStoredFiles([copy.key]).catch((error: unknown) =>
+      console.error(`Could not delete the extra copy of ${asset.id}`, error),
+    ),
+  ]);
+  return { asset: kept ?? asset, created: false };
 };
 
-/** Remove uploaded candidate files; every key is an UploadThing customId. */
+/**
+ * Remove uploaded candidate files by their UploadThing customIds. Throws when storage reports
+ * a failure, so callers can keep the rows that point at the files and retry.
+ */
 export const deleteStoredFiles = async (keys: string[]) => {
   if (keys.length === 0) return;
   const result = await new UTApi().deleteFiles(keys, { keyType: "customId" });
@@ -237,6 +217,18 @@ export const deleteStoredFiles = async (keys: string[]) => {
     throw new Error("Could not delete suggestion media from storage");
 };
 
+/**
+ * A candidate whose service fails is left out rather than failing the suggestion, which keeps
+ * the candidates already copied to storage recorded, and so removable.
+ */
+const skipped =
+  <T>(what: string, fallback: T) =>
+  (error: unknown) => {
+    console.error(`${what} failed; leaving it out of the candidates`, error);
+    return fallback;
+  };
+
+/** Copy a remote file to our storage under a new customId; returns its served URL and key. */
 const copyToStorage = async (url: string, extension: string) => {
   const customId = extensionCustomId(`file.${extension}`);
   const uploaded = await new UTApi().uploadFilesFromUrl({
@@ -248,7 +240,7 @@ const copyToStorage = async (url: string, extension: string) => {
   return { url: servedUfsUrl(uploaded.data), key: customId };
 };
 
-/** Our uploads are served at /f/<customId>. */
+/** Storage key of a file we uploaded, read from its served URL (/f/<customId>), or null. */
 const storageKeyOf = (url: string) => {
   try {
     return /\/f\/([^/?#]+)$/.exec(new URL(url).pathname)?.[1] ?? null;
@@ -256,3 +248,28 @@ const storageKeyOf = (url: string) => {
     return null;
   }
 };
+
+/** Asset type that serves each media kind: catalog picks must have it, new sounds get it. */
+const ASSET_TYPE_FOR: Record<ContentProposalMediaKind, GameAssetType> = {
+  SFX: "SFX",
+  ANIMATION: "ANIMATION",
+  IMAGE: "STATIC",
+};
+
+/** What a suggestion asks for one media field: catalog picks, a sound search, a prompt. */
+type MediaRequest = {
+  kind: ContentProposalMediaKind;
+  path: string;
+  catalogIds: string[];
+  search: string | null;
+  generate: string | null;
+};
+
+/** Searches and generations left in one audit run; both cost money or quota. */
+export type MediaBudget = { searches: number; generations: number };
+
+/** A candidate as ContentProposalMedia stores it, before it is tied to a suggestion. */
+type MediaCandidate = Pick<
+  ContentProposalMedia,
+  "source" | "kind" | "externalId" | "title" | "url" | "fileKey" | "lengthMs" | "prompt"
+>;

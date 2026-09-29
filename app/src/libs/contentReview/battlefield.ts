@@ -1,46 +1,6 @@
 import type { ContentProposalEntityType } from "@/drizzle/constants";
 
 /**
- * Width of the combat canvas the battlefield preview reproduces. The combat view fills the
- * main column, which is 688 px wide on any desktop and 370 px on a 390 px wide phone.
- */
-export const BATTLEFIELD_VIEWPORTS = { desktop: 688, phone: 370 } as const;
-export type BattlefieldViewport = keyof typeof BATTLEFIELD_VIEWPORTS;
-
-/** Where combat draws an effect: on its caster, on the fighter it targets, or on a tile. */
-export type BattlefieldPlacement = "caster" | "target" | "ground";
-
-export type BattlefieldEffect = {
-  staticAssetPath: string;
-  staticAnimation: string;
-  appearAnimation: string;
-  disappearAnimation: string;
-  /** Sounds combat plays as the effect appears and as it ends. */
-  appearSfx: string;
-  disappearSfx: string;
-  placement: BattlefieldPlacement;
-};
-
-/** Asset drawn from these values instead of its catalog row, for a suggested asset edit. */
-export type BattlefieldAsset = {
-  id: string;
-  name: string;
-  image: string;
-  frames: number;
-  speed: number;
-};
-
-export type BattlefieldScene = {
-  effects: BattlefieldEffect[];
-  /** Raw artwork of an AI standing on the target tile; the target has a village marker otherwise. */
-  targetAvatar: string | null;
-  assets: BattlefieldAsset[];
-};
-
-/** Item types whose effects sit on the wearer for the whole battle. */
-const WORN_ITEM_TYPES = ["ARMOR", "ACCESSORY", "KEYSTONE"];
-
-/**
  * What a jutsu, item, bloodline, AI or battlefield asset draws in combat, with every effect
  * placed the way `libs/combat/actions.ts` places it: SELF tags land on the caster, and the
  * other tags land on the tile of a ground action or on the target of any other action.
@@ -97,6 +57,7 @@ export const sceneAssetIds = (scene: BattlefieldScene | null) => [
   ),
 ];
 
+/** Placement of each effect tag of this entity, given the tag's own target. */
 const placementRule =
   (entityType: ContentProposalEntityType, fields: Record<string, unknown>) =>
   (tagTarget: string): BattlefieldPlacement => {
@@ -111,7 +72,10 @@ const placementRule =
     return "target";
   };
 
-/** An animation loops on a tile and plays once on a fighter; a static asset covers a tile. */
+/**
+ * Scene of a battlefield asset: an animation loops on a tile and plays once on a fighter, and
+ * a static asset covers a tile. Assets of other types draw nothing.
+ */
 const assetScene = (
   entityId: string | null,
   fields: Record<string, unknown>,
@@ -151,3 +115,47 @@ const assetScene = (
 };
 
 const text = (value: unknown) => (typeof value === "string" ? value : "");
+
+/**
+ * Width of the combat canvas the battlefield preview reproduces. The combat view fills the
+ * main column, which is 688 px wide on any desktop and 370 px on a 390 px wide phone.
+ */
+export const BATTLEFIELD_VIEWPORTS = { desktop: 688, phone: 370 } as const;
+
+/** Item types whose effects sit on the wearer for the whole battle. */
+const WORN_ITEM_TYPES = ["ARMOR", "ACCESSORY", "KEYSTONE"];
+
+/** Screen a battlefield preview reproduces. */
+export type BattlefieldViewport = keyof typeof BATTLEFIELD_VIEWPORTS;
+
+/** Where combat draws an effect: on its caster, on the fighter it targets, or on a tile. */
+export type BattlefieldPlacement = "caster" | "target" | "ground";
+
+/** One effect as combat draws it: the asset ids it shows and plays (empty when unset). */
+export type BattlefieldEffect = {
+  staticAssetPath: string;
+  staticAnimation: string;
+  appearAnimation: string;
+  disappearAnimation: string;
+  /** Sounds combat plays as the effect appears and as it ends. */
+  appearSfx: string;
+  disappearSfx: string;
+  placement: BattlefieldPlacement;
+};
+
+/** Asset drawn from these values instead of its catalog row, for a suggested asset edit. */
+type BattlefieldAsset = {
+  id: string;
+  name: string;
+  image: string;
+  frames: number;
+  speed: number;
+};
+
+/** Everything the battlefield preview draws for one version of an entity. */
+export type BattlefieldScene = {
+  effects: BattlefieldEffect[];
+  /** Raw artwork of an AI on the target tile; any other target gets a village marker. */
+  targetAvatar: string | null;
+  assets: BattlefieldAsset[];
+};

@@ -17,7 +17,7 @@ import { QuestHelper } from "@/layout/ContentHelp";
 import { EditContent, ObjectiveFormWrapper } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
 import { RaidThresholdEditor } from "@/layout/RaidThresholdEditor";
-import SuggestChange from "@/layout/SuggestChange";
+import { SuggestChange } from "@/layout/SuggestChange";
 import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
 import { verifyQuestObjectiveFlow } from "@/libs/quest";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
@@ -49,7 +49,7 @@ export default function ManualBloodlineEdit(props: {
     { enabled: !!questId },
   );
 
-  // Redirect to profile if not content or admin
+  // Redirect to profile if not staff
   useEffect(() => {
     if (userData && !isStaffRole(userData.role)) {
       void router.push("/profile");

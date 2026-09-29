@@ -1,7 +1,8 @@
-# Daily content audit: Codex reviews a snapshot of the game's content and adds a few
+# Daily content audit: Codex reviews a snapshot of the game's content and adds its
 # suggestions to the staff review desk (/manual/review).
 #
 # The jobs keep the model away from secrets:
+#   target       picks the deployment to audit: production, or a pull request's preview
 #   snapshot     fetches the audit input with CRON_SECRET
 #   gallery      on animation days, draws the most used animation and static assets with the
 #                game's combat renderer (/manual/review/battlefield) in headless Chrome
@@ -76,10 +77,13 @@ jobs:
         run: echo "base_url=https://www.theninja-rpg.com" >> "$GITHUB_OUTPUT"
       - name: Explain a skipped pull request run
         if: github.event_name == 'pull_request' && steps.preview.outputs.is_ready != 'true'
+        # The reason is free text (it quotes commands in backticks), so it reaches the shell as
+        # an environment variable, never inside the script.
+        env:
+          REASON: ${{ steps.preview.outputs.reason }}
         run: >
-          echo "::notice::No ready preview for this pull request
-          (${{ steps.preview.outputs.reason }}). Comment /tnr-create-preview,
-          then re-run this workflow."
+          echo "::notice::No ready preview for this pull request ($REASON).
+          Comment /tnr-create-preview, then re-run this workflow."
 
   snapshot:
     needs: target
@@ -182,8 +186,8 @@ jobs:
           fi
           echo "codex_args=$args" >> "$GITHUB_OUTPUT"
           echo "note=$note" >> "$GITHUB_OUTPUT"
-      # Codex runs last and holds no secret; the submit job is the only one that can write,
-      # and the server re-validates what it receives.
+      # Codex is the job's last step and holds no secret; the submit job is the only one that
+      # can write, and the server re-validates what it receives.
       - name: Run Codex
         id: codex
         uses: openai/codex-action@0b91f4a2703c23df3102c3f0967d3c6db34eedef # v1
@@ -215,6 +219,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       count: ${{ steps.render.outputs.count }}
+      suggestions: ${{ steps.render.outputs.suggestions }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -323,6 +328,7 @@ jobs:
         env:
           PROPOSALS: ${{ needs.audit.outputs.proposals }}
           VERDICTS: ${{ needs.verify.outputs.verdicts }}
+          RENDERED_INDICES: ${{ needs.battlefield.outputs.suggestions }}
         run: |
           printf '%s' "$PROPOSALS" > proposals.json
           jq -e '.proposals | type == "array"' proposals.json > /dev/null

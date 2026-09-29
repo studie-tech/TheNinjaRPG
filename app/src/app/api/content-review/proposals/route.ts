@@ -9,7 +9,8 @@ export const maxDuration = 300;
 
 /**
  * Suggestions from the daily content audit. Authenticated with the cron secret because the
- * caller is a scheduled CI job; it can only add suggestions, never approve them.
+ * caller is a scheduled CI job; it can only add suggestions, never approve them. Answers
+ * with the suggestions accepted and the reason each other one was refused.
  */
 export async function POST(request: Request) {
   const authError = authenticateCronRequest(request);

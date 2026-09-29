@@ -8,6 +8,17 @@ import { createHash } from "node:crypto";
 export const canonicalJson = (value: unknown): string =>
   JSON.stringify(normalize(value)) ?? "null";
 
+/** Whether two values are equal once canonicalized. */
+export const sameValue = (a: unknown, b: unknown) =>
+  canonicalJson(a) === canonicalJson(b);
+
+/**
+ * Version of an entity: the first 16 hex characters of sha256 over its editable fields.
+ * Counters and timestamps are not editable fields, so only real content edits change it.
+ */
+export const contentVersion = (editable: Record<string, unknown>) =>
+  createHash("sha256").update(canonicalJson(editable)).digest("hex").slice(0, 16);
+
 const normalize = (value: unknown): unknown => {
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map((entry) => normalize(entry ?? null));
@@ -22,16 +33,8 @@ const normalize = (value: unknown): unknown => {
   return value;
 };
 
-/** Whether two values are equal once canonicalized. */
-export const sameValue = (a: unknown, b: unknown) =>
-  canonicalJson(a) === canonicalJson(b);
-
 /**
- * Version of an entity: the first 16 hex characters of sha256 over its editable fields.
- * Counters and timestamps are not editable fields, so only real content edits change it.
+ * Version of an entity that does not exist. No content hashes to it, so a suggestion resting
+ * on a deleted entity never matches the live version.
  */
-export const contentVersion = (editable: Record<string, unknown>) =>
-  createHash("sha256").update(canonicalJson(editable)).digest("hex").slice(0, 16);
-
-/** Version recorded for an entity that no longer exists. */
 export const MISSING_VERSION = "0000000000000000";

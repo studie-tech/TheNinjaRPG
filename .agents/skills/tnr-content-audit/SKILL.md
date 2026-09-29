@@ -119,9 +119,10 @@ preview staff get on every suggestion) and attaches the renders as images;
   desktop field (`appearing`, `active`, `disappearing`), then the active frame on a phone field.
   The caster stands on the left, the target on the right, and ground effects sit on the tile
   between them, as combat places them.
-- Hexes are 74 px wide on desktop and 40 px on a phone. Animations are always 50 px square and
-  centred on their hex, so they cover about two thirds of a desktop hex and spill over a phone
-  hex; static assets are stretched to the hex's box.
+- On a player's screen, hexes are 74 px wide on desktop and 40 px on a phone. Animations are
+  always 50 px square and centred on their hex, so they cover about two thirds of a desktop hex
+  and spill over a phone hex; static assets are stretched to the hex's box. The renders draw
+  everything at twice these sizes.
 - Judge what a player notices: an effect meant to cover a tile (water, fire, smoke, ice, a trap)
   covers the hex instead of a corner of it; a hit reads at hex scale and stays centred on the
   fighter; nothing important is cut off, lost against the ground, blank or a broken frame.

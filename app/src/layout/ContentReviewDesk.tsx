@@ -6,6 +6,8 @@ import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  CONTENT_PROPOSAL_RETENTION_DAYS,
+  CONTENT_REVIEW_BULK_LIMIT,
   ContentProposalCategories,
   type ContentProposalCategory,
   type ContentProposalSource,
@@ -20,27 +22,9 @@ import { canChangeContent } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-const TABS = [
-  "Pending",
-  "Outdated",
-  "Applied",
-  "Rejected",
-  "Reverted",
-  "Stats",
-] as const;
-type Tab = (typeof TABS)[number];
-const TAB_STATUS: Record<Tab, ContentProposalStatus | null> = {
-  Pending: "PENDING",
-  Outdated: "OUTDATED",
-  Applied: "APPLIED",
-  Rejected: "REJECTED",
-  Reverted: "REVERTED",
-  Stats: null,
-};
-
 /**
  * The content review desk: suggestions from the daily audit and from staff, one at a time,
- * with keyboard shortcuts for fast review.
+ * with keyboard shortcuts for fast review. Staff who cannot review see their own suggestions.
  */
 export const ContentReviewDesk: React.FC = () => {
   const { data: userData } = useRequiredUserData();
@@ -48,7 +32,7 @@ export const ContentReviewDesk: React.FC = () => {
   const [category, setCategory] = useState<ContentProposalCategory | null>(null);
   const [source, setSource] = useState<ContentProposalSource | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [bulk, setBulk] = useState<Set<string>>(new Set());
+  const [bulkIds, setBulkIds] = useState<Set<string>>(new Set());
   const status = TAB_STATUS[tab];
   const utils = api.useUtils();
 
@@ -65,7 +49,7 @@ export const ContentReviewDesk: React.FC = () => {
   const bulkApprove = api.contentReview.bulkApprove.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      setBulk(new Set());
+      setBulkIds(new Set());
       await Promise.all([
         utils.contentReview.getQueue.invalidate(),
         utils.contentReview.getCounts.invalidate(),
@@ -95,6 +79,8 @@ export const ContentReviewDesk: React.FC = () => {
   };
   const statusCount = (value: ContentProposalStatus) => counts?.statuses[value] ?? 0;
   const pending = statusCount("PENDING");
+  const canBulkApprove = status === "PENDING" && canReview;
+  const isBulkFull = bulkIds.size >= CONTENT_REVIEW_BULK_LIMIT;
 
   return (
     <ContentBox
@@ -111,7 +97,7 @@ export const ContentReviewDesk: React.FC = () => {
         onValueChange={(value) => {
           setTab(value as Tab);
           setSelectedId(null);
-          setBulk(new Set());
+          setBulkIds(new Set());
         }}
         className="mb-3"
       >
@@ -130,19 +116,19 @@ export const ContentReviewDesk: React.FC = () => {
         </TabsList>
       </Tabs>
       {tab === "Stats" ? (
-        <ReviewStats enabled={canReview && canChangeContent(userData.role)} />
+        <ReviewStats canView={canReview && canChangeContent(userData.role)} />
       ) : (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-1 text-xs">
             <FilterChip
-              active={category === null}
+              isActive={category === null}
               label={`All ${status ? STATUS_LABELS[status].toLowerCase() : ""}`}
               onClick={() => setCategory(null)}
             />
             {ContentProposalCategories.map((entry) => (
               <FilterChip
                 key={entry}
-                active={category === entry}
+                isActive={category === entry}
                 label={`${CATEGORY_LABELS[entry]}${
                   status === "PENDING" && counts?.pendingByCategory[entry]
                     ? ` ${counts.pendingByCategory[entry]}`
@@ -155,19 +141,22 @@ export const ContentReviewDesk: React.FC = () => {
             {(["AGENT", "STAFF"] as const).map((entry) => (
               <FilterChip
                 key={entry}
-                active={source === entry}
+                isActive={source === entry}
                 label={entry === "AGENT" ? "Daily audit" : "Staff"}
                 onClick={() => setSource(source === entry ? null : entry)}
               />
             ))}
           </div>
-          {status === "PENDING" && canReview && bulk.size > 0 && (
+          {canBulkApprove && bulkIds.size > 0 && (
             <div className="flex items-center justify-between gap-2 rounded-lg border bg-poppopover p-2 text-sm">
-              <span>{bulk.size} selected for approval with their defaults.</span>
+              <span>
+                {bulkIds.size} selected for approval with their defaults.
+                {isBulkFull && ` Up to ${CONTENT_REVIEW_BULK_LIMIT} at a time.`}
+              </span>
               <Button
                 size="sm"
                 loading={bulkApprove.isPending}
-                onClick={() => bulkApprove.mutate({ ids: [...bulk] })}
+                onClick={() => bulkApprove.mutate({ ids: [...bulkIds] })}
               >
                 Approve selected
               </Button>
@@ -188,12 +177,13 @@ export const ContentReviewDesk: React.FC = () => {
                   <li key={item.id} className="md:max-lg:w-56 md:max-lg:shrink-0">
                     <QueueCard
                       item={item}
-                      selected={item.id === selectedId}
-                      bulkEnabled={status === "PENDING" && canReview}
-                      bulkChecked={bulk.has(item.id)}
+                      isSelected={item.id === selectedId}
+                      canBulkApprove={canBulkApprove}
+                      isBulkSelected={bulkIds.has(item.id)}
+                      isBulkFull={isBulkFull}
                       onSelect={() => setSelectedId(item.id)}
-                      onBulk={() =>
-                        setBulk((previous) => {
+                      onToggleBulk={() =>
+                        setBulkIds((previous) => {
                           const next = new Set(previous);
                           if (next.has(item.id)) next.delete(item.id);
                           else next.add(item.id);
@@ -230,7 +220,8 @@ export const ContentReviewDesk: React.FC = () => {
           )}
           <p className="text-xs opacity-70">
             Shortcuts: J and K move, A twice approves, R rejects, E edits text. Rejected
-            and outdated suggestions are removed after 10 days.
+            and outdated suggestions are removed after {CONTENT_PROPOSAL_RETENTION_DAYS}{" "}
+            days.
           </p>
         </div>
       )}
@@ -238,20 +229,23 @@ export const ContentReviewDesk: React.FC = () => {
   );
 };
 
-type QueueItem = RouterOutputs["contentReview"]["getQueue"]["items"][number];
-
+/** One suggestion in the queue list: category, age, target and source. */
 const QueueCard: React.FC<{
   item: QueueItem;
-  selected: boolean;
-  bulkEnabled: boolean;
-  bulkChecked: boolean;
+  isSelected: boolean;
+  canBulkApprove: boolean;
+  isBulkSelected: boolean;
+  /** Bulk approval holds its maximum, so only ticked cards can change. */
+  isBulkFull: boolean;
   onSelect: () => void;
-  onBulk: () => void;
-}> = ({ item, selected, bulkEnabled, bulkChecked, onSelect, onBulk }) => {
+  onToggleBulk: () => void;
+}> = (props) => {
+  const { item, isSelected, canBulkApprove, isBulkSelected, isBulkFull } = props;
+  const { onSelect, onToggleBulk } = props;
   const target = item.targets[0];
   return (
     <div
-      className={`flex flex-col gap-1 rounded-lg border p-2 text-sm ${selected ? "border-primary bg-poppopover shadow-[inset_3px_0_0_var(--color-orange-500)]" : "bg-popover hover:border-primary"}`}
+      className={`flex flex-col gap-1 rounded-lg border p-2 text-sm ${isSelected ? "border-primary bg-poppopover shadow-[inset_3px_0_0_var(--color-orange-500)]" : "bg-popover hover:border-primary"}`}
     >
       <div className="flex items-center justify-between gap-2">
         <CategoryBadge category={item.category} />
@@ -259,12 +253,13 @@ const QueueCard: React.FC<{
           {formatTimeAgo(
             new Date(item.status === "PENDING" ? item.createdAt : item.statusChangedAt),
           )}
-          {bulkEnabled && (
+          {canBulkApprove && (
             <input
               type="checkbox"
               aria-label={`Select ${item.title} for bulk approval`}
-              checked={bulkChecked}
-              onChange={onBulk}
+              checked={isBulkSelected}
+              disabled={isBulkFull && !isBulkSelected}
+              onChange={onToggleBulk}
             />
           )}
         </span>
@@ -296,28 +291,29 @@ const QueueCard: React.FC<{
   );
 };
 
-const FilterChip: React.FC<{ active: boolean; label: string; onClick: () => void }> = ({
-  active,
-  label,
-  onClick,
-}) => (
+/** Pill that toggles one queue filter. */
+const FilterChip: React.FC<{
+  isActive: boolean;
+  label: string;
+  onClick: () => void;
+}> = ({ isActive, label, onClick }) => (
   <button
     type="button"
-    aria-pressed={active}
+    aria-pressed={isActive}
     onClick={onClick}
-    className={`rounded-full border px-3 py-0.5 ${active ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary"}`}
+    className={`rounded-full border px-3 py-0.5 ${isActive ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary"}`}
   >
     {label}
   </button>
 );
 
 /** Acceptance per source and category over the retention window, to tune the audit. */
-const ReviewStats: React.FC<{ enabled: boolean }> = ({ enabled }) => {
+const ReviewStats: React.FC<{ canView: boolean }> = ({ canView }) => {
   const { data, isPending } = api.contentReview.getStats.useQuery(
-    { days: 10 },
-    { enabled },
+    { days: CONTENT_PROPOSAL_RETENTION_DAYS },
+    { enabled: canView },
   );
-  if (!enabled) return <p>Only content staff can see review statistics.</p>;
+  if (!canView) return <p>Only content staff can see review statistics.</p>;
   if (isPending) return <Loader explanation="Loading statistics" />;
   const rows = new Map<
     string,
@@ -330,7 +326,9 @@ const ReviewStats: React.FC<{ enabled: boolean }> = ({ enabled }) => {
     entry.counts[row.status] = (entry.counts[row.status] ?? 0) + row.n;
     rows.set(key, entry);
   }
-  if (rows.size === 0) return <p>No suggestions in the last 10 days.</p>;
+  if (rows.size === 0) {
+    return <p>No suggestions in the last {CONTENT_PROPOSAL_RETENTION_DAYS} days.</p>;
+  }
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -374,11 +372,31 @@ const ReviewStats: React.FC<{ enabled: boolean }> = ({ enabled }) => {
         </tbody>
       </table>
       <p className="mt-2 text-xs opacity-70">
-        Last 10 days. Rejected and outdated suggestions are removed after that, so older
-        numbers would undercount them.
+        Last {CONTENT_PROPOSAL_RETENTION_DAYS} days. Rejected and outdated suggestions
+        are removed after that, so older numbers would undercount them.
       </p>
     </div>
   );
 };
 
-export default ContentReviewDesk;
+/** Desk tabs; every tab but Stats lists the suggestions in one status. */
+const TABS = [
+  "Pending",
+  "Outdated",
+  "Applied",
+  "Rejected",
+  "Reverted",
+  "Stats",
+] as const;
+type Tab = (typeof TABS)[number];
+const TAB_STATUS: Record<Tab, ContentProposalStatus | null> = {
+  Pending: "PENDING",
+  Outdated: "OUTDATED",
+  Applied: "APPLIED",
+  Rejected: "REJECTED",
+  Reverted: "REVERTED",
+  Stats: null,
+};
+
+/** A suggestion as the queue list shows it. */
+type QueueItem = RouterOutputs["contentReview"]["getQueue"]["items"][number];

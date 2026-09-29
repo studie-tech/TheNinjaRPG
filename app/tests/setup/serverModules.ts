@@ -33,7 +33,7 @@ const delegating = <T extends object>(actual: T) =>
 
 vi.mock("@/routers/profile", () => delegating(actualProfile));
 
-/** Cron route suites that test the work behind the guard stub its authentication here. */
+/** Cron authentication stays real until a suite answers it with `stubCronAuth`. */
 vi.mock("@/server/utils/cron", () => delegating(actualCron));
 
 /**

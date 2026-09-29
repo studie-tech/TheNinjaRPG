@@ -934,10 +934,10 @@ export const profileRouter = createTRPCRouter({
           });
         }
 
-        // Get moderation and application counts in parallel for eligible staff.
+        // Get moderation, application and content review counts in parallel for staff.
         const approvalGroup = getApprovalGroup(user.role);
-        const reviewsContent = canChangeContent(user.role);
-        if (canModerateRoles.includes(user.role) || approvalGroup || reviewsContent) {
+        const canReviewContent = canChangeContent(user.role);
+        if (canModerateRoles.includes(user.role) || approvalGroup || canReviewContent) {
           const [reportCounts, ticketCounts, applicationCounts, reviewCounts] =
             await Promise.all([
               canModerateRoles.includes(user.role)
@@ -978,7 +978,7 @@ export const profileRouter = createTRPCRouter({
                       ),
                     )
                 : null,
-              reviewsContent
+              canReviewContent
                 ? ctx.drizzle
                     .select({ count: sql`count(*)`.mapWith(Number) })
                     .from(contentProposal)

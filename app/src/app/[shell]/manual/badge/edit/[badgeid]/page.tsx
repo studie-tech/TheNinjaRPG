@@ -8,7 +8,7 @@ import ChatInputField from "@/layout/ChatInputField";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
-import SuggestChange from "@/layout/SuggestChange";
+import { SuggestChange } from "@/layout/SuggestChange";
 import { useBadgeEditForm } from "@/libs/badge";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -27,7 +27,7 @@ export default function BadgeEdit(props: { params: Promise<{ badgeid: string }> 
     { enabled: !!badgeId && !!userData },
   );
 
-  // Redirect to profile if not content or admin
+  // Redirect to profile if not staff
   useEffect(() => {
     if (userData && !isStaffRole(userData.role)) {
       router.push("/profile");

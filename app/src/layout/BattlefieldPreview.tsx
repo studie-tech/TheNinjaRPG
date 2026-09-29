@@ -31,7 +31,9 @@ import { EFFECT_ANIMATION_SIZE } from "@/libs/threejs/combat";
 
 interface BattlefieldPreviewProps {
   entityType: ContentProposalEntityType;
+  /** Null for an entry that does not exist yet. */
   entityId: string | null;
+  /** The entity's editable fields, current or proposed. */
   fields: Record<string, unknown>;
   /** URLs of suggested sounds that are not in the catalog yet, by the id the fields hold. */
   sounds?: Record<string, string>;
@@ -52,7 +54,7 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
   const [viewport, setViewport] = useState<BattlefieldViewport>("desktop");
   const [zoom, setZoom] = useState(1);
   const [background, setBackground] = useState<CombatBiome>("ground");
-  const [unsupported, setUnsupported] = useState(false);
+  const [isUnsupported, setIsUnsupported] = useState(false);
   const scene = battlefieldSceneOf(entityType, entityId, fields);
   const signature = JSON.stringify(scene);
   const soundSignature = JSON.stringify(sounds ?? {});
@@ -64,11 +66,11 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
     { ids },
     { enabled: ids.length > 0 },
   );
-  const ready = !!scene && (ids.length === 0 || !!assets);
+  const isReady = !!scene && (ids.length === 0 || !!assets);
 
   useEffect(() => {
     const mount = mountRef.current;
-    if (!mount || !ready) return;
+    if (!mount || !isReady) return;
     const preview = createBattlefieldPreview({
       scene: JSON.parse(signature),
       assets: assets ?? [],
@@ -78,7 +80,7 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
       sounds: JSON.parse(soundSignature),
     });
     if (!preview) {
-      setUnsupported(true);
+      setIsUnsupported(true);
       return;
     }
     // Never wider than a player's screen shows it, and narrower only when the panel is.
@@ -98,12 +100,12 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
       previewRef.current = null;
       preview.dispose();
     };
-  }, [signature, soundSignature, ready, assets, viewport, background, zoom]);
+  }, [signature, soundSignature, isReady, assets, viewport, background, zoom]);
 
   if (!scene) {
     return <p className="text-xs opacity-70">Draws nothing on the battlefield.</p>;
   }
-  if (unsupported) {
+  if (isUnsupported) {
     return (
       <p className="text-xs opacity-70">
         This browser cannot draw the battlefield (WebGL is unavailable).
@@ -189,6 +191,7 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
   );
 };
 
+/** Segmented control that picks one of a few values. */
 const Toggle = <T extends string | number>(props: {
   options: [T, string][];
   value: T;
@@ -208,6 +211,7 @@ const Toggle = <T extends string | number>(props: {
   </div>
 );
 
+/** Names in the background picker; the combat biome key is spelled "dessert". */
 const BIOME_LABELS: Record<CombatBiome, string> = {
   ocean: "Ocean",
   ground: "Ground",
@@ -217,5 +221,3 @@ const BIOME_LABELS: Record<CombatBiome, string> = {
   arena: "Arena",
   default: "Default",
 };
-
-export default BattlefieldPreview;

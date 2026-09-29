@@ -28,7 +28,7 @@ import ContentImageSelector from "@/layout/ContentImageSelector";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
-import SuggestChange from "@/layout/SuggestChange";
+import { SuggestChange } from "@/layout/SuggestChange";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
@@ -59,7 +59,7 @@ export default function ItemEdit(props: { params: Promise<{ itemid: string }> })
   // Convert key null values to empty strings, preparing data for form
   setNullsToEmptyStrings(data);
 
-  // Redirect to profile if not content or admin
+  // Redirect to profile if not staff
   useEffect(() => {
     if (userData && !isStaffRole(userData.role)) {
       void router.push("/profile");
