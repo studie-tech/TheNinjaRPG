@@ -19,6 +19,7 @@ import type {
 import { Clock, Group, OrthographicCamera } from "three";
 import { TD_HEX_SIZE } from "@/drizzle/constants";
 import type { GameAsset } from "@/drizzle/schema";
+import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import WebGlError from "@/layout/WebGLError";
 import type { TerrainHex } from "@/libs/hexgrid";
@@ -91,6 +92,7 @@ interface TowerDefenseProps {
   impactAsset?: GameAsset;
   /** STABLE: Sound effect URL (cached externally) */
   sfxUrl?: string;
+  sfxEnabledRef: React.RefObject<boolean | undefined>;
 }
 
 /**
@@ -126,6 +128,7 @@ const TowerDefenseInner = ({
   playerHitEventsRef,
   impactAsset,
   sfxUrl,
+  sfxEnabledRef,
   ref,
 }: TowerDefenseProps & { ref?: React.Ref<TowerDefenseHandle> }) => {
   // Performance monitoring - use bounded mode (requestAnimationFrame) for proper vsync
@@ -637,7 +640,10 @@ const TowerDefenseInner = ({
                 });
               }
 
-              if (cachedSfxUrl) {
+              if (
+                cachedSfxUrl &&
+                (sfxEnabledRef.current ?? safeLocalStorageGetItem("sfxOn") !== "false")
+              ) {
                 void playPreloadedAudio(cachedSfxUrl, 0.8);
               }
 
@@ -785,7 +791,10 @@ const TowerDefenseInner = ({
                 });
               }
 
-              if (cachedSfxUrl) {
+              if (
+                cachedSfxUrl &&
+                (sfxEnabledRef.current ?? safeLocalStorageGetItem("sfxOn") !== "false")
+              ) {
                 void playPreloadedAudio(cachedSfxUrl, 0.8);
               }
 
