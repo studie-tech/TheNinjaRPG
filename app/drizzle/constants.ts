@@ -2417,6 +2417,8 @@ export const IMG_MANUAL_AI =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuTQifZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 export const IMG_MANUAL_STAFF =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3CT6Io8pYHJX5rdkUTfOKtvu2eGIELmSWqBx.webp";
+export const IMG_MANUAL_REVIEW =
+  "https://uploadthing.b-cdn.net/f/content-WaMWC0umwru8ZLBGJYbsR.webp";
 export const IMG_MANUAL_QUEST =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmWVaWXHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap.webp";
 export const IMG_MANUAL_LOGS =
