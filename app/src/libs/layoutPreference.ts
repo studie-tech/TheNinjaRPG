@@ -15,6 +15,13 @@ export type FontScaleValue = (typeof FONT_SCALE_VALUES)[number];
 export const DEFAULT_FONT_SCALE: FontScaleValue = 1;
 
 /**
+ * The light layout preference lives in localStorage under this key; the root layout's
+ * <head> script mirrors it onto <html> as this attribute before first paint.
+ */
+export const LIGHT_LAYOUT_STORAGE_KEY = "lightLayout";
+export const LIGHT_LAYOUT_ATTRIBUTE = "data-light-layout";
+
+/**
  * toFontScale
  * - Validates an unknown stored value against the supported scales
  * @param value - Raw cookie or localStorage value

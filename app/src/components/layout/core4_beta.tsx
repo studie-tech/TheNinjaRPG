@@ -100,7 +100,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
           data-compact-hide
         >
           {!lightLayout && (
-            <Link href="/">
+            <Link href="/" data-light-layout-hide>
               <Image
                 className="hidden md:block"
                 id="tutorial-logo"
@@ -140,6 +140,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
           <div
             className="relative top-[-10px] left-[50%] z-1 hidden translate-x-[-50%] font-bold text-lg text-orange-100 md:block lg:text-2xl"
             data-compact-hide
+            data-light-layout-hide
           >
             <Image
               className="select-none"

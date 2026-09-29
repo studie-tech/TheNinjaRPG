@@ -56,6 +56,7 @@ import WebGlError from "@/layout/WebGLError";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
 import type { HexagonalFaceMesh, TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
+import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import {
   arrivalPromptDecision,
@@ -215,7 +216,7 @@ const Sector: React.FC<SectorProps> = (props) => {
   const { setTarget, setPosition } = props;
 
   // Light layout preference state
-  const [lightLayout] = useLocalStorage<boolean>("lightLayout", false);
+  const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
 
   // Day/night map shading preference — ref so the long-running render loop
   // reacts without rebuilding the map

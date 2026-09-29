@@ -1,6 +1,6 @@
 "use client";
 
-import React, { startTransition, useEffect, useState } from "react";
+import React, { startTransition, useEffect, useLayoutEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import {
   safeLocalStorageGetItem,
@@ -10,7 +10,12 @@ import {
 import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
 import TutorialAssistant from "@/layout/TutorialAssistant";
-import { persistFontScaleCookie, toFontScale } from "@/libs/layoutPreference";
+import {
+  LIGHT_LAYOUT_ATTRIBUTE,
+  LIGHT_LAYOUT_STORAGE_KEY,
+  persistFontScaleCookie,
+  toFontScale,
+} from "@/libs/layoutPreference";
 import { getMainNavbarLinks, useGameMenu } from "@/libs/menus";
 import {
   DEFAULT_MOBILE_NAV_CONFIG,
@@ -65,8 +70,20 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const onRightSideBarOpenChange = (open: boolean) =>
     startTransition(() => setRightSideBarOpen(open));
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [lightLayout, setLightLayout] = useLocalStorage<boolean>("lightLayout", false);
+  const [lightLayout, setLightLayout] = useLocalStorage<boolean>(
+    LIGHT_LAYOUT_STORAGE_KEY,
+    false,
+  );
   const [isMounted, setIsMounted] = useState(false);
+
+  // The root layout's head script sets this before first paint; keep it in step with a
+  // toggle, and restore it before paint after a remount of the shell strips it.
+  useLayoutEffect(() => {
+    document.documentElement.toggleAttribute(
+      LIGHT_LAYOUT_ATTRIBUTE,
+      lightLayout === true,
+    );
+  }, [lightLayout]);
 
   useEffect(() => {
     // Deep links and notification taps navigate without clicking a sidebar item.

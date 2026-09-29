@@ -23,6 +23,8 @@ import {
   DEFAULT_FONT_SCALE,
   FONT_SCALE_COOKIE,
   FONT_SCALE_VALUES,
+  LIGHT_LAYOUT_ATTRIBUTE,
+  LIGHT_LAYOUT_STORAGE_KEY,
 } from "@/libs/layoutPreference";
 import {
   absoluteUrl,
@@ -57,6 +59,15 @@ export function generateStaticParams() {
  */
 const FONT_SCALE_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^|; )${FONT_SCALE_COOKIE}=([^;]*)/);var v=m&&parseFloat(decodeURIComponent(m[1]));if(v!==${DEFAULT_FONT_SCALE}&&${JSON.stringify(FONT_SCALE_VALUES)}.indexOf(v)>=0)document.documentElement.style.setProperty("--font-scale",String(v))}catch(e){}})()`;
 
+/**
+ * The light layout drops the logo and navbar from the default chrome, which moves
+ * everything below them up; switched after hydration, that is one large layout shift. A
+ * prerendered document always carries the full chrome, so this marks <html> from the
+ * stored preference before first paint and CSS hides that chrome until React stops
+ * rendering it. GameLayoutController keeps the attribute in step afterwards.
+ */
+const LIGHT_LAYOUT_SCRIPT = `(function(){try{if(localStorage.getItem(${JSON.stringify(LIGHT_LAYOUT_STORAGE_KEY)})==="true")document.documentElement.setAttribute(${JSON.stringify(LIGHT_LAYOUT_ATTRIBUTE)},"")}catch(e){}})()`;
+
 export default async function RootLayout({
   children,
   params,
@@ -81,6 +92,8 @@ export default async function RootLayout({
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the script is a module-level constant assembled from three other constants, with no input from anywhere. */}
         <script dangerouslySetInnerHTML={{ __html: FONT_SCALE_SCRIPT }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the script is a module-level constant assembled from two other constants, with no input from anywhere. */}
+        <script dangerouslySetInnerHTML={{ __html: LIGHT_LAYOUT_SCRIPT }} />
       </head>
       <body className="h-full">
         <StructuredData />
