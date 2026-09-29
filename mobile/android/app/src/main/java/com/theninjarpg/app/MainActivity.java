@@ -20,11 +20,14 @@ public class MainActivity extends BridgeActivity {
         // The bundled entry point handles cold-start outages. If a later navigation fails,
         // return to that same retry screen instead of leaving Android's raw WebView error.
         bridge.setWebViewClient(new BridgeWebViewClient(bridge) {
+            private boolean isRecovering;
+
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (bridge.getAppUrl().equals(url) || (bridge.getAppUrl() + "/").equals(url)) {
+                if (isRecovering && (bridge.getAppUrl().equals(url) || (bridge.getAppUrl() + "/").equals(url))) {
                     // A failed remote page must not remain behind the retry screen.
+                    isRecovering = false;
                     view.clearHistory();
                 }
             }
@@ -33,6 +36,7 @@ public class MainActivity extends BridgeActivity {
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
                 if (request.isForMainFrame() && !bridge.getHost().equals(request.getUrl().getHost())) {
+                    isRecovering = true;
                     view.loadUrl(bridge.getAppUrl());
                 }
             }
