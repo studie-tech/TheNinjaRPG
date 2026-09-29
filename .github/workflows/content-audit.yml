@@ -33,7 +33,7 @@ on:
       - ".github/scripts/apply-visual-check.mjs"
       - ".agents/skills/tnr-content-audit/**"
       - "app/src/app/api/content-review/**"
-      - "app/src/app/[[]shell]/manual/review/battlefield/**"
+      - "app/src/app/*/manual/review/battlefield/**"
       - "app/src/libs/contentReview/**"
       - "app/src/libs/threejs/battlefieldPreview.ts"
       - "app/src/validators/contentReview.ts"
