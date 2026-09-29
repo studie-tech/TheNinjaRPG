@@ -46,7 +46,6 @@ import {
   NonActionItemTypes,
   PvpBattleTypes,
   QuestBattleTypes,
-  RANKED_BLOODLINE_EFFECT_MULT,
   RANKS_RESTRICTED_FROM_PVP,
   REGEN_SECONDS,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
@@ -98,6 +97,7 @@ import {
   COMBAT_BORDER_RIGHT,
   COMBAT_BORDER_TOP,
   COMBAT_LOBBY_SECONDS,
+  RANKED_BLOODLINE_DAMAGE_TAG,
 } from "@/libs/combat/constants";
 import {
   createAction,
@@ -142,11 +142,11 @@ import {
   getBattleClaimIds,
   getBattleGrid,
   getDefaultBattleSizes,
-  getEffectiveMaxPool,
   getTurnControl,
   isEffectActive,
   maskBattle,
   maskBattleDynamic,
+  reconcileLobbyPools,
   rollInitiative,
 } from "@/libs/combat/util";
 import { fetchDmgConfig } from "@/libs/gamesettings";
@@ -1277,9 +1277,11 @@ export const combatRouter = createTRPCRouter({
       // re-maxed for ranked) just because the loadout was swapped in the lobby.
       const originalInitiative = user.initiative;
       const originalDirection = user.direction;
-      const originalCurHealth = user.curHealth;
-      const originalCurChakra = user.curChakra;
-      const originalCurStamina = user.curStamina;
+      const originalPools = {
+        curHealth: user.curHealth,
+        curChakra: user.curChakra,
+        curStamina: user.curStamina,
+      };
 
       // Hydrate jutsus and items from extraState if not using new loadouts
       // We reconstruct CombatQueryUser format from BattleUserState refs + extraState
@@ -1382,43 +1384,23 @@ export const combatRouter = createTRPCRouter({
         },
       );
 
-      // Restore original initiative, direction, and combat pools
-      if (usersState[0]) {
-        const updatedUser = usersState[0];
-        // Mirror initiateBattle: apply pool modifiers so _prev*Adj tracking is set and
-        // subsequent rounds do not treat loadout pool effects as a fresh delta.
-        const hasPoolEffects = userEffects.some(
-          (e) =>
-            e.targetId === updatedUser.userId &&
-            (e.type === "increasemaxpools" || e.type === "decreasemaxpools") &&
-            isEffectActive(e),
-        );
-        if (hasPoolEffects) {
-          applyPoolAdjustmentsToBase(updatedUser, userEffects);
-        }
-        updatedUser.initiative = originalInitiative;
-        updatedUser.direction = originalDirection;
-        updatedUser.curHealth = Math.min(
-          originalCurHealth,
-          getEffectiveMaxPool(updatedUser, userEffects, "Health"),
-        );
-        updatedUser.curChakra = Math.min(
-          originalCurChakra,
-          getEffectiveMaxPool(updatedUser, userEffects, "Chakra"),
-        );
-        updatedUser.curStamina = Math.min(
-          originalCurStamina,
-          getEffectiveMaxPool(updatedUser, userEffects, "Stamina"),
-        );
-      }
-
-      // Merge the user's state with the other user's state
-      userBattle.usersState = [...otherUserState, ...usersState];
-      userBattle.usersEffects = [
+      const completeUserEffects = [
         ...otherUserEffects,
         ...preservedSageEffects,
         ...userEffects,
       ];
+
+      // Restore original initiative, direction, and combat pools
+      if (usersState[0]) {
+        const updatedUser = usersState[0];
+        reconcileLobbyPools(updatedUser, originalPools, completeUserEffects);
+        updatedUser.initiative = originalInitiative;
+        updatedUser.direction = originalDirection;
+      }
+
+      // Merge the user's state with the other user's state
+      userBattle.usersState = [...otherUserState, ...usersState];
+      userBattle.usersEffects = completeUserEffects;
 
       // Merge extraState: add new jutsus/items from the updated loadout to existing extraState
       // This ensures new jutsus/items can be looked up by ID during battle
@@ -3245,23 +3227,7 @@ export const processUsersForBattle = async (
       user.bloodline
     ) {
       const realized = realizeTag({
-        tag: {
-          type: "increasedamagegiven",
-          power: (RANKED_BLOODLINE_EFFECT_MULT - 1) * 100,
-          powerPerLevel: 0,
-          calculation: "percentage",
-          direction: "offence",
-          target: "SELF",
-          description: "Ranked bloodline simulation",
-          statTypes: ["Highest"],
-          elements: ["Fire", "Water", "Wind", "Lightning", "Earth", "None"],
-          staticAssetPath: "",
-          staticAnimation: "",
-          appearAnimation: "",
-          disappearAnimation: "",
-          appearSfx: "",
-          disappearSfx: "",
-        } as UserEffect,
+        tag: { ...RANKED_BLOODLINE_DAMAGE_TAG } as UserEffect,
         user: user,
         actionId: user.bloodline.id,
         target: user,

@@ -959,6 +959,18 @@ export const fetchUserSkills = async (client: DrizzleClient, userId: string) => 
   });
 };
 
+export const resolveRequiredSkillName = async (
+  client: DrizzleClient,
+  skillId: string | null,
+) => {
+  if (!skillId) return null;
+  const requiredSkill = await client.query.skillTree.findFirst({
+    columns: { name: true },
+    where: eq(skillTree.id, skillId),
+  });
+  return requiredSkill?.name ?? skillId;
+};
+
 export const fetchSkillTreeViewer = async (
   client: DrizzleClient,
   userId: string | null | undefined,

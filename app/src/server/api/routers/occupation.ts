@@ -23,7 +23,9 @@ import {
   getInventoryBucketFullMessage,
 } from "@/libs/item";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getActivatedSkillIds, meetsRequiredSkill } from "@/libs/skillTree";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
+import { fetchUserSkills, resolveRequiredSkillName } from "@/routers/skillTree";
 import {
   fetchItemWithCraftingRequirements,
   fetchUserItems,
@@ -375,11 +377,12 @@ export const occupationRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Run all initial queries in parallel
-      const [updatedUserResult, userItems] = await Promise.all([
+      const [updatedUserResult, userItems, userSkills] = await Promise.all([
         // Get user data
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         // Get all user items (like in crafting)
         fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
 
       // Guards
@@ -437,6 +440,18 @@ export const occupationRouter = createTRPCRouter({
       }
       if (crystalItem.itemType !== "CRYSTAL") {
         return errorResponse("Selected item is not a crystal");
+      }
+      if (
+        !meetsRequiredSkill(
+          crystalItem.requiredSkillId,
+          getActivatedSkillIds(userSkills),
+        )
+      ) {
+        const requiredSkill = await resolveRequiredSkillName(
+          ctx.drizzle,
+          crystalItem.requiredSkillId,
+        );
+        return errorResponse(`Requires active skill: ${requiredSkill}`);
       }
       if (crystalItem.crystalTargetTypes) {
         if (crystalItem.crystalTargetTypes !== targetUserItem.item?.itemType) {

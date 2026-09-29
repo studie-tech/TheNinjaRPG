@@ -845,7 +845,6 @@ export default function MyJutsu() {
                       const canEvolve =
                         !!userData &&
                         effectiveLevel >= JUTSU_TRAIN_LEVEL_CAP &&
-                        meetsEvoSkill &&
                         canEvolveJutsu(evo, userData) &&
                         hasRequiredRank(userData.rank, evo.requiredRank) &&
                         hasRequiredLevel(userData.level, evo.requiredLevel) &&
@@ -894,9 +893,11 @@ export default function MyJutsu() {
                             </p>
                           )}
                           {!meetsEvoSkill && evoRequiredSkillName && (
-                            <p className="text-destructive text-sm">
-                              Requires active skill: <b>{evoRequiredSkillName}</b>.
-                              Activate it in the Skill Tree first.
+                            <p className="text-muted-foreground text-sm">
+                              Evolving does not require this skill, but the evolved
+                              jutsu will be unequipped. Activate{" "}
+                              <b>{evoRequiredSkillName}</b> in the Skill Tree before
+                              equipping it.
                             </p>
                           )}
                           {evo.requiredRank && (

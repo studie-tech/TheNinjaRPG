@@ -100,7 +100,7 @@ import { callDiscordContent } from "@/libs/socials";
 import { hasRequiredLevel } from "@/libs/train";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/routers/bloodline";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
-import { fetchUserSkills } from "@/routers/skillTree";
+import { fetchUserSkills, resolveRequiredSkillName } from "@/routers/skillTree";
 import { fetchStructures } from "@/routers/village";
 import {
   baseServerResponse,
@@ -160,18 +160,6 @@ import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards"
 import { updateRewards } from "./quests";
 
 const MIN_ITEM_SHOP_DISCOUNT_FACTOR = 0.05;
-
-const resolveRequiredSkillName = async (
-  client: DrizzleClient,
-  skillId: string | null,
-) => {
-  if (!skillId) return null;
-  const requiredSkill = await client.query.skillTree.findFirst({
-    columns: { name: true },
-    where: eq(skillTree.id, skillId),
-  });
-  return requiredSkill?.name ?? skillId;
-};
 
 export const itemRouter = createTRPCRouter({
   getAllNames: publicProcedure

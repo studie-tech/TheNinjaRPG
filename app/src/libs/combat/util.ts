@@ -742,6 +742,29 @@ export const applyPoolAdjustmentsToBase = (
   }
 };
 
+/** Preserve lobby pools while tracking the complete effect list saved to battle state. */
+export const reconcileLobbyPools = (
+  user: BattleUserState,
+  originalPools: Pick<BattleUserState, "curHealth" | "curChakra" | "curStamina">,
+  effects: UserEffect[],
+) => {
+  // Retained incoming and sage effects contribute just like regenerated effects.
+  // Synchronize even when effects were removed, so the next pass has no stale delta.
+  applyPoolAdjustmentsToBase(user, effects);
+  user.curHealth = Math.min(
+    originalPools.curHealth,
+    getEffectiveMaxPool(user, effects, "Health"),
+  );
+  user.curChakra = Math.min(
+    originalPools.curChakra,
+    getEffectiveMaxPool(user, effects, "Chakra"),
+  );
+  user.curStamina = Math.min(
+    originalPools.curStamina,
+    getEffectiveMaxPool(user, effects, "Stamina"),
+  );
+};
+
 /**
  * Check if a single tag is a shared cooldown tag
  */

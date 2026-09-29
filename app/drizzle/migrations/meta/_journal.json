@@ -358,6 +358,13 @@
       "when": 1790594215140,
       "tag": "0050_secret_sentinels",
       "breakpoints": false
+    },
+    {
+      "idx": 51,
+      "version": "5",
+      "when": 1790709551314,
+      "tag": "0051_skill_requirements_pvp_record",
+      "breakpoints": false
     }
   ]
 }
