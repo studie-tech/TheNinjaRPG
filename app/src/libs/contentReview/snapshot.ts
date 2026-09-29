@@ -20,7 +20,6 @@ import { agentAuditOutputSchema, visualCheckSchema } from "@/validators/contentR
 import { type ContentEntity, entityKey, loadAllEntities } from "./entities";
 import { isEpidemicConfigured } from "./epidemic";
 import { expireStaleEvidence } from "./outdate";
-import { auditQuota } from "./submit";
 
 /** Vercel caps function responses at 4.5 MB; stay well under it. */
 const MAX_SNAPSHOT_BYTES = 3_800_000;
@@ -222,8 +221,7 @@ export const buildAuditSnapshot = async (
   const focus = resolveFocus(requested);
   const view = VIEWS[focus];
   await expireStaleEvidence(client);
-  const [quota, entityLists, stats, owners, assets, recent] = await Promise.all([
-    auditQuota(client),
+  const [entityLists, stats, owners, assets, recent] = await Promise.all([
     Promise.all(view.types.map((type) => loadAllEntities(client, type))),
     view.stats ? usageStats(client) : Promise.resolve(new Map<string, Usage>()),
     focus === "balance"
@@ -271,8 +269,6 @@ export const buildAuditSnapshot = async (
   const snapshot = {
     generatedAt: new Date().toISOString(),
     focus,
-    maxEntries: quota.remaining,
-    queue: quota,
     capabilities: {
       epidemicSoundSearch: isEpidemicConfigured(),
       generation: !!process.env.REPLICATE_API_TOKEN,

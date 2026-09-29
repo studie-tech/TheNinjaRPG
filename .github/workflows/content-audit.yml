@@ -88,7 +88,6 @@ jobs:
     timeout-minutes: 10
     outputs:
       focus: ${{ steps.fetch.outputs.focus }}
-      skip: ${{ steps.fetch.outputs.skip }}
     steps:
       - id: fetch
         env:
@@ -104,8 +103,7 @@ jobs:
           jq '.proposalSchema' snapshot.json > schema.json
           jq '.visualCheckSchema' snapshot.json > visual-check-schema.json
           echo "focus=$(jq -r '.focus' snapshot.json)" >> "$GITHUB_OUTPUT"
-          echo "skip=$(jq '.maxEntries <= 0' snapshot.json)" >> "$GITHUB_OUTPUT"
-          jq -r '"Snapshot: focus \(.focus), \(.entities | length) entities, \(.assets | length) assets, room for \(.maxEntries) suggestions."' snapshot.json >> "$GITHUB_STEP_SUMMARY"
+          jq -r '"Snapshot: focus \(.focus), \(.entities | length) entities, \(.assets | length) assets, \(.openSuggestions | length) open suggestions."' snapshot.json >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         with:
           name: audit-input
@@ -117,7 +115,7 @@ jobs:
 
   gallery:
     needs: [target, snapshot]
-    if: needs.snapshot.outputs.skip != 'true' && needs.snapshot.outputs.focus == 'animation'
+    if: needs.snapshot.outputs.focus == 'animation'
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 20
     steps:
@@ -151,7 +149,7 @@ jobs:
   audit:
     needs: [snapshot, gallery]
     if: >-
-      always() && needs.snapshot.result == 'success' && needs.snapshot.outputs.skip != 'true'
+      always() && needs.snapshot.result == 'success'
       && (needs.gallery.result == 'success' || needs.gallery.result == 'skipped')
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 40
@@ -208,7 +206,6 @@ jobs:
             Follow .agents/skills/tnr-content-audit/SKILL.md exactly.
             The snapshot is audit/snapshot.json and today's focus is "${{ needs.snapshot.outputs.focus }}".
             ${{ steps.renders.outputs.note }}
-            Return at most as many proposals as the snapshot's maxEntries.
             Your final message must be only the JSON object described by the output schema.
 
   battlefield:

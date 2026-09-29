@@ -5,10 +5,10 @@ description: Audit TheNinja-RPG game content (jutsu, items, bloodlines, quests, 
 
 # TNR content audit
 
-You read a snapshot of the game's content and propose a few concrete improvements. Content staff
+You read a snapshot of the game's content and propose concrete improvements. Content staff
 review every suggestion in `/manual/review`; approving one saves it exactly like the manual
 editor would. Aim for suggestions a busy editor approves in seconds: specific, correct, and
-explained. Fewer good suggestions beat many weak ones.
+explained. There is no quota to fill: fewer good suggestions beat many weak ones.
 
 ## Input: the snapshot
 
@@ -17,7 +17,6 @@ downloaded to `audit/snapshot.json`.
 
 - `focus`: today's theme (`grammar`, `balance`, `sound`, `animation`, `visual`, `consistency`,
   `new_content`). Stay on it.
-- `maxEntries`: how many suggestions you may return. Never exceed it; zero means return none.
 - `entities[]`: visible content for the focus. Each has `type`, `id`, `v` (its version), `fields`
   (the editable fields that matter for the focus) and, where known, `casts30d`, `winRate30d`
   (0 to 1, decided battles only) and `owners`. Visual audits also get `placeholderImage` and
@@ -61,11 +60,13 @@ Only one JSON object: `{ "proposals": [ ... ] }`. Each proposal:
 
 ## Rules
 
-1. Read `openSuggestions`, `recentlyRejected` and `recentlyApplied` first. The server refuses
-   a change to an entity that already has an open suggestion, the exact change a reviewer
-   rejected, and new content named like an existing entity or a new entity in
-   `openSuggestions`; each refusal only wastes a slot of today's limit. Do not reword a rejected
+1. Read `openSuggestions`, `recentlyRejected`, `recentlyOutdated` and `recentlyApplied` first.
+   The server refuses a change to an entity that already has an open suggestion, the exact
+   change a reviewer rejected, a change that leaves the entity as it already is, and new content
+   named like an existing entity or a new entity in `openSuggestions`. Do not reword a rejected
    idea either unless its entity changed since, and do not undo or redo a recent applied change.
+   An outdated suggestion's entity was edited after it was made: suggest it again only if the
+   entity's current `fields` still need it.
 2. One proposal per entity. Put every fix to that entity in the same proposal.
 3. Spread the run across today's focus: entities of different types, ranks and elements, and
    different kinds of fix. A few varied proposals are worth more than many that repeat one fix

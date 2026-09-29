@@ -2,7 +2,6 @@
 
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { CONTENT_AUDIT_DAILY_LIMIT } from "@/drizzle/constants";
 import {
   actionLog,
   badge,
@@ -497,7 +496,7 @@ describeWithDatabase("content review", () => {
     expect(results.filter((result) => result.success)).toHaveLength(1);
   });
 
-  it("refuses stale, duplicate and invalid audit suggestions and caps the day", async () => {
+  it("refuses stale, duplicate and invalid audit suggestions", async () => {
     const database = await getTestDatabase();
     const version = await versionOf(BADGE);
     const proposal = (entityId: string, v: string, path = "description") => ({
@@ -539,23 +538,6 @@ describeWithDatabase("content review", () => {
     expect(stored?.source).toBe("AGENT");
     expect(stored?.agentName).toBe("codex · test");
     expect(stored?.changes[0]?.before).toEqual({ description: "Awarded for braveyr in battle." });
-
-    await database.insert(contentProposal).values(
-      Array.from({ length: CONTENT_AUDIT_DAILY_LIMIT }, (_, index) => ({
-        id: `earlier-${index}`,
-        title: "Earlier suggestion",
-        rationale: "Added earlier today.",
-        category: "GRAMMAR" as const,
-        source: "AGENT" as const,
-        status: "REJECTED" as const,
-      })),
-    );
-    const capped = await ingestAgentSubmission(database, {
-      ...submission,
-      proposals: [proposal(OTHER_BADGE, await versionOf(OTHER_BADGE))],
-    });
-    expect(capped.accepted).toHaveLength(0);
-    expect(capped.refused[0]?.reason).toContain("limit is reached");
   });
 
   it("refuses new content named like an existing entity or a draft in the queue", async () => {

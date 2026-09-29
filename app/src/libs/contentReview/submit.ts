@@ -1,9 +1,7 @@
-import { and, count, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { z } from "zod";
 import {
-  CONTENT_AUDIT_BACKLOG_LIMIT,
-  CONTENT_AUDIT_DAILY_LIMIT,
   CONTENT_AUDIT_MAX_GENERATIONS,
   CONTENT_AUDIT_MAX_SOUND_SEARCHES,
   CONTENT_PROPOSAL_EVIDENCE_DAYS,
@@ -62,44 +60,6 @@ export type SubmissionResult = {
   summary: string;
 };
 
-/** How many more suggestions the audit may add right now. */
-export const auditQuota = async (client: DrizzleClient) => {
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const [[today], [waiting]] = await Promise.all([
-    client
-      .select({ n: count() })
-      .from(contentProposal)
-      .where(
-        and(
-          eq(contentProposal.source, "AGENT"),
-          gte(contentProposal.createdAt, startOfDay),
-        ),
-      ),
-    client
-      .select({ n: count() })
-      .from(contentProposal)
-      .where(
-        and(eq(contentProposal.source, "AGENT"), eq(contentProposal.status, "PENDING")),
-      ),
-  ]);
-  const addedToday = today?.n ?? 0;
-  const waitingNow = waiting?.n ?? 0;
-  return {
-    addedToday,
-    dailyLimit: CONTENT_AUDIT_DAILY_LIMIT,
-    waiting: waitingNow,
-    backlogLimit: CONTENT_AUDIT_BACKLOG_LIMIT,
-    remaining: Math.max(
-      0,
-      Math.min(
-        CONTENT_AUDIT_DAILY_LIMIT - addedToday,
-        CONTENT_AUDIT_BACKLOG_LIMIT - waitingNow,
-      ),
-    ),
-  };
-};
-
 /**
  * Validate and store the audit's suggestions. Every change is replayed against the live row:
  * `before` comes from the database, never from the model, and a basis version that no longer
@@ -121,23 +81,22 @@ export const ingestAgentSubmission = async (
     ),
   ]);
   const targetIds = [...new Set(refs.map((ref) => ref.entityId))];
-  const createdTypes = [
-    ...new Set(
-      submission.proposals.flatMap((proposal) =>
-        proposal.changes.flatMap((change) =>
-          change.operation === "CREATE" ? [change.entityType] : [],
-        ),
-      ),
-    ),
-  ];
-  const [quota, entities, open, rejected, names] = await Promise.all([
-    auditQuota(client),
+  // Names new content would take, read from its `set` up front so each type needs one query.
+  const drafts = submission.proposals.flatMap((proposal) =>
+    proposal.changes.flatMap((change) => {
+      if (change.operation !== "CREATE") return [];
+      const fields = Object.fromEntries(
+        change.set.map((set) => [set.path, parsedJson(set.valueJson)]),
+      );
+      const name = draftName(fields);
+      return name ? [{ entityType: change.entityType, name }] : [];
+    }),
+  );
+  const [entities, open, rejected, names] = await Promise.all([
     loadEntities(client, refs),
     targetIds.length ? openTargets(client, targetIds) : Promise.resolve(new Map()),
     targetIds.length ? rejectedChanges(client, targetIds) : Promise.resolve([]),
-    createdTypes.length
-      ? takenNames(client, createdTypes)
-      : Promise.resolve(new Set<string>()),
+    drafts.length ? takenNames(client, drafts) : Promise.resolve(new Set<string>()),
   ]);
   const budget: MediaBudget = {
     searches: CONTENT_AUDIT_MAX_SOUND_SEARCHES,
@@ -149,14 +108,6 @@ export const ingestAgentSubmission = async (
   for (const [index, proposal] of submission.proposals.entries()) {
     const refuse = (reason: string) =>
       result.refused.push({ index, title: proposal.title, reason });
-    if (planned.length >= quota.remaining) {
-      refuse(
-        quota.remaining === 0
-          ? `The audit limit is reached (${quota.addedToday}/${quota.dailyLimit} today, ${quota.waiting}/${quota.backlogLimit} waiting)`
-          : "The daily limit was reached by earlier suggestions in this run",
-      );
-      continue;
-    }
     // Candidates copied to storage for a suggestion that is not kept are deleted again.
     const uploaded: string[] = [];
     const plan = await planAgentProposal(
@@ -186,7 +137,7 @@ export const ingestAgentSubmission = async (
     await discardUploads(mediaKeys(planned));
     throw error;
   });
-  result.summary = submissionSummary(submission, result, quota, planned.length);
+  result.summary = submissionSummary(submission, result);
   return result;
 };
 
@@ -558,20 +509,23 @@ const openTargets = async (client: DrizzleClient, ids: string[]) => {
 };
 
 /**
- * Names new content of these types cannot take: every live entity's and every new entity
- * still waiting in the queue, compared without case.
+ * Which drafted names new content cannot take: names a live entity of the type already has,
+ * and names of new entities still waiting in the queue, compared without case.
  */
 const takenNames = async (
   client: DrizzleClient,
-  types: ContentProposalEntityType[],
+  drafts: { entityType: ContentProposalEntityType; name: string }[],
 ) => {
+  const types = [...new Set(drafts.map((draft) => draft.entityType))];
   const [live, queued] = await Promise.all([
     Promise.all(
-      types.map(async (type) =>
-        (await ENTITY_CONFIG[type].load(client, null)).map((row) =>
-          nameKey(type, row.name),
-        ),
-      ),
+      types.map(async (type) => {
+        const names = drafts
+          .filter((draft) => draft.entityType === type)
+          .map((draft) => draft.name);
+        const found = await ENTITY_CONFIG[type].findNames(client, names);
+        return found.map((name) => nameKey(type, name));
+      }),
     ),
     client
       .select({
@@ -600,6 +554,14 @@ const takenNames = async (
 const nameKey = (type: ContentProposalEntityType, name: string) =>
   `${type}:${name.trim().toLowerCase()}`;
 
+const parsedJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
 /** Rejected changes still within retention, so the audit cannot resubmit them unchanged. */
 const rejectedChanges = async (client: DrizzleClient, ids: string[]) =>
   client
@@ -620,12 +582,7 @@ const rejectedChanges = async (client: DrizzleClient, ids: string[]) =>
       ),
     );
 
-const submissionSummary = (
-  submission: AgentSubmission,
-  result: SubmissionResult,
-  quota: Awaited<ReturnType<typeof auditQuota>>,
-  added: number,
-) => {
+const submissionSummary = (submission: AgentSubmission, result: SubmissionResult) => {
   const lines = [
     `### Content audit${submission.focus ? ` · focus: ${submission.focus}` : ""}`,
     "",
@@ -639,8 +596,6 @@ const submissionSummary = (
         refused ? `refused: ${refused.reason.replaceAll("|", "/")}` : "accepted"
       } |`;
     }),
-    "",
-    `Audit suggestions today: ${quota.addedToday + added}/${quota.dailyLimit}. Waiting for review: ${quota.waiting + added}/${quota.backlogLimit}.`,
   ];
   return lines.join("\n");
 };

@@ -75,12 +75,10 @@ describeWithDatabase("content review routes end to end", () => {
     expect(response.status).toBe(200);
     const snapshot = (await response.json()) as {
       focus: string;
-      maxEntries: number;
       proposalSchema: object;
       entities: { type: string; id: string; v: string; fields: Record<string, unknown> }[];
     };
     expect(snapshot.focus).toBe("grammar");
-    expect(snapshot.maxEntries).toBeGreaterThan(0);
     expect(snapshot.proposalSchema).toHaveProperty("properties.proposals");
     const entity = snapshot.entities.find((row) => row.id === "route-badge");
     expect(entity?.fields.description).toBe("Given for braveyr.");

@@ -340,10 +340,6 @@ export const CONTENT_AUDIT_WEEKDAY_FOCUS: readonly ContentAuditFocus[] = [
   "consistency",
   "visual",
 ];
-/** Most suggestions the audit may add per UTC day. */
-export const CONTENT_AUDIT_DAILY_LIMIT = 10;
-/** The audit skips a run while this many of its suggestions still wait for review. */
-export const CONTENT_AUDIT_BACKLOG_LIMIT = 50;
 /** Rejected and outdated suggestions are removed this long after they were decided. */
 export const CONTENT_PROPOSAL_RETENTION_DAYS = 10;
 /** Suggestions resting on usage statistics go out of date after this many days. */

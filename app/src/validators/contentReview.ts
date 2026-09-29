@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   COMBAT_BIOMES,
-  CONTENT_AUDIT_DAILY_LIMIT,
   CONTENT_PROPOSAL_MAX_BASIS,
   CONTENT_PROPOSAL_RETENTION_DAYS,
   CONTENT_REVIEW_BULK_LIMIT,
@@ -66,7 +65,7 @@ export type AgentProposal = z.infer<typeof agentProposalSchema>;
 
 /** The shape the audit model must return. */
 export const agentAuditOutputSchema = z.object({
-  proposals: z.array(agentProposalSchema).max(CONTENT_AUDIT_DAILY_LIMIT),
+  proposals: z.array(agentProposalSchema),
 });
 
 /** What the audit's submit step posts: the model output plus run metadata. */
@@ -82,38 +81,34 @@ export type AgentSubmission = z.infer<typeof agentSubmissionSchema>;
  * suggestions to keep, and which candidate assets looked wrong on the battlefield.
  */
 export const visualCheckSchema = z.object({
-  verdicts: z
-    .array(
-      z.object({
-        index: z.number().int().min(0),
-        keep: z.boolean(),
-        rejectedAssetIds: z.array(z.string().min(1).max(191)).max(3),
-        reason: z.string().min(3).max(600),
-      }),
-    )
-    .max(CONTENT_AUDIT_DAILY_LIMIT),
+  verdicts: z.array(
+    z.object({
+      index: z.number().int().min(0),
+      keep: z.boolean(),
+      rejectedAssetIds: z.array(z.string().min(1).max(191)).max(3),
+      reason: z.string().min(3).max(600),
+    }),
+  ),
 });
 
 /** Content entity versions for the battlefield capture page to draw onto labelled sheets. */
 export const battlefieldSheetsSchema = z.object({
-  requests: z
-    .array(
-      z.object({
-        title: z.string().min(1).max(200),
-        entityType: z.enum(ContentProposalEntityTypes),
-        entityId: z.string().min(1).max(191).nullable(),
-        variants: z
-          .array(
-            z.object({
-              name: z.string().min(1).max(160),
-              fields: z.record(z.string(), z.unknown()),
-            }),
-          )
-          .min(1)
-          .max(4),
-      }),
-    )
-    .max(60),
+  requests: z.array(
+    z.object({
+      title: z.string().min(1).max(200),
+      entityType: z.enum(ContentProposalEntityTypes),
+      entityId: z.string().min(1).max(191).nullable(),
+      variants: z
+        .array(
+          z.object({
+            name: z.string().min(1).max(160),
+            fields: z.record(z.string(), z.unknown()),
+          }),
+        )
+        .min(1)
+        .max(4),
+    }),
+  ),
   perSheet: z.number().int().min(1).max(8),
   background: z.enum(COMBAT_BIOMES).prefault("ground"),
 });

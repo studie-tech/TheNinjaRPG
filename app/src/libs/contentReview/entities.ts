@@ -58,6 +58,8 @@ type EntityConfig = {
   editHref: (id: string) => string;
   /** Rows by id, or every row of the type when `ids` is null. */
   load: (client: DrizzleClient, ids: string[] | null) => Promise<Loaded[]>;
+  /** The names among `names` that a row already has, compared the way the column collates. */
+  findNames: (client: DrizzleClient, names: string[]) => Promise<string[]>;
 };
 
 const keysOf = (schema: { shape: Record<string, unknown> }) =>
@@ -132,6 +134,13 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         payload: { ...row },
       }));
     },
+    findNames: async (client, names) =>
+      (
+        await client
+          .select({ name: jutsu.name })
+          .from(jutsu)
+          .where(inArray(jutsu.name, names))
+      ).map((row) => row.name),
   },
   ITEM: {
     contentType: "item",
@@ -179,6 +188,13 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         },
       }));
     },
+    findNames: async (client, names) =>
+      (
+        await client
+          .select({ name: item.name })
+          .from(item)
+          .where(inArray(item.name, names))
+      ).map((row) => row.name),
   },
   BLOODLINE: {
     contentType: "bloodline",
@@ -202,6 +218,13 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         payload: { ...row },
       }));
     },
+    findNames: async (client, names) =>
+      (
+        await client
+          .select({ name: bloodline.name })
+          .from(bloodline)
+          .where(inArray(bloodline.name, names))
+      ).map((row) => row.name),
   },
   QUEST: {
     contentType: "quest",
@@ -228,6 +251,13 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         payload: { ...row },
       }));
     },
+    findNames: async (client, names) =>
+      (
+        await client
+          .select({ name: quest.name })
+          .from(quest)
+          .where(inArray(quest.name, names))
+      ).map((row) => row.name),
   },
   BADGE: {
     contentType: "badge",
@@ -251,6 +281,13 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         payload: { ...row },
       }));
     },
+    findNames: async (client, names) =>
+      (
+        await client
+          .select({ name: badge.name })
+          .from(badge)
+          .where(inArray(badge.name, names))
+      ).map((row) => row.name),
   },
   GAME_ASSET: {
     contentType: "asset",
@@ -274,6 +311,13 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         payload: { ...row },
       }));
     },
+    findNames: async (client, names) =>
+      (
+        await client
+          .select({ name: gameAsset.name })
+          .from(gameAsset)
+          .where(inArray(gameAsset.name, names))
+      ).map((row) => row.name),
   },
   AI: {
     contentType: "ai",
@@ -317,6 +361,14 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
         },
       }));
     },
+    // Usernames are unique across players and AI, so a new AI cannot take a player's either.
+    findNames: async (client, names) =>
+      (
+        await client
+          .select({ name: userData.username })
+          .from(userData)
+          .where(inArray(userData.username, names))
+      ).map((row) => row.name),
   },
 };
 
