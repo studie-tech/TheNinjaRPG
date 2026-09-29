@@ -547,6 +547,9 @@ jobs:
           openai-api-key: ${{ secrets.AZURE_API_KEY }}
           responses-api-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           model: "gpt-5.4-2026-03-05"
+          # An unpinned install takes CLI releases that were never run against the Azure
+          # deployment; 0.159.0 fails there before its first reply.
+          codex-version: "0.154.0"
           sandbox: "danger-full-access"
           safety-strategy: "unsafe"
           allow-users: ${{ vars.TNR_CODEX_ALLOW_USERS || 'MathiasGruber' }}
