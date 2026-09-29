@@ -52,8 +52,11 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
       disabled={props.backDisabled}
       aria-busy={props.backDisabled}
       onClick={() => {
-        handleBack();
+        // onBack owns in-page back navigation (a thread returning to its list). Navigating as
+        // well would leave the page, or push the same route and hold the view change until
+        // that navigation completes.
         if (props.onBack) props.onBack();
+        else handleBack();
       }}
       suppressHydrationWarning
     >

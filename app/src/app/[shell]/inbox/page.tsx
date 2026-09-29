@@ -1,7 +1,7 @@
 "use client";
 
 import { BellRing, SquarePen, Trash2, UserRoundX, Users, X } from "lucide-react";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -19,6 +19,10 @@ import { useRequiredUserData } from "@/utils/UserContext";
 export default function Inbox() {
   const { data: userData } = useRequiredUserData();
   const [selectedConvo, setSelectedConvo] = useState<string | null>(null);
+  // Opening a thread or going back swaps the whole view, unmounting the clicked control;
+  // as a transition that render no longer blocks the click's next paint.
+  const selectConvo: React.Dispatch<React.SetStateAction<string | null>> = (value) =>
+    startTransition(() => setSelectedConvo(value));
   if (!userData) return <Loader explanation="Loading userdata" />;
 
   const topRightContent = (
@@ -51,7 +55,7 @@ export default function Inbox() {
         refreshKey={0}
         convo_id={selectedConvo}
         defaultBackHref="/inbox"
-        onBack={() => setSelectedConvo(null)}
+        onBack={() => selectConvo(null)}
         title="Inbox"
         subtitle="Private messages"
         topRightContent={topRightContent}
@@ -67,7 +71,7 @@ export default function Inbox() {
       >
         <ShowConversations
           selectedConvo={selectedConvo}
-          setSelectedConvo={setSelectedConvo}
+          setSelectedConvo={selectConvo}
         />
       </ContentBox>
     );
