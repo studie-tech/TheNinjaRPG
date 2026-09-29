@@ -87,8 +87,14 @@ export const collectCandidates = async (
     isEpidemicConfigured()
   ) {
     budget.searches -= 1;
-    for (const sfx of await searchEpidemicSfx(request.search, room())) {
-      const copy = await copyToStorage(await epidemicSfxDownloadUrl(sfx.id), "mp3");
+    const found = await searchEpidemicSfx(request.search, room()).catch(
+      skipped("Epidemic Sound search", []),
+    );
+    for (const sfx of found) {
+      const copy = await epidemicSfxDownloadUrl(sfx.id)
+        .then((url) => copyToStorage(url, "mp3"))
+        .catch(skipped(`Epidemic Sound ${sfx.id}`, null));
+      if (!copy) continue;
       out.push({
         source: "EPIDEMIC",
         kind: "SFX",
@@ -103,26 +109,28 @@ export const collectCandidates = async (
   }
   if (request.generate && room() > 0 && budget.generations > 0) {
     budget.generations -= 1;
-    const url =
-      request.kind === "SFX"
-        ? await generateAndUploadAudio({
-            relationId: "content-review",
-            prompt: request.generate,
-            secondsTotal: 2,
-          })
-        : request.kind === "IMAGE"
-          ? (
-              await txt2imgNanoBanana({
-                preprompt: getPrePrompts(contentType),
-                prompt: request.generate,
-                removeBg: REMOVE_BG_TYPES.includes(contentType),
-                userId: "content-review",
-                width: 512,
-                height: 512,
-                size: "square",
-              })
-            )[0]
-          : null;
+    const prompt = request.generate;
+    const generate = async () => {
+      if (request.kind === "SFX") {
+        return generateAndUploadAudio({
+          relationId: "content-review",
+          prompt,
+          secondsTotal: 2,
+        });
+      }
+      if (request.kind !== "IMAGE") return null;
+      const images = await txt2imgNanoBanana({
+        preprompt: getPrePrompts(contentType),
+        prompt,
+        removeBg: REMOVE_BG_TYPES.includes(contentType),
+        userId: "content-review",
+        width: 512,
+        height: 512,
+        size: "square",
+      });
+      return images[0] ?? null;
+    };
+    const url = await generate().catch(skipped(`Generating "${prompt}"`, null));
     if (url) {
       out.push({
         source: "GENERATED",
@@ -138,6 +146,17 @@ export const collectCandidates = async (
   }
   return out;
 };
+
+/**
+ * A candidate whose service fails is left out rather than failing the suggestion, which keeps
+ * the candidates already copied to storage recorded, and so removable.
+ */
+const skipped =
+  <T>(what: string, fallback: T) =>
+  (error: unknown) => {
+    console.error(`${what} failed; leaving it out of the candidates`, error);
+    return fallback;
+  };
 
 /**
  * The value a chosen candidate writes into its field, plus the GameAsset to create when a new

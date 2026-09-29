@@ -131,12 +131,18 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
       if (document.querySelector("[role='dialog']")) return;
       const key = event.key.toLowerCase();
-      if (rejecting && /^[1-5]$/.test(key)) {
-        const next = ContentProposalRejectReasons[Number(key) - 1];
-        if (next) setReason(next);
-        event.preventDefault();
-      } else if (rejecting && key === "enter") {
-        doReject();
+      // While a rejection is being written, only its own keys act: no approving or moving on.
+      if (rejecting) {
+        if (/^[1-5]$/.test(key)) {
+          const next = ContentProposalRejectReasons[Number(key) - 1];
+          if (next) setReason(next);
+        } else if (key === "enter") {
+          doReject();
+        } else if (key === "escape" || key === "r") {
+          setRejecting(false);
+        } else {
+          return;
+        }
         event.preventDefault();
       } else if (key === "escape") {
         setRejecting(false);

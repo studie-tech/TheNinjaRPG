@@ -15,6 +15,7 @@ import {
 } from "@/drizzle/schema";
 import { cleanupContentProposals } from "@/libs/contentReview/cleanup";
 import { entityKey, loadEntities } from "@/libs/contentReview/entities";
+import * as media from "@/libs/contentReview/media";
 import { epidemicAssetId, importEpidemicSfx } from "@/libs/contentReview/media";
 import { ingestAgentSubmission } from "@/libs/contentReview/submit";
 import * as socials from "@/libs/socials";
@@ -182,6 +183,137 @@ describeWithDatabase("content review", () => {
       ["Rename the badge", "PENDING"],
     ]);
     expect(rows.every((row) => row.outdatedReason === null)).toBe(true);
+  });
+
+  it("undoes a revert that throws part way and keeps the suggestion applied", async () => {
+    const moderator = await callerFor(contentReviewRouter, MODERATOR);
+    await moderator.create(suggestion("Awarded for bravery in battle."));
+    const [pending] = await proposalRows();
+    const editor = await callerFor(contentReviewRouter, EDITOR);
+    expect((await editor.approve({ id: pending?.id ?? "" })).success).toBe(true);
+    vi.spyOn(socials, "callDiscordContent").mockRejectedValue(new Error("Discord is down"));
+    await expect(editor.revert({ id: pending?.id ?? "" })).rejects.toThrow(
+      "Discord is down",
+    );
+    const stored = await (await getTestDatabase()).query.badge.findFirst({
+      where: eq(badge.id, BADGE),
+    });
+    expect(stored?.description).toBe("Awarded for bravery in battle.");
+    expect((await proposalRows())[0]?.status).toBe("APPLIED");
+  });
+
+  it("records what the entity stored, so a trimmed value can still be reverted", async () => {
+    const database = await getTestDatabase();
+    const result = await ingestAgentSubmission(database, {
+      agentName: "codex · test",
+      runUrl: null,
+      focus: "grammar",
+      proposals: [
+        {
+          title: "Rename the badge",
+          category: "CONSISTENCY",
+          rationale: "The name should say what the badge is for.",
+          confidence: 70,
+          usesUsageData: false,
+          changes: [
+            {
+              entityType: "BADGE",
+              entityId: BADGE,
+              operation: "UPDATE",
+              set: [{ path: "name", valueJson: JSON.stringify("  Brave Heart  ") }],
+              media: [],
+            },
+          ],
+          basis: [{ entityType: "BADGE", entityId: BADGE, v: await versionOf(BADGE) }],
+        },
+      ],
+    });
+    const id = result.accepted[0]?.id ?? "";
+    const editor = await callerFor(contentReviewRouter, EDITOR);
+    expect((await editor.approve({ id })).success).toBe(true);
+    expect((await proposalRows())[0]?.changes[0]?.applied).toEqual({ name: "Brave Heart" });
+    expect((await editor.revert({ id })).success).toBe(true);
+    const stored = await database.query.badge.findFirst({ where: eq(badge.id, BADGE) });
+    expect(stored?.name).toBe(`Badge ${BADGE}`);
+  });
+
+  it("pages past suggestions a refresh outdated without skipping any", async () => {
+    const database = await getTestDatabase();
+    await database.insert(badge).values(badgeRow("review-badge-3", "Awarded for focus."));
+    const moderator = await callerFor(contentReviewRouter, MODERATOR);
+    for (const id of [BADGE, OTHER_BADGE, "review-badge-3"]) {
+      await moderator.create({
+        ...suggestion("A clearer description."),
+        entityId: id,
+        data: badgeRow(id, `Awarded for clarity ${id}.`),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    await database
+      .update(badge)
+      .set({ description: "Changed by a migration." })
+      .where(eq(badge.id, BADGE));
+    const editor = await callerFor(contentReviewRouter, EDITOR);
+    const first = await editor.getQueue({ status: "PENDING", limit: 2 });
+    expect(first.items).toHaveLength(1);
+    const second = await editor.getQueue({
+      status: "PENDING",
+      limit: 2,
+      cursor: first.nextCursor,
+    });
+    expect([...first.items, ...second.items].map((item) => item.targets[0]?.entityId)).toEqual(
+      [OTHER_BADGE, "review-badge-3"],
+    );
+  });
+
+  it("deletes the candidate files of a suggestion it refuses", async () => {
+    vi.spyOn(media, "collectCandidates").mockResolvedValue([
+      {
+        source: "GENERATED",
+        kind: "IMAGE",
+        externalId: null,
+        title: "Generated: a brave badge",
+        url: "https://ui0arpl8sm.ufs.sh/f/generated-badge",
+        fileKey: "generated-badge",
+        lengthMs: null,
+        prompt: "a brave badge",
+      },
+    ]);
+    const removed = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
+    const result = await ingestAgentSubmission(await getTestDatabase(), {
+      agentName: "codex · test",
+      runUrl: null,
+      focus: "visual",
+      proposals: [
+        {
+          title: "Draw a new badge image",
+          category: "VISUAL",
+          rationale: "The badge uses a placeholder image.",
+          confidence: 60,
+          usesUsageData: false,
+          changes: [
+            {
+              entityType: "BADGE",
+              entityId: BADGE,
+              operation: "UPDATE",
+              set: [],
+              media: [
+                {
+                  kind: "IMAGE",
+                  path: "image",
+                  catalogIds: [],
+                  search: null,
+                  generate: "a brave badge",
+                },
+              ],
+            },
+          ],
+          basis: [{ entityType: "BADGE", entityId: BADGE, v: "0000000000000001" }],
+        },
+      ],
+    });
+    expect(result.refused[0]?.reason).toContain("changed after the snapshot");
+    expect(removed).toHaveBeenCalledWith(["generated-badge"]);
   });
 
   it("applies reviewer edits and leaves out unticked fields", async () => {

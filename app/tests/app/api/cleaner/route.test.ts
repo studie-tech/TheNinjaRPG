@@ -44,6 +44,12 @@ describe("account deletion in the existing cleaner", () => {
     expect(mocks.process).toHaveBeenCalledOnce();
     expect(mocks.reset).not.toHaveBeenCalled();
   });
+  it("still processes deletions when content review cleanup fails", async () => {
+    mocks.lock.mockResolvedValueOnce({ isNewHour: true, prevTime: new Date(0) });
+    vi.spyOn(contentReviewCleanup, "cleanupContentProposals").mockRejectedValue(new Error("storage down"));
+    expect((await GET(request())).status).toBe(200);
+    expect(mocks.process).toHaveBeenCalledOnce();
+  });
   it("uses the standard cleaner failure and timer rollback for deletion failures", async () => {
     const previous = new Date(0);
     mocks.lock.mockResolvedValueOnce({ isNewHour: true, prevTime: previous });

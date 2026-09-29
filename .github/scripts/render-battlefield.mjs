@@ -117,10 +117,8 @@ const verifyRequests = (output) =>
           title: `Suggestion ${index}: ${proposal.title} · ${change.entityType} ${entity?.fields?.name ?? change.entityId ?? "(new)"}`,
           entityType: change.entityType,
           entityId: change.entityId,
-          variants: [
-            ...(entity ? [{ name: "current", fields: current }] : []),
-            ...suggested,
-          ].slice(0, 4),
+          // At most 3 candidates per request, so current plus candidates fits the page's 4.
+          variants: [...(entity ? [{ name: "current", fields: current }] : []), ...suggested],
         },
       ];
     }),

@@ -28,7 +28,12 @@ import {
   entityKey,
   loadEntities,
 } from "./entities";
-import { collectCandidates, type MediaBudget, materializeChoice } from "./media";
+import {
+  collectCandidates,
+  deleteStoredFiles,
+  type MediaBudget,
+  materializeChoice,
+} from "./media";
 import {
   agentChangeViolation,
   applySetOperations,
@@ -139,12 +144,21 @@ export const ingestAgentSubmission = async (
       );
       continue;
     }
-    const plan = await planAgentProposal(client, proposal, entities, budget, {
-      open,
-      rejected,
-      claimed,
+    // Candidates copied to storage for a suggestion that is not kept are deleted again.
+    const uploaded: string[] = [];
+    const plan = await planAgentProposal(
+      client,
+      proposal,
+      entities,
+      budget,
+      { open, rejected, claimed },
+      uploaded,
+    ).catch(async (error: unknown) => {
+      await discardUploads(uploaded);
+      throw error;
     });
     if (typeof plan === "string") {
+      await discardUploads(uploaded);
       refuse(plan);
       continue;
     }
@@ -154,7 +168,12 @@ export const ingestAgentSubmission = async (
     planned.push(plan);
     result.accepted.push({ index, id: plan.proposal.id, title: proposal.title });
   }
-  await insertRows(client, planned);
+  await insertRows(client, planned).catch(async (error: unknown) => {
+    await discardUploads(
+      planned.flatMap((rows) => rows.media.flatMap((row) => row.fileKey ?? [])),
+    );
+    throw error;
+  });
   result.summary = submissionSummary(submission, result, quota, planned.length);
   return result;
 };
@@ -171,6 +190,7 @@ const planAgentProposal = async (
   entities: Map<string, ContentEntity>,
   budget: MediaBudget,
   guards: Guards,
+  uploaded: string[],
 ): Promise<Rows | string> => {
   const proposalId = nanoid();
   const rows: Rows = {
@@ -235,6 +255,7 @@ const planAgentProposal = async (
         budget,
         config.contentType,
       );
+      uploaded.push(...candidates.flatMap((candidate) => candidate.fileKey ?? []));
       if (candidates.length === 0) {
         return `No ${request.kind.toLowerCase()} candidates were found for ${request.path}`;
       }
@@ -456,6 +477,14 @@ export const validationError = (validator: z.ZodType, payload: unknown) => {
 const firstIssue = (error: z.ZodError) => {
   const issue = error.issues[0];
   return issue ? `${issue.path.join(".") || "value"}: ${issue.message}` : "invalid";
+};
+
+/** Best effort: the hourly cleanup never sees files no suggestion recorded. */
+const discardUploads = async (keys: string[]) => {
+  if (keys.length === 0) return;
+  await deleteStoredFiles(keys).catch((error: unknown) => {
+    console.error("Could not delete candidate files of a dropped suggestion", error);
+  });
 };
 
 const insertRows = async (client: DrizzleClient, rows: Rows[]) => {

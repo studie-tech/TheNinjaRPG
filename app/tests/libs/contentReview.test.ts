@@ -1,8 +1,15 @@
 // @vitest-environment node
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CONTENT_AUDIT_WEEKDAY_FOCUS } from "@/drizzle/constants";
-import { epidemicAssetId, materializeChoice } from "@/libs/contentReview/media";
+import * as epidemic from "@/libs/contentReview/epidemic";
+import {
+  collectCandidates,
+  epidemicAssetId,
+  materializeChoice,
+} from "@/libs/contentReview/media";
+import * as replicate from "@/libs/replicate";
+import type { DrizzleClient } from "@/server/db";
 import { withCreateBaseline } from "@/libs/contentReview/rules";
 import { getAtPath, setAtPath, topLevelField } from "@/libs/contentReview/paths";
 import {
@@ -246,5 +253,32 @@ describe("drafts of new content", () => {
       ok: false,
     });
     expect(withCreateBaseline("GAME_ASSET", { name: "New" })).toMatchObject({ ok: false });
+  });
+});
+
+describe("candidate collection", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("leaves out candidates whose service fails instead of failing the suggestion", async () => {
+    vi.spyOn(epidemic, "isEpidemicConfigured").mockReturnValue(true);
+    vi.spyOn(epidemic, "searchEpidemicSfx").mockRejectedValue(new Error("Epidemic is down"));
+    vi.spyOn(replicate, "generateAndUploadAudio").mockRejectedValue(
+      new Error("Replicate is down"),
+    );
+    const found = await collectCandidates(
+      {} as DrizzleClient,
+      {
+        kind: "SFX",
+        path: "effects.0.appearSfx",
+        catalogIds: [],
+        search: "fiery whoosh",
+        generate: "a fiery whoosh",
+      },
+      { searches: 1, generations: 1 },
+      "jutsu",
+    );
+    expect(found).toEqual([]);
   });
 });

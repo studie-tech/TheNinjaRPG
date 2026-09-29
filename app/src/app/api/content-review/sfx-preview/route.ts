@@ -6,6 +6,7 @@ import {
   isEpidemicConfigured,
 } from "@/libs/contentReview/epidemic";
 import { drizzleDB } from "@/server/db";
+import { fetchWithTimeout } from "@/utils/http";
 import { canChangeContent } from "@/utils/permissions";
 import { sfxPreviewSchema } from "@/validators/contentReview";
 
@@ -32,11 +33,22 @@ export async function GET(request: Request) {
   if (!isEpidemicConfigured()) {
     return new Response("Epidemic Sound is not configured", { status: 404 });
   }
-  const upstream = await fetch(await epidemicSfxDownloadUrl(parsed.data.epidemicId));
-  if (!upstream.ok || !upstream.body) {
-    return new Response("Epidemic Sound did not return the sound", { status: 502 });
+  // The picker's audio element shows it cannot play; the reviewer can pick another sound.
+  const failed = () =>
+    new Response("Epidemic Sound did not return the sound", { status: 502 });
+  try {
+    const upstream = await fetchWithTimeout(
+      await epidemicSfxDownloadUrl(parsed.data.epidemicId),
+    );
+    if (!upstream.ok || !upstream.body) return failed();
+    return new Response(upstream.body, {
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Cache-Control": "private, max-age=3600",
+      },
+    });
+  } catch (cause) {
+    console.error("Epidemic Sound preview failed", cause);
+    return failed();
   }
-  return new Response(upstream.body, {
-    headers: { "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=3600" },
-  });
 }

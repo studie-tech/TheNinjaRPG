@@ -255,7 +255,9 @@ jobs:
 
   verify:
     needs: [snapshot, battlefield]
-    if: always() && needs.battlefield.result == 'success' && needs.battlefield.outputs.count != '0'
+    if: >-
+      always() && needs.battlefield.result == 'success'
+      && fromJSON(needs.battlefield.outputs.count || '0') > 0
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 20
     outputs:
@@ -275,7 +277,13 @@ jobs:
       - name: Attach battlefield renders
         id: renders
         run: |
-          args=$(printf '%s\n' audit/battlefield/*.png | jq -R . | jq -sc 'map(["--image", .]) | add')
+          shopt -s nullglob
+          files=(audit/battlefield/*.png)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::The battlefield job reported renders, but none were downloaded"
+            exit 1
+          fi
+          args=$(printf '%s\n' "${files[@]}" | jq -R . | jq -sc 'map(["--image", .]) | add')
           echo "codex_args=$args" >> "$GITHUB_OUTPUT"
       - name: Run Codex
         id: codex

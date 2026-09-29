@@ -120,7 +120,8 @@ export const contentReviewRouter = createTRPCRouter({
       const entities = await loadEntities(ctx.drizzle, targetRefs(visible));
       return {
         items: visible.map((row) => toSummary(row, entities)),
-        nextCursor: hasMore ? offset + input.limit : null,
+        // Rows outdated on this page left the pending list, so the next page starts earlier.
+        nextCursor: hasMore ? offset + input.limit - outdated.size : null,
         canReview,
       };
     }),
@@ -407,32 +408,76 @@ export const contentReviewRouter = createTRPCRouter({
         );
       if (claim.rowsAffected !== 1)
         return errorResponse("This suggestion was already reverted");
-      for (const change of [...changes].reverse()) {
-        const entity = entities.get(
-          entityKey(change.entityType, change.entityId as string),
+      const startedAt = new Date();
+      // Updates go back first and new entries are deleted last: a deleted entry cannot be
+      // brought back if a later step fails.
+      const ordered = [...changes]
+        .reverse()
+        .sort(
+          (a, b) => Number(a.operation === "CREATE") - Number(b.operation === "CREATE"),
         );
-        if (!entity) continue;
-        const outcome =
-          change.operation === "CREATE"
-            ? await deleteEntity(ctx, change.entityType, entity.id)
-            : await updateEntity(ctx, change.entityType, entity.id, {
-                ...entity.payload,
-                ...Object.fromEntries(
-                  Object.keys(change.applied ?? {}).map((field) => [
-                    field,
-                    change.before[field] ?? null,
-                  ]),
-                ),
-              });
-        if (!outcome.success) {
-          await ctx.drizzle
-            .update(contentProposal)
-            .set({ status: "APPLIED" })
-            .where(eq(contentProposal.id, proposal.id));
-          return errorResponse(
-            `${ENTITY_CONFIG[change.entityType].label}: ${outcome.message}`,
+      const undone: typeof changes = [];
+      let current: (typeof changes)[number] | undefined;
+      // Put the applied values back on what was already reverted, and the status with them.
+      const restore = async (reverted: typeof changes) => {
+        for (const change of [...reverted].reverse()) {
+          const entity = entities.get(
+            entityKey(change.entityType, change.entityId as string),
           );
+          if (!entity || change.operation === "CREATE") continue;
+          const outcome = await updateEntity(
+            ctx,
+            change.entityType,
+            entity.id,
+            entity.payload,
+          ).catch((error: unknown) => ({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+          }));
+          if (!outcome.success) {
+            console.error(
+              `Content review revert rollback failed for ${change.entityType} ${entity.id}: ${outcome.message}`,
+            );
+          }
         }
+        await ctx.drizzle
+          .update(contentProposal)
+          .set({ status: "APPLIED" })
+          .where(eq(contentProposal.id, proposal.id));
+        await reinstateProposalsFor(ctx.drizzle, refsOf(reverted), startedAt);
+      };
+      try {
+        for (const change of ordered) {
+          current = change;
+          const entity = entities.get(
+            entityKey(change.entityType, change.entityId as string),
+          );
+          if (!entity) continue;
+          const outcome =
+            change.operation === "CREATE"
+              ? await deleteEntity(ctx, change.entityType, entity.id)
+              : await updateEntity(ctx, change.entityType, entity.id, {
+                  ...entity.payload,
+                  ...Object.fromEntries(
+                    Object.keys(change.applied ?? {}).map((field) => [
+                      field,
+                      change.before[field] ?? null,
+                    ]),
+                  ),
+                });
+          if (!outcome.success) {
+            await restore(undone);
+            return errorResponse(
+              `${ENTITY_CONFIG[change.entityType].label}: ${outcome.message}`,
+            );
+          }
+          undone.push(change);
+          current = undefined;
+        }
+      } catch (error) {
+        // An update that threw may have written its row already; restoring it is harmless.
+        await restore(current ? [...undone, current] : undone);
+        throw error;
       }
       return { success: true, message: "Reverted. The previous values are back." };
     }),
@@ -645,13 +690,29 @@ const applyProposal = async (
       done.push({ plan, entityId });
       current = undefined;
     }
+    // What the entities' updates stored, after their validators trimmed and sorted it, is
+    // what revert later compares the live rows against.
+    const saved = await loadEntities(
+      ctx.drizzle,
+      done.map(({ plan, entityId }) => ({
+        entityType: plan.change.entityType,
+        entityId,
+      })),
+    );
     await Promise.all([
-      ...done.map(({ plan, entityId }) =>
-        ctx.drizzle
+      ...done.map(({ plan, entityId }) => {
+        const stored = saved.get(entityKey(plan.change.entityType, entityId))?.editable;
+        const applied = Object.fromEntries(
+          Object.keys(plan.fields).map((field) => [
+            field,
+            stored && field in stored ? stored[field] : plan.fields[field],
+          ]),
+        );
+        return ctx.drizzle
           .update(contentProposalChange)
-          .set({ applied: plan.fields, entityId })
-          .where(eq(contentProposalChange.id, plan.change.id)),
-      ),
+          .set({ applied, entityId })
+          .where(eq(contentProposalChange.id, plan.change.id));
+      }),
       chosenMedia.length
         ? ctx.drizzle
             .update(contentProposalMedia)
@@ -721,6 +782,15 @@ const rollback = async (
     startedAt,
   );
 };
+
+const refsOf = (
+  changes: { entityType: ContentProposalEntityType; entityId: string | null }[],
+) =>
+  changes.flatMap((change) =>
+    change.entityId
+      ? [{ entityType: change.entityType, entityId: change.entityId }]
+      : [],
+  );
 
 const updateEntity = (
   ctx: Caller,
