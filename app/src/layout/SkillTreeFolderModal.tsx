@@ -10,12 +10,14 @@ import Modal from "@/layout/Modal";
 import { parseHtml } from "@/utils/parse";
 
 interface SkillTreeFolderModalProps {
+  includeHidden?: boolean;
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   folder: SkillTreeFolder | null;
   folders: SkillTreeFolder[];
   allSkills: SkillTree[];
   userSkills: (UserSkill & { skill: SkillTree })[];
+  activatedSkillIds: string[];
   userSkillPoints: number;
   onPurchaseSkill: (skillId: string) => void;
   onNavigateToFolder: (folderId: string) => void;
@@ -24,12 +26,14 @@ interface SkillTreeFolderModalProps {
 }
 
 export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
+  includeHidden = false,
   isOpen,
   setIsOpen,
   folder,
   folders,
   allSkills,
   userSkills,
+  activatedSkillIds,
   userSkillPoints,
   onPurchaseSkill,
   onNavigateToFolder,
@@ -39,11 +43,6 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
   const [selectedSkill, setSelectedSkill] = useState<SkillTree | null>(null);
   const [navigationHistory, setNavigationHistory] = useState<string[]>([]);
 
-  // Get activated skill IDs
-  const activatedSkillIds = userSkills
-    .filter((us) => us.activated)
-    .map((us) => us.skillId);
-
   // Get owned skill IDs (activated or not)
   const ownedSkillIds = userSkills.map((us) => us.skillId);
 
@@ -51,7 +50,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
   const folderSkills = allSkills.filter((s) => {
     if (!folder) return false;
     if (s.folderId !== folder.id) return false;
-    if (s.hidden) return false;
+    if (!includeHidden && (s.hidden || folder.hidden)) return false;
     // Hide SPECIAL skills unless user owns them
     if (s.skillType === "SPECIAL" && !ownedSkillIds.includes(s.id)) return false;
     // Apply effect filter if selected

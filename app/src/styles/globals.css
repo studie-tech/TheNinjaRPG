@@ -231,6 +231,10 @@
     top: 0;
   }
 
+  html[data-light-layout] [data-light-layout-hide] {
+    display: none;
+  }
+
   .tnr-pixel-clip {
     clip-path: polygon(
       0 10px,

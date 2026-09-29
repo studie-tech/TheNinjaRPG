@@ -36,14 +36,16 @@ jobs:
         run: bun run build
         working-directory: ./app
     env:
-      NEXT_PUBLIC_PUSHER_APP_KEY: ${{ secrets.NEXT_PUBLIC_PUSHER_APP_KEY }}
-      NEXT_PUBLIC_PUSHER_APP_CLUSTER: ${{ secrets.NEXT_PUBLIC_PUSHER_APP_CLUSTER }}
-      NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
-      PUSHER_APP_ID: ${{ secrets.PUSHER_APP_ID }}
-      PUSHER_APP_SECRET: ${{ secrets.PUSHER_APP_SECRET }}
-      DATABASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
+      # Fork pull requests receive empty secrets. An empty Pusher secret fails HMAC
+      # import, and an empty public URL fails configuration parsing for both steps.
+      NEXT_PUBLIC_PUSHER_APP_KEY: ${{ secrets.NEXT_PUBLIC_PUSHER_APP_KEY || 'test-key' }}
+      NEXT_PUBLIC_PUSHER_APP_CLUSTER: ${{ secrets.NEXT_PUBLIC_PUSHER_APP_CLUSTER || 'mt1' }}
+      NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000' }}
+      PUSHER_APP_ID: ${{ secrets.PUSHER_APP_ID || 'test-app' }}
+      PUSHER_APP_SECRET: ${{ secrets.PUSHER_APP_SECRET || 'test-secret' }}
+      DATABASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL || 'http://127.0.0.1:1' }}
       CAPTCHA_SALT: ${{ secrets.CAPTCHA_SALT }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-placeholder-not-a-real-key' }}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
       NODE_OPTIONS: "--max-old-space-size=4096"

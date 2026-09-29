@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/tooltip";
 import { REGEN_SECONDS } from "@/drizzle/constants";
 import type { UserStatus } from "@/drizzle/schema";
+import { cn } from "@/libs/shadui";
 import { secondsPassed } from "@/utils/time";
 
 interface StatusBarProps {
@@ -118,8 +119,10 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
 
   return (
     <div className="group relative flex-row">
-      {showText && !isInBattle && (
-        <div className="leading-none">
+      {/* Hidden rather than removed in battle: the status flips to and from BATTLE
+          mid-session, and removing the line moved everything below the bars. */}
+      {showText && (
+        <div className={cn("leading-none", isInBattle && "invisible")}>
           {title} ({total ? `${Math.round(state.current)} / ${total}` : "?? / ??"})
         </div>
       )}

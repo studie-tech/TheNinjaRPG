@@ -6,6 +6,8 @@ import type { SkillTree } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
+import { canAccessHiddenSkillTree } from "@/utils/permissions";
+import { useRequiredUserData } from "@/utils/UserContext";
 import type {
   ZodAllTags,
   ZodSkillTreeInput,
@@ -20,6 +22,7 @@ import { SkillTreeValidator } from "@/validators/combat";
 export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   // Get utils
   const utils = api.useUtils();
+  const { data: userData } = useRequiredUserData();
 
   // Case type
   const skillTree = { ...data, effects: data.effects };
@@ -109,7 +112,9 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
     { id: "target", type: "str_array", values: SkillTreeTargets },
     { id: "tier", type: "number" },
     { id: "costSkillPoints", type: "number", label: "Skill Points Cost" },
-    { id: "hidden", type: "boolean" },
+    ...(canAccessHiddenSkillTree(userData?.role)
+      ? [{ id: "hidden" as const, type: "boolean" as const }]
+      : []),
     { id: "skillType", type: "str_array", values: SkillTreeEntryTypes },
     {
       id: "folderId",

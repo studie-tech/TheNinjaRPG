@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect, useState } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Image from "@/layout/Image";
+import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { cn } from "@/libs/shadui";
 
 /**
@@ -28,7 +29,7 @@ export const avatarRenditionWidth = (size: number, lightLayout: boolean) =>
  * the first client render agree; the preference lives in localStorage.
  */
 export const useAvatarRenditionWidth = (size: number) => {
-  const [lightLayout] = useLocalStorage<boolean>("lightLayout", false);
+  const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);

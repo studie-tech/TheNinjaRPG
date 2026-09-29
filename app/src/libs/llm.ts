@@ -5,16 +5,26 @@ import { fetchUser } from "@/routers/profile";
 import { drizzleDB } from "@/server/db";
 import { canChangeContent } from "@/utils/permissions";
 
-export const checkContentAiAuth = async () => {
+/**
+ * Authorize a request to one of the staff content-editor chat routes.
+ *
+ * Returns null for a signed-in user who may change content, otherwise a ready-to-return
+ * error response. The proxy lets /api/ requests through without requiring a session, so
+ * each route must return this before it reads the body or calls the model. The plain-text
+ * body is what ChatBox shows in its error toast.
+ */
+export const checkContentAiAuth = async (): Promise<Response | null> => {
   // Auth guard
   const { userId } = await auth();
-  if (!userId) return "Not authenticated";
+  if (!userId) return new Response("Not authenticated", { status: 401 });
 
   // User guard
   const user = await fetchUser(drizzleDB, userId);
   if (!canChangeContent(user.role)) {
-    throw new Error("You are not allowed to change content");
+    return new Response("You are not allowed to change content", { status: 403 });
   }
+
+  return null;
 };
 
 /**

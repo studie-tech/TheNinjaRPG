@@ -1145,12 +1145,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
           {/* Hole highlight over the game button */}
           <div
             className="absolute bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
-            style={{
-              top: gameMenuHighlight.top - 10,
-              left: gameMenuHighlight.left - 10,
-              width: gameMenuHighlight.width + 20,
-              height: gameMenuHighlight.height + 20,
-            }}
+            style={highlightHoleStyle(gameMenuHighlight)}
           >
             <div className="absolute inset-0 z-[1] animate-pulse rounded-md border-[3px] border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.7)]">
               {/* Allow clicking to open the menu */}
@@ -1286,12 +1281,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
               "absolute bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]",
               pointerEvents,
             )}
-            style={{
-              top: highlight.top - 10,
-              left: highlight.left - 10,
-              width: highlight.width + 20,
-              height: highlight.height + 20,
-            }}
+            style={highlightHoleStyle(highlight)}
           >
             <div className="absolute inset-0 z-[1] animate-pulse rounded-md border-[3px] border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.7)]">
               <button
@@ -1577,6 +1567,24 @@ const isSameBox = (
   b: { top: number; left: number; width: number; height: number },
 ) =>
   a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
+
+/**
+ * Style for the hole cut around a highlighted element, padded by 10px. The hole follows its
+ * element as the page scrolls; placed with top/left, every step of that is a layout shift of
+ * a viewport-sized box, while a transform moves it without one.
+ */
+const highlightHoleStyle = (box: {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}): React.CSSProperties => ({
+  top: 0,
+  left: 0,
+  width: box.width + 20,
+  height: box.height + 20,
+  transform: `translate(${box.left - 10}px, ${box.top - 10}px)`,
+});
 
 // Helper function to find element to highlight based on current tutorial step
 const getUsableHighlightElement = (id: string | undefined) => {

@@ -37,6 +37,7 @@ import { UncontrolledSliderField } from "@/layout/SliderField";
 import {
   type EffectiveLayout,
   LAYOUT_PREFERENCE_COOKIE,
+  LIGHT_LAYOUT_STORAGE_KEY,
   persistLayoutPreferenceCookie,
 } from "@/libs/layoutPreference";
 import { audioSession, platform } from "@/libs/native";
@@ -403,7 +404,10 @@ export const useGameSettings = (userData?: UserWithRelations | null) => {
   );
 
   // Light layout preference state
-  const [lightLayout, setLightLayout] = useLocalStorage<boolean>("lightLayout", false);
+  const [lightLayout, setLightLayout] = useLocalStorage<boolean>(
+    LIGHT_LAYOUT_STORAGE_KEY,
+    false,
+  );
 
   // Day/night map overlay preference (applies immediately, no refresh)
   const { showDayNightMapOverlays, setShowDayNightMapOverlays } =

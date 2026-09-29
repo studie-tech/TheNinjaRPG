@@ -228,15 +228,38 @@ const ElderHall: React.FC<{
           are used as a tie-breaker when clans have equal activity points.
         </p>
       </ContentBox>
-      {/* SHOW CURRENT ELDERS */}
-      {elders && elders.length > 0 && (
+      {/* SHOW CURRENT ELDERS: while loading, a row of avatar placeholders holds the
+          height of the loaded grid, and a village without elders keeps that height for
+          its empty message, so the boxes below do not move when the query resolves */}
+      {((isPending && !!user.villageId) || elders) && (
         <ContentBox
           title="Current Elders"
           initialBreak={true}
           subtitle={`Currently serving elders`}
         >
-          {isPending && <Loader explanation="Loading Elders" />}
           <div className="grid grid-cols-3 pt-3">
+            {isPending &&
+              ["a", "b", "c"].map((slot) => (
+                <div key={slot} aria-hidden>
+                  <AvatarImage size={100} />
+                  <div className="invisible">
+                    <div className="font-bold">&nbsp;</div>
+                    <div>&nbsp;</div>
+                  </div>
+                </div>
+              ))}
+            {elders?.length === 0 && (
+              <div className="relative col-span-3">
+                <div className="invisible w-1/3" aria-hidden>
+                  <AvatarImage size={100} />
+                  <div className="font-bold">&nbsp;</div>
+                  <div>&nbsp;</div>
+                </div>
+                <p className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                  No elders are serving right now
+                </p>
+              </div>
+            )}
             {elders?.map((elder) => (
               <div key={elder.userId} className="relative">
                 <Link href={`/userid/${elder.userId}`} className="text-center">
@@ -278,11 +301,14 @@ const ElderHall: React.FC<{
                 <div className="flex items-center gap-3">
                   <span className="font-bold text-lg">#{i + 1}</span>
                   <Link href={`/clanhall/${clan.id}`}>
+                    {/* Sized explicitly: in this shrink-wrapped row the avatar would
+                        otherwise take the image's own width, growing the row on load */}
                     <AvatarImage
                       href={clan.image}
                       alt={clan.name}
                       size={50}
                       hover_effect={true}
+                      className="w-[50px]"
                     />
                   </Link>
                   <div>

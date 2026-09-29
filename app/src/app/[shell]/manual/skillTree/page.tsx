@@ -15,7 +15,7 @@ import SkillTreeFiltering, {
 } from "@/layout/SkillTreeFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
-import { canChangeContent } from "@/utils/permissions";
+import { canAccessHiddenSkillTree, canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
 export default function ManualSkillTree() {
@@ -50,7 +50,11 @@ export default function ManualSkillTree() {
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Mutations
-  const { mutate: create, isPending: load1 } = api.skillTree.create.useMutation({
+  const {
+    mutate: create,
+    isPending: load1,
+    data: createResult,
+  } = api.skillTree.create.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
@@ -123,17 +127,24 @@ export default function ManualSkillTree() {
         initialBreak={true}
         topRightContent={
           <div className="flex flex-row items-center gap-2">
-            {userData && canChangeContent(userData.role) && (
-              <Button id="create-skill" onClick={() => create()} disabled={load1}>
-                <FilePlus className="h-6 w-6 sm:mr-2" />
-                {load1 ? "Creating..." : "New"}
-              </Button>
-            )}
+            {userData &&
+              canChangeContent(userData.role) &&
+              canAccessHiddenSkillTree(userData.role) && (
+                <Button id="create-skill" onClick={() => create()} disabled={load1}>
+                  <FilePlus className="h-6 w-6 sm:mr-2" />
+                  {load1 ? "Creating..." : "New"}
+                </Button>
+              )}
 
             <SkillTreeFiltering state={state} />
           </div>
         }
       >
+        {!load1 && createResult && !createResult.success && (
+          <p role="alert" className="text-destructive">
+            {createResult.message}
+          </p>
+        )}
         {totalLoading && <Loader explanation="Loading data" />}
         {allSkills.map((skill, i) => (
           <div key={skill.id} ref={i === allSkills.length - 1 ? setLastElement : null}>

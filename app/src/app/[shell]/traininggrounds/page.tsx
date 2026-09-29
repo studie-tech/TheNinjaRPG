@@ -16,7 +16,13 @@ import {
   UserRoundCheck,
   XCircle,
 } from "lucide-react";
-import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  startTransition,
+  useEffect,
+  useState,
+} from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
@@ -900,7 +906,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const masteries = effectiveMasteries({
     ...userData,
     items: userItems ?? [],
-    userSkills: userSkills?.filter((userSkill) => userSkill.activated),
+    userSkills: userSkills?.skills.filter((userSkill) => userSkill.activated),
   });
 
   // User Jutsus
@@ -979,10 +985,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Mutation loading
   const isPending = isStartingTrain || isStoppingTrain;
 
+  // Selecting a jutsu restyles every tile of the grid and mounts or unmounts the confirm
+  // modal; as a transition that render no longer blocks the tap's next paint.
   const setJutsuConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
     const next = typeof open === "function" ? open(isOpen) : open;
-    setIsOpen(next);
-    if (!next) setJutsu(undefined);
+    startTransition(() => {
+      setIsOpen(next);
+      if (!next) setJutsu(undefined);
+    });
   };
 
   // While loading userdata
@@ -1098,7 +1108,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       }
     >
       {userData && (
-        <div className="max-h-[320px] overflow-y-scroll">
+        // The list fills its 320px cap once loaded; holding that height through the
+        // first load keeps the boxes below from being pushed down when it arrives.
+        <div className={cn("max-h-[320px] overflow-y-scroll", !jutsus && "h-[320px]")}>
           <ActionSelector
             items={alljutsus}
             counts={userJutsuCounts}
@@ -1107,11 +1119,13 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             emptyText="No jutsu available for your rank"
             onClick={(id) => {
               if (id === jutsu?.id) {
-                setJutsu(undefined);
-                setIsOpen(false);
+                setJutsuConfirmOpen(false);
               } else {
-                setJutsu(alljutsus?.find((jutsu) => jutsu.id === id));
-                setIsOpen(true);
+                const selected = alljutsus?.find((jutsu) => jutsu.id === id);
+                startTransition(() => {
+                  setJutsu(selected);
+                  setIsOpen(true);
+                });
               }
             }}
             showBgColor={false}
@@ -1127,7 +1141,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
               isOpen={isOpen}
               setIsOpen={setJutsuConfirmOpen}
               isValid={false}
-              onClose={() => setJutsu(undefined)}
+              onClose={() => startTransition(() => setJutsu(undefined))}
               onAccept={() => {
                 if (canTrain && !isPending) {
                   train({ jutsuId: jutsu.id });
@@ -1159,7 +1173,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           )}
         </div>
       )}
-      {isFetching && <Loader explanation="Loading jutsu" />}
+      {/* Below the in-progress training overlay (z-20), so its countdown and cancel stay usable */}
+      {isFetching && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
+          <Loader explanation="Loading jutsu" />
+        </div>
+      )}
       {finishTrainingAt?.finishTraining && (
         <div className="min-h-36">
           <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">

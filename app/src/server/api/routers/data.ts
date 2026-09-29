@@ -66,6 +66,7 @@ import {
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { type DeviceType, getDeviceType } from "@/utils/hardware";
 import {
+  canAccessHiddenSkillTree,
   canChangeContent,
   canViewRecruitmentAnalytics,
   canViewRevenueAnalytics,
@@ -80,7 +81,11 @@ import { bloodlineDatabaseFilter, fetchBloodline } from "./bloodline";
 import { fetchItem, itemDatabaseFilter } from "./item";
 import { fetchJutsu, jutsuDatabaseFilter } from "./jutsu";
 import { fetchUser } from "./profile";
-import { skillTreeDatabaseFilter } from "./skillTree";
+import {
+  fetchSkillTreeViewer,
+  isSkillVisible,
+  skillTreeDatabaseFilter,
+} from "./skillTree";
 
 export const dataRouter = createTRPCRouter({
   // AB tests summaries (protected)
@@ -1708,17 +1713,30 @@ export const dataRouter = createTRPCRouter({
       // Build where conditions
       const baseFilters = skillTreeDatabaseFilter(input);
       // Fetch results
-      const results = await ctx.drizzle.query.skillTree.findMany({
-        where: and(...baseFilters),
-        columns: {
-          id: true,
-          name: true,
-          tier: true,
-          costSkillPoints: true,
-          effects: true,
-        },
-      });
-      return results;
+      const [user, results] = await Promise.all([
+        fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.skillTree.findMany({
+          where: and(...baseFilters),
+          columns: {
+            id: true,
+            name: true,
+            tier: true,
+            costSkillPoints: true,
+            effects: true,
+            hidden: true,
+          },
+          with: { folder: { columns: { hidden: true } } },
+        }),
+      ]);
+      return results
+        .filter((skill) => isSkillVisible(skill, canAccessHiddenSkillTree(user?.role)))
+        .map(({ id, name, tier, costSkillPoints, effects }) => ({
+          id,
+          name,
+          tier,
+          costSkillPoints,
+          effects,
+        }));
     }),
   getItemBalanceStatistics: publicProcedure
     .input(

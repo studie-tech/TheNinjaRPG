@@ -42,6 +42,7 @@ import {
   resolveControlledActorId,
 } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
+import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { appEvents, haptics, isNative } from "@/libs/native";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import {
@@ -112,7 +113,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   } | null>(null);
 
   // Light layout preference state
-  const [lightLayout] = useLocalStorage<boolean>("lightLayout", false);
+  const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("combatZoom", 1.5);
 
   // Performance monitoring (unbounded for max FPS testing in dev)

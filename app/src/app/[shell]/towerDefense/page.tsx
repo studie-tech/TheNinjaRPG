@@ -63,6 +63,10 @@ const PAGE_SUBTITLE = "Survive as many waves as possible!";
 
 const TowerDefensePage: React.FC = () => {
   const { data: userData, isClerkLoaded } = useUserData();
+  const sfxEnabledRef = useRef(userData?.sfxOn);
+  useEffect(() => {
+    sfxEnabledRef.current = userData?.sfxOn;
+  }, [userData?.sfxOn]);
   const [upgradeTab, setUpgradeTab] = useLocalStorage<TowerDefenseUpgradeCategory>(
     "towerDefenseUpgradeTab",
     "ATTACK",
@@ -419,6 +423,7 @@ const TowerDefensePage: React.FC = () => {
             playerHitEventsRef={playerHitEventsRef}
             impactAsset={cachedAssets.impactAsset}
             sfxUrl={cachedAssets.sfxUrl}
+            sfxEnabledRef={sfxEnabledRef}
           />
         )}
 

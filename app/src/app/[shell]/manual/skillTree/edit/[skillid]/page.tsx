@@ -11,7 +11,7 @@ import ContentBox from "@/layout/ContentBox";
 import { SkillTreeHelper } from "@/layout/ContentHelp";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
-import { canChangeContent } from "@/utils/permissions";
+import { canAccessHiddenSkillTree, canChangeContent } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
@@ -29,7 +29,7 @@ export default function SkillTreeEdit(props: { params: Promise<{ skillid: string
   const { data: userData } = useRequiredUserData();
 
   // Queries
-  const { data, isPending, refetch } = api.skillTree.get.useQuery(
+  const { data, isPending, isError, refetch } = api.skillTree.get.useQuery(
     { id: skillId },
     { retry: false, enabled: !!skillId && !!userData },
   );
@@ -45,8 +45,27 @@ export default function SkillTreeEdit(props: { params: Promise<{ skillid: string
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !canChangeContent(userData.role)) {
     return <Loader explanation="Loading data" />;
+  }
+
+  // get returns nothing for a hidden skill this role cannot read, and for a missing id.
+  if (!data) {
+    return (
+      <ContentBox
+        title="Content Panel"
+        subtitle="Skill Tree Management"
+        defaultBackHref="/manual/skillTree"
+      >
+        <p role="alert">
+          {isError
+            ? "Could not load this skill."
+            : canAccessHiddenSkillTree(userData.role)
+              ? "This skill does not exist."
+              : "You are not authorized to view this skill."}
+        </p>
+      </ContentBox>
+    );
   }
 
   return <SingleEditSkillTree skillTree={data} refetch={refetch} />;

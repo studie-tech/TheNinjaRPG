@@ -8,7 +8,9 @@ import { ItemValidatorRawSchema } from "@/validators/combat";
 
 export async function POST(req: Request) {
   // Auth guard
-  await checkContentAiAuth();
+  const authError = await checkContentAiAuth();
+  if (authError) return authError;
+
   // Call LLM
   const { messages: uiMessages } = (await req.json()) as { messages: UIMessage[] };
   const schema = convertToOpenaiCompatibleSchema(

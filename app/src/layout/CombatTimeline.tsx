@@ -282,12 +282,15 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
             </p>
           )}
 
+          {/* Slots are keyed by position: once the window is full, each round drops the
+              oldest entries, and entry-keyed nodes would all slide left (a layout shift
+              every round). Positional slots stay put and take their new entry in place. */}
           {resolvedEntries.map(
             (
               { entry, user, actionImage, actionItem, remainingRounds, isNewEffect },
               idx,
             ) => (
-              <React.Fragment key={entry.id}>
+              <React.Fragment key={idx}>
                 {idx > 0 && (
                   <div className="relative w-4 flex-none">
                     <ChevronRight className="absolute top-1/2 left-0 h-3 w-3 -translate-y-1/2 text-muted-foreground/70" />

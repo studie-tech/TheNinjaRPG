@@ -351,9 +351,10 @@ export default function MyJutsu() {
     isReordering;
   const isFetching = l1 || l2;
 
-  // Activated skills raise masteries as the server's equip gate counts them
+  // Activated skills raise masteries as the server's equip gate counts them; hidden ones
+  // are not sent to players, so only the server counts those
   const activeSkills = useMemo(
-    () => userSkills?.filter((userSkill) => userSkill.activated),
+    () => userSkills?.skills.filter((userSkill) => userSkill.activated),
     [userSkills],
   );
 

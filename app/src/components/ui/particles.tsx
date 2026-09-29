@@ -4,6 +4,7 @@ import type { Container, ISourceOptions } from "@tsparticles/engine";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import {
   CONFETTI_OVERLAY_ID,
   CONFETTI_OVERLAY_Z_INDEX,
@@ -122,7 +123,7 @@ const ParticleProvider = () => {
   const activeLayout = useActiveLayout();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const [lightLayout] = useLocalStorage<boolean>("lightLayout", false);
+  const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
   const shouldRender = isDesktop && !lightLayout && !reducedMotion;
   const pauseWhileScrolling = activeLayout === "pixel";
 

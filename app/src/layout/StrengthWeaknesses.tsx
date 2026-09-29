@@ -27,6 +27,7 @@ import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useActiveLayout } from "@/utils/LayoutContext";
+import { canAccessHiddenSkillTree } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { getUserElements } from "@/validators/user";
 
@@ -420,6 +421,7 @@ interface SkillsTabProps {
 }
 
 export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
+  const includeHidden = canAccessHiddenSkillTree(userData.role);
   // State for folder UI
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -438,9 +440,10 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
     enabled: !!userData,
   });
 
-  const { data: folders } = api.skillTree.getAllFolders.useQuery(undefined, {
-    enabled: !!userData,
-  });
+  const { data: folders } = api.skillTree.getAllFolders.useQuery(
+    { includeHidden },
+    { enabled: !!userData },
+  );
 
   const { data: folderStats } = api.skillTree.getFolderStats.useQuery(undefined, {
     enabled: !!userData,
@@ -464,13 +467,10 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
 
   // Skill tree derived data
   const allSkillsData = allSkills?.data ?? [];
-  const ownedSkills = userSkills || [];
-  const activatedSkills = ownedSkills.filter((us) => us.activated);
+  const ownedSkills = userSkills?.skills ?? [];
+  const activatedSkillCount = userSkills?.activatedSkillCount ?? 0;
   const totalSkillPoints = userData?.skillPoints || 0;
-  const usedSkillPoints = activatedSkills.reduce(
-    (total, userSkill) => total + userSkill.skill.costSkillPoints,
-    0,
-  );
+  const usedSkillPoints = userSkills?.usedSkillPoints ?? 0;
 
   // Get selected folder
   const selectedFolder = folders?.find((f) => f.id === selectedFolderId) ?? null;
@@ -509,7 +509,7 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
       <div className="mb-6 grid grid-cols-3 gap-4">
         <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center dark:border-green-800 dark:bg-green-950/30">
           <div className="font-bold text-2xl text-green-600 dark:text-green-400">
-            {activatedSkills.length}
+            {activatedSkillCount}
           </div>
           <div className="text-green-700 text-sm dark:text-green-300">
             Skills Activated
@@ -549,12 +549,14 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
 
       {/* Folder Modal */}
       <SkillTreeFolderModal
+        includeHidden={includeHidden}
         isOpen={isModalOpen}
         setIsOpen={setIsModalOpen}
         folder={selectedFolder}
         folders={folders ?? []}
         allSkills={allSkillsData}
-        userSkills={userSkills ?? []}
+        userSkills={ownedSkills}
+        activatedSkillIds={userSkills?.activatedSkillIds ?? []}
         userSkillPoints={totalSkillPoints - usedSkillPoints}
         onPurchaseSkill={(skillId) => purchaseSkill({ skillId })}
         onNavigateToFolder={handleNavigateToFolder}
