@@ -12,7 +12,9 @@ export const searchEpidemicSfx = async (term: string, limit: number) => {
   const query = new URLSearchParams({
     term,
     limit: String(limit),
+    // Best match ranks by relevance only in descending order; ascending lists the worst first.
     sort: "best-match",
+    order: "desc",
   });
   const body = epidemicSfxSearchResponse.parse(
     await request(`/v0/sound-effects/search?${query.toString()}`),

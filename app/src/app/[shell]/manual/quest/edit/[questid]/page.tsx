@@ -293,7 +293,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
               buttonTxt="Save to Database"
               type="quest"
               relationId={props.quest.id}
-              allowImageUpload={true}
+              allowImageUpload={props.canSave}
               onAccept={handleQuestSubmit}
               submitDisabled={currentValues.consecutiveObjectives && !isFlowValid}
               submitLoading={isUpdating}
@@ -332,7 +332,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
       {renderSelectedObjective()}
 
       {/* Damage Thresholds for Raids */}
-      {currentValues.questType === "raid" && (
+      {currentValues.questType === "raid" && props.canSave && (
         <ContentBox
           title="Damage Thresholds"
           subtitle="Configure reward tiers based on damage dealt"

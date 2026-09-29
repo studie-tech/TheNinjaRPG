@@ -311,7 +311,10 @@ export const createBattlefieldPreview = (
       begin();
     },
     whenLoaded: async (timeoutMs = 6000) => {
-      const failed = await preloadImages(drawn.map((asset) => asset.image));
+      const failed = await preloadImages(
+        drawn.map((asset) => asset.image),
+        timeoutMs,
+      );
       const deadline = Date.now() + timeoutMs;
       // A texture whose image failed never loads; stop once only those are left.
       while (pendingTextures(scene) > failed.size && Date.now() < deadline) {
@@ -560,8 +563,12 @@ const visualEffect = (
   latitude: tile.row,
 });
 
-/** Fetch images the way the renderer does, reporting the ones that fail to load. */
-const preloadImages = async (urls: string[]) => {
+/**
+ * Fetch images the way the renderer does, reporting the ones that fail to load. An image that
+ * gives no answer within `timeoutMs` counts as failed, so a stalled request never holds up a
+ * capture.
+ */
+const preloadImages = async (urls: string[], timeoutMs: number) => {
   const failed = new Set<string>();
   await Promise.all(
     [...new Set(urls)].map(
@@ -569,11 +576,19 @@ const preloadImages = async (urls: string[]) => {
         new Promise<void>((resolve) => {
           loadTexture(url);
           const image = new Image();
-          image.crossOrigin = "anonymous";
-          image.onload = () => resolve();
-          image.onerror = () => {
+          const fail = () => {
             failed.add(url);
             resolve();
+          };
+          const timer = setTimeout(fail, timeoutMs);
+          image.crossOrigin = "anonymous";
+          image.onload = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          image.onerror = () => {
+            clearTimeout(timer);
+            fail();
           };
           image.src = textureImageUrl(url, 50);
         }),

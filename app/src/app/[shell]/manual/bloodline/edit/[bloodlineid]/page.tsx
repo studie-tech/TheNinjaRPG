@@ -167,7 +167,7 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
               buttonTxt="Save to Database"
               type="bloodline"
               relationId={bloodline.id}
-              allowImageUpload={true}
+              allowImageUpload={props.canSave}
               onAccept={handleBloodlineSubmit}
             />
             <div className="mt-2 flex justify-end">

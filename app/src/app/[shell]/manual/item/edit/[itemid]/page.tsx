@@ -180,7 +180,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
               buttonTxt="Save to Database"
               type="item"
               relationId={item.id}
-              allowImageUpload={true}
+              allowImageUpload={props.canSave}
               onAccept={handleItemSubmit}
               submitLoading={isUpdating}
               submitLoadingText="Saving"
@@ -195,7 +195,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
             </div>
           </>
         )}
-        {item && <ItemVariantsEditor itemId={item.id} />}
+        {item && props.canSave && <ItemVariantsEditor itemId={item.id} />}
       </ContentBox>
 
       {validEffects.length === 0 && (

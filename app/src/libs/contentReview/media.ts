@@ -194,7 +194,14 @@ export const importEpidemicSfx = async (
   const inserted = await client
     .insert(gameAsset)
     .values(asset)
-    .onDuplicateKeyUpdate({ set: { id: asset.id } });
+    .onDuplicateKeyUpdate({ set: { id: asset.id } })
+    .catch(async (error: unknown) => {
+      // Without its row nothing points at the copy, so it goes before the error surfaces.
+      await deleteStoredFiles([copy.key]).catch((cleanup: unknown) =>
+        console.error(`Could not delete the copy of ${asset.id}`, cleanup),
+      );
+      throw error;
+    });
   if (inserted.rowsAffected === 1) return { asset, created: true };
   // A simultaneous import of the same sound won; its row stands and this copy goes again.
   const [kept] = await Promise.all([

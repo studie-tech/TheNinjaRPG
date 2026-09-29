@@ -83,7 +83,7 @@ const SingleEditAsset: React.FC<SingleEditAssetProps> = (props) => {
             submitLoadingText="Saving"
             type="asset"
             relationId={asset.id}
-            allowImageUpload={true}
+            allowImageUpload={props.canSave}
             onAccept={handleAssetSubmit}
           />
           <div className="mt-2 flex justify-end">

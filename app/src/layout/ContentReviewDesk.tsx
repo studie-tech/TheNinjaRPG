@@ -123,7 +123,10 @@ export const ContentReviewDesk: React.FC = () => {
             <FilterChip
               isActive={category === null}
               label={`All ${status ? STATUS_LABELS[status].toLowerCase() : ""}`}
-              onClick={() => setCategory(null)}
+              onClick={() => {
+                setCategory(null);
+                setBulkIds(new Set());
+              }}
             />
             {ContentProposalCategories.map((entry) => (
               <FilterChip
@@ -134,7 +137,10 @@ export const ContentReviewDesk: React.FC = () => {
                     ? ` ${counts.pendingByCategory[entry]}`
                     : ""
                 }`}
-                onClick={() => setCategory(category === entry ? null : entry)}
+                onClick={() => {
+                  setCategory(category === entry ? null : entry);
+                  setBulkIds(new Set());
+                }}
               />
             ))}
             <span className="grow" />
@@ -143,7 +149,10 @@ export const ContentReviewDesk: React.FC = () => {
                 key={entry}
                 isActive={source === entry}
                 label={entry === "AGENT" ? "Daily audit" : "Staff"}
-                onClick={() => setSource(source === entry ? null : entry)}
+                onClick={() => {
+                  setSource(source === entry ? null : entry);
+                  setBulkIds(new Set());
+                }}
               />
             ))}
           </div>
@@ -156,7 +165,14 @@ export const ContentReviewDesk: React.FC = () => {
               <Button
                 size="sm"
                 loading={bulkApprove.isPending}
-                onClick={() => bulkApprove.mutate({ ids: [...bulkIds] })}
+                onClick={() =>
+                  // Only what the reviewer can still see in the list.
+                  bulkApprove.mutate({
+                    ids: items
+                      .filter((item) => bulkIds.has(item.id))
+                      .map((item) => item.id),
+                  })
+                }
               >
                 Approve selected
               </Button>

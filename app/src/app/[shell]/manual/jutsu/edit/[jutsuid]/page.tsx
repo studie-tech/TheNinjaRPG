@@ -158,7 +158,7 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
               buttonTxt="Save to Database"
               type="jutsu"
               relationId={jutsu.id}
-              allowImageUpload={true}
+              allowImageUpload={props.canSave}
               onAccept={handleJutsuSubmit}
             />
             <div className="mt-2 flex justify-end">

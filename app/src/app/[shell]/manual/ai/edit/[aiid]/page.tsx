@@ -180,7 +180,7 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
               buttonTxt="Save to Database"
               type="ai"
               relationId={processedUser.userId}
-              allowImageUpload={true}
+              allowImageUpload={props.canSave}
               onAccept={handleUserSubmit}
             />
             <div className="mt-2 flex justify-end">
@@ -237,22 +237,25 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
         );
       })}
 
-      <AiProfileEdit userData={props.user} />
-
-      <ContentBox title="Nindo" subtitle="Edit the AI Nindo" initialBreak>
-        {isUpdating && <Loader explanation="Updating..." />}
-        {!isUpdating && (
-          <NindoChange
-            userId={processedUser.userId}
-            onChange={(data) =>
-              updateNindo({
-                userId: processedUser.userId,
-                content: data.content,
-              })
-            }
-          />
-        )}
-      </ContentBox>
+      {props.canSave && (
+        <>
+          <AiProfileEdit userData={props.user} />
+          <ContentBox title="Nindo" subtitle="Edit the AI Nindo" initialBreak>
+            {isUpdating && <Loader explanation="Updating..." />}
+            {!isUpdating && (
+              <NindoChange
+                userId={processedUser.userId}
+                onChange={(data) =>
+                  updateNindo({
+                    userId: processedUser.userId,
+                    content: data.content,
+                  })
+                }
+              />
+            )}
+          </ContentBox>
+        </>
+      )}
     </>
   );
 };

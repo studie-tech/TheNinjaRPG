@@ -26,7 +26,7 @@ export const EpidemicSfxSearch: React.FC<EpidemicSfxSearchProps> = ({ onImported
   const [term, setTerm] = useState("");
   const canSearch = !!userData && canChangeContent(userData.role);
   const utils = api.useUtils();
-  const { data, isFetching } = api.contentReview.searchSfx.useQuery(
+  const { data, error, isFetching } = api.contentReview.searchSfx.useQuery(
     { term },
     { enabled: canSearch && term.length >= 2 },
   );
@@ -69,6 +69,11 @@ export const EpidemicSfxSearch: React.FC<EpidemicSfxSearchProps> = ({ onImported
       {data && !data.configured && (
         <p className="text-sm opacity-70">
           Sound search is not configured on this server.
+        </p>
+      )}
+      {error && !data && !isFetching && (
+        <p className="text-red-500 text-sm">
+          The sound search failed ({error.message}). Try again in a moment.
         </p>
       )}
       {data?.configured && data.results.length === 0 && !isFetching && (
