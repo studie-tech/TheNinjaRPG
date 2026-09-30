@@ -7,19 +7,15 @@ import {
   userStatTrainingQueue,
 } from "@/drizzle/schema";
 import { drizzleDB } from "@/server/db";
+import { authenticateCronRequest } from "@/server/utils/cron";
 import { settleAllQueuesForUser } from "@/server/utils/queue";
 
 const BATCH_SIZE = 100;
 
 export const GET = async (request: Request) => {
+  const unauthorized = authenticateCronRequest(request);
+  if (unauthorized) return unauthorized;
   await cookies();
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    return Response.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-  }
-  if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   const now = new Date();
   const [stats, jutsus, crafting] = await Promise.all([

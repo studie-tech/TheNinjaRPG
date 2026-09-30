@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "node:crypto";
+
 /**
  * Authenticate a Vercel cron request using the platform-provided Bearer token.
  *
@@ -11,7 +13,9 @@ export const authenticateCronRequest = (request: Request): Response | null => {
     return Response.json({ error: "CRON_SECRET not configured" }, { status: 500 });
   }
 
-  if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  const actual = Buffer.from(request.headers.get("authorization") ?? "");
+  const expected = Buffer.from(`Bearer ${cronSecret}`);
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
     return Response.json(
       { error: "Unauthorized - Invalid or missing authorization header" },
       { status: 401 },
