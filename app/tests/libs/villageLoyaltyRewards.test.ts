@@ -145,7 +145,7 @@ const profileSnapshot = (isOutlaw: boolean, anbuId: string | null = null) => ({
   userQuests: [], completedQuests: [], votes: {}, promotions: [], questData: [],
 });
 
-const profileClient = (snapshots: ReturnType<typeof profileSnapshot>[], failCleanup = false) => {
+const profileClient = (snapshots: ReturnType<typeof profileSnapshot>[], failCleanup = false, maxReads = Infinity) => {
   const selection = Object.assign(Promise.resolve([]), {
     from: () => selection, where: () => selection, leftJoin: () => selection,
     limit: () => selection, orderBy: () => selection,
@@ -155,7 +155,10 @@ const profileClient = (snapshots: ReturnType<typeof profileSnapshot>[], failClea
   const db = {
     select: () => selection,
     query: {
-      userData: { findFirst: () => Promise.resolve(structuredClone(snapshots[Math.min(reads++, snapshots.length - 1)])) },
+      userData: { findFirst: () => {
+        if (reads >= maxReads) throw new Error("Exceeded profile read budget");
+        return Promise.resolve(structuredClone(snapshots[Math.min(reads++, snapshots.length - 1)]));
+      } },
       war: { findMany: () => Promise.resolve([]) },
       mpvpBattleQueue: { findMany: () => Promise.resolve([]) },
       quest: { findMany: () => Promise.resolve([]) },
@@ -173,6 +176,21 @@ const profileClient = (snapshots: ReturnType<typeof profileSnapshot>[], failClea
 };
 
 describe("village expulsion recovery", () => {
+  it("bounds repeated expulsion CAS losses", async () => {
+    const { db, reads } = profileClient([profileSnapshot(false)], false, 3);
+    await expect(fetchUpdatedUser({ client: db, userId: "user-1" })).rejects.toThrow("User state changed concurrently");
+    expect(reads()).toBe(3);
+  });
+
+  it("does not repeatedly expel an already-outlaw account with inconsistent village data", async () => {
+    const snapshot = { ...profileSnapshot(false), isOutlaw: true };
+    const { db, reads, writes } = profileClient([snapshot], false, 1);
+    const result = await fetchUpdatedUser({ client: db, userId: "user-1" });
+    expect(result.user?.isOutlaw).toBe(true);
+    expect(reads()).toBe(1);
+    expect(writes()).toBe(0);
+  });
+
   it("reloads full membership and relations after a lost expulsion CAS", async () => {
     const fresh = profileSnapshot(true);
     const { db, reads } = profileClient([profileSnapshot(false), fresh]);

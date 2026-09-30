@@ -2677,9 +2677,11 @@ export const fetchUpdatedUser = async (
   props: Parameters<typeof fetchUpdatedUserOnce>[0],
 ) => {
   // A lost village-state CAS invalidates the entire snapshot, including its relations.
-  let result = await fetchUpdatedUserOnce(props);
-  while (result === null) result = await fetchUpdatedUserOnce(props);
-  return result;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await fetchUpdatedUserOnce(props);
+    if (result !== null) return result;
+  }
+  throw serverError("CONFLICT", "User state changed concurrently; please try again");
 };
 
 const fetchUpdatedUserOnce = async (props: {
@@ -2880,7 +2882,11 @@ const fetchUpdatedUserOnce = async (props: {
   // Handle village prestige situations
   if (user) {
     // If prestige below 0, reset to 0 and move to outlaw faction
-    if (user.villagePrestige < 0 && user.village?.type === "VILLAGE") {
+    if (
+      !user.isOutlaw &&
+      user.villagePrestige < 0 &&
+      user.village?.type === "VILLAGE"
+    ) {
       // Check if we need to remove the kage
       const needNewKage =
         user.villageId &&
