@@ -20,10 +20,7 @@ import type { NextRequest } from "next/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 import { userData } from "@/drizzle/schema";
-import {
-  AB_PIXEL_LAYOUT_COOKIE,
-  LEGACY_AB_LAYOUT_COOKIE,
-} from "@/libs/layoutPreference";
+import { LEGACY_AB_LAYOUT_COOKIE } from "@/libs/layoutPreference";
 import type { McpMeta } from "@/libs/mcp";
 /**
  * 1. CONTEXT
@@ -63,16 +60,12 @@ export const createAppTRPCContext = async (options: {
   const abLemuReplacementVariant = normalizeAbVariant(
     options.readCookies.get(LEGACY_AB_LAYOUT_COOKIE)?.value,
   );
-  const abPixelLayoutVariant = normalizeAbVariant(
-    options.readCookies.get(AB_PIXEL_LAYOUT_COOKIE)?.value,
-  );
   return {
     drizzle: drizzleDB,
     userIp,
     userId,
     userAgent,
     abLemuReplacementVariant,
-    abPixelLayoutVariant,
   };
 };
 
@@ -86,7 +79,6 @@ export const createCdnTRPCContext = (readHeaders: ReadonlyHeaders) => ({
   userId: null,
   userAgent: undefined,
   abLemuReplacementVariant: undefined,
-  abPixelLayoutVariant: undefined,
 });
 
 /**
@@ -233,7 +225,6 @@ export const cdnCachedProcedure = publicProcedure
         userIp: undefined,
         userAgent: undefined,
         abLemuReplacementVariant: undefined,
-        abPixelLayoutVariant: undefined,
       },
     }),
   );

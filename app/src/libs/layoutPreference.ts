@@ -1,6 +1,3 @@
-import type { AbVariant } from "@/hooks/useAbVariant";
-
-export const AB_PIXEL_LAYOUT_COOKIE = "ab_pixel_layout_1";
 export const LEGACY_AB_LAYOUT_COOKIE = "ab_lemu_replacement_2";
 export const LAYOUT_PREFERENCE_COOKIE = "tnr_layout_preference";
 
@@ -46,36 +43,18 @@ export interface LayoutExperimentAssignment {
   variant: string;
 }
 
-export const abVariantToLayout = (
-  variant?: AbVariant | string | null,
-): EffectiveLayout => {
-  return variant === "treatment" ? "pixel" : "default";
-};
-
 export const cookieValueToLayout = (
   value?: string | null,
 ): EffectiveLayout | undefined => {
   if (value === "pixel" || value === "PIXEL") return "pixel";
   if (value === "default" || value === "DEFAULT") return "default";
-  if (value === "treatment" || value === "control") return abVariantToLayout(value);
   return undefined;
 };
 
-export const layoutToAbVariant = (layout: EffectiveLayout): AbVariant => {
-  return layout === "pixel" ? "treatment" : "control";
-};
-
 export const getLayoutExperimentAssignments = (variants: {
-  abPixelLayoutVariant?: string | null;
   abLemuReplacementVariant?: string | null;
 }): LayoutExperimentAssignment[] => {
   const assignments: LayoutExperimentAssignment[] = [];
-  if (variants.abPixelLayoutVariant) {
-    assignments.push({
-      experiment: AB_PIXEL_LAYOUT_COOKIE,
-      variant: variants.abPixelLayoutVariant,
-    });
-  }
   if (variants.abLemuReplacementVariant) {
     assignments.push({
       experiment: LEGACY_AB_LAYOUT_COOKIE,

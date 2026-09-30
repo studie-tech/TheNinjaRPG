@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  AB_PIXEL_LAYOUT_COOKIE,
-  LAYOUT_PREFERENCE_COOKIE,
-  LEGACY_AB_LAYOUT_COOKIE,
-} from "@/libs/layoutPreference";
+import { LAYOUT_PREFERENCE_COOKIE, LEGACY_AB_LAYOUT_COOKIE } from "@/libs/layoutPreference";
 import {
   chooseShell,
   parseShellParam,
@@ -97,34 +93,33 @@ describe("chooseShell", () => {
     cookies: new Map(Object.entries(overrides.cookies ?? {})),
   });
 
-  it("gives a first-time visitor on the landing page an assignment and renders it", () => {
+  it("gives a first-time visitor on the landing page the default layout", () => {
     const { variant, assigned } = chooseShell(request({ pathname: "/" }));
-    expect(assigned).toEqual({
-      [LEGACY_AB_LAYOUT_COOKIE]: "treatment",
-      [AB_PIXEL_LAYOUT_COOKIE]: "treatment",
-    });
-    expect(variant).toEqual({ client: "web", layout: "pixel", signedIn: false });
+    expect(assigned).toEqual({ [LEGACY_AB_LAYOUT_COOKIE]: "treatment" });
+    expect(variant).toEqual({ client: "web", layout: "default", signedIn: false });
   });
 
   it("draws nothing off the landing page, and nothing a visitor already carries", () => {
     expect(chooseShell(request({ pathname: "/home" })).assigned).toEqual({});
     const carried = chooseShell(
-      request({ pathname: "/", cookies: { [AB_PIXEL_LAYOUT_COOKIE]: "control" } }),
+      request({ pathname: "/", cookies: { [LEGACY_AB_LAYOUT_COOKIE]: "control" } }),
     );
-    expect(carried.assigned).toEqual({ [LEGACY_AB_LAYOUT_COOKIE]: "treatment" });
-    expect(carried.variant.layout).toBe("default");
+    expect(carried.assigned).toEqual({});
   });
 
-  it("lets an explicit preference beat the experiment, on every page", () => {
-    const { variant } = chooseShell(
-      request({
-        cookies: {
-          [AB_PIXEL_LAYOUT_COOKIE]: "treatment",
-          [LAYOUT_PREFERENCE_COOKIE]: "default",
-        },
-      }),
+  it("ignores a pixel preference until the visitor is signed in", () => {
+    const signedOut = chooseShell(
+      request({ pathname: "/", cookies: { [LAYOUT_PREFERENCE_COOKIE]: "pixel" } }),
     );
-    expect(variant.layout).toBe("default");
+    expect(signedOut.variant.layout).toBe("default");
+    const signedIn = chooseShell(
+      request({ userId: "user_1", cookies: { [LAYOUT_PREFERENCE_COOKIE]: "pixel" } }),
+    );
+    expect(signedIn.variant.layout).toBe("pixel");
+  });
+
+  it("gives a signed-in player without a preference the default layout", () => {
+    expect(chooseShell(request({ userId: "user_1" })).variant.layout).toBe("default");
   });
 
   it("reads the signed-in frame from Clerk's client marker, not from the token", () => {
@@ -150,10 +145,7 @@ describe("chooseShell", () => {
       request({
         userAgent: GOOGLEBOT,
         pathname: "/",
-        cookies: {
-          [LAYOUT_PREFERENCE_COOKIE]: "pixel",
-          [AB_PIXEL_LAYOUT_COOKIE]: "treatment",
-        },
+        cookies: { [LAYOUT_PREFERENCE_COOKIE]: "pixel" },
       }),
     );
     expect(variant).toEqual({ client: "web", layout: "default", signedIn: false });

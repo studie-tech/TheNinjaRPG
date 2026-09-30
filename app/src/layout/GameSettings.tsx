@@ -694,34 +694,38 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
 
       <div>
         <p className={headerClass}>Display</p>
-        <div className="mb-4 space-y-2">
-          <div className="flex items-start gap-2">
-            <LayoutTemplate className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div>
-              <p className={textClass}>Game Layout</p>
+        {/* The pixel layout is an opt-in for signed-in players; the shell ignores the
+            preference for signed-out visitors. */}
+        {userData && (
+          <div className="mb-4 space-y-2">
+            <div className="flex items-start gap-2">
+              <LayoutTemplate className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div>
+                <p className={textClass}>Game Layout</p>
+              </div>
             </div>
+            <RadioGroup
+              value={layoutPreference}
+              onValueChange={handleLayoutChange}
+              className="grid grid-cols-2 gap-2"
+            >
+              <label
+                htmlFor="layout-default"
+                className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm hover:bg-accent"
+              >
+                <RadioGroupItem id="layout-default" value="default" />
+                Classic
+              </label>
+              <label
+                htmlFor="layout-pixel"
+                className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm hover:bg-accent"
+              >
+                <RadioGroupItem id="layout-pixel" value="pixel" />
+                Pixel
+              </label>
+            </RadioGroup>
           </div>
-          <RadioGroup
-            value={layoutPreference}
-            onValueChange={handleLayoutChange}
-            className="grid grid-cols-2 gap-2"
-          >
-            <label
-              htmlFor="layout-default"
-              className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm hover:bg-accent"
-            >
-              <RadioGroupItem id="layout-default" value="default" />
-              Classic
-            </label>
-            <label
-              htmlFor="layout-pixel"
-              className="flex cursor-pointer items-center gap-2 rounded-md border border-border p-2 text-sm hover:bg-accent"
-            >
-              <RadioGroupItem id="layout-pixel" value="pixel" />
-              Pixel
-            </label>
-          </RadioGroup>
-        </div>
+        )}
         {!isPixelLayout && (
           <div className="flex items-center justify-between">
             <div>
