@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowRight,
   BookOpen,
   BriefcaseBusiness,
@@ -19,6 +20,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
+import Confirm from "@/layout/Confirm";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import LevelUpBtn from "@/layout/LevelUpBtn";
@@ -27,7 +30,12 @@ import Loader from "@/layout/Loader";
 import { LogbookActive } from "@/layout/Logbook";
 import { getRewardPreview } from "@/libs/objectives";
 import { calcLevelRequirements, formatTrainingStatName } from "@/libs/profile";
-import { selectDashboardHighlights } from "@/libs/profileDashboard";
+import {
+  dashboardContentActionLabel,
+  dashboardContentHref,
+  raidContinueHref,
+  selectDashboardHighlights,
+} from "@/libs/profileDashboard";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { trainingSpeedSeconds } from "@/libs/train";
@@ -80,13 +88,6 @@ export default function ProfileDashboard() {
       utils.profile.getUser.invalidate(),
     ]);
   };
-
-  const claimStreak = api.activityStreak.claimStreakDay.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) await refreshDashboard();
-    },
-  });
   const claimInterest = api.bank.claimInterest.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
@@ -98,18 +99,11 @@ export default function ProfileDashboard() {
   });
 
   const claimableStreak = streaks.data?.streaks.find((streak) => streak.canClaimToday);
+  const catchUpStreak = streaks.data?.streaks.find((streak) => streak.needsCatchUp);
   const recurringStreak = streaks.data?.activeRecurringConfig;
-  const streakConfigId = claimableStreak?.configId ?? recurringStreak?.id;
-  const streakDay = claimableStreak?.nextDayNumber ?? (recurringStreak ? 1 : null);
-  const streakReward = claimableStreak
-    ? getRewardPreview(claimableStreak.nextRewards)
-    : recurringStreak
-      ? getRewardPreview(
-          recurringStreak.rewards.find((reward) => reward.dayNumber === 1)?.rewards ??
-            null,
-        )
-      : null;
-  const canClaimStreak = !!streakConfigId && userData?.status === "AWAKE";
+  const canActOnStreak =
+    (!!claimableStreak || !!catchUpStreak || !!recurringStreak) &&
+    userData?.status === "AWAKE";
   const canClaimInterest =
     (interest.data?.totalPending ?? 0) > 0 && userData?.status !== "BATTLE";
   const canLevelUp =
@@ -121,7 +115,7 @@ export default function ProfileDashboard() {
     dashboard.data?.raidRewards.reduce((sum, raid) => sum + raid.claimableCount, 0) ??
     0;
   const readyCount = [
-    canClaimStreak,
+    canActOnStreak,
     canClaimInterest,
     canLevelUp,
     canChooseOccupation,
@@ -172,8 +166,8 @@ export default function ProfileDashboard() {
   const catalogue = useMemo<CatalogueEntry[]>(() => {
     const quests = dashboard.data?.content ?? [];
     const raidEntries: CatalogueEntry[] = (raids.data?.raids ?? []).map((raid) => {
-      const travelRequired =
-        raid.raidSector !== null && raid.raidSector !== userData?.sector;
+      const destination = raidContinueHref(raid.raidSector, userData?.sector);
+      const travelRequired = destination === "/travel";
       return {
         id: raid.id,
         name: raid.name,
@@ -184,7 +178,7 @@ export default function ProfileDashboard() {
         rank: "RAID",
         location:
           raid.raidSector === null ? "Global ANBU HQ" : `Sector ${raid.raidSector}`,
-        destination: travelRequired ? "/travel" : "/globalanbuhq",
+        destination,
         availability: travelRequired ? "travel" : "available",
         availabilityReason: travelRequired
           ? `Travel to sector ${raid.raidSector} to participate`
@@ -252,40 +246,7 @@ export default function ProfileDashboard() {
           aside={`${readyCount} ${readyCount === 1 ? "action" : "actions"} ready`}
         />
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <PriorityCard
-            icon={Gift}
-            label="Reward"
-            title="Activity streak"
-            accent="amber"
-            isLoading={streaks.isLoading}
-            error={streaks.error?.message}
-            onRetry={() => void streaks.refetch()}
-          >
-            {streakDay ? (
-              <>
-                <p>Day {streakDay} is ready.</p>
-                <p className="text-muted-foreground text-xs">
-                  {streakReward || "Claim today’s activity reward."}
-                </p>
-                <Button
-                  className="mt-auto w-full"
-                  disabled={!canClaimStreak || claimStreak.isPending}
-                  onClick={() =>
-                    streakConfigId && claimStreak.mutate({ configId: streakConfigId })
-                  }
-                >
-                  {claimStreak.isPending ? "Claiming..." : `Claim day ${streakDay}`}
-                </Button>
-                {claimStreak.error && (
-                  <p className="text-destructive text-xs">
-                    {claimStreak.error.message}
-                  </p>
-                )}
-              </>
-            ) : (
-              <EmptyPriority text="Today’s streak reward is already handled." />
-            )}
-          </PriorityCard>
+          <ProfileStreakCard onClaimed={refreshDashboard} />
 
           <PriorityCard
             icon={Landmark}
@@ -517,7 +478,7 @@ export default function ProfileDashboard() {
                 </p>
               </div>
               <Button asChild>
-                <Link href={recommended.destination}>View next activity</Link>
+                <Link href={dashboardContentHref(recommended)}>View next activity</Link>
               </Button>
             </div>
           ) : (
@@ -552,13 +513,7 @@ export default function ProfileDashboard() {
                     variant="outline"
                     className="hover:text-black"
                   >
-                    <Link
-                      href={
-                        raid.raidSector === userData.sector
-                          ? "/globalanbuhq"
-                          : "/travel"
-                      }
-                    >
+                    <Link href={raidContinueHref(raid.raidSector, userData.sector)}>
                       Continue raid
                     </Link>
                   </Button>
@@ -569,6 +524,149 @@ export default function ProfileDashboard() {
         )}
       </section>
     </div>
+  );
+}
+
+/** Claim, catch up, or start the activity streak. Mounted once per profile view. */
+export function ProfileStreakCard({
+  onClaimed,
+}: {
+  onClaimed?: () => Promise<unknown>;
+}) {
+  const { data: userData } = useRequiredUserData();
+  const utils = api.useUtils();
+  const streaks = api.activityStreak.getUserStreaks.useQuery(undefined, {
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+  const claimStreak = api.activityStreak.claimStreakDay.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (!data.success) return;
+      if (onClaimed) {
+        await onClaimed();
+        return;
+      }
+      await Promise.allSettled([
+        streaks.refetch(),
+        utils.profile.getUser.invalidate(),
+        utils.profile.getDashboard.invalidate(),
+      ]);
+    },
+  });
+
+  const claimableStreak = streaks.data?.streaks.find((streak) => streak.canClaimToday);
+  const catchUpStreak = streaks.data?.streaks.find((streak) => streak.needsCatchUp);
+  const recurringStreak = streaks.data?.activeRecurringConfig;
+  const awake = userData?.status === "AWAKE";
+  const recurringReward = getRewardPreview(
+    recurringStreak?.rewards.find((reward) => reward.dayNumber === 1)?.rewards ?? null,
+  );
+
+  return (
+    <PriorityCard
+      icon={Gift}
+      label="Reward"
+      title="Activity streak"
+      accent="amber"
+      isLoading={streaks.isLoading}
+      error={streaks.error?.message}
+      onRetry={() => void streaks.refetch()}
+    >
+      {catchUpStreak ? (
+        <>
+          <p className="flex items-start gap-2 text-orange-700 dark:text-orange-400">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            {catchUpStreak.daysToGo ?? 1} day
+            {(catchUpStreak.daysToGo ?? 1) === 1 ? "" : "s"} behind
+          </p>
+          <p className="text-muted-foreground text-xs">
+            Pay {COST_STREAK_CATCHUP_DAY} rep per day to catch up, or reset your streak.
+            Day {catchUpStreak.nextDayNumber}:{" "}
+            {getRewardPreview(catchUpStreak.nextRewards) || "Daily reward"}
+          </p>
+          <div className="mt-auto flex gap-2">
+            <Confirm
+              title="Reset Streak"
+              button={
+                <Button
+                  variant="outline"
+                  disabled={!awake || claimStreak.isPending}
+                  className="flex-1 hover:text-black"
+                >
+                  <RotateCcw className="mr-1 h-4 w-4" />
+                  Reset
+                </Button>
+              }
+              onAccept={(event) => {
+                event.preventDefault();
+                claimStreak.mutate({ configId: catchUpStreak.configId, reset: true });
+              }}
+            >
+              <p>
+                Your streak will reset to day 1. Current progress (day{" "}
+                {catchUpStreak.currentDay}) will be lost.
+              </p>
+            </Confirm>
+            <Button
+              className="flex-1"
+              disabled={!awake || claimStreak.isPending}
+              onClick={() =>
+                claimStreak.mutate({
+                  configId: catchUpStreak.configId,
+                  payCatchUp: true,
+                })
+              }
+            >
+              {claimStreak.isPending
+                ? "Claiming..."
+                : `Catch up (${COST_STREAK_CATCHUP_DAY} rep)`}
+            </Button>
+          </div>
+        </>
+      ) : claimableStreak ? (
+        <>
+          <p>Day {claimableStreak.nextDayNumber} is ready.</p>
+          <p className="text-muted-foreground text-xs">
+            {getRewardPreview(claimableStreak.nextRewards) ||
+              "Claim today’s activity reward."}
+          </p>
+          <Button
+            className="mt-auto w-full"
+            disabled={!awake || claimStreak.isPending}
+            onClick={() => claimStreak.mutate({ configId: claimableStreak.configId })}
+          >
+            {claimStreak.isPending
+              ? "Claiming..."
+              : `Claim day ${claimableStreak.nextDayNumber}`}
+          </Button>
+        </>
+      ) : recurringStreak ? (
+        <>
+          <p>Day 1 is ready.</p>
+          <p className="text-muted-foreground text-xs">
+            {recurringReward || "Claim today’s activity reward."}
+          </p>
+          <Button
+            className="mt-auto w-full"
+            disabled={!awake || claimStreak.isPending}
+            onClick={() => claimStreak.mutate({ configId: recurringStreak.id })}
+          >
+            {claimStreak.isPending ? "Claiming..." : "Claim day 1"}
+          </Button>
+        </>
+      ) : (
+        <EmptyPriority text="Today’s streak reward is already handled." />
+      )}
+      {claimStreak.error && (
+        <p className="text-destructive text-xs">{claimStreak.error.message}</p>
+      )}
+      {!awake && (catchUpStreak || claimableStreak || recurringStreak) && (
+        <p className="text-muted-foreground text-xs">
+          You can claim this once you are awake.
+        </p>
+      )}
+    </PriorityCard>
   );
 }
 
@@ -721,21 +819,8 @@ function RetryPanel({ message, onRetry }: { message: string; onRetry?: () => voi
 }
 
 function ContentCard({ entry }: { entry: CatalogueEntry }) {
-  const routesThroughWakeIsland =
-    entry.category === "events" || entry.category === "story";
-  const destination =
-    entry.category === "battlePyramids"
-      ? "/battlearena#Battle%20Pyramid"
-      : routesThroughWakeIsland || entry.availability === "travel"
-        ? "/travel"
-        : entry.destination;
-  const actionLabel = routesThroughWakeIsland
-    ? "Go to Wake Island"
-    : entry.availability === "travel"
-      ? "Open travel"
-      : entry.availability === "locked"
-        ? "View requirements"
-        : "Open content";
+  const destination = dashboardContentHref(entry);
+  const actionLabel = dashboardContentActionLabel(entry);
   return (
     <Card className="group overflow-hidden">
       <div className="relative aspect-[16/7] overflow-hidden bg-muted">

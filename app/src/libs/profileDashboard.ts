@@ -1,8 +1,10 @@
 import {
   ERRANDS_PER_DAY,
+  MAP_WAKE_ISLAND_SECTOR,
   MEDICAL_MISSIONS_PER_DAY,
   MISSIONS_PER_DAY,
   PVP_MISSIONS_PER_DAY,
+  WAR_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
@@ -157,4 +159,83 @@ export const resolveDashboardAvailability = (input: {
     };
   }
   return { availability: "available", reason: null };
+};
+
+/**
+ * Events and story start at Wake Island. Everything else starts in the player's
+ * own village; outlaws are not sent home for that content.
+ */
+export const dashboardContentRequiresTravel = ({
+  category,
+  sector,
+  isOutlaw,
+  villageSector,
+}: {
+  category: DashboardContentSummary["category"];
+  sector: number;
+  isOutlaw: boolean;
+  villageSector: number | null | undefined;
+}) => {
+  if (category === "events" || category === "story") {
+    return sector !== MAP_WAKE_ISLAND_SECTOR;
+  }
+  return !isOutlaw && villageSector != null && sector !== villageSector;
+};
+
+/** Open the content itself when the player is already there; otherwise open travel. */
+export const dashboardContentHref = (entry: {
+  category: string;
+  availability: DashboardAvailability;
+  destination: string;
+}) => {
+  if (entry.availability === "travel") return "/travel";
+  if (entry.category === "battlePyramids") return "/battlearena#Battle%20Pyramid";
+  return entry.destination;
+};
+
+export const dashboardContentActionLabel = (entry: {
+  category: string;
+  availability: DashboardAvailability;
+}) => {
+  if (entry.availability === "travel") {
+    return entry.category === "events" || entry.category === "story"
+      ? "Go to Wake Island"
+      : "Open travel";
+  }
+  if (entry.availability === "locked") return "View requirements";
+  return "Open content";
+};
+
+/** A raid with no sector is fought from Global ANBU HQ, same as one in the current sector. */
+export const raidContinueHref = (
+  raidSector: number | null,
+  userSector: number | null | undefined,
+) => (raidSector === null || raidSector === userSector ? "/globalanbuhq" : "/travel");
+
+export interface DashboardWarSummary {
+  attackerVillageId: string;
+  defenderVillageId: string;
+  warAllies: { villageId: string }[];
+}
+
+/** War missions follow the mission hall: an involved village, including allies, and the daily cap. */
+export const isDashboardWarMissionVisible = ({
+  questType,
+  villageId,
+  dailyWarMissions,
+  activeWars,
+}: {
+  questType: string;
+  villageId: string | null;
+  dailyWarMissions: number;
+  activeWars: DashboardWarSummary[];
+}) => {
+  if (questType !== "war") return true;
+  if (!villageId || dailyWarMissions >= WAR_MISSIONS_PER_DAY) return false;
+  return activeWars.some(
+    (activeWar) =>
+      activeWar.attackerVillageId === villageId ||
+      activeWar.defenderVillageId === villageId ||
+      activeWar.warAllies.some((ally) => ally.villageId === villageId),
+  );
 };

@@ -17,10 +17,14 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { LogbookAchievements, LogbookBattles, LogbookHistory } from "@/layout/Logbook";
+import Logbook, {
+  LogbookAchievements,
+  LogbookBattles,
+  LogbookHistory,
+} from "@/layout/Logbook";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
-import ProfileDashboard from "@/layout/ProfileDashboard";
+import ProfileDashboard, { ProfileStreakCard } from "@/layout/ProfileDashboard";
 import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
@@ -56,6 +60,11 @@ export default function Profile() {
           />
         </div>
       </div>
+      {activeTab !== "Dashboard" && !tutorialActive && (
+        <div className="mb-3">
+          <ProfileStreakCard />
+        </div>
+      )}
       {activeTab === "Character" ? (
         <CharacterProfile />
       ) : (
@@ -366,6 +375,7 @@ function CharacterProfile() {
       )}
 
       <StrengthWeaknesses />
+      {isTutorialActive(userData) && <Logbook />}
     </>
   );
 }

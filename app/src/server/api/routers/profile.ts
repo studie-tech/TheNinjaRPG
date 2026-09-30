@@ -33,7 +33,6 @@ import {
   IMG_AVATAR_DEFAULT,
   KAGE_MIN_PRESTIGE,
   KAGE_PRESTIGE_REQUIREMENT,
-  MAP_WAKE_ISLAND_SECTOR,
   MAX_ATTRIBUTES,
   MAX_SKILL_POINTS,
   REGEN_SECONDS,
@@ -117,7 +116,9 @@ import {
 } from "@/libs/profile";
 import {
   condenseDashboardMissionContent,
+  dashboardContentRequiresTravel,
   filterAccessibleDashboardContent,
+  isDashboardWarMissionVisible,
   resolveDashboardAvailability,
 } from "@/libs/profileDashboard";
 import { getServerPusher } from "@/libs/pusher";
@@ -133,7 +134,11 @@ import {
 import { getRaidObjectiveData } from "@/libs/raids";
 import { createThumbnail } from "@/libs/replicate";
 import { callDiscordContent } from "@/libs/socials";
-import { availableQuestLetterRanks, getReducedGainsDays } from "@/libs/train";
+import {
+  availableQuestLetterRanks,
+  getReducedGainsDays,
+  inferJutsuTrainingStartedAt,
+} from "@/libs/train";
 import { fetchSquad, removeFromSquad } from "@/routers/anbu";
 import { fetchClan, removeFromClan } from "@/routers/clan";
 import { fetchKageReplacement } from "@/routers/kage";
@@ -224,8 +229,8 @@ export const profileRouter = createTRPCRouter({
     .output(profileDashboardSchema)
     .query(async ({ ctx }) => {
       const serverTime = new Date();
-      const [user, completedQuests, candidates, raidParticipations] = await Promise.all(
-        [
+      const [user, completedQuests, candidates, raidParticipations, activeWars] =
+        await Promise.all([
           ctx.drizzle.query.userData.findFirst({
             where: eq(userData.userId, ctx.userId),
             with: {
@@ -271,8 +276,20 @@ export const profileRouter = createTRPCRouter({
               },
             },
           }),
-        ],
-      );
+          // Read-only. fetchActiveWars also ends wars whose tokens or health are
+          // gone, which a profile read must not do.
+          ctx.drizzle.query.war.findMany({
+            where: eq(war.status, "ACTIVE"),
+            columns: {
+              id: true,
+              attackerVillageId: true,
+              defenderVillageId: true,
+            },
+            with: {
+              warAllies: { columns: { villageId: true } },
+            },
+          }),
+        ]);
 
       if (!user) {
         throw serverError("NOT_FOUND", "User not found. Please complete registration.");
@@ -280,10 +297,6 @@ export const profileRouter = createTRPCRouter({
 
       const userForAvailability = { ...user, completedQuests };
       const availableRanks = availableQuestLetterRanks(user.rank);
-      const isAwayFromVillage =
-        !user.isOutlaw &&
-        user.village?.sector !== undefined &&
-        user.sector !== user.village.sector;
 
       const content = candidates.flatMap((candidate) => {
         const availability = isAvailableUserQuests(
@@ -292,6 +305,16 @@ export const profileRouter = createTRPCRouter({
           true,
         );
         if (availability.message.includes("Quest is hidden")) return [];
+        if (
+          !isDashboardWarMissionVisible({
+            questType: candidate.questType,
+            villageId: user.villageId,
+            dailyWarMissions: user.dailyWarMissions,
+            activeWars,
+          })
+        ) {
+          return [];
+        }
 
         const category =
           candidate.questType === "event"
@@ -323,10 +346,12 @@ export const profileRouter = createTRPCRouter({
           ["event", "mission", "errand", "crime", "medical", "pvp", "war"].includes(
             candidate.questType,
           ) && !availableRanks.includes(candidate.questRank);
-        const requiresVillageTravel =
-          category === "story"
-            ? user.sector !== MAP_WAKE_ISLAND_SECTOR
-            : isAwayFromVillage && category !== "battlePyramids";
+        const requiresVillageTravel = dashboardContentRequiresTravel({
+          category,
+          sector: user.sector,
+          isOutlaw: user.isOutlaw,
+          villageSector: user.village?.sector,
+        });
 
         const resolvedAvailability = resolveDashboardAvailability({
           isEligible: availability.check,
@@ -395,11 +420,14 @@ export const profileRouter = createTRPCRouter({
         .select({
           name: sql<string>`COALESCE(${jutsuReskin.name}, ${jutsu.name})`,
           level: userJutsu.level,
-          trainingStartedAt: userJutsu.updatedAt,
+          jutsuRank: jutsu.jutsuRank,
           finishTraining: userJutsu.finishTraining,
+          senseiId: userData.senseiId,
+          rank: userData.rank,
         })
         .from(userJutsu)
         .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
+        .innerJoin(userData, eq(userJutsu.userId, userData.userId))
         .leftJoin(jutsuReskin, eq(userJutsu.reskinId, jutsuReskin.id))
         .where(and(eq(userJutsu.userId, ctx.userId), gt(userJutsu.finishTraining, now)))
         .orderBy(asc(userJutsu.finishTraining))
@@ -438,13 +466,24 @@ export const profileRouter = createTRPCRouter({
         .limit(1),
     ]);
 
-    const jutsuTraining = jutsuTrainingRows[0];
+    const jutsuTrainingRow = jutsuTrainingRows[0];
     const crafting = craftingRows[0];
+    const jutsuTraining = jutsuTrainingRow?.finishTraining
+      ? {
+          name: jutsuTrainingRow.name,
+          level: jutsuTrainingRow.level,
+          trainingStartedAt: inferJutsuTrainingStartedAt(
+            jutsuTrainingRow.finishTraining,
+            { jutsuRank: jutsuTrainingRow.jutsuRank },
+            jutsuTrainingRow.level,
+            { senseiId: jutsuTrainingRow.senseiId, rank: jutsuTrainingRow.rank },
+          ),
+          finishTraining: jutsuTrainingRow.finishTraining,
+        }
+      : null;
 
     return {
-      jutsuTraining: jutsuTraining?.finishTraining
-        ? { ...jutsuTraining, finishTraining: jutsuTraining.finishTraining }
-        : null,
+      jutsuTraining,
       crafting: crafting?.craftingFinishedAt
         ? { ...crafting, craftingFinishedAt: crafting.craftingFinishedAt }
         : null,

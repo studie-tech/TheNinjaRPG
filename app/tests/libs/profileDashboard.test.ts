@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { MAP_WAKE_ISLAND_SECTOR, WAR_MISSIONS_PER_DAY } from "@/drizzle/constants";
 import {
   condenseDashboardMissionContent,
+  dashboardContentActionLabel,
+  dashboardContentHref,
+  dashboardContentRequiresTravel,
   filterAccessibleDashboardContent,
+  isDashboardWarMissionVisible,
+  raidContinueHref,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
@@ -185,5 +191,159 @@ describe("selectDashboardHighlights", () => {
       "story",
       "battlepyramid",
     ]);
+  });
+});
+
+const homeSector = 10;
+
+describe("dashboardContentRequiresTravel", () => {
+  it("sends events and story to Wake Island, including for outlaws", () => {
+    expect(
+      dashboardContentRequiresTravel({
+        category: "events",
+        sector: homeSector,
+        isOutlaw: false,
+        villageSector: homeSector,
+      }),
+    ).toBe(true);
+    expect(
+      dashboardContentRequiresTravel({
+        category: "story",
+        sector: MAP_WAKE_ISLAND_SECTOR,
+        isOutlaw: true,
+        villageSector: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("requires village travel for battle pyramids and leaves outlaws where they are", () => {
+    expect(
+      dashboardContentRequiresTravel({
+        category: "battlePyramids",
+        sector: 40,
+        isOutlaw: false,
+        villageSector: homeSector,
+      }),
+    ).toBe(true);
+    expect(
+      dashboardContentRequiresTravel({
+        category: "battlePyramids",
+        sector: 40,
+        isOutlaw: true,
+        villageSector: homeSector,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("dashboard content links", () => {
+  it("opens the destination when the player is already there", () => {
+    const entry = createContent("event", {
+      category: "events",
+      availability: "available",
+      destination: "/adminbuilding",
+    });
+    expect(dashboardContentHref(entry)).toBe("/adminbuilding");
+    expect(dashboardContentActionLabel(entry)).toBe("Open content");
+  });
+
+  it("sends travel-required events and story through Wake Island", () => {
+    const entry = createContent("story", {
+      category: "story",
+      availability: "travel",
+      destination: "/globalanbuhq",
+    });
+    expect(dashboardContentHref(entry)).toBe("/travel");
+    expect(dashboardContentActionLabel(entry)).toBe("Go to Wake Island");
+  });
+
+  it("opens the battle pyramid tab only when it can be started here", () => {
+    expect(
+      dashboardContentHref(
+        createContent("battlepyramid", {
+          category: "battlePyramids",
+          availability: "available",
+          destination: "/battlearena",
+        }),
+      ),
+    ).toBe("/battlearena#Battle%20Pyramid");
+    expect(
+      dashboardContentHref(
+        createContent("battlepyramid", {
+          category: "battlePyramids",
+          availability: "travel",
+          destination: "/battlearena",
+        }),
+      ),
+    ).toBe("/travel");
+  });
+});
+
+describe("raidContinueHref", () => {
+  it("keeps a raid with no sector on Global ANBU HQ", () => {
+    expect(raidContinueHref(null, 12)).toBe("/globalanbuhq");
+    expect(raidContinueHref(12, 12)).toBe("/globalanbuhq");
+    expect(raidContinueHref(40, 12)).toBe("/travel");
+  });
+});
+
+describe("isDashboardWarMissionVisible", () => {
+  const activeWars = [
+    {
+      attackerVillageId: "attacker",
+      defenderVillageId: "defender",
+      warAllies: [{ villageId: "ally" }],
+    },
+  ];
+
+  it("shows war missions for attackers, defenders, and allies under the daily cap", () => {
+    for (const villageId of ["attacker", "defender", "ally"]) {
+      expect(
+        isDashboardWarMissionVisible({
+          questType: "war",
+          villageId,
+          dailyWarMissions: WAR_MISSIONS_PER_DAY - 1,
+          activeWars,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it("hides war missions without an involved village or after the daily cap", () => {
+    expect(
+      isDashboardWarMissionVisible({
+        questType: "war",
+        villageId: "neutral",
+        dailyWarMissions: 0,
+        activeWars,
+      }),
+    ).toBe(false);
+    expect(
+      isDashboardWarMissionVisible({
+        questType: "war",
+        villageId: null,
+        dailyWarMissions: 0,
+        activeWars,
+      }),
+    ).toBe(false);
+    expect(
+      isDashboardWarMissionVisible({
+        questType: "war",
+        villageId: "attacker",
+        dailyWarMissions: WAR_MISSIONS_PER_DAY,
+        activeWars,
+      }),
+    ).toBe(false);
+  });
+
+  it("leaves other quest types alone", () => {
+    expect(
+      isDashboardWarMissionVisible({
+        questType: "mission",
+        villageId: null,
+        dailyWarMissions: WAR_MISSIONS_PER_DAY,
+        activeWars: [],
+      }),
+    ).toBe(true);
   });
 });

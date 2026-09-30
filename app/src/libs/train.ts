@@ -287,7 +287,11 @@ export const canUseJutsu = (
 
 export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5;
 
-export const calcJutsuTrainTime = (jutsu: Jutsu, level: number, userdata: UserData) => {
+export const calcJutsuTrainTime = (
+  jutsu: Pick<Jutsu, "jutsuRank">,
+  level: number,
+  userdata: Pick<UserData, "senseiId" | "rank">,
+) => {
   let lvlIncrement = 7;
   if (jutsu.jutsuRank === "C") {
     lvlIncrement = 8;
@@ -308,6 +312,22 @@ export const calcJutsuTrainTime = (jutsu: Jutsu, level: number, userdata: UserDa
   }
   return cappedTrainTime;
 };
+
+/**
+ * Training stores the target level and finish time. Later actions such as equip
+ * rewrite updatedAt without changing finishTraining, so the start is the finish
+ * minus the duration of the level training began at.
+ */
+export const inferJutsuTrainingStartedAt = (
+  finishTraining: Date,
+  jutsu: Pick<Jutsu, "jutsuRank">,
+  storedLevel: number,
+  userdata: Pick<UserData, "senseiId" | "rank">,
+) =>
+  new Date(
+    finishTraining.getTime() -
+      calcJutsuTrainTime(jutsu, Math.max(0, storedLevel - 1), userdata),
+  );
 
 export const calcJutsuTrainCost = (
   jutsu: Jutsu,
