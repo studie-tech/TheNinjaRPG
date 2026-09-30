@@ -1,6 +1,6 @@
 ---
 name: tnr-content-audit
-description: Audit TheNinja-RPG game content (jutsu, items, bloodlines, quests, badges, AI characters, assets) for grammar, balance, sound, animation, visual and consistency gaps, and write suggestions for the staff content review desk. Use for the daily CI audit or whenever asked to "audit content", "find content gaps", "suggest content fixes", "review jutsu balance", "check item descriptions".
+description: Audit TheNinja-RPG game content (jutsu, items, bloodlines, quests, badges, AI characters, assets) for grammar, balance, sound, animation, visual and consistency gaps, and write suggestions for the staff content review desk. Use for the scheduled CI audit or whenever asked to "audit content", "find content gaps", "suggest content fixes", "review jutsu balance", "check item descriptions".
 ---
 
 # TNR content audit
@@ -15,7 +15,7 @@ explained. There is no quota to fill: fewer good suggestions beat many weak ones
 `GET /api/content-review/snapshot?focus=<focus>` returns one JSON document. In CI it is already
 downloaded to `audit/snapshot.json`.
 
-- `focus`: today's theme (`grammar`, `balance`, `sound`, `animation`, `visual`, `consistency`,
+- `focus`: this run's theme (`grammar`, `balance`, `sound`, `animation`, `visual`, `consistency`,
   `new_content`). Stay on it.
 - `entities[]`: visible content for the focus. Each has `type`, `id`, `v` (its version), `fields`
   (the editable fields that matter for the focus) and, where known, `casts30d`, `winRate30d`
@@ -68,7 +68,7 @@ Only one JSON object: `{ "proposals": [ ... ] }`. Each proposal:
    An outdated suggestion's entity was edited after it was made: suggest it again only if the
    entity's current `fields` still need it.
 2. One proposal per entity. Put every fix to that entity in the same proposal.
-3. Spread the run across today's focus: entities of different types, ranks and elements, and
+3. Spread the run across its focus: entities of different types, ranks and elements, and
    different kinds of fix. A few varied proposals are worth more than many that repeat one fix
    on similar entities.
 4. Keep combat text placeholders exactly as they are: `%user`, `%target`, `%user_subject`,
@@ -125,7 +125,7 @@ preview staff get on every suggestion) and attaches the renders as images;
 - Judge what a player notices: an effect meant to cover a tile (water, fire, smoke, ice, a trap)
   covers the hex instead of a corner of it; a hit reads at hex scale and stays centred on the
   fighter; nothing important is cut off, lost against the ground, blank or a broken frame.
-- On `animation` days the most used animation and static assets come attached. Prefer
+- On `animation` runs the most used animation and static assets come attached. Prefer
   candidates that look right in their render, and cite a render when it shows the problem you
   fix.
 - After the audit, every suggestion that changes what an entity draws in battle is rendered as

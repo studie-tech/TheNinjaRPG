@@ -2,9 +2,10 @@ import alea from "alea";
 import { and, count, eq, gte, inArray, or, sum } from "drizzle-orm";
 import { z } from "zod";
 import {
-  CONTENT_AUDIT_WEEKDAY_FOCUS,
+  CONTENT_AUDIT_INTERVAL_HOURS,
   CONTENT_PROPOSAL_RETENTION_DAYS,
   type ContentAuditFocus,
+  ContentAuditFocuses,
   type ContentProposalEntityType,
   IMG_AVATAR_DEFAULT,
 } from "@/drizzle/constants";
@@ -17,25 +18,26 @@ import {
   userJutsu,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { DAY_S, secondsFromNow } from "@/utils/time";
+import { DAY_S, HOUR_S, secondsFromNow } from "@/utils/time";
 import { agentAuditOutputSchema, visualCheckSchema } from "@/validators/contentReview";
 import { type ContentEntity, entityKey, loadAllEntities } from "./entities";
 import { isEpidemicConfigured } from "./epidemic";
 import { expireStaleEvidence } from "./outdate";
 
 /**
- * Everything the audit reads: visible content of the day's focus with versions and usage,
+ * Everything the audit reads: visible content of the run's focus with versions and usage,
  * the asset library, which media services are available, open suggestions and recent
  * decisions (so rejected ideas are not repeated), and the JSON schemas its answers must
  * match. Suggestions whose usage data expired are outdated first. Entities come most used
- * first when the focus reads usage and in a daily shuffled order otherwise, cut to keep the
+ * first when the focus reads usage and in a per-run shuffled order otherwise, cut to keep the
  * response under MAX_SNAPSHOT_BYTES.
  */
 export const buildAuditSnapshot = async (
   client: DrizzleClient,
   requested: ContentAuditFocus | "rotate",
 ) => {
-  const focus = resolveFocus(requested);
+  const now = new Date();
+  const focus = resolveFocus(requested, now);
   const view = VIEWS[focus];
   await expireStaleEvidence(client);
   const [entityLists, stats, owners, assets, recent] = await Promise.all([
@@ -82,11 +84,11 @@ export const buildAuditSnapshot = async (
         : {}),
     };
   });
-  // Ties, which are every row on a focus without usage, get an order that changes daily, so
-  // a trimmed snapshot shows the audit a different part of the content each day.
-  const day = new Date().toISOString().slice(0, 10);
+  // Ties, which are every row on a focus without usage, get an order that changes with every
+  // scheduled run, so a trimmed snapshot shows the audit a different part of the content.
+  const run = auditRun(now);
   const tieBreak = new Map(
-    rows.map((row) => [row, alea(`${day}:${row.type}:${row.id}`)()]),
+    rows.map((row) => [row, alea(`${run}:${row.type}:${row.id}`)()]),
   );
   rows.sort(
     (a, b) =>
@@ -94,7 +96,7 @@ export const buildAuditSnapshot = async (
       (tieBreak.get(a) ?? 0) - (tieBreak.get(b) ?? 0),
   );
   const snapshot = {
-    generatedAt: new Date().toISOString(),
+    generatedAt: now.toISOString(),
     focus,
     capabilities: {
       epidemicSoundSearch: isEpidemicConfigured(),
@@ -122,10 +124,16 @@ export const buildAuditSnapshot = async (
   return snapshot;
 };
 
-/** The focus of an audit run: "rotate" resolves to the focus of the current UTC weekday. */
+/**
+ * The focus of an audit run. "rotate" takes the focuses in turn, one per scheduled run, and
+ * carries on across days rather than restarting at midnight, so every focus comes up equally
+ * often.
+ */
 export const resolveFocus = (focus: ContentAuditFocus | "rotate", now = new Date()) =>
   focus === "rotate"
-    ? (CONTENT_AUDIT_WEEKDAY_FOCUS[now.getUTCDay()] as ContentAuditFocus)
+    ? (ContentAuditFocuses[
+        auditRun(now) % ContentAuditFocuses.length
+      ] as ContentAuditFocus)
     : focus;
 
 /**
@@ -332,6 +340,10 @@ const textOnly = (node: unknown): unknown => {
   }
   return node;
 };
+
+/** Number of the scheduled run window `now` falls in, counted from the epoch. */
+const auditRun = (now: Date) =>
+  Math.floor(now.getTime() / 1000 / (CONTENT_AUDIT_INTERVAL_HOURS * HOUR_S));
 
 const pick = (source: Record<string, unknown>, keys: string[]) =>
   Object.fromEntries(
