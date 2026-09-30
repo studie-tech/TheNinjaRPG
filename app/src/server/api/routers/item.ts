@@ -60,6 +60,11 @@ import {
 } from "@/drizzle/schema";
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import {
+  deletedReason,
+  editedReason,
+  outdateProposalsFor,
+} from "@/libs/contentReview/outdate";
+import {
   filterVisibleEvolutions,
   isEvolution,
   meetsEvolutionStatRequirements,
@@ -423,15 +428,23 @@ export const itemRouter = createTRPCRouter({
           "Delete incomplete — an evolution now points at this item. Remove it and retry.",
         );
       }
-      await ctx.drizzle.insert(actionLog).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        tableName: "item",
-        changes: [`Deleted: ${entry.name}`],
-        relatedId: entry.id,
-        relatedMsg: `Delete: ${entry.name}`,
-        relatedImage: entry.image,
-      });
+      await Promise.all([
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "item",
+          changes: [`Deleted: ${entry.name}`],
+          relatedId: entry.id,
+          relatedMsg: `Delete: ${entry.name}`,
+          relatedImage: entry.image,
+        }),
+        outdateProposalsFor(
+          ctx.drizzle,
+          "ITEM",
+          [entry.id],
+          deletedReason("ITEM", entry.name, user.username),
+        ),
+      ]);
       return { success: true, message: `Item deleted` };
     }),
   // Update an item
@@ -637,6 +650,12 @@ export const itemRouter = createTRPCRouter({
             ]
           : []),
       ]);
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "ITEM",
+        [entry.id],
+        editedReason("ITEM", entry.name, user.username),
+      );
       if (process.env.NODE_ENV !== "development") {
         await callDiscordContent(user.username, entry.name, diff, entry.image);
       }

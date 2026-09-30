@@ -12,7 +12,8 @@ import ContentBox from "@/layout/ContentBox";
 import { BloodlineHelper } from "@/layout/ContentHelp";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
-import { canChangeContent } from "@/utils/permissions";
+import { SuggestChange } from "@/layout/SuggestChange";
+import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { ZodAllTags, ZodBloodlineType } from "@/validators/combat";
@@ -40,22 +41,30 @@ export default function BloodlineEdit(props: {
   // Convert key null values to empty strings, preparing data for form
   setNullsToEmptyStrings(data);
 
-  // Redirect to profile if not content or admin
+  // Redirect to profile if not staff
   useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
+    if (userData && !isStaffRole(userData.role)) {
       void router.push("/profile");
     }
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
     return <Loader explanation="Loading data" />;
   }
 
-  return <SingleEditBloodline bloodline={data} refetch={refetch} />;
+  return (
+    <SingleEditBloodline
+      bloodline={data}
+      refetch={refetch}
+      canSave={canChangeContent(userData.role)}
+    />
+  );
 }
 
 interface SingleEditBloodlineProps {
+  /** Staff who cannot save content still get the editor, to suggest changes. */
+  canSave: boolean;
   bloodline: Bloodline;
   refetch: () => void;
 }
@@ -149,17 +158,27 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
       >
         {!bloodline && <p>Could not find this bloodline</p>}
         {!loading && bloodline && (
-          <EditContent
-            schema={BloodlineValidator}
-            form={form as unknown as UseFormReturn<ZodBloodlineType, any>}
-            formData={formData}
-            showSubmit={true}
-            buttonTxt="Save to Database"
-            type="bloodline"
-            relationId={bloodline.id}
-            allowImageUpload={true}
-            onAccept={handleBloodlineSubmit}
-          />
+          <>
+            <EditContent
+              schema={BloodlineValidator}
+              form={form as unknown as UseFormReturn<ZodBloodlineType, any>}
+              formData={formData}
+              showSubmit={props.canSave}
+              buttonTxt="Save to Database"
+              type="bloodline"
+              relationId={bloodline.id}
+              allowImageUpload={props.canSave}
+              onAccept={handleBloodlineSubmit}
+            />
+            <div className="mt-2 flex justify-end">
+              <SuggestChange
+                entityType="BLOODLINE"
+                entityId={bloodline.id}
+                getData={() => form.getValues()}
+                label={props.canSave ? "Suggest instead" : "Suggest a change"}
+              />
+            </div>
+          </>
         )}
       </ContentBox>
 

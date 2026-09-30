@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as contentReviewCleanup from "@/libs/contentReview/cleanup";
 import * as gamesettings from "@/libs/gamesettings";
 import * as raids from "@/routers/raids";
 import * as grant from "@/server/utils/purchases/grant";
@@ -23,6 +24,7 @@ describe("account deletion in the existing cleaner", () => {
     vi.spyOn(gamesettings, "lockWithDailyTimer").mockResolvedValue({ isNewDay: false } as Awaited<ReturnType<typeof gamesettings.lockWithDailyTimer>>);
     vi.spyOn(gamesettings, "updateGameSetting").mockImplementation(mocks.reset);
     vi.spyOn(raids, "cleanupExpiredExclusiveRaids").mockImplementation(vi.fn());
+    vi.spyOn(contentReviewCleanup, "cleanupContentProposals").mockResolvedValue({ removed: 0, filesDeleted: 0 });
     vi.spyOn(grant, "reconcileFederalStatuses").mockImplementation(vi.fn());
     vi.spyOn(processor, "processAccountDeletions").mockImplementation(mocks.process);
     process.env["CRON_SECRET"] = "test-cron";
@@ -41,6 +43,12 @@ describe("account deletion in the existing cleaner", () => {
     expect(mocks.execute).toHaveBeenCalled();
     expect(mocks.process).toHaveBeenCalledOnce();
     expect(mocks.reset).not.toHaveBeenCalled();
+  });
+  it("still processes deletions when content review cleanup fails", async () => {
+    mocks.lock.mockResolvedValueOnce({ isNewHour: true, prevTime: new Date(0) });
+    vi.spyOn(contentReviewCleanup, "cleanupContentProposals").mockRejectedValue(new Error("storage down"));
+    expect((await GET(request())).status).toBe(200);
+    expect(mocks.process).toHaveBeenCalledOnce();
   });
   it("uses the standard cleaner failure and timer rollback for deletion failures", async () => {
     const previous = new Date(0);

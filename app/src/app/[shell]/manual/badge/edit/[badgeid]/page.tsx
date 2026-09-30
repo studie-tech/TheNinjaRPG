@@ -8,8 +8,9 @@ import ChatInputField from "@/layout/ChatInputField";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
+import { SuggestChange } from "@/layout/SuggestChange";
 import { useBadgeEditForm } from "@/libs/badge";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { ZodBadgeType } from "@/validators/badge";
 import { BadgeValidator } from "@/validators/badge";
@@ -26,22 +27,30 @@ export default function BadgeEdit(props: { params: Promise<{ badgeid: string }> 
     { enabled: !!badgeId && !!userData },
   );
 
-  // Redirect to profile if not content or admin
+  // Redirect to profile if not staff
   useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
+    if (userData && !isStaffRole(userData.role)) {
       router.push("/profile");
     }
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role) || !data) {
+  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
     return <Loader explanation="Loading data" />;
   }
 
-  return <SingleEditBadge badge={data} refetch={refetch} />;
+  return (
+    <SingleEditBadge
+      badge={data}
+      refetch={refetch}
+      canSave={canChangeContent(userData.role)}
+    />
+  );
 }
 
 interface SingleEditBadgeProps {
+  /** Staff who cannot save content still get the editor, to suggest changes. */
+  canSave: boolean;
   badge: Badge;
   refetch: () => void;
 }
@@ -90,19 +99,29 @@ const SingleEditBadge: React.FC<SingleEditBadgeProps> = (props) => {
     >
       {!badge && <p>Could not find this badge</p>}
       {badge && (
-        <EditContent
-          schema={BadgeValidator}
-          form={form}
-          formData={formData}
-          showSubmit={true}
-          buttonTxt="Save to Database"
-          type="badge"
-          relationId={badge.id}
-          allowImageUpload={true}
-          onAccept={handleBadgeSubmit}
-          submitLoading={isUpdating}
-          submitLoadingText="Saving"
-        />
+        <>
+          <EditContent
+            schema={BadgeValidator}
+            form={form}
+            formData={formData}
+            showSubmit={props.canSave}
+            buttonTxt="Save to Database"
+            type="badge"
+            relationId={badge.id}
+            allowImageUpload={props.canSave}
+            onAccept={handleBadgeSubmit}
+            submitLoading={isUpdating}
+            submitLoadingText="Saving"
+          />
+          <div className="mt-2 flex justify-end">
+            <SuggestChange
+              entityType="BADGE"
+              entityId={badge.id}
+              getData={() => form.getValues()}
+              label={props.canSave ? "Suggest instead" : "Suggest a change"}
+            />
+          </div>
+        </>
       )}
     </ContentBox>
   );

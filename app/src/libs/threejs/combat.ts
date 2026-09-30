@@ -101,6 +101,9 @@ type PendingSfx = { url: string; volume: number };
 let pendingSfxQueue: PendingSfx[] = [];
 let wasMovingLastFrame = false;
 
+/** Size of an effect animation on the battlefield; unlike static assets it ignores the hex size. */
+export const EFFECT_ANIMATION_SIZE = 50;
+
 // PERFORMANCE: Cache for effect meshes to avoid getObjectByName calls
 const effectMeshCache = new Map<string, Group>();
 
@@ -626,7 +629,7 @@ export const drawCombatEffect = (info: {
             const actionSprite = showAnimation({
               gameAsset: obj,
               spriteMixer,
-              scale: 50,
+              scale: EFFECT_ANIMATION_SIZE,
               position: { x: w / 2, y: h / 2 },
               layer: 5,
             });
@@ -651,7 +654,7 @@ export const drawCombatEffect = (info: {
               gameAsset: obj,
               spriteMixer,
               playInfinite: true,
-              scale: 50,
+              scale: EFFECT_ANIMATION_SIZE,
               position: { x: w / 2, y: h / 2 },
               layer: 5,
             });

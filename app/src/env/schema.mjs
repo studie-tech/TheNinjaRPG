@@ -41,6 +41,8 @@ export const serverSchema = z.object({
   TWITTER_ACCESS_TOKEN: z.string().optional(),
   TWITTER_ACCESS_SECRET: z.string().optional(),
   REPLICATE_API_TOKEN: z.string().optional(),
+  // Epidemic Sound Partner API key for sound suggestions in the content review desk
+  EPIDEMIC_API_KEY: z.string().optional(),
   SENDGRID_API_KEY: z.string().optional(),
   CAPTCHA_SALT: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
@@ -108,6 +110,7 @@ export const serverEnv = {
   TWITTER_ACCESS_TOKEN: process.env.TWITTER_ACCESS_TOKEN,
   TWITTER_ACCESS_SECRET: process.env.TWITTER_ACCESS_SECRET,
   REPLICATE_API_TOKEN: process.env.REPLICATE_API_TOKEN,
+  EPIDEMIC_API_KEY: process.env.EPIDEMIC_API_KEY,
   SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
   CAPTCHA_SALT: process.env.CAPTCHA_SALT,
   CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,

@@ -1,6 +1,13 @@
 "use client";
 
-import { BarChartBig, Box, Copy, SquarePen, Trash2 } from "lucide-react";
+import {
+  BarChartBig,
+  Box,
+  Copy,
+  MessageSquarePlus,
+  SquarePen,
+  Trash2,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type React from "react";
@@ -30,7 +37,7 @@ import { getRewardArray } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { capitalizeFirstLetter, formatBattleUsageType } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
 import type { ZodAllTags } from "@/validators/combat";
@@ -53,6 +60,17 @@ export type GenericObject = {
   village?: { name: string };
   href?: string;
 };
+
+/** Editors that open in suggest mode for staff who cannot save content. */
+const SUGGESTABLE_CONTENT: readonly string[] = [
+  "jutsu",
+  "item",
+  "bloodline",
+  "quest",
+  "badge",
+  "asset",
+  "ai",
+];
 
 export interface ItemWithEffectsProps {
   item:
@@ -601,6 +619,19 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     )}
                   </>
                 )}
+                {showEdit &&
+                  SUGGESTABLE_CONTENT.includes(showEdit) &&
+                  userData &&
+                  isStaffRole(userData.role) &&
+                  !canChangeContent(userData.role) && (
+                    <Link
+                      href={`/manual/${showEdit}/edit/${item.id}`}
+                      aria-label="Suggest a change"
+                      title="Suggest a change"
+                    >
+                      <MessageSquarePlus className="h-6 w-6 hover:text-popover-foreground/50" />
+                    </Link>
+                  )}
               </div>
             </div>
             {!hideDetails && !hideDates && (

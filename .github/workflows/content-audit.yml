@@ -1,0 +1,363 @@
+# Daily content audit: Codex reviews a snapshot of the game's content and adds its
+# suggestions to the staff review desk (/manual/review).
+#
+# The jobs keep the model away from secrets:
+#   target       picks the deployment to audit: production, or a pull request's preview
+#   snapshot     fetches the audit input with CRON_SECRET
+#   gallery      on animation days, draws the most used animation and static assets with the
+#                game's combat renderer (/manual/review/battlefield) in headless Chrome
+#   audit        runs Codex with no secret and a read-only sandbox; its final message must
+#                match the proposal JSON schema the server generates from its Zod validator
+#   battlefield  draws every suggestion that changes what content shows in battle
+#   verify       Codex looks at those renders and keeps, trims or drops the suggestions
+#   submit       posts what is left with CRON_SECRET; the server validates everything again
+#
+# Pull requests that touch the audit run it against the PR's Vercel preview (comment
+# `/tnr-create-preview` first), so the whole pipeline is exercised before it ships.
+name: Content audit
+
+on:
+  schedule:
+    - cron: "40 3 * * *"
+  workflow_dispatch:
+    inputs:
+      focus:
+        description: "Audit focus; rotate picks one per weekday"
+        type: choice
+        options:
+          [rotate, grammar, balance, sound, animation, visual, consistency, new_content]
+        default: rotate
+  pull_request:
+    paths:
+      - ".github/workflows/content-audit.yml"
+      - ".github/scripts/render-battlefield.mjs"
+      - ".github/scripts/apply-visual-check.mjs"
+      - ".agents/skills/tnr-content-audit/**"
+      - "app/src/app/api/content-review/**"
+      - "app/src/app/*/manual/review/battlefield/**"
+      - "app/src/libs/contentReview/**"
+      - "app/src/libs/threejs/battlefieldPreview.ts"
+      - "app/src/validators/contentReview.ts"
+
+concurrency:
+  group: content-audit-${{ github.event.pull_request.number || 'production' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PLAYWRIGHT_VERSION: "1.63.0"
+
+jobs:
+  target:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+      deployments: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      base_url: ${{ steps.preview.outputs.preview_url || steps.production.outputs.base_url }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 1
+      - id: preview
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node .github/scripts/check-preview-ready.mjs
+      - id: production
+        if: github.event_name != 'pull_request'
+        run: echo "base_url=https://www.theninja-rpg.com" >> "$GITHUB_OUTPUT"
+      - name: Explain a skipped pull request run
+        if: github.event_name == 'pull_request' && steps.preview.outputs.is_ready != 'true'
+        # The reason is free text (it quotes commands in backticks), so it reaches the shell as
+        # an environment variable, never inside the script.
+        env:
+          REASON: ${{ steps.preview.outputs.reason }}
+        run: >
+          echo "::notice::No ready preview for this pull request ($REASON).
+          Comment /tnr-create-preview, then re-run this workflow."
+
+  snapshot:
+    needs: target
+    if: needs.target.outputs.base_url != ''
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    outputs:
+      focus: ${{ steps.fetch.outputs.focus }}
+    steps:
+      - id: fetch
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          BASE_URL: ${{ needs.target.outputs.base_url }}
+          FOCUS: ${{ inputs.focus || 'rotate' }}
+        run: |
+          curl -fsS --retry 2 --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "x-vercel-protection-bypass: $VERCEL_BYPASS" \
+            "$BASE_URL/api/content-review/snapshot?focus=$FOCUS" -o snapshot.json
+          jq '.proposalSchema' snapshot.json > schema.json
+          jq '.visualCheckSchema' snapshot.json > visual-check-schema.json
+          echo "focus=$(jq -r '.focus' snapshot.json)" >> "$GITHUB_OUTPUT"
+          jq -r '"Snapshot: focus \(.focus), \(.entities | length) entities, \(.assets | length) assets, \(.openSuggestions | length) open suggestions."' snapshot.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: audit-input
+          path: |
+            snapshot.json
+            schema.json
+            visual-check-schema.json
+          retention-days: 7
+
+  gallery:
+    needs: [target, snapshot]
+    if: needs.snapshot.outputs.focus == 'animation'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/scripts
+      - uses: actions/download-artifact@v7
+        with:
+          name: audit-input
+          path: audit
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install Playwright
+        run: npm install --no-save --no-package-lock --prefix .github/scripts "playwright@$PLAYWRIGHT_VERSION"
+      - name: Draw the most used assets on the battlefield
+        env:
+          BASE_URL: ${{ needs.target.outputs.base_url }}
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          MODE: gallery
+          SNAPSHOT: audit/snapshot.json
+          OUT_DIR: battlefield
+        run: node .github/scripts/render-battlefield.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: battlefield-gallery
+          path: battlefield
+          retention-days: 7
+
+  audit:
+    needs: [snapshot, gallery]
+    if: >-
+      always() && needs.snapshot.result == 'success'
+      && (needs.gallery.result == 'success' || needs.gallery.result == 'skipped')
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 40
+    outputs:
+      proposals: ${{ steps.codex.outputs.final-message }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - uses: actions/download-artifact@v7
+        with:
+          name: audit-input
+          path: audit
+      - uses: actions/download-artifact@v7
+        if: needs.gallery.result == 'success'
+        with:
+          name: battlefield-gallery
+          path: audit/battlefield
+      - name: Attach battlefield renders
+        id: renders
+        run: |
+          shopt -s nullglob
+          files=(audit/battlefield/*.png)
+          if [ ${#files[@]} -gt 0 ]; then
+            args=$(printf '%s\n' "${files[@]}" | jq -R . | jq -sc 'map(["--image", .]) | add')
+            note="Battlefield renders of the most used animation and static assets are attached; audit/battlefield/index.json lists the blocks on each image."
+          else
+            args='[]'
+            note="No battlefield renders are attached today."
+          fi
+          echo "codex_args=$args" >> "$GITHUB_OUTPUT"
+          echo "note=$note" >> "$GITHUB_OUTPUT"
+      # Codex is the job's last step and holds no secret; the submit job is the only one that
+      # can write, and the server re-validates what it receives.
+      - name: Run Codex
+        id: codex
+        uses: openai/codex-action@0b91f4a2703c23df3102c3f0967d3c6db34eedef # v1
+        with:
+          openai-api-key: ${{ secrets.AZURE_API_KEY }}
+          responses-api-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          # Azure Responses API expects the deployment name here.
+          model: "gpt-5.6-sol"
+          # An unpinned install takes CLI releases that were never run against the Azure
+          # deployments; 0.159.0 fails there before its first reply.
+          codex-version: "0.154.0"
+          sandbox: "read-only"
+          # Blacksmith runners fail both drop-sudo and sudo-based user switching checks.
+          safety-strategy: "unsafe"
+          allow-users: "MathiasGruber"
+          output-schema-file: audit/schema.json
+          codex-args: ${{ steps.renders.outputs.codex_args }}
+          prompt: |
+            You are running the daily content audit for TheNinja-RPG.
+            Follow .agents/skills/tnr-content-audit/SKILL.md exactly.
+            The snapshot is audit/snapshot.json and today's focus is "${{ needs.snapshot.outputs.focus }}".
+            ${{ steps.renders.outputs.note }}
+            Your final message must be only the JSON object described by the output schema.
+
+  battlefield:
+    needs: [target, audit]
+    if: always() && needs.audit.result == 'success'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 20
+    outputs:
+      count: ${{ steps.render.outputs.count }}
+      suggestions: ${{ steps.render.outputs.suggestions }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/scripts
+      - uses: actions/download-artifact@v7
+        with:
+          name: audit-input
+          path: audit
+      - name: Save the audit's suggestions
+        env:
+          PROPOSALS: ${{ needs.audit.outputs.proposals }}
+        run: |
+          printf '%s' "$PROPOSALS" > audit/proposals.json
+          jq -e '.proposals | type == "array"' audit/proposals.json > /dev/null
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install Playwright
+        run: npm install --no-save --no-package-lock --prefix .github/scripts "playwright@$PLAYWRIGHT_VERSION"
+      - name: Draw the suggestions on the battlefield
+        id: render
+        env:
+          BASE_URL: ${{ needs.target.outputs.base_url }}
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          MODE: verify
+          SNAPSHOT: audit/snapshot.json
+          PROPOSALS: audit/proposals.json
+          OUT_DIR: audit/battlefield
+        run: node .github/scripts/render-battlefield.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: battlefield-check
+          path: |
+            audit/proposals.json
+            audit/battlefield
+          retention-days: 7
+
+  verify:
+    needs: [snapshot, battlefield]
+    if: >-
+      always() && needs.battlefield.result == 'success'
+      && fromJSON(needs.battlefield.outputs.count || '0') > 0
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 20
+    outputs:
+      verdicts: ${{ steps.codex.outputs.final-message }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - uses: actions/download-artifact@v7
+        with:
+          name: audit-input
+          path: audit
+      - uses: actions/download-artifact@v7
+        with:
+          name: battlefield-check
+          path: audit
+      - name: Attach battlefield renders
+        id: renders
+        run: |
+          shopt -s nullglob
+          files=(audit/battlefield/*.png)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::The battlefield job reported renders, but none were downloaded"
+            exit 1
+          fi
+          args=$(printf '%s\n' "${files[@]}" | jq -R . | jq -sc 'map(["--image", .]) | add')
+          echo "codex_args=$args" >> "$GITHUB_OUTPUT"
+      - name: Run Codex
+        id: codex
+        uses: openai/codex-action@0b91f4a2703c23df3102c3f0967d3c6db34eedef # v1
+        with:
+          openai-api-key: ${{ secrets.AZURE_API_KEY }}
+          responses-api-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          model: "gpt-5.6-sol"
+          codex-version: "0.154.0"
+          sandbox: "read-only"
+          safety-strategy: "unsafe"
+          allow-users: "MathiasGruber"
+          output-schema-file: audit/visual-check-schema.json
+          codex-args: ${{ steps.renders.outputs.codex_args }}
+          prompt: |
+            You are checking today's content audit suggestions for TheNinja-RPG on the battlefield.
+            Follow the "Battlefield renders" section of .agents/skills/tnr-content-audit/SKILL.md.
+            The suggestions are audit/proposals.json and the snapshot is audit/snapshot.json.
+            The attached images draw every suggestion that changes what content shows in battle;
+            audit/battlefield/index.json lists the blocks on each image, and "Suggestion N" is proposals[N].
+            Return one verdict per suggestion that appears in the renders.
+            Your final message must be only the JSON object described by the output schema.
+
+  submit:
+    needs: [target, snapshot, audit, battlefield, verify]
+    if: >-
+      always() && needs.audit.result == 'success' && needs.battlefield.result == 'success'
+      && (needs.verify.result == 'success' || needs.verify.result == 'skipped')
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/scripts
+      - name: Apply the battlefield check
+        env:
+          PROPOSALS: ${{ needs.audit.outputs.proposals }}
+          VERDICTS: ${{ needs.verify.outputs.verdicts }}
+          RENDERED_INDICES: ${{ needs.battlefield.outputs.suggestions }}
+        run: |
+          printf '%s' "$PROPOSALS" > proposals.json
+          jq -e '.proposals | type == "array"' proposals.json > /dev/null
+          if [ -n "$VERDICTS" ]; then
+            printf '%s' "$VERDICTS" > verdicts.json
+            jq -e '.verdicts | type == "array"' verdicts.json > /dev/null
+          fi
+          PROPOSALS_FILE=proposals.json VERDICTS_FILE=verdicts.json OUT_FILE=checked.json \
+            node .github/scripts/apply-visual-check.mjs
+      - name: Submit suggestions
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          BASE_URL: ${{ needs.target.outputs.base_url }}
+          FOCUS: ${{ needs.snapshot.outputs.focus }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq --arg run "$RUN_URL" --arg focus "$FOCUS" \
+            '. + {agentName: "codex · gpt-5.6-sol · tnr-content-audit", runUrl: $run, focus: $focus}' \
+            checked.json > submission.json
+          status=$(curl -sS --max-time 290 -o result.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "x-vercel-protection-bypass: $VERCEL_BYPASS" \
+            -H "content-type: application/json" \
+            --data @submission.json \
+            "$BASE_URL/api/content-review/proposals")
+          if [ "$status" != "200" ]; then
+            echo "::error::Submission failed with HTTP $status"
+            cat result.json
+            exit 1
+          fi
+          jq -r '.summary' result.json >> "$GITHUB_STEP_SUMMARY"

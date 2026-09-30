@@ -1,8 +1,10 @@
 // @vitest-environment node
 
-vi.mock("@/server/utils/cron", () => ({ authenticateCronRequest: () => null }));
-
-import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
+import {
+  resetServerModuleStubs,
+  stubCronAuth,
+  stubDatabase,
+} from "../../../setup/serverModules";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type DailyQuestTestMocks = {
@@ -100,6 +102,7 @@ describe("daily-quest cron", () => {
   afterEach(resetServerModuleStubs);
 
   beforeEach(() => {
+    stubCronAuth(() => null);
     stubDatabase({
       query: {
         quest: { findMany: getDailyQuestTestMocks().findQuests },

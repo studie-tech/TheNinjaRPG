@@ -1,0 +1,222 @@
+import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import {
+  CONTENT_PROPOSAL_EVIDENCE_DAYS,
+  type ContentProposalEntityType,
+} from "@/drizzle/constants";
+import { contentProposal, contentProposalBasis } from "@/drizzle/schema";
+import type { DrizzleClient } from "@/server/db";
+import { type ContentEntity, entityKey, entityLabel, loadEntities } from "./entities";
+import { MISSING_VERSION } from "./version";
+
+/**
+ * Mark pending suggestions that rest on these entities as outdated. Every content update and
+ * delete calls this once its write has finished, so a suggestion built on an old version
+ * leaves the queue the moment its basis changes, while a save that changed nothing leaves it
+ * in place. Only PENDING rows are touched, which leaves out the suggestion being applied.
+ */
+export const outdateProposalsFor = async (
+  client: DrizzleClient,
+  entityType: ContentProposalEntityType,
+  entityIds: string[],
+  reason: string,
+) => {
+  if (entityIds.length === 0) return;
+  const rows = await client
+    .select({
+      id: contentProposalBasis.proposalId,
+      entityId: contentProposalBasis.entityId,
+      version: contentProposalBasis.version,
+    })
+    .from(contentProposalBasis)
+    .innerJoin(contentProposal, eq(contentProposal.id, contentProposalBasis.proposalId))
+    .where(
+      and(
+        eq(contentProposalBasis.entityType, entityType),
+        inArray(contentProposalBasis.entityId, entityIds),
+        eq(contentProposal.status, "PENDING"),
+      ),
+    );
+  if (rows.length === 0) return;
+  const live = await loadEntities(
+    client,
+    entityIds.map((entityId) => ({ entityType, entityId })),
+  );
+  const changed = rows.filter(
+    (row) =>
+      (live.get(entityKey(entityType, row.entityId))?.version ?? MISSING_VERSION) !==
+      row.version,
+  );
+  await markOutdated(client, [...new Set(changed.map((row) => row.id))], reason);
+};
+
+/** Reason shown for an edit made through one of the content editors. */
+export const editedReason = (
+  entityType: ContentProposalEntityType,
+  name: string,
+  username: string,
+) => `${entityLabel(entityType)} ${name} was edited by ${username}`;
+
+/** Reason shown for a deletion made through one of the content editors. */
+export const deletedReason = (
+  entityType: ContentProposalEntityType,
+  name: string,
+  username: string,
+) => `${entityLabel(entityType)} ${name} was deleted by ${username}`;
+
+/**
+ * Return to the queue the suggestions an undone approval outdated. Once its writes are rolled
+ * back, a suggestion outdated since `since` that rests on one of these entities is current
+ * again when its whole basis matches the live rows and its usage data has not expired.
+ */
+export const reinstateProposalsFor = async (
+  client: DrizzleClient,
+  refs: { entityType: ContentProposalEntityType; entityId: string }[],
+  since: Date,
+) => {
+  if (refs.length === 0) return;
+  const rows = await client
+    .select({
+      id: contentProposal.id,
+      expiresAt: contentProposal.expiresAt,
+      entityType: contentProposalBasis.entityType,
+      entityId: contentProposalBasis.entityId,
+      version: contentProposalBasis.version,
+    })
+    .from(contentProposal)
+    .innerJoin(
+      contentProposalBasis,
+      eq(contentProposalBasis.proposalId, contentProposal.id),
+    )
+    .where(
+      and(
+        eq(contentProposal.status, "OUTDATED"),
+        gte(contentProposal.statusChangedAt, since),
+      ),
+    );
+  const touched = new Set(refs.map((ref) => entityKey(ref.entityType, ref.entityId)));
+  const byProposal = new Map<string, typeof rows>();
+  for (const row of rows)
+    byProposal.set(row.id, [...(byProposal.get(row.id) ?? []), row]);
+  const candidates = [...byProposal.values()].filter(
+    (basis) =>
+      basis.some((row) => touched.has(entityKey(row.entityType, row.entityId))) &&
+      !basis.some((row) => row.expiresAt && row.expiresAt.getTime() < Date.now()),
+  );
+  if (candidates.length === 0) return;
+  const live = await loadEntities(client, candidates.flat());
+  const current = candidates.filter((basis) =>
+    basis.every(
+      (row) =>
+        (live.get(entityKey(row.entityType, row.entityId))?.version ??
+          MISSING_VERSION) === row.version,
+    ),
+  );
+  if (current.length === 0) return;
+  await client
+    .update(contentProposal)
+    .set({ status: "PENDING", outdatedReason: null, statusChangedAt: new Date() })
+    .where(
+      and(
+        inArray(
+          contentProposal.id,
+          current.map((basis) => basis[0]?.id ?? ""),
+        ),
+        eq(contentProposal.status, "OUTDATED"),
+      ),
+    );
+};
+
+/**
+ * Re-check the basis of the given pending suggestions against the live rows, and expire
+ * suggestions whose usage data is too old. This catches edits that bypassed the content
+ * editors (migrations, console fixes). Pass `loaded` when the caller already holds the basis
+ * entities, keyed by `entityKey`, to save loading them again. Returns the reason per
+ * suggestion that went out of date.
+ */
+export const refreshProposalFreshness = async (
+  client: DrizzleClient,
+  proposals: {
+    id: string;
+    expiresAt: Date | null;
+    basis: {
+      entityType: ContentProposalEntityType;
+      entityId: string;
+      version: string;
+    }[];
+  }[],
+  loaded?: Map<string, ContentEntity>,
+) => {
+  const outdated = new Map<string, string>();
+  if (proposals.length === 0) return outdated;
+  const entities =
+    loaded ??
+    (await loadEntities(
+      client,
+      proposals.flatMap((proposal) => proposal.basis),
+    ));
+  const now = Date.now();
+  const byReason = new Map<string, string[]>();
+  const add = (reason: string, id: string) => {
+    byReason.set(reason, [...(byReason.get(reason) ?? []), id]);
+    outdated.set(id, reason);
+  };
+  for (const proposal of proposals) {
+    if (proposal.expiresAt && proposal.expiresAt.getTime() < now) {
+      add(
+        `Its usage data is older than ${CONTENT_PROPOSAL_EVIDENCE_DAYS} days`,
+        proposal.id,
+      );
+      continue;
+    }
+    for (const basis of proposal.basis) {
+      const entity = entities.get(entityKey(basis.entityType, basis.entityId));
+      const version = entity?.version ?? MISSING_VERSION;
+      if (version === basis.version) continue;
+      const label = entityLabel(basis.entityType);
+      add(
+        entity
+          ? `${label} ${entity.name} changed since the suggestion was made`
+          : `${label} ${basis.entityId} no longer exists`,
+        proposal.id,
+      );
+      break;
+    }
+  }
+  await Promise.all(
+    [...byReason.entries()].map(([reason, ids]) => markOutdated(client, ids, reason)),
+  );
+  return outdated;
+};
+
+/** Outdate pending suggestions whose usage data has expired. */
+export const expireStaleEvidence = async (client: DrizzleClient) => {
+  const rows = await client
+    .select({ id: contentProposal.id })
+    .from(contentProposal)
+    .where(
+      and(
+        eq(contentProposal.status, "PENDING"),
+        lt(contentProposal.expiresAt, new Date()),
+      ),
+    );
+  await markOutdated(
+    client,
+    rows.map((row) => row.id),
+    `Its usage data is older than ${CONTENT_PROPOSAL_EVIDENCE_DAYS} days`,
+  );
+};
+
+/** Outdate those of `ids` that are still pending, with `reason` cut to fit its column. */
+const markOutdated = async (client: DrizzleClient, ids: string[], reason: string) => {
+  if (ids.length === 0) return;
+  await client
+    .update(contentProposal)
+    .set({
+      status: "OUTDATED",
+      outdatedReason: reason.slice(0, 191),
+      statusChangedAt: new Date(),
+    })
+    .where(
+      and(inArray(contentProposal.id, ids), eq(contentProposal.status, "PENDING")),
+    );
+};

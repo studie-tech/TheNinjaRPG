@@ -17,9 +17,10 @@ import { QuestHelper } from "@/layout/ContentHelp";
 import { EditContent, ObjectiveFormWrapper } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
 import { RaidThresholdEditor } from "@/layout/RaidThresholdEditor";
+import { SuggestChange } from "@/layout/SuggestChange";
 import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
 import { verifyQuestObjectiveFlow } from "@/libs/quest";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type {
   AllObjectivesType,
@@ -48,15 +49,15 @@ export default function ManualBloodlineEdit(props: {
     { enabled: !!questId },
   );
 
-  // Redirect to profile if not content or admin
+  // Redirect to profile if not staff
   useEffect(() => {
-    if (userData && !canChangeContent(userData.role)) {
+    if (userData && !isStaffRole(userData.role)) {
       void router.push("/profile");
     }
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !canChangeContent(userData.role)) {
+  if (isPending || !userData || !isStaffRole(userData.role)) {
     return <Loader explanation="Loading data" />;
   }
   if (!data) {
@@ -71,10 +72,18 @@ export default function ManualBloodlineEdit(props: {
     );
   }
 
-  return <SingleEditQuest quest={data} refetch={refetch} />;
+  return (
+    <SingleEditQuest
+      quest={data}
+      refetch={refetch}
+      canSave={canChangeContent(userData.role)}
+    />
+  );
 }
 
 interface SingleEditQuestProps {
+  /** Staff who cannot save content still get the editor, to suggest changes. */
+  canSave: boolean;
   quest: Quest;
   refetch: () => Promise<unknown>;
 }
@@ -87,6 +96,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
     formData,
     setObjectives,
     handleQuestSubmit,
+    getSuggestionData,
     isUpdating,
   } = useQuestEditForm(props.quest, props.refetch);
 
@@ -274,20 +284,30 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         )}
 
         {props.quest && (
-          <EditContent
-            schema={QuestFormRawSchema}
-            form={form as UseFormReturn<ZodQuestFormType>}
-            formData={formData}
-            showSubmit={true}
-            buttonTxt="Save to Database"
-            type="quest"
-            relationId={props.quest.id}
-            allowImageUpload={true}
-            onAccept={handleQuestSubmit}
-            submitDisabled={currentValues.consecutiveObjectives && !isFlowValid}
-            submitLoading={isUpdating}
-            submitLoadingText="Saving"
-          />
+          <>
+            <EditContent
+              schema={QuestFormRawSchema}
+              form={form as UseFormReturn<ZodQuestFormType>}
+              formData={formData}
+              showSubmit={props.canSave}
+              buttonTxt="Save to Database"
+              type="quest"
+              relationId={props.quest.id}
+              allowImageUpload={props.canSave}
+              onAccept={handleQuestSubmit}
+              submitDisabled={currentValues.consecutiveObjectives && !isFlowValid}
+              submitLoading={isUpdating}
+              submitLoadingText="Saving"
+            />
+            <div className="mt-2 flex justify-end">
+              <SuggestChange
+                entityType="QUEST"
+                entityId={props.quest.id}
+                getData={getSuggestionData}
+                label={props.canSave ? "Suggest instead" : "Suggest a change"}
+              />
+            </div>
+          </>
         )}
       </ContentBox>
       <ObjectiveFlowGraph
@@ -312,7 +332,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
       {renderSelectedObjective()}
 
       {/* Damage Thresholds for Raids */}
-      {currentValues.questType === "raid" && (
+      {currentValues.questType === "raid" && props.canSave && (
         <ContentBox
           title="Damage Thresholds"
           subtitle="Configure reward tiers based on damage dealt"

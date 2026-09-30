@@ -64,6 +64,11 @@ import {
   village,
   war,
 } from "@/drizzle/schema";
+import {
+  deletedReason,
+  editedReason,
+  outdateProposalsFor,
+} from "@/libs/contentReview/outdate";
 import { getFarmingLevel, qualifiesForFarmActivityReward } from "@/libs/farming";
 import { getGatheringItemDrops } from "@/libs/gathering";
 import { getHuntingItemDrops } from "@/libs/hunting";
@@ -862,6 +867,12 @@ export const questsRouter = createTRPCRouter({
             relatedImage: entry.image,
           }),
         ]);
+        await outdateProposalsFor(
+          ctx.drizzle,
+          "QUEST",
+          [entry.id],
+          editedReason("QUEST", entry.name, user.username),
+        );
         if (process.env.NODE_ENV !== "development") {
           await callDiscordContent(user.username, entry.name, diff, entry.image);
         }
@@ -1038,6 +1049,12 @@ export const questsRouter = createTRPCRouter({
             relatedImage: entry.image,
           }),
         ]);
+        await outdateProposalsFor(
+          ctx.drizzle,
+          "QUEST",
+          [entry.id],
+          deletedReason("QUEST", entry.name, user.username),
+        );
         return { success: true, message: `Quest deleted` };
       } else {
         return { success: false, message: `Not allowed to delete quest` };

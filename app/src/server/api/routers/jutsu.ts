@@ -40,6 +40,11 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
+import {
+  deletedReason,
+  editedReason,
+  outdateProposalsFor,
+} from "@/libs/contentReview/outdate";
 import { filterVisibleEvolutions, validateEvolutionGraph } from "@/libs/evolution";
 import type { ComputedJutsuLoadout, JutsuCapFlags, JutsuEquipCap } from "@/libs/jutsu";
 import {
@@ -474,6 +479,12 @@ export const jutsuRouter = createTRPCRouter({
           relatedImage: entry.image,
         }),
       ]);
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "JUTSU",
+        [entry.id],
+        deletedReason("JUTSU", entry.name, user.username),
+      );
       return { success: true, message: `Jutsu deleted` };
     }),
 
@@ -828,6 +839,12 @@ export const jutsuRouter = createTRPCRouter({
             ]
           : []),
       ]);
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "JUTSU",
+        [entry.id],
+        editedReason("JUTSU", entry.name, user.username),
+      );
       if (process.env.NODE_ENV !== "development") {
         await callDiscordContent(user.username, entry.name, diff, entry.image);
       }

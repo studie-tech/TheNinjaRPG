@@ -57,6 +57,7 @@ export default function SignupUser() {
         <SignUp
           path="/signup"
           routing="path"
+          signInUrl="/login"
           appearance={{
             elements: {
               rootBox: "!w-full [color-scheme:light]",

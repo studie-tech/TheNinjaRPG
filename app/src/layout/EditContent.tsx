@@ -36,6 +36,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
 import ContentImage from "@/layout/ContentImage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
+import { EpidemicSfxSearch } from "@/layout/EpidemicSfxSearch";
 import Image from "@/layout/Image";
 import Modal from "@/layout/Modal";
 import RichInput from "@/layout/RichInput";
@@ -399,45 +400,63 @@ export const EditContent = <
               </div>
 
               {assetPickerType === "SFX" ? (
-                <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
-                  {(allPickerAssets || [])
-                    .filter((a) => a.type === "SFX")
-                    .map((a) => {
-                      const selected =
-                        String(form.getValues(assetPickerField as Path<S>) ?? "") ===
-                        a.id;
-                      return (
-                        <div
-                          key={a.id}
-                          className={cn(
-                            "space-y-2 rounded border p-2",
-                            selected ? "border-green-500 bg-green-50" : "",
-                          )}
-                        >
-                          <Label>{a.name}</Label>
-                          {/* biome-ignore lint/a11y/useMediaCaption: Audio asset preview - no captions for music/sfx */}
-                          <audio src={a.url ?? undefined} controls className="w-full" />
-                          <Button
-                            type="button"
-                            variant={selected ? "default" : "secondary"}
-                            className="w-full"
-                            onClick={() => {
-                              if (assetPickerField) {
-                                form.setValue(
-                                  assetPickerField as unknown as Path<S>,
-                                  a.id as PathValue<S, K>,
-                                  { shouldDirty: true },
-                                );
-                                setAssetPickerOpen(false);
-                              }
-                            }}
+                <>
+                  <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
+                    {(allPickerAssets || [])
+                      .filter((a) => a.type === "SFX")
+                      .map((a) => {
+                        const selected =
+                          String(form.getValues(assetPickerField as Path<S>) ?? "") ===
+                          a.id;
+                        return (
+                          <div
+                            key={a.id}
+                            className={cn(
+                              "space-y-2 rounded border p-2",
+                              selected ? "border-green-500 bg-green-50" : "",
+                            )}
                           >
-                            {selected ? "Selected" : "Use this"}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                </div>
+                            <Label>{a.name}</Label>
+                            {/* biome-ignore lint/a11y/useMediaCaption: Audio asset preview - no captions for music/sfx */}
+                            <audio
+                              src={a.url ?? undefined}
+                              controls
+                              className="w-full"
+                            />
+                            <Button
+                              type="button"
+                              variant={selected ? "default" : "secondary"}
+                              className="w-full"
+                              onClick={() => {
+                                if (assetPickerField) {
+                                  form.setValue(
+                                    assetPickerField as unknown as Path<S>,
+                                    a.id as PathValue<S, K>,
+                                    { shouldDirty: true },
+                                  );
+                                  setAssetPickerOpen(false);
+                                }
+                              }}
+                            >
+                              {selected ? "Selected" : "Use this"}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                  <EpidemicSfxSearch
+                    onImported={(assetId) => {
+                      if (assetPickerField) {
+                        form.setValue(
+                          assetPickerField as unknown as Path<S>,
+                          assetId as PathValue<S, K>,
+                          { shouldDirty: true },
+                        );
+                        setAssetPickerOpen(false);
+                      }
+                    }}
+                  />
+                </>
               ) : (
                 <ActionSelector
                   items={allPickerAssets?.map((a) => ({

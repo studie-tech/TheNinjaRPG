@@ -318,6 +318,13 @@ export const formatSecondsToTimeDisplay = (totalSeconds: number): string => {
 };
 
 /**
+ * Length of a sound clip, e.g. "2.5 s". Epidemic Sound reports whole seconds, so a clip
+ * shorter than one second arrives as 0.
+ */
+export const formatSoundLength = (lengthMs: number) =>
+  lengthMs < 1000 ? "under 1 s" : `${(lengthMs / 1000).toFixed(1)} s`;
+
+/**
  * Get the first day of the next month at midnight UTC
  * Used for monthly reset countdowns
  */

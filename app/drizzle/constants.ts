@@ -260,16 +260,120 @@ export const LOG_TYPES = [
   "battleAction",
   "bloodline",
   "clan",
+  "gameAsset",
   "guide",
   "item",
   "jutsu",
   "poll",
+  "quest",
   "user",
   "userjutsu",
   "villageStructure",
   "war",
 ] as const;
 export type LogType = (typeof LOG_TYPES)[number];
+
+// Content review: suggested content changes from the daily audit and staff, decided in
+// /manual/review. See app/src/libs/contentReview/.
+
+/** What a suggestion improves; the review desk filters by it. */
+export const ContentProposalCategories = [
+  "GRAMMAR",
+  "BALANCE",
+  "SOUND",
+  "ANIMATION",
+  "VISUAL",
+  "CONSISTENCY",
+  "NEW_CONTENT",
+] as const;
+export type ContentProposalCategory = (typeof ContentProposalCategories)[number];
+/**
+ * A suggestion is PENDING until a reviewer applies or rejects it, OUTDATED when an entity it
+ * rests on changes or its usage data expires first, and REVERTED once its change is undone.
+ */
+export const ContentProposalStatuses = [
+  "PENDING",
+  "APPLIED",
+  "REJECTED",
+  "OUTDATED",
+  "REVERTED",
+] as const;
+export type ContentProposalStatus = (typeof ContentProposalStatuses)[number];
+/** AGENT for the daily audit, STAFF for a suggestion made from the manual. */
+export const ContentProposalSources = ["AGENT", "STAFF"] as const;
+export type ContentProposalSource = (typeof ContentProposalSources)[number];
+/** Content a suggestion can change or create. */
+export const ContentProposalEntityTypes = [
+  "JUTSU",
+  "ITEM",
+  "BLOODLINE",
+  "QUEST",
+  "BADGE",
+  "GAME_ASSET",
+  "AI",
+] as const;
+export type ContentProposalEntityType = (typeof ContentProposalEntityTypes)[number];
+/** Whether a change edits an existing entity or creates a new one. */
+export const ContentProposalOperations = ["UPDATE", "CREATE"] as const;
+export type ContentProposalOperation = (typeof ContentProposalOperations)[number];
+/** TARGET entities are the ones a suggestion changes; CONTEXT entities only informed it. */
+export const ContentProposalBasisRoles = ["TARGET", "CONTEXT"] as const;
+/** Where a media candidate comes from: the asset library, Epidemic Sound or a generation. */
+export const ContentProposalMediaSources = ["CATALOG", "EPIDEMIC", "GENERATED"] as const;
+export type ContentProposalMediaSource = (typeof ContentProposalMediaSources)[number];
+/** Sounds and animations fill a field with an asset id, images with an image URL. */
+export const ContentProposalMediaKinds = ["SFX", "ANIMATION", "IMAGE"] as const;
+export type ContentProposalMediaKind = (typeof ContentProposalMediaKinds)[number];
+/** Why a reviewer rejected a suggestion; the next audit reads it. */
+export const ContentProposalRejectReasons = [
+  "NOT_AN_IMPROVEMENT",
+  "FACTUALLY_WRONG",
+  "STYLE_MISMATCH",
+  "WRONG_CHANGE",
+  "OTHER",
+] as const;
+export type ContentProposalRejectReason = (typeof ContentProposalRejectReasons)[number];
+/** What one run of the daily audit concentrates on. */
+export const ContentAuditFocuses = [
+  "grammar",
+  "balance",
+  "sound",
+  "animation",
+  "visual",
+  "consistency",
+  "new_content",
+] as const;
+export type ContentAuditFocus = (typeof ContentAuditFocuses)[number];
+/** Focus per UTC weekday, Sunday first, used when the audit is asked to rotate. */
+export const CONTENT_AUDIT_WEEKDAY_FOCUS: readonly ContentAuditFocus[] = [
+  "new_content",
+  "grammar",
+  "balance",
+  "sound",
+  "animation",
+  "consistency",
+  "visual",
+];
+/** Rejected and outdated suggestions are removed this long after they were decided. */
+export const CONTENT_PROPOSAL_RETENTION_DAYS = 10;
+/** Suggestions resting on usage statistics go out of date after this many days. */
+export const CONTENT_PROPOSAL_EVIDENCE_DAYS = 14;
+/** Most entities one audit suggestion may list as its basis. */
+export const CONTENT_PROPOSAL_MAX_BASIS = 25;
+/** Most media candidates offered for one field. */
+export const CONTENT_PROPOSAL_MAX_CANDIDATES = 3;
+/** Epidemic Sound searches one audit run may make; they cost API quota. */
+export const CONTENT_AUDIT_MAX_SOUND_SEARCHES = 3;
+/** Replicate generations one audit run may request; they cost money. */
+export const CONTENT_AUDIT_MAX_GENERATIONS = 2;
+/** Most suggestions one bulk approval takes. */
+export const CONTENT_REVIEW_BULK_LIMIT = 25;
+/** Length bounds of a suggestion's title and rationale, and the longest rejection note. */
+export const CONTENT_PROPOSAL_TITLE_LENGTH = { min: 3, max: 120 } as const;
+export const CONTENT_PROPOSAL_RATIONALE_LENGTH = { min: 10, max: 4000 } as const;
+export const CONTENT_PROPOSAL_NOTE_MAX_LENGTH = 500;
+/** Sound effects one search in the SFX picker returns. */
+export const CONTENT_REVIEW_SFX_SEARCH_RESULTS = 12;
 
 export const StatTypes = [
   "Highest",
@@ -2364,6 +2468,8 @@ export const IMG_MANUAL_AI =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJuTQifZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b.webp";
 export const IMG_MANUAL_STAFF =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ3CT6Io8pYHJX5rdkUTfOKtvu2eGIELmSWqBx.webp";
+export const IMG_MANUAL_REVIEW =
+  "https://uploadthing.b-cdn.net/f/content-WaMWC0umwru8ZLBGJYbsR.webp";
 export const IMG_MANUAL_QUEST =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmWVaWXHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap.webp";
 export const IMG_MANUAL_LOGS =

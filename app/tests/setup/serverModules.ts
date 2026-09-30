@@ -13,6 +13,7 @@
 import { vi } from "vitest";
 import * as actualDb from "@/server/db";
 import * as actualProfile from "@/routers/profile";
+import * as actualCron from "@/server/utils/cron";
 import { peekTestDatabase } from "./testDatabase";
 
 type AnyFn = (...args: never[]) => unknown;
@@ -31,6 +32,9 @@ const delegating = <T extends object>(actual: T) =>
   );
 
 vi.mock("@/routers/profile", () => delegating(actualProfile));
+
+/** Cron authentication stays real until a suite answers it with `stubCronAuth`. */
+vi.mock("@/server/utils/cron", () => delegating(actualCron));
 
 /**
  * `drizzleDB` is a module-level singleton, so suites that exercise cron routes cannot inject a
@@ -66,6 +70,13 @@ export const stubProfile = (
   implementation: AnyFn,
 ) => {
   stubs.set(name, implementation);
+};
+
+/** Answer cron authentication with `implementation` for the current suite. */
+export const stubCronAuth = (
+  implementation: typeof actualCron.authenticateCronRequest,
+) => {
+  stubs.set("authenticateCronRequest", implementation);
 };
 
 /** Hand every stubbed export back to its real implementation. */

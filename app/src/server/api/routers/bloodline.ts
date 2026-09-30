@@ -42,6 +42,11 @@ import {
   getFreeBloodlineSwaps,
   getPityRolls,
 } from "@/libs/bloodline";
+import {
+  deletedReason,
+  editedReason,
+  outdateProposalsFor,
+} from "@/libs/contentReview/outdate";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -621,6 +626,12 @@ export const bloodlineRouter = createTRPCRouter({
           relatedImage: entry.image,
         }),
       ]);
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "BLOODLINE",
+        [entry.id],
+        deletedReason("BLOODLINE", entry.name, user.username),
+      );
       return { success: true, message: `Bloodline deleted` };
     }),
   // Update a bloodline
@@ -667,15 +678,23 @@ export const bloodlineRouter = createTRPCRouter({
           .update(bloodline)
           .set(newData)
           .where(eq(bloodline.id, input.id));
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "bloodline",
-          changes: diff,
-          relatedId: entry.id,
-          relatedMsg: `Update: ${entry.name}`,
-          relatedImage: entry.image,
-        });
+        await Promise.all([
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "bloodline",
+            changes: diff,
+            relatedId: entry.id,
+            relatedMsg: `Update: ${entry.name}`,
+            relatedImage: entry.image,
+          }),
+          outdateProposalsFor(
+            ctx.drizzle,
+            "BLOODLINE",
+            [entry.id],
+            editedReason("BLOODLINE", entry.name, user.username),
+          ),
+        ]);
         if (process.env.NODE_ENV !== "development") {
           await callDiscordContent(user.username, entry.name, diff, entry.image);
         }

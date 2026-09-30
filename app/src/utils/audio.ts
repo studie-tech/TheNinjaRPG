@@ -3,9 +3,22 @@
  */
 
 import {
+  safeLocalStorageGetItem,
   safeSessionStorageGetItem,
   safeSessionStorageSetItem,
 } from "@/hooks/localstorage";
+
+/** Sound effect volume the player chose in the game settings; 0.8 until they change it. */
+export const savedSfxVolume = () => {
+  const saved = safeLocalStorageGetItem("sfxVolume");
+  try {
+    const volume: unknown = saved === null ? null : JSON.parse(saved);
+    return typeof volume === "number" && Number.isFinite(volume) ? volume : 0.8;
+  } catch {
+    // Storage another version or an extension wrote is not worth failing a battle over.
+    return 0.8;
+  }
+};
 
 /**
  * Detect if the current browser is Safari or iOS
