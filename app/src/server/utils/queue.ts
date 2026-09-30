@@ -31,12 +31,12 @@ export type QueueResponse<T> = {
 const unfinishedWhere = <T extends QueueTable>(table: T, userId: string) =>
   and(eq(table.userId, userId), isNull(table.completedAt), isNull(table.cancelledAt));
 
+// Queue routers settle once during preparation, before reading the resulting state.
 export const getStatTrainingQueue = async (
   client: DrizzleClient,
   userId: string,
   now = new Date(),
 ) => {
-  await settleStatTrainingQueue(client, userId, now);
   const [user, entries] = await Promise.all([
     client.query.userData.findFirst({ where: eq(userData.userId, userId) }),
     client.query.userStatTrainingQueue.findMany({
@@ -53,7 +53,6 @@ export const getJutsuTrainingQueue = async (
   userId: string,
   now = new Date(),
 ) => {
-  await settleJutsuTrainingQueue(client, userId, now);
   const [user, entries] = await Promise.all([
     client.query.userData.findFirst({ where: eq(userData.userId, userId) }),
     client.query.userJutsuTrainingQueue.findMany({
@@ -71,7 +70,6 @@ export const getCraftingQueue = async (
   userId: string,
   now = new Date(),
 ) => {
-  await settleCraftingQueue(client, userId, now);
   const [user, entries] = await Promise.all([
     client.query.userData.findFirst({ where: eq(userData.userId, userId) }),
     client.query.userCraftingQueue.findMany({

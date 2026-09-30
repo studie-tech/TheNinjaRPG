@@ -471,6 +471,7 @@ export const profileRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
           userIp: ctx.userIp,
+          skipQueueSettlement: false,
           // forceRegen: true, // This should be disabled in prod to save on DB calls
         },
       );
@@ -2359,9 +2360,10 @@ export const fetchUpdatedUser = async (props: {
     userId,
     userIp,
     hideInformation = true,
-    skipQueueSettlement = false,
+    skipQueueSettlement = true,
   } = props;
   let { forceRegen } = props;
+  // Queue-aware reads opt in; ordinary callers must not incur settlement queries.
   if (!skipQueueSettlement) {
     const { settleAllQueuesForUser } = await import("@/server/utils/queue");
     await settleAllQueuesForUser(client, userId);
