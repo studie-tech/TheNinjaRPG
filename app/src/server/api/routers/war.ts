@@ -667,20 +667,6 @@ export const warRouter = createTRPCRouter({
         );
       }
 
-      // Re-check just before creation to avoid races
-      if (
-        isVillageInvolvedInAnyWar(activeWars, attackerVillage.id, undefined, [
-          "VILLAGE_WAR",
-          "WAR_RAID",
-        ]) ||
-        isVillageInvolvedInAnyWar(activeWars, defenderVillage.id, undefined, [
-          "VILLAGE_WAR",
-          "WAR_RAID",
-        ])
-      ) {
-        return errorResponse("A village is now already involved in an active war");
-      }
-
       // Factions have no elder council, so their leader's declaration is the approval
       if (isFactionVillage(attackerVillage)) {
         const started = await startDeclaredWar(ctx.drizzle, {
@@ -695,7 +681,7 @@ export const warRouter = createTRPCRouter({
         });
         if (!started) {
           return errorResponse(
-            `Your village needs ${WAR_DECLARATION_COST.toLocaleString()} tokens to declare war`,
+            "War could not start: a village is already involved in a war or your village no longer has enough tokens.",
           );
         }
         return {

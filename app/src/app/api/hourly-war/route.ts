@@ -417,7 +417,7 @@ async function handleExpiredWarDeclaration(
   });
   if (!started) {
     await rejectWithNotification(
-      `War declaration against ${defenderName} was cancelled — the village no longer has enough tokens.`,
+      `War declaration against ${defenderName} was cancelled — a village is already involved in a war or there are no longer enough tokens.`,
     );
   }
 }

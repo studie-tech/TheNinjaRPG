@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { WarState, WarType } from "@/drizzle/constants";
 import {
@@ -32,8 +32,10 @@ import {
   villageStructure,
   war,
 } from "@/drizzle/schema";
+import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 
 /**
@@ -504,9 +506,9 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
 };
 
 /**
- * Start an approved war declaration: charge the attacker WAR_DECLARATION_COST with a
- * balance guard, then create the war and notify both leaders. Returns false, with
- * nothing written, when the attacker can no longer afford the declaration.
+ * Start an approved declaration only while both villages remain available and the
+ * attacker can afford it. The token charge and war commit together; leaders are
+ * notified after success. Rejected declarations leave tokens and wars unchanged.
  */
 export const startDeclaredWar = async (
   client: DrizzleClient,
@@ -521,35 +523,65 @@ export const startDeclaredWar = async (
     targetStructureRoute: string;
   },
 ) => {
-  const tokenResult = await client
-    .update(village)
-    .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
-    .where(
-      and(
-        eq(village.id, declaration.attackerVillageId),
-        gte(village.tokens, WAR_DECLARATION_COST),
-      ),
-    );
-  if (tokenResult.rowsAffected === 0) return false;
+  const started = await retryOnDeadlock(() =>
+    client.transaction(async (tx) => {
+      // Shared village rows serialize overlapping declarations; sorted locks avoid inversion.
+      const villageIds = [
+        declaration.attackerVillageId,
+        declaration.defenderVillageId,
+      ].sort();
+      const lockedVillages = await tx
+        .select({ id: village.id })
+        .from(village)
+        .where(inArray(village.id, villageIds))
+        .orderBy(asc(village.id))
+        .for("update");
+      if (lockedVillages.length !== 2) return false;
+
+      const activeWars = await tx.query.war.findMany({
+        where: and(
+          eq(war.status, "ACTIVE"),
+          inArray(war.type, ["VILLAGE_WAR", "WAR_RAID"]),
+        ),
+        with: { warAllies: true },
+      });
+      if (villageIds.some((id) => isVillageInvolvedInAnyWar(activeWars, id)))
+        return false;
+
+      const tokenResult = await tx
+        .update(village)
+        .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
+        .where(
+          and(
+            eq(village.id, declaration.attackerVillageId),
+            gte(village.tokens, WAR_DECLARATION_COST),
+          ),
+        );
+      if (tokenResult.rowsAffected === 0) return false;
+
+      await tx.insert(war).values({
+        id: nanoid(),
+        attackerVillageId: declaration.attackerVillageId,
+        defenderVillageId: declaration.defenderVillageId,
+        status: "ACTIVE",
+        type: declaration.warType,
+        targetStructureRoute: declaration.targetStructureRoute,
+        attackerShrineHp: WAR_RAID_SHRINE_HP,
+        attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
+        attackerShrineStatus: "ACTIVE",
+        defenderShrineHp: WAR_RAID_SHRINE_HP,
+        defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
+        defenderShrineStatus: "ACTIVE",
+      });
+      return true;
+    }),
+  );
+  if (!started) return false;
 
   const warContent = `${declaration.attackerVillageName} has declared war on ${declaration.defenderVillageName}!`;
   const notifyKageIds = [declaration.initiatedByUserId];
   if (declaration.defenderKageId) notifyKageIds.push(declaration.defenderKageId);
   await Promise.all([
-    client.insert(war).values({
-      id: nanoid(),
-      attackerVillageId: declaration.attackerVillageId,
-      defenderVillageId: declaration.defenderVillageId,
-      status: "ACTIVE",
-      type: declaration.warType,
-      targetStructureRoute: declaration.targetStructureRoute,
-      attackerShrineHp: WAR_RAID_SHRINE_HP,
-      attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
-      attackerShrineStatus: "ACTIVE",
-      defenderShrineHp: WAR_RAID_SHRINE_HP,
-      defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
-      defenderShrineStatus: "ACTIVE",
-    }),
     client
       .insert(notification)
       .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),

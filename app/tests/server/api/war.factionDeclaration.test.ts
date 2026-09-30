@@ -19,6 +19,7 @@ import {
   warAlly,
 } from "@/drizzle/schema";
 import { warRouter } from "@/routers/war";
+import { startDeclaredWar } from "@/server/utils/war";
 import { insertUsers } from "../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
@@ -26,7 +27,7 @@ const FACTION = "faction-hideout";
 const TARGET = "target-village";
 const LEADER = "faction-leader";
 const TARGET_KAGE = "target-kage";
-const TOKENS = WAR_DECLARATION_COST + 500_000;
+const TOKENS = WAR_DECLARATION_COST * 2 + 500_000;
 
 const declare = async (userId: string, userVillageId: string) =>
   (await callerFor(warRouter, userId)).declareVillageWarOrRaid({
@@ -148,6 +149,46 @@ describeWithDatabase("faction war declarations", () => {
     expect(result.success).toBe(false);
     expect(await database.select().from(war)).toHaveLength(0);
   });
+
+  it.each(["attacker", "defender"] as const)(
+    "starts only one overlapping declaration sharing the %s",
+    async (sharedSide) => {
+      await seedWorld();
+      const database = await getTestDatabase();
+      await database.insert(village).values({
+        id: "other-village",
+        name: "Other",
+        sector: 103,
+        kageId: LEADER,
+        tokens: TOKENS,
+      });
+      const declaration = {
+        attackerVillageId: FACTION,
+        attackerVillageName: "Akatsuki",
+        defenderVillageId: TARGET,
+        defenderVillageName: "Konoki",
+        initiatedByUserId: LEADER,
+        warType: "WAR_RAID" as const,
+        targetStructureRoute: "/townhall",
+      };
+      const results = await Promise.all([
+        startDeclaredWar(database, declaration),
+        startDeclaredWar(database, {
+          ...declaration,
+          ...(sharedSide === "attacker"
+            ? { defenderVillageId: "other-village", defenderVillageName: "Other" }
+            : { attackerVillageId: "other-village", attackerVillageName: "Other" }),
+        }),
+      ]);
+      expect(results.filter(Boolean)).toHaveLength(1);
+      expect(await database.select().from(war)).toHaveLength(1);
+      const balances = await database.select().from(village);
+      const startingTokens = TOKENS * 2 + WAR_MINIMUM_TOKENS_FOR_BEING_ATTACKABLE;
+      expect(balances.reduce((sum, row) => sum + row.tokens, 0)).toBe(
+        startingTokens - WAR_DECLARATION_COST,
+      );
+    },
+  );
 
   it("keeps requiring elders for a village declaration", async () => {
     await seedWorld("VILLAGE");

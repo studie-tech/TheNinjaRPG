@@ -164,7 +164,10 @@ export const getShrineHpByLevel = (level?: number | null) => {
  * @returns true if the village is involved in any active war, false otherwise
  */
 export const isVillageInvolvedInAnyWar = (
-  activeWars: FetchActiveWarsReturnType[],
+  activeWars: (Pick<
+    FetchActiveWarsReturnType,
+    "id" | "type" | "attackerVillageId" | "defenderVillageId"
+  > & { warAllies: { villageId: string }[] })[],
   villageId: string,
   excludeWarId?: string,
   types?: readonly WarType[],
