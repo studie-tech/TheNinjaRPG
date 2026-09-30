@@ -1454,7 +1454,7 @@ export const raidsRouter = createTRPCRouter({
       }
 
       // Derived - post-process rewards to convert item format
-      const processedRewards = postProcessRewards(rewards);
+      const processedRewards = postProcessRewards(rewards, user);
 
       // Mutation - grant all reward types
       // Note: We intentionally do NOT roll back the claim on failure because updateRewards is not atomic.

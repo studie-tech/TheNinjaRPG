@@ -296,9 +296,9 @@ export const getReward = (
         boostFactor = 1 + errandsBoost + villageMissionBoost;
       }
     }
-    if (["mission", "errand"].includes(userQuest.quest.questType)) {
-      boostFactor += loyalty.missionRewards / 100;
-    }
+    const missionLoyalty = ["mission", "errand"].includes(userQuest.quest.questType)
+      ? loyalty.missionRewards
+      : 0;
     // Get rewards
     const tracker = trackers.find((q) => q.id === userQuest.quest.id);
     const goals = tracker?.goals ?? [];
@@ -393,41 +393,44 @@ export const getReward = (
       isReducedMissionReward(user.dailyMissions, { phase: "in-progress" })
         ? ADDITIONAL_MISSION_REWARD_MULTIPLIER
         : 1;
-    const factor = boostFactor * reducedRewardFactor;
-    const villageRewardFactor =
-      (boostFactor + loyalty.villageRewards / 100) * reducedRewardFactor;
-    const masteryTrainingFactor =
-      (boostFactor + loyalty.masteryTraining / 100) * reducedRewardFactor;
+    // Loyalty improves earnings, never the cost of a configured penalty.
+    const scaleReward = (value: number, extraLoyalty = 0) =>
+      Math.floor(
+        (value * boostFactor +
+          (value > 0 ? (value * (missionLoyalty + extraLoyalty)) / 100 : 0)) *
+          reducedRewardFactor,
+      );
 
-    rawRewards.reward_money = Math.floor(rawRewards.reward_money * factor);
-    rawRewards.reward_clanpoints = Math.floor(rawRewards.reward_clanpoints * factor);
-    rawRewards.reward_anbupoints = Math.floor(rawRewards.reward_anbupoints * factor);
-    rawRewards.reward_exp = Math.floor(rawRewards.reward_exp * factor);
-    rawRewards.reward_tokens = Math.floor(
-      rawRewards.reward_tokens * villageRewardFactor,
+    rawRewards.reward_money = scaleReward(rawRewards.reward_money);
+    rawRewards.reward_clanpoints = scaleReward(rawRewards.reward_clanpoints);
+    rawRewards.reward_anbupoints = scaleReward(rawRewards.reward_anbupoints);
+    rawRewards.reward_exp = scaleReward(rawRewards.reward_exp);
+    rawRewards.reward_tokens = scaleReward(
+      rawRewards.reward_tokens,
+      loyalty.villageRewards,
     );
-    rawRewards.reward_prestige = Math.floor(
-      rawRewards.reward_prestige * villageRewardFactor,
+    rawRewards.reward_prestige = scaleReward(
+      rawRewards.reward_prestige,
+      loyalty.villageRewards,
     );
-    rawRewards.reward_reputation = Math.floor(rawRewards.reward_reputation * factor);
-    rawRewards.reward_medical_experience = Math.floor(
-      rawRewards.reward_medical_experience * factor,
+    rawRewards.reward_reputation = scaleReward(rawRewards.reward_reputation);
+    rawRewards.reward_medical_experience = scaleReward(
+      rawRewards.reward_medical_experience,
     );
-    rawRewards.reward_hunting_experience = Math.floor(
-      rawRewards.reward_hunting_experience * factor,
+    rawRewards.reward_hunting_experience = scaleReward(
+      rawRewards.reward_hunting_experience,
     );
-    rawRewards.reward_crafting_experience = Math.floor(
-      rawRewards.reward_crafting_experience * factor,
+    rawRewards.reward_crafting_experience = scaleReward(
+      rawRewards.reward_crafting_experience,
     );
-    rawRewards.reward_gathering_experience = Math.floor(
-      rawRewards.reward_gathering_experience * factor,
+    rawRewards.reward_gathering_experience = scaleReward(
+      rawRewards.reward_gathering_experience,
     );
-    rawRewards.reward_sage_mastery_experience = Math.floor(
-      rawRewards.reward_sage_mastery_experience * masteryTrainingFactor,
+    rawRewards.reward_sage_mastery_experience = scaleReward(
+      rawRewards.reward_sage_mastery_experience,
+      loyalty.masteryTraining,
     );
-    rawRewards.reward_seichi_silver = Math.floor(
-      rawRewards.reward_seichi_silver * factor,
-    );
+    rawRewards.reward_seichi_silver = scaleReward(rawRewards.reward_seichi_silver);
     // Apply clan experience boosts (percentages stored in clan object)
     // Only apply for real clans, not outlaw factions/towns
     const clanHunterExpBoost = user.isOutlaw
@@ -552,11 +555,30 @@ export type GetRewardResult = ReturnType<typeof getReward>["rewards"];
  */
 export const postProcessRewards = (
   rewards: ObjectiveRewardType,
+  user?: Parameters<typeof getVillageLoyaltyBonuses>[0],
 ): PostProcessedRewards => {
   // Defensive check: ensure reward_items is an array (handles malformed DB data)
   const rewardItems = Array.isArray(rewards?.reward_items) ? rewards.reward_items : [];
+  // Pass user for unscaled configured payouts; getReward already applies its quest factors.
+  const villageRewardBonus = user ? getVillageLoyaltyBonuses(user).villageRewards : 0;
   return {
     ...rewards,
+    ...(user
+      ? {
+          reward_tokens: Math.floor(
+            rewards.reward_tokens > 0
+              ? rewards.reward_tokens +
+                  (rewards.reward_tokens * villageRewardBonus) / 100
+              : rewards.reward_tokens,
+          ),
+          reward_prestige: Math.floor(
+            rewards.reward_prestige > 0
+              ? rewards.reward_prestige +
+                  (rewards.reward_prestige * villageRewardBonus) / 100
+              : rewards.reward_prestige,
+          ),
+        }
+      : {}),
     reward_items: rewardItems
       .filter((reward) => {
         // Use 'number' as drop chance (default 100 = guaranteed)

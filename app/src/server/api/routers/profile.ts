@@ -129,6 +129,7 @@ import { getRaidObjectiveData } from "@/libs/raids";
 import { createThumbnail } from "@/libs/replicate";
 import { callDiscordContent } from "@/libs/socials";
 import { getReducedGainsDays } from "@/libs/train";
+import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
 import { fetchSquad, removeFromSquad } from "@/routers/anbu";
 import { fetchClan, removeFromClan } from "@/routers/clan";
 import { fetchKageReplacement } from "@/routers/kage";
@@ -1772,19 +1773,20 @@ export const profileRouter = createTRPCRouter({
       if (inputSum > user.earnedExperience) {
         return errorResponse("Trying to assign more stats than available");
       }
+      const statFactor = percentageMultiplier(getVillageLoyaltyBonuses(user).statGains);
       // Mutate & cap
-      user.ninjutsuOffence += Math.floor(input.ninjutsuOffence);
-      user.taijutsuOffence += Math.floor(input.taijutsuOffence);
-      user.genjutsuOffence += Math.floor(input.genjutsuOffence);
-      user.bukijutsuOffence += Math.floor(input.bukijutsuOffence);
-      user.ninjutsuDefence += Math.floor(input.ninjutsuDefence);
-      user.taijutsuDefence += Math.floor(input.taijutsuDefence);
-      user.genjutsuDefence += Math.floor(input.genjutsuDefence);
-      user.bukijutsuDefence += Math.floor(input.bukijutsuDefence);
-      user.strength += Math.floor(input.strength);
-      user.speed += Math.floor(input.speed);
-      user.intelligence += Math.floor(input.intelligence);
-      user.willpower += Math.floor(input.willpower);
+      user.ninjutsuOffence += Math.floor(input.ninjutsuOffence) * statFactor;
+      user.taijutsuOffence += Math.floor(input.taijutsuOffence) * statFactor;
+      user.genjutsuOffence += Math.floor(input.genjutsuOffence) * statFactor;
+      user.bukijutsuOffence += Math.floor(input.bukijutsuOffence) * statFactor;
+      user.ninjutsuDefence += Math.floor(input.ninjutsuDefence) * statFactor;
+      user.taijutsuDefence += Math.floor(input.taijutsuDefence) * statFactor;
+      user.genjutsuDefence += Math.floor(input.genjutsuDefence) * statFactor;
+      user.bukijutsuDefence += Math.floor(input.bukijutsuDefence) * statFactor;
+      user.strength += Math.floor(input.strength) * statFactor;
+      user.speed += Math.floor(input.speed) * statFactor;
+      user.intelligence += Math.floor(input.intelligence) * statFactor;
+      user.willpower += Math.floor(input.willpower) * statFactor;
       capUserStats(user);
       // Update
       const data = {
@@ -1800,7 +1802,7 @@ export const profileRouter = createTRPCRouter({
         speed: user.speed,
         intelligence: user.intelligence,
         willpower: user.willpower,
-        experience: user.experience + inputSum,
+        experience: user.experience + inputSum * statFactor,
         earnedExperience: user.earnedExperience - inputSum,
       };
       const result = await ctx.drizzle
@@ -2671,7 +2673,16 @@ export const updateUserContent = async (props: {
  * Fetch user with bloodline & village relations. Occasionally updates the user with regeneration
  * of pools, or optionally forces regeneration with forceRegen=true
  */
-export const fetchUpdatedUser = async (props: {
+export const fetchUpdatedUser = async (
+  props: Parameters<typeof fetchUpdatedUserOnce>[0],
+) => {
+  // A lost village-state CAS invalidates the entire snapshot, including its relations.
+  let result = await fetchUpdatedUserOnce(props);
+  while (result === null) result = await fetchUpdatedUserOnce(props);
+  return result;
+};
+
+const fetchUpdatedUserOnce = async (props: {
   client: DrizzleClient;
   userId: string;
   userIp?: string;
@@ -2857,6 +2868,15 @@ export const fetchUpdatedUser = async (props: {
     user.regeneration = calcActiveUserRegen(user, settings);
   }
 
+  // The surviving ANBU membership is a durable retry marker after failed expulsion cleanup.
+  if (user?.isOutlaw && user.anbuId) {
+    const squadData = await fetchSquad(client, user.anbuId);
+    if (squadData && (await removeFromSquad(client, squadData, user.userId))) {
+      user.anbuId = null;
+      user.anbuSquad = null;
+    }
+  }
+
   // Handle village prestige situations
   if (user) {
     // If prestige below 0, reset to 0 and move to outlaw faction
@@ -2894,44 +2914,42 @@ export const fetchUpdatedUser = async (props: {
               expectedVillage,
             ),
           );
-        if (kickResult.rowsAffected === 1) {
-          Object.assign(user, kickUpdate);
-          forceRegen = true;
-          void pusher.trigger(user.userId, "event", {
-            type: "userMessage",
-            message:
-              "You have been kicked out of your village due to negative prestige",
-            route: "/profile",
-            routeText: "To Profile",
-          });
-          // Complete the guarded transition before starting related membership cleanup.
-          await Promise.all([
-            ...(user.anbuId && squadData
-              ? [removeFromSquad(client, squadData, user.userId)]
-              : []),
-            ...(user.clanId && clanData
-              ? [removeFromClan(client, clanData, user, ["Turned outlaw"])]
-              : []),
-            ...(needNewKage && elder && previousVillageId
-              ? [
-                  client
-                    .update(village)
-                    .set({ kageId: elder.userId, leaderUpdatedAt: new Date() })
-                    .where(eq(village.id, previousVillageId)),
-                  client
-                    .update(userData)
-                    .set({ villagePrestige: KAGE_PRESTIGE_REQUIREMENT })
-                    .where(eq(userData.userId, user.userId)),
-                  pusher.trigger(user.userId, "event", {
-                    type: "userMessage",
-                    message: `Your prestige dropped below ${KAGE_MIN_PRESTIGE} and you are no longer kage`,
-                    route: "/profile",
-                    routeText: "To Profile",
-                  }),
-                ]
-              : []),
-          ]);
-        }
+        if (kickResult.rowsAffected !== 1) return null;
+        Object.assign(user, kickUpdate);
+        forceRegen = true;
+        void pusher.trigger(user.userId, "event", {
+          type: "userMessage",
+          message: "You have been kicked out of your village due to negative prestige",
+          route: "/profile",
+          routeText: "To Profile",
+        });
+        // Complete the guarded transition before starting related membership cleanup.
+        await Promise.all([
+          ...(user.anbuId && squadData
+            ? [removeFromSquad(client, squadData, user.userId)]
+            : []),
+          ...(user.clanId && clanData
+            ? [removeFromClan(client, clanData, user, ["Turned outlaw"])]
+            : []),
+          ...(needNewKage && elder && previousVillageId
+            ? [
+                client
+                  .update(village)
+                  .set({ kageId: elder.userId, leaderUpdatedAt: new Date() })
+                  .where(eq(village.id, previousVillageId)),
+                client
+                  .update(userData)
+                  .set({ villagePrestige: KAGE_PRESTIGE_REQUIREMENT })
+                  .where(eq(userData.userId, user.userId)),
+                pusher.trigger(user.userId, "event", {
+                  type: "userMessage",
+                  message: `Your prestige dropped below ${KAGE_MIN_PRESTIGE} and you are no longer kage`,
+                  route: "/profile",
+                  routeText: "To Profile",
+                }),
+              ]
+            : []),
+        ]);
       }
     }
   }

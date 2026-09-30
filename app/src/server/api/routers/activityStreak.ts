@@ -554,7 +554,7 @@ export const activityStreakRouter = createTRPCRouter({
       }
 
       // Only grant rewards after successful progress update
-      const processedRewards = postProcessRewards(rewards);
+      const processedRewards = postProcessRewards(rewards, user);
 
       const updatePromises: Promise<unknown>[] = [
         updateRewards({

@@ -31,6 +31,7 @@ import {
 } from "@/drizzle/schema";
 import { castElderVoteEntry, fetchElderVote } from "@/libs/elder";
 import { getServerPusher } from "@/libs/pusher";
+import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
 import { fetchClan } from "@/routers/clan";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, fetchUser, updateNindo } from "@/routers/profile";
@@ -217,12 +218,18 @@ export const kageRouter = createTRPCRouter({
         "KAGE_PVP",
       );
       if (result.success) {
+        const prestigeReward = Math.floor(
+          KAGE_CHALLENGE_ACCEPT_PRESTIGE +
+            (KAGE_CHALLENGE_ACCEPT_PRESTIGE *
+              getVillageLoyaltyBonuses(user).villageRewards) /
+              100,
+        );
         await Promise.all([
           updateRequestState(ctx.drizzle, input.id, "ACCEPTED", "KAGE"),
           ctx.drizzle
             .update(userData)
             .set({
-              villagePrestige: sql`${userData.villagePrestige} + ${KAGE_CHALLENGE_ACCEPT_PRESTIGE}`,
+              villagePrestige: sql`${userData.villagePrestige} + ${prestigeReward}`,
             })
             .where(eq(userData.userId, ctx.userId)),
           pusher.trigger(challenge.senderId, "event", {

@@ -1615,7 +1615,9 @@ export const updateRewards = async (info: {
     sageMasteryExperience: sql`LEAST(${userData.sageMasteryExperience} + ${rewards.reward_sage_mastery_experience ?? 0}, ${SAGE_MASTERY_EXP_CAP})`,
     rank: getNewRank ? rewards.reward_rank : user.rank,
     villageId: getNewVillage && villageData ? villageData.id : user.villageId,
-    ...(getNewVillage && villageData ? { joinedVillageAt: new Date() } : {}),
+    ...(getNewVillage && villageData && villageData.id !== user.villageId
+      ? { joinedVillageAt: new Date() }
+      : {}),
     ...(rolledSageMode
       ? { sageModeId: sql`COALESCE(${userData.sageModeId}, ${rolledSageMode.id})` }
       : {}),
