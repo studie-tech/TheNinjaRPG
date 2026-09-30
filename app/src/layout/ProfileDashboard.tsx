@@ -1,18 +1,20 @@
 "use client";
 
 import {
-  AlertTriangle,
   ArrowRight,
   BookOpen,
-  BriefcaseBusiness,
+  Briefcase,
+  Coins,
   Dumbbell,
+  Eye,
   Gift,
-  Landmark,
+  Hammer,
   MapPin,
   RotateCcw,
+  ScrollText,
   ShieldCheck,
-  Sparkles,
-  Trophy,
+  Swords,
+  Timer,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -33,13 +35,14 @@ import { calcLevelRequirements, formatTrainingStatName } from "@/libs/profile";
 import {
   dashboardContentActionLabel,
   dashboardContentHref,
+  describeOccupationLine,
+  isDashboardTrainingAvailable,
   raidContinueHref,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { trainingSpeedSeconds } from "@/libs/train";
-import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
@@ -97,30 +100,25 @@ export default function ProfileDashboard() {
       }
     },
   });
+  const claimStreak = api.activityStreak.claimStreakDay.useMutation({
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (data.success) await refreshDashboard();
+    },
+  });
 
   const claimableStreak = streaks.data?.streaks.find((streak) => streak.canClaimToday);
   const catchUpStreak = streaks.data?.streaks.find((streak) => streak.needsCatchUp);
   const recurringStreak = streaks.data?.activeRecurringConfig;
-  const canActOnStreak =
-    (!!claimableStreak || !!catchUpStreak || !!recurringStreak) &&
-    userData?.status === "AWAKE";
   const canClaimInterest =
     (interest.data?.totalPending ?? 0) > 0 && userData?.status !== "BATTLE";
   const canLevelUp =
     !!userData &&
     userData.level < 100 &&
     userData.experience >= calcLevelRequirements(userData.level);
-  const canChooseOccupation = !userData?.occupation && userData?.status === "AWAKE";
   const claimableRaidRewards =
     dashboard.data?.raidRewards.reduce((sum, raid) => sum + raid.claimableCount, 0) ??
     0;
-  const readyCount = [
-    canActOnStreak,
-    canClaimInterest,
-    canLevelUp,
-    canChooseOccupation,
-    claimableRaidRewards > 0,
-  ].filter(Boolean).length;
 
   const statTrainingEndsAt =
     userData?.trainingStartedAt && userData.currentlyTraining
@@ -131,7 +129,7 @@ export default function ProfileDashboard() {
       : null;
   const training = userData?.currentlyTraining
     ? {
-        title: `${formatTrainingStatName(userData.currentlyTraining)} training`,
+        title: formatTrainingStatName(userData.currentlyTraining),
         startedAt: userData.trainingStartedAt,
         endsAt: statTrainingEndsAt,
       }
@@ -146,7 +144,10 @@ export default function ProfileDashboard() {
     ...(sidebarTimers.data?.crafting
       ? [
           {
-            label: `Crafting ${sidebarTimers.data.crafting.itemName}`,
+            kind: "crafting" as const,
+            label: "Crafting",
+            title: sidebarTimers.data.crafting.itemName,
+            href: "/occupation",
             startedAt: sidebarTimers.data.crafting.craftingStartedAt,
             endsAt: sidebarTimers.data.crafting.craftingFinishedAt,
           },
@@ -155,7 +156,10 @@ export default function ProfileDashboard() {
     ...(sidebarTimers.data?.imbuement
       ? [
           {
-            label: `Imbuing ${sidebarTimers.data.imbuement.targetName}`,
+            kind: "imbuement" as const,
+            label: "Imbuing",
+            title: sidebarTimers.data.imbuement.targetName,
+            href: "/items",
             startedAt: sidebarTimers.data.imbuement.craftingStartedAt,
             endsAt: sidebarTimers.data.imbuement.craftingFinishedAt,
           },
@@ -235,171 +239,362 @@ export default function ProfileDashboard() {
     (raid) => raid.userParticipation,
   );
   const recommended = catalogue.find((entry) => entry.availability === "available");
+  const occupationLine = describeOccupationLine({
+    occupation: userData.occupation,
+    quests: userData.userQuests,
+    trackers: userData.questData,
+    craftingItemName:
+      userData.occupation === "CRAFTING" &&
+      sidebarTimers.isLoading &&
+      !sidebarTimers.data
+        ? undefined
+        : (sidebarTimers.data?.crafting?.itemName ?? null),
+  });
+  const visibleCraftTimers = craftingTimers.filter(
+    (timer) => !(timer.kind === "crafting" && occupationLine.craftTimer),
+  );
+  const levelRequirement = calcLevelRequirements(userData.level);
+  const experienceToGo = Math.max(levelRequirement - userData.experience, 0);
+  const levelProgress =
+    levelRequirement > 0
+      ? Math.min(100, (userData.experience / levelRequirement) * 100)
+      : 100;
+  const claimsLoading = streaks.isLoading || interest.isLoading || dashboard.isLoading;
+  const claimsFailed = streaks.isError || interest.isError || dashboard.isError;
+  const streakNeedsAttention = Boolean(
+    claimableStreak || catchUpStreak || recurringStreak,
+  );
+  const bankWaiting = (interest.data?.totalPending ?? 0) > 0;
+  const hasCollectible =
+    streakNeedsAttention || bankWaiting || claimableRaidRewards > 0;
+  const recurringReward = getRewardPreview(
+    recurringStreak?.rewards.find((reward) => reward.dayNumber === 1)?.rewards ?? null,
+  );
+  const awake = userData.status === "AWAKE";
+  const craftTimer = craftingTimers.find((timer) => timer.kind === "crafting");
+  const canStartTraining =
+    !training &&
+    isDashboardTrainingAvailable({
+      ...userData,
+      villageSector: userData.village?.sector,
+    });
+  const raidTitle =
+    dashboard.data?.raidRewards.length === 1
+      ? (dashboard.data.raidRewards[0]?.raidName ?? "Raid rewards")
+      : "Raid rewards";
+  const pendingInterestDays = interest.data?.records.length ?? 0;
 
   return (
     <div className="space-y-8 p-3 sm:p-4">
-      <section aria-labelledby="priority-heading">
-        <SectionHeader
-          eyebrow="Priority queue"
-          title="Claim before you roam"
-          id="priority-heading"
-          aside={`${readyCount} ${readyCount === 1 ? "action" : "actions"} ready`}
-        />
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <ProfileStreakCard onClaimed={refreshDashboard} />
-
-          <PriorityCard
-            icon={Landmark}
-            label="Bank"
-            title="Pending interest"
-            accent="blue"
-            isLoading={interest.isLoading}
-            error={interest.error?.message}
-            onRetry={() => void interest.refetch()}
-          >
-            {(interest.data?.totalPending ?? 0) > 0 ? (
-              <>
-                <p className="font-semibold text-lg">
-                  +{interest.data?.totalPending.toLocaleString()} ryo
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  Across {interest.data?.records.length} unclaimed daily records.
-                </p>
-                <Button
-                  className="mt-auto w-full"
+      <section aria-labelledby="now-heading">
+        <SectionHeader eyebrow="Right now" title="In progress" id="now-heading" />
+        <div className="rounded-md border bg-card px-4">
+          {claimsLoading && (
+            <p className="border-t py-3 text-muted-foreground text-sm first:border-t-0">
+              Checking the streak, the bank, and raids...
+            </p>
+          )}
+          {streaks.isError && (
+            <div className="border-t py-3 first:border-t-0">
+              <RetryPanel
+                message="The activity streak could not be loaded."
+                onRetry={() => void streaks.refetch()}
+              />
+            </div>
+          )}
+          {interest.isError && (
+            <div className="border-t py-3 first:border-t-0">
+              <RetryPanel
+                message="Bank interest could not be loaded."
+                onRetry={() => void interest.refetch()}
+              />
+            </div>
+          )}
+          {dashboard.isError && (
+            <div className="border-t py-3 first:border-t-0">
+              <RetryPanel
+                message="Raid rewards could not be loaded."
+                onRetry={() => void dashboard.refetch()}
+              />
+            </div>
+          )}
+          {catchUpStreak && (
+            <StatusRow
+              label="Streak"
+              title={`${catchUpStreak.daysToGo ?? 1} ${(catchUpStreak.daysToGo ?? 1) === 1 ? "day" : "days"} behind`}
+              detail={`Day ${catchUpStreak.nextDayNumber}: ${getRewardPreview(catchUpStreak.nextRewards) || "Daily reward"}. ${COST_STREAK_CATCHUP_DAY} rep per day to catch up.`}
+              note={
+                <>
+                  {!awake && <p>You can claim this once you are awake.</p>}
+                  {claimStreak.error && (
+                    <p className="text-destructive">{claimStreak.error.message}</p>
+                  )}
+                </>
+              }
+              action={
+                <>
+                  <Confirm
+                    title="Reset Streak"
+                    button={
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!awake || claimStreak.isPending}
+                        className="w-full gap-1.5 hover:text-black"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        Reset
+                      </Button>
+                    }
+                    onAccept={(event) => {
+                      event.preventDefault();
+                      claimStreak.mutate({
+                        configId: catchUpStreak.configId,
+                        reset: true,
+                      });
+                    }}
+                  >
+                    <p>
+                      Your streak will reset to day 1. Current progress (day{" "}
+                      {catchUpStreak.currentDay}) will be lost.
+                    </p>
+                  </Confirm>
+                  <RowAction
+                    icon={Timer}
+                    variant="default"
+                    disabled={!awake || claimStreak.isPending}
+                    onClick={() =>
+                      claimStreak.mutate({
+                        configId: catchUpStreak.configId,
+                        payCatchUp: true,
+                      })
+                    }
+                  >
+                    {claimStreak.isPending ? "Claiming..." : "Catch up"}
+                  </RowAction>
+                </>
+              }
+            />
+          )}
+          {!catchUpStreak && claimableStreak && (
+            <StatusRow
+              label="Streak"
+              title={`Day ${claimableStreak.nextDayNumber}`}
+              detail={
+                getRewardPreview(claimableStreak.nextRewards) ||
+                "Claim today’s activity reward."
+              }
+              note={
+                <>
+                  {!awake && <p>You can claim this once you are awake.</p>}
+                  {claimStreak.error && (
+                    <p className="text-destructive">{claimStreak.error.message}</p>
+                  )}
+                </>
+              }
+              action={
+                <RowAction
+                  icon={Gift}
+                  variant="default"
+                  disabled={!awake || claimStreak.isPending}
+                  onClick={() =>
+                    claimStreak.mutate({ configId: claimableStreak.configId })
+                  }
+                >
+                  {claimStreak.isPending ? "Claiming..." : "Claim"}
+                </RowAction>
+              }
+            />
+          )}
+          {!catchUpStreak && !claimableStreak && recurringStreak && (
+            <StatusRow
+              label="Streak"
+              title="Day 1"
+              detail={recurringReward || "Claim today’s activity reward."}
+              note={
+                <>
+                  {!awake && <p>You can claim this once you are awake.</p>}
+                  {claimStreak.error && (
+                    <p className="text-destructive">{claimStreak.error.message}</p>
+                  )}
+                </>
+              }
+              action={
+                <RowAction
+                  icon={Gift}
+                  variant="default"
+                  disabled={!awake || claimStreak.isPending}
+                  onClick={() => claimStreak.mutate({ configId: recurringStreak.id })}
+                >
+                  {claimStreak.isPending ? "Claiming..." : "Claim"}
+                </RowAction>
+              }
+            />
+          )}
+          {bankWaiting && (
+            <StatusRow
+              label="Bank"
+              title={`${(interest.data?.totalPending ?? 0).toLocaleString()} ryo`}
+              detail={
+                pendingInterestDays > 0
+                  ? `${pendingInterestDays} unclaimed ${pendingInterestDays === 1 ? "day" : "days"}`
+                  : "Ready to collect"
+              }
+              note={
+                claimInterest.error ? (
+                  <p className="text-destructive">{claimInterest.error.message}</p>
+                ) : null
+              }
+              action={
+                <RowAction
+                  icon={Coins}
+                  variant="default"
                   disabled={!canClaimInterest || claimInterest.isPending}
                   onClick={() => claimInterest.mutate()}
                 >
-                  {claimInterest.isPending ? "Collecting..." : "Collect interest"}
-                </Button>
-                {claimInterest.error && (
-                  <p className="text-destructive text-xs">
-                    {claimInterest.error.message}
-                  </p>
-                )}
-              </>
-            ) : (
-              <EmptyPriority text="No bank interest is waiting." />
-            )}
-          </PriorityCard>
-
-          <PriorityCard
-            icon={Trophy}
-            label="Raids"
-            title="Earned rewards"
-            accent="red"
-            isLoading={dashboard.isLoading}
-            error={dashboard.error?.message}
-            onRetry={() => void dashboard.refetch()}
-          >
-            {claimableRaidRewards > 0 ? (
-              <>
-                <p className="font-semibold text-lg">
-                  {claimableRaidRewards} threshold reward
-                  {claimableRaidRewards === 1 ? "" : "s"}
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  {dashboard.data?.raidRewards.map((raid) => raid.raidName).join(", ")}
-                </p>
-                <Button asChild className="mt-auto w-full">
-                  <Link href="/globalanbuhq">Open raid rewards</Link>
-                </Button>
-              </>
-            ) : (
-              <EmptyPriority text="No raid threshold rewards are ready." />
-            )}
-          </PriorityCard>
-
-          <PriorityCard
-            icon={Dumbbell}
-            label="Training"
-            title={training?.title ?? "Training grounds"}
-            accent="red"
-            isLoading={sidebarTimers.isLoading}
-            error={sidebarTimers.error?.message}
-            onRetry={() => void sidebarTimers.refetch()}
-          >
-            <p className="text-muted-foreground text-xs">
-              {training?.endsAt
-                ? `Current session ends ${training.endsAt.toLocaleString()}.`
-                : "No stat or jutsu training is active."}
-            </p>
-            {training?.startedAt && training.endsAt && (
-              <TimerProgress
-                label="Training progress"
-                startedAt={training.startedAt}
-                endsAt={training.endsAt}
-                timeDiff={timeDiff}
-                onFinish={() => void sidebarTimers.refetch()}
-              />
-            )}
-            <Button
-              asChild
-              variant="outline"
-              className="mt-auto w-full hover:text-black"
-            >
-              <Link href="/traininggrounds">
-                {training ? "View training" : "Start training"}
-              </Link>
-            </Button>
-          </PriorityCard>
-
-          <PriorityCard
-            icon={BriefcaseBusiness}
-            label="Occupation"
-            title={
-              userData.occupation
-                ? capitalizeFirstLetter(userData.occupation)
-                : "Choose an occupation"
+                  {claimInterest.isPending ? "Collecting..." : "Collect"}
+                </RowAction>
+              }
+            />
+          )}
+          {claimableRaidRewards > 0 && (
+            <StatusRow
+              label="Raids"
+              title={raidTitle}
+              detail={`${claimableRaidRewards} ready`}
+              action={
+                <RowAction href="/globalanbuhq" icon={Swords}>
+                  Open
+                </RowAction>
+              }
+            />
+          )}
+          {training ? (
+            <StatusRow
+              label="Training"
+              title={training.title}
+              detail={
+                training.endsAt ? (
+                  <Countdown
+                    targetDate={training.endsAt}
+                    timeDiff={timeDiff}
+                    onEndShow="Ready"
+                  />
+                ) : null
+              }
+              meter={
+                training.startedAt && training.endsAt ? (
+                  <ElapsedMeter
+                    startedAt={training.startedAt}
+                    endsAt={training.endsAt}
+                    timeDiff={timeDiff}
+                    onFinish={() => void sidebarTimers.refetch()}
+                  />
+                ) : null
+              }
+              action={
+                <RowAction href="/traininggrounds" icon={Eye}>
+                  View
+                </RowAction>
+              }
+            />
+          ) : canStartTraining ? (
+            <StatusRow
+              label="Training"
+              title="Training grounds"
+              action={
+                <RowAction href="/traininggrounds" icon={Dumbbell}>
+                  Train
+                </RowAction>
+              }
+            />
+          ) : null}
+          <StatusRow
+            label={occupationLine.label}
+            title={occupationLine.title}
+            detail={
+              occupationLine.craftTimer && craftTimer ? (
+                <Countdown
+                  targetDate={craftTimer.endsAt}
+                  timeDiff={timeDiff}
+                  onEndShow="Ready"
+                />
+              ) : (
+                occupationLine.detail
+              )
             }
-            accent="amber"
-            isLoading={sidebarTimers.isLoading}
-            error={sidebarTimers.error?.message}
-            onRetry={() => void sidebarTimers.refetch()}
-          >
-            <p className="text-muted-foreground text-xs">
-              {sidebarTimers.data?.crafting
-                ? `${sidebarTimers.data.crafting.itemName} is being crafted.`
-                : userData.occupation
-                  ? "Continue your work and check collection readiness."
-                  : "Select a profession to unlock steady work and rewards."}
-            </p>
-            {craftingTimers.map((timer) => (
-              <TimerProgress
-                key={`${timer.label}-${timer.endsAt.toISOString()}`}
-                label={timer.label}
-                startedAt={timer.startedAt}
-                endsAt={timer.endsAt}
-                timeDiff={timeDiff}
-                onFinish={() => void sidebarTimers.refetch()}
+            progress={occupationLine.craftTimer ? null : occupationLine.progress}
+            meter={
+              occupationLine.craftTimer && craftTimer ? (
+                <ElapsedMeter
+                  startedAt={craftTimer.startedAt}
+                  endsAt={craftTimer.endsAt}
+                  timeDiff={timeDiff}
+                  onFinish={() => void sidebarTimers.refetch()}
+                />
+              ) : null
+            }
+            action={
+              <RowAction
+                href="/occupation"
+                icon={iconForRowAction(occupationLine.action)}
+              >
+                {occupationLine.action}
+              </RowAction>
+            }
+          />
+          {visibleCraftTimers.map((timer) => (
+            <StatusRow
+              key={`${timer.kind}-${timer.title}`}
+              label={timer.label}
+              title={timer.title}
+              detail={
+                <Countdown
+                  targetDate={timer.endsAt}
+                  timeDiff={timeDiff}
+                  onEndShow="Ready"
+                />
+              }
+              meter={
+                <ElapsedMeter
+                  startedAt={timer.startedAt}
+                  endsAt={timer.endsAt}
+                  timeDiff={timeDiff}
+                  onFinish={() => void sidebarTimers.refetch()}
+                />
+              }
+              action={
+                <RowAction href={timer.href} icon={Eye}>
+                  View
+                </RowAction>
+              }
+            />
+          ))}
+          {sidebarTimers.isError && (
+            <div className="border-t py-3">
+              <RetryPanel
+                message="Training and crafting timers could not be loaded."
+                onRetry={() => void sidebarTimers.refetch()}
               />
-            ))}
-            <Button
-              asChild
-              variant="outline"
-              className="mt-auto w-full hover:text-black"
-            >
-              <Link href="/occupation">
-                {userData.occupation ? "Continue work" : "Start a job"}
-              </Link>
-            </Button>
-          </PriorityCard>
-
-          <PriorityCard
-            icon={Sparkles}
-            label="Growth"
-            title={canLevelUp ? "Level up ready" : `Level ${userData.level}`}
-            accent="blue"
-          >
-            <p className="text-muted-foreground text-xs">
-              {canLevelUp
-                ? "You have enough experience for your next level."
-                : `${Math.max(calcLevelRequirements(userData.level) - userData.experience, 0).toFixed(0)} experience until your next level.`}
-            </p>
-            <div className="mt-auto">
-              <LevelUpBtn id="tutorial-level-up-dashboard" />
             </div>
-          </PriorityCard>
+          )}
+          <div className="border-t py-3">
+            <div className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="font-semibold">Level {userData.level}</span>
+              <span className="text-muted-foreground">
+                {canLevelUp
+                  ? "Ready to level up"
+                  : `${Number(experienceToGo.toFixed(0)).toLocaleString()} experience to go`}
+              </span>
+            </div>
+            <Progress value={levelProgress} className="mt-1.5 h-1.5" />
+            <LevelUpBtn id="tutorial-level-up-dashboard" />
+          </div>
+          {!claimsLoading && !claimsFailed && !hasCollectible && (
+            <p className="border-t py-3 text-muted-foreground text-sm">
+              Nothing to collect from the streak, the bank, or raids.
+            </p>
+          )}
         </div>
       </section>
 
@@ -527,149 +722,6 @@ export default function ProfileDashboard() {
   );
 }
 
-/** Claim, catch up, or start the activity streak. Mounted once per profile view. */
-export function ProfileStreakCard({
-  onClaimed,
-}: {
-  onClaimed?: () => Promise<unknown>;
-}) {
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
-  const streaks = api.activityStreak.getUserStreaks.useQuery(undefined, {
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
-  const claimStreak = api.activityStreak.claimStreakDay.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (!data.success) return;
-      if (onClaimed) {
-        await onClaimed();
-        return;
-      }
-      await Promise.allSettled([
-        streaks.refetch(),
-        utils.profile.getUser.invalidate(),
-        utils.profile.getDashboard.invalidate(),
-      ]);
-    },
-  });
-
-  const claimableStreak = streaks.data?.streaks.find((streak) => streak.canClaimToday);
-  const catchUpStreak = streaks.data?.streaks.find((streak) => streak.needsCatchUp);
-  const recurringStreak = streaks.data?.activeRecurringConfig;
-  const awake = userData?.status === "AWAKE";
-  const recurringReward = getRewardPreview(
-    recurringStreak?.rewards.find((reward) => reward.dayNumber === 1)?.rewards ?? null,
-  );
-
-  return (
-    <PriorityCard
-      icon={Gift}
-      label="Reward"
-      title="Activity streak"
-      accent="amber"
-      isLoading={streaks.isLoading}
-      error={streaks.error?.message}
-      onRetry={() => void streaks.refetch()}
-    >
-      {catchUpStreak ? (
-        <>
-          <p className="flex items-start gap-2 text-orange-700 dark:text-orange-400">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            {catchUpStreak.daysToGo ?? 1} day
-            {(catchUpStreak.daysToGo ?? 1) === 1 ? "" : "s"} behind
-          </p>
-          <p className="text-muted-foreground text-xs">
-            Pay {COST_STREAK_CATCHUP_DAY} rep per day to catch up, or reset your streak.
-            Day {catchUpStreak.nextDayNumber}:{" "}
-            {getRewardPreview(catchUpStreak.nextRewards) || "Daily reward"}
-          </p>
-          <div className="mt-auto flex gap-2">
-            <Confirm
-              title="Reset Streak"
-              button={
-                <Button
-                  variant="outline"
-                  disabled={!awake || claimStreak.isPending}
-                  className="flex-1 hover:text-black"
-                >
-                  <RotateCcw className="mr-1 h-4 w-4" />
-                  Reset
-                </Button>
-              }
-              onAccept={(event) => {
-                event.preventDefault();
-                claimStreak.mutate({ configId: catchUpStreak.configId, reset: true });
-              }}
-            >
-              <p>
-                Your streak will reset to day 1. Current progress (day{" "}
-                {catchUpStreak.currentDay}) will be lost.
-              </p>
-            </Confirm>
-            <Button
-              className="flex-1"
-              disabled={!awake || claimStreak.isPending}
-              onClick={() =>
-                claimStreak.mutate({
-                  configId: catchUpStreak.configId,
-                  payCatchUp: true,
-                })
-              }
-            >
-              {claimStreak.isPending
-                ? "Claiming..."
-                : `Catch up (${COST_STREAK_CATCHUP_DAY} rep)`}
-            </Button>
-          </div>
-        </>
-      ) : claimableStreak ? (
-        <>
-          <p>Day {claimableStreak.nextDayNumber} is ready.</p>
-          <p className="text-muted-foreground text-xs">
-            {getRewardPreview(claimableStreak.nextRewards) ||
-              "Claim today’s activity reward."}
-          </p>
-          <Button
-            className="mt-auto w-full"
-            disabled={!awake || claimStreak.isPending}
-            onClick={() => claimStreak.mutate({ configId: claimableStreak.configId })}
-          >
-            {claimStreak.isPending
-              ? "Claiming..."
-              : `Claim day ${claimableStreak.nextDayNumber}`}
-          </Button>
-        </>
-      ) : recurringStreak ? (
-        <>
-          <p>Day 1 is ready.</p>
-          <p className="text-muted-foreground text-xs">
-            {recurringReward || "Claim today’s activity reward."}
-          </p>
-          <Button
-            className="mt-auto w-full"
-            disabled={!awake || claimStreak.isPending}
-            onClick={() => claimStreak.mutate({ configId: recurringStreak.id })}
-          >
-            {claimStreak.isPending ? "Claiming..." : "Claim day 1"}
-          </Button>
-        </>
-      ) : (
-        <EmptyPriority text="Today’s streak reward is already handled." />
-      )}
-      {claimStreak.error && (
-        <p className="text-destructive text-xs">{claimStreak.error.message}</p>
-      )}
-      {!awake && (catchUpStreak || claimableStreak || recurringStreak) && (
-        <p className="text-muted-foreground text-xs">
-          You can claim this once you are awake.
-        </p>
-      )}
-    </PriorityCard>
-  );
-}
-
 function SectionHeader({
   eyebrow,
   title,
@@ -699,65 +751,104 @@ function SectionHeader({
   );
 }
 
-function PriorityCard({
+const rowActionIcons = {
+  "Start a job": Briefcase,
+  "Pick a quest": ScrollText,
+  "Open quest": BookOpen,
+  View: Eye,
+  "Start crafting": Hammer,
+  Open: ArrowRight,
+} as const;
+
+const iconForRowAction = (action: string) =>
+  action in rowActionIcons
+    ? rowActionIcons[action as keyof typeof rowActionIcons]
+    : ArrowRight;
+
+function RowAction({
+  href,
   icon: Icon,
-  label,
-  title,
-  accent,
-  isLoading,
-  error,
-  onRetry,
   children,
+  variant = "outline",
+  disabled,
+  onClick,
 }: {
+  href?: string;
   icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  title: string;
-  accent: "amber" | "blue" | "red";
-  isLoading?: boolean;
-  error?: string;
-  onRetry?: () => void;
   children: React.ReactNode;
+  variant?: "default" | "outline";
+  disabled?: boolean;
+  onClick?: () => void;
 }) {
+  const className = cn("w-full gap-1.5", variant === "outline" && "hover:text-black");
+  const content = (
+    <>
+      <Icon className="h-4 w-4 shrink-0" />
+      {children}
+    </>
+  );
+  if (href) {
+    return (
+      <Button asChild size="sm" variant={variant} className={className}>
+        <Link href={href}>{content}</Link>
+      </Button>
+    );
+  }
   return (
-    <Card
-      className={cn(
-        "flex min-h-56 flex-col border-t-2",
-        accent === "amber" && "border-t-amber-400",
-        accent === "blue" && "border-t-sky-400",
-        accent === "red" && "border-t-red-400",
-      )}
+    <Button
+      size="sm"
+      variant={variant}
+      className={className}
+      disabled={disabled}
+      onClick={onClick}
     >
-      <CardHeader className="pb-2">
-        <div className="flex items-center gap-2 font-mono text-muted-foreground text-xs uppercase tracking-wider">
-          <Icon className="h-4 w-4" /> {label}
-        </div>
-        <CardTitle className="text-lg">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-2 text-sm">
-        {isLoading ? (
-          <Loader explanation={`Loading ${label.toLowerCase()}...`} />
-        ) : error ? (
-          <RetryPanel message={error} onRetry={onRetry} />
-        ) : (
-          children
-        )}
-      </CardContent>
-    </Card>
+      {content}
+    </Button>
   );
 }
 
-function EmptyPriority({ text }: { text: string }) {
-  return <p className="text-muted-foreground text-sm">{text}</p>;
+function StatusRow({
+  label,
+  title,
+  detail,
+  progress,
+  meter,
+  note,
+  action,
+}: {
+  label: string;
+  title: string;
+  detail?: React.ReactNode;
+  progress?: number | null;
+  meter?: React.ReactNode;
+  note?: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-2 border-t py-3 first:border-t-0 sm:grid-cols-[7.5rem_minmax(0,1fr)_10rem] sm:items-center sm:gap-3">
+      <div className="text-muted-foreground text-sm">{label}</div>
+      <div className="min-w-0">
+        <p className="font-semibold">{title}</p>
+        {detail ? <div className="text-muted-foreground text-sm">{detail}</div> : null}
+        {typeof progress === "number" ? (
+          <Progress value={progress} className="mt-1.5 h-1.5" />
+        ) : null}
+        {meter}
+        {note ? <div className="mt-1 text-muted-foreground text-xs">{note}</div> : null}
+      </div>
+      {action ? (
+        <div className="flex w-full flex-col gap-2 [&>*]:w-full">{action}</div>
+      ) : null}
+    </div>
+  );
 }
 
-function TimerProgress({
-  label,
+function ElapsedMeter({
   startedAt,
   endsAt,
   timeDiff,
   onFinish,
 }: {
-  label: string;
   startedAt: Date;
   endsAt: Date;
   timeDiff: number;
@@ -786,18 +877,7 @@ function TimerProgress({
     onFinishRef.current?.();
   }, [progress]);
 
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span>{label}</span>
-        <span className="font-mono text-muted-foreground">
-          {Math.round(progress)}% ·{" "}
-          <Countdown targetDate={endsAt} timeDiff={timeDiff} onEndShow="Ready" />
-        </span>
-      </div>
-      <Progress value={progress} className="h-2" />
-    </div>
-  );
+  return <Progress value={progress} className="mt-1.5 h-1.5" />;
 }
 
 function RetryPanel({ message, onRetry }: { message: string; onRetry?: () => void }) {

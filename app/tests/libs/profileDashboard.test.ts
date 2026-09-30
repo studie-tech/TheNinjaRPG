@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { MAP_WAKE_ISLAND_SECTOR, WAR_MISSIONS_PER_DAY } from "@/drizzle/constants";
+import {
+  MAP_WAKE_ISLAND_SECTOR,
+  MAX_DAILY_TRAININGS,
+  UserStatNames,
+  WAR_MISSIONS_PER_DAY,
+  getUserCaps,
+} from "@/drizzle/constants";
 import {
   condenseDashboardMissionContent,
   dashboardContentActionLabel,
   dashboardContentHref,
   dashboardContentRequiresTravel,
+  describeOccupationLine,
   filterAccessibleDashboardContent,
+  isDashboardTrainingAvailable,
   isDashboardWarMissionVisible,
   raidContinueHref,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
+import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
 const availableDailyCounts = {
@@ -345,5 +354,244 @@ describe("isDashboardWarMissionVisible", () => {
         activeWars: [],
       }),
     ).toBe(true);
+  });
+});
+
+const herbsObjective = {
+  id: "herbs",
+  task: "herbs_gathered",
+  description: "Collect medicinal herbs",
+  value: 8,
+} as AllObjectivesType;
+
+const occupationQuest = (
+  questId: string,
+  name: string,
+  questType: string,
+  objective: AllObjectivesType,
+  consecutiveObjectives = false,
+) => ({
+  questId,
+  completed: 0,
+  quest: {
+    name,
+    questType,
+    consecutiveObjectives,
+    content: { objectives: [objective] },
+  },
+});
+
+const occupationTracker = (
+  questId: string,
+  goalId: string,
+  value: number,
+  done: boolean,
+): QuestTrackerType => ({
+  id: questId,
+  startAt: "2026-01-01T00:00:00.000Z",
+  goals: [{ id: goalId, done, value, collected: false, recentlyDied: false }],
+});
+
+const trainableUser = () => {
+  const stats = Object.fromEntries(UserStatNames.map((stat) => [stat, 0])) as Record<
+    (typeof UserStatNames)[number],
+    number
+  >;
+  return {
+    ...stats,
+    status: "AWAKE",
+    isOutlaw: false,
+    sector: 1,
+    villageSector: 1,
+    dailyTrainings: 0,
+    rank: "STUDENT" as const,
+  };
+};
+
+describe("isDashboardTrainingAvailable", () => {
+  it("lets an awake villager under the cap start training", () => {
+    expect(isDashboardTrainingAvailable(trainableUser())).toBe(true);
+  });
+
+  it("hides training once the daily limit or every stat cap is reached", () => {
+    expect(
+      isDashboardTrainingAvailable({
+        ...trainableUser(),
+        dailyTrainings: MAX_DAILY_TRAININGS,
+      }),
+    ).toBe(false);
+    const caps = getUserCaps("STUDENT");
+    const capped = trainableUser();
+    for (const stat of UserStatNames) {
+      capped[stat] =
+        stat.includes("Offence") || stat.includes("Defence")
+          ? caps.stats_cap
+          : caps.gens_cap;
+    }
+    expect(isDashboardTrainingAvailable(capped)).toBe(false);
+  });
+
+  it("hides training away from the village and while not awake", () => {
+    expect(
+      isDashboardTrainingAvailable({ ...trainableUser(), sector: 2, villageSector: 1 }),
+    ).toBe(false);
+    expect(isDashboardTrainingAvailable({ ...trainableUser(), status: "BATTLE" })).toBe(
+      false,
+    );
+    expect(
+      isDashboardTrainingAvailable({
+        ...trainableUser(),
+        isOutlaw: true,
+        sector: 9,
+        villageSector: 1,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("describeOccupationLine", () => {
+  it("asks a player without an occupation to start a job", () => {
+    expect(
+      describeOccupationLine({
+        occupation: null,
+        quests: [],
+        trackers: [],
+      }),
+    ).toMatchObject({
+      label: "Occupation",
+      title: "Choose an occupation",
+      action: "Start a job",
+      detail: null,
+    });
+  });
+
+  it("names the gathering quest and how far the current objective is", () => {
+    const line = describeOccupationLine({
+      occupation: "GATHERING",
+      quests: [
+        occupationQuest("finished", "Old herbs", "gathering", herbsObjective),
+        occupationQuest("current", "Medicinal Gathering", "gathering", herbsObjective),
+        occupationQuest("mission", "A mission", "mission", herbsObjective),
+      ],
+      trackers: [
+        occupationTracker("finished", "herbs", 8, true),
+        occupationTracker("current", "herbs", 3, false),
+      ],
+    });
+
+    expect(line).toMatchObject({
+      label: "Gathering",
+      title: "Medicinal Gathering",
+      detail: "Collect medicinal herbs · 3 of 8",
+      action: "Open quest",
+      craftTimer: false,
+    });
+    expect(line.progress).toBeCloseTo(37.5);
+  });
+
+  it("asks for a quest when the occupation has none", () => {
+    expect(
+      describeOccupationLine({
+        occupation: "HUNTER",
+        quests: [occupationQuest("gathering", "Medicinal Gathering", "gathering", herbsObjective)],
+        trackers: [],
+      }),
+    ).toMatchObject({
+      label: "Hunter",
+      title: "No hunting quest",
+      action: "Pick a quest",
+    });
+  });
+
+  it("says the quest is ready when every objective is done", () => {
+    expect(
+      describeOccupationLine({
+        occupation: "GATHERING",
+        quests: [occupationQuest("finished", "Medicinal Gathering", "gathering", herbsObjective)],
+        trackers: [occupationTracker("finished", "herbs", 8, true)],
+      }),
+    ).toMatchObject({
+      title: "Medicinal Gathering",
+      detail: "Ready to turn in",
+      progress: null,
+    });
+  });
+
+  it("names the item and sector when a gathering objective has no description", () => {
+    const copper = {
+      id: "ore",
+      task: "collect_item",
+      description: "",
+      item_name: "Copper Ore",
+      sector: 724,
+      hideLocation: false,
+    } as AllObjectivesType;
+
+    expect(
+      describeOccupationLine({
+        occupation: "GATHERING",
+        quests: [occupationQuest("current", "Copper Gathering", "gathering", copper)],
+        trackers: [occupationTracker("current", "ore", 0, false)],
+      }),
+    ).toMatchObject({
+      title: "Copper Gathering",
+      detail: "Collect Copper Ore · sector 724",
+      progress: null,
+    });
+  });
+
+  it("uses the shared objective title when the quest has no description", () => {
+    const untitled = { ...herbsObjective, description: "" } as AllObjectivesType;
+    expect(
+      describeOccupationLine({
+        occupation: "GATHERING",
+        quests: [occupationQuest("current", "Medicinal Gathering", "gathering", untitled)],
+        trackers: [occupationTracker("current", "herbs", 3, false)],
+      }).detail,
+    ).toBe("Herbs Gathered · 3 of 8");
+  });
+
+  it("names the item on a crafter's bench", () => {
+    expect(
+      describeOccupationLine({
+        occupation: "CRAFTING",
+        quests: [],
+        trackers: [],
+        craftingItemName: "Healing Salve",
+      }),
+    ).toMatchObject({
+      label: "Crafting",
+      title: "Healing Salve",
+      action: "View",
+      craftTimer: true,
+    });
+  });
+
+  it("does not invent an empty bench while crafting timers are still loading", () => {
+    expect(
+      describeOccupationLine({
+        occupation: "CRAFTING",
+        quests: [],
+        trackers: [],
+      }),
+    ).toMatchObject({
+      title: "Checking the bench",
+      craftTimer: false,
+    });
+  });
+
+  it("tells an idle crafter to start", () => {
+    expect(
+      describeOccupationLine({
+        occupation: "CRAFTING",
+        quests: [],
+        trackers: [],
+        craftingItemName: null,
+      }),
+    ).toMatchObject({
+      title: "Not crafting",
+      action: "Start crafting",
+      craftTimer: false,
+    });
   });
 });

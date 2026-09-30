@@ -1,11 +1,22 @@
 import {
   ERRANDS_PER_DAY,
+  getUserCaps,
   MAP_WAKE_ISLAND_SECTOR,
+  MAX_DAILY_TRAININGS,
   MEDICAL_MISSIONS_PER_DAY,
   MISSIONS_PER_DAY,
   PVP_MISSIONS_PER_DAY,
+  type UserRank,
+  UserStatNames,
   WAR_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
+import type { Quest } from "@/drizzle/schema";
+import {
+  getActiveObjective,
+  getObjectiveImage,
+  isObjectiveComplete,
+} from "@/libs/objectives";
+import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
 export type DashboardAvailability = "available" | "travel" | "locked";
@@ -238,4 +249,247 @@ export const isDashboardWarMissionVisible = ({
       activeWar.defenderVillageId === villageId ||
       activeWar.warAllies.some((ally) => ally.villageId === villageId),
   );
+};
+
+type DashboardTrainingStats = Record<(typeof UserStatNames)[number], number>;
+
+/**
+ * A player can start training while awake, under the daily limit, in their own
+ * village (outlaws excepted), and still below the rank cap on at least one stat.
+ */
+export const isDashboardTrainingAvailable = (
+  user: DashboardTrainingStats & {
+    status: string;
+    isOutlaw: boolean;
+    sector: number;
+    villageSector: number | null | undefined;
+    dailyTrainings: number;
+    rank: UserRank | null;
+  },
+) => {
+  if (user.status !== "AWAKE") return false;
+  if (user.dailyTrainings >= MAX_DAILY_TRAININGS) return false;
+  if (
+    !user.isOutlaw &&
+    (user.villageSector == null || user.sector !== user.villageSector)
+  ) {
+    return false;
+  }
+  const { stats_cap, gens_cap } = getUserCaps(user.rank);
+  return UserStatNames.some((stat) => {
+    const cap =
+      stat.includes("Offence") || stat.includes("Defence") ? stats_cap : gens_cap;
+    return user[stat] < cap;
+  });
+};
+
+const occupationLines = {
+  GATHERING: {
+    label: "Gathering",
+    questType: "gathering",
+    emptyTitle: "No gathering quest",
+  },
+  HUNTER: {
+    label: "Hunter",
+    questType: "hunting",
+    emptyTitle: "No hunting quest",
+  },
+  CRAFTING: {
+    label: "Crafting",
+    questType: "crafting",
+    emptyTitle: "Not crafting",
+  },
+} as const;
+
+export type OccupationProgressLine = {
+  label: string;
+  title: string;
+  detail: string | null;
+  /** 0–100 when the current objective has a numeric target. */
+  progress: number | null;
+  action: string;
+  /** The crafting countdown belongs on this row, not on a second crafting row. */
+  craftTimer: boolean;
+};
+
+type OccupationQuestEntry = {
+  questId: string;
+  completed?: number;
+  quest: {
+    name: string;
+    questType: string;
+    consecutiveObjectives: boolean;
+    content: { objectives: AllObjectivesType[] };
+  };
+};
+
+/**
+ * One occupation row: the quest the player is on, or a prompt to pick one.
+ * Crafting has no quest, so the row names the item on the bench.
+ */
+export const describeOccupationLine = ({
+  occupation,
+  quests,
+  trackers,
+  craftingItemName,
+}: {
+  occupation: string | null | undefined;
+  quests: OccupationQuestEntry[];
+  trackers: QuestTrackerType[] | null | undefined;
+  /** Undefined while the crafting timer is still loading. */
+  craftingItemName?: string | null;
+}): OccupationProgressLine => {
+  if (!occupation) {
+    return {
+      label: "Occupation",
+      title: "Choose an occupation",
+      detail: null,
+      progress: null,
+      action: "Start a job",
+      craftTimer: false,
+    };
+  }
+
+  const meta = occupationLines[occupation as keyof typeof occupationLines];
+  if (!meta) {
+    return {
+      label: "Occupation",
+      title: occupation,
+      detail: null,
+      progress: null,
+      action: "Open",
+      craftTimer: false,
+    };
+  }
+
+  if (occupation === "CRAFTING") {
+    if (craftingItemName === undefined) {
+      return {
+        label: meta.label,
+        title: "Checking the bench",
+        detail: null,
+        progress: null,
+        action: "View",
+        craftTimer: false,
+      };
+    }
+    if (craftingItemName) {
+      return {
+        label: meta.label,
+        title: craftingItemName,
+        detail: null,
+        progress: null,
+        action: "View",
+        craftTimer: true,
+      };
+    }
+    return {
+      label: meta.label,
+      title: meta.emptyTitle,
+      detail: null,
+      progress: null,
+      action: "Start crafting",
+      craftTimer: false,
+    };
+  }
+
+  const trackerFor = (questId: string) =>
+    trackers?.find((tracker) => tracker.id === questId);
+  const activeQuests = quests.filter(
+    (entry) => (entry.completed ?? 0) === 0 && entry.quest.questType === meta.questType,
+  );
+  const chosen =
+    activeQuests.find(
+      (entry) => currentObjective(entry.quest, trackerFor(entry.questId)) !== undefined,
+    ) ?? activeQuests[0];
+
+  if (!chosen) {
+    return {
+      label: meta.label,
+      title: meta.emptyTitle,
+      detail: null,
+      progress: null,
+      action: "Pick a quest",
+      craftTimer: false,
+    };
+  }
+
+  const objective = currentObjective(chosen.quest, trackerFor(chosen.questId));
+  if (!objective) {
+    return {
+      label: meta.label,
+      title: chosen.quest.name,
+      detail: chosen.quest.content.objectives.length > 0 ? "Ready to turn in" : null,
+      progress: null,
+      action: "Open quest",
+      craftTimer: false,
+    };
+  }
+
+  const progress = objectiveProgress(objective, trackerFor(chosen.questId));
+  return {
+    label: meta.label,
+    title: chosen.quest.name,
+    detail: progress.detail,
+    progress: progress.progress,
+    action: "Open quest",
+    craftTimer: false,
+  };
+};
+
+const currentObjective = (
+  quest: OccupationQuestEntry["quest"],
+  tracker: QuestTrackerType | undefined,
+) => {
+  const objectives = quest.content.objectives;
+  if (objectives.length === 0) return undefined;
+  if (!tracker) return objectives[0];
+  if (quest.consecutiveObjectives) {
+    return getActiveObjective(quest as Quest, tracker) ?? undefined;
+  }
+  return objectives.find((objective) => !isObjectiveComplete(tracker, objective).done);
+};
+
+const objectiveProgress = (
+  objective: AllObjectivesType,
+  tracker: QuestTrackerType | undefined,
+) => {
+  const label = objectiveLabel(objective);
+  if (!tracker || !("value" in objective) || objective.value <= 0) {
+    const sector = objectiveSector(objective);
+    return {
+      detail: sector === null ? label : `${label} · sector ${sector}`,
+      progress: null,
+    };
+  }
+  const current = Math.min(
+    isObjectiveComplete(tracker, objective).value,
+    objective.value,
+  );
+  return {
+    detail: `${label} · ${current} of ${objective.value}`,
+    progress: (current / objective.value) * 100,
+  };
+};
+
+/** Prefer the quest's own wording, then the specific item, then the shared title. */
+const objectiveLabel = (objective: AllObjectivesType) => {
+  const plain = objective.description
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (plain) return plain.length > 90 ? `${plain.slice(0, 89).trimEnd()}...` : plain;
+  if ("item_name" in objective && objective.item_name) {
+    return objective.task === "deliver_item"
+      ? `Deliver ${objective.item_name}`
+      : `Collect ${objective.item_name}`;
+  }
+  return getObjectiveImage(objective).title;
+};
+
+const objectiveSector = (objective: AllObjectivesType) => {
+  if (!("sector" in objective) || typeof objective.sector !== "number") return null;
+  if ("hideLocation" in objective && objective.hideLocation) return null;
+  return objective.sector;
 };

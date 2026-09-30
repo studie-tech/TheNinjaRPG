@@ -45,10 +45,12 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   }, [canGoBack, router, props]);
 
   // Title to be shown
+  // The 48px touch target is taller than the title line. The negative margin
+  // returns that spare space so the subtitle stays against the title.
   const title = props.defaultBackHref ? (
     <button
       type="button"
-      className="ml-1 flex min-h-[48px] min-w-[48px] cursor-pointer flex-row items-center hover:text-orange-700 disabled:cursor-wait disabled:opacity-60"
+      className="my-[min(0px,calc((2rem-48px)/2))] ml-1 flex min-h-[48px] min-w-[48px] cursor-pointer flex-row items-center hover:text-orange-700 disabled:cursor-wait disabled:opacity-60"
       disabled={props.backDisabled}
       aria-busy={props.backDisabled}
       onClick={() => {

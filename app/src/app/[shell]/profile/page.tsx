@@ -382,9 +382,7 @@ function ProfileHistory() {
       <div className="flex justify-end border-b px-3">
         <NavTabs current={tab} options={["Quests", "Battles"]} setValue={setTab} />
       </div>
-      <div className="p-3">
-        {tab === "Quests" ? <LogbookHistory /> : <LogbookBattles />}
-      </div>
+      {tab === "Quests" ? <LogbookHistory /> : <LogbookBattles />}
     </div>
   );
 }
