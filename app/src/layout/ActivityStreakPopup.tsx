@@ -29,8 +29,8 @@ import { blockingPopupOpenAtom, useUserData } from "@/utils/UserContext";
 
 const ActivityStreakPopup: React.FC = () => {
   const pathname = usePublicPathname();
-  // The profile page owns this claim surface on every tab. Suppressing the global
-  // dialog there prevents the same reward appearing twice.
+  // The profile dashboard owns this claim surface. Suppressing the global dialog on
+  // the profile route prevents the same reward appearing twice.
   const dashboardOwnsStreak = pathname === "/profile";
   const currentDateKey = getDateKey(new Date());
   // Preserve the pre-overworld behavior: once opened, the popup stays mounted through reward

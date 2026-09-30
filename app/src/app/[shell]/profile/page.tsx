@@ -24,7 +24,7 @@ import Logbook, {
 } from "@/layout/Logbook";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
-import ProfileDashboard, { ProfileStreakCard } from "@/layout/ProfileDashboard";
+import ProfileDashboard from "@/layout/ProfileDashboard";
 import StrengthWeaknesses from "@/layout/StrengthWeaknesses";
 import { calcMedninRank } from "@/libs/hospital";
 import { calcLevelRequirements, showUserRank } from "@/libs/profile";
@@ -60,11 +60,6 @@ export default function Profile() {
           />
         </div>
       </div>
-      {activeTab !== "Dashboard" && !tutorialActive && (
-        <div className="mb-3">
-          <ProfileStreakCard />
-        </div>
-      )}
       {activeTab === "Character" ? (
         <CharacterProfile />
       ) : (
