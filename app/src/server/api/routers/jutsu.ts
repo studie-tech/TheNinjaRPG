@@ -1203,6 +1203,13 @@ export const jutsuRouter = createTRPCRouter({
           orderBy: asc(userJutsuTrainingQueue.startsAt),
         });
         if (!currentUser) return { status: "STATE_CHANGED" as const };
+        // Eligibility must reflect any bloodline change committed before this lock.
+        const currentEligibility = { ...user, ...currentUser };
+        if (
+          (!info.parentJutsuId && !canTrainJutsu(info, currentEligibility)) ||
+          (info.parentJutsuId && !canUseJutsu(info, currentEligibility, true))
+        )
+          return { status: "STATE_CHANGED" as const };
         if (currentQueue.length >= getQueueTotalCapacity(currentUser)) {
           return { status: "FULL" as const };
         }

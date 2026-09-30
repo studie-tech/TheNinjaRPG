@@ -1,7 +1,8 @@
-import { and, asc, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   item,
+  questHistory,
   trainingLog,
   userCraftingQueue,
   userData,
@@ -12,8 +13,8 @@ import {
 } from "@/drizzle/schema";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { splitQueue } from "@/libs/queue";
-import { fetchUpdatedUser } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 
 type QueueTable =
@@ -132,54 +133,50 @@ export const settleStatTrainingQueue = async (
   });
   let completed = 0;
   for (const entry of due) {
-    // Fetch outside the transaction — Vitess rejects Promise.all on a shared tx.
-    const { user } = await fetchUpdatedUser({
-      client,
-      userId,
-      skipQueueSettlement: true,
-    });
-    if (!user)
-      throw new Error(`Could not settle stat queue for missing user ${userId}`);
-    const { trackers } = getNewTrackers(user, [
-      { task: "stats_trained", increment: entry.fullStatGain },
-      { task: "minutes_training", increment: entry.durationSeconds / 60 },
-    ]);
-    const didComplete = await client.transaction(async (tx) => {
-      await tx
-        .update(userData)
-        .set({ updatedAt: sql`${userData.updatedAt}` })
-        .where(eq(userData.userId, userId));
-      const claim = await tx
-        .update(userStatTrainingQueue)
-        .set({ completedAt: now })
-        .where(
-          and(
-            eq(userStatTrainingQueue.id, entry.id),
-            isNull(userStatTrainingQueue.completedAt),
-            isNull(userStatTrainingQueue.cancelledAt),
-          ),
-        );
-      if (claim.rowsAffected !== 1) return false;
+    const didComplete = await retryOnDeadlock(() =>
+      client.transaction(async (tx) => {
+        await tx
+          .update(userData)
+          .set({ updatedAt: sql`${userData.updatedAt}` })
+          .where(eq(userData.userId, userId));
+        const claim = await tx
+          .update(userStatTrainingQueue)
+          .set({ completedAt: now })
+          .where(
+            and(
+              eq(userStatTrainingQueue.id, entry.id),
+              isNull(userStatTrainingQueue.completedAt),
+              isNull(userStatTrainingQueue.cancelledAt),
+            ),
+          );
+        if (claim.rowsAffected !== 1) return false;
 
-      const statColumn = userData[entry.stat];
-      await tx
-        .update(userData)
-        .set({
-          [entry.stat]: sql`${statColumn} + ${entry.fullStatGain}`,
-          experience: sql`${userData.experience} + ${entry.fullExperienceGain}`,
-          dailyTrainings: sql`${userData.dailyTrainings} + 1`,
-          questData: filterQuestTrackersForDbPersist(trackers, user),
-        })
-        .where(eq(userData.userId, userId));
-      await tx.insert(trainingLog).values({
-        userId,
-        amount: entry.fullStatGain,
-        stat: entry.stat,
-        speed: entry.trainingSpeed,
-        trainingFinishedAt: entry.finishesAt,
-      });
-      return true;
-    });
+        const user = await fetchQueueQuestUser(tx, userId);
+        const { trackers } = getNewTrackers(user, [
+          { task: "stats_trained", increment: entry.fullStatGain },
+          { task: "minutes_training", increment: entry.durationSeconds / 60 },
+        ]);
+
+        const statColumn = userData[entry.stat];
+        await tx
+          .update(userData)
+          .set({
+            [entry.stat]: sql`${statColumn} + ${entry.fullStatGain}`,
+            experience: sql`${userData.experience} + ${entry.fullExperienceGain}`,
+            dailyTrainings: sql`${userData.dailyTrainings} + 1`,
+            questData: filterQuestTrackersForDbPersist(trackers, user),
+          })
+          .where(eq(userData.userId, userId));
+        await tx.insert(trainingLog).values({
+          userId,
+          amount: entry.fullStatGain,
+          stat: entry.stat,
+          speed: entry.trainingSpeed,
+          trainingFinishedAt: entry.finishesAt,
+        });
+        return true;
+      }),
+    );
     if (didComplete) completed += 1;
   }
   return completed;
@@ -199,60 +196,56 @@ export const settleJutsuTrainingQueue = async (
   });
   let completed = 0;
   for (const entry of due) {
-    const didComplete = await client.transaction(async (tx) => {
-      await tx
-        .update(userData)
-        .set({ updatedAt: sql`${userData.updatedAt}` })
-        .where(eq(userData.userId, userId));
-      const claim = await tx
-        .update(userJutsuTrainingQueue)
-        .set({ completedAt: now })
-        .where(
-          and(
-            eq(userJutsuTrainingQueue.id, entry.id),
-            isNull(userJutsuTrainingQueue.completedAt),
-            isNull(userJutsuTrainingQueue.cancelledAt),
-          ),
-        );
-      if (claim.rowsAffected !== 1) return false as const;
-
-      const existing = await tx.query.userJutsu.findFirst({
-        where: and(eq(userJutsu.userId, userId), eq(userJutsu.jutsuId, entry.jutsuId)),
-      });
-      if (existing) {
+    const didComplete = await retryOnDeadlock(() =>
+      client.transaction(async (tx) => {
         await tx
-          .update(userJutsu)
-          .set({ level: sql`${userJutsu.level} + 1`, updatedAt: now })
-          .where(eq(userJutsu.id, existing.id));
-        return "leveled" as const;
-      }
-      await tx.insert(userJutsu).values({
-        id: nanoid(),
-        userId,
-        jutsuId: entry.jutsuId,
-        level: 1,
-        equipped: false,
-      });
-      return "mastered" as const;
-    });
-    if (didComplete === "mastered") {
-      // Quest trackers outside tx — Vitess rejects fetchUpdatedUser's Promise.all on tx.
-      const { user } = await fetchUpdatedUser({
-        client,
-        userId,
-        skipQueueSettlement: true,
-      });
-      if (!user)
-        throw new Error(`Could not settle jutsu queue for missing user ${userId}`);
-      const { trackers } = getNewTrackers(user, [
-        { task: "jutsus_mastered", increment: 1 },
-        { task: "train_specific_jutsu", increment: 1, contentId: entry.jutsuId },
-      ]);
-      await client
-        .update(userData)
-        .set({ questData: filterQuestTrackersForDbPersist(trackers, user) })
-        .where(eq(userData.userId, userId));
-    }
+          .update(userData)
+          .set({ updatedAt: sql`${userData.updatedAt}` })
+          .where(eq(userData.userId, userId));
+        const claim = await tx
+          .update(userJutsuTrainingQueue)
+          .set({ completedAt: now })
+          .where(
+            and(
+              eq(userJutsuTrainingQueue.id, entry.id),
+              isNull(userJutsuTrainingQueue.completedAt),
+              isNull(userJutsuTrainingQueue.cancelledAt),
+            ),
+          );
+        if (claim.rowsAffected !== 1) return false as const;
+
+        const existing = await tx.query.userJutsu.findFirst({
+          where: and(
+            eq(userJutsu.userId, userId),
+            eq(userJutsu.jutsuId, entry.jutsuId),
+          ),
+        });
+        if (existing) {
+          await tx
+            .update(userJutsu)
+            .set({ level: sql`${userJutsu.level} + 1`, updatedAt: now })
+            .where(eq(userJutsu.id, existing.id));
+          return "leveled" as const;
+        }
+        await tx.insert(userJutsu).values({
+          id: nanoid(),
+          userId,
+          jutsuId: entry.jutsuId,
+          level: 1,
+          equipped: false,
+        });
+        const user = await fetchQueueQuestUser(tx, userId);
+        const { trackers } = getNewTrackers(user, [
+          { task: "jutsus_mastered", increment: 1 },
+          { task: "train_specific_jutsu", increment: 1, contentId: entry.jutsuId },
+        ]);
+        await tx
+          .update(userData)
+          .set({ questData: filterQuestTrackersForDbPersist(trackers, user) })
+          .where(eq(userData.userId, userId));
+        return "mastered" as const;
+      }),
+    );
     if (didComplete) completed += 1;
   }
   return completed;
@@ -272,83 +265,79 @@ export const settleCraftingQueue = async (
   });
   let completed = 0;
   for (const entry of due) {
-    // Fetch outside the transaction — Vitess rejects Promise.all on a shared tx.
-    const { user } = await fetchUpdatedUser({
-      client,
-      userId,
-      skipQueueSettlement: true,
-    });
-    if (!user)
-      throw new Error(`Could not settle crafting queue for missing user ${userId}`);
-    const { trackers } = getNewTrackers(user, [
-      { task: "crafting_experience_gained", increment: entry.craftingExperience },
-      { task: "items_crafted", increment: entry.quantity },
-      {
-        task: "craft_specific_item",
-        increment: entry.quantity,
-        contentId: entry.itemId,
-      },
-    ]);
-    const didComplete = await client.transaction(async (tx) => {
-      await tx
-        .update(userData)
-        .set({ updatedAt: sql`${userData.updatedAt}` })
-        .where(eq(userData.userId, userId));
-      const claim = await tx
-        .update(userCraftingQueue)
-        .set({ completedAt: now })
-        .where(
-          and(
-            eq(userCraftingQueue.id, entry.id),
-            isNull(userCraftingQueue.completedAt),
-            isNull(userCraftingQueue.cancelledAt),
-          ),
-        );
-      if (claim.rowsAffected !== 1) return false;
-
-      // Legacy crafting created its output and awarded EXP/quests at enqueue.
-      // Backfilled rows only need their linked future-dated inventory unlocked.
-      if (entry.outputCreatedAt) {
+    const didComplete = await retryOnDeadlock(() =>
+      client.transaction(async (tx) => {
         await tx
-          .update(userItem)
-          .set({ craftingFinishedAt: null })
+          .update(userData)
+          .set({ updatedAt: sql`${userData.updatedAt}` })
+          .where(eq(userData.userId, userId));
+        const claim = await tx
+          .update(userCraftingQueue)
+          .set({ completedAt: now })
           .where(
             and(
-              eq(userItem.userId, userId),
-              eq(userItem.itemId, entry.itemId),
-              eq(userItem.craftingFinishedAt, entry.finishesAt),
+              eq(userCraftingQueue.id, entry.id),
+              isNull(userCraftingQueue.completedAt),
+              isNull(userCraftingQueue.cancelledAt),
             ),
           );
+        if (claim.rowsAffected !== 1) return false;
+
+        // Legacy crafting created its output and awarded EXP/quests at enqueue.
+        // Backfilled rows only need their linked future-dated inventory unlocked.
+        if (entry.outputCreatedAt) {
+          await tx
+            .update(userItem)
+            .set({ craftingFinishedAt: null })
+            .where(
+              and(
+                eq(userItem.userId, userId),
+                eq(userItem.itemId, entry.itemId),
+                eq(userItem.craftingFinishedAt, entry.finishesAt),
+              ),
+            );
+          return true;
+        }
+
+        const user = await fetchQueueQuestUser(tx, userId);
+        const { trackers } = getNewTrackers(user, [
+          { task: "crafting_experience_gained", increment: entry.craftingExperience },
+          { task: "items_crafted", increment: entry.quantity },
+          {
+            task: "craft_specific_item",
+            increment: entry.quantity,
+            contentId: entry.itemId,
+          },
+        ]);
+
+        const craftedItem = await tx.query.item.findFirst({
+          where: eq(item.id, entry.itemId),
+        });
+        if (!craftedItem)
+          throw new Error(`Crafting output item ${entry.itemId} is missing`);
+        const outputs: (typeof userItem.$inferInsert)[] = [];
+        let remaining = entry.quantity;
+        while (remaining > 0) {
+          const quantity = Math.min(remaining, craftedItem.stackSize);
+          outputs.push({ id: nanoid(), userId, itemId: entry.itemId, quantity });
+          remaining -= quantity;
+        }
+        if (outputs.length > 0) await tx.insert(userItem).values(outputs);
+
+        await tx
+          .update(userData)
+          .set({
+            craftingExperience: sql`${userData.craftingExperience} + ${entry.craftingExperience}`,
+            questData: filterQuestTrackersForDbPersist(trackers, user),
+          })
+          .where(eq(userData.userId, userId));
+        await tx
+          .update(userCraftingQueue)
+          .set({ outputCreatedAt: now })
+          .where(eq(userCraftingQueue.id, entry.id));
         return true;
-      }
-
-      const craftedItem = await tx.query.item.findFirst({
-        where: eq(item.id, entry.itemId),
-      });
-      if (!craftedItem)
-        throw new Error(`Crafting output item ${entry.itemId} is missing`);
-      const outputs: (typeof userItem.$inferInsert)[] = [];
-      let remaining = entry.quantity;
-      while (remaining > 0) {
-        const quantity = Math.min(remaining, craftedItem.stackSize);
-        outputs.push({ id: nanoid(), userId, itemId: entry.itemId, quantity });
-        remaining -= quantity;
-      }
-      if (outputs.length > 0) await tx.insert(userItem).values(outputs);
-
-      await tx
-        .update(userData)
-        .set({
-          craftingExperience: sql`${userData.craftingExperience} + ${entry.craftingExperience}`,
-          questData: filterQuestTrackersForDbPersist(trackers, user),
-        })
-        .where(eq(userData.userId, userId));
-      await tx
-        .update(userCraftingQueue)
-        .set({ outputCreatedAt: now })
-        .where(eq(userCraftingQueue.id, entry.id));
-      return true;
-    });
+      }),
+    );
     if (didComplete) completed += 1;
   }
   return completed;
@@ -359,11 +348,39 @@ export const settleAllQueuesForUser = async (
   userId: string,
   now = new Date(),
 ) => {
-  // Queue types are independent; within each queue settlement stays chronological.
-  const [stats, jutsus, crafting] = await Promise.all([
-    settleStatTrainingQueue(client, userId, now),
-    settleJutsuTrainingQueue(client, userId, now),
-    settleCraftingQueue(client, userId, now),
-  ]);
+  // All queue types persist questData; preserve each preceding settlement's progress.
+  const stats = await settleStatTrainingQueue(client, userId, now);
+  const jutsus = await settleJutsuTrainingQueue(client, userId, now);
+  const crafting = await settleCraftingQueue(client, userId, now);
   return stats + jutsus + crafting;
+};
+
+/** Read quest context only after acquiring the account lock. Unlike session refresh,
+ * queue settlement must not regenerate pools, assign quests or mark users online. */
+const fetchQueueQuestUser = async (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) => {
+  const user = await client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    with: {
+      userQuests: {
+        where: or(
+          and(isNull(questHistory.endAt), eq(questHistory.completed, 0)),
+          eq(questHistory.questType, "achievement"),
+        ),
+        with: { quest: true },
+      },
+      completedQuests: {
+        columns: { id: true, questId: true, completed: true },
+        where: gte(questHistory.completed, 1),
+      },
+      village: true,
+      items: {
+        with: { item: { columns: { id: true, itemType: true, maxDurability: true } } },
+      },
+    },
+  });
+  if (!user) throw new Error(`Could not settle queue for missing user ${userId}`);
+  return user;
 };

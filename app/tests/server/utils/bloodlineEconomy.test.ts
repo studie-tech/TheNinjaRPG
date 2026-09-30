@@ -14,7 +14,8 @@ const bloodlineClient = (userDataRowsAffected: number) => {
   const update = vi.fn().mockReturnValue({ set: userDataSet });
   const values = vi.fn().mockResolvedValue({ rowsAffected: 1 });
   const insert = vi.fn().mockReturnValue({ values });
-  return { client: { update, insert } as never, update, userDataSet, userDataWhere, insert, values };
+  const client = { update, insert, transaction: async (run: (tx: unknown) => unknown) => run(client) };
+  return { client: client as never, update, userDataSet, userDataWhere, insert, values };
 };
 
 const baseUser = {
@@ -46,4 +47,22 @@ describe("updateBloodline", () => {
     await updateBloodline(client, baseUser, null, 50, "Bloodline Removed");
     expect(insert).toHaveBeenCalledOnce();
   });
+});
+
+it("checks pending bloodline training only while holding the enqueue lock", async () => {
+  const events: string[] = [];
+  const pending = vi.fn(async () => { events.push("pending"); return { id: "queued" }; });
+  const tx = {
+    update: () => ({ set: () => ({ where: async () => { events.push("lock"); return { rowsAffected: 1 }; } }) }),
+    query: { userJutsuTrainingQueue: { findFirst: pending } },
+  };
+  const client = {
+    query: { jutsu: { findMany: async () => [{ id: "bloodline-jutsu" }] } },
+    transaction: async (run: (tx: unknown) => unknown) => { events.push("transaction"); return run(tx); },
+    insert: vi.fn(),
+  };
+  await expect(updateBloodline(client as never, { userId: "u1", bloodlineId: "old", reputationPoints: 100 } as never, null, 0, "Removed"))
+    .rejects.toThrow("Cancel queued training");
+  expect(events).toEqual(["transaction", "lock", "pending"]);
+  expect(client.insert).not.toHaveBeenCalled();
 });

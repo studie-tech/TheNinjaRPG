@@ -241,9 +241,9 @@ export default function OccupationCrafting() {
                     <Countdown
                       targetDate={craftingQueue.active.finishesAt}
                       onEndShow="Settling…"
-                      onFinish={() => {
-                        void utils.occupation.getCraftingQueue.invalidate();
-                        void utils.item.getUserItems.invalidate();
+                      onFinish={async () => {
+                        await utils.occupation.getCraftingQueue.invalidate();
+                        await utils.item.getUserItems.invalidate();
                       }}
                     />
                   </div>

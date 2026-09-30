@@ -368,20 +368,23 @@ export const occupationRouter = createTRPCRouter({
         for (const consumption of allConsumptions) {
           const source = materialRows.find((row) => row.id === consumption.userItemId);
           if (!source) return "MATERIALS" as const;
-          const update = await tx
-            .update(userItem)
-            .set({ quantity: consumption.newQuantity })
-            .where(
-              and(
-                eq(userItem.id, source.id),
-                eq(userItem.userId, ctx.userId),
-                eq(
-                  userItem.quantity,
-                  consumption.consumeQuantity + consumption.newQuantity,
-                ),
-                eq(userItem.isInAuction, false),
-              ),
-            );
+          const materialGuard = and(
+            eq(userItem.id, source.id),
+            eq(userItem.userId, ctx.userId),
+            eq(
+              userItem.quantity,
+              consumption.consumeQuantity + consumption.newQuantity,
+            ),
+            eq(userItem.isInAuction, false),
+          );
+          // Retain the auction guard; the generic quantity helper doesn't enforce it.
+          const update =
+            consumption.newQuantity === 0
+              ? await tx.delete(userItem).where(materialGuard)
+              : await tx
+                  .update(userItem)
+                  .set({ quantity: consumption.newQuantity })
+                  .where(materialGuard);
           if (update.rowsAffected !== 1) return "MATERIALS" as const;
           reservations.push({
             id: nanoid(),

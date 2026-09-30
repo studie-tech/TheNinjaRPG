@@ -410,6 +410,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               userData[result.data.currentlyTraining] + result.data.experience,
             questData: result.data.questData,
           });
+          await utils.profile.getUser.invalidate();
         }
       },
     });
@@ -743,7 +744,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       onSuccess: async (data) => {
         showMutationToast(data);
         await utils.jutsu.getTrainingQueue.invalidate();
-        if (data.success && "refund" in data) {
+        if (data.success && "refund" in data && typeof data.refund === "number") {
           await updateUser({ money: userData.money + data.refund });
         }
       },

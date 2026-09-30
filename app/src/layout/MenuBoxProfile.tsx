@@ -466,7 +466,10 @@ const MenuBoxProfile: React.FC = () => {
                       <Countdown
                         targetDate={queueOverview.stats.active.finishesAt}
                         timeDiff={timeDiff}
-                        onFinish={() => utils.train.getQueueOverview.invalidate()}
+                        onFinish={async () => {
+                          await utils.train.getQueueOverview.invalidate();
+                          await utils.profile.getUser.invalidate();
+                        }}
                       />
                       {queueOverview.stats.waiting.length > 0 && (
                         <span> +{queueOverview.stats.waiting.length}</span>

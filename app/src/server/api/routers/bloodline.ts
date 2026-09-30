@@ -61,7 +61,7 @@ import {
   removeBloodlineFromPoolAtomically,
   reservePityCredit,
 } from "@/server/utils/concurrency";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUnique } from "@/utils/grouping";
@@ -1091,48 +1091,57 @@ export const updateBloodline = async (
         })
       ).map((j) => j.id)
     : [];
-  if (bloodlineJutsus.length > 0) {
-    const pending = await client.query.userJutsuTrainingQueue.findFirst({
-      columns: { id: true },
-      where: and(
-        eq(userJutsuTrainingQueue.userId, user.userId),
-        inArray(userJutsuTrainingQueue.jutsuId, bloodlineJutsus),
-        isNull(userJutsuTrainingQueue.completedAt),
-        isNull(userJutsuTrainingQueue.cancelledAt),
-      ),
-    });
-    if (pending) {
-      throw serverError(
-        "BAD_REQUEST",
-        "Cancel queued training for bloodline jutsu before changing bloodlines",
-      );
-    }
-  }
+  await retryOnDeadlock(() =>
+    client.transaction(async (tx) => {
+      // Serialize with jutsu enqueue before testing the absence of pending training.
+      await tx
+        .update(userData)
+        .set({ updatedAt: sql`${userData.updatedAt}` })
+        .where(eq(userData.userId, user.userId));
+      if (bloodlineJutsus.length > 0) {
+        const pending = await tx.query.userJutsuTrainingQueue.findFirst({
+          columns: { id: true },
+          where: and(
+            eq(userJutsuTrainingQueue.userId, user.userId),
+            inArray(userJutsuTrainingQueue.jutsuId, bloodlineJutsus),
+            isNull(userJutsuTrainingQueue.completedAt),
+            isNull(userJutsuTrainingQueue.cancelledAt),
+          ),
+        });
+        if (pending) {
+          throw serverError(
+            "BAD_REQUEST",
+            "Cancel queued training for bloodline jutsu before changing bloodlines",
+          );
+        }
+      }
 
-  // Update user first, with a CAS on both reputation (atomic decrement, floor guard) and the
-  // caller's pre-state bloodlineId (prevents a raced/duplicate grant from re-spending reputation
-  // or clobbering a bloodline someone else already changed).
-  const updateResult = await client
-    .update(userData)
-    .set({
-      bloodlineId: bloodline?.id || null,
-      bloodlineReskinId: null,
-      reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
-      // Advance the whole-user version so a concurrent claimUserSnapshot CAS detects this write.
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(userData.userId, user.userId),
-        gte(userData.reputationPoints, repCost),
-        user.bloodlineId
-          ? eq(userData.bloodlineId, user.bloodlineId)
-          : isNull(userData.bloodlineId),
-      ),
-    );
-  if (!updateResult.rowsAffected) {
-    throw new BloodlineGrantRejectedError("Unable to update bloodline");
-  }
+      // Update user first, with a CAS on both reputation (atomic decrement, floor guard) and the
+      // caller's pre-state bloodlineId (prevents a raced/duplicate grant from re-spending reputation
+      // or clobbering a bloodline someone else already changed).
+      const updateResult = await tx
+        .update(userData)
+        .set({
+          bloodlineId: bloodline?.id || null,
+          bloodlineReskinId: null,
+          reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
+          // Advance the whole-user version so a concurrent claimUserSnapshot CAS detects this write.
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(userData.userId, user.userId),
+            gte(userData.reputationPoints, repCost),
+            user.bloodlineId
+              ? eq(userData.bloodlineId, user.bloodlineId)
+              : isNull(userData.bloodlineId),
+          ),
+        );
+      if (!updateResult.rowsAffected) {
+        throw new BloodlineGrantRejectedError("Unable to update bloodline");
+      }
+    }),
+  );
   // Only once the grant is confirmed, run the side-effect writes
   await Promise.all([
     // Update bloodline jutsus currently being trained
