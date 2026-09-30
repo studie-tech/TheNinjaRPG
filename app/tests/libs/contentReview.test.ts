@@ -11,7 +11,6 @@ import {
 } from "@/libs/contentReview/media";
 import * as replicate from "@/libs/replicate";
 import type { DrizzleClient } from "@/server/db";
-import { withCreateBaseline } from "@/libs/contentReview/rules";
 import {
   getAtPath,
   isMediaPath,
@@ -22,7 +21,6 @@ import {
   agentChangeViolation,
   applySetOperations,
   changedFields,
-  questRewardSignature,
 } from "@/libs/contentReview/rules";
 import {
   auditJsonSchema,
@@ -86,29 +84,38 @@ describe("audit rules", () => {
     expect(ok.ok && ok.editable.name).toBe("New");
   });
 
-  it("keeps prices, visibility and quest rewards off limits", () => {
-    expect(agentChangeViolation("ITEM", { cost: 100 }, { cost: 90 })).toMatch(/cost/);
-    expect(agentChangeViolation("JUTSU", { hidden: false }, { hidden: true })).toMatch(
-      /hidden/,
+  it("keeps reputation and seichi silver amounts off limits wherever they sit", () => {
+    const item = { cost: 100, repsCost: 0, seichiSilverCost: 0, hidden: false };
+    expect(agentChangeViolation(item, { ...item, cost: 90, hidden: true })).toBeNull();
+    expect(agentChangeViolation(item, { ...item, repsCost: 5 })).toMatch(/^repsCost:/);
+    expect(agentChangeViolation(item, { ...item, seichiSilverCost: 5 })).toMatch(
+      /^seichiSilverCost:/,
     );
-    expect(agentChangeViolation("ITEM", { cost: 100 }, { cost: 100 })).toBeNull();
+    const effect = { type: "noncombatconsumereward", reward_money: 50, reward_reputation: 2 };
+    expect(
+      agentChangeViolation({ effects: [effect] }, { effects: [{ ...effect, reward_money: 80 }] }),
+    ).toBeNull();
+    expect(
+      agentChangeViolation(
+        { effects: [effect] },
+        { effects: [{ ...effect, reward_reputation: 3 }] },
+      ),
+    ).toMatch(/^effects\.0\.reward_reputation:/);
     const content = {
-      reward: { reward_money: 100 },
+      reward: { reward_money: 100, reward_seichi_silver: 10 },
       objectives: [{ description: "Go", reward_exp: 10 }],
     };
-    const reworded = {
-      ...content,
-      objectives: [{ description: "Go now", reward_exp: 10 }],
+    const extended = {
+      reward: { reward_money: 500, reward_seichi_silver: 10 },
+      objectives: [...content.objectives, { description: "Return", reward_reputation: 0 }],
     };
-    const richer = {
-      ...content,
-      objectives: [{ description: "Go", reward_exp: 50 }],
-    };
-    expect(questRewardSignature(content)).toBe(questRewardSignature(reworded));
-    expect(agentChangeViolation("QUEST", { content }, { content: reworded })).toBeNull();
-    expect(agentChangeViolation("QUEST", { content }, { content: richer })).toMatch(
-      /rewards/,
-    );
+    expect(agentChangeViolation({ content }, { content: extended })).toBeNull();
+    expect(
+      agentChangeViolation({ content }, { content: { ...content, reward: {} } }),
+    ).toMatch(/^content\.reward\.reward_seichi_silver:/);
+    // A draft is checked against no fields, so it may not bring an amount of its own.
+    expect(agentChangeViolation({}, item)).toBeNull();
+    expect(agentChangeViolation({}, { ...item, repsCost: 50 })).toMatch(/^repsCost:/);
   });
 
   it("reports only fields whose values changed", () => {
@@ -211,57 +218,6 @@ describe("chosen media", () => {
       url: null,
     };
     expect(materializeChoice(pick, "reviewer")).toEqual({ value: "asset-1", asset: null });
-  });
-});
-
-describe("drafts of new content", () => {
-  it("start hidden and free whatever the draft says", () => {
-    const jutsu = withCreateBaseline("JUTSU", {
-      name: "Tidal Crash",
-      extraBaseCost: 5000,
-      hidden: false,
-    });
-    expect(jutsu).toEqual({
-      ok: true,
-      editable: { name: "Tidal Crash", extraBaseCost: 0, hidden: true },
-    });
-    const item = withCreateBaseline("ITEM", {
-      name: "Storm Kunai",
-      cost: 900,
-      inShop: true,
-      craftingRequirements: [{ ids: ["ore"], number: 2 }],
-    });
-    expect(item.ok && item.editable).toMatchObject({
-      name: "Storm Kunai",
-      cost: 0,
-      inShop: false,
-      craftingRequirements: [],
-      hidden: true,
-    });
-  });
-
-  it("empty every quest reward and refuse quest types staff set up", () => {
-    const quest = withCreateBaseline("QUEST", {
-      questType: "mission",
-      tierLevel: 3,
-      content: {
-        reward: { reward_money: 5000, reward_rank: "JONIN", reward_unknown: 1 },
-        objectives: [{ task: "defeat_opponents", reward_items: [{ ids: ["x"] }] }],
-      },
-    });
-    expect(quest.ok && quest.editable).toEqual({
-      questType: "mission",
-      tierLevel: null,
-      hidden: true,
-      content: {
-        reward: { reward_money: 0, reward_rank: "NONE" },
-        objectives: [{ task: "defeat_opponents", reward_items: [] }],
-      },
-    });
-    expect(withCreateBaseline("QUEST", { questType: "event" })).toMatchObject({
-      ok: false,
-    });
-    expect(withCreateBaseline("GAME_ASSET", { name: "New" })).toMatchObject({ ok: false });
   });
 });
 

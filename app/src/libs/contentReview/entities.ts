@@ -133,14 +133,13 @@ const AI_EDITABLE_KEYS = [
 
 /**
  * How the review system loads, names, validates and links each content type, and which of
- * its fields suggestions and the audit may change.
+ * its fields suggestions may change.
  */
 export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   JUTSU: {
     contentType: "jutsu",
     label: ENTITY_LABELS.JUTSU,
     editableKeys: keysOf(JutsuValidatorRawSchema),
-    agentProtected: ["extraBaseCost", "hidden"],
     validator: JutsuValidator,
     detailHref: (id) => `/manual/jutsu/${id}`,
     load: async (client, ids) => {
@@ -168,20 +167,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     contentType: "item",
     label: ENTITY_LABELS.ITEM,
     editableKeys: keysOf(ItemValidatorRawSchema),
-    agentProtected: [
-      "cost",
-      "repsCost",
-      "seichiSilverCost",
-      "inShop",
-      "isEventItem",
-      "expireFromStoreAt",
-      "farmSellValue",
-      "farmYieldItemId",
-      "farmExtractSeedItemId",
-      "farmExtractSeedCount",
-      "craftingRequirements",
-      "hidden",
-    ],
     validator: ItemValidator,
     detailHref: (id) => `/manual/item/${id}`,
     load: async (client, ids) => {
@@ -220,7 +205,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     contentType: "bloodline",
     label: ENTITY_LABELS.BLOODLINE,
     editableKeys: keysOf(BloodlineValidator),
-    agentProtected: ["hidden"],
     validator: BloodlineValidator,
     detailHref: (id) => `/manual/bloodline/${id}`,
     load: async (client, ids) => {
@@ -251,7 +235,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     editableKeys: keysOf(QuestValidatorRawSchema).filter(
       (key) => key !== "raidBossCurrentHealth",
     ),
-    agentProtected: ["hidden", "questType", "tierLevel"],
     validator: QuestValidator,
     detailHref: (id) => `/manual/quest/edit/${id}`,
     load: async (client, ids) => {
@@ -279,7 +262,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     contentType: "badge",
     label: ENTITY_LABELS.BADGE,
     editableKeys: keysOf(BadgeValidator),
-    agentProtected: [],
     validator: BadgeValidator,
     detailHref: (id) => `/manual/badge/edit/${id}`,
     load: async (client, ids) => {
@@ -307,7 +289,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     contentType: "asset",
     label: ENTITY_LABELS.GAME_ASSET,
     editableKeys: keysOf(gameAssetValidator),
-    agentProtected: ["hidden", "type", "licenseDetails"],
     validator: gameAssetValidator,
     detailHref: (id) => `/manual/asset/edit/${id}`,
     load: async (client, ids) => {
@@ -335,7 +316,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
     contentType: "ai",
     label: ENTITY_LABELS.AI,
     editableKeys: AI_EDITABLE_KEYS,
-    agentProtected: ["items"],
     validator: insertAiSchema,
     detailHref: (id) => `/manual/ai/edit/${id}`,
     load: async (client, ids) => {
@@ -404,8 +384,6 @@ type EntityConfig = {
   contentType: ContentType;
   /** Top-level fields suggestions may change. */
   editableKeys: readonly string[];
-  /** Fields the audit may never change: prices, loot, recipes, visibility and structure. */
-  agentProtected: readonly string[];
   /** Input validator of the entity's update procedure. */
   validator: z.ZodType;
   /** Manual page the review desk links an entity to. */

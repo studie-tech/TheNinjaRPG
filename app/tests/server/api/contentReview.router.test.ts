@@ -652,6 +652,59 @@ describeWithDatabase("content review", () => {
     expect(nextDay.refused[0]?.reason).toContain("already exists or is waiting in the queue");
   });
 
+  it("lets the audit reprice and hide content but not in reputation or seichi silver", async () => {
+    const database = await getTestDatabase();
+    const ref = { entityType: "ITEM" as const, entityId: "review-kunai" };
+    await insertItems([
+      {
+        id: ref.entityId,
+        name: "Review Kunai",
+        image: "https://ui0arpl8sm.ufs.sh/f/kunai.webp",
+        cost: 100,
+      },
+    ]);
+    const live = (await loadEntities(database, [ref])).get(entityKey("ITEM", ref.entityId));
+    const proposal = (
+      change: { entityType: "ITEM" | "GAME_ASSET"; entityId: string | null },
+      set: Record<string, unknown>,
+    ) => ({
+      title: "Bring the kunai in line with its peers",
+      category: "BALANCE" as const,
+      rationale: "The kunai costs more than every other common weapon.",
+      confidence: 70,
+      usesUsageData: false,
+      changes: [
+        {
+          ...change,
+          operation: change.entityId ? ("UPDATE" as const) : ("CREATE" as const),
+          set: Object.entries(set).map(([path, value]) => ({
+            path,
+            valueJson: JSON.stringify(value),
+          })),
+          media: [],
+        },
+      ],
+      basis: change.entityId ? [{ ...ref, v: live?.version ?? "" }] : [],
+    });
+    const result = await ingestAgentSubmission(database, {
+      agentName: "codex · test",
+      runUrl: null,
+      focus: "balance",
+      proposals: [
+        proposal(ref, { cost: 90, hidden: true }),
+        proposal({ entityType: "ITEM", entityId: null }, { name: "Review Shuriken", repsCost: 50 }),
+        proposal({ entityType: "GAME_ASSET", entityId: null }, { name: "Review Sound" }),
+      ],
+    });
+    expect(result.accepted.map((entry) => entry.index)).toEqual([0]);
+    expect(result.refused.map((entry) => entry.reason)).toEqual([
+      "repsCost: reputation points and seichi silver are off limits for the audit",
+      "New assets come from media candidates, not drafts",
+    ]);
+    const [stored] = await proposalRows();
+    expect(stored?.changes[0]?.after).toEqual({ cost: 90, hidden: true });
+  });
+
   it("reuses an Epidemic sound the asset library already holds", async () => {
     const database = await getTestDatabase();
     const id = epidemicAssetId("7c9ac26f-3c04-4fbd-8a70-049cd775c094");

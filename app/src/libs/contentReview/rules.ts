@@ -1,82 +1,25 @@
-import type { ContentProposalEntityType, QuestType } from "@/drizzle/constants";
-import { ObjectiveReward } from "@/validators/rewards";
+import type { ContentProposalEntityType } from "@/drizzle/constants";
 import { ENTITY_CONFIG } from "./entities";
 import { getAtPath, setAtPath, topLevelField } from "./paths";
-import { canonicalJson, sameValue } from "./version";
+import { sameValue } from "./version";
 
 /**
- * Reason the audit may not change an entity's editable fields from `before` to `after`, or
- * null. Economy values (prices, rewards, loot), visibility and a few structural fields stay
- * with staff.
+ * Reason the audit may not turn `before` into `after`, or null. Reputation points and seichi
+ * silver stay with staff wherever they appear: as a price, or as a reward of a quest or a
+ * consumable item. A new entity is checked against no fields, so a draft cannot bring any.
  */
 export const agentChangeViolation = (
-  entityType: ContentProposalEntityType,
   before: Record<string, unknown>,
   after: Record<string, unknown>,
 ) => {
-  const config = ENTITY_CONFIG[entityType];
-  for (const field of Object.keys(after)) {
-    if (
-      config.agentProtected.includes(field) &&
-      !sameValue(before[field], after[field])
-    ) {
-      return `${config.label} field ${field} is off limits for the audit`;
-    }
-  }
-  if (
-    entityType === "QUEST" &&
-    "content" in after &&
-    questRewardSignature(before.content) !== questRewardSignature(after.content)
-  ) {
-    return "Quest rewards are off limits for the audit";
-  }
-  return null;
-};
-
-/** Every `reward_*` value inside a quest's content, as one comparable string. */
-export const questRewardSignature = (content: unknown) => {
-  const found: [string, unknown][] = [];
-  const walk = (node: unknown, path: string) => {
-    if (Array.isArray(node)) {
-      for (const [index, entry] of node.entries()) walk(entry, `${path}.${index}`);
-    } else if (node && typeof node === "object") {
-      for (const [key, value] of Object.entries(node)) {
-        if (key.startsWith("reward_")) found.push([`${path}.${key}`, value]);
-        else walk(value, `${path}.${key}`);
-      }
-    }
-  };
-  walk(content, "content");
-  return canonicalJson(found.sort(([a], [b]) => a.localeCompare(b)));
-};
-
-/**
- * A new entity drafted by the audit starts hidden and free, without loot, a recipe or
- * rewards, whatever the draft says: staff price and release it after approving it. Returns
- * the draft with those fields reset, or the reason it cannot be drafted at all.
- */
-export const withCreateBaseline = (
-  entityType: ContentProposalEntityType,
-  editable: Record<string, unknown>,
-): { ok: true; editable: Record<string, unknown> } | { ok: false; reason: string } => {
-  if (entityType === "GAME_ASSET") {
-    return { ok: false, reason: "New assets come from media candidates, not drafts" };
-  }
-  if (
-    entityType === "QUEST" &&
-    !DRAFTABLE_QUEST_TYPES.includes(editable.questType as QuestType)
-  ) {
-    return {
-      ok: false,
-      reason: `New ${String(editable.questType)} quests are for staff to set up`,
-    };
-  }
-  const next = { ...editable };
-  for (const field of ENTITY_CONFIG[entityType].agentProtected) {
-    if (field in CREATE_BASELINE) next[field] = CREATE_BASELINE[field];
-  }
-  if ("content" in next) next.content = withoutRewards(next.content);
-  return { ok: true, editable: next };
+  const was = protectedAmounts(before);
+  const now = protectedAmounts(after);
+  const changed = [...new Set([...was.keys(), ...now.keys()])].find(
+    (path) => was.get(path) !== now.get(path),
+  );
+  return changed
+    ? `${changed}: reputation points and seichi silver are off limits for the audit`
+    : null;
 };
 
 /**
@@ -128,50 +71,31 @@ export const changedFields = (
   };
 };
 
-/** The same content with every `reward_*` value emptied, and unknown ones dropped. */
-const withoutRewards = (node: unknown): unknown => {
-  if (Array.isArray(node)) return node.map(withoutRewards);
-  if (!node || typeof node !== "object") return node;
-  return Object.fromEntries(
-    Object.entries(node).flatMap(([key, value]) => {
-      if (!key.startsWith("reward_")) return [[key, withoutRewards(value)]];
-      return key in EMPTY_REWARD ? [[key, EMPTY_REWARD[key]]] : [];
-    }),
-  );
+/** Non-zero reputation point and seichi silver amounts in the fields, by dotted path. */
+const protectedAmounts = (fields: Record<string, unknown>) => {
+  const found = new Map<string, number>();
+  const walk = (node: unknown, path: string) => {
+    if (Array.isArray(node)) {
+      for (const [index, entry] of node.entries()) walk(entry, `${path}.${index}`);
+    } else if (node && typeof node === "object") {
+      for (const [key, value] of Object.entries(node)) {
+        const at = path ? `${path}.${key}` : key;
+        if (!AGENT_PROTECTED_KEYS.has(key)) walk(value, at);
+        else if (Number(value)) found.set(at, Number(value));
+      }
+    }
+  };
+  walk(fields, "");
+  return found;
 };
 
-/** Protected fields of a new audit draft, as it starts before staff price and release it. */
-const CREATE_BASELINE: Record<string, unknown> = {
-  hidden: true,
-  extraBaseCost: 0,
-  cost: 0,
-  repsCost: 0,
-  seichiSilverCost: 0,
-  inShop: false,
-  isEventItem: false,
-  expireFromStoreAt: null,
-  farmSellValue: 0,
-  farmYieldItemId: null,
-  farmExtractSeedItemId: null,
-  farmExtractSeedCount: 0,
-  craftingRequirements: [],
-  items: [],
-  tierLevel: null,
-};
-
-/** Quest types the audit may draft; the others rank players up, run on schedules or teach. */
-const DRAFTABLE_QUEST_TYPES: QuestType[] = [
-  "mission",
-  "errand",
-  "crime",
-  "story",
-  "medical",
-  "hunting",
-  "gathering",
-];
-
-/** Every known `reward_*` field at its default. */
-const EMPTY_REWARD: Record<string, unknown> = ObjectiveReward.parse({});
+/** Keys that hold an amount of reputation points or seichi silver, as a price or a reward. */
+const AGENT_PROTECTED_KEYS = new Set([
+  "repsCost",
+  "seichiSilverCost",
+  "reward_reputation",
+  "reward_seichi_silver",
+]);
 
 /** One field assignment: a dotted path into the editable fields and the value to write. */
 export type SetOperation = { path: string; value: unknown };

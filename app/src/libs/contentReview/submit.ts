@@ -40,7 +40,6 @@ import {
   applySetOperations,
   changedFields,
   type SetOperation,
-  withCreateBaseline,
 } from "./rules";
 import { sameValue } from "./version";
 
@@ -310,6 +309,10 @@ const planAgentProposal = async (
       targets.add(key);
     } else if (change.entityId) {
       return "A new entity cannot carry an id";
+    } else if (change.entityType === "GAME_ASSET") {
+      // A draft has no way to bring a file; new sounds and images arrive as media candidates
+      // and become assets when their suggestion is approved.
+      return "New assets come from media candidates, not drafts";
     }
     const operations: SetOperation[] = [];
     for (const set of change.set) {
@@ -372,10 +375,9 @@ const planAgentProposal = async (
       if (!withMedia.ok) return withMedia.reason;
       next = withMedia.editable;
     }
+    const violation = agentChangeViolation(base, next);
+    if (violation) return violation;
     if (change.operation === "CREATE") {
-      const baseline = withCreateBaseline(change.entityType, next);
-      if (!baseline.ok) return baseline.reason;
-      next = baseline.editable;
       // A draft without a name is left to the validator below, which says so.
       const name = draftName(next);
       const key = nameKey(change.entityType, name);
@@ -383,9 +385,6 @@ const planAgentProposal = async (
         return `${config.label} ${name} already exists or is waiting in the queue`;
       }
       if (name) drafted.add(key);
-    } else {
-      const violation = agentChangeViolation(change.entityType, base, next);
-      if (violation) return violation;
     }
     const diff = changedFields(base, next);
     if (Object.keys(diff.after).length === 0)
