@@ -281,8 +281,10 @@ export default function GameRules() {
         </p>
         <ul className="list-disc pl-5">
           <li>
-            Not act on the matter themselves, and hand it to another staff member with
-            the same or higher role.
+            Not act on the matter themselves, and hand it to an unconflicted staff
+            member in the same area (moderation or content) with the same or higher
+            role. If no such staff member is available, escalate to the relevant Admin
+            (Moderator Admin or Content Admin) or, failing that, the Site Owner.
           </li>
           <li>
             Disclose the conflict when handing it over, so the reviewing staff member
@@ -290,8 +292,8 @@ export default function GameRules() {
           </li>
           <li>
             Treat any doubt as a conflict. If a staff member is unsure whether a
-            conflict exists, they must recuse themselves and ask a Head Moderator or
-            Admin.
+            conflict exists, they must recuse themselves and ask a Head Moderator,
+            Moderator Admin, or Content Admin.
           </li>
         </ul>
         <p className="my-2">
