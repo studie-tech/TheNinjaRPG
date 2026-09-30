@@ -502,7 +502,10 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
   // Track initial lightLayout value to detect changes
   const [initialLightLayout] = useState<boolean>(lightLayout);
   const [lightLayoutChanged, setLightLayoutChanged] = useState(false);
-  const isPixelLayout = layoutPreference === "pixel";
+  // Display controls follow the shell actually rendered: a signed-out visitor's stored
+  // pixel preference is ignored by the shell, so it must not hide the light layout toggle.
+  const activeLayout = useActiveLayout();
+  const isPixelLayout = activeLayout === "pixel";
 
   // Update tracking when lightLayout changes
   useEffect(() => {
