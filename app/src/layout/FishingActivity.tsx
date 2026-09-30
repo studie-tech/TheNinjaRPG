@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { FISHING_STARTER_BAIT } from "@/drizzle/constants";
@@ -8,6 +7,7 @@ import ContentBox from "@/layout/ContentBox";
 import { FishingRaidActivity } from "@/layout/FishingRaidActivity";
 import { FishingCollection } from "@/layout/fishing/FishingCollection";
 import { FishingVisualEncounter } from "@/layout/fishing/FishingVisualEncounter";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { FISHING_SPECIES } from "@/libs/fishing";
 import { useRequiredUserData } from "@/utils/UserContext";
