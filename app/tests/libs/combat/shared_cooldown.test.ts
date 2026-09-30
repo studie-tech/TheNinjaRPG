@@ -12,6 +12,7 @@ import {
   makeBattleUser,
   makeBattleUserItem,
   makeBattleWithWeapon,
+  makeEffect,
   makeInjectBattle,
   makeTag,
 } from "./helpers/battleScenario";
@@ -185,6 +186,23 @@ describe("global cooldown", () => {
       sharedJutsu("tear", 8, "clear"),
     ]);
     perform(battle, 1, "rip");
+    perform(battle, 4, "tear");
+    expect(usableRounds(battle, "clear", 4, 8)).toEqual([7, 8]);
+  });
+
+  it("preserves a basic lock whose effective cooldown is already as long as the GCD", () => {
+    const battle = makeGcdBattle([
+      sharedJutsu("rip", 5, "clear"),
+      sharedJutsu("tear", 8, "clear"),
+    ]);
+    perform(battle, 1, "rip");
+    battle.usersEffects.push(
+      makeEffect(
+        "increasecooldown",
+        { power: 3, rounds: 10, actionsAffected: ["clear"] },
+        { targetId: USER },
+      ),
+    );
     perform(battle, 4, "tear");
     expect(usableRounds(battle, "clear", 4, 8)).toEqual([7, 8]);
   });

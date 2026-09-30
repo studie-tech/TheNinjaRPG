@@ -1292,8 +1292,8 @@ export const performBattleAction = (props: {
  * The performed action restarts its own base cooldown, dropping any GCD override it
  * carried. Every other action sharing one of its shared-cooldown tags is then locked
  * for SHARED_COOLDOWN_ROUNDS, unless it is already locked for longer. "Longer" is
- * judged against the cooldown the action currently runs on, i.e. a previous GCD
- * override when one is active, since that is what availableUserActions enforces.
+ * judged against the effective cooldown, including a previous GCD override and
+ * active basic-action modifiers, as availableUserActions enforces.
  */
 export const applyActionCooldowns = (
   battle: CompleteBattle,
@@ -1339,7 +1339,7 @@ export const applyActionCooldowns = (
     }
   });
 
-  Object.values(getDefaultBasicActions(user)).forEach((ba) => {
+  Object.values(getActiveBasicActions(battle, user)).forEach((ba) => {
     let tracking = user.basicActions.find((t) => t.id === ba.id);
     if (ba.id === action.id && action.type === "basic") {
       if (!tracking) return;
@@ -1347,7 +1347,7 @@ export const applyActionCooldowns = (
       delete tracking.cooldown;
     } else if (applyGcd && sharesCooldown(ba.effects)) {
       const lastUsedRound = tracking?.lastUsedRound ?? ba.lastUsedRound ?? 0;
-      const cooldown = tracking?.cooldown ?? ba.cooldown;
+      const cooldown = ba.cooldown;
       if (lockedFor(lastUsedRound, cooldown) < SHARED_COOLDOWN_ROUNDS) {
         if (!tracking) {
           tracking = { id: ba.id, lastUsedRound };
