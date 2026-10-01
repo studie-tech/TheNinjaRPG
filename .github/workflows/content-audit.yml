@@ -34,6 +34,7 @@ on:
     paths:
       - ".github/workflows/content-audit.yml"
       - ".github/scripts/render-battlefield.mjs"
+      - ".github/scripts/battlefield-labels.mjs"
       - ".github/scripts/apply-visual-check.mjs"
       - ".agents/skills/tnr-content-audit/**"
       - "app/src/app/api/content-review/**"
@@ -182,7 +183,7 @@ jobs:
           files=(audit/battlefield/*.png)
           if [ ${#files[@]} -gt 0 ]; then
             args=$(printf '%s\n' "${files[@]}" | jq -R . | jq -sc 'map(["--image", .]) | add')
-            note="Battlefield renders of the most used animation and static assets are attached; audit/battlefield/index.json lists the blocks on each image."
+            note="Battlefield renders of the most used animation and static assets are attached; audit/battlefield/index.json lists the blocks on each image. Captions may be shortened; blocks[].description preserves the full asset labels."
           else
             args='[]'
             note="No battlefield renders are attached to this run."
@@ -312,6 +313,7 @@ jobs:
             The suggestions are audit/proposals.json and the snapshot is audit/snapshot.json.
             The attached images draw every suggestion that changes what content shows in battle;
             audit/battlefield/index.json lists the blocks on each image, and "Suggestion N" is proposals[N].
+            Captions may be shortened; blocks[].description and blocks[].variants[].description in the index preserve the full labels and candidate asset IDs.
             Return one verdict per suggestion that appears in the renders.
             Your final message must be only the JSON object described by the output schema.
 
