@@ -412,7 +412,14 @@ export const getActiveBasicActions = (
     if (mod === 0) return;
     const ba = Object.values(active).find((a) => a.id === aid);
     if (ba) {
-      ba.cooldown = Math.max(0, ba.cooldown + mod);
+      // A basic-action GCD must remain a full shared lock even under cooldown reductions.
+      const hasSharedCooldown = tracking?.some(
+        (action) => action.id === aid && action.cooldown !== undefined,
+      );
+      ba.cooldown = Math.max(
+        hasSharedCooldown ? SHARED_COOLDOWN_ROUNDS : 0,
+        ba.cooldown + mod,
+      );
     }
   });
 

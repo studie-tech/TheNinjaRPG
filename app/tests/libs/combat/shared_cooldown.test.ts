@@ -216,4 +216,43 @@ describe("global cooldown", () => {
     expect(usable(battle, "rip")).toBe(true);
     expect(usable(battle, "clear")).toBe(true);
   });
+
+  it("extends a reduced basic cooldown without shortening its existing lock", () => {
+    const battle = makeGcdBattle([sharedJutsu("rip", 5, "clear")]);
+    battle.usersEffects.push(
+      makeEffect(
+        "decreasecooldown",
+        { power: 2, rounds: 20, actionsAffected: ["clear"] },
+        { targetId: USER },
+      ),
+    );
+    perform(battle, 1, "clear");
+    expect(usableRounds(battle, "clear", 7, 10)).toEqual([9, 10]);
+    perform(battle, 7, "rip");
+    expect(usableRounds(battle, "clear", 7, 10)).toEqual([10]);
+    // Using Clear removes the GCD override, so its own cooldown is reduced again.
+    perform(battle, 10, "clear");
+    expect(usableRounds(battle, "clear", 10, 19)).toEqual([18, 19]);
+  });
+
+  it.each([2, SHARED_COOLDOWN_ROUNDS, 12])(
+    "keeps the full basic-action GCD with a %i-round cooldown reduction",
+    (power) => {
+      const battle = makeGcdBattle([
+        sharedJutsu("rip", 5, "clear"),
+        sharedJutsu("tear", 8, "clear"),
+      ]);
+      battle.usersEffects.push(
+        makeEffect(
+          "decreasecooldown",
+          { power, rounds: 20, actionsAffected: ["clear"] },
+          { targetId: USER },
+        ),
+      );
+      perform(battle, 1, "rip");
+      expect(usableRounds(battle, "clear", 1, 4)).toEqual([4]);
+      perform(battle, 4, "tear");
+      expect(usableRounds(battle, "clear", 4, 8)).toEqual([7, 8]);
+    },
+  );
 });
