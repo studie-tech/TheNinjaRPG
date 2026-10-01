@@ -2323,7 +2323,7 @@ export const questRequiresTravel = (
   return !canAccessStructure(user, questStructureRoute(questType), sectorVillage);
 };
 
-export interface QuestWarSummary {
+interface QuestWarSummary {
   attackerVillageId: string;
   defenderVillageId: string;
   warAllies: { villageId: string }[];

@@ -219,7 +219,6 @@ export const profileRouter = createTRPCRouter({
       },
     })
     .query(async ({ ctx }) => {
-      const serverTime = new Date();
       const [candidates, raidParticipations] = await Promise.all([
         fetchQuestDiscoverySummaryCandidates(ctx.drizzle, ctx.userId, {
           questTypes: [
@@ -263,13 +262,11 @@ export const profileRouter = createTRPCRouter({
             raidId: participation.quest.id,
             raidName: participation.quest.name,
             claimableCount,
-            damageDealt: participation.damageDealt,
           },
         ];
       });
 
       return {
-        serverTime,
         candidates,
         raidProgress: raidParticipations.map((participation) => ({
           raidId: participation.quest.id,

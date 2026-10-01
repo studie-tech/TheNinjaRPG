@@ -13,12 +13,11 @@ import {
   dashboardContentActionLabel,
   dashboardContentHref,
   describeOccupationLine,
-  filterAccessibleDashboardContent,
   raidContinueHref,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
-import type { DashboardContentSummary } from "@/validators/profileDashboard";
+import type { DashboardContentSummary } from "@/libs/profileDashboard";
 
 const availableDailyCounts = {
   dailyMissions: 0,
@@ -37,12 +36,10 @@ const createContent = (
   image: null,
   category: "missions",
   questType,
-  rank: "C",
   location: "Mission Hall",
   destination: "/missionhall",
-  availability: "locked",
-  availabilityReason: "Locked",
-  startsAt: null,
+  availability: "travel",
+  availabilityReason: "Travel to Mission Hall to begin",
   endsAt: null,
   ...overrides,
 });
@@ -135,27 +132,6 @@ describe("condenseDashboardMissionContent", () => {
     );
 
     expect(result).toEqual([]);
-  });
-});
-
-describe("filterAccessibleDashboardContent", () => {
-  it("keeps available and travel content but removes locked content", () => {
-    const available = createContent("mission", { availability: "available" });
-    const travel = createContent("story", {
-      id: "travel",
-      category: "story",
-      availability: "travel",
-    });
-    const locked = createContent("event", {
-      id: "locked",
-      category: "events",
-      availability: "locked",
-    });
-
-    expect(filterAccessibleDashboardContent([available, travel, locked])).toEqual([
-      available,
-      travel,
-    ]);
   });
 });
 

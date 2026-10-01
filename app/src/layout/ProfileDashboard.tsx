@@ -210,7 +210,7 @@ export default function ProfileDashboard() {
   );
   const awake = userData.status === "AWAKE";
   const craftTimer = craftingTimers.find((timer) => timer.kind === "crafting");
-  const canStartTraining = !!userData && !training && canStartStatTraining(userData);
+  const canStartTraining = !training && canStartStatTraining(userData);
   const raidTitle =
     dashboard.data?.raidRewards.length === 1
       ? (dashboard.data.raidRewards[0]?.raidName ?? "Raid rewards")
@@ -650,13 +650,11 @@ function SectionHeader({
   eyebrow,
   title,
   id,
-  aside,
   action,
 }: {
   eyebrow: string;
   title: string;
   id: string;
-  aside?: string;
   action?: React.ReactNode;
 }) {
   return (
@@ -669,7 +667,6 @@ function SectionHeader({
           {title}
         </h2>
       </div>
-      {aside && <Badge variant="outline">{aside}</Badge>}
       {action}
     </div>
   );
@@ -850,14 +847,9 @@ function ContentCard({ entry }: { entry: DashboardCatalogueEntry }) {
             className={cn(
               entry.availability === "available" && "border-green-500 text-green-500",
               entry.availability === "travel" && "border-amber-500 text-amber-500",
-              entry.availability === "locked" && "border-muted-foreground",
             )}
           >
-            {entry.availability === "available"
-              ? "Available here"
-              : entry.availability === "travel"
-                ? "Travel required"
-                : "Locked"}
+            {entry.availability === "available" ? "Available here" : "Travel required"}
           </Badge>
         </div>
         <CardTitle className="text-base">{entry.name}</CardTitle>

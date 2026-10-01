@@ -121,7 +121,7 @@ export const normalizeRecurringStreakProgress = <
     ? { ...progress, currentDay: 0, startedAt: now }
     : progress;
 
-export const streakContinuityEndsAt = (lastClaimDate: Date | null) =>
+const streakContinuityEndsAt = (lastClaimDate: Date | null) =>
   lastClaimDate
     ? new Date(lastClaimDate.getTime() + STREAK_CONTINUITY_HOURS * HOUR_S * 1000)
     : null;

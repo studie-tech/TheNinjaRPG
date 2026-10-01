@@ -85,7 +85,6 @@ export const fetchQuestDiscoverySummaryCandidates = async (
       endsAt: quest.endsAt,
       previousAttempts: questHistory.previousAttempts,
       previousCompletes: questHistory.previousCompletes,
-      completed: questHistory.completed,
       periodCompletes: questHistory.periodCompletes,
       periodStartAt: questHistory.periodStartAt,
     })

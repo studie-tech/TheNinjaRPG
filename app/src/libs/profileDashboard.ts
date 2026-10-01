@@ -18,9 +18,22 @@ import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { fetchQuestDiscoverySummaryCandidates } from "@/server/utils/questDiscovery";
 import { getOwnSectorVillage, type SectorVillage } from "@/utils/village";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
-import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
-export type DashboardAvailability = "available" | "travel" | "locked";
+type DashboardAvailability = "available" | "travel";
+
+export type DashboardContentSummary = {
+  id: string;
+  name: string;
+  description: string | null;
+  image: string | null;
+  category: "events" | "missions" | "story" | "battlePyramids";
+  questType: string;
+  location: string;
+  destination: string;
+  availability: DashboardAvailability;
+  availabilityReason: string | null;
+  endsAt: string | null;
+};
 
 const missionGroupDefinitions = [
   {
@@ -53,16 +66,12 @@ const missionGroupDefinitions = [
   },
 ] as const;
 
-export interface DashboardMissionDailyCounts {
+interface DashboardMissionDailyCounts {
   dailyMissions: number;
   dailyErrands: number;
   dailyMedicalMissions: number;
   dailyPvpMissions: number;
 }
-
-/** Keep content the player can start here or after traveling to its location. */
-export const filterAccessibleDashboardContent = (content: DashboardContentSummary[]) =>
-  content.filter((entry) => entry.availability !== "locked");
 
 /** Fill dashboard highlights with daily assignments before other content categories. */
 export const selectDashboardHighlights = <T extends { category: string }>(
@@ -85,7 +94,6 @@ export const selectDashboardHighlights = <T extends { category: string }>(
 const availabilityPriority: Record<DashboardAvailability, number> = {
   available: 0,
   travel: 1,
-  locked: 2,
 };
 
 /** Collapse mission-hall quest definitions into player-facing assignment groups. */
@@ -129,44 +137,13 @@ export const condenseDashboardMissionContent = (
         description: group.description,
         image: entries.find((entry) => entry.image)?.image ?? null,
         questType: group.questType,
-        rank: "VARIOUS",
         destination: "/missionhall",
-        startsAt: null,
         endsAt: null,
       },
     ];
   });
 
   return [...otherContent, ...groupedMissions];
-};
-
-export const resolveDashboardAvailability = (input: {
-  isEligible: boolean;
-  eligibilityReason: string;
-  isRankEligible: boolean;
-  questRank: string;
-  requiresVillageTravel: boolean;
-  location: string;
-}): { availability: DashboardAvailability; reason: string | null } => {
-  if (!input.isRankEligible) {
-    return {
-      availability: "locked",
-      reason: `Requires an available ${input.questRank}-rank assignment`,
-    };
-  }
-  if (!input.isEligible) {
-    return {
-      availability: "locked",
-      reason: input.eligibilityReason.trim().replaceAll("\n", ". "),
-    };
-  }
-  if (input.requiresVillageTravel) {
-    return {
-      availability: "travel",
-      reason: `Travel to ${input.location} to begin`,
-    };
-  }
-  return { availability: "available", reason: null };
 };
 
 /** Open the content itself when the player is already there; otherwise open travel. */
@@ -181,13 +158,11 @@ export const dashboardContentHref = (entry: {
 };
 
 export const dashboardContentActionLabel = (entry: {
-  category: string;
   availability: DashboardAvailability;
 }) => {
   if (entry.availability === "travel") {
     return "Open travel";
   }
-  if (entry.availability === "locked") return "View requirements";
   return "Open content";
 };
 
@@ -215,7 +190,7 @@ const occupationLines = {
   },
 } as const;
 
-export type OccupationProgressLine = {
+type OccupationProgressLine = {
   label: string;
   title: string;
   detail: string | null;
@@ -422,6 +397,7 @@ export const resolveDashboardContent = (
     const availability = isAvailableUserQuests(candidate, user);
     if (
       !availability.check ||
+      !isQuestRankAllowed(candidate, user) ||
       questAlreadyActiveBlockMessage(candidate, user) ||
       questTypeConcurrentBlockMessage(candidate, user)
     )
@@ -458,21 +434,12 @@ export const resolveDashboardContent = (
             : user.isOutlaw
               ? "Crimes Board"
               : `${user.village?.name ?? "Village"} Mission Hall`;
-    const rankLocked = !isQuestRankAllowed(candidate, user);
     const requiresVillageTravel = questRequiresTravel(
       candidate.questType,
       user,
       sectorVillage ?? getOwnSectorVillage(user),
     );
 
-    const resolvedAvailability = resolveDashboardAvailability({
-      isEligible: availability.check,
-      eligibilityReason: availability.message,
-      isRankEligible: !rankLocked,
-      questRank: candidate.questRank,
-      requiresVillageTravel,
-      location,
-    });
     return [
       {
         id: candidate.id,
@@ -481,21 +448,20 @@ export const resolveDashboardContent = (
         image: candidate.image,
         category,
         questType: candidate.questType,
-        rank: candidate.questRank,
         location,
         destination,
-        availability: resolvedAvailability.availability,
-        availabilityReason: resolvedAvailability.reason,
-        startsAt: candidate.startsAt,
+        availability: requiresVillageTravel
+          ? ("travel" as const)
+          : ("available" as const),
+        availabilityReason: requiresVillageTravel
+          ? `Travel to ${location} to begin`
+          : null,
         endsAt: candidate.endsAt,
       },
     ];
   });
 
-  return condenseDashboardMissionContent(
-    filterAccessibleDashboardContent(content),
-    user,
-  );
+  return condenseDashboardMissionContent(content, user);
 };
 
 export type DashboardCatalogueEntry = Omit<DashboardContentSummary, "category"> & {
@@ -520,14 +486,12 @@ export const buildDashboardCatalogue = (
         image: raid.image,
         category: "raids",
         questType: "raid",
-        rank: "RAID",
         location: raid.sector === null ? "Global ANBU HQ" : `Sector ${raid.sector}`,
         destination,
         availability: travelRequired ? "travel" : "available",
         availabilityReason: travelRequired
           ? `Travel to sector ${raid.sector} to participate`
           : null,
-        startsAt: null,
         endsAt: raid.raidEndsAt?.toISOString() ?? null,
       };
     },
@@ -539,14 +503,14 @@ export const buildDashboardCatalogue = (
     medical: 2,
     pvp: 3,
   };
-  const availabilityOrder = { available: 0, travel: 1, locked: 2 };
   return [...quests, ...raidEntries].sort(
     (left, right) =>
       categoryOrder.indexOf(left.category) - categoryOrder.indexOf(right.category) ||
       (left.category === "missions" && right.category === "missions"
         ? (missionOrder[left.questType] ?? 99) - (missionOrder[right.questType] ?? 99)
         : 0) ||
-      availabilityOrder[left.availability] - availabilityOrder[right.availability] ||
+      availabilityPriority[left.availability] -
+        availabilityPriority[right.availability] ||
       left.name.localeCompare(right.name),
   );
 };

@@ -31,7 +31,6 @@ const candidate = (patch: Partial<Candidate> = {}): Candidate => ({
   endsAt: null,
   previousAttempts: null,
   previousCompletes: null,
-  completed: null,
   periodCompletes: null,
   periodStartAt: null,
   ...patch,
@@ -83,6 +82,28 @@ describe("dashboard discovery from shared profile data", () => {
         }),
       ),
     ).toEqual([expect.objectContaining({ id: "story", availability: "available" })]);
+  });
+
+  it("excludes ranks the player cannot start instead of building locked cards", () => {
+    expect(
+      resolveDashboardContent(
+        [candidate({ questRank: "A" })],
+        user({ rank: "STUDENT" }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not recommend an event that is already active", () => {
+    expect(
+      resolveDashboardContent(
+        [candidate({ id: "event", questType: "event" })],
+        user({
+          userQuests: [
+            { questId: "event", endAt: null, quest: { questType: "event" } },
+          ] as User["userQuests"],
+        }),
+      ),
+    ).toEqual([]);
   });
 
   it("updates travel guidance from the current user sector", () => {
