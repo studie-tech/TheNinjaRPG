@@ -66,6 +66,7 @@ const allowedPath = (segments: readonly string[], method: string) => {
   if (root === "profile" && segments.length === 1)
     return method === "GET" || method === "PUT";
   if (root === "players" && segments.length === 1) return method === "GET";
+  if (root === "full-version" && segments.length === 1) return method === "GET";
   if (root === "leaderboards" && segments.length === 1) return method === "GET";
   if (root === "friends" && segments.length === 1)
     return method === "GET" || method === "POST";
