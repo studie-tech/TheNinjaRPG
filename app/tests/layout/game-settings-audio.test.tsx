@@ -1,13 +1,17 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as audioHook from "@/hooks/useAudio";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
 import type { UserWithRelations } from "@/routers/profile";
+import * as audioUtils from "@/utils/audio";
 import { ensureDom } from "../setup-dom.mjs";
 
 type RemoteCommand = "play" | "pause" | "toggle";
 type AudioTestMocks = {
   remoteCommand?: (command: RemoteCommand) => void;
-  setEnabled: ReturnType<typeof vi.fn>;
+  setEnabled: ReturnType<
+    typeof vi.fn<(enabled: boolean, isPreferenceChange?: boolean) => Promise<void>>
+  >;
   activate: ReturnType<typeof vi.fn>;
   deactivate: ReturnType<typeof vi.fn>;
   isPlaying: boolean;
@@ -27,15 +31,6 @@ function getAudioTestMocks(): AudioTestMocks {
   };
   return globals.__audioTestMocks;
 }
-
-vi.mock("@/hooks/useAudio", () => ({
-  useAudio: () => ({
-    isPlaying: getAudioTestMocks().isPlaying,
-    requiresInteraction: false,
-    enabled: getAudioTestMocks().enabled,
-    setEnabled: getAudioTestMocks().setEnabled,
-  }),
-}));
 
 vi.mock("@/libs/native", () => ({
   platform: () => {
@@ -57,11 +52,6 @@ vi.mock("@/libs/native", () => ({
   },
 }));
 
-vi.mock("@/utils/audio", () => ({
-  playPreloadedAudio: vi.fn(),
-  preloadAudioBuffers: vi.fn(async () => undefined),
-}));
-
 const user = (level: number, musicOn = true) =>
   ({
     userId: "user-1",
@@ -72,8 +62,26 @@ const user = (level: number, musicOn = true) =>
 
 ensureDom();
 
+beforeEach(() => {
+  // Restore hook and utility exports between suites sharing Bun's module cache.
+  vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
+    isPlaying: getAudioTestMocks().isPlaying,
+    isLoading: false,
+    error: null,
+    canPlay: true,
+    requiresInteraction: false,
+    enabled: getAudioTestMocks().enabled,
+    setEnabled: getAudioTestMocks().setEnabled,
+    toggle: vi.fn(async () => undefined),
+    setVolume: vi.fn(),
+  }));
+  vi.spyOn(audioUtils, "playPreloadedAudio").mockResolvedValue(undefined);
+  vi.spyOn(audioUtils, "preloadAudioBuffers").mockResolvedValue(undefined);
+});
+
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   const audio = getAudioTestMocks();
   audio.setEnabled.mockClear();
   audio.activate.mockClear();
