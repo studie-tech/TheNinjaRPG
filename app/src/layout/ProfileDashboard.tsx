@@ -513,11 +513,11 @@ export default function ProfileDashboard() {
           )}
           <div className="border-t py-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 min-w-11 shrink-0 flex-col items-center justify-center rounded-md border border-amber-600/50 bg-gradient-to-b from-amber-100 to-amber-200/60 shadow-sm dark:from-amber-950 dark:to-amber-900/50">
-                <span className="font-semibold text-[9px] text-amber-900 uppercase leading-none tracking-widest dark:text-amber-200">
+              <div className="flex h-10 min-w-12 shrink-0 flex-col items-center justify-center rounded-md border border-amber-600/50 bg-gradient-to-b from-amber-100 to-amber-200/60 px-2 shadow-sm dark:from-amber-950 dark:to-amber-900/50">
+                <span className="font-semibold text-[8px] text-amber-900 uppercase leading-none tracking-wide dark:text-amber-200">
                   Level
                 </span>
-                <span className="mt-0.5 font-bold font-mono text-amber-950 text-lg leading-none dark:text-amber-100">
+                <span className="mt-0.5 font-bold font-mono text-amber-950 text-base leading-none dark:text-amber-100">
                   {userData.level}
                 </span>
               </div>
