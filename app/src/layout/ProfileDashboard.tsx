@@ -1,5 +1,6 @@
 "use client";
 
+import { noCase } from "change-case";
 import {
   ArrowRight,
   BookOpen,
@@ -31,7 +32,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { LogbookActive } from "@/layout/Logbook";
 import { getRewardPreview } from "@/libs/objectives";
-import { calcLevelRequirements, formatTrainingStatName } from "@/libs/profile";
+import { calcLevelRequirements } from "@/libs/profile";
 import {
   dashboardContentActionLabel,
   dashboardContentHref,
@@ -43,6 +44,7 @@ import {
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { trainingSpeedSeconds } from "@/libs/train";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
@@ -129,7 +131,7 @@ export default function ProfileDashboard() {
       : null;
   const training = userData?.currentlyTraining
     ? {
-        title: formatTrainingStatName(userData.currentlyTraining),
+        title: capitalizeFirstLetter(noCase(userData.currentlyTraining)),
         startedAt: userData.trainingStartedAt,
         endsAt: statTrainingEndsAt,
       }
