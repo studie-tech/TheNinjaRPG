@@ -260,6 +260,8 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
 
       if (!enabled && isPreferenceChange) {
         isSourceDetached.current = true;
+        // WebKit excludes muted media from Now Playing, even while unloading its source.
+        if (audio) audio.muted = true;
         audio?.pause();
         audio?.removeAttribute("src");
         audio?.load();
@@ -270,6 +272,7 @@ export const useAudio = (options: UseAudioOptions): UseAudioReturn => {
       if (enabled && isSourceDetached.current) {
         isSourceDetached.current = false;
         if (audio) {
+          audio.muted = false;
           audio.src = src;
           audio.load();
           if (autoPlay) {
