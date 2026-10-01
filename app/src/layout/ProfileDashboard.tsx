@@ -512,15 +512,43 @@ export default function ProfileDashboard() {
             </div>
           )}
           <div className="border-t py-3">
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="font-semibold">Level {userData.level}</span>
-              <span className="text-muted-foreground">
-                {canLevelUp
-                  ? "Ready to level up"
-                  : `${Number(experienceToGo.toFixed(0)).toLocaleString()} experience to go`}
-              </span>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 min-w-11 shrink-0 flex-col items-center justify-center rounded-md border border-amber-600/50 bg-gradient-to-b from-amber-100 to-amber-200/60 shadow-sm dark:from-amber-950 dark:to-amber-900/50">
+                <span className="font-semibold text-[9px] text-amber-900 uppercase leading-none tracking-widest dark:text-amber-200">
+                  Level
+                </span>
+                <span className="mt-0.5 font-bold font-mono text-amber-950 text-lg leading-none dark:text-amber-100">
+                  {userData.level}
+                </span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
+                  <span className="font-semibold text-amber-900 uppercase tracking-wide dark:text-amber-200">
+                    XP
+                  </span>
+                  <span className="text-muted-foreground">
+                    {canLevelUp
+                      ? "Ready to level up"
+                      : `${Number(experienceToGo.toFixed(0)).toLocaleString()} XP to go`}
+                  </span>
+                </div>
+                <div className="relative">
+                  <Progress
+                    value={levelProgress}
+                    aria-label={`Experience toward leveling up from level ${userData.level}`}
+                    aria-valuenow={levelProgress}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    className="h-3 rounded-sm border border-amber-900/30 bg-amber-950/10 shadow-inner dark:border-amber-300/25 dark:bg-black/30"
+                    indicatorClassName="bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]"
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 rounded-sm bg-[repeating-linear-gradient(to_right,transparent_0,transparent_calc(12.5%-1px),rgba(120,53,15,0.25)_calc(12.5%-1px),rgba(120,53,15,0.25)_12.5%)]"
+                  />
+                </div>
+              </div>
             </div>
-            <Progress value={levelProgress} className="mt-1.5 h-1.5" />
             <LevelUpBtn id="tutorial-level-up-dashboard" />
           </div>
           {!claimsLoading && !claimsFailed && !hasCollectible && (
