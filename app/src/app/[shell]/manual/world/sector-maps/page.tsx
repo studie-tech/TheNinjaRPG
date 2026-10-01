@@ -336,6 +336,7 @@ function SectorMapEditorContent() {
           utils.travel.getVillageInSector.invalidate(),
           utils.travel.getSectorData.invalidate(),
           utils.worldMap.getSectorWindow.invalidate(),
+          ...(data.success ? [utils.profile.getUser.invalidate()] : []),
         ]);
       },
     });

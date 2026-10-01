@@ -842,6 +842,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       // Invalidate raid queries when a RAID battle ends so boss HP is refreshed
       ...(props.battleState.battle?.battleType === "RAID"
         ? [
+            utils.profile.getDashboard.invalidate(),
             utils.raids.getRaidDetails.invalidate(),
             utils.raids.getAvailableRaids.invalidate(),
             utils.raids.getRaidLeaderboard.invalidate(),
