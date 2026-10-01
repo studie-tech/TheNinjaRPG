@@ -36,6 +36,7 @@ import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { type DrizzleClient, drizzleDB } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { logError } from "@/server/utils/sentry";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 
 /**
@@ -581,14 +582,22 @@ export const startDeclaredWar = async (
   const warContent = `${declaration.attackerVillageName} has declared war on ${declaration.defenderVillageName}!`;
   const notifyKageIds = [declaration.initiatedByUserId];
   if (declaration.defenderKageId) notifyKageIds.push(declaration.defenderKageId);
-  await Promise.all([
-    client
-      .insert(notification)
-      .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),
-    client
-      .update(userData)
-      .set({ unreadNotifications: sql`unreadNotifications + 1` })
-      .where(inArray(userData.userId, notifyKageIds)),
-  ]);
+  try {
+    await Promise.all([
+      client
+        .insert(notification)
+        .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),
+      client
+        .update(userData)
+        .set({ unreadNotifications: sql`unreadNotifications + 1` })
+        .where(inArray(userData.userId, notifyKageIds)),
+    ]);
+  } catch (error) {
+    // The war has committed; keep the client's success response and war refresh intact.
+    logError(error, "Failed to notify leaders about a started war", {
+      attackerVillageId: declaration.attackerVillageId,
+      defenderVillageId: declaration.defenderVillageId,
+    });
+  }
   return true;
 };

@@ -1,7 +1,7 @@
 // @vitest-environment node
 
-import { eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { eq, getTableName } from "drizzle-orm";
+import { beforeEach, expect, it, vi } from "vitest";
 import {
   ELDER_MIN_VOTING_COUNT,
   WAR_DECLARATION_COST,
@@ -19,9 +19,10 @@ import {
   warAlly,
 } from "@/drizzle/schema";
 import { warRouter } from "@/routers/war";
+import * as serverSentry from "@/server/utils/sentry";
 import { startDeclaredWar } from "@/server/utils/war";
 import { insertUsers } from "../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const FACTION = "faction-hideout";
 const TARGET = "target-village";
@@ -126,6 +127,45 @@ describeWithDatabase("faction war declarations", () => {
     expect(await database.select().from(villageElderVote)).toHaveLength(0);
     const notified = (await database.select().from(notification)).map((n) => n.userId);
     expect(notified.sort()).toEqual([LEADER, TARGET_KAGE].sort());
+  });
+
+  it("reports success when leader notifications fail after the war commits", async () => {
+    await seedWorld();
+    const database = await getTestDatabase();
+    const failure = new Error("Notification storage unavailable");
+    const report = vi.spyOn(serverSentry, "logError").mockImplementation(() => {});
+    const failingNotifications = new Proxy(database, {
+      get(target, property, receiver) {
+        if (property === "insert") {
+          return ((table) => {
+            if (getTableName(table) === getTableName(notification)) throw failure;
+            return target.insert(table);
+          }) as typeof database.insert;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    try {
+      const result = await callerForDatabase(
+        warRouter,
+        LEADER,
+        failingNotifications,
+      ).declareVillageWarOrRaid({
+        targetVillageId: TARGET,
+        targetStructureRoute: "/townhall",
+        userVillageId: FACTION,
+      });
+      expect(result.success).toBe(true);
+      expect(await database.select().from(war)).toHaveLength(1);
+      expect((await readFaction())?.tokens).toBe(TOKENS - WAR_DECLARATION_COST);
+      expect(report).toHaveBeenCalledWith(
+        failure,
+        "Failed to notify leaders about a started war",
+        { attackerVillageId: FACTION, defenderVillageId: TARGET },
+      );
+    } finally {
+      report.mockRestore();
+    }
   });
 
   it("still refuses a faction member who is not the leader", async () => {
