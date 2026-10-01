@@ -210,3 +210,14 @@ export const prepareExclusiveRaidActivation = (
     })),
   };
 };
+
+export const raidRewardBlockMessage = (
+  participation: { damageDealt: number; rewardsClaimed: string[] },
+  threshold: { id: string; damageRequired: number },
+): string | null => {
+  if (participation.damageDealt < threshold.damageRequired)
+    return "You have not dealt enough damage to claim this reward";
+  if (participation.rewardsClaimed.includes(threshold.id))
+    return "You have already claimed this reward";
+  return null;
+};

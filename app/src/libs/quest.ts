@@ -1,5 +1,6 @@
 import {
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
+  ERRANDS_PER_DAY,
   type GATHERING_RANK,
   GATHERING_RANKS,
   type HUNTING_RANK,
@@ -15,9 +16,13 @@ import {
   type LetterRank,
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
+  MEDICAL_MISSIONS_PER_DAY,
   type MEDNIN_RANK,
   MEDNIN_RANKS,
   MISSIONS_FULL_REWARD_COUNT,
+  MISSIONS_PER_DAY,
+  PVP_MISSIONS_PER_DAY,
+  QUESTS_CONCURRENT_LIMIT,
   type QuestType,
   QuestTypesWithMaxAttempts,
   type RetryQuestDelay,
@@ -28,6 +33,7 @@ import {
   SENSEI_STUDENT_MISSION_EXP_BOOST_PERC,
   TERMINAL_DIALOG_PREFIX,
   VILLAGE_SYNDICATE_ID,
+  WAR_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
 import type { GameSetting, Quest, UserData, UserItem } from "@/drizzle/schema";
 import { getFarmingLevel } from "@/libs/farming";
@@ -44,13 +50,19 @@ import {
   isSupportedOverworldBindingTask,
 } from "@/libs/overworldAi";
 import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
+import { availableQuestLetterRanks } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUnique } from "@/utils/grouping";
 import { randomInt } from "@/utils/math";
 import { canChangeContent, canPlayHiddenQuests } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { periodStart, secondsPassed } from "@/utils/time";
-import { getShrineBoost, getStrucBoost } from "@/utils/village";
+import {
+  canAccessStructure,
+  getShrineBoost,
+  getStrucBoost,
+  type SectorVillage,
+} from "@/utils/village";
 import type {
   AllObjectivesType,
   AllObjectiveTask,
@@ -2131,3 +2143,219 @@ export const fallbackQuestsFilter = (
   }
   return { filtered, rankInfo };
 };
+
+/** A player can have multiple events, but cannot start the same quest twice. */
+export const questAlreadyActiveBlockMessage = (
+  quest: Pick<Quest, "id" | "name">,
+  user: Pick<NonNullable<UserWithRelations>, "userQuests">,
+): string | null =>
+  user.userQuests?.some((active) => active.questId === quest.id && !active.endAt)
+    ? `You are already on this quest: ${quest.name}`
+    : null;
+
+/** Returns a rejection message when the quest's concurrency slot is occupied. */
+export const questTypeConcurrentBlockMessage = (
+  quest: Pick<Quest, "questType" | "name">,
+  user: NonNullable<UserWithRelations>,
+): string | null => {
+  /** Returns the user's unfinished quests for a specific quest type. */
+  const activeOfType = (type: string) =>
+    user.userQuests?.filter((q) => q.quest.questType === type && !q.endAt) ?? [];
+  switch (quest.questType) {
+    case "story":
+    case "hunting":
+    case "gathering":
+    case "anbu":
+    case "event": {
+      const cur = activeOfType(quest.questType);
+      if (cur.length >= QUESTS_CONCURRENT_LIMIT) {
+        return `Already ${QUESTS_CONCURRENT_LIMIT} active ${quest.questType} quests; ${cur
+          .map((c) => c.quest.name)
+          .join(", ")}. Abandon one to start this quest.`;
+      }
+      return null;
+    }
+    case "battlepyramid": {
+      if (activeOfType("battlepyramid").length >= 1) {
+        return `Already in active battle pyramid. Abandon if you want to restart.`;
+      }
+      return null;
+    }
+    case "starter": {
+      if (activeOfType("starter").length >= 1) {
+        return `Already in active starter quest. Abandon if you want to restart.`;
+      }
+      return null;
+    }
+    case "war": {
+      const blockers = ["mission", "crime", "errand", "medical", "pvp", "war"];
+      const found = user.userQuests?.find(
+        (q) => blockers.includes(q.quest.questType) && !q.endAt,
+      );
+      return found ? `Already have an active ${found.quest.questType}` : null;
+    }
+    case "mission":
+    case "crime":
+    case "medical":
+    case "pvp":
+    case "errand": {
+      const blockers = ["mission", "crime", "errand", "medical", "pvp"];
+      const found = user.userQuests?.find(
+        (q) => blockers.includes(q.quest.questType) && !q.endAt,
+      );
+      return found ? `Already active ${found.quest.questType}` : null;
+    }
+    default:
+      return null;
+  }
+};
+
+/**
+ * Structure and occupation guards that only apply when a player starts a quest
+ * through the UI (Mission Hall, Anbu page, etc.). NPC-initiated quests skip these.
+ * Returns a rejection message, or null to allow proceeding.
+ */
+export const questUiAccessBlockMessage = (
+  quest: Pick<Quest, "questType" | "questRank">,
+  user: NonNullable<UserWithRelations>,
+  sectorVillage: SectorVillage | null,
+): string | null => {
+  const hasStructureAccess = canAccessStructure(
+    user,
+    questStructureRoute(quest.questType),
+    sectorVillage,
+  );
+  if (quest.questType === "story") {
+    if (!hasStructureAccess) {
+      return "Must be in the Global Anbu HQ to start story quests";
+    }
+  } else if (quest.questType === "hunting") {
+    if (user.occupation !== "HUNTER") {
+      return "You are not a hunter";
+    }
+  } else if (quest.questType === "gathering") {
+    if (user.occupation !== "GATHERING") {
+      return "You are not a gatherer";
+    }
+  } else if (quest.questType === "anbu") {
+    if (!hasStructureAccess) {
+      return "Must be in the Anbu page to start anbu quests";
+    }
+    if (!user.anbuId) {
+      return "You are not in an anbu squad";
+    }
+  } else if (quest.questType === "event") {
+    if (!hasStructureAccess) {
+      return "Must be in your allied village to start quest";
+    }
+  } else if (quest.questType === "war") {
+    if (!user.villageId) {
+      return "You must be in a village to accept war missions";
+    }
+    if (!user.isOutlaw && !hasStructureAccess) {
+      return "Must be in your allied village to start quest";
+    }
+    if (user.dailyWarMissions >= WAR_MISSIONS_PER_DAY) {
+      return `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`;
+    }
+  } else if (["mission", "crime", "medical", "pvp"].includes(quest.questType)) {
+    if (["mission", "crime"].includes(quest.questType) && quest.questRank !== "A") {
+      return `Only A rank missions/crimes are allowed`;
+    }
+    if (!user.isOutlaw && !hasStructureAccess) {
+      return "Must be in your allied village to start quest";
+    }
+  }
+  return null;
+};
+
+/** Daily assignment counters used by the mission hall, discovery and acquisition guards. */
+export const questDailyQuota = (
+  questType: string,
+  user: Pick<
+    UserData,
+    | "dailyMissions"
+    | "dailyErrands"
+    | "dailyMedicalMissions"
+    | "dailyPvpMissions"
+    | "dailyWarMissions"
+  >,
+) => {
+  switch (questType) {
+    case "mission":
+    case "crime":
+      return { current: user.dailyMissions, limit: MISSIONS_PER_DAY };
+    case "errand":
+      return { current: user.dailyErrands, limit: ERRANDS_PER_DAY };
+    case "medical":
+      return { current: user.dailyMedicalMissions, limit: MEDICAL_MISSIONS_PER_DAY };
+    case "pvp":
+      return { current: user.dailyPvpMissions, limit: PVP_MISSIONS_PER_DAY };
+    case "war":
+      return { current: user.dailyWarMissions, limit: WAR_MISSIONS_PER_DAY };
+    default:
+      return null;
+  }
+};
+
+/** Structure used by the quest's normal UI entry point. */
+export const questStructureRoute = (questType: string) => {
+  switch (questType) {
+    case "event":
+      return "/adminbuilding" as const;
+    case "story":
+      return "/globalanbuhq" as const;
+    case "battlepyramid":
+      return "/battlearena" as const;
+    case "anbu":
+      return "/anbu" as const;
+    default:
+      return "/missionhall" as const;
+  }
+};
+
+export const questRequiresTravel = (
+  questType: string,
+  user: NonNullable<UserWithRelations>,
+  sectorVillage?: SectorVillage | null,
+) => {
+  if (user.isOutlaw && !["event", "story", "anbu"].includes(questType)) return false;
+  return !canAccessStructure(user, questStructureRoute(questType), sectorVillage);
+};
+
+interface QuestWarSummary {
+  attackerVillageId: string;
+  defenderVillageId: string;
+  warAllies: { villageId: string }[];
+}
+
+/** War missions follow the mission hall: an involved village, including allies, and the daily cap. */
+export const isWarMissionAvailable = ({
+  questType,
+  villageId,
+  dailyWarMissions,
+  activeWars,
+}: {
+  questType: string;
+  villageId: string | null;
+  dailyWarMissions: number;
+  activeWars: QuestWarSummary[];
+}) => {
+  if (questType !== "war") return true;
+  if (!villageId || dailyWarMissions >= WAR_MISSIONS_PER_DAY) return false;
+  return activeWars.some(
+    (activeWar) =>
+      activeWar.attackerVillageId === villageId ||
+      activeWar.defenderVillageId === villageId ||
+      activeWar.warAllies.some((ally) => ally.villageId === villageId),
+  );
+};
+
+export const isQuestRankAllowed = (
+  quest: Pick<Quest, "questType" | "questRank">,
+  user: Pick<UserData, "rank">,
+  source: "ui" | "random_assignment" = "ui",
+) =>
+  source === "random_assignment" && quest.questType !== "mission"
+    ? true
+    : availableQuestLetterRanks(user.rank).includes(quest.questRank);

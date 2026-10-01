@@ -4,8 +4,13 @@ import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
-import { energyPerSecond, trainEfficiency, trainingMultiplier } from "@/libs/train";
-import { calcIsInVillage } from "@/libs/travel";
+import {
+  energyPerSecond,
+  masteryTrainingBlockMessage,
+  statTrainingBlockMessage,
+  trainEfficiency,
+  trainingMultiplier,
+} from "@/libs/train";
 import { validateCaptcha } from "@/routers/misc";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
@@ -41,8 +46,8 @@ export const trainRouter = createTRPCRouter({
         forceRegen: true,
       });
       if (!user) return errorResponse("User not found");
-      const guard = assertCanStartTraining(user);
-      if (guard) return guard;
+      const block = statTrainingBlockMessage(user);
+      if (block) return errorResponse(block);
       const data = { trainingStartedAt: new Date(), currentlyTraining: input.stat };
       const result = await ctx.drizzle
         .update(userData)
@@ -74,8 +79,8 @@ export const trainRouter = createTRPCRouter({
         forceRegen: true,
       });
       if (!user) return errorResponse("User not found");
-      const guard = assertCanStartTraining(user);
-      if (guard) return guard;
+      const block = masteryTrainingBlockMessage(user);
+      if (block) return errorResponse(block);
       const { mastery_cap } = getUserCaps(user.rank);
       if (user[input.stat] >= mastery_cap) return errorResponse("Already capped");
       const data = {
@@ -367,30 +372,6 @@ const calcTrainingAmount = (
   return { trainingAmount, minutes };
 };
 
-/** Shared guards for starting either training slot. Returns an error response, or null */
-const assertCanStartTraining = (
-  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
-) => {
-  const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
-  if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
-  if (!user.isOutlaw) {
-    if (!inVillage) return errorResponse("Must be in your own village");
-    if (user.sector !== user.village?.sector) return errorResponse("Wrong sector");
-  }
-  if (user.trainingSpeed !== "8hrs" && user.isBanned) {
-    return errorResponse("Only 8hrs training interval allowed when banned");
-  }
-  // A session still running in either slot will spend one training when it stops
-  const inFlight =
-    Number(!!user.currentlyTraining) + Number(!!user.currentlyTrainingMastery);
-  if (user.dailyTrainings + inFlight >= MAX_DAILY_TRAININGS) {
-    return errorResponse(
-      `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`,
-    );
-  }
-  return null;
-};
-
 /**
  * The other slot, if it is already running, will spend one training when it stops.
  * Checked in the UPDATE so two starts cannot both pass while one daily training remains.
@@ -408,21 +389,14 @@ const explainRejectedStart = async (
     userId: ctx.userId,
   });
   if (!user) return errorResponse("User not found");
-  const occupied =
-    slot === "combat" ? user.currentlyTraining : user.currentlyTrainingMastery;
-  if (occupied) {
-    return errorResponse(
-      slot === "combat"
+  const block =
+    slot === "combat"
+      ? statTrainingBlockMessage(user)
+      : masteryTrainingBlockMessage(user);
+  return errorResponse(
+    block ??
+      (slot === "combat"
         ? "You are already training a combat stat"
-        : "You are already training a mastery",
-    );
-  }
-  return (
-    assertCanStartTraining(user) ??
-    errorResponse(
-      slot === "combat"
-        ? "You are already training a combat stat"
-        : "You are already training a mastery",
-    )
+        : "You are already training a mastery"),
   );
 };

@@ -25,9 +25,9 @@ interface LayoutSwitcherProps {
 }
 
 /**
- * LayoutSwitcher component for A/B testing different layouts
- * - Anonymous users enter the A/B-tested layout from the middleware cookie
- * - Users can override locally from the settings dialog
+ * LayoutSwitcher renders the shell for the layout the proxy chose
+ * - Signed-out visitors always get the default layout
+ * - Signed-in players can opt into the pixel layout from the settings dialog
  */
 const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   children,

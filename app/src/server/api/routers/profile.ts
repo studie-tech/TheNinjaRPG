@@ -81,6 +81,7 @@ import {
   poll,
   quest,
   questHistory,
+  raidParticipation,
   recruitmentRewards,
   sageMode,
   staffApplication,
@@ -115,9 +116,9 @@ import {
   calcActiveUserRegen,
   calcCP,
   calcHP,
-  calcLevelRequirements,
   calcSP,
   getAssignedCombatStatTotal,
+  levelUpBlockMessage,
   scaleUserStats,
 } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
@@ -130,10 +131,14 @@ import {
   mockAchievementHistoryEntries,
   questHasOverworldObjectives,
 } from "@/libs/quest";
-import { getRaidObjectiveData } from "@/libs/raids";
+import {
+  getRaidObjectiveData,
+  isRaidListedForVillage,
+  raidRewardBlockMessage,
+} from "@/libs/raids";
 import { createThumbnail } from "@/libs/replicate";
 import { callDiscordContent } from "@/libs/socials";
-import { getReducedGainsDays } from "@/libs/train";
+import { getReducedGainsDays, inferJutsuTrainingStartedAt } from "@/libs/train";
 import { fetchSquad, removeFromSquad } from "@/routers/anbu";
 import { fetchClan, removeFromClan } from "@/routers/clan";
 import { fetchKageReplacement } from "@/routers/kage";
@@ -159,6 +164,7 @@ import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { getFarmCollectionCount } from "@/server/utils/farming";
 import { hashIp } from "@/server/utils/ipHash";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
+import { fetchQuestDiscoverySummaryCandidates } from "@/server/utils/questDiscovery";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -212,6 +218,70 @@ import {
 const pusher = getServerPusher();
 
 export const profileRouter = createTRPCRouter({
+  getDashboard: protectedProcedure
+    .meta({
+      mcp: {
+        enabled: true,
+        description: "Get compact profile dashboard discovery and reward summaries",
+      },
+    })
+    .query(async ({ ctx }) => {
+      const [candidates, raidParticipations] = await Promise.all([
+        fetchQuestDiscoverySummaryCandidates(ctx.drizzle, ctx.userId, {
+          questTypes: [
+            "event",
+            "mission",
+            "errand",
+            "crime",
+            "medical",
+            "pvp",
+            "war",
+            "story",
+            "battlepyramid",
+          ],
+        }),
+        ctx.drizzle.query.raidParticipation.findMany({
+          where: eq(raidParticipation.userId, ctx.userId),
+          columns: {
+            damageDealt: true,
+            rewardsClaimed: true,
+          },
+          with: {
+            quest: {
+              columns: { id: true, name: true },
+              with: {
+                raidDamageThresholds: {
+                  columns: { id: true, damageRequired: true },
+                },
+              },
+            },
+          },
+        }),
+      ]);
+
+      const raidRewards = raidParticipations.flatMap((participation) => {
+        const claimableCount = participation.quest.raidDamageThresholds.filter(
+          (threshold) => !raidRewardBlockMessage(participation, threshold),
+        ).length;
+        if (claimableCount === 0) return [];
+        return [
+          {
+            raidId: participation.quest.id,
+            raidName: participation.quest.name,
+            claimableCount,
+          },
+        ];
+      });
+
+      return {
+        candidates,
+        raidProgress: raidParticipations.map((participation) => ({
+          raidId: participation.quest.id,
+          damageDealt: participation.damageDealt,
+        })),
+        raidRewards,
+      };
+    }),
   getSidebarTimers: protectedProcedure.query(async ({ ctx }) => {
     const now = sql`NOW()`;
     const imbuedItem = alias(item, "imbuedItem");
@@ -221,10 +291,14 @@ export const profileRouter = createTRPCRouter({
         .select({
           name: sql<string>`COALESCE(${jutsuReskin.name}, ${jutsu.name})`,
           level: userJutsu.level,
+          jutsuRank: jutsu.jutsuRank,
           finishTraining: userJutsu.finishTraining,
+          senseiId: userData.senseiId,
+          rank: userData.rank,
         })
         .from(userJutsu)
         .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
+        .innerJoin(userData, eq(userJutsu.userId, userData.userId))
         .leftJoin(jutsuReskin, eq(userJutsu.reskinId, jutsuReskin.id))
         .where(and(eq(userJutsu.userId, ctx.userId), gt(userJutsu.finishTraining, now)))
         .orderBy(asc(userJutsu.finishTraining))
@@ -232,6 +306,7 @@ export const profileRouter = createTRPCRouter({
       ctx.drizzle
         .select({
           itemName: item.name,
+          craftingStartedAt: userItem.createdAt,
           craftingFinishedAt: userItem.craftingFinishedAt,
         })
         .from(userItem)
@@ -245,6 +320,7 @@ export const profileRouter = createTRPCRouter({
         .select({
           imbuedName: imbuedItem.name,
           targetName: item.name,
+          craftingStartedAt: userItemImbuement.createdAt,
           craftingFinishedAt: userItemImbuement.craftingFinishedAt,
         })
         .from(userItemImbuement)
@@ -261,13 +337,24 @@ export const profileRouter = createTRPCRouter({
         .limit(1),
     ]);
 
-    const jutsuTraining = jutsuTrainingRows[0];
+    const jutsuTrainingRow = jutsuTrainingRows[0];
     const crafting = craftingRows[0];
+    const jutsuTraining = jutsuTrainingRow?.finishTraining
+      ? {
+          name: jutsuTrainingRow.name,
+          level: jutsuTrainingRow.level,
+          trainingStartedAt: inferJutsuTrainingStartedAt(
+            jutsuTrainingRow.finishTraining,
+            { jutsuRank: jutsuTrainingRow.jutsuRank },
+            jutsuTrainingRow.level,
+            { senseiId: jutsuTrainingRow.senseiId, rank: jutsuTrainingRow.rank },
+          ),
+          finishTraining: jutsuTrainingRow.finishTraining,
+        }
+      : null;
 
     return {
-      jutsuTraining: jutsuTraining?.finishTraining
-        ? { ...jutsuTraining, finishTraining: jutsuTraining.finishTraining }
-        : null,
+      jutsuTraining,
       crafting: crafting?.craftingFinishedAt
         ? { ...crafting, craftingFinishedAt: crafting.craftingFinishedAt }
         : null,
@@ -321,7 +408,6 @@ export const profileRouter = createTRPCRouter({
         ctx.userIp && ctx.userIp !== "unknown" ? hashIp(ctx.userIp) : undefined;
       if (input.step === TUTORIAL_STEPS_COUNT && ipHash) {
         const experiments = getLayoutExperimentAssignments({
-          abPixelLayoutVariant: ctx.abPixelLayoutVariant,
           abLemuReplacementVariant: ctx.abLemuReplacementVariant,
         });
         await Promise.all(
@@ -487,16 +573,8 @@ export const profileRouter = createTRPCRouter({
       });
       // Guard
       if (!user) return errorResponse("User not found");
-      const expRequired = calcLevelRequirements(user.level) - user.experience;
-      const { lvl_cap } = getUserCaps(user.rank);
-      if (user.level >= lvl_cap)
-        return errorResponse("User at max level for this rank!");
-      if (expRequired > 0) return errorResponse("No enough experience for level");
-      if (user.village?.name === "Horizon" && user.level > 9) {
-        return errorResponse(
-          "Horizon users cannot level beyond level 9. To progress, go to the academy to take a quest for joining one of the main villages.",
-        );
-      }
+      const block = levelUpBlockMessage(user);
+      if (block) return errorResponse(block);
       // Mutate
       const newLevel = user.level + 1;
       const { trackers } = getNewTrackers(user, [
@@ -1702,12 +1780,17 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const currentColor =
+      const storedColor =
         input.target === "username" ? user.tavernUsernameColor : user.tavernTitleColor;
       const cost = getTavernColorChangeCost(input.color);
 
       if (user.isBanned) return errorResponse("You are banned");
-      if (currentColor === input.color) {
+      if (storedColor !== input.currentColor) {
+        return errorResponse(
+          "Could not update tavern color; your selection or reputation changed",
+        );
+      }
+      if (input.currentColor === input.color) {
         return errorResponse(`Tavern ${input.target} color is unchanged`);
       }
       if (cost > user.reputationPoints) {
@@ -1732,7 +1815,7 @@ export const profileRouter = createTRPCRouter({
               input.target === "username"
                 ? userData.tavernUsernameColor
                 : userData.tavernTitleColor,
-              currentColor ?? "DEFAULT",
+              input.currentColor,
             ),
             gte(userData.reputationPoints, cost),
           ),
@@ -1749,7 +1832,7 @@ export const profileRouter = createTRPCRouter({
         userId: ctx.userId,
         tableName: "user",
         changes: [
-          `Tavern ${input.target} color changed from ${currentColor} to ${input.color} (-${cost} reputation)`,
+          `Tavern ${input.target} color changed from ${input.currentColor} to ${input.color} (-${cost} reputation)`,
         ],
         relatedId: ctx.userId,
         relatedMsg: `${user.username} changed their tavern ${input.target} color`,
@@ -2835,45 +2918,47 @@ export const fetchUpdatedUser = async (props: {
       user.village?.sectors?.map((s) => s.sector) ?? [],
     );
 
+    const attackerDefeatedShrineSectors = new Set(
+      allActiveWars
+        .filter(
+          (w) =>
+            w.type === "SECTOR_WAR" &&
+            w.defenderShrineHp <= 0 &&
+            (w.attackerVillageId === user.villageId ||
+              w.warAllies.some(
+                (ally) =>
+                  ally.villageId === user.villageId &&
+                  ally.supportVillageId === w.attackerVillageId,
+              )),
+        )
+        .map((w) => w.sector),
+    );
     const userActiveRaids = activeRaids
-      .map((raid) => {
+      .filter((raid) =>
+        isRaidListedForVillage(
+          raid,
+          user.villageId,
+          ownedSectorNumbers,
+          attackerDefeatedShrineSectors,
+          now,
+        ),
+      )
+      .flatMap((raid) => {
         const raidData = getRaidObjectiveData(raid);
-        if (!raidData) return null;
-
-        // Open raids are available to everyone
-        if (raidData.isOpen) {
-          return {
-            id: raid.id,
-            name: raid.name,
-            sector: raidData.sector,
-            raidType: "open" as const,
-          };
-        }
-
-        // Exclusive raids require village sector ownership
-        if (raidData.isExclusive && user.villageId && raidData.sector !== null) {
-          const ownsCurrentSector = ownedSectorNumbers.has(raidData.sector);
-
-          // Check capture deadline and grace period
-          if (raid.raidCaptureDeadline && raid.raidCaptureDeadline < now) {
-            if (!raid.raidGracePeriodEnd || raid.raidGracePeriodEnd < now) {
-              return null; // Deadline passed, no access
-            }
-          }
-
-          if (ownsCurrentSector) {
-            return {
-              id: raid.id,
-              name: raid.name,
-              sector: raidData.sector,
-              raidType: "exclusive" as const,
-            };
-          }
-        }
-
-        return null;
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null);
+        return raidData
+          ? [
+              {
+                id: raid.id,
+                name: raid.name,
+                description: raid.description,
+                image: raid.image,
+                sector: raidData.sector,
+                raidType: raidData.raidType,
+                raidEndsAt: raid.raidEndsAt,
+              },
+            ]
+          : [];
+      });
 
     (user as NonNullable<UserWithRelations>).activeRaids = userActiveRaids;
   }
@@ -3247,6 +3332,8 @@ const fetchAllActiveWars = (client: DrizzleClient) =>
       columns: {
         id: true,
         type: true,
+        status: true,
+        defenderShrineHp: true,
         attackerVillageId: true,
         defenderVillageId: true,
         sector: true,
@@ -3589,6 +3676,7 @@ export type UserWithRelations =
       completedQuests: { id: string; questId: string; completed: number }[];
       votes?: UserVote | null;
       activeWars?: {
+        status: string;
         id: string;
         type: string;
         attackerVillageId: string;
@@ -3607,7 +3695,10 @@ export type UserWithRelations =
       activeRaids?: {
         id: string;
         name: string;
-        sector: number;
+        sector: number | null;
+        description: string | null;
+        image: string | null;
+        raidEndsAt: Date | null;
         raidType: "open" | "exclusive";
       }[];
     })

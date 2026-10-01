@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Input for the daily content audit (.github/workflows/content-audit.yml), as
+ * Input for the content audit (.github/workflows/content-audit.yml), as
  * `buildAuditSnapshot` assembles it. A scheduled CI job has no user session, so it
  * authenticates with the cron secret like Vercel's crons.
  */

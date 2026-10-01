@@ -26,6 +26,7 @@ import {
   getReward,
   isAvailableUserQuests,
   isMockQuestHistoryRow,
+  questTypeConcurrentBlockMessage,
 } from "@/libs/quest";
 import { availableQuestLetterRanks } from "@/libs/train";
 import { initiateBattle } from "@/routers/combat";
@@ -35,7 +36,6 @@ import {
   assignQuestToUser,
   commitQuestObjectiveRewards,
   OVERWORLD_ASSIGNABLE_QUEST_TYPES,
-  questTypeConcurrentBlockMessage,
 } from "@/routers/quests";
 import { fetchActiveWars } from "@/routers/war";
 import {

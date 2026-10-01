@@ -60,7 +60,6 @@ export const miscRouter = createTRPCRouter({
       if (ip === "unknown") return { success: false, message: "No IP detected" };
 
       const experiments = getLayoutExperimentAssignments({
-        abPixelLayoutVariant: ctx.abPixelLayoutVariant,
         abLemuReplacementVariant: ctx.abLemuReplacementVariant,
       });
 

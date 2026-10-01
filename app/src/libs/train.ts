@@ -1,20 +1,24 @@
 import type {
   BattleType,
+  CombatStatName,
   ElementName,
   LetterRank,
   TrainingSpeed,
 } from "@/drizzle/constants";
 import {
+  CombatStatNames,
   DURABILITY_USABILITY_THR,
   ElementNames,
   FED_GOLD_JUTSU_SLOTS,
   FED_NORMAL_JUTSU_SLOTS,
   FED_SILVER_JUTSU_SLOTS,
+  getUserCaps,
   ITEM_XP_BATTLE_TYPES,
   ITEM_XP_ON_LOSS,
   ITEM_XP_ON_WIN,
   JUTSU_TRAIN_TO_LEARN_RESTRICTED_TYPES,
   LetterRanks,
+  MAX_DAILY_TRAININGS,
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
   SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
@@ -36,9 +40,10 @@ import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import type { MasterySources, MasteryStatSource } from "@/libs/mastery";
 import { effectiveMasteries, hasMasteryRequirements } from "@/libs/mastery";
+import { calcIsInVillage } from "@/libs/travel";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
-import { secondsPassed } from "@/utils/time";
+import { secondsFromDate, secondsPassed } from "@/utils/time";
 import { getUserElements } from "@/validators/user";
 
 type UserStatData = Pick<
@@ -377,7 +382,11 @@ export const jutsuRequirementWarning = (
 
 export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5;
 
-export const calcJutsuTrainTime = (jutsu: Jutsu, level: number, userdata: UserData) => {
+export const calcJutsuTrainTime = (
+  jutsu: Pick<Jutsu, "jutsuRank">,
+  level: number,
+  userdata: Pick<UserData, "senseiId" | "rank">,
+) => {
   let lvlIncrement = 7;
   if (jutsu.jutsuRank === "C") {
     lvlIncrement = 8;
@@ -398,6 +407,22 @@ export const calcJutsuTrainTime = (jutsu: Jutsu, level: number, userdata: UserDa
   }
   return cappedTrainTime;
 };
+
+/**
+ * Training stores the target level and finish time. Later actions such as equip
+ * rewrite updatedAt without changing finishTraining, so the start is the finish
+ * minus the duration of the level training began at.
+ */
+export const inferJutsuTrainingStartedAt = (
+  finishTraining: Date,
+  jutsu: Pick<Jutsu, "jutsuRank">,
+  storedLevel: number,
+  userdata: Pick<UserData, "senseiId" | "rank">,
+) =>
+  new Date(
+    finishTraining.getTime() -
+      calcJutsuTrainTime(jutsu, Math.max(0, storedLevel - 1), userdata),
+  );
 
 export const calcJutsuTrainCost = (
   jutsu: Jutsu,
@@ -641,3 +666,86 @@ const applyExpMultiplierSetting = (
   settingName: string,
   settings?: GameSetting[],
 ): number => baseExp * (getGameSettingBoost(settingName, settings ?? [])?.value ?? 1);
+
+type StatTrainingUser = UserStatData &
+  Pick<
+    UserData,
+    | "status"
+    | "isOutlaw"
+    | "sector"
+    | "longitude"
+    | "latitude"
+    | "dailyTrainings"
+    | "rank"
+    | "trainingSpeed"
+    | "isBanned"
+    | "currentlyTraining"
+    | "currentlyTrainingMastery"
+  > & { village?: { sector: number } | null };
+
+/**
+ * Preconditions for starting either training slot; the start write still guards status, the
+ * slot and the daily budget atomically. A session running in the other slot spends one
+ * training when it stops, so it counts toward the daily limit.
+ */
+const trainingStartBlockMessage = (
+  user: StatTrainingUser,
+  otherSlotRunning: boolean,
+): string | null => {
+  if (user.status !== "AWAKE") return "Must be awake to train";
+  if (!user.isOutlaw) {
+    if (!calcIsInVillage({ x: user.longitude, y: user.latitude }))
+      return "Must be in your own village";
+    if (user.sector !== user.village?.sector) return "Wrong sector";
+  }
+  if (user.trainingSpeed !== "8hrs" && user.isBanned)
+    return "Only 8hrs training interval allowed when banned";
+  if (user.dailyTrainings + Number(otherSlotRunning) >= MAX_DAILY_TRAININGS)
+    return `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`;
+  return null;
+};
+
+/** Preconditions for starting combat-stat training. */
+export const statTrainingBlockMessage = (user: StatTrainingUser): string | null =>
+  trainingStartBlockMessage(user, !!user.currentlyTrainingMastery) ??
+  (user.currentlyTraining ? "You are already training a combat stat" : null);
+
+/** Preconditions for starting mastery training. */
+export const masteryTrainingBlockMessage = (user: StatTrainingUser): string | null =>
+  trainingStartBlockMessage(user, !!user.currentlyTraining) ??
+  (user.currentlyTrainingMastery ? "You are already training a mastery" : null);
+
+export const isStatTrainingCapped = (
+  user: UserStatData & Pick<UserData, "rank">,
+  stat: CombatStatName,
+) => {
+  const { stats_cap, gens_cap } = getUserCaps(user.rank);
+  return (
+    user[stat] >= (stat === "offence" || stat === "defence" ? stats_cap : gens_cap)
+  );
+};
+
+/** Offer training only when the player can start and at least one combat stat can gain. */
+export const canStartStatTraining = (user: StatTrainingUser) =>
+  !statTrainingBlockMessage(user) &&
+  CombatStatNames.some((stat) => !isStatTrainingCapped(user, stat));
+
+export const statTrainingEndsAt = (
+  user: Pick<UserData, "trainingStartedAt" | "currentlyTraining" | "trainingSpeed">,
+) =>
+  user.trainingStartedAt && user.currentlyTraining
+    ? secondsFromDate(trainingSpeedSeconds(user.trainingSpeed), user.trainingStartedAt)
+    : null;
+
+export const masteryTrainingEndsAt = (
+  user: Pick<
+    UserData,
+    "masteryTrainingStartedAt" | "currentlyTrainingMastery" | "trainingSpeed"
+  >,
+) =>
+  user.masteryTrainingStartedAt && user.currentlyTrainingMastery
+    ? secondsFromDate(
+        trainingSpeedSeconds(user.trainingSpeed),
+        user.masteryTrainingStartedAt,
+      )
+    : null;

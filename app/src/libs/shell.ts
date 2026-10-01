@@ -1,6 +1,5 @@
 import type { AbVariant } from "@/hooks/useAbVariant";
 import {
-  AB_PIXEL_LAYOUT_COOKIE,
   cookieValueToLayout,
   type EffectiveLayout,
   LAYOUT_PREFERENCE_COOKIE,
@@ -92,15 +91,9 @@ export interface ShellChoice {
 }
 
 /**
- * Search engines and social preview services discard cookies between fetches, so the
- * random landing-page assignment would hand them a different variant -- different
- * headings, copy and hero asset -- on every crawl of the site's highest-value URL.
- * Anything matching here is pinned to the default layout instead, which renders the
- * long-form section copy (Jutsus, Combat, Village, Sectors, Travel), roughly twice the
- * indexable text of the pixel variant. Both are variants real visitors receive, so this
- * is an A/B split rather than crawler-specific content. Note that Welcome.tsx hides that
- * copy when NEXT_PUBLIC_MCP_ENABLED is set, so enabling MCP in production would leave
- * crawlers on a near-empty landing page and this choice should be revisited.
+ * Search engines and social preview services discard cookies between fetches, so a
+ * request matching here is never treated as a landing visit that draws experiment
+ * assignments, and always receives the signed-out default shell.
  */
 const CRAWLER_USER_AGENT =
   /bot|crawler|spider|crawling|slurp|mediapartners|facebookexternalhit|bingpreview|whatsapp|telegram|embedly|quora link preview|pinterest|vkshare|w3c_validator|lighthouse|chrome-lighthouse/i;
@@ -122,11 +115,12 @@ const clientHasSession = (cookies: ReadonlyMap<string, string>) => {
 /**
  * The variant a request is served, and any experiment assignment drawn for it.
  *
- * A crawler is pinned to the signed-out default layout; a person whose browser string
- * happens to match the crawler pattern is told apart by their session cookies. Everyone
- * else gets the layout their cookies ask for, an explicit preference beating the
- * experiment assignment, and a signed-out visitor arriving on the landing page without an
- * assignment is given one here so this very document and the cookie agree.
+ * Signed-out visitors, crawlers included, always get the default layout; the pixel
+ * layout is an opt-in for signed-in players, read from their stored preference. A person
+ * whose browser string happens to match the crawler pattern is told apart by their
+ * session cookies. A signed-out visitor arriving on the landing page without an
+ * assignment for the tutorial experiment is given one here so this very document and the
+ * cookie agree.
  */
 export const chooseShell = (request: ShellRequest): ShellChoice => {
   const native = parseNativeUserAgent(request.userAgent);
@@ -137,20 +131,11 @@ export const chooseShell = (request: ShellRequest): ShellChoice => {
   }
   const assigned: ShellChoice["assigned"] = {};
   const isLandingVisit = !hasSession && request.pathname === "/";
-  const assignment = (cookie: string) => {
-    const existing = request.cookies.get(cookie);
-    if (existing !== undefined || !isLandingVisit) return existing;
-    const drawn = request.draw();
-    assigned[cookie] = drawn;
-    return drawn;
-  };
-  // The legacy experiment is still assigned so the tRPC context keeps stamping it, but
-  // it no longer decides the layout.
-  assignment(LEGACY_AB_LAYOUT_COOKIE);
-  const pixel = assignment(AB_PIXEL_LAYOUT_COOKIE);
-  const layout =
-    cookieValueToLayout(request.cookies.get(LAYOUT_PREFERENCE_COOKIE)) ??
-    cookieValueToLayout(pixel) ??
-    "default";
+  if (isLandingVisit && request.cookies.get(LEGACY_AB_LAYOUT_COOKIE) === undefined) {
+    assigned[LEGACY_AB_LAYOUT_COOKIE] = request.draw();
+  }
+  const layout = hasSession
+    ? (cookieValueToLayout(request.cookies.get(LAYOUT_PREFERENCE_COOKIE)) ?? "default")
+    : "default";
   return { variant: { client, layout, signedIn: hasSession }, assigned };
 };

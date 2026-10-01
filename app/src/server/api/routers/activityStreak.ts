@@ -12,6 +12,7 @@ import {
 import {
   getEventPassCompletionDate,
   isEventPassCompletion,
+  isStreakContinuous,
   normalizeRecurringStreakProgress,
 } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
@@ -26,7 +27,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent } from "@/utils/permissions";
-import { hoursSince, isToday, isWithinDateRange } from "@/utils/time";
+import { isToday, isWithinDateRange } from "@/utils/time";
 import {
   activityStreakConfigSchema,
   activityStreakConfigUpdateSchema,
@@ -35,12 +36,6 @@ import {
 } from "@/validators/activityStreak";
 import { idSchema } from "@/validators/misc";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
-
-const STREAK_CONTINUITY_HOURS = 36;
-
-const isStreakContinuous = (lastClaimDate: Date | null): boolean => {
-  return hoursSince(lastClaimDate) < STREAK_CONTINUITY_HOURS;
-};
 
 const getDefaultRewards = (): ObjectiveRewardType => {
   return ObjectiveReward.parse({});

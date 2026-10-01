@@ -44,8 +44,24 @@ describeWithDatabase("profile tavern color purchases", () => {
   it("charges username and title as independent 10-reputation purchases", async () => {
     await createUser();
     const api = await caller("color-user");
-    expect((await api.updateTavernColor({ target: "username", color: "NAVY" })).success).toBe(true);
-    expect((await api.updateTavernColor({ target: "title", color: "COBALT" })).success).toBe(true);
+    expect(
+      (
+        await api.updateTavernColor({
+          target: "username",
+          color: "NAVY",
+          currentColor: "DEFAULT",
+        })
+      ).success,
+    ).toBe(true);
+    expect(
+      (
+        await api.updateTavernColor({
+          target: "title",
+          color: "COBALT",
+          currentColor: "DEFAULT",
+        })
+      ).success,
+    ).toBe(true);
 
     const user = await readUser();
     expect(user?.tavernUsernameColor).toBe("NAVY");
@@ -58,6 +74,7 @@ describeWithDatabase("profile tavern color purchases", () => {
     const result = await (await caller("color-user")).updateTavernColor({
       target: "username",
       color: "DEFAULT",
+      currentColor: "NAVY",
     });
     expect(result.success).toBe(true);
     const user = await readUser();
@@ -70,6 +87,7 @@ describeWithDatabase("profile tavern color purchases", () => {
     const result = await (await caller("color-user")).updateTavernColor({
       target: "username",
       color: "DEFAULT",
+      currentColor: "NAVY",
     });
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/not enough/i);
@@ -81,6 +99,7 @@ describeWithDatabase("profile tavern color purchases", () => {
     const result = await (await caller("color-user")).updateTavernColor({
       target: "title",
       color: "GOLD",
+      currentColor: "DEFAULT",
     });
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/not enough/i);
@@ -92,6 +111,7 @@ describeWithDatabase("profile tavern color purchases", () => {
     const result = await (await caller("color-user")).updateTavernColor({
       target: "username",
       color: "DEFAULT",
+      currentColor: "DEFAULT",
     });
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/unchanged/i);
@@ -102,6 +122,7 @@ describeWithDatabase("profile tavern color purchases", () => {
     const result = await (await caller("color-user")).updateTavernColor({
       target: "username",
       color: "SLATE",
+      currentColor: "DEFAULT",
     });
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/banned/i);
@@ -110,8 +131,16 @@ describeWithDatabase("profile tavern color purchases", () => {
   it("writes an action log only after a successful change", async () => {
     await createUser();
     const api = await caller("color-user");
-    await api.updateTavernColor({ target: "username", color: "NAVY" });
-    await api.updateTavernColor({ target: "username", color: "NAVY" });
+    await api.updateTavernColor({
+      target: "username",
+      color: "NAVY",
+      currentColor: "DEFAULT",
+    });
+    await api.updateTavernColor({
+      target: "username",
+      color: "NAVY",
+      currentColor: "NAVY",
+    });
     const database = await getTestDatabase();
     const logs = await database
       .select()
@@ -127,8 +156,16 @@ describeWithDatabase("profile tavern color purchases", () => {
     await createUser({ reputationPoints: 10 });
     const api = await caller("color-user");
     const results = await Promise.all([
-      api.updateTavernColor({ target: "username", color: "NAVY" }),
-      api.updateTavernColor({ target: "title", color: "COBALT" }),
+      api.updateTavernColor({
+        target: "username",
+        color: "NAVY",
+        currentColor: "DEFAULT",
+      }),
+      api.updateTavernColor({
+        target: "title",
+        color: "COBALT",
+        currentColor: "DEFAULT",
+      }),
     ]);
     expect(results.filter((result) => result.success)).toHaveLength(1);
     const user = await readUser();
@@ -155,11 +192,19 @@ describeWithDatabase("profile tavern color purchases", () => {
       "color-user",
       beforeStatements(database, userData, [
         async () => {
-          competing = await api.updateTavernColor({ target: "username", color: "COBALT" });
+          competing = await api.updateTavernColor({
+            target: "username",
+            color: "COBALT",
+            currentColor: "DEFAULT",
+          });
         },
       ]),
     );
-    const result = await stale.updateTavernColor({ target: "username", color: "NAVY" });
+    const result = await stale.updateTavernColor({
+      target: "username",
+      color: "NAVY",
+      currentColor: "DEFAULT",
+    });
     expect(competing?.success).toBe(true);
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/could not update tavern color/i);

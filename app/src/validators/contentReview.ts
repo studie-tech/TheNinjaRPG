@@ -60,7 +60,7 @@ const proposalBasisSchema = z.object({
   v: z.string().length(16),
 });
 
-/** One suggestion of the daily audit: up to four changes a reviewer decides on together. */
+/** One suggestion of the content audit: up to four changes a reviewer decides on together. */
 const agentProposalSchema = z.object({
   title: z
     .string()
@@ -130,7 +130,7 @@ export const battlefieldSheetsSchema = z.object({
 });
 export type BattlefieldSheetsInput = z.infer<typeof battlefieldSheetsSchema>;
 
-/** Query of the audit snapshot route; `rotate` picks the focus of the UTC weekday. */
+/** Query of the audit snapshot route; `rotate` takes the next focus in turn. */
 export const auditSnapshotQuerySchema = z.object({
   focus: z.enum([...ContentAuditFocuses, "rotate"]).prefault("rotate"),
 });

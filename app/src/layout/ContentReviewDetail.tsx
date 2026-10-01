@@ -378,7 +378,7 @@ const ProposalHeader: React.FC<{ proposal: Proposal }> = ({ proposal }) => (
     </div>
     <p className="text-xs opacity-80">
       {proposal.source === "AGENT"
-        ? `Daily audit · ${proposal.agentName ?? "agent"}`
+        ? `Content audit · ${proposal.agentName ?? "agent"}`
         : `Suggested by ${proposal.createdBy ?? "staff"}`}{" "}
       · {formatTimeAgo(new Date(proposal.createdAt))}
       {proposal.runUrl && (

@@ -273,7 +273,7 @@ export const LOG_TYPES = [
 ] as const;
 export type LogType = (typeof LOG_TYPES)[number];
 
-// Content review: suggested content changes from the daily audit and staff, decided in
+// Content review: suggested content changes from the scheduled audit and staff, decided in
 // /manual/review. See app/src/libs/contentReview/.
 
 /** What a suggestion improves; the review desk filters by it. */
@@ -299,7 +299,7 @@ export const ContentProposalStatuses = [
   "REVERTED",
 ] as const;
 export type ContentProposalStatus = (typeof ContentProposalStatuses)[number];
-/** AGENT for the daily audit, STAFF for a suggestion made from the manual. */
+/** AGENT for the content audit, STAFF for a suggestion made from the manual. */
 export const ContentProposalSources = ["AGENT", "STAFF"] as const;
 export type ContentProposalSource = (typeof ContentProposalSources)[number];
 /** Content a suggestion can change or create. */
@@ -333,7 +333,7 @@ export const ContentProposalRejectReasons = [
   "OTHER",
 ] as const;
 export type ContentProposalRejectReason = (typeof ContentProposalRejectReasons)[number];
-/** What one run of the daily audit concentrates on. */
+/** What one audit run concentrates on; a rotating run takes the next one in this order. */
 export const ContentAuditFocuses = [
   "grammar",
   "balance",
@@ -344,16 +344,8 @@ export const ContentAuditFocuses = [
   "new_content",
 ] as const;
 export type ContentAuditFocus = (typeof ContentAuditFocuses)[number];
-/** Focus per UTC weekday, Sunday first, used when the audit is asked to rotate. */
-export const CONTENT_AUDIT_WEEKDAY_FOCUS: readonly ContentAuditFocus[] = [
-  "new_content",
-  "grammar",
-  "balance",
-  "sound",
-  "animation",
-  "consistency",
-  "visual",
-];
+/** Hours between scheduled audit runs; the cron in .github/workflows/content-audit.yml. */
+export const CONTENT_AUDIT_INTERVAL_HOURS = 3;
 /** Rejected and outdated suggestions are removed this long after they were decided. */
 export const CONTENT_PROPOSAL_RETENTION_DAYS = 10;
 /** Suggestions resting on usage statistics go out of date after this many days. */
@@ -1209,6 +1201,7 @@ export const COST_SKILL_RESET = 30;
 export const COST_CONCEPT_IMAGE = 1;
 export const COST_CONCEPT_VIDEO = 15;
 export const COST_STREAK_CATCHUP_DAY = 1;
+export const STREAK_CONTINUITY_HOURS = 36;
 export const MAX_EXTRA_JUTSU_SLOTS = 2;
 export const BATTLE_LOG_FULL_LIMIT = 1000;
 export const BATTLE_LOG_DEFAULT_LIMIT = 30;

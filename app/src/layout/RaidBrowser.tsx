@@ -146,6 +146,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
         }
         void util.raids.getRaidDetails.invalidate();
         void util.profile.getUser.invalidate();
+        if (data.success) void util.profile.getDashboard.invalidate();
       },
     });
 

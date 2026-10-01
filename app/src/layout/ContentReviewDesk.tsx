@@ -23,7 +23,7 @@ import { formatTimeAgo } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /**
- * The content review desk: suggestions from the daily audit and from staff, one at a time,
+ * The content review desk: suggestions from the content audit and from staff, one at a time,
  * with keyboard shortcuts for fast review. Staff who cannot review see their own suggestions.
  */
 export const ContentReviewDesk: React.FC = () => {
@@ -148,7 +148,7 @@ export const ContentReviewDesk: React.FC = () => {
               <FilterChip
                 key={entry}
                 isActive={source === entry}
-                label={entry === "AGENT" ? "Daily audit" : "Staff"}
+                label={entry === "AGENT" ? "Content audit" : "Staff"}
                 onClick={() => {
                   setSource(source === entry ? null : entry);
                   setBulkIds(new Set());
@@ -183,7 +183,7 @@ export const ContentReviewDesk: React.FC = () => {
           ) : items.length === 0 ? (
             <p className="rounded-lg border border-dashed p-6 text-center">
               {status === "PENDING"
-                ? "The queue is clear. New suggestions from the daily audit show up here."
+                ? "The queue is clear. New suggestions from the content audit show up here."
                 : "Nothing here."}
             </p>
           ) : (
@@ -299,7 +299,7 @@ const QueueCard: React.FC<{
           {item.status === "OUTDATED" && item.outdatedReason
             ? item.outdatedReason
             : item.source === "AGENT"
-              ? "Daily audit"
+              ? "Content audit"
               : (item.createdBy ?? "Staff")}
         </span>
       </button>
@@ -336,7 +336,7 @@ const ReviewStats: React.FC<{ canView: boolean }> = ({ canView }) => {
     { label: string; category: ContentProposalCategory; counts: Record<string, number> }
   >();
   for (const row of data ?? []) {
-    const label = row.source === "AGENT" ? (row.agentName ?? "Daily audit") : "Staff";
+    const label = row.source === "AGENT" ? (row.agentName ?? "Content audit") : "Staff";
     const key = `${label}|${row.category}`;
     const entry = rows.get(key) ?? { label, category: row.category, counts: {} };
     entry.counts[row.status] = (entry.counts[row.status] ?? 0) + row.n;

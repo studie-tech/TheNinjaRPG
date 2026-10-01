@@ -5,10 +5,8 @@ import { QueryBuilder } from "drizzle-orm/mysql-core";
 import { describe, expect, it, vi } from "vitest";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
 import { quest } from "@/drizzle/schema";
-import {
-  fetchUncompletedQuests,
-  questTypeConcurrentBlockMessage,
-} from "../../src/server/api/routers/quests";
+import { questTypeConcurrentBlockMessage } from "@/libs/quest";
+import { fetchUncompletedQuests } from "../../src/server/api/routers/quests";
 
 /** Creates a minimal user fixture with unfinished quests of the supplied types. */
 const userWith = (active: { questType: string; endAt?: Date | null }[]) =>

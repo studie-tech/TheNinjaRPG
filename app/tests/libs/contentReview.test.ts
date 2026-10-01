@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CONTENT_AUDIT_WEEKDAY_FOCUS } from "@/drizzle/constants";
+import { ContentAuditFocuses } from "@/drizzle/constants";
 import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
 import * as epidemic from "@/libs/contentReview/epidemic";
 import {
@@ -142,10 +142,20 @@ describe("audit rules", () => {
 });
 
 describe("audit snapshot helpers", () => {
-  it("rotates the focus by UTC weekday", () => {
-    const tuesday = new Date("2026-09-29T12:00:00.000Z");
-    expect(resolveFocus("rotate", tuesday)).toBe(CONTENT_AUDIT_WEEKDAY_FOCUS[2]);
-    expect(resolveFocus("sound", tuesday)).toBe("sound");
+  it("takes the focuses in turn, one per scheduled run", () => {
+    const at = (time: string) => resolveFocus("rotate", new Date(`2026-09-30T${time}Z`));
+    const runs = ["00:40", "03:40", "06:40", "09:40", "12:40", "15:40", "18:40", "21:40"].map(
+      (time) => at(`${time}:00`),
+    );
+    const first = ContentAuditFocuses.findIndex((focus) => focus === runs[0]);
+    expect(runs).toEqual(
+      runs.map((_, index) => ContentAuditFocuses[(first + index) % ContentAuditFocuses.length]),
+    );
+    // A run that GitHub starts late keeps the focus of its window.
+    expect(at("02:59:59")).toBe(runs[0]);
+    // The rotation carries on across days instead of restarting at midnight.
+    expect(resolveFocus("rotate", new Date("2026-10-01T00:40:00Z"))).toBe(runs[1]);
+    expect(resolveFocus("sound")).toBe("sound");
   });
 
   it("emits a schema in the strict structured-output subset", () => {

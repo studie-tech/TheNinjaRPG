@@ -402,3 +402,7 @@ export const getBankInterestDateRange = (now = new Date()) => {
     today: now.toISOString().slice(0, 10),
   };
 };
+
+/** Next UTC daily reset, used to refresh calendar-based eligibility. */
+export const nextUtcDayAt = (now = new Date()) =>
+  new Date(periodStart("daily", now).getTime() + DAY_S * 1000);

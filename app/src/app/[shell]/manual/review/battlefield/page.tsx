@@ -7,7 +7,7 @@ import { captureBattlefieldSheets } from "@/libs/threejs/battlefieldPreview";
 import { battlefieldSheetsSchema } from "@/validators/contentReview";
 
 /**
- * Draws content on the battlefield for the daily content audit, which opens this page in
+ * Draws content on the battlefield for the content audit, which opens this page in
  * headless Chrome and calls `window.tnrBattlefield.renderSheets` (see
  * .github/scripts/render-battlefield.mjs). It reads only public asset rows.
  */
@@ -27,7 +27,7 @@ export default function BattlefieldCapturePage() {
   }, [utils]);
 
   return (
-    <ContentBox title="Battlefield renders" subtitle="Used by the daily content audit">
+    <ContentBox title="Battlefield renders" subtitle="Used by the content audit">
       <p className="text-sm">
         The content audit draws jutsu, item and asset effects here with the combat
         renderer, so it can judge them the way players see them in battle. Staff see the

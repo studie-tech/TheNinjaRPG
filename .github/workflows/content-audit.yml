@@ -1,10 +1,11 @@
-# Daily content audit: Codex reviews a snapshot of the game's content and adds its
-# suggestions to the staff review desk (/manual/review).
+# Content audit, every three hours: Codex reviews a snapshot of the game's content and adds
+# its suggestions to the staff review desk (/manual/review). Each scheduled run audits the
+# next focus in turn (resolveFocus in app/src/libs/contentReview/snapshot.ts).
 #
 # The jobs keep the model away from secrets:
 #   target       picks the deployment to audit: production, or a pull request's preview
 #   snapshot     fetches the audit input with CRON_SECRET
-#   gallery      on animation days, draws the most used animation and static assets with the
+#   gallery      on animation runs, draws the most used animation and static assets with the
 #                game's combat renderer (/manual/review/battlefield) in headless Chrome
 #   audit        runs Codex with no secret and a read-only sandbox; its final message must
 #                match the proposal JSON schema the server generates from its Zod validator
@@ -18,11 +19,13 @@ name: Content audit
 
 on:
   schedule:
-    - cron: "40 3 * * *"
+    # Every CONTENT_AUDIT_INTERVAL_HOURS (app/drizzle/constants.ts). A run starts 40 minutes
+    # into its window, so one that GitHub starts late still audits its own focus.
+    - cron: "40 */3 * * *"
   workflow_dispatch:
     inputs:
       focus:
-        description: "Audit focus; rotate picks one per weekday"
+        description: "Audit focus; rotate takes the next one in turn"
         type: choice
         options:
           [rotate, grammar, balance, sound, animation, visual, consistency, new_content]
@@ -182,7 +185,7 @@ jobs:
             note="Battlefield renders of the most used animation and static assets are attached; audit/battlefield/index.json lists the blocks on each image."
           else
             args='[]'
-            note="No battlefield renders are attached today."
+            note="No battlefield renders are attached to this run."
           fi
           echo "codex_args=$args" >> "$GITHUB_OUTPUT"
           echo "note=$note" >> "$GITHUB_OUTPUT"
@@ -206,9 +209,9 @@ jobs:
           output-schema-file: audit/schema.json
           codex-args: ${{ steps.renders.outputs.codex_args }}
           prompt: |
-            You are running the daily content audit for TheNinja-RPG.
+            You are running the content audit for TheNinja-RPG.
             Follow .agents/skills/tnr-content-audit/SKILL.md exactly.
-            The snapshot is audit/snapshot.json and today's focus is "${{ needs.snapshot.outputs.focus }}".
+            The snapshot is audit/snapshot.json and this run's focus is "${{ needs.snapshot.outputs.focus }}".
             ${{ steps.renders.outputs.note }}
             Your final message must be only the JSON object described by the output schema.
 
@@ -304,7 +307,7 @@ jobs:
           output-schema-file: audit/visual-check-schema.json
           codex-args: ${{ steps.renders.outputs.codex_args }}
           prompt: |
-            You are checking today's content audit suggestions for TheNinja-RPG on the battlefield.
+            You are checking this run's content audit suggestions for TheNinja-RPG on the battlefield.
             Follow the "Battlefield renders" section of .agents/skills/tnr-content-audit/SKILL.md.
             The suggestions are audit/proposals.json and the snapshot is audit/snapshot.json.
             The attached images draw every suggestion that changes what content shows in battle;

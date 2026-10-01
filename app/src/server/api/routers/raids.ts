@@ -45,6 +45,7 @@ import {
   getRaidChatConversationId,
   getRaidObjectiveData,
   isRaidListedForVillage,
+  raidRewardBlockMessage,
   validateRaidIsActive,
 } from "@/libs/raids";
 import { fetchActiveUserMpvpBattles } from "@/routers/clan";
@@ -1427,9 +1428,8 @@ export const raidsRouter = createTRPCRouter({
       if (!participation)
         return errorResponse("You have not participated in this raid");
       if (!threshold) return errorResponse("Threshold not found");
-      if (participation.damageDealt < threshold.damageRequired) {
-        return errorResponse("You have not dealt enough damage to claim this reward");
-      }
+      const block = raidRewardBlockMessage(participation, threshold);
+      if (block) return errorResponse(block);
 
       // Derived
       const rewards = threshold.rewards;

@@ -11,7 +11,7 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
-import { calcCP, calcHP, calcLevelRequirements, calcSP } from "@/libs/profile";
+import { calcCP, calcHP, calcSP, levelUpBlockMessage } from "@/libs/profile";
 import { showMutationToast, triggerConfetti } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -45,7 +45,10 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
         await handleNextStepAsync();
       }
       if (data.success && userData) {
-        await utils.profile.getUser.invalidate();
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.profile.getDashboard.invalidate(),
+        ]);
         sendGTMEvent({
           event: "level_up",
           level: userData.level + 1,
@@ -60,9 +63,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
   });
 
   // Derived
-  const expRequired = userData ? Math.max(calcLevelRequirements(userData.level)) : 0;
-  const canLevel =
-    userData && userData.experience >= expRequired && userData.level < 100;
+  const canLevel = !!userData && !levelUpBlockMessage(userData);
 
   // If current tutorial step is "Level Up!", but user can't level up yet, progress the tutorial
   useEffect(() => {

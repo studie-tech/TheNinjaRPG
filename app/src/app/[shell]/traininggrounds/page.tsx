@@ -96,6 +96,9 @@ import {
   checkJutsuRank,
   checkJutsuVillage,
   isJutsuTrainToLearnRestricted,
+  isStatTrainingCapped,
+  masteryTrainingBlockMessage,
+  statTrainingBlockMessage,
   trainEfficiency,
   trainingSpeedSeconds,
 } from "@/libs/train";
@@ -617,7 +620,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
   const iconClassName = "w-5 h-5 absolute top-1 right-1 text-blue-500";
-  const { stats_cap, gens_cap, mastery_cap } = getUserCaps(userData.rank);
+  const { mastery_cap } = getUserCaps(userData.rank);
 
   const renderCaptchaStop = (target: "combat" | "mastery") => {
     if (!showCaptcha) {
@@ -739,9 +742,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           <div className="grid grid-cols-3 text-center font-bold">
             {CombatStatNames.map((stat, i) => {
               const label = getTrainingLabel(stat);
-              const cap =
-                stat === "offence" || stat === "defence" ? stats_cap : gens_cap;
-              const overCap = userData[stat] >= cap;
+              const overCap = isStatTrainingCapped(userData, stat);
               const icon =
                 stat === "offence" ? (
                   <Swords className={iconClassName} />
@@ -755,11 +756,13 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
                   type="button"
                   id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
                   key={`${stat}-${i}`}
-                  onClick={() =>
-                    overCap
-                      ? showMutationToast({ success: false, message: "Already capped" })
-                      : startTraining({ stat })
-                  }
+                  onClick={() => {
+                    const block = statTrainingBlockMessage(userData);
+                    if (block) showMutationToast({ success: false, message: block });
+                    else if (overCap)
+                      showMutationToast({ success: false, message: "Already capped" });
+                    else startTraining({ stat });
+                  }}
                   className="relative"
                 >
                   <div
@@ -808,11 +811,13 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
                   type="button"
                   id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
                   key={`${stat}-${i}`}
-                  onClick={() =>
-                    overCap
-                      ? showMutationToast({ success: false, message: "Already capped" })
-                      : startMasteryTraining({ stat })
-                  }
+                  onClick={() => {
+                    const block = masteryTrainingBlockMessage(userData);
+                    if (block) showMutationToast({ success: false, message: block });
+                    else if (overCap)
+                      showMutationToast({ success: false, message: "Already capped" });
+                    else startMasteryTraining({ stat });
+                  }}
                   className="relative"
                 >
                   <div

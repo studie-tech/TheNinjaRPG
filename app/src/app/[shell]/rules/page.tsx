@@ -239,6 +239,114 @@ export default function GameRules() {
           <li>
             <b>Transparency:</b> All disciplinary actions must be logged and justified.
           </li>
+          <li>
+            <b>Rules Apply to Staff:</b> Staff are held to every rule on this page in
+            the same way as players. A staff role does not grant any exemption.
+          </li>
+        </ul>
+
+        <h3 className="pt-3 font-bold text-md">
+          &nbsp;&nbsp;6.3 Recusal and Conflicts of Interest
+        </h3>
+        <p className="my-2">
+          &nbsp;&nbsp;Staff may not use staff powers, tools, or influence (including
+          moderation actions, content and balance changes, reward or item grants, and
+          access to private information) in any matter where they have a conflict of
+          interest. A conflict of interest exists whenever the matter involves:
+        </p>
+        <ul className="list-disc pl-5">
+          <li>
+            <b>Their Own Accounts:</b> Any account they own, control, have ever shared,
+            or play on, including secondary accounts (alts), whether or not the account
+            is currently active.
+          </li>
+          <li>
+            <b>Connected Players:</b> Accounts belonging to family members, people in
+            the same household or on the same IP, or anyone whose account they have
+            access to.
+          </li>
+          <li>
+            <b>Their Village, Clan, or Faction:</b> The village, clan, ANBU squad,
+            faction, or any other group the staff member (or any of their accounts)
+            belongs to or has belonged to within the last 30 days.
+          </li>
+          <li>
+            <b>Players in Conflict:</b> Any player they are, or have recently been, in a
+            personal dispute, argument, feud, or in-game rivalry with, and any player
+            who has reported them or whom they have reported.
+          </li>
+        </ul>
+        <p className="my-2">
+          &nbsp;&nbsp;When a conflict of interest exists, staff must:
+        </p>
+        <ul className="list-disc pl-5">
+          <li>
+            Not act on the matter themselves, and hand it to an unconflicted staff
+            member in the same area (moderation or content) with the same or higher
+            role. If no such staff member is available, escalate to the relevant Admin
+            (Moderator Admin or Content Admin) or, failing that, the Site Owner.
+          </li>
+          <li>
+            Disclose the conflict when handing it over, so the reviewing staff member
+            has full context.
+          </li>
+          <li>
+            Treat any doubt as a conflict. If a staff member is unsure whether a
+            conflict exists, they must recuse themselves and ask a Head Moderator,
+            Moderator Admin, or Content Admin.
+          </li>
+        </ul>
+        <p className="my-2">
+          &nbsp;&nbsp;These rules are applied by their intent, not only their wording.
+          Actions that benefit a staff member&apos;s own accounts or groups indirectly
+          (for example, a balance change made to favor their own build, or asking
+          another staff member to act on their behalf) are treated as violations.
+        </p>
+
+        <h3 className="pt-3 font-bold text-md">
+          &nbsp;&nbsp;6.4 Staff Harassment Protocol
+        </h3>
+        <p className="my-2">
+          &nbsp;&nbsp;When a staff member is the target of harassment, baiting, or
+          hostility, they must:
+        </p>
+        <ul className="list-disc pl-5">
+          <li>
+            <b>Disengage:</b> Stop responding to the player in public spaces and avoid
+            escalating the situation.
+          </li>
+          <li>
+            <b>Tag a Moderator:</b> Ask another moderator, who has no conflict of
+            interest, to handle the situation.
+          </li>
+          <li>
+            <b>Report:</b> Use the in-game report feature so reliable evidence is
+            recorded.
+          </li>
+        </ul>
+        <p className="my-2">
+          &nbsp;&nbsp;Staff may never punish, silence, ban, or otherwise act against a
+          player who is harassing or arguing with them personally.
+        </p>
+
+        <h3 className="pt-3 font-bold text-md">
+          &nbsp;&nbsp;6.5 Staff Probation and Removal
+        </h3>
+        <ul className="list-disc pl-5">
+          <li>
+            Staff may be placed on probation when joining or changing role, or after a
+            conduct issue. The terms and length of the probation (typically 90 days) are
+            communicated to the staff member in writing.
+          </li>
+          <li>
+            A single breach of the recusal rules, the harassment protocol, or the
+            probation terms during probation ends the staff member&apos;s role.
+          </li>
+          <li>
+            Outside of probation, breaches of these rules may lead to a warning,
+            demotion, or removal from staff, in addition to any normal punishment under
+            section 4.
+          </li>
         </ul>
         <hr className="my-2" />
 

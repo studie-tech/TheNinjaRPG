@@ -1,3 +1,5 @@
+import { STREAK_CONTINUITY_HOURS } from "@/drizzle/constants";
+import { DAY_S, HOUR_S, nextUtcDayAt } from "@/utils/time";
 export type ActivityStreakPopupState = {
   isOpen: boolean;
   isLoading: boolean;
@@ -118,3 +120,33 @@ export const normalizeRecurringStreakProgress = <
     (eventPassCompletedAt !== undefined && eventPassCompletedAt >= progress.startedAt))
     ? { ...progress, currentDay: 0, startedAt: now }
     : progress;
+
+const streakContinuityEndsAt = (lastClaimDate: Date | null) =>
+  lastClaimDate
+    ? new Date(lastClaimDate.getTime() + STREAK_CONTINUITY_HOURS * HOUR_S * 1000)
+    : null;
+
+export const isStreakContinuous = (lastClaimDate: Date | null, now = new Date()) =>
+  (streakContinuityEndsAt(lastClaimDate)?.getTime() ?? 0) > now.getTime();
+
+/** Recheck at UTC rollover, the continuity deadline, or the next elapsed pass day. */
+export const nextStreakRefreshAt = (
+  streaks: { lastClaimDate: Date | null; startedAt?: Date }[],
+  now = new Date(),
+) => {
+  const deadlines = streaks
+    .flatMap((streak) => {
+      const continuity = streakContinuityEndsAt(streak.lastClaimDate)?.getTime() ?? 0;
+      const start = streak.startedAt?.getTime();
+      const nextPassDay =
+        start === undefined
+          ? 0
+          : start +
+            (Math.max(0, Math.floor((now.getTime() - start) / (DAY_S * 1000))) + 1) *
+              DAY_S *
+              1000;
+      return [continuity, nextPassDay];
+    })
+    .filter((timestamp) => timestamp > now.getTime());
+  return new Date(Math.min(nextUtcDayAt(now).getTime(), ...deadlines));
+};

@@ -4,7 +4,6 @@ import { useSetAtom } from "jotai";
 import { BellOff, Gift, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useActivityStreaks } from "@/hooks/useActivityStreaks";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import {
   isActivityStreakPopupBlocking,
@@ -23,10 +23,15 @@ import {
 } from "@/libs/activityStreak";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
+import { usePublicPathname } from "@/utils/routing";
 import { getDateKey } from "@/utils/time";
 import { blockingPopupOpenAtom, useUserData } from "@/utils/UserContext";
 
 const ActivityStreakPopup: React.FC = () => {
+  const pathname = usePublicPathname();
+  // The profile dashboard owns this claim surface. Suppressing the global dialog on
+  // the profile route prevents the same reward appearing twice.
+  const dashboardOwnsStreak = pathname === "/profile";
   const currentDateKey = getDateKey(new Date());
   // Preserve the pre-overworld behavior: once opened, the popup stays mounted through reward
   // refetches so the user can see the claimed state until they explicitly close it.
@@ -49,7 +54,7 @@ const ActivityStreakPopup: React.FC = () => {
   );
 
   // Query
-  const { data: userData } = useUserData();
+  const { data: userData, timeDiff } = useUserData();
 
   // Read off userData rather than a shared atom so the suppression holds from
   // the very first render, with no window where both can be on screen.
@@ -60,17 +65,14 @@ const ActivityStreakPopup: React.FC = () => {
   // for a popup that cannot appear. Re-enables when those latches clear (tutorial
   // finished, date rollover) so an unclaimed reward is not dropped.
   const shouldFetchStreaks = shouldFetchActivityStreaksForPopup({
-    hasUser: !!userData,
+    hasUser: !!userData && !dashboardOwnsStreak,
     tutorialActive,
     dismissedToday,
     userClosed,
   });
-  const { data: userStreaks, isLoading } = api.activityStreak.getUserStreaks.useQuery(
-    undefined,
-    {
-      enabled: shouldFetchStreaks,
-      staleTime: 1000 * 60 * 5, // 5 minutes
-    },
+  const { data: userStreaks, isLoading } = useActivityStreaks(
+    shouldFetchStreaks,
+    timeDiff ?? 0,
   );
 
   // Determine if we should show the popup
@@ -78,7 +80,9 @@ const ActivityStreakPopup: React.FC = () => {
     userStreaks?.streaks.some((s) => s.canClaimToday) ?? false;
   const needsCatchUp = userStreaks?.streaks.some((s) => s.needsCatchUp) ?? false;
   const hasRecurringToEnroll = !!userStreaks?.activeRecurringConfig;
-  const shouldShowPopup = hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll;
+  const shouldShowPopup =
+    !dashboardOwnsStreak &&
+    (hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll);
 
   useEffect(() => {
     setIsModalOpen((isOpen) =>
