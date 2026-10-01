@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
+import { COST_STREAK_CATCHUP_DAY, STREAK_CONTINUITY_HOURS } from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
@@ -39,12 +39,14 @@ import {
   describeOccupationLine,
   isDashboardTrainingAvailable,
   raidContinueHref,
+  resolveDashboardContent,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { trainingSpeedSeconds } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/string";
+import { DAY_S, HOUR_S, periodStart } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
@@ -67,45 +69,32 @@ export default function ProfileDashboard() {
 
   const dashboard = api.profile.getDashboard.useQuery(undefined, {
     staleTime: 60_000,
-    refetchOnMount: "always",
   });
   const streaks = api.activityStreak.getUserStreaks.useQuery(undefined, {
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 300_000,
   });
   const interest = api.bank.getPendingInterest.useQuery(undefined, {
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: 300_000,
   });
-  const sidebarTimers = api.profile.getSidebarTimers.useQuery(undefined, {
-    staleTime: 30_000,
-  });
-  const raids = api.raids.getAvailableRaids.useQuery(undefined, {
-    staleTime: 60_000,
-  });
+  const sidebarTimers = api.profile.getSidebarTimers.useQuery();
 
-  const refreshDashboard = async () => {
-    await Promise.allSettled([
-      dashboard.refetch(),
-      streaks.refetch(),
-      interest.refetch(),
-      raids.refetch(),
-      utils.profile.getUser.invalidate(),
-    ]);
-  };
   const claimInterest = api.bank.claimInterest.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success && data.data) {
         await updateUser({ bank: data.data.bank });
-        await refreshDashboard();
+        await interest.refetch();
       }
     },
   });
   const claimStreak = api.activityStreak.claimStreakDay.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      if (data.success) await refreshDashboard();
+      if (data.success)
+        await Promise.allSettled([
+          streaks.refetch(),
+          utils.profile.getUser.invalidate(),
+        ]);
     },
   });
 
@@ -170,9 +159,11 @@ export default function ProfileDashboard() {
   ];
 
   const catalogue = useMemo<CatalogueEntry[]>(() => {
-    const quests = dashboard.data?.content ?? [];
-    const raidEntries: CatalogueEntry[] = (raids.data?.raids ?? []).map((raid) => {
-      const destination = raidContinueHref(raid.raidSector, userData?.sector);
+    const quests = userData
+      ? resolveDashboardContent(dashboard.data?.candidates ?? [], userData)
+      : [];
+    const raidEntries: CatalogueEntry[] = (userData?.activeRaids ?? []).map((raid) => {
+      const destination = raidContinueHref(raid.sector, userData?.sector);
       const travelRequired = destination === "/travel";
       return {
         id: raid.id,
@@ -182,12 +173,11 @@ export default function ProfileDashboard() {
         category: "raids",
         questType: "raid",
         rank: "RAID",
-        location:
-          raid.raidSector === null ? "Global ANBU HQ" : `Sector ${raid.raidSector}`,
+        location: raid.sector === null ? "Global ANBU HQ" : `Sector ${raid.sector}`,
         destination,
         availability: travelRequired ? "travel" : "available",
         availabilityReason: travelRequired
-          ? `Travel to sector ${raid.raidSector} to participate`
+          ? `Travel to sector ${raid.sector} to participate`
           : null,
         startsAt: null,
         endsAt: raid.raidEndsAt?.toISOString() ?? null,
@@ -210,36 +200,93 @@ export default function ProfileDashboard() {
         availabilityOrder[left.availability] - availabilityOrder[right.availability] ||
         left.name.localeCompare(right.name),
     );
-  }, [dashboard.data?.content, raids.data?.raids, userData?.sector]);
+  }, [dashboard.data?.candidates, userData]);
 
   const previewContent = useMemo(() => {
     if (showAllContent) return catalogue;
     return selectDashboardHighlights(catalogue);
   }, [catalogue, showAllContent]);
 
+  // Refresh only the data whose time-based eligibility changes at this boundary.
   useEffect(() => {
-    const timestamps = catalogue
-      .flatMap((entry) => [entry.startsAt, entry.endsAt])
-      .filter((date): date is string => !!date)
+    const timestamps = [
+      ...(dashboard.data?.candidates ?? []).flatMap((entry) => [
+        entry.startsAt,
+        entry.endsAt,
+      ]),
+      ...(userData?.activeRaids ?? []).map((raid) => raid.raidEndsAt),
+    ]
+      .filter((date): date is string | Date => !!date)
       .map((date) => new Date(date).getTime() + (timeDiff ?? 0))
       .filter((timestamp) => timestamp > Date.now());
     if (timestamps.length === 0) return;
-    const nextBoundary = Math.min(...timestamps);
     const timeout = window.setTimeout(
-      () => void Promise.allSettled([dashboard.refetch(), raids.refetch()]),
-      Math.min(nextBoundary - Date.now() + 1_000, 2_147_000_000),
+      () =>
+        void Promise.allSettled([
+          dashboard.refetch(),
+          utils.profile.getUser.invalidate(),
+        ]),
+      Math.min(Math.min(...timestamps) - Date.now() + 1_000, 2_147_000_000),
     );
     return () => window.clearTimeout(timeout);
-  }, [catalogue, dashboard.refetch, raids.refetch, timeDiff]);
+  }, [
+    dashboard.data?.candidates,
+    dashboard.refetch,
+    userData?.activeRaids,
+    utils.profile.getUser,
+    timeDiff,
+  ]);
+
+  useEffect(() => {
+    const now = new Date(Date.now() - (timeDiff ?? 0));
+    const nextDay = periodStart("daily", now).getTime() + DAY_S * 1000;
+    const continuityEnds = (streaks.data?.streaks ?? [])
+      .flatMap((streak) =>
+        streak.lastClaimDate
+          ? [
+              new Date(streak.lastClaimDate).getTime() +
+                STREAK_CONTINUITY_HOURS * HOUR_S * 1000,
+            ]
+          : [],
+      )
+      .filter((timestamp) => timestamp > now.getTime());
+    const nextBoundary = Math.min(nextDay, ...continuityEnds);
+    const timeout = window.setTimeout(
+      () =>
+        void Promise.allSettled([
+          streaks.refetch(),
+          ...(nextBoundary === nextDay
+            ? [
+                interest.refetch(),
+                dashboard.refetch(),
+                utils.profile.getUser.invalidate(),
+              ]
+            : []),
+        ]),
+      nextBoundary - now.getTime() + 1_000,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [
+    streaks.data,
+    interest.data,
+    streaks.refetch,
+    interest.refetch,
+    dashboard.refetch,
+    utils.profile.getUser,
+    timeDiff,
+  ]);
 
   if (!userData) return <Loader explanation="Loading your logbook..." />;
 
   const hasActiveQuests = userData.userQuests.some(
     (entry) => !["tier", "achievement"].includes(entry.quest.questType),
   );
-  const activeRaids = (raids.data?.raids ?? []).filter(
-    (raid) => raid.userParticipation,
-  );
+  const activeRaids = (userData.activeRaids ?? []).flatMap((raid) => {
+    const progress = dashboard.data?.raidProgress.find(
+      (entry) => entry.raidId === raid.id,
+    );
+    return progress ? [{ ...raid, damageDealt: progress.damageDealt }] : [];
+  });
   const recommended = catalogue.find((entry) => entry.availability === "available");
   const occupationLine = describeOccupationLine({
     occupation: userData.occupation,
@@ -627,7 +674,7 @@ export default function ProfileDashboard() {
             ) : null
           }
         />
-        {(dashboard.isLoading || raids.isLoading) && catalogue.length === 0 ? (
+        {dashboard.isLoading && catalogue.length === 0 ? (
           <Loader explanation="Loading available content..." />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -645,12 +692,6 @@ export default function ProfileDashboard() {
           <RetryPanel
             message="Quest discovery could not be loaded. This is not the same as having no available content."
             onRetry={() => void dashboard.refetch()}
-          />
-        )}
-        {raids.isError && (
-          <RetryPanel
-            message="Raid availability could not be loaded; other categories are still shown."
-            onRetry={() => void raids.refetch()}
           />
         )}
       </section>
@@ -695,10 +736,7 @@ export default function ProfileDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
-                  <p>
-                    {(raid.userParticipation?.damageDealt ?? 0).toLocaleString()} damage
-                    dealt
-                  </p>
+                  <p>{raid.damageDealt.toLocaleString()} damage dealt</p>
                   <p className="text-muted-foreground">
                     {raid.raidEndsAt
                       ? `Ends ${raid.raidEndsAt.toLocaleString()}`
@@ -710,7 +748,7 @@ export default function ProfileDashboard() {
                     variant="outline"
                     className="hover:text-black"
                   >
-                    <Link href={raidContinueHref(raid.raidSector, userData.sector)}>
+                    <Link href={raidContinueHref(raid.sector, userData.sector)}>
                       Continue raid
                     </Link>
                   </Button>

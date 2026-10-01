@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
+import { COST_STREAK_CATCHUP_DAY, STREAK_CONTINUITY_HOURS } from "@/drizzle/constants";
 import {
   actionLog,
   activityStreakConfig,
@@ -35,8 +35,6 @@ import {
 } from "@/validators/activityStreak";
 import { idSchema } from "@/validators/misc";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
-
-const STREAK_CONTINUITY_HOURS = 36;
 
 const isStreakContinuous = (lastClaimDate: Date | null): boolean => {
   return hoursSince(lastClaimDate) < STREAK_CONTINUITY_HOURS;

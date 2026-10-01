@@ -1055,6 +1055,7 @@ export const COST_SKILL_RESET = 30;
 export const COST_CONCEPT_IMAGE = 1;
 export const COST_CONCEPT_VIDEO = 15;
 export const COST_STREAK_CATCHUP_DAY = 1;
+export const STREAK_CONTINUITY_HOURS = 36;
 export const MAX_EXTRA_JUTSU_SLOTS = 2;
 export const BATTLE_LOG_FULL_LIMIT = 1000;
 export const BATTLE_LOG_DEFAULT_LIMIT = 30;

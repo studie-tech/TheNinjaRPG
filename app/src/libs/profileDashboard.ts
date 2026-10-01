@@ -16,6 +16,10 @@ import {
   getObjectiveImage,
   isObjectiveComplete,
 } from "@/libs/objectives";
+import { isAvailableUserQuests } from "@/libs/quest";
+import { availableQuestLetterRanks } from "@/libs/train";
+import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { fetchQuestDiscoverySummaryCandidates } from "@/server/utils/questDiscovery";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
@@ -492,4 +496,98 @@ const objectiveSector = (objective: AllObjectivesType) => {
   if (!("sector" in objective) || typeof objective.sector !== "number") return null;
   if ("hideLocation" in objective && objective.hideLocation) return null;
   return objective.sector;
+};
+
+/** Resolve discovery against the same user snapshot shown by the rest of the profile. */
+export const resolveDashboardContent = (
+  candidates: Awaited<ReturnType<typeof fetchQuestDiscoverySummaryCandidates>>,
+  user: NonNullable<UserWithRelations>,
+): DashboardContentSummary[] => {
+  const activeWars = (user.activeWars ?? [])
+    .filter((war) => war.status === "ACTIVE")
+    .map((war) => ({ ...war, warAllies: war.warAllies ?? [] }));
+  const availableRanks = availableQuestLetterRanks(user.rank);
+
+  const content = candidates.flatMap((candidate) => {
+    const availability = isAvailableUserQuests(candidate, user, true);
+    if (availability.message.includes("Quest is hidden")) return [];
+    if (
+      !isDashboardWarMissionVisible({
+        questType: candidate.questType,
+        villageId: user.villageId,
+        dailyWarMissions: user.dailyWarMissions,
+        activeWars,
+      })
+    ) {
+      return [];
+    }
+
+    const category =
+      candidate.questType === "event"
+        ? ("events" as const)
+        : candidate.questType === "story"
+          ? ("story" as const)
+          : candidate.questType === "battlepyramid"
+            ? ("battlePyramids" as const)
+            : ("missions" as const);
+    const destination =
+      category === "events"
+        ? "/adminbuilding"
+        : category === "story"
+          ? "/globalanbuhq"
+          : category === "battlePyramids"
+            ? "/battlearena"
+            : "/missionhall";
+    const location =
+      category === "events"
+        ? "Administration Building"
+        : category === "story"
+          ? "Global ANBU HQ"
+          : category === "battlePyramids"
+            ? "Battle Arena"
+            : user.isOutlaw
+              ? "Crimes Board"
+              : `${user.village?.name ?? "Village"} Mission Hall`;
+    const rankLocked =
+      ["event", "mission", "errand", "crime", "medical", "pvp", "war"].includes(
+        candidate.questType,
+      ) && !availableRanks.includes(candidate.questRank);
+    const requiresVillageTravel = dashboardContentRequiresTravel({
+      category,
+      sector: user.sector,
+      isOutlaw: user.isOutlaw,
+      villageSector: user.village?.sector,
+    });
+
+    const resolvedAvailability = resolveDashboardAvailability({
+      isEligible: availability.check,
+      eligibilityReason: availability.message,
+      isRankEligible: !rankLocked,
+      questRank: candidate.questRank,
+      requiresVillageTravel,
+      location,
+    });
+    return [
+      {
+        id: candidate.id,
+        name: candidate.name,
+        description: candidate.description,
+        image: candidate.image,
+        category,
+        questType: candidate.questType,
+        rank: candidate.questRank,
+        location,
+        destination,
+        availability: resolvedAvailability.availability,
+        availabilityReason: resolvedAvailability.reason,
+        startsAt: candidate.startsAt,
+        endsAt: candidate.endsAt,
+      },
+    ];
+  });
+
+  return condenseDashboardMissionContent(
+    filterAccessibleDashboardContent(content),
+    user,
+  );
 };

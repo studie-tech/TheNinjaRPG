@@ -114,13 +114,6 @@ import {
   capUserStats,
   scaleUserStats,
 } from "@/libs/profile";
-import {
-  condenseDashboardMissionContent,
-  dashboardContentRequiresTravel,
-  filterAccessibleDashboardContent,
-  isDashboardWarMissionVisible,
-  resolveDashboardAvailability,
-} from "@/libs/profileDashboard";
 import { getServerPusher } from "@/libs/pusher";
 import {
   controlShownQuestLocationInformation,
@@ -131,14 +124,10 @@ import {
   mockAchievementHistoryEntries,
   questHasOverworldObjectives,
 } from "@/libs/quest";
-import { getRaidObjectiveData } from "@/libs/raids";
+import { getRaidObjectiveData, isRaidListedForVillage } from "@/libs/raids";
 import { createThumbnail } from "@/libs/replicate";
 import { callDiscordContent } from "@/libs/socials";
-import {
-  availableQuestLetterRanks,
-  getReducedGainsDays,
-  inferJutsuTrainingStartedAt,
-} from "@/libs/train";
+import { getReducedGainsDays, inferJutsuTrainingStartedAt } from "@/libs/train";
 import { fetchSquad, removeFromSquad } from "@/routers/anbu";
 import { fetchClan, removeFromClan } from "@/routers/clan";
 import { fetchKageReplacement } from "@/routers/kage";
@@ -201,7 +190,6 @@ import { getShrineBoost } from "@/utils/village";
 import { createStatSchema } from "@/validators/combat";
 import { mutateContentSchema } from "@/validators/comments";
 import { idSchema } from "@/validators/misc";
-import { profileDashboardSchema } from "@/validators/profileDashboard";
 import { attributes, colors, skin_colors, usernameSchema } from "@/validators/register";
 import {
   isReservedCustomTitle,
@@ -226,159 +214,40 @@ export const profileRouter = createTRPCRouter({
         description: "Get compact profile dashboard discovery and reward summaries",
       },
     })
-    .output(profileDashboardSchema)
     .query(async ({ ctx }) => {
       const serverTime = new Date();
-      const [user, completedQuests, candidates, raidParticipations, activeWars] =
-        await Promise.all([
-          ctx.drizzle.query.userData.findFirst({
-            where: eq(userData.userId, ctx.userId),
-            with: {
-              village: {
-                columns: { name: true, sector: true },
-              },
-            },
-          }),
-          ctx.drizzle.query.questHistory.findMany({
-            where: and(
-              eq(questHistory.userId, ctx.userId),
-              eq(questHistory.completed, 1),
-            ),
-            columns: { id: true, questId: true, completed: true },
-          }),
-          fetchQuestDiscoverySummaryCandidates(ctx.drizzle, ctx.userId, {
-            questTypes: [
-              "event",
-              "mission",
-              "errand",
-              "crime",
-              "medical",
-              "pvp",
-              "war",
-              "story",
-              "battlepyramid",
-            ],
-          }),
-          ctx.drizzle.query.raidParticipation.findMany({
-            where: eq(raidParticipation.userId, ctx.userId),
-            columns: {
-              damageDealt: true,
-              rewardsClaimed: true,
-            },
-            with: {
-              quest: {
-                columns: { id: true, name: true },
-                with: {
-                  raidDamageThresholds: {
-                    columns: { id: true, damageRequired: true },
-                  },
+      const [candidates, raidParticipations] = await Promise.all([
+        fetchQuestDiscoverySummaryCandidates(ctx.drizzle, ctx.userId, {
+          questTypes: [
+            "event",
+            "mission",
+            "errand",
+            "crime",
+            "medical",
+            "pvp",
+            "war",
+            "story",
+            "battlepyramid",
+          ],
+        }),
+        ctx.drizzle.query.raidParticipation.findMany({
+          where: eq(raidParticipation.userId, ctx.userId),
+          columns: {
+            damageDealt: true,
+            rewardsClaimed: true,
+          },
+          with: {
+            quest: {
+              columns: { id: true, name: true },
+              with: {
+                raidDamageThresholds: {
+                  columns: { id: true, damageRequired: true },
                 },
               },
             },
-          }),
-          // Read-only. fetchActiveWars also ends wars whose tokens or health are
-          // gone, which a profile read must not do.
-          ctx.drizzle.query.war.findMany({
-            where: eq(war.status, "ACTIVE"),
-            columns: {
-              id: true,
-              attackerVillageId: true,
-              defenderVillageId: true,
-            },
-            with: {
-              warAllies: { columns: { villageId: true } },
-            },
-          }),
-        ]);
-
-      if (!user) {
-        throw serverError("NOT_FOUND", "User not found. Please complete registration.");
-      }
-
-      const userForAvailability = { ...user, completedQuests };
-      const availableRanks = availableQuestLetterRanks(user.rank);
-
-      const content = candidates.flatMap((candidate) => {
-        const availability = isAvailableUserQuests(
-          candidate,
-          userForAvailability,
-          true,
-        );
-        if (availability.message.includes("Quest is hidden")) return [];
-        if (
-          !isDashboardWarMissionVisible({
-            questType: candidate.questType,
-            villageId: user.villageId,
-            dailyWarMissions: user.dailyWarMissions,
-            activeWars,
-          })
-        ) {
-          return [];
-        }
-
-        const category =
-          candidate.questType === "event"
-            ? ("events" as const)
-            : candidate.questType === "story"
-              ? ("story" as const)
-              : candidate.questType === "battlepyramid"
-                ? ("battlePyramids" as const)
-                : ("missions" as const);
-        const destination =
-          category === "events"
-            ? "/adminbuilding"
-            : category === "story"
-              ? "/globalanbuhq"
-              : category === "battlePyramids"
-                ? "/battlearena"
-                : "/missionhall";
-        const location =
-          category === "events"
-            ? "Administration Building"
-            : category === "story"
-              ? "Global ANBU HQ"
-              : category === "battlePyramids"
-                ? "Battle Arena"
-                : user.isOutlaw
-                  ? "Crimes Board"
-                  : `${user.village?.name ?? "Village"} Mission Hall`;
-        const rankLocked =
-          ["event", "mission", "errand", "crime", "medical", "pvp", "war"].includes(
-            candidate.questType,
-          ) && !availableRanks.includes(candidate.questRank);
-        const requiresVillageTravel = dashboardContentRequiresTravel({
-          category,
-          sector: user.sector,
-          isOutlaw: user.isOutlaw,
-          villageSector: user.village?.sector,
-        });
-
-        const resolvedAvailability = resolveDashboardAvailability({
-          isEligible: availability.check,
-          eligibilityReason: availability.message,
-          isRankEligible: !rankLocked,
-          questRank: candidate.questRank,
-          requiresVillageTravel,
-          location,
-        });
-        return [
-          {
-            id: candidate.id,
-            name: candidate.name,
-            description: candidate.description,
-            image: candidate.image,
-            category,
-            questType: candidate.questType,
-            rank: candidate.questRank,
-            location,
-            destination,
-            availability: resolvedAvailability.availability,
-            availabilityReason: resolvedAvailability.reason,
-            startsAt: candidate.startsAt,
-            endsAt: candidate.endsAt,
           },
-        ];
-      });
+        }),
+      ]);
 
       const raidRewards = raidParticipations.flatMap((participation) => {
         const claimableCount = participation.quest.raidDamageThresholds.filter(
@@ -399,15 +268,11 @@ export const profileRouter = createTRPCRouter({
 
       return {
         serverTime,
-        content: condenseDashboardMissionContent(
-          filterAccessibleDashboardContent(content),
-          {
-            dailyMissions: user.dailyMissions,
-            dailyErrands: user.dailyErrands,
-            dailyMedicalMissions: user.dailyMedicalMissions,
-            dailyPvpMissions: user.dailyPvpMissions,
-          },
-        ),
+        candidates,
+        raidProgress: raidParticipations.map((participation) => ({
+          raidId: participation.quest.id,
+          damageDealt: participation.damageDealt,
+        })),
         raidRewards,
       };
     }),
@@ -3050,45 +2915,47 @@ export const fetchUpdatedUser = async (props: {
       user.village?.sectors?.map((s) => s.sector) ?? [],
     );
 
+    const attackerDefeatedShrineSectors = new Set(
+      allActiveWars
+        .filter(
+          (w) =>
+            w.type === "SECTOR_WAR" &&
+            w.defenderShrineHp <= 0 &&
+            (w.attackerVillageId === user.villageId ||
+              w.warAllies.some(
+                (ally) =>
+                  ally.villageId === user.villageId &&
+                  ally.supportVillageId === w.attackerVillageId,
+              )),
+        )
+        .map((w) => w.sector),
+    );
     const userActiveRaids = activeRaids
-      .map((raid) => {
+      .filter((raid) =>
+        isRaidListedForVillage(
+          raid,
+          user.villageId,
+          ownedSectorNumbers,
+          attackerDefeatedShrineSectors,
+          now,
+        ),
+      )
+      .flatMap((raid) => {
         const raidData = getRaidObjectiveData(raid);
-        if (!raidData) return null;
-
-        // Open raids are available to everyone
-        if (raidData.isOpen) {
-          return {
-            id: raid.id,
-            name: raid.name,
-            sector: raidData.sector,
-            raidType: "open" as const,
-          };
-        }
-
-        // Exclusive raids require village sector ownership
-        if (raidData.isExclusive && user.villageId && raidData.sector !== null) {
-          const ownsCurrentSector = ownedSectorNumbers.has(raidData.sector);
-
-          // Check capture deadline and grace period
-          if (raid.raidCaptureDeadline && raid.raidCaptureDeadline < now) {
-            if (!raid.raidGracePeriodEnd || raid.raidGracePeriodEnd < now) {
-              return null; // Deadline passed, no access
-            }
-          }
-
-          if (ownsCurrentSector) {
-            return {
-              id: raid.id,
-              name: raid.name,
-              sector: raidData.sector,
-              raidType: "exclusive" as const,
-            };
-          }
-        }
-
-        return null;
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null);
+        return raidData
+          ? [
+              {
+                id: raid.id,
+                name: raid.name,
+                description: raid.description,
+                image: raid.image,
+                sector: raidData.sector,
+                raidType: raidData.raidType,
+                raidEndsAt: raid.raidEndsAt,
+              },
+            ]
+          : [];
+      });
 
     (user as NonNullable<UserWithRelations>).activeRaids = userActiveRaids;
   }
@@ -3462,6 +3329,8 @@ const fetchAllActiveWars = (client: DrizzleClient) =>
       columns: {
         id: true,
         type: true,
+        status: true,
+        defenderShrineHp: true,
         attackerVillageId: true,
         defenderVillageId: true,
         sector: true,
@@ -3788,6 +3657,7 @@ export type UserWithRelations =
       completedQuests: { id: string; questId: string; completed: number }[];
       votes?: UserVote | null;
       activeWars?: {
+        status: string;
         id: string;
         type: string;
         attackerVillageId: string;
@@ -3806,7 +3676,10 @@ export type UserWithRelations =
       activeRaids?: {
         id: string;
         name: string;
-        sector: number;
+        sector: number | null;
+        description: string | null;
+        image: string | null;
+        raidEndsAt: Date | null;
         raidType: "open" | "exclusive";
       }[];
     })

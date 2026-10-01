@@ -9,9 +9,10 @@ import {
   lte,
   or,
 } from "drizzle-orm";
-import type { LetterRank, QuestType } from "@/drizzle/constants";
-import { quest, questHistory } from "@/drizzle/schema";
+import { type LetterRank, type QuestType, UserRoles } from "@/drizzle/constants";
+import { quest, questHistory, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { canPlayHiddenQuests } from "@/utils/permissions";
 
 interface QuestDiscoveryOptions {
   questTypes: QuestType[];
@@ -48,7 +49,10 @@ export const fetchQuestDiscoveryCandidates = async (
     .where(buildQuestDiscoveryWhere(options))
     .orderBy(asc(quest.name));
 
-/** The same discovery join without objective JSON or other full-definition fields. */
+/**
+ * Discovery inputs without objective JSON. Authorize hidden summaries in the join,
+ * because callers resolve display eligibility against the cached client profile.
+ */
 export const fetchQuestDiscoverySummaryCandidates = async (
   client: DrizzleClient,
   userId: string,
@@ -90,7 +94,16 @@ export const fetchQuestDiscoverySummaryCandidates = async (
       questHistory,
       and(eq(quest.id, questHistory.questId), eq(questHistory.userId, userId)),
     )
-    .where(buildQuestDiscoveryWhere(options))
+    .innerJoin(userData, eq(userData.userId, userId))
+    .where(
+      and(
+        buildQuestDiscoveryWhere(options),
+        or(
+          eq(quest.hidden, false),
+          inArray(userData.role, UserRoles.filter(canPlayHiddenQuests)),
+        ),
+      ),
+    )
     .orderBy(asc(quest.name));
 
 const buildQuestDiscoveryWhere = (options: QuestDiscoveryOptions) =>

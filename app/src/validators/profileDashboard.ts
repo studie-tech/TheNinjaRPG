@@ -25,18 +25,4 @@ export const dashboardContentSummarySchema = z.object({
   endsAt: z.string().nullable(),
 });
 
-export const dashboardRaidRewardSchema = z.object({
-  raidId: z.string(),
-  raidName: z.string(),
-  claimableCount: z.number().int().nonnegative(),
-  damageDealt: z.number().nonnegative(),
-});
-
-export const profileDashboardSchema = z.object({
-  serverTime: z.date(),
-  content: z.array(dashboardContentSummarySchema),
-  raidRewards: z.array(dashboardRaidRewardSchema),
-});
-
-export type ProfileDashboard = z.infer<typeof profileDashboardSchema>;
 export type DashboardContentSummary = z.infer<typeof dashboardContentSummarySchema>;
