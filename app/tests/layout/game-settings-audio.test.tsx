@@ -93,6 +93,47 @@ afterEach(() => {
 });
 
 describe("GlobalAudioProvider", () => {
+  it("ignores Android remote commands while the saved music preference is off", async () => {
+    const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
+    Object.defineProperty(window, "Capacitor", {
+      configurable: true,
+      value: { getPlatform: () => "android" },
+    });
+    const audio = getAudioTestMocks();
+    const view = render(
+      <GlobalAudioProvider userData={user(1, false)}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    try {
+      await waitFor(() => expect(audio.remoteCommand).toBeTypeOf("function"));
+      audio.setEnabled.mockClear();
+      act(() => {
+        audio.remoteCommand?.("play");
+        audio.remoteCommand?.("toggle");
+        audio.remoteCommand?.("pause");
+      });
+      expect(audio.setEnabled).not.toHaveBeenCalled();
+
+      view.rerender(
+        <GlobalAudioProvider userData={user(1, true)}>
+          <span>child</span>
+        </GlobalAudioProvider>,
+      );
+      await waitFor(() => expect(audio.setEnabled).toHaveBeenCalledWith(true, true));
+      audio.setEnabled.mockClear();
+      act(() => audio.remoteCommand?.("play"));
+      expect(audio.setEnabled).toHaveBeenCalledWith(true);
+    } finally {
+      view.unmount();
+      if (originalCapacitor) {
+        Object.defineProperty(window, "Capacitor", originalCapacitor);
+      } else {
+        Reflect.deleteProperty(window, "Capacitor");
+      }
+    }
+  });
+
   it("retries iOS session activation after a failed attempt", async () => {
     const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
     Object.defineProperty(window, "Capacitor", {

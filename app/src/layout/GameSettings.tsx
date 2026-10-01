@@ -274,14 +274,14 @@ export const GlobalAudioProvider: React.FC<{
   useEffect(() => {
     if (!isClient) return;
     return audioSession.onRemoteCommand((command) => {
+      // A delayed transport command must not undo an explicit Music-off preference.
+      if (isMusicTurnedOff.current) return;
       if (platform() !== "ios") {
         if (command === "play") void setAudioEnabled(true);
         else if (command === "pause") void setAudioEnabled(false);
         else void setAudioEnabled(!audioEnabled);
         return;
       }
-      // A delayed transport command must not undo an explicit Music-off preference.
-      if (isMusicTurnedOff.current) return;
       if (command === "pause" || (command === "toggle" && audioEnabled)) {
         isRemotePaused.current = true;
         isMusicTurnedOff.current = false;
