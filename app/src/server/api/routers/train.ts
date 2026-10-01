@@ -1,16 +1,16 @@
 import { and, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import {
-  MAX_DAILY_TRAININGS,
-  TrainingSpeeds,
-  UserStatNames,
-} from "@/drizzle/constants";
+import { TrainingSpeeds, UserStatNames } from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
-import { energyPerSecond, trainEfficiency, trainingMultiplier } from "@/libs/train";
-import { calcIsInVillage } from "@/libs/travel";
+import {
+  energyPerSecond,
+  statTrainingBlockMessage,
+  trainEfficiency,
+  trainingMultiplier,
+} from "@/libs/train";
 import { validateCaptcha } from "@/routers/misc";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
@@ -47,21 +47,8 @@ export const trainRouter = createTRPCRouter({
       });
       // Derived
       if (!user) return errorResponse("User not found");
-      const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
-      // Guard
-      if (user.status !== "AWAKE") return errorResponse("Must be awake to train");
-      if (!user.isOutlaw) {
-        if (!inVillage) return errorResponse("Must be in your own village");
-        if (user.sector !== user.village?.sector) return errorResponse("Wrong sector");
-      }
-      if (user.trainingSpeed !== "8hrs" && user.isBanned) {
-        return errorResponse("Only 8hrs training interval allowed when banned");
-      }
-      if (user.dailyTrainings >= MAX_DAILY_TRAININGS) {
-        return errorResponse(
-          `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`,
-        );
-      }
+      const block = statTrainingBlockMessage(user);
+      if (block) return errorResponse(block);
       // Mutate
       const data = { trainingStartedAt: new Date(), currentlyTraining: input.stat };
       const result = await ctx.drizzle

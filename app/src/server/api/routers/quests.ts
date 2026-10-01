@@ -16,16 +16,12 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { QuestType, UserRole } from "@/drizzle/constants";
 import {
-  ERRANDS_PER_DAY,
   FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
   IMG_AVATAR_DEFAULT,
   LetterRanks,
   MAX_SKILL_POINTS,
-  MEDICAL_MISSIONS_PER_DAY,
   MEDNIN_EXP_CAP,
   NPC_ONLY_QUEST_TYPES,
-  PVP_MISSIONS_PER_DAY,
-  QUESTS_CONCURRENT_LIMIT,
   QuestTypes,
   SAGE_MASTERY_EXP_CAP,
   SENSEI_STUDENT_RYO_PER_MISSION,
@@ -84,6 +80,12 @@ import {
   getReward,
   getUserQuests,
   isAvailableUserQuests,
+  isQuestRankAllowed,
+  isWarMissionAvailable,
+  questAlreadyActiveBlockMessage,
+  questDailyQuota,
+  questTypeConcurrentBlockMessage,
+  questUiAccessBlockMessage,
   verifyQuestContentForSave,
 } from "@/libs/quest";
 import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
@@ -265,7 +267,7 @@ export const questsRouter = createTRPCRouter({
         }),
         fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
           questTypes: ["event"],
-          villageId: input.villageId ?? VILLAGE_SYNDICATE_ID,
+          villageId: input.villageId ?? undefined,
           level: input.level ?? 0,
           ranks: input.rank,
         }),
@@ -296,7 +298,12 @@ export const questsRouter = createTRPCRouter({
         fetchActiveWars(ctx.drizzle, input.villageId),
       ]);
       if (!user) return [];
-      const villageInWar = activeWars.length > 0;
+      const villageInWar = isWarMissionAvailable({
+        questType: "war",
+        villageId: user.villageId,
+        dailyWarMissions: user.dailyWarMissions,
+        activeWars,
+      });
       const filtered = missions.filter((e) => {
         if (e.questType === "war" && !villageInWar) return false;
         return isAvailableUserQuests(e, user, true).check;
@@ -432,43 +439,35 @@ export const questsRouter = createTRPCRouter({
       if (!setting) return errorResponse("Setting not found");
       if (user.isBanned) return errorResponse("You are banned");
 
-      // Check daily errand limit
-      if (isErrand && user.dailyErrands >= ERRANDS_PER_DAY) {
+      const quota = questDailyQuota(input.type, user);
+      if ((isErrand || isMedical || isPvp) && quota && quota.current >= quota.limit) {
+        const label = isErrand
+          ? "errand"
+          : isMedical
+            ? "medical mission"
+            : "PvP mission";
         return errorResponse(
-          `You have reached your daily errand limit of ${ERRANDS_PER_DAY} errands. Please try again tomorrow.`,
-        );
-      }
-
-      // Check daily medical mission limit
-      if (isMedical && user.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY) {
-        return errorResponse(
-          `You have reached your daily medical mission limit of ${MEDICAL_MISSIONS_PER_DAY} medical missions. Please try again tomorrow.`,
-        );
-      }
-
-      // Check daily PvP mission limit
-      if (isPvp && user.dailyPvpMissions >= PVP_MISSIONS_PER_DAY) {
-        return errorResponse(
-          `You have reached your daily PvP mission limit of ${PVP_MISSIONS_PER_DAY} PvP missions. Please try again tomorrow.`,
+          `You have reached your daily ${label} limit of ${quota.limit}. Please try again tomorrow.`,
         );
       }
 
       // Check if user is allowed to perform this rank
-      const ranks = availableQuestLetterRanks(user.rank);
-      if (!ranks.includes(input.rank) && input.type === "mission") {
+      if (
+        !isQuestRankAllowed(
+          { questType: input.type, questRank: input.rank },
+          user,
+          "random_assignment",
+        )
+      ) {
         return errorResponse(`Rank ${input.rank} not allowed`);
       }
 
       // Confirm user does not have any current active missions/crimes/errands/medical/pvp
-      const current = user?.userQuests?.find(
-        (q) =>
-          ["mission", "crime", "errand", "medical", "pvp"].includes(
-            q.quest.questType,
-          ) && !q.endAt,
+      const concurrentBlock = questTypeConcurrentBlockMessage(
+        { questType: input.type, name: "Assignment" },
+        user,
       );
-      if (current) {
-        return errorResponse(`Already active ${current.questType}`);
-      }
+      if (concurrentBlock) return errorResponse(concurrentBlock);
       // Fetch quest
       const result = getRandomElement(
         results.filter((e) => isAvailableUserQuests(e, user).check),
@@ -2152,7 +2151,7 @@ export const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
 /**
  * Quest types an overworld NPC must NOT grant. Their UI start path enforces an
  * occupation / squad-membership / structure-location prerequisite (HUNTER, GATHERING, anbuId,
- * Global Anbu HQ, adminbuilding) via {@link uiStructureAccessGuard}, which
+ * Global Anbu HQ, adminbuilding) via {@link questUiAccessBlockMessage}, which
  * {@link assignQuestToUser} only runs for `source === "ui"`. A player interacting with a friendly
  * NPC in the field can satisfy none of these, so pooling such a quest would hand its content to a
  * player who fails the gate the mission-hall path enforces.
@@ -2176,121 +2175,6 @@ export type QuestAcquisitionSource =
   | "random_assignment"
   | "system"
   | "quest_objective";
-
-/**
- * Returns the user-facing reason a quest cannot start because its type has reached its concurrency
- * limit, or `null` when another quest of that type may be assigned.
- */
-export const questTypeConcurrentBlockMessage = (
-  quest: Pick<Quest, "questType" | "name">,
-  user: NonNullable<UserWithRelations>,
-): string | null => {
-  /** Returns the user's unfinished quests for a specific quest type. */
-  const activeOfType = (type: string) =>
-    user.userQuests?.filter((q) => q.quest.questType === type && !q.endAt) ?? [];
-  switch (quest.questType) {
-    case "story":
-    case "hunting":
-    case "gathering":
-    case "anbu":
-    case "event": {
-      const cur = activeOfType(quest.questType);
-      if (cur.length >= QUESTS_CONCURRENT_LIMIT) {
-        return `Already ${QUESTS_CONCURRENT_LIMIT} active ${quest.questType} quests; ${cur
-          .map((c) => c.quest.name)
-          .join(", ")}. Abandon one to start this quest.`;
-      }
-      return null;
-    }
-    case "battlepyramid": {
-      if (activeOfType("battlepyramid").length >= 1) {
-        return `Already in active battle pyramid. Abandon if you want to restart.`;
-      }
-      return null;
-    }
-    case "starter": {
-      if (activeOfType("starter").length >= 1) {
-        return `Already in active starter quest. Abandon if you want to restart.`;
-      }
-      return null;
-    }
-    case "war": {
-      const blockers = ["mission", "crime", "errand", "medical", "pvp", "war"];
-      const found = user.userQuests?.find(
-        (q) => blockers.includes(q.quest.questType) && !q.endAt,
-      );
-      return found ? `Already have an active ${found.quest.questType}` : null;
-    }
-    case "mission":
-    case "crime":
-    case "medical":
-    case "pvp": {
-      const blockers = ["mission", "crime", "errand", "medical", "pvp"];
-      const found = user.userQuests?.find(
-        (q) => blockers.includes(q.quest.questType) && !q.endAt,
-      );
-      return found ? `Already active ${found.quest.questType}` : null;
-    }
-    default:
-      return null;
-  }
-};
-
-/**
- * Structure and occupation guards that only apply when a player starts a quest
- * through the UI (Mission Hall, Anbu page, etc.). NPC-initiated quests skip these.
- * Returns an errorResponse-shaped object on failure, or null to allow proceeding.
- */
-const uiStructureAccessGuard = (
-  quest: Quest,
-  user: NonNullable<UserWithRelations>,
-  sectorVillage: Awaited<ReturnType<typeof fetchSectorVillage>>,
-): { success: false; message: string } | null => {
-  if (quest.questType === "story") {
-    if (!canAccessStructure(user, "/globalanbuhq", sectorVillage)) {
-      return errorResponse("Must be in the Global Anbu HQ to start story quests");
-    }
-  } else if (quest.questType === "hunting") {
-    if (user.occupation !== "HUNTER") {
-      return errorResponse("You are not a hunter");
-    }
-  } else if (quest.questType === "gathering") {
-    if (user.occupation !== "GATHERING") {
-      return errorResponse("You are not a gatherer");
-    }
-  } else if (quest.questType === "anbu") {
-    if (!canAccessStructure(user, "/anbu", sectorVillage)) {
-      return errorResponse("Must be in the Anbu page to start anbu quests");
-    }
-    if (!user.anbuId) {
-      return errorResponse("You are not in an anbu squad");
-    }
-  } else if (quest.questType === "event") {
-    if (!canAccessStructure(user, "/adminbuilding", sectorVillage)) {
-      return errorResponse("Must be in your allied village to start quest");
-    }
-  } else if (quest.questType === "war") {
-    if (!user.villageId) {
-      return errorResponse("You must be in a village to accept war missions");
-    }
-    if (!user.isOutlaw && !canAccessStructure(user, "/missionhall", sectorVillage)) {
-      return errorResponse("Must be in your allied village to start quest");
-    }
-    if (user.dailyWarMissions >= WAR_MISSIONS_PER_DAY) {
-      return errorResponse(
-        `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
-      );
-    }
-  } else if (["mission", "crime", "medical", "pvp"].includes(quest.questType)) {
-    if (["mission", "crime"].includes(quest.questType) && quest.questRank !== "A") {
-      return errorResponse(`Only A rank missions/crimes are allowed`);
-    }
-    if (!user.isOutlaw && !canAccessStructure(user, "/missionhall", sectorVillage)) {
-      return errorResponse("Must be in your allied village to start quest");
-    }
-  }
-  return null;
-};
 
 /**
  * Core quest-assignment orchestration shared by the UI (`startQuest`) and overworld
@@ -2348,8 +2232,7 @@ export const assignQuestToUser = async (args: {
   }
 
   // Rank guard
-  const ranks = availableQuestLetterRanks(user.rank);
-  if (!ranks.includes(questData.questRank)) {
+  if (!isQuestRankAllowed(questData, user)) {
     return errorResponse(`Rank ${user.rank} not allowed`);
   }
 
@@ -2371,17 +2254,13 @@ export const assignQuestToUser = async (args: {
   }
 
   // Check if user is already on this quest
-  const isAlreadyOnQuest = user.userQuests?.some(
-    (q) => q.questId === questData.id && !q.endAt,
-  );
-  if (isAlreadyOnQuest) {
-    return errorResponse(`You are already on this quest: ${questData.name}`);
-  }
+  const activeBlock = questAlreadyActiveBlockMessage(questData, user);
+  if (activeBlock) return errorResponse(activeBlock);
 
   // UI-only structure/occupation/rank guards
   if (source === "ui") {
-    const guard = uiStructureAccessGuard(questData, user, sectorVillage ?? null);
-    if (guard) return guard;
+    const guard = questUiAccessBlockMessage(questData, user, sectorVillage ?? null);
+    if (guard) return errorResponse(guard);
   }
 
   // Overworld NPC grants skip the UI structure/occupation gate (the player is in the field, not at
@@ -2412,7 +2291,14 @@ export const assignQuestToUser = async (args: {
       return errorResponse("You must be in a village for war missions");
     }
     const warList = await fetchActiveWars(client, user.villageId);
-    if (warList.length === 0) {
+    if (
+      !isWarMissionAvailable({
+        questType: "war",
+        villageId: user.villageId,
+        dailyWarMissions: user.dailyWarMissions,
+        activeWars: warList,
+      })
+    ) {
       return errorResponse("Your village is not in an active war");
     }
   }

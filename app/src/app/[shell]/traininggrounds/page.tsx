@@ -38,7 +38,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Progress } from "@/components/ui/progress";
 import type { TrainingSpeed, UserStatName } from "@/drizzle/constants";
 import {
-  getUserCaps,
   IMG_TRAIN_BUKI_DEF,
   IMG_TRAIN_BUKI_OFF,
   IMG_TRAIN_GEN_DEF,
@@ -93,17 +92,15 @@ import {
   checkJutsuRank,
   checkJutsuVillage,
   isJutsuTrainToLearnRestricted,
+  isStatTrainingCapped,
+  statTrainingBlockMessage,
+  statTrainingEndsAt,
   trainEfficiency,
-  trainingSpeedSeconds,
 } from "@/libs/train";
 import { isTutorialJutsuPickStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
-import {
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  secondsFromDate,
-} from "@/utils/time";
+import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
 import { useRequireInVillage } from "@/utils/UserContext";
 import type { CaptchaVerifySchema } from "@/validators/misc";
 import { captchaVerifySchema } from "@/validators/misc";
@@ -563,12 +560,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           {UserStatNames.map((stat, i) => {
             const part = stat.match(/[a-z]+/g)?.[0] ?? "";
             const label = part.charAt(0).toUpperCase() + part.slice(1);
-            const { stats_cap, gens_cap } = getUserCaps(userData.rank);
-            const cap =
-              stat.includes("Offence") || stat.includes("Defence")
-                ? stats_cap
-                : gens_cap;
-            const overCap = userData[stat] >= cap;
+            const overCap = isStatTrainingCapped(userData, stat);
             const icon = stat.includes("Offence") ? (
               <Swords className={iconClassName} />
             ) : stat.includes("Defence") ? (
@@ -582,11 +574,13 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
                 type="button"
                 id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
                 key={`${stat}-${i}`}
-                onClick={() =>
-                  overCap
-                    ? showMutationToast({ success: false, message: "Already capped" })
-                    : startTraining({ stat })
-                }
+                onClick={() => {
+                  const block = statTrainingBlockMessage(userData);
+                  if (block) showMutationToast({ success: false, message: block });
+                  else if (overCap)
+                    showMutationToast({ success: false, message: "Already capped" });
+                  else startTraining({ stat });
+                }}
                 className="relative"
               >
                 <div
@@ -621,10 +615,9 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
                   <p className="text-2xl">
                     Time Left:{" "}
                     <Countdown
-                      targetDate={secondsFromDate(
-                        trainingSpeedSeconds(userData.trainingSpeed),
-                        userData.trainingStartedAt,
-                      )}
+                      targetDate={
+                        statTrainingEndsAt(userData) ?? userData.trainingStartedAt
+                      }
                       timeDiff={timeDiff}
                     />
                   </p>

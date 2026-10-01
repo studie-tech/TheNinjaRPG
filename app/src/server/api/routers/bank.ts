@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/mysql-core";
 import { z } from "zod";
 import { RYO_CAP } from "@/drizzle/constants";
 import { bankTransfers, dailyBankInterest, userData } from "@/drizzle/schema";
+import { bankAccessBlockMessage } from "@/libs/bank";
 import { fetchUser } from "@/routers/profile";
 import {
   baseServerResponse,
@@ -299,9 +300,8 @@ export const claimBankInterest = (client: DrizzleClient, userId: string) =>
         .where(eq(userData.userId, userId))
         .for("update");
       if (!user) return errorResponse("User not found");
-      if (user.isBanned) return errorResponse("You are banned");
-      if (user.status === "BATTLE")
-        return errorResponse("Cannot access bank while in combat");
+      const block = bankAccessBlockMessage(user);
+      if (block) return errorResponse(block);
 
       const pending = await tx
         .select({ id: dailyBankInterest.id, amount: dailyBankInterest.amount })

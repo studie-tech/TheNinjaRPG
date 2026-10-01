@@ -17,13 +17,14 @@ import {
 import type { AchievementProgress, UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import type { StructureRoute } from "@/drizzle/constants";
+import { useSectorVillage } from "@/hooks/useSectorVillage";
 import { usePusherHandler } from "@/layout/PusherHandler";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { secondsFromDate } from "@/utils/time";
-import { canAccessStructure, getOwnSectorVillage } from "@/utils/village";
+import { canAccessStructure } from "@/utils/village";
 
 /**
  * Atom for storing combat action¨
@@ -269,19 +270,8 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
     updateUser,
     updateNotifications,
   } = useRequiredUserData();
-  // Get sector information based on user data
-  // Sector 0 is a real sector, so gate on the value being present rather than on it
-  // being truthy, which skipped the query entirely for anyone standing in sector 0.
-  // isLoading rather than isPending: a disabled query never stops being pending, which
-  // would keep the access check below from ever running.
-  const { data: queriedSectorVillage, isLoading: isLoadingSector } =
-    api.travel.getVillageInSector.useQuery(
-      { sector: userData?.sector ?? -1, isOutlaw: userData?.isOutlaw ?? false },
-      { enabled: userData?.sector != null },
-    );
-  const ownSectorVillage = getOwnSectorVillage(userData);
-  const sectorVillage = queriedSectorVillage ?? ownSectorVillage;
-  const isSectorKnown = !isLoadingSector || !!ownSectorVillage;
+  const { sectorVillage, isLoading: isLoadingSector } = useSectorVillage(userData);
+  const isSectorKnown = !isLoadingSector;
   const ownVillage = userData?.village?.sector === sectorVillage?.sector;
   const router = useRouter();
   useEffect(() => {

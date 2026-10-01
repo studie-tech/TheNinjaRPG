@@ -44,7 +44,17 @@ const user = (patch: Partial<User> = {}): User =>
     level: 20,
     sector: MAP_WAKE_ISLAND_SECTOR,
     villageId: "village",
-    village: { name: "Home", sector: MAP_WAKE_ISLAND_SECTOR },
+    village: {
+      name: "Home",
+      type: "VILLAGE",
+      sector: MAP_WAKE_ISLAND_SECTOR,
+      structures: [
+        { route: "/globalanbuhq", allyAccess: 1 },
+        { route: "/missionhall", allyAccess: 1 },
+      ],
+      relationshipA: [],
+      relationshipB: [],
+    },
     isOutlaw: false,
     medicalExperience: 0,
     huntingExperience: 0,

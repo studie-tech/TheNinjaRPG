@@ -64,8 +64,8 @@ import { useGameMenu } from "@/libs/menus";
 import { calcLevelRequirements, getExpBracket } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { calcCovertTrainingFinishAt } from "@/libs/stealth";
-import { trainingSpeedSeconds } from "@/libs/train";
-import { getDaysHoursMinutesSeconds, getGameTime, secondsFromDate } from "@/utils/time";
+import { statTrainingEndsAt } from "@/libs/train";
+import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
 import { userBattleAtom, useUserData } from "@/utils/UserContext";
 import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
 
@@ -423,10 +423,9 @@ const MenuBoxProfile: React.FC = () => {
                     <Dumbbell className="mr-2 h-6 w-6" />
                     <Link href="/traininggrounds">
                       <Countdown
-                        targetDate={secondsFromDate(
-                          trainingSpeedSeconds(userData?.trainingSpeed),
-                          userData?.trainingStartedAt,
-                        )}
+                        targetDate={
+                          statTrainingEndsAt(userData) ?? userData.trainingStartedAt
+                        }
                         timeDiff={timeDiff}
                       />
                     </Link>

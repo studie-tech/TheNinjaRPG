@@ -109,9 +109,9 @@ import {
   calcActiveUserRegen,
   calcCP,
   calcHP,
-  calcLevelRequirements,
   calcSP,
   capUserStats,
+  levelUpBlockMessage,
   scaleUserStats,
 } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
@@ -124,7 +124,11 @@ import {
   mockAchievementHistoryEntries,
   questHasOverworldObjectives,
 } from "@/libs/quest";
-import { getRaidObjectiveData, isRaidListedForVillage } from "@/libs/raids";
+import {
+  getRaidObjectiveData,
+  isRaidListedForVillage,
+  raidRewardBlockMessage,
+} from "@/libs/raids";
 import { createThumbnail } from "@/libs/replicate";
 import { callDiscordContent } from "@/libs/socials";
 import { getReducedGainsDays, inferJutsuTrainingStartedAt } from "@/libs/train";
@@ -251,9 +255,7 @@ export const profileRouter = createTRPCRouter({
 
       const raidRewards = raidParticipations.flatMap((participation) => {
         const claimableCount = participation.quest.raidDamageThresholds.filter(
-          (threshold) =>
-            participation.damageDealt >= threshold.damageRequired &&
-            !participation.rewardsClaimed.includes(threshold.id),
+          (threshold) => !raidRewardBlockMessage(participation, threshold),
         ).length;
         if (claimableCount === 0) return [];
         return [
@@ -568,16 +570,8 @@ export const profileRouter = createTRPCRouter({
       });
       // Guard
       if (!user) return errorResponse("User not found");
-      const expRequired = calcLevelRequirements(user.level) - user.experience;
-      const { lvl_cap } = getUserCaps(user.rank);
-      if (user.level >= lvl_cap)
-        return errorResponse("User at max level for this rank!");
-      if (expRequired > 0) return errorResponse("No enough experience for level");
-      if (user.village?.name === "Horizon" && user.level > 9) {
-        return errorResponse(
-          "Horizon users cannot level beyond level 9. To progress, go to the academy to take a quest for joining one of the main villages.",
-        );
-      }
+      const block = levelUpBlockMessage(user);
+      if (block) return errorResponse(block);
       // Mutate
       const newLevel = user.level + 1;
       const { trackers } = getNewTrackers(user, [

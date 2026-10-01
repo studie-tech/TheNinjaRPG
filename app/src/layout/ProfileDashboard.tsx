@@ -23,7 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { COST_STREAK_CATCHUP_DAY, STREAK_CONTINUITY_HOURS } from "@/drizzle/constants";
+import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
+import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
+import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
+import { useSectorVillage } from "@/hooks/useSectorVillage";
 import Confirm from "@/layout/Confirm";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
@@ -31,24 +35,23 @@ import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { LogbookActive } from "@/layout/Logbook";
+import { bankAccessBlockMessage } from "@/libs/bank";
 import { getRewardPreview } from "@/libs/objectives";
-import { calcLevelRequirements } from "@/libs/profile";
+import { calcLevelRequirements, levelUpBlockMessage } from "@/libs/profile";
 import {
+  buildDashboardCatalogue,
+  type DashboardCatalogueEntry,
   dashboardContentActionLabel,
   dashboardContentHref,
   describeOccupationLine,
-  isDashboardTrainingAvailable,
   raidContinueHref,
-  resolveDashboardContent,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
 import { cn } from "@/libs/shadui";
-import { showMutationToast } from "@/libs/toast";
-import { trainingSpeedSeconds } from "@/libs/train";
+import { canStartStatTraining, statTrainingEndsAt } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { DAY_S, HOUR_S, periodStart } from "@/utils/time";
+import { nextUtcDayAt } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
 const categoryLabels = {
   events: "Events",
@@ -58,71 +61,40 @@ const categoryLabels = {
   raids: "Raids",
 } as const;
 
-type CatalogueEntry = Omit<DashboardContentSummary, "category"> & {
-  category: DashboardContentSummary["category"] | "raids";
-};
-
 export default function ProfileDashboard() {
-  const { data: userData, updateUser, timeDiff } = useRequiredUserData();
+  const { data: userData, timeDiff } = useRequiredUserData();
   const utils = api.useUtils();
+  const { sectorVillage } = useSectorVillage(userData);
   const [showAllContent, setShowAllContent] = useState(false);
 
   const dashboard = api.profile.getDashboard.useQuery(undefined, {
     staleTime: 60_000,
   });
-  const streaks = api.activityStreak.getUserStreaks.useQuery(undefined, {
-    staleTime: 300_000,
-  });
-  const interest = api.bank.getPendingInterest.useQuery(undefined, {
-    staleTime: 300_000,
-  });
+  const streaks = useActivityStreaks(true, timeDiff ?? 0);
+  const interest = usePendingBankInterest(true, timeDiff ?? 0);
   const sidebarTimers = api.profile.getSidebarTimers.useQuery();
 
-  const claimInterest = api.bank.claimInterest.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success && data.data) {
-        await updateUser({ bank: data.data.bank });
-        await interest.refetch();
-      }
-    },
-  });
-  const claimStreak = api.activityStreak.claimStreakDay.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success)
-        await Promise.allSettled([
-          streaks.refetch(),
-          utils.profile.getUser.invalidate(),
-        ]);
-    },
-  });
+  const claimInterest = useClaimBankInterest();
+  const claimStreak = useClaimStreakDay();
 
   const claimableStreak = streaks.data?.streaks.find((streak) => streak.canClaimToday);
   const catchUpStreak = streaks.data?.streaks.find((streak) => streak.needsCatchUp);
   const recurringStreak = streaks.data?.activeRecurringConfig;
   const canClaimInterest =
-    (interest.data?.totalPending ?? 0) > 0 && userData?.status !== "BATTLE";
-  const canLevelUp =
+    (interest.data?.totalPending ?? 0) > 0 &&
     !!userData &&
-    userData.level < 100 &&
-    userData.experience >= calcLevelRequirements(userData.level);
+    !bankAccessBlockMessage(userData);
+  const canLevelUp = !!userData && !levelUpBlockMessage(userData);
   const claimableRaidRewards =
     dashboard.data?.raidRewards.reduce((sum, raid) => sum + raid.claimableCount, 0) ??
     0;
 
-  const statTrainingEndsAt =
-    userData?.trainingStartedAt && userData.currentlyTraining
-      ? new Date(
-          userData.trainingStartedAt.getTime() +
-            trainingSpeedSeconds(userData.trainingSpeed) * 1000,
-        )
-      : null;
+  const trainingFinish = userData ? statTrainingEndsAt(userData) : null;
   const training = userData?.currentlyTraining
     ? {
         title: capitalizeFirstLetter(noCase(userData.currentlyTraining)),
         startedAt: userData.trainingStartedAt,
-        endsAt: statTrainingEndsAt,
+        endsAt: trainingFinish,
       }
     : sidebarTimers.data?.jutsuTraining
       ? {
@@ -158,123 +130,40 @@ export default function ProfileDashboard() {
       : []),
   ];
 
-  const catalogue = useMemo<CatalogueEntry[]>(() => {
-    const quests = userData
-      ? resolveDashboardContent(dashboard.data?.candidates ?? [], userData)
-      : [];
-    const raidEntries: CatalogueEntry[] = (userData?.activeRaids ?? []).map((raid) => {
-      const destination = raidContinueHref(raid.sector, userData?.sector);
-      const travelRequired = destination === "/travel";
-      return {
-        id: raid.id,
-        name: raid.name,
-        description: raid.description,
-        image: raid.image,
-        category: "raids",
-        questType: "raid",
-        rank: "RAID",
-        location: raid.sector === null ? "Global ANBU HQ" : `Sector ${raid.sector}`,
-        destination,
-        availability: travelRequired ? "travel" : "available",
-        availabilityReason: travelRequired
-          ? `Travel to sector ${raid.sector} to participate`
-          : null,
-        startsAt: null,
-        endsAt: raid.raidEndsAt?.toISOString() ?? null,
-      };
-    });
-    const categoryOrder = ["missions", "events", "story", "battlePyramids", "raids"];
-    const missionOrder: Record<string, number> = {
-      mission: 0,
-      errand: 1,
-      medical: 2,
-      pvp: 3,
-    };
-    const availabilityOrder = { available: 0, travel: 1, locked: 2 };
-    return [...quests, ...raidEntries].sort(
-      (left, right) =>
-        categoryOrder.indexOf(left.category) - categoryOrder.indexOf(right.category) ||
-        (left.category === "missions" && right.category === "missions"
-          ? (missionOrder[left.questType] ?? 99) - (missionOrder[right.questType] ?? 99)
-          : 0) ||
-        availabilityOrder[left.availability] - availabilityOrder[right.availability] ||
-        left.name.localeCompare(right.name),
-    );
-  }, [dashboard.data?.candidates, userData]);
+  const catalogue = useMemo(
+    () =>
+      userData
+        ? buildDashboardCatalogue(
+            dashboard.data?.candidates ?? [],
+            userData,
+            sectorVillage,
+          )
+        : [],
+    [dashboard.data?.candidates, userData, sectorVillage],
+  );
 
   const previewContent = useMemo(() => {
     if (showAllContent) return catalogue;
     return selectDashboardHighlights(catalogue);
   }, [catalogue, showAllContent]);
 
-  // Refresh only the data whose time-based eligibility changes at this boundary.
-  useEffect(() => {
-    const timestamps = [
+  useRefreshAt(
+    [
+      nextUtcDayAt(new Date(Date.now() - (timeDiff ?? 0))),
       ...(dashboard.data?.candidates ?? []).flatMap((entry) => [
         entry.startsAt,
         entry.endsAt,
       ]),
       ...(userData?.activeRaids ?? []).map((raid) => raid.raidEndsAt),
-    ]
-      .filter((date): date is string | Date => !!date)
-      .map((date) => new Date(date).getTime() + (timeDiff ?? 0))
-      .filter((timestamp) => timestamp > Date.now());
-    if (timestamps.length === 0) return;
-    const timeout = window.setTimeout(
-      () =>
-        void Promise.allSettled([
-          dashboard.refetch(),
-          utils.profile.getUser.invalidate(),
-        ]),
-      Math.min(Math.min(...timestamps) - Date.now() + 1_000, 2_147_000_000),
-    );
-    return () => window.clearTimeout(timeout);
-  }, [
-    dashboard.data?.candidates,
-    dashboard.refetch,
-    userData?.activeRaids,
-    utils.profile.getUser,
-    timeDiff,
-  ]);
-
-  useEffect(() => {
-    const now = new Date(Date.now() - (timeDiff ?? 0));
-    const nextDay = periodStart("daily", now).getTime() + DAY_S * 1000;
-    const continuityEnds = (streaks.data?.streaks ?? [])
-      .flatMap((streak) =>
-        streak.lastClaimDate
-          ? [
-              new Date(streak.lastClaimDate).getTime() +
-                STREAK_CONTINUITY_HOURS * HOUR_S * 1000,
-            ]
-          : [],
-      )
-      .filter((timestamp) => timestamp > now.getTime());
-    const nextBoundary = Math.min(nextDay, ...continuityEnds);
-    const timeout = window.setTimeout(
-      () =>
-        void Promise.allSettled([
-          streaks.refetch(),
-          ...(nextBoundary === nextDay
-            ? [
-                interest.refetch(),
-                dashboard.refetch(),
-                utils.profile.getUser.invalidate(),
-              ]
-            : []),
-        ]),
-      nextBoundary - now.getTime() + 1_000,
-    );
-    return () => window.clearTimeout(timeout);
-  }, [
-    streaks.data,
-    interest.data,
-    streaks.refetch,
-    interest.refetch,
-    dashboard.refetch,
-    utils.profile.getUser,
-    timeDiff,
-  ]);
+    ],
+    () => {
+      void Promise.allSettled([
+        dashboard.refetch({ cancelRefetch: false }),
+        utils.profile.getUser.invalidate(),
+      ]);
+    },
+    timeDiff ?? 0,
+  );
 
   if (!userData) return <Loader explanation="Loading your logbook..." />;
 
@@ -321,12 +210,7 @@ export default function ProfileDashboard() {
   );
   const awake = userData.status === "AWAKE";
   const craftTimer = craftingTimers.find((timer) => timer.kind === "crafting");
-  const canStartTraining =
-    !training &&
-    isDashboardTrainingAvailable({
-      ...userData,
-      villageSector: userData.village?.sector,
-    });
+  const canStartTraining = !!userData && !training && canStartStatTraining(userData);
   const raidTitle =
     dashboard.data?.raidRewards.length === 1
       ? (dashboard.data.raidRewards[0]?.raidName ?? "Raid rewards")
@@ -938,7 +822,7 @@ function RetryPanel({ message, onRetry }: { message: string; onRetry?: () => voi
   );
 }
 
-function ContentCard({ entry }: { entry: CatalogueEntry }) {
+function ContentCard({ entry }: { entry: DashboardCatalogueEntry }) {
   const destination = dashboardContentHref(entry);
   const actionLabel = dashboardContentActionLabel(entry);
   return (

@@ -1,3 +1,5 @@
+import { canStartStatTraining } from "@/libs/train";
+import { isWarMissionAvailable } from "@/libs/quest";
 import { describe, expect, it } from "vitest";
 import {
   MAP_WAKE_ISLAND_SECTOR,
@@ -10,11 +12,8 @@ import {
   condenseDashboardMissionContent,
   dashboardContentActionLabel,
   dashboardContentHref,
-  dashboardContentRequiresTravel,
   describeOccupationLine,
   filterAccessibleDashboardContent,
-  isDashboardTrainingAvailable,
-  isDashboardWarMissionVisible,
   raidContinueHref,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
@@ -203,48 +202,6 @@ describe("selectDashboardHighlights", () => {
   });
 });
 
-const homeSector = 10;
-
-describe("dashboardContentRequiresTravel", () => {
-  it("sends events and story to Wake Island, including for outlaws", () => {
-    expect(
-      dashboardContentRequiresTravel({
-        category: "events",
-        sector: homeSector,
-        isOutlaw: false,
-        villageSector: homeSector,
-      }),
-    ).toBe(true);
-    expect(
-      dashboardContentRequiresTravel({
-        category: "story",
-        sector: MAP_WAKE_ISLAND_SECTOR,
-        isOutlaw: true,
-        villageSector: null,
-      }),
-    ).toBe(false);
-  });
-
-  it("requires village travel for battle pyramids and leaves outlaws where they are", () => {
-    expect(
-      dashboardContentRequiresTravel({
-        category: "battlePyramids",
-        sector: 40,
-        isOutlaw: false,
-        villageSector: homeSector,
-      }),
-    ).toBe(true);
-    expect(
-      dashboardContentRequiresTravel({
-        category: "battlePyramids",
-        sector: 40,
-        isOutlaw: true,
-        villageSector: homeSector,
-      }),
-    ).toBe(false);
-  });
-});
-
 describe("dashboard content links", () => {
   it("opens the destination when the player is already there", () => {
     const entry = createContent("event", {
@@ -263,7 +220,7 @@ describe("dashboard content links", () => {
       destination: "/globalanbuhq",
     });
     expect(dashboardContentHref(entry)).toBe("/travel");
-    expect(dashboardContentActionLabel(entry)).toBe("Go to Wake Island");
+    expect(dashboardContentActionLabel(entry)).toBe("Open travel");
   });
 
   it("opens the battle pyramid tab only when it can be started here", () => {
@@ -296,7 +253,7 @@ describe("raidContinueHref", () => {
   });
 });
 
-describe("isDashboardWarMissionVisible", () => {
+describe("isWarMissionAvailable", () => {
   const activeWars = [
     {
       attackerVillageId: "attacker",
@@ -308,7 +265,7 @@ describe("isDashboardWarMissionVisible", () => {
   it("shows war missions for attackers, defenders, and allies under the daily cap", () => {
     for (const villageId of ["attacker", "defender", "ally"]) {
       expect(
-        isDashboardWarMissionVisible({
+        isWarMissionAvailable({
           questType: "war",
           villageId,
           dailyWarMissions: WAR_MISSIONS_PER_DAY - 1,
@@ -320,7 +277,7 @@ describe("isDashboardWarMissionVisible", () => {
 
   it("hides war missions without an involved village or after the daily cap", () => {
     expect(
-      isDashboardWarMissionVisible({
+      isWarMissionAvailable({
         questType: "war",
         villageId: "neutral",
         dailyWarMissions: 0,
@@ -328,7 +285,7 @@ describe("isDashboardWarMissionVisible", () => {
       }),
     ).toBe(false);
     expect(
-      isDashboardWarMissionVisible({
+      isWarMissionAvailable({
         questType: "war",
         villageId: null,
         dailyWarMissions: 0,
@@ -336,7 +293,7 @@ describe("isDashboardWarMissionVisible", () => {
       }),
     ).toBe(false);
     expect(
-      isDashboardWarMissionVisible({
+      isWarMissionAvailable({
         questType: "war",
         villageId: "attacker",
         dailyWarMissions: WAR_MISSIONS_PER_DAY,
@@ -347,7 +304,7 @@ describe("isDashboardWarMissionVisible", () => {
 
   it("leaves other quest types alone", () => {
     expect(
-      isDashboardWarMissionVisible({
+      isWarMissionAvailable({
         questType: "mission",
         villageId: null,
         dailyWarMissions: WAR_MISSIONS_PER_DAY,
@@ -399,23 +356,28 @@ const trainableUser = () => {
   >;
   return {
     ...stats,
-    status: "AWAKE",
+    status: "AWAKE" as const,
     isOutlaw: false,
     sector: 1,
-    villageSector: 1,
+    village: { sector: 1 },
+    longitude: 0,
+    latitude: 0,
+    trainingSpeed: "8hrs" as const,
+    isBanned: false,
+    currentlyTraining: null,
     dailyTrainings: 0,
     rank: "STUDENT" as const,
   };
 };
 
-describe("isDashboardTrainingAvailable", () => {
+describe("canStartStatTraining", () => {
   it("lets an awake villager under the cap start training", () => {
-    expect(isDashboardTrainingAvailable(trainableUser())).toBe(true);
+    expect(canStartStatTraining(trainableUser())).toBe(true);
   });
 
   it("hides training once the daily limit or every stat cap is reached", () => {
     expect(
-      isDashboardTrainingAvailable({
+      canStartStatTraining({
         ...trainableUser(),
         dailyTrainings: MAX_DAILY_TRAININGS,
       }),
@@ -428,22 +390,25 @@ describe("isDashboardTrainingAvailable", () => {
           ? caps.stats_cap
           : caps.gens_cap;
     }
-    expect(isDashboardTrainingAvailable(capped)).toBe(false);
+    expect(canStartStatTraining(capped)).toBe(false);
   });
 
   it("hides training away from the village and while not awake", () => {
     expect(
-      isDashboardTrainingAvailable({ ...trainableUser(), sector: 2, villageSector: 1 }),
+      canStartStatTraining({ ...trainableUser(), sector: 2, village: { sector: 1 } }),
     ).toBe(false);
-    expect(isDashboardTrainingAvailable({ ...trainableUser(), status: "BATTLE" })).toBe(
-      false,
-    );
+    expect(canStartStatTraining({ ...trainableUser(), status: "BATTLE" })).toBe(false);
     expect(
-      isDashboardTrainingAvailable({
+      canStartStatTraining({
         ...trainableUser(),
         isOutlaw: true,
         sector: 9,
-        villageSector: 1,
+        village: { sector: 1 },
+        longitude: 0,
+        latitude: 0,
+        trainingSpeed: "8hrs" as const,
+        isBanned: false,
+        currentlyTraining: null,
       }),
     ).toBe(true);
   });
@@ -493,7 +458,14 @@ describe("describeOccupationLine", () => {
     expect(
       describeOccupationLine({
         occupation: "HUNTER",
-        quests: [occupationQuest("gathering", "Medicinal Gathering", "gathering", herbsObjective)],
+        quests: [
+          occupationQuest(
+            "gathering",
+            "Medicinal Gathering",
+            "gathering",
+            herbsObjective,
+          ),
+        ],
         trackers: [],
       }),
     ).toMatchObject({
@@ -507,7 +479,14 @@ describe("describeOccupationLine", () => {
     expect(
       describeOccupationLine({
         occupation: "GATHERING",
-        quests: [occupationQuest("finished", "Medicinal Gathering", "gathering", herbsObjective)],
+        quests: [
+          occupationQuest(
+            "finished",
+            "Medicinal Gathering",
+            "gathering",
+            herbsObjective,
+          ),
+        ],
         trackers: [occupationTracker("finished", "herbs", 8, true)],
       }),
     ).toMatchObject({
@@ -545,7 +524,9 @@ describe("describeOccupationLine", () => {
     expect(
       describeOccupationLine({
         occupation: "GATHERING",
-        quests: [occupationQuest("current", "Medicinal Gathering", "gathering", untitled)],
+        quests: [
+          occupationQuest("current", "Medicinal Gathering", "gathering", untitled),
+        ],
         trackers: [occupationTracker("current", "herbs", 3, false)],
       }).detail,
     ).toBe("Herbs Gathered · 3 of 8");

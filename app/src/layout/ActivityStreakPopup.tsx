@@ -4,7 +4,6 @@ import { useSetAtom } from "jotai";
 import { BellOff, Gift, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useActivityStreaks } from "@/hooks/useActivityStreaks";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import {
   isActivityStreakPopupBlocking,
@@ -54,7 +54,7 @@ const ActivityStreakPopup: React.FC = () => {
   );
 
   // Query
-  const { data: userData } = useUserData();
+  const { data: userData, timeDiff } = useUserData();
 
   // Read off userData rather than a shared atom so the suppression holds from
   // the very first render, with no window where both can be on screen.
@@ -70,12 +70,9 @@ const ActivityStreakPopup: React.FC = () => {
     dismissedToday,
     userClosed,
   });
-  const { data: userStreaks, isLoading } = api.activityStreak.getUserStreaks.useQuery(
-    undefined,
-    {
-      enabled: shouldFetchStreaks,
-      staleTime: 1000 * 60 * 5, // 5 minutes
-    },
+  const { data: userStreaks, isLoading } = useActivityStreaks(
+    shouldFetchStreaks,
+    timeDiff ?? 0,
   );
 
   // Determine if we should show the popup

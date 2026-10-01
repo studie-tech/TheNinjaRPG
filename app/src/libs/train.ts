@@ -10,16 +10,19 @@ import {
   FED_GOLD_JUTSU_SLOTS,
   FED_NORMAL_JUTSU_SLOTS,
   FED_SILVER_JUTSU_SLOTS,
+  getUserCaps,
   ITEM_XP_BATTLE_TYPES,
   ITEM_XP_ON_LOSS,
   ITEM_XP_ON_WIN,
   JUTSU_TRAIN_TO_LEARN_RESTRICTED_TYPES,
   LetterRanks,
+  MAX_DAILY_TRAININGS,
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
   SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
   SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC,
   SENSEI_MAX_STUDENT_LEVEL,
+  UserStatNames,
   VILLAGE_LEAVE_REQUIRED_RANK,
   VILLAGE_REDUCED_GAINS_DAYS,
   VILLAGE_SYNDICATE_ID,
@@ -34,6 +37,8 @@ import type {
 } from "@/drizzle/schema";
 import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
+import { calcIsInVillage } from "@/libs/travel";
+import { secondsFromDate } from "@/utils/time";
 
 type UserStatData = Pick<
   UserData,
@@ -571,3 +576,58 @@ const applyExpMultiplierSetting = (
   settingName: string,
   settings?: GameSetting[],
 ): number => baseExp * (getGameSettingBoost(settingName, settings ?? [])?.value ?? 1);
+
+type StatTrainingUser = UserStatData &
+  Pick<
+    UserData,
+    | "status"
+    | "isOutlaw"
+    | "sector"
+    | "longitude"
+    | "latitude"
+    | "dailyTrainings"
+    | "rank"
+    | "trainingSpeed"
+    | "isBanned"
+    | "currentlyTraining"
+  > & { village?: { sector: number } | null };
+
+/** Preconditions for starting stat training; the write still atomically guards status and training. */
+export const statTrainingBlockMessage = (user: StatTrainingUser): string | null => {
+  if (user.status !== "AWAKE") return "Must be awake to train";
+  if (!user.isOutlaw) {
+    if (!calcIsInVillage({ x: user.longitude, y: user.latitude }))
+      return "Must be in your own village";
+    if (user.sector !== user.village?.sector) return "Wrong sector";
+  }
+  if (user.trainingSpeed !== "8hrs" && user.isBanned)
+    return "Only 8hrs training interval allowed when banned";
+  if (user.dailyTrainings >= MAX_DAILY_TRAININGS)
+    return `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`;
+  if (user.currentlyTraining) return "You are already training";
+  return null;
+};
+
+export const isStatTrainingCapped = (
+  user: UserStatData & Pick<UserData, "rank">,
+  stat: (typeof UserStatNames)[number],
+) => {
+  const caps = getUserCaps(user.rank);
+  const cap =
+    stat.includes("Offence") || stat.includes("Defence")
+      ? caps.stats_cap
+      : caps.gens_cap;
+  return user[stat] >= cap;
+};
+
+/** Offer training only when the player can start and at least one stat can gain. */
+export const canStartStatTraining = (user: StatTrainingUser) =>
+  !statTrainingBlockMessage(user) &&
+  UserStatNames.some((stat) => !isStatTrainingCapped(user, stat));
+
+export const statTrainingEndsAt = (
+  user: Pick<UserData, "trainingStartedAt" | "currentlyTraining" | "trainingSpeed">,
+) =>
+  user.trainingStartedAt && user.currentlyTraining
+    ? secondsFromDate(trainingSpeedSeconds(user.trainingSpeed), user.trainingStartedAt)
+    : null;

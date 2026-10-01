@@ -1,25 +1,22 @@
-import {
-  ERRANDS_PER_DAY,
-  getUserCaps,
-  MAP_WAKE_ISLAND_SECTOR,
-  MAX_DAILY_TRAININGS,
-  MEDICAL_MISSIONS_PER_DAY,
-  MISSIONS_PER_DAY,
-  PVP_MISSIONS_PER_DAY,
-  type UserRank,
-  UserStatNames,
-  WAR_MISSIONS_PER_DAY,
-} from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import {
   getActiveObjective,
   getObjectiveImage,
   isObjectiveComplete,
 } from "@/libs/objectives";
-import { isAvailableUserQuests } from "@/libs/quest";
-import { availableQuestLetterRanks } from "@/libs/train";
+import {
+  isAvailableUserQuests,
+  isQuestRankAllowed,
+  isWarMissionAvailable,
+  questAlreadyActiveBlockMessage,
+  questDailyQuota,
+  questRequiresTravel,
+  questStructureRoute,
+  questTypeConcurrentBlockMessage,
+} from "@/libs/quest";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { fetchQuestDiscoverySummaryCandidates } from "@/server/utils/questDiscovery";
+import { getOwnSectorVillage, type SectorVillage } from "@/utils/village";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import type { DashboardContentSummary } from "@/validators/profileDashboard";
 
@@ -32,8 +29,6 @@ const missionGroupDefinitions = [
     description: "Take on a mission or crime suited to your rank.",
     questType: "mission",
     includedTypes: ["mission", "crime"],
-    dailyCountKey: "dailyMissions",
-    dailyLimit: MISSIONS_PER_DAY,
   },
   {
     key: "errands",
@@ -41,8 +36,6 @@ const missionGroupDefinitions = [
     description: "Complete quick assignments for daily rewards.",
     questType: "errand",
     includedTypes: ["errand"],
-    dailyCountKey: "dailyErrands",
-    dailyLimit: ERRANDS_PER_DAY,
   },
   {
     key: "medical",
@@ -50,8 +43,6 @@ const missionGroupDefinitions = [
     description: "Put your medical skills to work on specialist assignments.",
     questType: "medical",
     includedTypes: ["medical"],
-    dailyCountKey: "dailyMedicalMissions",
-    dailyLimit: MEDICAL_MISSIONS_PER_DAY,
   },
   {
     key: "pvp",
@@ -59,8 +50,6 @@ const missionGroupDefinitions = [
     description: "Challenge other players through PvP assignments.",
     questType: "pvp",
     includedTypes: ["pvp"],
-    dailyCountKey: "dailyPvpMissions",
-    dailyLimit: PVP_MISSIONS_PER_DAY,
   },
 ] as const;
 
@@ -114,7 +103,11 @@ export const condenseDashboardMissionContent = (
   );
 
   const groupedMissions = missionGroupDefinitions.flatMap((group) => {
-    if (dailyCounts[group.dailyCountKey] >= group.dailyLimit) return [];
+    const quota = questDailyQuota(group.questType, {
+      ...dailyCounts,
+      dailyWarMissions: 0,
+    });
+    if (quota && quota.current >= quota.limit) return [];
 
     const entries = missionContent
       .filter((entry) =>
@@ -176,27 +169,6 @@ export const resolveDashboardAvailability = (input: {
   return { availability: "available", reason: null };
 };
 
-/**
- * Events and story start at Wake Island. Everything else starts in the player's
- * own village; outlaws are not sent home for that content.
- */
-export const dashboardContentRequiresTravel = ({
-  category,
-  sector,
-  isOutlaw,
-  villageSector,
-}: {
-  category: DashboardContentSummary["category"];
-  sector: number;
-  isOutlaw: boolean;
-  villageSector: number | null | undefined;
-}) => {
-  if (category === "events" || category === "story") {
-    return sector !== MAP_WAKE_ISLAND_SECTOR;
-  }
-  return !isOutlaw && villageSector != null && sector !== villageSector;
-};
-
 /** Open the content itself when the player is already there; otherwise open travel. */
 export const dashboardContentHref = (entry: {
   category: string;
@@ -213,9 +185,7 @@ export const dashboardContentActionLabel = (entry: {
   availability: DashboardAvailability;
 }) => {
   if (entry.availability === "travel") {
-    return entry.category === "events" || entry.category === "story"
-      ? "Go to Wake Island"
-      : "Open travel";
+    return "Open travel";
   }
   if (entry.availability === "locked") return "View requirements";
   return "Open content";
@@ -226,66 +196,6 @@ export const raidContinueHref = (
   raidSector: number | null,
   userSector: number | null | undefined,
 ) => (raidSector === null || raidSector === userSector ? "/globalanbuhq" : "/travel");
-
-export interface DashboardWarSummary {
-  attackerVillageId: string;
-  defenderVillageId: string;
-  warAllies: { villageId: string }[];
-}
-
-/** War missions follow the mission hall: an involved village, including allies, and the daily cap. */
-export const isDashboardWarMissionVisible = ({
-  questType,
-  villageId,
-  dailyWarMissions,
-  activeWars,
-}: {
-  questType: string;
-  villageId: string | null;
-  dailyWarMissions: number;
-  activeWars: DashboardWarSummary[];
-}) => {
-  if (questType !== "war") return true;
-  if (!villageId || dailyWarMissions >= WAR_MISSIONS_PER_DAY) return false;
-  return activeWars.some(
-    (activeWar) =>
-      activeWar.attackerVillageId === villageId ||
-      activeWar.defenderVillageId === villageId ||
-      activeWar.warAllies.some((ally) => ally.villageId === villageId),
-  );
-};
-
-type DashboardTrainingStats = Record<(typeof UserStatNames)[number], number>;
-
-/**
- * A player can start training while awake, under the daily limit, in their own
- * village (outlaws excepted), and still below the rank cap on at least one stat.
- */
-export const isDashboardTrainingAvailable = (
-  user: DashboardTrainingStats & {
-    status: string;
-    isOutlaw: boolean;
-    sector: number;
-    villageSector: number | null | undefined;
-    dailyTrainings: number;
-    rank: UserRank | null;
-  },
-) => {
-  if (user.status !== "AWAKE") return false;
-  if (user.dailyTrainings >= MAX_DAILY_TRAININGS) return false;
-  if (
-    !user.isOutlaw &&
-    (user.villageSector == null || user.sector !== user.villageSector)
-  ) {
-    return false;
-  }
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  return UserStatNames.some((stat) => {
-    const cap =
-      stat.includes("Offence") || stat.includes("Defence") ? stats_cap : gens_cap;
-    return user[stat] < cap;
-  });
-};
 
 const occupationLines = {
   GATHERING: {
@@ -502,17 +412,24 @@ const objectiveSector = (objective: AllObjectivesType) => {
 export const resolveDashboardContent = (
   candidates: Awaited<ReturnType<typeof fetchQuestDiscoverySummaryCandidates>>,
   user: NonNullable<UserWithRelations>,
+  sectorVillage?: SectorVillage | null,
 ): DashboardContentSummary[] => {
   const activeWars = (user.activeWars ?? [])
     .filter((war) => war.status === "ACTIVE")
     .map((war) => ({ ...war, warAllies: war.warAllies ?? [] }));
-  const availableRanks = availableQuestLetterRanks(user.rank);
 
   const content = candidates.flatMap((candidate) => {
-    const availability = isAvailableUserQuests(candidate, user, true);
-    if (availability.message.includes("Quest is hidden")) return [];
+    const availability = isAvailableUserQuests(candidate, user);
     if (
-      !isDashboardWarMissionVisible({
+      !availability.check ||
+      questAlreadyActiveBlockMessage(candidate, user) ||
+      questTypeConcurrentBlockMessage(candidate, user)
+    )
+      return [];
+    const quota = questDailyQuota(candidate.questType, user);
+    if (quota && quota.current >= quota.limit) return [];
+    if (
+      !isWarMissionAvailable({
         questType: candidate.questType,
         villageId: user.villageId,
         dailyWarMissions: user.dailyWarMissions,
@@ -530,14 +447,7 @@ export const resolveDashboardContent = (
           : candidate.questType === "battlepyramid"
             ? ("battlePyramids" as const)
             : ("missions" as const);
-    const destination =
-      category === "events"
-        ? "/adminbuilding"
-        : category === "story"
-          ? "/globalanbuhq"
-          : category === "battlePyramids"
-            ? "/battlearena"
-            : "/missionhall";
+    const destination = questStructureRoute(candidate.questType);
     const location =
       category === "events"
         ? "Administration Building"
@@ -548,16 +458,12 @@ export const resolveDashboardContent = (
             : user.isOutlaw
               ? "Crimes Board"
               : `${user.village?.name ?? "Village"} Mission Hall`;
-    const rankLocked =
-      ["event", "mission", "errand", "crime", "medical", "pvp", "war"].includes(
-        candidate.questType,
-      ) && !availableRanks.includes(candidate.questRank);
-    const requiresVillageTravel = dashboardContentRequiresTravel({
-      category,
-      sector: user.sector,
-      isOutlaw: user.isOutlaw,
-      villageSector: user.village?.sector,
-    });
+    const rankLocked = !isQuestRankAllowed(candidate, user);
+    const requiresVillageTravel = questRequiresTravel(
+      candidate.questType,
+      user,
+      sectorVillage ?? getOwnSectorVillage(user),
+    );
 
     const resolvedAvailability = resolveDashboardAvailability({
       isEligible: availability.check,
@@ -589,5 +495,58 @@ export const resolveDashboardContent = (
   return condenseDashboardMissionContent(
     filterAccessibleDashboardContent(content),
     user,
+  );
+};
+
+export type DashboardCatalogueEntry = Omit<DashboardContentSummary, "category"> & {
+  category: DashboardContentSummary["category"] | "raids";
+};
+
+/** Adapt shared system summaries to cards and apply dashboard presentation ordering. */
+export const buildDashboardCatalogue = (
+  candidates: Awaited<ReturnType<typeof fetchQuestDiscoverySummaryCandidates>>,
+  user: NonNullable<UserWithRelations>,
+  sectorVillage?: SectorVillage | null,
+): DashboardCatalogueEntry[] => {
+  const quests = resolveDashboardContent(candidates, user, sectorVillage);
+  const raidEntries: DashboardCatalogueEntry[] = (user.activeRaids ?? []).map(
+    (raid) => {
+      const destination = raidContinueHref(raid.sector, user.sector);
+      const travelRequired = destination === "/travel";
+      return {
+        id: raid.id,
+        name: raid.name,
+        description: raid.description,
+        image: raid.image,
+        category: "raids",
+        questType: "raid",
+        rank: "RAID",
+        location: raid.sector === null ? "Global ANBU HQ" : `Sector ${raid.sector}`,
+        destination,
+        availability: travelRequired ? "travel" : "available",
+        availabilityReason: travelRequired
+          ? `Travel to sector ${raid.sector} to participate`
+          : null,
+        startsAt: null,
+        endsAt: raid.raidEndsAt?.toISOString() ?? null,
+      };
+    },
+  );
+  const categoryOrder = ["missions", "events", "story", "battlePyramids", "raids"];
+  const missionOrder: Record<string, number> = {
+    mission: 0,
+    errand: 1,
+    medical: 2,
+    pvp: 3,
+  };
+  const availabilityOrder = { available: 0, travel: 1, locked: 2 };
+  return [...quests, ...raidEntries].sort(
+    (left, right) =>
+      categoryOrder.indexOf(left.category) - categoryOrder.indexOf(right.category) ||
+      (left.category === "missions" && right.category === "missions"
+        ? (missionOrder[left.questType] ?? 99) - (missionOrder[right.questType] ?? 99)
+        : 0) ||
+      availabilityOrder[left.availability] - availabilityOrder[right.availability] ||
+      left.name.localeCompare(right.name),
   );
 };

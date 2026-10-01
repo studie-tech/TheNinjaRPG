@@ -43,6 +43,22 @@ export function calcLevelRequirements(level: number): number {
   return cost + prevCost;
 }
 
+/** Rank and village progression gates shared by the level-up action and its previews. */
+export const levelUpBlockMessage = (
+  user: Pick<UserData, "rank" | "level" | "experience"> & {
+    village?: Pick<Village, "name"> | null;
+  },
+): string | null => {
+  if (user.level >= getUserCaps(user.rank).lvl_cap)
+    return "User at max level for this rank!";
+  if (user.experience < calcLevelRequirements(user.level))
+    return "Not enough experience for level";
+  if (user.village?.name === "Horizon" && user.level > 9) {
+    return "Horizon users cannot level beyond level 9. To progress, go to the academy to take a quest for joining one of the main villages.";
+  }
+  return null;
+};
+
 /**
  * Calculate the level for a given experience
  * @param experience - the experience to calculate the level for

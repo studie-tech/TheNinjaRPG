@@ -27,40 +27,37 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
+import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
 import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { getRewardPreview } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
+import { useUserData } from "@/utils/UserContext";
 
 export function ActivityStreakPanel() {
   const utils = api.useUtils();
+  const { timeDiff } = useUserData();
 
-  const { data: userStreaks, isLoading: streaksLoading } =
-    api.activityStreak.getUserStreaks.useQuery(undefined, {
-      staleTime: 0,
-      refetchOnMount: "always",
-    });
+  const { data: userStreaks, isLoading: streaksLoading } = useActivityStreaks(
+    true,
+    timeDiff ?? 0,
+  );
 
   const { data: availablePasses, isLoading: passesLoading } =
     api.activityStreak.getAvailablePasses.useQuery();
 
-  const claimStreak = api.activityStreak.claimStreakDay.useMutation({
-    onSuccess: (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        void utils.activityStreak.getUserStreaks.invalidate();
-        void utils.activityStreak.getAvailablePasses.invalidate();
-      }
-    },
-  });
+  const claimStreak = useClaimStreakDay();
 
   const purchasePass = api.activityStreak.purchaseEventPass.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
       if (data.success) {
-        void utils.activityStreak.getUserStreaks.invalidate();
-        void utils.activityStreak.getAvailablePasses.invalidate();
+        void Promise.allSettled([
+          utils.activityStreak.getUserStreaks.invalidate(),
+          utils.activityStreak.getAvailablePasses.invalidate(),
+          utils.profile.getUser.invalidate(),
+        ]);
       }
     },
   });

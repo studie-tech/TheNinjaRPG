@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { BANK_INTEREST_CLAIM_DAYS, IMG_BUILDING_BANK } from "@/drizzle/constants";
+import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
 import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
 import GraphBankLedger from "@/layout/GraphBankLedger";
@@ -56,7 +57,7 @@ export default function Bank() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // User data
-  const { userData, updateUser, access } = useRequireInVillage("/bank");
+  const { userData, updateUser, access, timeDiff } = useRequireInVillage("/bank");
   const money = userData?.money ?? 0;
   const bank = userData?.bank ?? 0;
 
@@ -65,10 +66,7 @@ export default function Bank() {
   const interest = calcBankInterest(boost, userData);
 
   // Pending interest query
-  const { data: pendingInterest, refetch: refetchPendingInterest } =
-    api.bank.getPendingInterest.useQuery(undefined, {
-      enabled: !!userData,
-    });
+  const { data: pendingInterest } = usePendingBankInterest(!!userData, timeDiff ?? 0);
 
   // Schemas
   const fromPocketSchema = createMoneyTransferSchema(money);
@@ -127,17 +125,7 @@ export default function Bank() {
     },
   });
 
-  const { mutate: claimInterest, isPending: l4 } = api.bank.claimInterest.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success && data.data) {
-        await updateUser({
-          bank: data.data.bank,
-        });
-        await refetchPendingInterest();
-      }
-    },
-  });
+  const { mutate: claimInterest, isPending: l4 } = useClaimBankInterest();
 
   // User search
   const maxUsers = 1;

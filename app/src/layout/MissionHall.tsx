@@ -33,6 +33,7 @@ import {
   fallbackQuestsFilter,
   getMissionHallSettings,
   isReducedMissionReward,
+  questDailyQuota,
 } from "@/libs/quest";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -156,7 +157,6 @@ export default function MissionHall({ userData }: MissionHallProps) {
 
   // Derived
   const availableUserRanks = availableQuestLetterRanks(userData.rank);
-  const errandsLeft = ERRANDS_PER_DAY - userData.dailyErrands;
   const classifier = userData.isOutlaw ? "crime" : "mission";
   const isInActiveWar = (userData.activeWars?.length ?? 0) > 0;
   const regularMissions = hallData?.filter((q) => q.questType !== "war") ?? [];
@@ -265,13 +265,8 @@ export default function MissionHall({ userData }: MissionHallProps) {
                     q.questType === "pvp" && availableUserRanks.includes(q.questRank),
                 )?.length ?? 0)
               : (filtered?.filter((q) => q.questRank === setting.rank)?.length ?? 0);
-            const capped = isErrand
-              ? errandsLeft <= 0
-              : isMedical
-                ? userData.dailyMedicalMissions >= MEDICAL_MISSIONS_PER_DAY
-                : isPvp
-                  ? dailyPvpMissions >= PVP_MISSIONS_PER_DAY
-                  : userData.dailyMissions >= MISSIONS_PER_DAY;
+            const quota = questDailyQuota(setting.type, userData);
+            const capped = !!quota && quota.current >= quota.limit;
             // Checks
             const rankCheck =
               availableUserRanks.includes(setting.rank) || isErrand || isPvp;
