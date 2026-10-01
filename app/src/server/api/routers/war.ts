@@ -1450,14 +1450,16 @@ export const warRouter = createTRPCRouter({
               .where(eq(villageElderVote.id, input.voteId)),
             ctx.drizzle.insert(notification).values({
               userId: voteRecord.initiatedByUserId,
-              content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — the village no longer has enough tokens.`,
+              content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — a village is already involved in a war or there are no longer enough tokens.`,
             }),
             ctx.drizzle
               .update(userData)
               .set({ unreadNotifications: sql`unreadNotifications + 1` })
               .where(eq(userData.userId, voteRecord.initiatedByUserId)),
           ]);
-          return errorResponse("Village no longer has enough tokens to declare war");
+          return errorResponse(
+            "War could not start: a village is already involved in a war or your village no longer has enough tokens.",
+          );
         }
         return {
           success: true,
