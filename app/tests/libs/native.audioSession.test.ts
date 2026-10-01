@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { deactivate, setNowPlaying } from "@/libs/native/audioSession";
+import { deactivate, onRemoteCommand, setNowPlaying } from "@/libs/native/audioSession";
 
 const globals = ["window", "navigator", "MediaMetadata"] as const;
 let original: Array<PropertyDescriptor | undefined>;
@@ -33,7 +33,7 @@ describe("native soundtrack metadata", () => {
         },
       },
     });
-    const session = { metadata: null };
+    const session = { metadata: null, playbackState: "none" };
     setGlobal("navigator", { mediaSession: session });
     setGlobal("MediaMetadata", function (info: MediaMetadataInit) {
       return info;
@@ -43,20 +43,53 @@ describe("native soundtrack metadata", () => {
     await setNowPlaying(info);
     expect(nativeMetadata).toHaveBeenCalledWith(info);
     expect(session.metadata).toEqual({ ...info, artwork: [] });
+    expect(session.playbackState).toBe("playing");
+
+    await deactivate(true);
+    expect(session.metadata).toEqual({ ...info, artwork: [] });
+    expect(session.playbackState).toBe("paused");
 
     await deactivate();
-    expect(nativeDeactivate).toHaveBeenCalledOnce();
+    expect(nativeDeactivate).toHaveBeenLastCalledWith({ preserveControls: false });
     expect(session.metadata).toBeNull();
+    expect(session.playbackState).toBe("none");
+  });
+
+  it("routes WebKit play and pause through the app and removes them on cleanup", () => {
+    const setActionHandler = vi.fn();
+    setGlobal("window", {
+      Capacitor: {
+        isNativePlatform: () => true,
+        getPlatform: () => "ios",
+        Plugins: {},
+      },
+    });
+    setGlobal("navigator", { mediaSession: { setActionHandler } });
+    const handler = vi.fn();
+    const remove = onRemoteCommand(handler);
+    const play = setActionHandler.mock.calls.find(([action]) => action === "play")?.[1];
+    const pause = setActionHandler.mock.calls.find(([action]) => action === "pause")?.[1];
+    play();
+    pause();
+    expect(handler.mock.calls).toEqual([["play"], ["pause"]]);
+    remove();
+    expect(setActionHandler.mock.calls.slice(-2)).toEqual([
+      ["play", null],
+      ["pause", null],
+    ]);
   });
 
   it.each(["web", "android"])("leaves %s browser metadata alone", async (platform) => {
     setGlobal("window", { Capacitor: { getPlatform: () => platform } });
     const metadata = { title: "Another player" };
-    const session = { metadata };
+    const session = { metadata, playbackState: "playing", setActionHandler: vi.fn() };
     setGlobal("navigator", { mediaSession: session });
 
     await setNowPlaying({ title: "TheNinja-RPG" });
     await deactivate();
     expect(session.metadata).toBe(metadata);
+    expect(session.playbackState).toBe("playing");
+    onRemoteCommand(vi.fn())();
+    expect(session.setActionHandler).not.toHaveBeenCalled();
   });
 });

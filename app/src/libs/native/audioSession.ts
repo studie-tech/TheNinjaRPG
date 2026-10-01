@@ -35,8 +35,9 @@ export const activate = async (): Promise<boolean> => {
  */
 export const deactivate = async (preserveControls = false): Promise<void> => {
   await invokeSafe(PLUGIN, "deactivate", { preserveControls });
-  if (!preserveControls && getPlatform() === "ios" && "mediaSession" in navigator) {
-    navigator.mediaSession.metadata = null;
+  if (getPlatform() === "ios" && "mediaSession" in navigator) {
+    navigator.mediaSession.playbackState = preserveControls ? "paused" : "none";
+    if (!preserveControls) navigator.mediaSession.metadata = null;
   }
 };
 
@@ -55,6 +56,7 @@ export const setNowPlaying = async (info: NowPlaying): Promise<void> => {
       artist: info.artist,
       artwork: info.artworkUrl ? [{ src: info.artworkUrl }] : [],
     });
+    navigator.mediaSession.playbackState = "playing";
   }
 };
 
@@ -66,10 +68,24 @@ export type RemoteCommand = "play" | "pause" | "toggle";
  */
 export const onRemoteCommand = (
   handler: (command: RemoteCommand) => void,
-): (() => void) =>
-  addNativeListener(PLUGIN, "remoteCommand", (data) => {
+): (() => void) => {
+  const removeNativeListener = addNativeListener(PLUGIN, "remoteCommand", (data) => {
     const command = (data as { command?: unknown } | null)?.command;
     if (command === "play" || command === "pause" || command === "toggle") {
       handler(command);
     }
   });
+  // WKWebView also owns transport commands for HTML audio. Route them through the
+  // same preference guard as the native plugin instead of WebKit's default player.
+  const session =
+    isNative() && getPlatform() === "ios" && "mediaSession" in navigator
+      ? navigator.mediaSession
+      : undefined;
+  session?.setActionHandler("play", () => handler("play"));
+  session?.setActionHandler("pause", () => handler("pause"));
+  return () => {
+    removeNativeListener();
+    session?.setActionHandler("play", null);
+    session?.setActionHandler("pause", null);
+  };
+};
