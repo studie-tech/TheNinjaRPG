@@ -28,6 +28,39 @@ const issued = (token: string) =>
   });
 
 describe("TheNinjaRPG same-origin puzzle bridge", () => {
+  it("reads shared ownership while denying purchase and claim forwarding", async () => {
+    const paths: string[] = [];
+    const bridge = await Effect.runPromise(
+      makeBlockStruggleBridge(config(), async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        paths.push(path);
+        if (path.endsWith("/exchange")) return issued("a".repeat(43));
+        expect(path).toBe("/api/ninja/full-version");
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          `Bearer ${"a".repeat(43)}`,
+        );
+        return Response.json({ owned: true, purchaseOwned: false });
+      }),
+    );
+    const result = await Effect.runPromise(
+      bridge.handle(request("full-version"), ["full-version"], identity()),
+    );
+    expect(result.response.status).toBe(200);
+    expect(await result.response.json()).toEqual({ owned: true, purchaseOwned: false });
+    for (const segments of [
+      ["full-version"],
+      ["full-version", "claim"],
+      ["full-version", "google", "claim"],
+    ]) {
+      const denied = await Effect.runPromise(
+        Effect.either(
+          bridge.handle(request(segments.join("/"), "POST"), segments, identity()),
+        ),
+      );
+      expect(Either.isLeft(denied) && denied.left.status).toBe(405);
+    }
+    expect(paths).toEqual(["/api/ninja/session/exchange", "/api/ninja/full-version"]);
+  });
   it("redeems an account link with a fresh Ninja Clerk proof without provisioning a game session", async () => {
     const paths: string[] = [];
     const bridge = await Effect.runPromise(
