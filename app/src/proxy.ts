@@ -94,7 +94,7 @@ export const config = {
      * the variant URL. Kept in step with SHELL_PARAMS by a test.
      */
     "/(web|ios|android)-(default|pixel)-(in|out)/:path*",
-    "/web-default-out-(control|spring|summer|winter|halloween)/:path*",
+    "/web-default-out-(control|spring|summer|winter|halloween|akikaze|hyorin|tsukimori|akasumi|shirohana|horizon)/:path*",
     /*
      * Optional catch-all routes are the exception to the file-like skip above:
      * they render the Clerk-dependent root layout for paths such as

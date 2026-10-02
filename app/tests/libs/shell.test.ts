@@ -30,8 +30,8 @@ describe("shell variants", () => {
   );
 
   it("builds every variant once", () => {
-    expect(SHELL_PARAMS).toHaveLength(17);
-    expect(new Set(SHELL_PARAMS).size).toBe(17);
+    expect(SHELL_PARAMS).toHaveLength(12 + WALLPAPER_VARIANTS.length);
+    expect(new Set(SHELL_PARAMS).size).toBe(12 + WALLPAPER_VARIANTS.length);
     expect(SHELL_PARAMS).toContain("web-default-out");
     expect(SHELL_PARAMS).toContain("android-pixel-in");
   });

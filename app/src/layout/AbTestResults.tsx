@@ -18,7 +18,11 @@ import {
   quantile,
   sampleBeta,
 } from "@/libs/statistics";
-import { WALLPAPER_EXPERIMENT } from "@/libs/wallpaperExperiment";
+import {
+  WALLPAPER_EXPERIMENT,
+  WALLPAPER_VARIANTS,
+  wallpaperLabel,
+} from "@/libs/wallpaperExperiment";
 
 type VariantAgg = { variant: string; loaded: number; register: number };
 type ExperimentAgg = { experiment: string; variants: VariantAgg[] };
@@ -412,7 +416,7 @@ export const AbTestResults: React.FC = () => {
               <div className="font-bold text-lg">{exp.experiment}</div>
               <p className="text-sm">
                 {exp.experiment === WALLPAPER_EXPERIMENT
-                  ? "Wallpaper experiment · control is the fall wallpaper · equal allocation across five candidates."
+                  ? `Wallpaper experiment · control is the fall wallpaper · equal allocation across ${WALLPAPER_VARIANTS.length} village and seasonal candidates.`
                   : "Tutorial experiment"}
               </p>
               <div className="overflow-x-auto">
@@ -430,9 +434,8 @@ export const AbTestResults: React.FC = () => {
                     {exp.variants.map((variant) => (
                       <tr key={variant.variant}>
                         <td>
-                          {variant.variant === "control" &&
-                          exp.experiment === WALLPAPER_EXPERIMENT
-                            ? "control (fall)"
+                          {exp.experiment === WALLPAPER_EXPERIMENT
+                            ? wallpaperLabel(variant.variant)
                             : variant.variant}
                         </td>
                         <td>{variant.loaded}</td>
@@ -482,7 +485,13 @@ const ExperimentComparisons = ({ exp }: { exp: ExperimentAgg }) => {
     .map((arm) => (
       <div key={arm.variant}>
         <h3 className="font-semibold">
-          {arm.variant} versus {baseline.variant}
+          {exp.experiment === WALLPAPER_EXPERIMENT
+            ? wallpaperLabel(arm.variant)
+            : arm.variant}{" "}
+          versus{" "}
+          {exp.experiment === WALLPAPER_EXPERIMENT
+            ? wallpaperLabel(baseline.variant)
+            : baseline.variant}
         </h3>
         <ExperimentRow
           exp={{ experiment: exp.experiment, variants: [baseline, arm] }}

@@ -2460,6 +2460,18 @@ export const IMG_WALLPAPER_FALL =
   "https://tnr-storage-cdn.b-cdn.net/wallpaper-fall.webp";
 export const IMG_WALLPAPER_HALLOWEEN =
   "https://tnr-storage-cdn.b-cdn.net/wallpaper-halloween.webp";
+export const IMG_WALLPAPER_AKIKAZE =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-current.webp";
+export const IMG_WALLPAPER_HYORIN =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-glacier.webp";
+export const IMG_WALLPAPER_TSUKIMORI =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-tsukimori.webp";
+export const IMG_WALLPAPER_AKASUMI =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-shroud.webp";
+export const IMG_WALLPAPER_SHIROHANA =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-shine.webp";
+export const IMG_WALLPAPER_HORIZON =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhzw4N5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM";
 export const IMG_LAYOUT_BUTTONDECOR =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYectQDOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d.webp";
 export const IMG_LAYOUT_NAVBAR =

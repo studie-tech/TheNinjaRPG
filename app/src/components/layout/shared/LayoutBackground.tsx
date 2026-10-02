@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ReactDOM from "react-dom";
+import { IMG_WALLPAPER_HORIZON } from "@/drizzle/constants";
 import { cn } from "@/libs/shadui";
 import { WALLPAPER_IMAGES } from "@/libs/wallpaperExperiment";
 import type { UserWithRelations } from "@/routers/profile";
@@ -31,7 +32,7 @@ interface LayoutBackgroundProps {
  * (fall: 137,670 B at width=1280, worst at 143,442 B at width=1342, against 94,994 B
  * untouched). Bunny passes the original through once the requested width reaches the
  * source width, so `full` has to stay at or above the widest source — currently 1343px,
- * except summer at 1594px. An intermediate tablet width sits below that cliff by
+ * except summer at 1594px and Horizon at 1792px. An intermediate tablet width sits below that cliff by
  * definition and costs bytes and resolution at once.
  */
 const WALLPAPER_WIDTHS = { mobile: 828, full: 1600 } as const;
@@ -74,15 +75,20 @@ const Wallpaper: React.FC<WallpaperProps> = ({
   ariaHidden,
   onLoad,
 }) => {
+  // Horizon's 1792px original is smaller than Bunny's re-encoded 1600px rendition.
+  const fullWidth = src === IMG_WALLPAPER_HORIZON ? 1792 : WALLPAPER_WIDTHS.full;
   // Only the priority layer is the LCP candidate. The user's own wallpaper fades in over
   // it and must not compete with it for bandwidth.
   if (priority) {
     for (const { media, width } of WALLPAPER_PRELOADS) {
-      ReactDOM.preload(bunnyImageUrl(src, width), {
-        as: "image",
-        media,
-        fetchPriority: "high",
-      });
+      ReactDOM.preload(
+        bunnyImageUrl(src, width === WALLPAPER_WIDTHS.full ? fullWidth : width),
+        {
+          as: "image",
+          media,
+          fetchPriority: "high",
+        },
+      );
     }
   }
   return (
@@ -93,7 +99,7 @@ const Wallpaper: React.FC<WallpaperProps> = ({
       />
       <img
         className={className}
-        src={bunnyImageUrl(src, WALLPAPER_WIDTHS.full)}
+        src={bunnyImageUrl(src, fullWidth)}
         width={1600}
         height={800}
         alt={alt}

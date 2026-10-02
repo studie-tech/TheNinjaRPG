@@ -15,7 +15,7 @@ describe("prerendered wallpaper", () => {
     );
     const image = WALLPAPER_IMAGES[wallpaper];
     expect(html).toContain(bunnyImageUrl(image, 828).replaceAll("&", "&amp;"));
-    expect(html).toContain(bunnyImageUrl(image, 1600).replaceAll("&", "&amp;"));
+    expect(html).toContain(bunnyImageUrl(image, wallpaper === "horizon" ? 1792 : 1600).replaceAll("&", "&amp;"));
     expect(html).toContain('rel="preload"');
     expect(html).toContain('fetchPriority="high"');
     expect(html).toContain('width="1600" height="800"');
