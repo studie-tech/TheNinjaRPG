@@ -2,8 +2,20 @@ import type {
   ContentProposalCategory,
   ContentProposalEntityType,
   ContentProposalRejectReason,
+  ContentProposalSource,
   ContentProposalStatus,
 } from "@/drizzle/constants";
+
+/** Group audit variants by agent keyword; staff submissions always remain Staff. */
+export const reviewStatsSourceLabel = (
+  source: ContentProposalSource,
+  agentName: string | null,
+): "Codex" | "Claude" | "Staff" => {
+  if (source === "STAFF") return "Staff";
+  if (/codex/i.test(agentName ?? "")) return "Codex";
+  if (/claude/i.test(agentName ?? "")) return "Claude";
+  return "Staff";
+};
 
 /** Display name of each content type, in server messages and on the review desk. */
 export const ENTITY_LABELS: Record<ContentProposalEntityType, string> = {
