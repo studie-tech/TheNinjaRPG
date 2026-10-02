@@ -15,6 +15,7 @@ import {
   contentProposalMedia,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { DAY_S, secondsFromNow } from "@/utils/time";
 import type {
   AgentProposal,
@@ -140,6 +141,7 @@ export const readAgentProposal = (client: DrizzleClient, id: string) =>
  * Refine a suggestion without changing its identity or approving content. Media preparation
  * precedes a short transaction; the guarded parent write and replacement children commit
  * together, so concurrent staff decisions cannot consume a partially rewritten draft.
+ * A parent CAS alone cannot atomically replace the changes, basis and media in three tables.
  */
 export const reviseAgentProposal = async (
   client: DrizzleClient,
@@ -323,45 +325,47 @@ export const reviseAgentProposal = async (
     );
     for (const row of [...plan.changes, ...plan.basis, ...plan.media])
       row.proposalId = id;
-    saved = await client.transaction(async (tx) => {
-      const claim = await tx
-        .update(contentProposal)
-        .set({
-          title: plan.proposal.title,
-          rationale: plan.proposal.rationale,
-          category: plan.proposal.category,
-          confidence: plan.proposal.confidence,
-          expiresAt: plan.proposal.expiresAt,
-          runUrl: input.runUrl ?? existing.runUrl,
-          focus: input.focus ?? existing.focus,
-          status: "PENDING",
-          statusChangedAt: nextAt,
-          // Retain the decision metadata so staff can see the feedback that prompted a revision.
-        })
-        .where(
-          and(
-            eq(contentProposal.id, id),
-            eq(contentProposal.source, "AGENT"),
-            eq(contentProposal.status, existing.status),
-            eq(contentProposal.statusChangedAt, existing.statusChangedAt),
-          ),
-        );
-      if (claim.rowsAffected !== 1) return false;
-      await tx
-        .delete(contentProposalMedia)
-        .where(eq(contentProposalMedia.proposalId, id));
-      await tx
-        .delete(contentProposalBasis)
-        .where(eq(contentProposalBasis.proposalId, id));
-      await tx
-        .delete(contentProposalChange)
-        .where(eq(contentProposalChange.proposalId, id));
-      if (plan.changes.length)
-        await tx.insert(contentProposalChange).values(plan.changes);
-      if (plan.basis.length) await tx.insert(contentProposalBasis).values(plan.basis);
-      if (plan.media.length) await tx.insert(contentProposalMedia).values(plan.media);
-      return true;
-    });
+    saved = await retryOnDeadlock(() =>
+      client.transaction(async (tx) => {
+        const claim = await tx
+          .update(contentProposal)
+          .set({
+            title: plan.proposal.title,
+            rationale: plan.proposal.rationale,
+            category: plan.proposal.category,
+            confidence: plan.proposal.confidence,
+            expiresAt: plan.proposal.expiresAt,
+            runUrl: input.runUrl ?? existing.runUrl,
+            focus: input.focus ?? existing.focus,
+            status: "PENDING",
+            statusChangedAt: nextAt,
+            // Retain the decision metadata so staff can see the feedback that prompted a revision.
+          })
+          .where(
+            and(
+              eq(contentProposal.id, id),
+              eq(contentProposal.source, "AGENT"),
+              eq(contentProposal.status, existing.status),
+              eq(contentProposal.statusChangedAt, existing.statusChangedAt),
+            ),
+          );
+        if (claim.rowsAffected !== 1) return false;
+        await tx
+          .delete(contentProposalMedia)
+          .where(eq(contentProposalMedia.proposalId, id));
+        await tx
+          .delete(contentProposalBasis)
+          .where(eq(contentProposalBasis.proposalId, id));
+        await tx
+          .delete(contentProposalChange)
+          .where(eq(contentProposalChange.proposalId, id));
+        if (plan.changes.length)
+          await tx.insert(contentProposalChange).values(plan.changes);
+        if (plan.basis.length) await tx.insert(contentProposalBasis).values(plan.basis);
+        if (plan.media.length) await tx.insert(contentProposalMedia).values(plan.media);
+        return true;
+      }),
+    );
     if (!saved)
       return {
         ok: false,
@@ -844,12 +848,14 @@ const insertRows = async (client: DrizzleClient, rows: Rows[]) => {
   const changes = rows.flatMap((row) => row.changes);
   const basis = rows.flatMap((row) => row.basis);
   const media = rows.flatMap((row) => row.media);
-  await client.transaction(async (tx) => {
-    await tx.insert(contentProposal).values(rows.map((row) => row.proposal));
-    if (changes.length) await tx.insert(contentProposalChange).values(changes);
-    if (basis.length) await tx.insert(contentProposalBasis).values(basis);
-    if (media.length) await tx.insert(contentProposalMedia).values(media);
-  });
+  await retryOnDeadlock(() =>
+    client.transaction(async (tx) => {
+      await tx.insert(contentProposal).values(rows.map((row) => row.proposal));
+      if (changes.length) await tx.insert(contentProposalChange).values(changes);
+      if (basis.length) await tx.insert(contentProposalBasis).values(basis);
+      if (media.length) await tx.insert(contentProposalMedia).values(media);
+    }),
+  );
 };
 
 const mediaKeys = (planned: Rows[]) =>

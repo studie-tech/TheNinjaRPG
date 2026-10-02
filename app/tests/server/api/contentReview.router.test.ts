@@ -1011,6 +1011,8 @@ describeWithDatabase("content review", () => {
     let cleanupStarted: () => void = () => {};
     let releaseCleanup: () => void = () => {};
     let mediaPrepared: () => void = () => {};
+    let releaseMedia: () => void = () => {};
+    const mediaRelease = new Promise<void>((resolve) => { releaseMedia = resolve; });
     const started = new Promise<void>((resolve) => { cleanupStarted = resolve; });
     const release = new Promise<void>((resolve) => { releaseCleanup = resolve; });
     const prepared = new Promise<void>((resolve) => { mediaPrepared = resolve; });
@@ -1019,22 +1021,48 @@ describeWithDatabase("content review", () => {
     });
     vi.spyOn(media, "collectCandidates").mockImplementation(async () => {
       mediaPrepared();
+      await mediaRelease;
       return [{ kind: "IMAGE", source: "GENERATED", externalId: null,
         url: "https://ui0arpl8sm.ufs.sh/f/new-candidate.webp", fileKey: "new-candidate-file",
         lengthMs: null, prompt: "A new badge", title: "New badge" }];
     });
-    const cleaning = cleanupContentProposals(database);
-    await started;
     const proposal = await revisionProposal("Awarded for demonstrated bravery.");
     const revising = reviseAgentProposal(database, id, { expectedStatusChangedAt: original.statusChangedAt.toISOString(),
       reactivate: true, feedbackResponse: "Clarify the wording to address the earlier rejection.",
       proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [{ kind: "IMAGE", path: "image", catalogIds: [], search: null, generate: "A new badge" }] }] } });
     await prepared;
+    const cleaning = cleanupContentProposals(database);
+    await started;
+    releaseMedia();
+    // The revision loses immediately even while storage is blocked; no database lock waits.
+    expect(await revising).toMatchObject({ ok: false, status: 409 });
     releaseCleanup();
     expect((await cleaning).removed).toBe(1);
-    expect(await revising).toMatchObject({ ok: false, status: 409 });
     expect(await readAgentProposal(database, id)).toBeUndefined();
     expect(deleted).toHaveBeenCalledWith(["new-candidate-file"]);
+  });
+
+  it("retries orphan files after storage failure without reviving a deleted proposal", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    const original = (await readAgentProposal(database, id))!;
+    await database.update(contentProposal).set({ status: "REJECTED", statusChangedAt: new Date(Date.now() - 11 * 86_400_000) }).where(eq(contentProposal.id, id));
+    await database.insert(contentProposalMedia).values([
+      { id: "retry-file", proposalId: id, changeId: original.changes[0]!.id, path: "image", kind: "IMAGE", source: "GENERATED", title: "Retry image", url: "https://example.com/retry.webp", fileKey: "retry-file-key", chosen: true },
+      { id: "orphan-catalog", proposalId: id, changeId: original.changes[0]!.id, path: "image", kind: "IMAGE", source: "CATALOG", title: "Catalog image" },
+    ]);
+    const deletion = vi.spyOn(media, "deleteStoredFiles").mockRejectedValueOnce(new Error("Storage unavailable")).mockResolvedValue(undefined);
+    await expect(cleanupContentProposals(database)).rejects.toThrow("Storage unavailable");
+    expect(await readAgentProposal(database, id)).toBeUndefined();
+    expect(await database.query.contentProposalMedia.findMany()).toHaveLength(2);
+    expect(await database.query.contentProposalChange.findMany()).toHaveLength(1);
+    expect(await database.query.contentProposalBasis.findMany()).not.toHaveLength(0);
+    expect(await cleanupContentProposals(database)).toEqual({ removed: 0, filesDeleted: 1 });
+    expect(deletion).toHaveBeenCalledWith(["retry-file-key"]);
+    expect(await database.query.contentProposalMedia.findMany()).toHaveLength(0);
+    expect(await database.query.contentProposalChange.findMany()).toHaveLength(0);
+    expect(await database.query.contentProposalBasis.findMany()).toHaveLength(0);
   });
 
   it("removes rejected suggestions once the retention window has passed", async () => {
