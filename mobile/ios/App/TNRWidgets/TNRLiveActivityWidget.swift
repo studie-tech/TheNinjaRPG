@@ -22,7 +22,7 @@ struct TNRLiveActivityWidget: Widget {
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.endsAt, style: .timer)
+                    countdownText(until: context.state.endsAt)
                         .font(.system(size: 20, weight: .semibold))
                         .monospacedDigit()
                         .multilineTextAlignment(.trailing)
@@ -44,7 +44,7 @@ struct TNRLiveActivityWidget: Widget {
             } compactLeading: {
                 Image(systemName: context.attributes.kind.symbol)
             } compactTrailing: {
-                Text(context.state.endsAt, style: .timer)
+                countdownText(until: context.state.endsAt)
                     .monospacedDigit()
                     // Without a width cap the timer pushes the compact island wider on
                     // every tick as the digits change.
@@ -88,9 +88,7 @@ private struct LockScreenView: View {
 
             Spacer(minLength: 4)
 
-            // The system keeps a `.timer` text ticking on its own, so the countdown stays
-            // right between the pushes that change the underlying state.
-            Text(context.state.endsAt, style: .timer)
+            countdownText(until: context.state.endsAt)
                 .font(.system(size: 22, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(.primary)

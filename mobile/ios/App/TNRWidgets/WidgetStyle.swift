@@ -24,6 +24,13 @@ extension View {
     }
 }
 
+/// The system updates the bounded timer while the app is suspended and stops at zero.
+/// A relative `.timer` date instead begins counting upward after the deadline passes.
+func countdownText(until deadline: Date, now: Date = Date()) -> Text {
+    guard deadline > now else { return Text("0:00") }
+    return Text(timerInterval: now...deadline, countsDown: true)
+}
+
 /// A labelled bar. Reads at a glance as a colour and a length, with the numbers there for
 /// anyone who wants them.
 struct StatBar: View {
