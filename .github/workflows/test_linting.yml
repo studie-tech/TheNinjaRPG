@@ -1,9 +1,22 @@
 name: test_linting
 on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    uses: ./.github/workflows/app-ci-changes.yml
   test_linting:
+    needs: changes
+    if: needs.changes.outputs.has_changes == 'true'
     name: test_linting
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:

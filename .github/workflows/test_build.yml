@@ -1,7 +1,20 @@
 name: test_build
 on: pull_request
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
+  changes:
+    uses: ./.github/workflows/app-ci-changes.yml
   test_build:
+    needs: changes
+    if: needs.changes.outputs.has_changes == 'true'
     name: test_build
     runs-on: blacksmith-4vcpu-ubuntu-2404
     # Database for tests that need to execute real SQL. 8.0 matches PlanetScale. Every table in

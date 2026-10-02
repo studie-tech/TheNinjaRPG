@@ -24,11 +24,19 @@ concurrency:
 jobs:
   check-completed-label:
     name: Guard Completed label
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
+    # Reject irrelevant events before allocating a runner.
     if: >-
-      !(github.event_name == 'pull_request' &&
-        github.event.action == 'labeled' &&
-        github.actor == 'github-actions[bot]')
+      (github.event_name == 'pull_request' &&
+        github.event.label.name == 'Completed' &&
+        github.actor != 'github-actions[bot]') ||
+      github.event_name == 'pull_request_review' ||
+      github.event_name == 'pull_request_review_comment' ||
+      (github.event_name == 'check_run' &&
+        github.event.check_run.name != 'Guard Completed label' &&
+        contains(fromJSON('["failure", "timed_out", "action_required"]'), github.event.check_run.conclusion)) ||
+      (github.event_name == 'status' &&
+        contains(fromJSON('["failure", "error"]'), github.event.state))
     steps:
       - name: Check for unresolved review threads and failing checks
         uses: actions/github-script@v9
