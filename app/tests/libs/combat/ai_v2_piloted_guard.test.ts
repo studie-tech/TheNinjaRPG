@@ -41,7 +41,6 @@ const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
     round: 0,
     direction: "right",
     isAggressor: false,
-    highestMasteryType: "Ninjutsu",
     highestGenerals: [],
     iAmHere: true,
     originalLevel: 1,

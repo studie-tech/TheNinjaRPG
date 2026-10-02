@@ -387,7 +387,7 @@ describe("potency element matching", () => {
   );
 
   it.each(
-    PotencyTagTypes.filter((type) => type !== "heal" && type !== "increaseheal"),
+    PotencyTagTypes.filter((type): type is Extract<(typeof PotencyTagTypes)[number], "damage" | "afterburn" | "lifesteal" | "reflect"> => ["damage", "afterburn", "lifesteal", "reflect"].includes(type)),
   )(
     "matches elements on %s in both directions and modes",
     (type) => {

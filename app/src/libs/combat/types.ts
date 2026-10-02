@@ -6,6 +6,7 @@ import type {
   CombatBiome,
   ElementName,
   GeneralType,
+  MasteryName,
   PoolType,
   StatType,
 } from "@/drizzle/constants";
@@ -115,8 +116,6 @@ export type CombatQueryUser = UserData & {
   sageModeActivatedRound?: number | null;
   sageModeExpiresRound?: number | null;
   sageModeUsedThisBattle?: boolean;
-  // Resolved by initiateBattle before rank caps, or carried over from live BattleUserState
-  highestMasteryType?: Exclude<StatType, "Highest">;
   village: CombatQueryVillage | null;
   loadout?: { jutsuIds: string[] } | null;
   clan?: Clan | null;
@@ -155,7 +154,6 @@ export type CombatUserFields = {
   controllerId: string;
   direction: "left" | "right";
   isAggressor: boolean;
-  highestMasteryType: Exclude<StatType, "Highest">;
   highestGenerals: (typeof GenNames)[number][];
   round: number;
   iAmHere: boolean;
@@ -166,6 +164,7 @@ export type CombatUserFields = {
   actionPoints: number;
   isOriginal: boolean;
   usedGenerals: Record<(typeof GenNames)[number], number>;
+  usedMasteries?: Partial<Record<MasteryName, number>>;
   usedStats: Record<(typeof StatNames)[number], number>;
   leftBattle: boolean;
   fledBattle: boolean;
@@ -463,6 +462,7 @@ export type DroppedItem = {
  * Result type for users when battle is ended
  */
 export type CombatResult = {
+  masteryGains?: Partial<Record<MasteryName, number>>;
   outcome: "Won" | "Lost" | "Draw" | "Fled";
   didWin: number;
   eloDiff: number;
@@ -596,7 +596,6 @@ export type BattleEffect = ZodAllTags & {
     | "sageModeAfter";
   targetType?: "user" | "barrier";
   power?: number;
-  highestMasteryType?: Exclude<StatType, "Highest">;
   highestGenerals?: (typeof GenNames)[number][];
   targetHighestGenerals?: (typeof GenNames)[number][];
   longitude: number;

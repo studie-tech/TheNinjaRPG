@@ -29,6 +29,7 @@ import {
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { BARRIER_DAMAGE_TAG_TYPES, COMBAT_SECONDS } from "@/libs/combat/constants";
+import { recordMasteryUsage } from "@/libs/combat/mastery";
 import { resolvePotencyTags } from "@/libs/combat/potency";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { getPower, realizeTag, updateStatUsage } from "@/libs/combat/tags";
@@ -472,7 +473,7 @@ export const getDefaultBasicActions = (
         DamageTag.parse({
           power: 10,
           powerPerLevel: 0.05,
-          statTypes: ["Highest"],
+          statTypes: ["None"],
           generalTypes: ["Highest"],
           rounds: 0,
           appearAnimation: ID_ANIMATION_HIT,
@@ -1122,6 +1123,7 @@ export const insertAction = (info: {
     action.effects.forEach((effect) => {
       updateStatUsage(user, effect as UserEffect);
     });
+    recordMasteryUsage(user, action);
     user.usedActions.push({ id: action.id, type: action.type });
     // Check if action affected anything
     if (affectedTiles.size > 0) {

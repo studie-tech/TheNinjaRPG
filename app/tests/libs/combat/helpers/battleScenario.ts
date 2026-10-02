@@ -137,9 +137,6 @@ export const battleUserSchema = z
     gender: str("Male"),
     villageId: str("village-1"),
     direction: z.enum(["left", "right"]).prefault("left"),
-    highestMasteryType: z
-      .enum(["Ninjutsu", "Genjutsu", "Taijutsu", "Bukijutsu"])
-      .prefault("Ninjutsu"),
     highestGenerals: z.array(genNameSchema).prefault(["strength", "intelligence"]),
     usedGenerals: z.record(genNameSchema, num()).prefault(usedGeneralDefaults),
     usedStats: z.record(statNameSchema, num()).prefault(usedStatDefaults),
@@ -292,7 +289,7 @@ export const makeDamageModifierEffect = (params: {
   rounds?: number;
   power?: number;
   calculation?: "static" | "percentage";
-  tag?: TagFields<DamageModifierType>;
+  tag?: TagFields<DamageModifierType> & { statTypes?: string[]; generalTypes?: string[]; elements?: string[] };
   runtime?: EffectRuntimeOverrides;
 }): UserEffect =>
   makeEffect(
@@ -390,7 +387,7 @@ export const makeBattleWithWeapon = (params: {
         power: 22,
         powerPerLevel: 1,
         calculation: "formula",
-        statTypes: ["Highest"],
+        statTypes: ["None"],
         generalTypes: ["Highest"],
         ...params.damage,
       }),

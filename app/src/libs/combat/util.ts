@@ -66,6 +66,7 @@ import type {
   VillageAlliance,
 } from "@/drizzle/schema";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
+import { combatMasteryGains } from "@/libs/combat/mastery";
 import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
 import type { ObjectiveTrackerTaskInput as ObjectiveTrackerTask } from "@/libs/quest";
@@ -2418,6 +2419,14 @@ export const calcBattleResult = (
         result.money = -moneyToLose;
       }
 
+      result.masteryGains = combatMasteryGains(
+        battle,
+        user,
+        targets,
+        outcome,
+        experience,
+      );
+
       // Return results
       return result;
     }
@@ -2440,7 +2449,7 @@ const distributeExpToStat = (
 ): number => {
   const expWeighted = (count / total) * experience;
   const expRounded = Math.floor(expWeighted * 100) / 100;
-  const expResult = user[stat] + expRounded > cap ? cap - user[stat] : expRounded;
+  const expResult = Math.max(0, Math.min(expRounded, cap - user[stat]));
   result[stat] += expResult;
   return expResult;
 };
@@ -3025,7 +3034,16 @@ export const getStatTypeLabels = (effect: {
   type: string;
   statTypes?: readonly StatType[] | null;
   direction?: string;
-}): (StatType | CombatStatType)[] => {
+}): (StatType | CombatStatType | "All damage")[] => {
+  if (
+    [
+      "increasedamagegiven",
+      "decreasedamagegiven",
+      "increasedamagetaken",
+      "decreasedamagetaken",
+    ].includes(effect.type)
+  )
+    return ["All damage"];
   const statTypes = effect.statTypes ?? [];
   if (effect.type !== "increasestat" && effect.type !== "decreasestat") {
     return [...statTypes];

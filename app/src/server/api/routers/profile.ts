@@ -468,9 +468,6 @@ export const profileRouter = createTRPCRouter({
           ...(input.defaultAutoCombat !== undefined
             ? { defaultAutoCombat: input.defaultAutoCombat }
             : {}),
-          ...(input.preferredStat !== undefined
-            ? { preferredStat: input.preferredStat }
-            : {}),
           ...(input.preferredGeneral1 !== undefined
             ? { preferredGeneral1: input.preferredGeneral1 }
             : {}),

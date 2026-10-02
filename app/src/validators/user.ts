@@ -3,7 +3,6 @@ import type { ElementName, LetterRank, QuestType } from "@/drizzle/constants";
 import {
   GeneralTypes,
   SEICHI_SILVER_ADJUST_LIMIT,
-  StatTypes,
   TavernColorPresets,
   UserRanks,
   UserRoles,
@@ -161,7 +160,6 @@ export type GetPublicUsersSchema = z.infer<typeof getPublicUsersSchema>;
 // For updating highest preferences
 export const updateUserPreferencesSchema = z
   .object({
-    preferredStat: z.enum(StatTypes).nullable().optional(),
     preferredGeneral1: z.enum(GeneralTypes).nullable().optional(),
     preferredGeneral2: z.enum(GeneralTypes).nullable().optional(),
     // Audio preferences

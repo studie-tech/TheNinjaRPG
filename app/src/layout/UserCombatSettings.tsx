@@ -41,7 +41,6 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
     setSfxOn(checked);
     if (userData) {
       updatePreferences({
-        preferredStat: userData.preferredStat ?? null,
         preferredGeneral1: userData.preferredGeneral1 ?? null,
         preferredGeneral2: userData.preferredGeneral2 ?? null,
         sfxOn: checked,

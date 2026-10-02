@@ -2458,7 +2458,6 @@ export const userData = mysqlTable(
       .default(0)
       .notNull(),
     // Settings
-    preferredStat: mysqlEnum("preferredStat", consts.StatTypes),
     preferredGeneral1: mysqlEnum("preferredGeneral1", consts.GeneralTypes),
     preferredGeneral2: mysqlEnum("preferredGeneral2", consts.GeneralTypes),
     showBattleDescription: boolean("showBattleDescription").default(true).notNull(),

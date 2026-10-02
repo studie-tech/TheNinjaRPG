@@ -122,7 +122,13 @@ const IncludeStats = {
   // static: directly equates to the amount returned
   // percentage: power is returned as a percentage
   // formula: power is used in stats-based formula to calculate return value
-  statTypes: z.array(z.enum(StatTypes)).optional(),
+  statTypes: z
+    .array(
+      z
+        .enum([...StatTypes, "Highest"])
+        .transform((value) => (value === "Highest" ? "None" : value)),
+    )
+    .optional(),
   generalTypes: z.array(z.enum(GeneralTypes)).optional(),
   elements: z.array(z.enum(ElementNames)).optional(),
 };
@@ -204,7 +210,6 @@ export const AbsorbTag = z.object({
 
 export const IncreaseDamageGivenTag = z.object({
   ...BaseAttributes,
-  ...IncludeStats,
   ...PowerAttributes,
   type: z.literal("increasedamagegiven").prefault("increasedamagegiven"),
   description: msg("Increase damage given by target"),
@@ -213,7 +218,6 @@ export const IncreaseDamageGivenTag = z.object({
 
 export const DecreaseDamageGivenTag = z.object({
   ...BaseAttributes,
-  ...IncludeStats,
   ...PowerAttributes,
   type: z.literal("decreasedamagegiven").prefault("decreasedamagegiven"),
   description: msg("Decrease damage given by target"),
@@ -222,7 +226,6 @@ export const DecreaseDamageGivenTag = z.object({
 
 export const IncreaseDamageTakenTag = z.object({
   ...BaseAttributes,
-  ...IncludeStats,
   ...PowerAttributes,
   type: z.literal("increasedamagetaken").prefault("increasedamagetaken"),
   description: msg("Increase damage taken of target"),
@@ -231,7 +234,6 @@ export const IncreaseDamageTakenTag = z.object({
 
 export const DecreaseDamageTakenTag = z.object({
   ...BaseAttributes,
-  ...IncludeStats,
   ...PowerAttributes,
   type: z.literal("decreasedamagetaken").prefault("decreasedamagetaken"),
   description: msg("Decrease damage taken of target"),
@@ -871,7 +873,13 @@ export const WeaknessTag = z.object({
   items: z.array(z.string()).prefault([]),
   jutsus: z.array(z.string()).prefault([]),
   elements: z.array(z.enum(ElementNames)).prefault([]),
-  statTypes: z.array(z.enum(StatTypes)).prefault([]),
+  statTypes: z
+    .array(
+      z
+        .enum([...StatTypes, "Highest"])
+        .transform((value) => (value === "Highest" ? "None" : value)),
+    )
+    .prefault([]),
   generalTypes: z.array(z.enum(GeneralTypes)).prefault([]),
   description: msg("Extra raw damage from specific things"),
   dmgModifier: z.coerce.number().min(1).max(50).prefault(1).optional(),
@@ -1374,7 +1382,7 @@ export const JutsuValidatorRawSchema = z.object({
   statClassification: z
     .enum(StatTypes)
     .nullish()
-    .transform((v) => v ?? "Highest"),
+    .transform((v) => v ?? "None"),
   hidden: z.coerce.boolean().optional(),
   injectableInBattle: z.coerce.boolean().prefault(false),
   healthCost: z.coerce.number().min(0).max(10000),
@@ -1429,7 +1437,7 @@ export const BloodlineValidator = z.object({
   statClassification: z
     .enum(StatTypes)
     .nullish()
-    .transform((v) => v ?? "Highest"),
+    .transform((v) => v ?? "None"),
   villageId: z.string().nullable(),
   hidden: z.coerce.boolean().optional(),
   difficulty: z.enum(BloodlineDifficultyRatings).nullable().optional(),
@@ -1685,7 +1693,13 @@ export type AssignableUserStats = StatSchemaType &
 
 export const actSchema = z.object({
   power: z.coerce.number().min(1).max(100).prefault(1),
-  statTypes: z.array(z.enum(StatTypes)).prefault(["Ninjutsu"]),
+  statTypes: z
+    .array(
+      z
+        .enum([...StatTypes, "Highest"])
+        .transform((value) => (value === "Highest" ? "None" : value)),
+    )
+    .prefault(["Ninjutsu"]),
   generalTypes: z.array(z.enum(GeneralTypes)).prefault(["Strength"]),
 });
 

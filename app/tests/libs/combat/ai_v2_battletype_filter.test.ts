@@ -28,7 +28,6 @@ const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
     fledBattle: false, leftBattle: false, longitude: 1, latitude: 1,
     actionPoints: 100, effects: [], jutsus: [], items: [], basicActions: [],
     round: 0, direction: "right", isAggressor: false,
-    highestMasteryType: "Ninjutsu",
     highestGenerals: [], iAmHere: true, level: 10,
     originalLevel: 10, originalMoney: 0, originalLongitude: 1, originalLatitude: 1,
     isOriginal: true, usedGenerals: {}, usedStats: {}, moneyStolen: 0,

@@ -121,7 +121,6 @@ const AI_EDITABLE_KEYS = [
   "inShrines",
   "primaryElement",
   "secondaryElement",
-  "preferredStat",
   "preferredGeneral1",
   "preferredGeneral2",
   "anbuId",

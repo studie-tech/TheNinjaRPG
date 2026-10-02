@@ -372,6 +372,13 @@
       "when": 1790746428968,
       "tag": "0052_unified_combat_stats_masteries",
       "breakpoints": false
+    },
+    {
+      "idx": 53,
+      "version": "5",
+      "when": 1790964632222,
+      "tag": "0053_mixed_sentinel",
+      "breakpoints": false
     }
   ]
 }

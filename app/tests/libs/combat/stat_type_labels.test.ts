@@ -18,8 +18,8 @@ describe("getStatTypeLabels", () => {
     expect(getStatTypeLabels(tag)).toEqual([]);
   });
 
-  it("keeps the jutsu types that other tags match on", () => {
-    const tag = { type: "increasedamagegiven", statTypes: ["Taijutsu", "Highest"] as const };
-    expect(getStatTypeLabels(tag)).toEqual(["Taijutsu", "Highest"]);
+  it("labels damage modifiers as universal", () => {
+    const tag = { type: "increasedamagegiven", statTypes: ["Taijutsu", "None"] as const };
+    expect(getStatTypeLabels(tag)).toEqual(["All damage"]);
   });
 });

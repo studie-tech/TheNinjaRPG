@@ -11,9 +11,9 @@ describe("statClassification", () => {
   it.each([
     ["jutsu", jutsuField],
     ["bloodline", bloodlineField],
-  ])("%s falls back to Highest for null and undefined", (_name, field) => {
-    expect(field.parse(null)).toBe("Highest");
-    expect(field.parse(undefined)).toBe("Highest");
+  ])("%s falls back to None for null and undefined", (_name, field) => {
+    expect(field.parse(null)).toBe("None");
+    expect(field.parse(undefined)).toBe("None");
   });
 
   it.each([

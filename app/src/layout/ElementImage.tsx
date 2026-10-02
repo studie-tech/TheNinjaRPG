@@ -73,6 +73,7 @@ interface ElementImageProps {
     | ElementName
     | PoolType
     | AdjustableBasicAction
+    | "None"
     | "All"
     | ZodAllTags["type"];
   hoverText?: string;
@@ -144,7 +145,7 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
     );
   } else if (
     isInArray(element, [
-      ...StatTypes,
+      ...StatTypes.filter((type) => type !== "None"),
       ...CombatStatTypes,
       ...MasteryTypes,
       ...GeneralTypes,

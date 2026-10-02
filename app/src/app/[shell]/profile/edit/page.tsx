@@ -516,7 +516,6 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   const form = useForm<z.infer<typeof updateUserPreferencesSchema>>({
     resolver: zodResolver(updateUserPreferencesSchema),
     defaultValues: {
-      preferredStat: null,
       preferredGeneral1: null,
       preferredGeneral2: null,
     },
@@ -587,7 +586,6 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   useEffect(() => {
     if (userData) {
       form.reset({
-        preferredStat: userData.preferredStat,
         preferredGeneral1: userData.preferredGeneral1,
         preferredGeneral2: userData.preferredGeneral2,
       });
@@ -604,7 +602,6 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
       showMutationToast(result);
       if (result.success) {
         await updateUser({
-          preferredStat: values.preferredStat,
           preferredGeneral1: values.preferredGeneral1,
           preferredGeneral2: values.preferredGeneral2,
         });
@@ -640,37 +637,6 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                 className="grid w-full grid-cols-4 items-end gap-3 p-4"
                 aria-busy={isUpdatingPreferences}
               >
-                <FormField
-                  control={form.control}
-                  name="preferredStat"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Preferred Mastery</FormLabel>
-                      <Select
-                        disabled={isUpdatingPreferences}
-                        onValueChange={(value) =>
-                          field.onChange(value === "__highest__" ? null : value)
-                        }
-                        value={field.value ?? "__highest__"}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Highest" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="__highest__">Highest</SelectItem>
-                          <SelectItem value="Ninjutsu">Ninjutsu</SelectItem>
-                          <SelectItem value="Genjutsu">Genjutsu</SelectItem>
-                          <SelectItem value="Taijutsu">Taijutsu</SelectItem>
-                          <SelectItem value="Bukijutsu">Bukijutsu</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <FormField
                   control={form.control}
                   name="preferredGeneral1"

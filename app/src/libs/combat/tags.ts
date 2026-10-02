@@ -19,6 +19,7 @@ import {
   TRANSFER_EXCLUDED_SOURCE_TYPES,
 } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
+import { damageModifierTypes } from "@/libs/combat/constants";
 import { getPotencyDescription } from "@/libs/combat/potency";
 import {
   isClone,
@@ -69,7 +70,7 @@ import type {
  */
 type RealizeTagUser = Pick<
   ReturnedUserState,
-  "userId" | "villageId" | "highestMasteryType" | "highestGenerals"
+  "userId" | "villageId" | "highestGenerals"
 >;
 
 /**
@@ -89,6 +90,12 @@ export const realizeTag = <T extends BattleEffect>(props: {
   if ("rounds" in tag) {
     tag.timeTracker = {};
   }
+  // Older catalog JSON uses Highest as an unclassified marker; it never resolves from mastery.
+  if ("statTypes" in tag) {
+    tag.statTypes = tag.statTypes?.map((type) =>
+      (type as string) === "Highest" ? "None" : type,
+    );
+  }
   tag.id = nanoid();
   tag.createdRound = round || 0;
   tag.creatorId = user.userId;
@@ -97,7 +104,6 @@ export const realizeTag = <T extends BattleEffect>(props: {
   tag.level = level ?? 0;
   tag.isNew = true;
   tag.castThisRound = true;
-  tag.highestMasteryType = user.highestMasteryType;
   tag.highestGenerals = user.highestGenerals;
   tag.barrierAbsorb = barrierAbsorb || 0;
   tag.actionId = props.actionId;
@@ -538,16 +544,15 @@ export const debuffPrevent = (
 /**
  * Human-readable summary of what an effect affects.
  * @param effect - the effect to describe
- * @param type - set by damage modifiers, where `statTypes` still selects which damage
- *   the modifier applies to. When unset the effect adjusts the unified combat stats, so
- *   `statTypes` are reported as Offence/Defence rather than as jutsu types.
+ * Damage modifiers affect all damage. Other stat tags describe unified Offence/Defence.
  */
 export const getAffected = (effect: UserEffect, type?: "offence" | "defence") => {
+  if (damageModifierTypes.includes(effect.type)) return "all damage";
   const stats: string[] = [];
   if ("statTypes" in effect && effect.statTypes?.length) {
     if (type) {
       effect.statTypes.forEach((stat: StatType) => {
-        stats.push(stat === "Highest" ? capitalizeFirstLetter(type) : stat);
+        stats.push(stat);
       });
     } else {
       const direction = "direction" in effect ? effect.direction : "both";
@@ -3361,6 +3366,8 @@ export const getPower = (effect: UserEffect | GroundEffect) => {
  * matched in the RHS, whereas a ratio of 1 means everything is matched by a value in RHS
  */
 export const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) => {
+  // Damage increases and reductions apply universally, independent of classification.
+  if (damageModifierTypes.includes(effect.type)) return 1;
   // Force reflect for pierce damage, bypassing tag matching
   if (dmgEffect.type === "pierce") return 1;
   // We need to get the list of dmgEffect stats/gens/elements and effect stats/gens/elements
@@ -3368,11 +3375,7 @@ export const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) =>
     const tags: string[] = [];
     if ("statTypes" in e) {
       e.statTypes?.forEach((statType: StatType) => {
-        tags.push(
-          statType === "Highest" && e.highestMasteryType
-            ? e.highestMasteryType
-            : statType,
-        );
+        tags.push(statType);
       });
     }
     if ("generalTypes" in e) {

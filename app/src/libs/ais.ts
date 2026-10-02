@@ -5,7 +5,6 @@ import {
   AvatarFacings,
   ElementNames,
   GeneralTypes,
-  StatTypes,
   UserRanks,
 } from "@/drizzle/constants";
 import type {
@@ -152,12 +151,6 @@ export const useAiEditForm = (
       id: "secondaryElement",
       type: "str_array",
       values: ElementNames,
-      resetButton: true,
-    },
-    {
-      id: "preferredStat",
-      type: "str_array",
-      values: StatTypes,
       resetButton: true,
     },
     {

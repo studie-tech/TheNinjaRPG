@@ -668,10 +668,9 @@ describe("computeDamagePacket", () => {
     const rawDamage = 742.44;
 
     const damageEffect = makeDamageEffect({
-      statTypes: ["Highest"],
+      statTypes: ["None"],
       generalTypes: ["Highest"],
       elements: ["Fire"],
-      highestMasteryType: "Bukijutsu",
       highestGenerals: ["strength", "speed"],
     });
 
@@ -687,7 +686,6 @@ describe("computeDamagePacket", () => {
           isNew: false,
           castThisRound: false,
           createdRound: 1,
-          highestMasteryType: "Bukijutsu",
           highestGenerals: ["strength", "speed"],
           ...params.runtime,
         },
@@ -741,7 +739,7 @@ describe("computeDamagePacket", () => {
         targetId: "defender",
         fromType: "item",
         power: 15,
-        tag: { statTypes: ["Highest"] },
+        tag: { statTypes: ["None"] },
       }),
     ];
 

@@ -85,7 +85,6 @@ export const useIframeMute = (): UseIframeMuteReturn => {
       // Save to database if user is logged in, otherwise localStorage
       if (userData) {
         updatePreferences({
-          preferredStat: userData.preferredStat ?? null,
           preferredGeneral1: userData.preferredGeneral1 ?? null,
           preferredGeneral2: userData.preferredGeneral2 ?? null,
           iframesMuted: muted,

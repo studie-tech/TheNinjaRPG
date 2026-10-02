@@ -368,7 +368,7 @@ export const CONTENT_PROPOSAL_NOTE_MAX_LENGTH = 500;
 export const CONTENT_REVIEW_SFX_SEARCH_RESULTS = 12;
 
 export const StatTypes = [
-  "Highest",
+  "None",
   "Ninjutsu",
   "Genjutsu",
   "Taijutsu",
@@ -1014,11 +1014,13 @@ export const CP_PER_LVL = 50;
 export const MAX_ATTRIBUTES = 5;
 export const BANK_INTEREST_CLAIM_DAYS = 8;
 export const RYO_CAP = 3000000000;
-// Offence/Defence, generals and mastery caps from #1277
+// Independent base progression caps. Effective mastery buffs may exceed these caps.
 export const MAX_STATS_CAP = 1322420;
 export const MAX_GENS_CAP = 400000;
 export const MAX_MASTERY_CAP = 1500000;
-// AI rows keep the pre-#1277 12-stat scale: half the level budget over 6 stats is 1/12 each.
+export const PVP_MASTERY_WIN_REWARD = 200;
+export const PVP_MASTERY_LOSS_REWARD = 100;
+// AI rows retain their catalog tuning: half the level budget over 6 stats is 1/12 each.
 export const SCALED_AI_STAT_BUDGET_SHARE = 0.5;
 export const MAX_DAILY_AI_CALLS = 100;
 

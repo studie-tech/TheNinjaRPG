@@ -1,12 +1,15 @@
 -- Apply by hand as one SQL script, never with `make dbpush` or `drizzle-kit push`: a push
 -- adds and drops the columns without the backfills below, wiping every player's stats.
--- The script is not idempotent and fails on its first statement if run twice.
+-- The script fails on its first statement if run twice, preventing duplicate conversion.
+-- Verify all non-AI/non-summon old combat stats are at least 10 before the cutover.
+-- Preserve a database backup before the cutover. Stored converted values remain uncapped:
+-- battle rank/global caps limit their use without discarding the converted entitlement.
 --
 -- The old and new builds cannot share a schema, because fetchUser selects every column by
 -- name. Cut over in this order:
 --   1. Build the new production deployment without promoting it.
 --   2. Apply this script at low traffic, or behind a brief write freeze.
---   3. Promote the new deployment immediately.
+--   3. Apply 0053_mixed_sentinel.sql, then promote the new deployment immediately.
 --   4. Apply the same script to tnr/development and to the theninja-ai database.
 ALTER TABLE `Item` ADD `requiredNinjutsuMastery` int;
 ALTER TABLE `Item` ADD `requiredGenjutsuMastery` int;
@@ -32,37 +35,16 @@ ALTER TABLE `UserData` ADD `masteryTrainingStartedAt` datetime(3);
 ALTER TABLE `UserData` ADD `currentlyTrainingMastery` enum('ninjutsuMastery','genjutsuMastery','taijutsuMastery','bukijutsuMastery','bloodlineMastery','sageMastery');
 UPDATE `UserData`
 SET
-	`offence` = GREATEST(`ninjutsuOffence`, `genjutsuOffence`, `taijutsuOffence`, `bukijutsuOffence`),
-	`defence` = GREATEST(`ninjutsuDefence`, `genjutsuDefence`, `taijutsuDefence`, `bukijutsuDefence`),
+	`offence` = CASE WHEN `isAi` OR `isSummon` THEN GREATEST(`ninjutsuOffence`, `genjutsuOffence`, `taijutsuOffence`, `bukijutsuOffence`)
+		ELSE 10 + (CAST(`ninjutsuOffence` AS DECIMAL(30, 10)) + CAST(`genjutsuOffence` AS DECIMAL(30, 10)) + CAST(`taijutsuOffence` AS DECIMAL(30, 10)) + CAST(`bukijutsuOffence` AS DECIMAL(30, 10)) - 40) * 1322410 / 1799960 END,
+	`defence` = CASE WHEN `isAi` OR `isSummon` THEN GREATEST(`ninjutsuDefence`, `genjutsuDefence`, `taijutsuDefence`, `bukijutsuDefence`)
+		ELSE 10 + (CAST(`ninjutsuDefence` AS DECIMAL(30, 10)) + CAST(`genjutsuDefence` AS DECIMAL(30, 10)) + CAST(`taijutsuDefence` AS DECIMAL(30, 10)) + CAST(`bukijutsuDefence` AS DECIMAL(30, 10)) - 40) * 1322410 / 1799960 END,
 	`ninjutsuMastery` = GREATEST(`ninjutsuOffence`, `ninjutsuDefence`),
 	`genjutsuMastery` = GREATEST(`genjutsuOffence`, `genjutsuDefence`),
 	`taijutsuMastery` = GREATEST(`taijutsuOffence`, `taijutsuDefence`),
 	`bukijutsuMastery` = GREATEST(`bukijutsuOffence`, `bukijutsuDefence`),
 	`bloodlineMastery` = 10,
 	`sageMastery` = 10;
--- "Highest" damage takes the type of the highest combat mastery. Merging each type's offence
--- and defence ties those masteries for players who trained their defences evenly, so keep
--- the mastery of a player's single highest offence strictly on top where it would tie.
-UPDATE `UserData`
-SET `ninjutsuMastery` = `ninjutsuMastery` + 1
-WHERE (`preferredStat` IS NULL OR `preferredStat` = 'Highest')
-	AND `ninjutsuOffence` > GREATEST(`genjutsuOffence`, `taijutsuOffence`, `bukijutsuOffence`)
-	AND `ninjutsuMastery` = GREATEST(`genjutsuMastery`, `taijutsuMastery`, `bukijutsuMastery`);
-UPDATE `UserData`
-SET `genjutsuMastery` = `genjutsuMastery` + 1
-WHERE (`preferredStat` IS NULL OR `preferredStat` = 'Highest')
-	AND `genjutsuOffence` > GREATEST(`ninjutsuOffence`, `taijutsuOffence`, `bukijutsuOffence`)
-	AND `genjutsuMastery` = GREATEST(`ninjutsuMastery`, `taijutsuMastery`, `bukijutsuMastery`);
-UPDATE `UserData`
-SET `taijutsuMastery` = `taijutsuMastery` + 1
-WHERE (`preferredStat` IS NULL OR `preferredStat` = 'Highest')
-	AND `taijutsuOffence` > GREATEST(`ninjutsuOffence`, `genjutsuOffence`, `bukijutsuOffence`)
-	AND `taijutsuMastery` = GREATEST(`ninjutsuMastery`, `genjutsuMastery`, `bukijutsuMastery`);
-UPDATE `UserData`
-SET `bukijutsuMastery` = `bukijutsuMastery` + 1
-WHERE (`preferredStat` IS NULL OR `preferredStat` = 'Highest')
-	AND `bukijutsuOffence` > GREATEST(`ninjutsuOffence`, `genjutsuOffence`, `taijutsuOffence`)
-	AND `bukijutsuMastery` = GREATEST(`ninjutsuMastery`, `genjutsuMastery`, `taijutsuMastery`);
 ALTER TABLE `UserData` MODIFY COLUMN `currentlyTraining` enum('ninjutsuOffence','taijutsuOffence','genjutsuOffence','bukijutsuOffence','ninjutsuDefence','taijutsuDefence','genjutsuDefence','bukijutsuDefence','intelligence','speed','willpower','strength','offence','defence');
 -- Sessions in flight on a per-type stat keep running, with their start time, on the stat
 -- it merged into, so they still pay experience when stopped.
@@ -168,35 +150,15 @@ SET `battleId` = NULL
 WHERE `winnerId` IS NULL AND `battleId` IN (SELECT `id` FROM `Battle`);
 DELETE FROM `Battle`;
 -- Saved damage simulations keep each side's stats as JSON under the old per-type names.
--- Merge them the way the UserData columns were merged, defaulting a missing stat to 10.
+-- Apply the player investment conversion, defaulting a missing stat to 10.
 UPDATE `DamageCalculation`
 SET `state` = JSON_REMOVE(
 	JSON_SET(
 		`state`,
-		'$.attacker.offence', GREATEST(
-			COALESCE(JSON_EXTRACT(`state`, '$.attacker.ninjutsuOffence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.attacker.genjutsuOffence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.attacker.taijutsuOffence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.attacker.bukijutsuOffence') + 0, 10)
-		),
-		'$.attacker.defence', GREATEST(
-			COALESCE(JSON_EXTRACT(`state`, '$.attacker.ninjutsuDefence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.attacker.genjutsuDefence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.attacker.taijutsuDefence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.attacker.bukijutsuDefence') + 0, 10)
-		),
-		'$.defender.offence', GREATEST(
-			COALESCE(JSON_EXTRACT(`state`, '$.defender.ninjutsuOffence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.defender.genjutsuOffence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.defender.taijutsuOffence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.defender.bukijutsuOffence') + 0, 10)
-		),
-		'$.defender.defence', GREATEST(
-			COALESCE(JSON_EXTRACT(`state`, '$.defender.ninjutsuDefence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.defender.genjutsuDefence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.defender.taijutsuDefence') + 0, 10),
-			COALESCE(JSON_EXTRACT(`state`, '$.defender.bukijutsuDefence') + 0, 10)
-		)
+		'$.attacker.offence', 10 + (CAST(COALESCE(JSON_EXTRACT(`state`, '$.attacker.ninjutsuOffence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.attacker.genjutsuOffence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.attacker.taijutsuOffence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.attacker.bukijutsuOffence') + 0, 10) AS DECIMAL(30, 10)) - 40) * 1322410 / 1799960,
+		'$.attacker.defence', 10 + (CAST(COALESCE(JSON_EXTRACT(`state`, '$.attacker.ninjutsuDefence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.attacker.genjutsuDefence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.attacker.taijutsuDefence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.attacker.bukijutsuDefence') + 0, 10) AS DECIMAL(30, 10)) - 40) * 1322410 / 1799960,
+		'$.defender.offence', 10 + (CAST(COALESCE(JSON_EXTRACT(`state`, '$.defender.ninjutsuOffence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.defender.genjutsuOffence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.defender.taijutsuOffence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.defender.bukijutsuOffence') + 0, 10) AS DECIMAL(30, 10)) - 40) * 1322410 / 1799960,
+		'$.defender.defence', 10 + (CAST(COALESCE(JSON_EXTRACT(`state`, '$.defender.ninjutsuDefence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.defender.genjutsuDefence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.defender.taijutsuDefence') + 0, 10) AS DECIMAL(30, 10)) + CAST(COALESCE(JSON_EXTRACT(`state`, '$.defender.bukijutsuDefence') + 0, 10) AS DECIMAL(30, 10)) - 40) * 1322410 / 1799960
 	),
 	'$.attacker.ninjutsuOffence', '$.attacker.genjutsuOffence', '$.attacker.taijutsuOffence', '$.attacker.bukijutsuOffence',
 	'$.attacker.ninjutsuDefence', '$.attacker.genjutsuDefence', '$.attacker.taijutsuDefence', '$.attacker.bukijutsuDefence',

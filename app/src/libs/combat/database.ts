@@ -3,6 +3,7 @@ import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
 import {
+  getUserCaps,
   HOSPITAL_LAT,
   HOSPITAL_LONG,
   ITEM_LEVEL_CAP,
@@ -10,6 +11,7 @@ import {
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_XP_TO_LEVEL,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MasteryNames,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   VILLAGE_SYNDICATE_ID,
   WAR_RECAPTURE_THRESHOLD,
@@ -1587,6 +1589,13 @@ export const updateUser = async (
           seichiSilver: result.seichiSilver
             ? sql`seichiSilver + ${result.seichiSilver}`
             : sql`seichiSilver`,
+          // Preserve stored over-cap entitlement; concurrent gains cannot exceed the cap.
+          ...Object.fromEntries(
+            MasteryNames.map((mastery) => [
+              mastery,
+              sql`${userData[mastery]} + LEAST(${result.masteryGains?.[mastery] ?? 0}, GREATEST(0, ${getUserCaps(user.rank).mastery_cap} - ${userData[mastery]}))`,
+            ]),
+          ),
           offence: sql`offence + ${result.offence}`,
           defence: sql`defence + ${result.defence}`,
           villagePrestige: sql`villagePrestige + ${result.villagePrestige}`,

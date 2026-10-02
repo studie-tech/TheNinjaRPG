@@ -6,7 +6,6 @@ import {
   effectiveMasteries,
   gearMissingMastery,
   hasMasteryRequirements,
-  highestJutsuMasteryType,
   isWornGearDisabled,
   missingMasteryRequirement,
 } from "@/libs/mastery";
@@ -254,22 +253,6 @@ describe("effectiveMasteries", () => {
   });
 });
 
-describe("highestJutsuMasteryType", () => {
-  const jutsuMasteries = (nin: number, gen: number, tai: number, buki: number) => ({
-    ninjutsuMastery: nin,
-    genjutsuMastery: gen,
-    taijutsuMastery: tai,
-    bukijutsuMastery: buki,
-  });
-
-  it("picks the greatest jutsu mastery", () => {
-    expect(highestJutsuMasteryType(jutsuMasteries(10, 20, 40, 30))).toBe("Taijutsu");
-  });
-
-  it("keeps the earlier type on a tie", () => {
-    expect(highestJutsuMasteryType(jutsuMasteries(10, 50, 10, 50))).toBe("Genjutsu");
-  });
-});
 
 describe("isWornGearDisabled", () => {
   const gated = gear("chest", [], { requiredNinjutsuMastery: 1500 });

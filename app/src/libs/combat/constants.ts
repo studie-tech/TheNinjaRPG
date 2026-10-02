@@ -103,12 +103,12 @@ export const publicState = [
  * Which user state is private
  */
 export const privateState = [
+  "usedMasteries",
   "bloodlineMastery",
   "bukijutsuMastery",
   "defence",
   "genjutsuMastery",
   "highestGenerals",
-  "highestMasteryType",
   "intelligence",
   "itemLoadout",
   "jutsuLoadout",

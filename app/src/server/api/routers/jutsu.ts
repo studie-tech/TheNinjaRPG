@@ -416,7 +416,7 @@ export const jutsuRouter = createTRPCRouter({
         requiredLevel: 1,
         target: "OTHER_USER",
         jutsuType: "AI",
-        statClassification: "Highest",
+        statClassification: "None",
         image: IMG_AVATAR_DEFAULT,
       });
       return { success: true, message: id };
@@ -2171,7 +2171,7 @@ export const jutsuDatabaseFilter = (
       ? input.excludedClassifications.map((c) =>
           ne(
             jutsu.statClassification,
-            c as "Highest" | "Ninjutsu" | "Genjutsu" | "Taijutsu" | "Bukijutsu",
+            c as "None" | "Ninjutsu" | "Genjutsu" | "Taijutsu" | "Bukijutsu",
           ),
         )
       : []),

@@ -69,6 +69,7 @@ import {
 } from "@/libs/threejs/util";
 import { showMutationToast } from "@/libs/toast";
 import { preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromNow } from "@/utils/time";
 import {
   combatActionIdAtom,
@@ -1545,6 +1546,14 @@ const Combat: React.FC<CombatProps> = (props) => {
               )}
               {result.offence > 0 && <p>Offence: {result.offence.toFixed(2)}</p>}
               {result.defence > 0 && <p>Defence: {result.defence.toFixed(2)}</p>}
+              {Object.entries(result.masteryGains ?? {})
+                .filter(([, gain]) => gain > 0)
+                .map(([mastery, gain]) => (
+                  <p key={mastery}>
+                    {capitalizeFirstLetter(mastery.replace("Mastery", ""))} Mastery:{" "}
+                    {gain.toFixed(2)}
+                  </p>
+                ))}
               {result.intelligence > 0 && (
                 <p>Intelligence: {result.intelligence.toFixed(2)}</p>
               )}

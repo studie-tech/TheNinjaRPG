@@ -152,7 +152,6 @@ import { fetchDmgConfig } from "@/libs/gamesettings";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import {
   effectiveMasteries,
-  highestJutsuMasteryType,
   isWornGear,
   isWornGearDisabled,
   missingMasteryRequirement,
@@ -2287,9 +2286,6 @@ export const initiateBattle = async (
       manuallyAssignUserStats(user, info?.userStatDistribution);
     }
 
-    // Resolve "Highest" before rank caps, which can tie masteries the stored values separate
-    Object.assign(user, { highestMasteryType: highestJutsuMasteryType(user) });
-
     // Apply caps to user stats. Ranked waives progression gates and plays everyone as an
     // ELITE JONIN, so its distributions cap at that rank rather than the player's own.
     const isRankedBattle =
@@ -2847,7 +2843,6 @@ export const processUsersForBattle = async (
       // Set all users to not be agressors by default
       isAggressor: false,
       // Initialize processing-specific fields (will be set below)
-      highestMasteryType: "Ninjutsu",
       highestGenerals: [],
       round: 0,
       iAmHere: false,
@@ -2945,14 +2940,6 @@ export const processUsersForBattle = async (
       user.experience = calcLevelRequirements(100);
       user.rank = "ELITE JONIN";
       user.medicalExperience = 100000;
-    }
-
-    // Add preferred (or highest) mastery type to user, used for tag efficiency matching
-    if (!user.preferredStat || user.preferredStat === "Highest") {
-      user.highestMasteryType =
-        inputUser.highestMasteryType ?? highestJutsuMasteryType(user);
-    } else {
-      user.highestMasteryType = user.preferredStat;
     }
 
     // Add highest generals to user
