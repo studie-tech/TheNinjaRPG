@@ -28,7 +28,12 @@ import {
   refreshProposalFreshness,
   reinstateProposalsFor,
 } from "@/libs/contentReview/outdate";
-import { getAtPath, setAtPath, topLevelField } from "@/libs/contentReview/paths";
+import {
+  getAtPath,
+  sceneAssetIds,
+  setAtPath,
+  topLevelField,
+} from "@/libs/contentReview/paths";
 import {
   createStaffProposal,
   normalizeEditable,
@@ -200,8 +205,7 @@ export const contentReviewRouter = createTRPCRouter({
         const value = entity ? getAtPath(entity.editable, path) : undefined;
         return typeof value === "string" && value ? value : null;
       };
-      // Assets the media comparisons show: every catalog candidate and the asset each
-      // sound or animation field points at today. Image fields hold a URL, not an asset.
+      // Resolve catalog media and both versions of scene pictures in one asset query.
       const assetIds = new Set(
         proposal.media.flatMap((media) => [
           ...(media.source === "CATALOG" && media.externalId ? [media.externalId] : []),
@@ -210,6 +214,11 @@ export const contentReviewRouter = createTRPCRouter({
             : []),
         ]),
       );
+      for (const change of proposal.changes) {
+        for (const fields of [change.before, change.after, change.applied]) {
+          for (const id of sceneAssetIds(fields)) assetIds.add(id);
+        }
+      }
       assetIds.delete("");
       const assets = assetIds.size
         ? await ctx.drizzle

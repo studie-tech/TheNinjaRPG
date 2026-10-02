@@ -41,7 +41,12 @@ import {
   REJECT_REASON_LABELS,
   STATUS_LABELS,
 } from "@/libs/contentReview/labels";
-import { isMediaPath, setAtPath, topLevelField } from "@/libs/contentReview/paths";
+import {
+  isMediaPath,
+  isSceneAssetPath,
+  setAtPath,
+  topLevelField,
+} from "@/libs/contentReview/paths";
 import { showMutationToast } from "@/libs/toast";
 import { formatSoundLength, formatTimeAgo } from "@/utils/time";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
@@ -504,6 +509,8 @@ const ChangeReview: React.FC<{
                 />
               ) : (
                 <FieldDiff
+                  path={field}
+                  assets={assets}
                   before={change.before[field] ?? null}
                   after={choices.edits[key] ?? values[field] ?? null}
                   hidePaths={mediaPaths
@@ -543,12 +550,26 @@ const ChangeReview: React.FC<{
  * Leaves under `hidePaths` are left to the media pickers that show them.
  */
 const FieldDiff: React.FC<{
+  path: string;
+  assets: Record<string, Asset>;
   before: unknown;
   after: unknown;
   hidePaths: string[];
   isEditing: boolean;
   onEdit: (value: string) => void;
-}> = ({ before, after, hidePaths, isEditing, onEdit }) => {
+}> = ({ path: fieldPath, assets, before, after, hidePaths, isEditing, onEdit }) => {
+  if (isSceneAssetPath(fieldPath)) {
+    return (
+      <ImageDiff
+        before={before}
+        after={after}
+        assets={assets}
+        isAssetReference
+        isEditing={false}
+        onEdit={onEdit}
+      />
+    );
+  }
   if (typeof after === "string" && (typeof before === "string" || before === null)) {
     return (
       <div className="flex flex-col gap-2">
@@ -615,15 +636,34 @@ const FieldDiff: React.FC<{
   return (
     <table className="w-full text-xs">
       <tbody>
-        {rows.map((path) => (
-          <tr key={path} className="border-t first:border-t-0">
-            <td className="py-1 pr-2 font-mono">{path}</td>
-            <td className="py-1 pr-2 line-through opacity-60">
-              {formatScalar(old.get(path))}
-            </td>
-            <td className="py-1 font-bold">{formatScalar(next.get(path))}</td>
-          </tr>
-        ))}
+        {rows.map((path) => {
+          const fullPath = path ? `${fieldPath}.${path}` : fieldPath;
+          const isAssetReference = isSceneAssetPath(fullPath);
+          return (
+            <tr key={path} className="border-t first:border-t-0">
+              <td className="break-all py-1 pr-2 align-top font-mono">{path}</td>
+              {isAssetReference || isMediaPath("IMAGE", fullPath) ? (
+                <td colSpan={2} className="py-1">
+                  <ImageDiff
+                    before={old.get(path)}
+                    after={next.get(path)}
+                    assets={assets}
+                    isAssetReference={isAssetReference}
+                    isEditing={false}
+                    onEdit={onEdit}
+                  />
+                </td>
+              ) : (
+                <>
+                  <td className="py-1 pr-2 line-through opacity-60">
+                    {formatScalar(old.get(path))}
+                  </td>
+                  <td className="py-1 font-bold">{formatScalar(next.get(path))}</td>
+                </>
+              )}
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -633,9 +673,11 @@ const FieldDiff: React.FC<{
 const ImageDiff: React.FC<{
   before: unknown;
   after: unknown;
+  assets?: Record<string, Asset>;
+  isAssetReference?: boolean;
   isEditing: boolean;
   onEdit: (value: string) => void;
-}> = ({ before, after, isEditing, onEdit }) => {
+}> = ({ before, after, assets = {}, isAssetReference = false, isEditing, onEdit }) => {
   const pictures = [
     ["Current", typeof before === "string" ? before : ""],
     ["Proposed", typeof after === "string" ? after : ""],
@@ -650,22 +692,35 @@ const ImageDiff: React.FC<{
         />
       )}
       <div className="flex flex-wrap gap-4">
-        {pictures.map(([label, url]) =>
-          label === "Current" && !url ? null : (
+        {pictures.map(([label, value]) => {
+          const asset = isAssetReference ? assets[value] : undefined;
+          const url = isAssetReference ? asset?.image : value;
+          return label === "Current" && !value ? null : (
             <figure key={label} className="flex flex-col gap-1">
               <figcaption className="font-bold text-xs uppercase opacity-70">
                 {label}
               </figcaption>
               {url ? (
                 <div className="h-32 w-32">
-                  <ContentImage image={url} alt={`${label} image`} className="" />
+                  <ContentImage
+                    image={url}
+                    alt={asset?.name ?? `${label} image`}
+                    className="object-contain"
+                  />
                 </div>
               ) : (
-                <p className="text-xs opacity-70">No image</p>
+                <p className="text-xs opacity-70">
+                  {value ? "Image unavailable" : "No image"}
+                </p>
+              )}
+              {isAssetReference && value && (
+                <span className="max-w-32 break-all text-xs">
+                  {asset?.name ?? value}
+                </span>
               )}
             </figure>
-          ),
-        )}
+          );
+        })}
       </div>
     </div>
   );

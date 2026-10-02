@@ -1,4 +1,5 @@
 import type { ContentProposalMediaKind } from "@/drizzle/constants";
+import { flattenLeaves } from "@/utils/wordDiff";
 
 /**
  * Top-level field a path starts in. Paths are dotted into an entity's editable fields:
@@ -52,6 +53,16 @@ export const isMediaPath = (kind: ContentProposalMediaKind, path: string) => {
   const last = pathSegments(path).pop() ?? "";
   return MEDIA_FIELDS[kind].includes(last);
 };
+
+/** Scene pictures reference catalog assets rather than image URLs. */
+export const isSceneAssetPath = (path: string) =>
+  /(?:^|\.)(?:sceneBackground|sceneCharacters\.\d+)$/.test(path);
+
+/** Catalog pictures used by quest scenes, including scenes nested in objectives. */
+export const sceneAssetIds = (fields: unknown) =>
+  [...flattenLeaves(fields)].flatMap(([path, value]) =>
+    isSceneAssetPath(path) && typeof value === "string" && value ? [value] : [],
+  );
 
 const pathSegments = (path: string) => path.split(".");
 
