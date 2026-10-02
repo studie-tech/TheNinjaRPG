@@ -2,9 +2,12 @@
 
 import { noCase } from "change-case";
 import {
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   BookOpen,
   Briefcase,
+  ChevronDown,
   Coins,
   Dumbbell,
   Eye,
@@ -24,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
 import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
@@ -53,6 +57,9 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { nextUtcDayAt } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+const dashboardSections = ["now", "catalogue", "progress"] as const;
+type DashboardSectionId = (typeof dashboardSections)[number];
+
 const categoryLabels = {
   events: "Events",
   missions: "Missions & crimes",
@@ -66,6 +73,36 @@ export default function ProfileDashboard() {
   const utils = api.useUtils();
   const { sectorVillage } = useSectorVillage(userData);
   const [showAllContent, setShowAllContent] = useState(false);
+  const [sectionOrder, setSectionOrder] = useState<DashboardSectionId[]>([
+    ...dashboardSections,
+  ]);
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(
+        safeLocalStorageGetItem("profileDashboardOrder") ?? "null",
+      );
+      if (
+        Array.isArray(stored) &&
+        stored.length === dashboardSections.length &&
+        new Set(stored).size === dashboardSections.length &&
+        stored.every((id) => dashboardSections.includes(id))
+      ) {
+        setSectionOrder(stored);
+      }
+    } catch {
+      // A malformed saved preference falls back to the published layout.
+    }
+  }, []);
+  const moveSection = (id: DashboardSectionId, direction: -1 | 1) => {
+    const index = sectionOrder.indexOf(id);
+    const target = index + direction;
+    if (target < 0 || target >= sectionOrder.length) return;
+    const next = [...sectionOrder];
+    next.splice(index, 1);
+    next.splice(target, 0, id);
+    setSectionOrder(next);
+    safeLocalStorageSetItem("profileDashboardOrder", JSON.stringify(next));
+  };
 
   const dashboard = api.profile.getDashboard.useQuery(undefined, {
     staleTime: 60_000,
@@ -216,346 +253,352 @@ export default function ProfileDashboard() {
       : "Raid rewards";
   const pendingInterestDays = interest.data?.records.length ?? 0;
 
-  return (
-    <div className="space-y-8 p-3 sm:p-4">
-      <section aria-labelledby="now-heading">
+  const sections = {
+    now: {
+      heading: (
         <SectionHeader eyebrow="Right now" title="In progress" id="now-heading" />
-        <div className="rounded-md border bg-card px-4">
-          {claimsLoading && (
-            <p className="border-t py-3 text-muted-foreground text-sm first:border-t-0">
-              Checking the streak, the bank, and raids...
-            </p>
-          )}
-          {streaks.isError && (
-            <div className="border-t py-3 first:border-t-0">
-              <RetryPanel
-                message="The activity streak could not be loaded."
-                onRetry={() => void streaks.refetch()}
+      ),
+      content: (
+        <>
+          <div className="rounded-md border bg-card px-4">
+            {claimsLoading && (
+              <p className="border-t py-3 text-muted-foreground text-sm first:border-t-0">
+                Checking the streak, the bank, and raids...
+              </p>
+            )}
+            {streaks.isError && (
+              <div className="border-t py-3 first:border-t-0">
+                <RetryPanel
+                  message="The activity streak could not be loaded."
+                  onRetry={() => void streaks.refetch()}
+                />
+              </div>
+            )}
+            {interest.isError && (
+              <div className="border-t py-3 first:border-t-0">
+                <RetryPanel
+                  message="Bank interest could not be loaded."
+                  onRetry={() => void interest.refetch()}
+                />
+              </div>
+            )}
+            {dashboard.isError && (
+              <div className="border-t py-3 first:border-t-0">
+                <RetryPanel
+                  message="Raid rewards could not be loaded."
+                  onRetry={() => void dashboard.refetch()}
+                />
+              </div>
+            )}
+            {catchUpStreak && (
+              <StatusRow
+                label="Streak"
+                title={`${catchUpStreak.daysToGo ?? 1} ${(catchUpStreak.daysToGo ?? 1) === 1 ? "day" : "days"} behind`}
+                detail={`Day ${catchUpStreak.nextDayNumber}: ${getRewardPreview(catchUpStreak.nextRewards) || "Daily reward"}. ${COST_STREAK_CATCHUP_DAY} rep per day to catch up.`}
+                note={
+                  <>
+                    {claimStreak.error && (
+                      <p className="text-destructive">{claimStreak.error.message}</p>
+                    )}
+                  </>
+                }
+                action={
+                  <>
+                    <Confirm
+                      title="Reset Streak"
+                      button={
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={claimStreak.isPending}
+                          className="w-full gap-1.5 hover:text-black"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          Reset
+                        </Button>
+                      }
+                      onAccept={(event) => {
+                        event.preventDefault();
+                        claimStreak.mutate({
+                          configId: catchUpStreak.configId,
+                          reset: true,
+                        });
+                      }}
+                    >
+                      <p>
+                        Your streak will reset to day 1. Current progress (day{" "}
+                        {catchUpStreak.currentDay}) will be lost.
+                      </p>
+                    </Confirm>
+                    <RowAction
+                      icon={Timer}
+                      variant="default"
+                      disabled={claimStreak.isPending}
+                      onClick={() =>
+                        claimStreak.mutate({
+                          configId: catchUpStreak.configId,
+                          payCatchUp: true,
+                        })
+                      }
+                    >
+                      {claimStreak.isPending ? "Claiming..." : "Catch up"}
+                    </RowAction>
+                  </>
+                }
               />
-            </div>
-          )}
-          {interest.isError && (
-            <div className="border-t py-3 first:border-t-0">
-              <RetryPanel
-                message="Bank interest could not be loaded."
-                onRetry={() => void interest.refetch()}
-              />
-            </div>
-          )}
-          {dashboard.isError && (
-            <div className="border-t py-3 first:border-t-0">
-              <RetryPanel
-                message="Raid rewards could not be loaded."
-                onRetry={() => void dashboard.refetch()}
-              />
-            </div>
-          )}
-          {catchUpStreak && (
-            <StatusRow
-              label="Streak"
-              title={`${catchUpStreak.daysToGo ?? 1} ${(catchUpStreak.daysToGo ?? 1) === 1 ? "day" : "days"} behind`}
-              detail={`Day ${catchUpStreak.nextDayNumber}: ${getRewardPreview(catchUpStreak.nextRewards) || "Daily reward"}. ${COST_STREAK_CATCHUP_DAY} rep per day to catch up.`}
-              note={
-                <>
-                  {claimStreak.error && (
-                    <p className="text-destructive">{claimStreak.error.message}</p>
-                  )}
-                </>
-              }
-              action={
-                <>
-                  <Confirm
-                    title="Reset Streak"
-                    button={
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={claimStreak.isPending}
-                        className="w-full gap-1.5 hover:text-black"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                        Reset
-                      </Button>
-                    }
-                    onAccept={(event) => {
-                      event.preventDefault();
-                      claimStreak.mutate({
-                        configId: catchUpStreak.configId,
-                        reset: true,
-                      });
-                    }}
-                  >
-                    <p>
-                      Your streak will reset to day 1. Current progress (day{" "}
-                      {catchUpStreak.currentDay}) will be lost.
-                    </p>
-                  </Confirm>
+            )}
+            {!catchUpStreak && claimableStreak && (
+              <StatusRow
+                label="Streak"
+                title={`Day ${claimableStreak.nextDayNumber}`}
+                detail={
+                  getRewardPreview(claimableStreak.nextRewards) ||
+                  "Claim today’s activity reward."
+                }
+                note={
+                  <>
+                    {claimStreak.error && (
+                      <p className="text-destructive">{claimStreak.error.message}</p>
+                    )}
+                  </>
+                }
+                action={
                   <RowAction
-                    icon={Timer}
+                    icon={Gift}
                     variant="default"
                     disabled={claimStreak.isPending}
                     onClick={() =>
-                      claimStreak.mutate({
-                        configId: catchUpStreak.configId,
-                        payCatchUp: true,
-                      })
+                      claimStreak.mutate({ configId: claimableStreak.configId })
                     }
                   >
-                    {claimStreak.isPending ? "Claiming..." : "Catch up"}
+                    {claimStreak.isPending ? "Claiming..." : "Claim"}
                   </RowAction>
-                </>
-              }
-            />
-          )}
-          {!catchUpStreak && claimableStreak && (
+                }
+              />
+            )}
+            {!catchUpStreak && !claimableStreak && recurringStreak && (
+              <StatusRow
+                label="Streak"
+                title="Day 1"
+                detail={recurringReward || "Claim today’s activity reward."}
+                note={
+                  <>
+                    {claimStreak.error && (
+                      <p className="text-destructive">{claimStreak.error.message}</p>
+                    )}
+                  </>
+                }
+                action={
+                  <RowAction
+                    icon={Gift}
+                    variant="default"
+                    disabled={claimStreak.isPending}
+                    onClick={() => claimStreak.mutate({ configId: recurringStreak.id })}
+                  >
+                    {claimStreak.isPending ? "Claiming..." : "Claim"}
+                  </RowAction>
+                }
+              />
+            )}
+            {bankWaiting && (
+              <StatusRow
+                label="Bank"
+                title={`${(interest.data?.totalPending ?? 0).toLocaleString()} ryo`}
+                detail={
+                  pendingInterestDays > 0
+                    ? `${pendingInterestDays} unclaimed ${pendingInterestDays === 1 ? "day" : "days"}`
+                    : "Ready to collect"
+                }
+                note={
+                  claimInterest.error ? (
+                    <p className="text-destructive">{claimInterest.error.message}</p>
+                  ) : null
+                }
+                action={
+                  <RowAction
+                    icon={Coins}
+                    variant="default"
+                    disabled={!canClaimInterest || claimInterest.isPending}
+                    onClick={() => claimInterest.mutate()}
+                  >
+                    {claimInterest.isPending ? "Collecting..." : "Collect"}
+                  </RowAction>
+                }
+              />
+            )}
+            {claimableRaidRewards > 0 && (
+              <StatusRow
+                label="Raids"
+                title={raidTitle}
+                detail={`${claimableRaidRewards} ready`}
+                action={
+                  <RowAction href="/globalanbuhq" icon={Swords}>
+                    Open
+                  </RowAction>
+                }
+              />
+            )}
+            {training ? (
+              <StatusRow
+                label="Training"
+                title={training.title}
+                detail={
+                  training.endsAt ? (
+                    <Countdown
+                      targetDate={training.endsAt}
+                      timeDiff={timeDiff}
+                      onEndShow="Ready"
+                    />
+                  ) : null
+                }
+                meter={
+                  training.startedAt && training.endsAt ? (
+                    <ElapsedMeter
+                      startedAt={training.startedAt}
+                      endsAt={training.endsAt}
+                      timeDiff={timeDiff}
+                      onFinish={() => void sidebarTimers.refetch()}
+                    />
+                  ) : null
+                }
+                action={
+                  <RowAction href="/traininggrounds" icon={Eye}>
+                    View
+                  </RowAction>
+                }
+              />
+            ) : canStartTraining ? (
+              <StatusRow
+                label="Training"
+                title="Training grounds"
+                action={
+                  <RowAction href="/traininggrounds" icon={Dumbbell}>
+                    Train
+                  </RowAction>
+                }
+              />
+            ) : null}
             <StatusRow
-              label="Streak"
-              title={`Day ${claimableStreak.nextDayNumber}`}
+              label={occupationLine.label}
+              title={occupationLine.title}
               detail={
-                getRewardPreview(claimableStreak.nextRewards) ||
-                "Claim today’s activity reward."
-              }
-              note={
-                <>
-                  {claimStreak.error && (
-                    <p className="text-destructive">{claimStreak.error.message}</p>
-                  )}
-                </>
-              }
-              action={
-                <RowAction
-                  icon={Gift}
-                  variant="default"
-                  disabled={claimStreak.isPending}
-                  onClick={() =>
-                    claimStreak.mutate({ configId: claimableStreak.configId })
-                  }
-                >
-                  {claimStreak.isPending ? "Claiming..." : "Claim"}
-                </RowAction>
-              }
-            />
-          )}
-          {!catchUpStreak && !claimableStreak && recurringStreak && (
-            <StatusRow
-              label="Streak"
-              title="Day 1"
-              detail={recurringReward || "Claim today’s activity reward."}
-              note={
-                <>
-                  {claimStreak.error && (
-                    <p className="text-destructive">{claimStreak.error.message}</p>
-                  )}
-                </>
-              }
-              action={
-                <RowAction
-                  icon={Gift}
-                  variant="default"
-                  disabled={claimStreak.isPending}
-                  onClick={() => claimStreak.mutate({ configId: recurringStreak.id })}
-                >
-                  {claimStreak.isPending ? "Claiming..." : "Claim"}
-                </RowAction>
-              }
-            />
-          )}
-          {bankWaiting && (
-            <StatusRow
-              label="Bank"
-              title={`${(interest.data?.totalPending ?? 0).toLocaleString()} ryo`}
-              detail={
-                pendingInterestDays > 0
-                  ? `${pendingInterestDays} unclaimed ${pendingInterestDays === 1 ? "day" : "days"}`
-                  : "Ready to collect"
-              }
-              note={
-                claimInterest.error ? (
-                  <p className="text-destructive">{claimInterest.error.message}</p>
-                ) : null
-              }
-              action={
-                <RowAction
-                  icon={Coins}
-                  variant="default"
-                  disabled={!canClaimInterest || claimInterest.isPending}
-                  onClick={() => claimInterest.mutate()}
-                >
-                  {claimInterest.isPending ? "Collecting..." : "Collect"}
-                </RowAction>
-              }
-            />
-          )}
-          {claimableRaidRewards > 0 && (
-            <StatusRow
-              label="Raids"
-              title={raidTitle}
-              detail={`${claimableRaidRewards} ready`}
-              action={
-                <RowAction href="/globalanbuhq" icon={Swords}>
-                  Open
-                </RowAction>
-              }
-            />
-          )}
-          {training ? (
-            <StatusRow
-              label="Training"
-              title={training.title}
-              detail={
-                training.endsAt ? (
+                occupationLine.craftTimer && craftTimer ? (
                   <Countdown
-                    targetDate={training.endsAt}
+                    targetDate={craftTimer.endsAt}
                     timeDiff={timeDiff}
                     onEndShow="Ready"
                   />
-                ) : null
+                ) : (
+                  occupationLine.detail
+                )
               }
+              progress={occupationLine.craftTimer ? null : occupationLine.progress}
               meter={
-                training.startedAt && training.endsAt ? (
+                occupationLine.craftTimer && craftTimer ? (
                   <ElapsedMeter
-                    startedAt={training.startedAt}
-                    endsAt={training.endsAt}
+                    startedAt={craftTimer.startedAt}
+                    endsAt={craftTimer.endsAt}
                     timeDiff={timeDiff}
                     onFinish={() => void sidebarTimers.refetch()}
                   />
                 ) : null
               }
               action={
-                <RowAction href="/traininggrounds" icon={Eye}>
-                  View
+                <RowAction
+                  href="/occupation"
+                  icon={iconForRowAction(occupationLine.action)}
+                >
+                  {occupationLine.action}
                 </RowAction>
               }
             />
-          ) : canStartTraining ? (
-            <StatusRow
-              label="Training"
-              title="Training grounds"
-              action={
-                <RowAction href="/traininggrounds" icon={Dumbbell}>
-                  Train
-                </RowAction>
-              }
-            />
-          ) : null}
-          <StatusRow
-            label={occupationLine.label}
-            title={occupationLine.title}
-            detail={
-              occupationLine.craftTimer && craftTimer ? (
-                <Countdown
-                  targetDate={craftTimer.endsAt}
-                  timeDiff={timeDiff}
-                  onEndShow="Ready"
-                />
-              ) : (
-                occupationLine.detail
-              )
-            }
-            progress={occupationLine.craftTimer ? null : occupationLine.progress}
-            meter={
-              occupationLine.craftTimer && craftTimer ? (
-                <ElapsedMeter
-                  startedAt={craftTimer.startedAt}
-                  endsAt={craftTimer.endsAt}
-                  timeDiff={timeDiff}
-                  onFinish={() => void sidebarTimers.refetch()}
-                />
-              ) : null
-            }
-            action={
-              <RowAction
-                href="/occupation"
-                icon={iconForRowAction(occupationLine.action)}
-              >
-                {occupationLine.action}
-              </RowAction>
-            }
-          />
-          {visibleCraftTimers.map((timer) => (
-            <StatusRow
-              key={`${timer.kind}-${timer.title}`}
-              label={timer.label}
-              title={timer.title}
-              detail={
-                <Countdown
-                  targetDate={timer.endsAt}
-                  timeDiff={timeDiff}
-                  onEndShow="Ready"
-                />
-              }
-              meter={
-                <ElapsedMeter
-                  startedAt={timer.startedAt}
-                  endsAt={timer.endsAt}
-                  timeDiff={timeDiff}
-                  onFinish={() => void sidebarTimers.refetch()}
-                />
-              }
-              action={
-                <RowAction href={timer.href} icon={Eye}>
-                  View
-                </RowAction>
-              }
-            />
-          ))}
-          {sidebarTimers.isError && (
-            <div className="border-t py-3">
-              <RetryPanel
-                message="Training and crafting timers could not be loaded."
-                onRetry={() => void sidebarTimers.refetch()}
+            {visibleCraftTimers.map((timer) => (
+              <StatusRow
+                key={`${timer.kind}-${timer.title}`}
+                label={timer.label}
+                title={timer.title}
+                detail={
+                  <Countdown
+                    targetDate={timer.endsAt}
+                    timeDiff={timeDiff}
+                    onEndShow="Ready"
+                  />
+                }
+                meter={
+                  <ElapsedMeter
+                    startedAt={timer.startedAt}
+                    endsAt={timer.endsAt}
+                    timeDiff={timeDiff}
+                    onFinish={() => void sidebarTimers.refetch()}
+                  />
+                }
+                action={
+                  <RowAction href={timer.href} icon={Eye}>
+                    View
+                  </RowAction>
+                }
               />
-            </div>
-          )}
-          <div className="border-t py-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 min-w-12 shrink-0 flex-col items-center justify-center rounded-md border border-amber-600/50 bg-gradient-to-b from-amber-100 to-amber-200/60 px-2 shadow-sm dark:from-amber-950 dark:to-amber-900/50">
-                <span className="font-semibold text-[8px] text-amber-900 uppercase leading-none tracking-wide dark:text-amber-200">
-                  Level
-                </span>
-                <span className="mt-0.5 font-bold font-mono text-amber-950 text-base leading-none dark:text-amber-100">
-                  {userData.level}
-                </span>
+            ))}
+            {sidebarTimers.isError && (
+              <div className="border-t py-3">
+                <RetryPanel
+                  message="Training and crafting timers could not be loaded."
+                  onRetry={() => void sidebarTimers.refetch()}
+                />
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
-                  <span className="font-semibold text-amber-900 uppercase tracking-wide dark:text-amber-200">
-                    XP
+            )}
+            <div className="border-t py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 min-w-12 shrink-0 flex-col items-center justify-center rounded-md border border-amber-600/50 bg-gradient-to-b from-amber-100 to-amber-200/60 px-2 shadow-sm dark:from-amber-950 dark:to-amber-900/50">
+                  <span className="font-semibold text-[8px] text-amber-900 uppercase leading-none tracking-wide dark:text-amber-200">
+                    Level
                   </span>
-                  <span className="text-muted-foreground">
-                    {canLevelUp
-                      ? "Ready to level up"
-                      : `${Number(experienceToGo.toFixed(0)).toLocaleString()} XP to go`}
+                  <span className="mt-0.5 font-bold font-mono text-amber-950 text-base leading-none dark:text-amber-100">
+                    {userData.level}
                   </span>
                 </div>
-                <div className="relative">
-                  <Progress
-                    value={levelProgress}
-                    aria-label={`Experience toward leveling up from level ${userData.level}`}
-                    aria-valuenow={levelProgress}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    className="h-3 rounded-sm border border-amber-900/30 bg-amber-950/10 shadow-inner dark:border-amber-300/25 dark:bg-black/30"
-                    indicatorClassName="bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]"
-                  />
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 rounded-sm bg-[repeating-linear-gradient(to_right,transparent_0,transparent_calc(12.5%-1px),rgba(120,53,15,0.25)_calc(12.5%-1px),rgba(120,53,15,0.25)_12.5%)]"
-                  />
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
+                    <span className="font-semibold text-amber-900 uppercase tracking-wide dark:text-amber-200">
+                      XP
+                    </span>
+                    <span className="text-muted-foreground">
+                      {canLevelUp
+                        ? "Ready to level up"
+                        : `${Number(experienceToGo.toFixed(0)).toLocaleString()} XP to go`}
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Progress
+                      value={levelProgress}
+                      aria-label={`Experience toward leveling up from level ${userData.level}`}
+                      aria-valuenow={levelProgress}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      className="h-3 rounded-sm border border-amber-900/30 bg-amber-950/10 shadow-inner dark:border-amber-300/25 dark:bg-black/30"
+                      indicatorClassName="bg-gradient-to-r from-amber-700 via-amber-500 to-amber-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]"
+                    />
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 rounded-sm bg-[repeating-linear-gradient(to_right,transparent_0,transparent_calc(12.5%-1px),rgba(120,53,15,0.25)_calc(12.5%-1px),rgba(120,53,15,0.25)_12.5%)]"
+                    />
+                  </div>
                 </div>
               </div>
+              <LevelUpBtn id="tutorial-level-up-dashboard" />
             </div>
-            <LevelUpBtn id="tutorial-level-up-dashboard" />
+            {!claimsLoading && !claimsFailed && !hasCollectible && (
+              <p className="border-t py-3 text-muted-foreground text-sm">
+                Nothing to collect from the streak, the bank, or raids.
+              </p>
+            )}
           </div>
-          {!claimsLoading && !claimsFailed && !hasCollectible && (
-            <p className="border-t py-3 text-muted-foreground text-sm">
-              Nothing to collect from the streak, the bank, or raids.
-            </p>
-          )}
-        </div>
-      </section>
+        </>
+      ),
+    },
 
-      <section aria-labelledby="catalogue-heading">
+    catalogue: {
+      heading: (
         <SectionHeader
           eyebrow="Opportunities"
           title="Available content"
@@ -582,91 +625,190 @@ export default function ProfileDashboard() {
             ) : null
           }
         />
-        {dashboard.isLoading && catalogue.length === 0 ? (
-          <Loader explanation="Loading available content..." />
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {previewContent.map((entry) => (
-              <ContentCard key={`${entry.category}-${entry.id}`} entry={entry} />
-            ))}
-            {previewContent.length === 0 && (
-              <div className="col-span-full rounded-md border border-dashed p-5 text-muted-foreground text-sm">
-                No discoverable content is published for your character right now.
-              </div>
-            )}
-          </div>
-        )}
-        {dashboard.isError && (
-          <RetryPanel
-            message="Quest discovery could not be loaded. This is not the same as having no available content."
-            onRetry={() => void dashboard.refetch()}
-          />
-        )}
-      </section>
+      ),
+      content: (
+        <>
+          {dashboard.isLoading && catalogue.length === 0 ? (
+            <Loader explanation="Loading available content..." />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {previewContent.map((entry) => (
+                <ContentCard key={`${entry.category}-${entry.id}`} entry={entry} />
+              ))}
+              {previewContent.length === 0 && (
+                <div className="col-span-full rounded-md border border-dashed p-5 text-muted-foreground text-sm">
+                  No discoverable content is published for your character right now.
+                </div>
+              )}
+            </div>
+          )}
+          {dashboard.isError && (
+            <RetryPanel
+              message="Quest discovery could not be loaded. This is not the same as having no available content."
+              onRetry={() => void dashboard.refetch()}
+            />
+          )}
+        </>
+      ),
+    },
 
-      <section aria-labelledby="progress-heading">
+    progress: {
+      heading: (
         <SectionHeader
           eyebrow="Your logbook"
           title="In progress"
           id="progress-heading"
         />
-        <div className="overflow-hidden rounded-md border bg-card">
-          {hasActiveQuests ? (
-            <LogbookActive />
-          ) : dashboard.isLoading ? (
-            <Loader explanation="Finding your next activity..." />
-          ) : recommended ? (
-            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold">Your logbook is clear.</p>
-                <p className="text-muted-foreground text-sm">
-                  A good next step is {recommended.name} in {recommended.location}.
-                </p>
+      ),
+      content: (
+        <>
+          <div className="overflow-hidden rounded-md border bg-card">
+            {hasActiveQuests ? (
+              <LogbookActive />
+            ) : dashboard.isLoading ? (
+              <Loader explanation="Finding your next activity..." />
+            ) : recommended ? (
+              <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold">Your logbook is clear.</p>
+                  <p className="text-muted-foreground text-sm">
+                    A good next step is {recommended.name} in {recommended.location}.
+                  </p>
+                </div>
+                <Button asChild>
+                  <Link href={dashboardContentHref(recommended)}>
+                    View next activity
+                  </Link>
+                </Button>
               </div>
-              <Button asChild>
-                <Link href={dashboardContentHref(recommended)}>View next activity</Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="p-4 text-muted-foreground text-sm">
-              No active activity or eligible recommendation is available right now.
+            ) : (
+              <div className="p-4 text-muted-foreground text-sm">
+                No active activity or eligible recommendation is available right now.
+              </div>
+            )}
+          </div>
+          {activeRaids.length > 0 && (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {activeRaids.map((raid) => (
+                <Card key={raid.id}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <ShieldCheck className="h-4 w-4 text-red-400" />
+                      {raid.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <p>{raid.damageDealt.toLocaleString()} damage dealt</p>
+                    <p className="text-muted-foreground">
+                      {raid.raidEndsAt
+                        ? `Ends ${raid.raidEndsAt.toLocaleString()}`
+                        : "No published deadline"}
+                    </p>
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="hover:text-black"
+                    >
+                      <Link href={raidContinueHref(raid.sector, userData.sector)}>
+                        Continue raid
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
-        </div>
-        {activeRaids.length > 0 && (
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            {activeRaids.map((raid) => (
-              <Card key={raid.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <ShieldCheck className="h-4 w-4 text-red-400" />
-                    {raid.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <p>{raid.damageDealt.toLocaleString()} damage dealt</p>
-                  <p className="text-muted-foreground">
-                    {raid.raidEndsAt
-                      ? `Ends ${raid.raidEndsAt.toLocaleString()}`
-                      : "No published deadline"}
-                  </p>
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="outline"
-                    className="hover:text-black"
-                  >
-                    <Link href={raidContinueHref(raid.sector, userData.sector)}>
-                      Continue raid
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </section>
+        </>
+      ),
+    },
+  };
+  return (
+    <div className="space-y-8 p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <p>
+          Seichi Silver: <strong>{userData.seichiSilver.toLocaleString()}</strong>
+        </p>
+        <p className="text-muted-foreground">Use the arrows to reorder sections.</p>
+      </div>
+      {sectionOrder.map((id, index) => (
+        <DashboardSection
+          key={id}
+          id={id}
+          heading={sections[id].heading}
+          onMove={(direction) => moveSection(id, direction)}
+          canMoveUp={index > 0}
+          canMoveDown={index < sectionOrder.length - 1}
+        >
+          {sections[id].content}
+        </DashboardSection>
+      ))}
     </div>
+  );
+}
+
+function DashboardSection({
+  id,
+  children,
+  heading,
+  onMove,
+  canMoveUp,
+  canMoveDown,
+}: {
+  id: DashboardSectionId;
+  children: React.ReactNode;
+  heading: React.ReactNode;
+  onMove: (direction: -1 | 1) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const labels = {
+    now: "Right now",
+    catalogue: "Available content",
+    progress: "Your logbook",
+  };
+  return (
+    <section aria-labelledby={`${id}-heading`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">{heading}</div>
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!canMoveUp}
+            onClick={() => onMove(-1)}
+            aria-label={`Move ${labels[id]} up`}
+          >
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!canMoveDown}
+            onClick={() => onMove(1)}
+            aria-label={`Move ${labels[id]} down`}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-expanded={!collapsed}
+            aria-controls={`${id}-content`}
+            aria-label={`${collapsed ? "Expand" : "Collapse"} ${labels[id]}`}
+            onClick={() => setCollapsed(!collapsed)}
+          >
+            <ChevronDown
+              className={cn("h-4 w-4 transition-transform", collapsed && "-rotate-90")}
+            />
+          </Button>
+        </div>
+      </div>
+      <div id={`${id}-content`} hidden={collapsed}>
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -855,7 +997,7 @@ function ContentCard({ entry }: { entry: DashboardCatalogueEntry }) {
             alt=""
             width={640}
             height={280}
-            className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+            className="h-full w-full object-contain"
           />
         ) : (
           <div className="flex h-full items-center justify-center">

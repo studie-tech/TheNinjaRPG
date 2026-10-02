@@ -40,12 +40,14 @@ type ProfileTab = (typeof profileTabs)[number];
 
 export default function Profile() {
   const { data: userData } = useRequiredUserData();
-  const [tab, setTab] = useState<ProfileTab>("Dashboard");
+  const [tab, setTab] = useState<ProfileTab | null>(null);
 
   if (!userData) return <Loader explanation="Loading profile page..." />;
 
   const tutorialActive = isTutorialActive(userData);
-  const activeTab = tutorialActive && tab === "Dashboard" ? "Character" : tab;
+  const selectedTab = tab ?? "Dashboard";
+  const activeTab =
+    tutorialActive && selectedTab === "Dashboard" ? "Character" : selectedTab;
   const visibleTabs = tutorialActive ? tutorialProfileTabs : profileTabs;
 
   return (
@@ -53,10 +55,18 @@ export default function Profile() {
       <div className="mb-3 flex justify-end">
         <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavTabs
-            current={activeTab}
+            id="profileTab"
+            current={tab === null ? null : activeTab}
             options={visibleTabs}
-            setValue={setTab}
-            fontSize="text-xs"
+            onChange={(value) =>
+              setTab(
+                profileTabs.includes(value as ProfileTab)
+                  ? (value as ProfileTab)
+                  : "Dashboard",
+              )
+            }
+            fontSize="text-sm"
+            className="min-h-11 px-3 sm:text-base"
           />
         </div>
       </div>
@@ -210,6 +220,7 @@ function CharacterProfile() {
                 </div>
               </TooltipProvider>
             )}
+            <p>Seichi Silver: {userData.seichiSilver.toLocaleString()}</p>
             <p>Medical Exp: {userData.medicalExperience?.toLocaleString()}</p>
           </div>
           <div>
@@ -376,11 +387,17 @@ function CharacterProfile() {
 }
 
 function ProfileHistory() {
-  const [tab, setTab] = useState<"Quests" | "Battles">("Quests");
+  const [tab, setTab] = useState<"Quests" | "Battles" | null>(null);
   return (
     <div>
       <div className="flex justify-end border-b px-3">
-        <NavTabs current={tab} options={["Quests", "Battles"]} setValue={setTab} />
+        <NavTabs
+          id="profileHistoryTab"
+          current={tab}
+          options={["Battles", "Quests"]}
+          onChange={(value) => setTab(value === "Quests" ? "Quests" : "Battles")}
+          className="min-h-11 px-3"
+        />
       </div>
       {tab === "Quests" ? <LogbookHistory /> : <LogbookBattles />}
     </div>
