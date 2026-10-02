@@ -725,9 +725,6 @@ export default function ProfileDashboard() {
   };
   return (
     <div className="space-y-8 p-3 sm:p-4">
-      <p className="text-muted-foreground text-sm">
-        Use the arrows to reorder sections.
-      </p>
       {sectionOrder.map((id, index) => (
         <DashboardSection
           key={id}
