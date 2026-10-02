@@ -220,12 +220,12 @@ function CharacterProfile() {
                 </div>
               </TooltipProvider>
             )}
-            <p>Seichi Silver: {userData.seichiSilver.toLocaleString()}</p>
             <p>Medical Exp: {userData.medicalExperience?.toLocaleString()}</p>
           </div>
           <div>
             <b>Reputation</b>
             <p>Reputation points: {userData.reputationPoints?.toLocaleString()}</p>
+            <p>Seichi Silver: {userData.seichiSilver.toLocaleString()}</p>
             <p>Federal Support: {(userData.federalStatus || "NONE").toLowerCase()}</p>
             {userData.isOutlaw && (
               <p>Notoriety: {userData.villagePrestige?.toLocaleString()}</p>

@@ -725,12 +725,9 @@ export default function ProfileDashboard() {
   };
   return (
     <div className="space-y-8 p-3 sm:p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <p>
-          Seichi Silver: <strong>{userData.seichiSilver.toLocaleString()}</strong>
-        </p>
-        <p className="text-muted-foreground">Use the arrows to reorder sections.</p>
-      </div>
+      <p className="text-muted-foreground text-sm">
+        Use the arrows to reorder sections.
+      </p>
       {sectionOrder.map((id, index) => (
         <DashboardSection
           key={id}
@@ -997,7 +994,7 @@ function ContentCard({ entry }: { entry: DashboardCatalogueEntry }) {
             alt=""
             width={640}
             height={280}
-            className="h-full w-full object-contain"
+            className="h-full w-full object-cover object-bottom"
           />
         ) : (
           <div className="flex h-full items-center justify-center">
