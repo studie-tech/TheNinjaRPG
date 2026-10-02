@@ -3,13 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import { sceneAssetIds } from "@/libs/contentReview/paths";
 
-const { state } = vi.hoisted(() => ({
-  state: { before: {}, after: {}, applied: null } as {
-    before: Record<string, unknown>;
-    after: Record<string, unknown>;
-    applied: Record<string, unknown> | null;
-  },
-}));
+const state: {
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  applied: Record<string, unknown> | null;
+} = { before: {}, after: {}, applied: null };
 
 vi.mock("@/app/_trpc/client", () => ({
   api: {
@@ -55,7 +53,6 @@ vi.mock("@/app/_trpc/client", () => ({
 }));
 vi.mock("@/layout/BattlefieldPreview", () => ({ BattlefieldPreview: () => null }));
 vi.mock("@/layout/ItemWithEffects", () => ({ default: () => null }));
-vi.mock("@/layout/Link", () => ({ default: () => null }));
 vi.mock("@/libs/toast", () => ({ showMutationToast: vi.fn() }));
 vi.mock("@/layout/ContentImage", () => ({
   default: ({ image, alt }: { image: string; alt: string }) => (
