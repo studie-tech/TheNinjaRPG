@@ -134,6 +134,54 @@ describe("GlobalAudioProvider", () => {
     }
   });
 
+  it("starts iOS remote Play during the gesture and keeps a later Pause authoritative", async () => {
+    const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
+    Object.defineProperty(window, "Capacitor", {
+      configurable: true,
+      value: { getPlatform: () => "ios" },
+    });
+    const audio = getAudioTestMocks();
+    audio.enabled = false;
+    const view = render(
+      <GlobalAudioProvider userData={user(1)}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    let resolveActivation: (activated: boolean) => void = () => undefined;
+    try {
+      await waitFor(() => expect(audio.remoteCommand).toBeTypeOf("function"));
+      await act(async () => undefined);
+      audio.setEnabled.mockClear();
+      audio.deactivate.mockClear();
+      audio.activate.mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveActivation = resolve;
+          }),
+      );
+
+      act(() => audio.remoteCommand?.("play"));
+      // WebKit's playback gesture ends when the action handler returns. The bridge
+      // response must not be a prerequisite for asking the audio element to play.
+      expect(audio.setEnabled).toHaveBeenCalledTimes(1);
+      expect(audio.setEnabled).toHaveBeenCalledWith(true);
+      await waitFor(() => expect(audio.activate).toHaveBeenCalledTimes(1));
+
+      act(() => audio.remoteCommand?.("pause"));
+      await act(async () => resolveActivation(true));
+      await waitFor(() => expect(audio.deactivate).toHaveBeenCalledWith(true));
+      expect(audio.setEnabled.mock.calls).toEqual([[true], [false]]);
+    } finally {
+      resolveActivation(true);
+      view.unmount();
+      if (originalCapacitor) {
+        Object.defineProperty(window, "Capacitor", originalCapacitor);
+      } else {
+        Reflect.deleteProperty(window, "Capacitor");
+      }
+    }
+  });
+
   it("retries iOS session activation after a failed attempt", async () => {
     const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
     Object.defineProperty(window, "Capacitor", {

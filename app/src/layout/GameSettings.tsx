@@ -290,7 +290,11 @@ export const GlobalAudioProvider: React.FC<{
         void setAudioEnabled(false);
       } else {
         const requestedPauseVersion = pauseVersion.current;
-        // Restore the native session before asking the backgrounded WebView to play.
+        // WebKit grants a playback gesture only while its media action handler runs.
+        // Start the audio before asynchronous bridge work; keep native session changes
+        // serialised so a later Pause or Music Off still wins.
+        isRemotePaused.current = false;
+        void setAudioEnabled(true);
         audioSessionQueue.current = audioSessionQueue.current
           .catch(() => undefined)
           .then(async () => {
@@ -308,8 +312,6 @@ export const GlobalAudioProvider: React.FC<{
               return;
             }
             hasActiveAudioSession.current = true;
-            isRemotePaused.current = false;
-            void setAudioEnabled(true);
           });
       }
     });
