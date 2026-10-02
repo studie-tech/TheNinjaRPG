@@ -322,7 +322,7 @@ describe("generated scene candidates", () => {
     globalThis.fetch = fetchImage;
     const request = { kind: "IMAGE" as const, path: "content.objectives.0.sceneCharacters.0", catalogIds: [], search: null, generate: "A dignified village representative" };
     const candidates = await collectCandidates({} as DrizzleClient, request, { searches: 0, generations: 1 }, "quest");
-    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ removeBg: true, preprompt: expect.stringContaining("scene character") }));
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ removeBg: true, width: 341, height: 512, size: "portrait", preprompt: expect.stringContaining("scene character") }));
     expect(candidates).toHaveLength(1);
     const opaque = await sharp({ create: { width: 128, height: 128, channels: 3, background: "white" } }).png().toBuffer();
     fetchImage.mockResolvedValue(new Response(opaque));

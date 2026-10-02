@@ -116,9 +116,10 @@ export const collectCandidates = async (
         prompt,
         removeBg: sceneCharacter || REMOVE_BG_TYPES.includes(contentType),
         userId: "content-review",
-        width: 512,
+        // Match the quest scene portrait so a full figure occupies its dialogue slot.
+        width: sceneCharacter ? 341 : 512,
         height: 512,
-        size: "square",
+        size: sceneCharacter ? "portrait" : "square",
       });
       const url = images[0] ?? null;
       if (url && sceneCharacter) {
