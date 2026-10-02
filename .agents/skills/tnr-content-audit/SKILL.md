@@ -1,6 +1,6 @@
 ---
 name: tnr-content-audit
-description: Audit TheNinja-RPG game content (jutsu, items, bloodlines, quests, badges, AI characters, assets) for grammar, balance, sound, animation, visual and consistency gaps, and write suggestions for the staff content review desk. Use for the scheduled CI audit or whenever asked to "audit content", "find content gaps", "suggest content fixes", "review jutsu balance", "check item descriptions".
+description: Audit TheNinja-RPG game content (jutsu, items, bloodlines, quests, badges, AI characters, assets) for grammar, balance, sound, animation, visual and consistency gaps, and write suggestions for the staff content review desk. Inspect scene and character art, validate generated cutouts, and refine or reopen agent proposals. Use for the scheduled CI audit or whenever asked to "audit content", "find content gaps", "suggest content fixes", "review jutsu balance", "check item descriptions".
 ---
 
 # TNR content audit
@@ -22,7 +22,10 @@ downloaded to `audit/snapshot.json`.
   (0 to 1, decided battles only) and `owners`. Visual audits also get `placeholderImage` and
   `imageSharedBy`.
 - `examples`: one full editable record per type, to copy the shape of new content from.
-- `assets[]`: the SFX and animation library (`id`, `name`, `type`, `frames`, `speed`, `usedBy`).
+- `assets[]`: the library for this focus (`id`, `name`, `type`, `image`, `url`, `v`,
+  `frames`, `speed`, `usedBy`). Scene focuses include `SCENE_CHARACTER` and
+  `SCENE_BACKGROUND`; inspect their pixels, not just their names. Include an asset
+  in `basis` as `GAME_ASSET` with its `v` when your choice relies on it.
 - `openSuggestions[]`: every suggestion still waiting for review, however old.
 - `recentlyRejected[]`, `recentlyOutdated[]`, `recentlyApplied[]`: what was decided in the last
   10 days, with reject reasons and notes.
@@ -82,7 +85,10 @@ Only one JSON object: `{ "proposals": [ ... ] }`. Each proposal:
    those; every other field is open to suggestions.
 8. Do not invent facts about the game's lore or mechanics. If a fix depends on something you
    cannot see in the snapshot, skip it.
-9. Write in the game's voice: plain English, second person for item and jutsu descriptions,
+9. Sound generation stays off unless the user explicitly requests it. Catalog selection and
+   external sound searches are allowed; set SFX `generate` to null. Image generation is
+   allowed when suitable inspected art is unavailable, subject to the visual checks below.
+10. Write in the game's voice: plain English, second person for item and jutsu descriptions,
    no emoji. Rationales call candidates sound or image proposals and never name the service
    they come from.
 
@@ -101,11 +107,105 @@ Only one JSON object: `{ "proposals": [ ... ] }`. Each proposal:
   `target` and the entity's `target`, which decide where combat draws it.
 - **visual**: placeholder images or images shared by unrelated entities. Use `media` with
   `kind: "IMAGE"`, `path: "image"` and a `generate` prompt describing the subject.
+  For quest casts, follow **Scene characters and generated art** below; scene slots hold
+  asset ids and use indexed paths, rather than image URLs.
 - **consistency**: descriptions that contradict their effects (numbers, elements, targets), and
-  naming that breaks the pattern of similar content.
+  naming that breaks the pattern of similar content. Check quest cast and setting against
+  the objective, dialogue, award and village context, using actual images.
 - **new_content**: gaps such as a rank, element or village with little content. Draft one
   complete entity with `operation: "CREATE"`, copying the structure of `examples[type]`. Assets
   are never drafted; new sounds and images come through `media`.
+
+## Scene characters and generated art
+
+Before choosing a cast, read the whole quest: its description, objectives, dialogue,
+quest type, village restrictions and reward. Describe the role the player meets and the
+scene's tone. An award for service as kage suggests a dignified village representative or
+elder; a dark unknown masked figure does not become appropriate simply because it is a
+valid scene asset. Do not turn the player into their own quest giver, invent a named canon
+character or assert an affiliation the evidence does not establish.
+
+1. Inspect the current character and background images and plausible catalog alternatives
+   with your image/vision tools. Scheduled runs attach labeled scene catalog sheets;
+   `audit/battlefield/scene-index.json` maps labels to ids and marks unavailable images.
+   Interactive runs can inspect the snapshot's image URLs or local cached originals.
+   If pixels cannot be read, do not claim visual verification or choose by name alone.
+2. Evaluate face visibility, apparent age, clothing, posture, expression, lighting and
+   silhouette against the role, mood and setting. Check transparency, complete limbs,
+   framing and readability at dialogue scale. Select the best fitting inspected candidate;
+   never use Nameless Ninja or another generic fallback merely to satisfy validation.
+   Cite the visible traits and scene evidence in the rationale. A plausible role is an
+   editorial proposal, not proof of lore.
+3. If no inspected catalog character fits, request new art through IMAGE media. Set the
+   role, appearance, expression, clothes and calm dialogue pose explicitly. Request a
+   single isolated full character in the game's pixel style, with transparent margins,
+   no backdrop, props extending outside the frame, text, border or watermark. Example:
+   ```json
+   { "kind": "IMAGE", "path": "content.sceneCharacters.0", "catalogIds": [],
+     "search": null, "generate": "A dignified elderly village representative, visible kind face, grey hair, modest formal robes, calm upright dialogue pose, full figure, retro pixel art, isolated on transparent background." }
+   ```
+   Objective casts use `content.objectives.<index>.sceneCharacters.<index>`. The slot must
+   already exist or append directly at the next index; do not create array holes. If an
+   array is absent, initialize it in `set` before using media. Never put a generated URL
+   in `sceneCharacters`; approval creates a `SCENE_CHARACTER` asset and writes its id.
+4. Generation happens on the submission server. It requests background removal and
+   refuses empty cutouts or images with opaque corner backgrounds. These technical checks
+   do not establish scene fit, good anatomy or clean edges. In an interactive run, GET the
+   saved proposal, inspect every actual generated candidate, and open its quest scene in
+   `/manual/review` using Current/Proposed and the objective selector. Inspect desktop and
+   narrow layouts: head/hands/feet intact, no leftover scenery or halo, no unwanted text,
+   readable face/clothes, correct role and mood, good scale/placement over the actual scene.
+   Do not report a generation as validated just because its prompt or removeBg flag says so.
+5. If the output fails, refine the same proposal to replace it and repeat the visual check.
+   Inspect all alternatives staff may choose, not just the default. Record the inspected
+   candidate and any remaining uncertainty in the rationale. Staff approval still controls
+   the content write. Scheduled audits cannot inspect images generated later by the submit
+   job: they must use already inspected catalog scene art or defer new scene generation to
+   this interactive inspection/refinement workflow.
+
+For delegated work, prepare shared evidence once: current full entity and version, relevant
+feedback, complete catalog metadata with versions, labeled inspected images, scene context,
+validator constraints and this skill. Remove stale dispatch policies that require generic
+protagonists or forbid the scene art generation now authorized by the user. Give each fresh subagent one content item and the
+shared evidence locations. Each agent must inspect the relevant pixels itself and report
+its evidence, candidate choice and validation result. Keep credentials with the submitting
+coordinator; a subagent's inference is not a visual check.
+
+## Refining and reopening agent suggestions
+
+When the user requests updates to existing proposals, use the existing id. Do not submit
+another proposal for the same target or automatically reopen staff rejections during a
+scheduled audit. With the same cron authentication as submission:
+
+- `GET /api/content-review/proposals/<id>` returns the saved proposal, `changes`, `basis`,
+  `media`, staff feedback and `statusChangedAt` (the optimistic revision token).
+- `PATCH /api/content-review/proposals/<id>` accepts a full replacement:
+  ```json
+  { "expectedStatusChangedAt": "<exact timestamp returned by GET>",
+    "reactivate": false, "feedbackResponse": null, "proposal": { "title": "…", "category": "VISUAL", "rationale": "…",
+      "confidence": 90, "usesUsageData": false, "changes": [], "basis": [] } }
+  ```
+  `proposal` is one complete object from the normal `proposals[]` output; fill in the
+  abbreviated example above with all changes and basis entries. Optional `runUrl` and
+  `focus` identify the revision run.
+  Preserve all target entities and operations. Rebuild every intended change against fresh
+  live content and versions; omitted fields/candidates are removed from the proposal.
+  Do not blindly replay old `after` values or lose other intended fixes.
+- For REJECTED or OUTDATED proposals, explicitly set `reactivate: true`. Read staff feedback
+  and explain how the revision addresses it in `feedbackResponse` (required for rejection).
+  The old decision metadata remains visible; this queues a revised draft for staff, without
+  approving or applying it. STAFF, APPLIED and REVERTED proposals cannot be revised here.
+- On HTTP 409, refetch the proposal and live basis and reassess the conflict. Never force a
+  retry with a new token without checking the intervening decision. On validation refusal,
+  correct the actual issue; do not remove safeguards or substitute a poor scene fit.
+- To keep already inspected GENERATED/EPIDEMIC candidates, pass their GET `media[].id`
+  values in optional `retainMediaIds`. Include matching media requests with the same target,
+  kind and path, `catalogIds: []`, `search: null`, `generate: null`. Other candidates are
+  removed. Retained candidates are not generated again; use this when recording a successful
+  visual check in the rationale. Catalog candidates use their catalog ids as usual.
+- After POST/PATCH generation, GET and inspect the resulting media and composed scene as
+  above. Request a fresh candidate through media to replace a failed generation. A catalog
+  character can be retained by its inspected id; ordinary image fields can retain their URL.
 
 ## Battlefield renders
 

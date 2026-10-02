@@ -30,6 +30,7 @@ import {
 } from "@/libs/contentReview/outdate";
 import {
   getAtPath,
+  isSceneCharacterPath,
   sceneAssetIds,
   setAtPath,
   topLevelField,
@@ -209,7 +210,7 @@ export const contentReviewRouter = createTRPCRouter({
       const assetIds = new Set(
         proposal.media.flatMap((media) => [
           ...(media.source === "CATALOG" && media.externalId ? [media.externalId] : []),
-          ...(media.kind !== "IMAGE"
+          ...(media.kind !== "IMAGE" || isSceneCharacterPath(media.path)
             ? [currentAt(media.changeId, media.path) ?? ""]
             : []),
         ]),
@@ -382,7 +383,16 @@ export const contentReviewRouter = createTRPCRouter({
           statusChangedAt: new Date(),
         })
         .where(
-          and(eq(contentProposal.id, input.id), eq(contentProposal.status, "PENDING")),
+          and(
+            eq(contentProposal.id, input.id),
+            eq(contentProposal.status, "PENDING"),
+            input.expectedStatusChangedAt
+              ? eq(
+                  contentProposal.statusChangedAt,
+                  new Date(input.expectedStatusChangedAt),
+                )
+              : undefined,
+          ),
         );
       if (result.rowsAffected !== 1) {
         return errorResponse("This suggestion was already decided or went out of date");
@@ -621,6 +631,14 @@ const applyProposal = async (
   if (proposal.status !== "PENDING") {
     return errorResponse(`This suggestion is already ${proposal.status.toLowerCase()}`);
   }
+  if (
+    choices.expectedStatusChangedAt &&
+    choices.expectedStatusChangedAt !== proposal.statusChangedAt.toISOString()
+  ) {
+    return errorResponse(
+      "This suggestion was refined. Reload and review the revised draft before deciding.",
+    );
+  }
   const entities = await loadEntities(ctx.drizzle, [
     ...targetRefs([proposal]),
     ...proposal.basis,
@@ -702,7 +720,11 @@ const applyProposal = async (
       statusChangedAt: new Date(),
     })
     .where(
-      and(eq(contentProposal.id, proposal.id), eq(contentProposal.status, "PENDING")),
+      and(
+        eq(contentProposal.id, proposal.id),
+        eq(contentProposal.status, "PENDING"),
+        eq(contentProposal.statusChangedAt, proposal.statusChangedAt),
+      ),
     );
   if (claim.rowsAffected !== 1) {
     return errorResponse(

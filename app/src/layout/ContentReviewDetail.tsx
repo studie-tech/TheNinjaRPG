@@ -45,10 +45,11 @@ import {
 import {
   isMediaPath,
   isSceneAssetPath,
+  isSceneCharacterPath,
   setAtPath,
   topLevelField,
 } from "@/libs/contentReview/paths";
-import { changedQuestScenes, questSceneOf } from "@/libs/contentReview/questScene";
+import { questSceneOf } from "@/libs/contentReview/questScene";
 import { showMutationToast } from "@/libs/toast";
 import { formatSoundLength, formatTimeAgo } from "@/utils/time";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
@@ -117,6 +118,7 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
     if (!proposal || !canDecide || isBusy) return;
     approve.mutate({
       id: proposal.id,
+      expectedStatusChangedAt: proposal.statusChangedAt.toISOString(),
       exclude: [...excluded].map((key) => {
         const [changeId = "", field = ""] = key.split("|");
         return { changeId, field };
@@ -130,7 +132,12 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
   };
   const doReject = () => {
     if (!proposal || !canDecide || isBusy) return;
-    reject.mutate({ id: proposal.id, reason, note: note.trim() || null });
+    reject.mutate({
+      id: proposal.id,
+      expectedStatusChangedAt: proposal.statusChangedAt.toISOString(),
+      reason,
+      note: note.trim() || null,
+    });
   };
   const toggleField = (key: string) =>
     setExcluded((previous) => {
@@ -750,11 +757,19 @@ const MediaChoice: React.FC<{
         <div className="rounded-lg border bg-card p-2 text-card-foreground">
           <p className="font-bold text-xs uppercase opacity-70">Current</p>
           <p className="truncate font-bold text-sm">
-            {kind === "IMAGE" ? "Current image" : (current?.name ?? "Nothing set")}
+            {kind === "IMAGE" && !isSceneCharacterPath(path)
+              ? "Current image"
+              : (current?.name ?? "Nothing set")}
           </p>
           <MediaPreview
             kind={kind}
-            url={kind === "IMAGE" ? currentId : null}
+            url={
+              kind === "IMAGE"
+                ? isSceneCharacterPath(path)
+                  ? (current?.image ?? null)
+                  : currentId
+                : null
+            }
             asset={current}
           />
         </div>
@@ -867,15 +882,37 @@ const InTheGame: React.FC<{
   const hasBattlefield = [current, proposed].some(
     (entry) => entry && battlefieldSceneOf(change.entityType, change.entityId, entry),
   );
-  const questScenes =
+  const questScenes: { label: string; objectiveIndex?: number }[] =
     change.entityType === "QUEST"
-      ? changedQuestScenes(current ? { ...current, ...change.before } : null, proposed)
+      ? [
+          { label: "Quest scene" },
+          ...(
+            (proposed.content as { objectives?: unknown[] } | undefined)?.objectives ??
+            []
+          ).map((_, objectiveIndex) => ({
+            label: `Objective ${objectiveIndex + 1}`,
+            objectiveIndex,
+          })),
+        ]
       : [];
   const activeQuestScene =
     questScenes.find((scene) => scene.label === questSceneLabel) ?? questScenes[0];
   const questScene =
     fields && activeQuestScene
-      ? questSceneOf(fields, assets, activeQuestScene.objectiveIndex)
+      ? questSceneOf(
+          fields,
+          {
+            ...assets,
+            ...Object.fromEntries(
+              change.media.flatMap((media) =>
+                media.kind === "IMAGE" && isSceneCharacterPath(media.path) && media.url
+                  ? [[mediaPlaceholder(media.id), { image: media.url }]]
+                  : [],
+              ),
+            ),
+          },
+          activeQuestScene.objectiveIndex,
+        )
       : null;
   if (!hasCard && !hasBattlefield && questScenes.length === 0) return null;
   return (
@@ -1107,11 +1144,11 @@ const proposedFields = (change: Change, choices: ReviewChoices) => {
     // A sound outside the catalog stays a placeholder that names the chosen candidate, so the
     // battlefield can play it from that candidate's URL.
     const value =
-      pick.kind === "IMAGE"
+      pick.kind === "IMAGE" && !isSceneCharacterPath(path)
         ? pick.url
         : pick.source === "CATALOG"
           ? pick.externalId
-          : pick.kind === "SFX"
+          : pick.kind === "SFX" || isSceneCharacterPath(path)
             ? mediaPlaceholder(pick.id)
             : null;
     if (value) fields = setAtPath(fields, path, value);

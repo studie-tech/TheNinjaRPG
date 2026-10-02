@@ -11,18 +11,19 @@ import {
   contentProposalMedia,
   gameAsset,
   item,
+  quest,
   userData,
 } from "@/drizzle/schema";
 import { cleanupContentProposals } from "@/libs/contentReview/cleanup";
 import { entityKey, loadEntities } from "@/libs/contentReview/entities";
 import * as media from "@/libs/contentReview/media";
 import { epidemicAssetId, importEpidemicSfx } from "@/libs/contentReview/media";
-import { ingestAgentSubmission } from "@/libs/contentReview/submit";
+import { ingestAgentSubmission, readAgentProposal, reviseAgentProposal } from "@/libs/contentReview/submit";
 import * as socials from "@/libs/socials";
 import { badgeRouter } from "@/server/api/routers/badge";
 import { contentReviewRouter } from "@/server/api/routers/contentReview";
 import type { AgentSubmission } from "@/validators/contentReview";
-import { insertItems, insertUsers } from "../../setup/factories";
+import { insertItems, insertQuests, insertUsers } from "../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const EDITOR = "review-editor";
@@ -71,6 +72,7 @@ describeWithDatabase("content review", () => {
       badge,
       gameAsset,
       item,
+      quest,
       userData,
     );
     await insertUsers([
@@ -89,6 +91,140 @@ describeWithDatabase("content review", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  const revisionProposal = async (description = "Awarded for bravery in battle.") => ({
+    title: "Clarify the badge award",
+    category: "GRAMMAR" as const,
+    rationale: "Clarify the award with accurate wording.",
+    confidence: 90,
+    usesUsageData: false,
+    changes: [{ entityType: "BADGE" as const, entityId: BADGE, operation: "UPDATE" as const,
+      set: [{ path: "description", valueJson: JSON.stringify(description) }], media: [] }],
+    basis: [{ entityType: "BADGE" as const, entityId: BADGE, v: await versionOf(BADGE) }],
+  });
+
+  it("refines the same pending agent draft and refuses a stale revision token", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "original agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    const initial = (await readAgentProposal(database, id))!;
+    const input = { proposal: await revisionProposal("Awarded for demonstrated bravery."),
+      expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null };
+    expect((await reviseAgentProposal(database, id, input)).ok).toBe(true);
+    const saved = (await readAgentProposal(database, id))!;
+    expect(saved.id).toBe(id);
+    expect(saved.agentName).toBe("original agent");
+    expect(saved.changes).toHaveLength(1);
+    expect(saved.changes[0]?.after).toEqual({ description: "Awarded for demonstrated bravery." });
+    expect(await reviseAgentProposal(database, id, input)).toMatchObject({ ok: false, status: 409 });
+  });
+
+  it("refuses staff decisions made from a view predating a refinement", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    const initial = (await readAgentProposal(database, id))!;
+    const token = initial.statusChangedAt.toISOString();
+    expect((await reviseAgentProposal(database, id, { proposal: await revisionProposal("Awarded for demonstrated bravery."), expectedStatusChangedAt: token, reactivate: false, feedbackResponse: null })).ok).toBe(true);
+    const reviewer = await callerFor(contentReviewRouter, EDITOR);
+    expect((await reviewer.approve({ id, expectedStatusChangedAt: token })).success).toBe(false);
+    expect((await reviewer.reject({ id, expectedStatusChangedAt: token, reason: "NOT_AN_IMPROVEMENT" })).success).toBe(false);
+    expect((await readAgentProposal(database, id))?.status).toBe("PENDING");
+  });
+
+  it("requires explicit reactivation and feedback while retaining the staff rejection", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    await database.update(contentProposal).set({ status: "REJECTED", reviewNote: "Specify demonstrated bravery" }).where(eq(contentProposal.id, id));
+    const rejected = (await readAgentProposal(database, id))!;
+    const input = { proposal: await revisionProposal("Awarded for demonstrated bravery."),
+      expectedStatusChangedAt: rejected.statusChangedAt.toISOString(), reactivate: true, feedbackResponse: null };
+    expect(await reviseAgentProposal(database, id, input)).toMatchObject({ ok: false, status: 400 });
+    expect((await reviseAgentProposal(database, id, { ...input, feedbackResponse: "The wording now specifies demonstrated bravery, addressing the staff note." })).ok).toBe(true);
+    const saved = (await readAgentProposal(database, id))!;
+    expect(saved.status).toBe("PENDING");
+    expect(saved.reviewNote).toBe("Specify demonstrated bravery");
+    expect(saved.rationale).toContain("Response to staff feedback");
+  });
+
+  it("refuses stale basis, changed targets, and staff or already applied proposals", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    const initial = (await readAgentProposal(database, id))!;
+    const input = { proposal: await revisionProposal("Awarded for demonstrated bravery."),
+      expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null };
+    expect(await reviseAgentProposal(database, id, { ...input, proposal: { ...input.proposal, basis: [{ entityType: "BADGE", entityId: BADGE, v: "0000000000000000" }] } })).toMatchObject({ ok: false, status: 422 });
+    expect(await reviseAgentProposal(database, id, { ...input, proposal: { ...input.proposal, changes: [{ ...input.proposal.changes[0]!, entityId: OTHER_BADGE }] } })).toMatchObject({ ok: false, status: 400 });
+    await database.update(contentProposal).set({ source: "STAFF" }).where(eq(contentProposal.id, id));
+    expect(await reviseAgentProposal(database, id, input)).toMatchObject({ ok: false, status: 409 });
+    await database.update(contentProposal).set({ source: "AGENT", status: "APPLIED" }).where(eq(contentProposal.id, id));
+    expect(await reviseAgentProposal(database, id, input)).toMatchObject({ ok: false, status: 409 });
+    expect((await readAgentProposal(database, id))?.changes[0]?.after).toEqual(initial.changes[0]?.after);
+  });
+
+  it("does not overwrite a staff decision made while revision media is prepared", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    const initial = (await readAgentProposal(database, id))!;
+    let release: () => void = () => {};
+    let preparing: () => void = () => {};
+    const ready = new Promise<void>((resolve) => { preparing = resolve; });
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const deleted = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
+    vi.spyOn(media, "collectCandidates").mockImplementation(async () => {
+      preparing();
+      await wait;
+      return [{ kind: "IMAGE", source: "GENERATED", externalId: null,
+        url: "https://ui0arpl8sm.ufs.sh/f/refined-badge.webp", fileKey: "unused-revision-file", lengthMs: null, prompt: "A badge portrait", title: "Refined badge" }];
+    });
+    const proposal = await revisionProposal("Awarded for demonstrated bravery.");
+    const refining = reviseAgentProposal(database, id, {
+      expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null,
+      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [{ kind: "IMAGE", path: "image", catalogIds: [], search: null, generate: "A badge portrait" }] }] },
+    });
+    await ready;
+    await database.update(contentProposal).set({ status: "APPLIED", statusChangedAt: new Date(initial.statusChangedAt.getTime() + 1) }).where(eq(contentProposal.id, id));
+    release();
+    expect(await refining).toMatchObject({ ok: false, status: 409 });
+    const saved = (await readAgentProposal(database, id))!;
+    expect(saved.status).toBe("APPLIED");
+    expect(saved.changes[0]?.after).toEqual(initial.changes[0]?.after);
+    expect(deleted).toHaveBeenCalledWith(["unused-revision-file"]);
+  });
+
+  it("keeps generated scene art as a candidate until approval creates a character asset", async () => {
+    const database = await getTestDatabase();
+    await insertQuests([{ id: "cast-quest", name: "Village service award", questType: "achievement", description: "Recognize village service", hidden: false, consecutiveObjectives: false }]);
+    const entity = (await loadEntities(database, [{ entityType: "QUEST", entityId: "cast-quest" }])).get(entityKey("QUEST", "cast-quest"))!;
+    const collector = vi.spyOn(media, "collectCandidates").mockResolvedValue([{ kind: "IMAGE", source: "GENERATED", externalId: null, title: "Village representative", url: "https://ui0arpl8sm.ufs.sh/f/elder-cutout.png", fileKey: null, lengthMs: null, prompt: "A calm village representative" }]);
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [{ title: "Add a village award representative", category: "VISUAL", rationale: "A visible calm elder suits the civic award scene.", confidence: 90, usesUsageData: false,
+      changes: [{ entityType: "QUEST", entityId: "cast-quest", operation: "UPDATE", set: [], media: [{ kind: "IMAGE", path: "content.sceneCharacters.0", catalogIds: [], search: null, generate: "A calm village representative" }] }], basis: [{ entityType: "QUEST", entityId: "cast-quest", v: entity.version }] }] });
+    expect(submitted.refused).toEqual([]);
+    const id = submitted.accepted[0]!.id;
+    expect(await database.query.gameAsset.findMany()).toHaveLength(0);
+    const candidate = (await readAgentProposal(database, id))!;
+    expect((candidate.changes[0]?.after.content as { sceneCharacters: string[] }).sceneCharacters[0]).toMatch(/^media:/);
+    collector.mockClear();
+    vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
+    const submittedProposal = { title: "Add a village award representative", category: "VISUAL" as const, rationale: "Inspected the actual generated cutout and its calm award-scene appearance.", confidence: 90, usesUsageData: false,
+      changes: [{ entityType: "QUEST" as const, entityId: "cast-quest", operation: "UPDATE" as const, set: [], media: [{ kind: "IMAGE" as const, path: "content.sceneCharacters.0", catalogIds: [], search: null, generate: null }] }], basis: [{ entityType: "QUEST" as const, entityId: "cast-quest", v: entity.version }] };
+    expect((await reviseAgentProposal(database, id, { expectedStatusChangedAt: candidate.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null, retainMediaIds: [candidate.media[0]!.id], proposal: submittedProposal })).ok).toBe(true);
+    expect(collector).not.toHaveBeenCalled();
+    const retained = (await readAgentProposal(database, id))!;
+    expect(retained.media[0]?.url).toBe(candidate.media[0]?.url);
+    expect(retained.media[0]?.chosen).toBe(false);
+    expect(await reviseAgentProposal(database, id, { expectedStatusChangedAt: retained.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null, retainMediaIds: ["another-proposals-candidate"], proposal: submittedProposal })).toMatchObject({ ok: false, status: 400 });
+    const reviewer = await callerFor(contentReviewRouter, EDITOR);
+    expect((await reviewer.approve({ id })).success).toBe(true);
+    const saved = (await database.query.quest.findFirst({ where: eq(quest.id, "cast-quest") }))!;
+    const [asset] = await database.query.gameAsset.findMany();
+    expect(asset).toMatchObject({ type: "SCENE_CHARACTER", image: "https://ui0arpl8sm.ufs.sh/f/elder-cutout.png" });
+    expect(saved.content.sceneCharacters).toEqual([asset!.id]);
+    expect(saved.description).toBe("Recognize village service");
   });
 
   it("stores only the changed fields of a staff suggestion", async () => {
@@ -723,6 +859,45 @@ describeWithDatabase("content review", () => {
     expect(result.created).toBe(false);
     expect(result.asset.id).toBe(id);
     expect(await database.query.gameAsset.findMany()).toHaveLength(1);
+  });
+
+  it("cannot reactivate a proposal while retention cleanup deletes its old files", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    await database.update(contentProposal).set({ status: "REJECTED", statusChangedAt: new Date(Date.now() - 11 * 86_400_000) }).where(eq(contentProposal.id, id));
+    await database.insert(contentProposalMedia).values({ id: "retained-old-media", proposalId: id,
+      changeId: (await readAgentProposal(database, id))!.changes[0]!.id,
+      path: "image", kind: "IMAGE", source: "GENERATED", title: "Old image",
+      url: "https://ui0arpl8sm.ufs.sh/f/old-candidate.webp", fileKey: "old-candidate-file" });
+    const original = (await readAgentProposal(database, id))!;
+    let cleanupStarted: () => void = () => {};
+    let releaseCleanup: () => void = () => {};
+    let mediaPrepared: () => void = () => {};
+    const started = new Promise<void>((resolve) => { cleanupStarted = resolve; });
+    const release = new Promise<void>((resolve) => { releaseCleanup = resolve; });
+    const prepared = new Promise<void>((resolve) => { mediaPrepared = resolve; });
+    const deleted = vi.spyOn(media, "deleteStoredFiles").mockImplementation(async (keys) => {
+      if (keys.includes("old-candidate-file")) { cleanupStarted(); await release; }
+    });
+    vi.spyOn(media, "collectCandidates").mockImplementation(async () => {
+      mediaPrepared();
+      return [{ kind: "IMAGE", source: "GENERATED", externalId: null,
+        url: "https://ui0arpl8sm.ufs.sh/f/new-candidate.webp", fileKey: "new-candidate-file",
+        lengthMs: null, prompt: "A new badge", title: "New badge" }];
+    });
+    const cleaning = cleanupContentProposals(database);
+    await started;
+    const proposal = await revisionProposal("Awarded for demonstrated bravery.");
+    const revising = reviseAgentProposal(database, id, { expectedStatusChangedAt: original.statusChangedAt.toISOString(),
+      reactivate: true, feedbackResponse: "Clarify the wording to address the earlier rejection.",
+      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [{ kind: "IMAGE", path: "image", catalogIds: [], search: null, generate: "A new badge" }] }] } });
+    await prepared;
+    releaseCleanup();
+    expect((await cleaning).removed).toBe(1);
+    expect(await revising).toMatchObject({ ok: false, status: 409 });
+    expect(await readAgentProposal(database, id)).toBeUndefined();
+    expect(deleted).toHaveBeenCalledWith(["new-candidate-file"]);
   });
 
   it("removes rejected suggestions once the retention window has passed", async () => {

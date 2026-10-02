@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, or } from "drizzle-orm";
 import {
   CONTENT_PROPOSAL_EVIDENCE_DAYS,
   type ContentProposalEntityType,
@@ -24,6 +24,7 @@ export const outdateProposalsFor = async (
   const rows = await client
     .select({
       id: contentProposalBasis.proposalId,
+      statusChangedAt: contentProposal.statusChangedAt,
       entityId: contentProposalBasis.entityId,
       version: contentProposalBasis.version,
     })
@@ -46,7 +47,12 @@ export const outdateProposalsFor = async (
       (live.get(entityKey(entityType, row.entityId))?.version ?? MISSING_VERSION) !==
       row.version,
   );
-  await markOutdated(client, [...new Set(changed.map((row) => row.id))], reason);
+  await markOutdated(
+    client,
+    changed.map((row) => row.id),
+    reason,
+    changed,
+  );
 };
 
 /** Reason shown for an edit made through one of the content editors. */
@@ -77,6 +83,7 @@ export const reinstateProposalsFor = async (
   const rows = await client
     .select({
       id: contentProposal.id,
+      statusChangedAt: contentProposal.statusChangedAt,
       expiresAt: contentProposal.expiresAt,
       entityType: contentProposalBasis.entityType,
       entityId: contentProposalBasis.entityId,
@@ -117,9 +124,17 @@ export const reinstateProposalsFor = async (
     .set({ status: "PENDING", outdatedReason: null, statusChangedAt: new Date() })
     .where(
       and(
-        inArray(
-          contentProposal.id,
-          current.map((basis) => basis[0]?.id ?? ""),
+        or(
+          ...current.flatMap((basis) =>
+            basis[0]
+              ? [
+                  and(
+                    eq(contentProposal.id, basis[0].id),
+                    eq(contentProposal.statusChangedAt, basis[0].statusChangedAt),
+                  ),
+                ]
+              : [],
+          ),
         ),
         eq(contentProposal.status, "OUTDATED"),
       ),
@@ -137,6 +152,7 @@ export const refreshProposalFreshness = async (
   client: DrizzleClient,
   proposals: {
     id: string;
+    statusChangedAt: Date;
     expiresAt: Date | null;
     basis: {
       entityType: ContentProposalEntityType;
@@ -183,7 +199,14 @@ export const refreshProposalFreshness = async (
     }
   }
   await Promise.all(
-    [...byReason.entries()].map(([reason, ids]) => markOutdated(client, ids, reason)),
+    [...byReason.entries()].map(([reason, ids]) =>
+      markOutdated(
+        client,
+        ids,
+        reason,
+        proposals.filter((proposal) => ids.includes(proposal.id)),
+      ),
+    ),
   );
   return outdated;
 };
@@ -191,7 +214,10 @@ export const refreshProposalFreshness = async (
 /** Outdate pending suggestions whose usage data has expired. */
 export const expireStaleEvidence = async (client: DrizzleClient) => {
   const rows = await client
-    .select({ id: contentProposal.id })
+    .select({
+      id: contentProposal.id,
+      statusChangedAt: contentProposal.statusChangedAt,
+    })
     .from(contentProposal)
     .where(
       and(
@@ -203,11 +229,17 @@ export const expireStaleEvidence = async (client: DrizzleClient) => {
     client,
     rows.map((row) => row.id),
     `Its usage data is older than ${CONTENT_PROPOSAL_EVIDENCE_DAYS} days`,
+    rows,
   );
 };
 
 /** Outdate those of `ids` that are still pending, with `reason` cut to fit its column. */
-const markOutdated = async (client: DrizzleClient, ids: string[], reason: string) => {
+const markOutdated = async (
+  client: DrizzleClient,
+  ids: string[],
+  reason: string,
+  revisions: { id: string; statusChangedAt: Date }[],
+) => {
   if (ids.length === 0) return;
   await client
     .update(contentProposal)
@@ -217,6 +249,16 @@ const markOutdated = async (client: DrizzleClient, ids: string[], reason: string
       statusChangedAt: new Date(),
     })
     .where(
-      and(inArray(contentProposal.id, ids), eq(contentProposal.status, "PENDING")),
+      and(
+        or(
+          ...revisions.map((row) =>
+            and(
+              eq(contentProposal.id, row.id),
+              eq(contentProposal.statusChangedAt, row.statusChangedAt),
+            ),
+          ),
+        ),
+        eq(contentProposal.status, "PENDING"),
+      ),
     );
 };

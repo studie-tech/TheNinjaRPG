@@ -92,6 +92,18 @@ export const agentSubmissionSchema = agentAuditOutputSchema.extend({
 });
 export type AgentSubmission = z.infer<typeof agentSubmissionSchema>;
 
+/** Full replacement of an agent draft, guarded by the revision returned by GET. */
+export const agentProposalRevisionSchema = z.object({
+  expectedStatusChangedAt: z.iso.datetime(),
+  reactivate: z.boolean(),
+  feedbackResponse: z.string().trim().min(20).max(2000).nullable(),
+  proposal: agentProposalSchema,
+  retainMediaIds: z.array(z.string().min(1).max(191)).max(12).optional(),
+  runUrl: z.url().max(512).nullish(),
+  focus: z.enum(ContentAuditFocuses).nullish(),
+});
+export type AgentProposalRevision = z.infer<typeof agentProposalRevisionSchema>;
+
 /**
  * The audit's second look at its own suggestions, made from their battlefield renders: which
  * suggestions to keep, and which candidate assets looked wrong on the battlefield.
@@ -167,6 +179,7 @@ export const reviewQueueSchema = z.object({
 
 export const approveProposalSchema = z.object({
   id: z.string(),
+  expectedStatusChangedAt: z.iso.datetime().optional(),
   /** Fields the reviewer unticked, per change. */
   exclude: z
     .array(z.object({ changeId: z.string(), field: z.string() }))
@@ -187,6 +200,7 @@ export type ApproveProposalInput = z.infer<typeof approveProposalSchema>;
 
 export const rejectProposalSchema = z.object({
   id: z.string(),
+  expectedStatusChangedAt: z.iso.datetime().optional(),
   reason: z.enum(ContentProposalRejectReasons),
   note: z.string().max(CONTENT_PROPOSAL_NOTE_MAX_LENGTH).nullish(),
 });

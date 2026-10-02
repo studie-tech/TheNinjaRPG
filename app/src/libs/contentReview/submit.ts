@@ -1,10 +1,11 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { z } from "zod";
 import {
   CONTENT_AUDIT_MAX_GENERATIONS,
   CONTENT_AUDIT_MAX_SOUND_SEARCHES,
   CONTENT_PROPOSAL_EVIDENCE_DAYS,
+  CONTENT_PROPOSAL_RATIONALE_LENGTH,
   type ContentProposalEntityType,
 } from "@/drizzle/constants";
 import {
@@ -17,6 +18,7 @@ import type { DrizzleClient } from "@/server/db";
 import { DAY_S, secondsFromNow } from "@/utils/time";
 import type {
   AgentProposal,
+  AgentProposalRevision,
   AgentSubmission,
   StaffCreateProposal,
 } from "@/validators/contentReview";
@@ -34,7 +36,7 @@ import {
   type MediaBudget,
   materializeChoice,
 } from "./media";
-import { isMediaPath, topLevelField } from "./paths";
+import { isMediaPath, isSceneCharacterPath, topLevelField } from "./paths";
 import {
   agentChangeViolation,
   applySetOperations,
@@ -125,6 +127,244 @@ export const ingestAgentSubmission = async (
   });
   result.summary = submissionSummary(submission, result);
   return result;
+};
+
+/** Fetch a draft and its current optimistic revision token without altering freshness. */
+export const readAgentProposal = (client: DrizzleClient, id: string) =>
+  client.query.contentProposal.findFirst({
+    where: eq(contentProposal.id, id),
+    with: { changes: true, basis: true, media: true },
+  });
+
+/**
+ * Refine a suggestion without changing its identity or approving content. Media preparation
+ * precedes a short transaction; the guarded parent write and replacement children commit
+ * together, so concurrent staff decisions cannot consume a partially rewritten draft.
+ */
+export const reviseAgentProposal = async (
+  client: DrizzleClient,
+  id: string,
+  input: AgentProposalRevision,
+): Promise<
+  | { ok: true; id: string; statusChangedAt: string }
+  | { ok: false; status: number; reason: string }
+> => {
+  const existing = await readAgentProposal(client, id);
+  if (!existing) return { ok: false, status: 404, reason: "Suggestion not found" };
+  if (
+    existing.source !== "AGENT" ||
+    !["PENDING", "REJECTED", "OUTDATED"].includes(existing.status)
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      reason: "Only pending, rejected or outdated agent suggestions can be refined",
+    };
+  }
+  if (existing.statusChangedAt.toISOString() !== input.expectedStatusChangedAt) {
+    return {
+      ok: false,
+      status: 409,
+      reason: "Suggestion changed; fetch it again before refining",
+    };
+  }
+  if ((existing.status !== "PENDING") !== input.reactivate) {
+    return {
+      ok: false,
+      status: 400,
+      reason: "Rejected and outdated suggestions require explicit reactivation",
+    };
+  }
+  if (existing.status === "REJECTED" && !input.feedbackResponse) {
+    return {
+      ok: false,
+      status: 400,
+      reason: "Explain how this revision addresses the staff rejection",
+    };
+  }
+  const targets = (
+    changes: { entityType: string; entityId: string | null; operation: string }[],
+  ) =>
+    changes
+      .map((change) =>
+        JSON.stringify([change.entityType, change.entityId, change.operation]),
+      )
+      .sort();
+  if (!sameValue(targets(existing.changes), targets(input.proposal.changes))) {
+    return {
+      ok: false,
+      status: 400,
+      reason: "A revision must preserve every target and operation",
+    };
+  }
+  // Retain only candidates from this exact revision and field. Their bytes have already
+  // been inspected; a rationale-only refinement must not silently generate a new image.
+  const retained = new Map<string, typeof existing.media>();
+  for (const mediaId of new Set(input.retainMediaIds ?? [])) {
+    const candidate = existing.media.find((media) => media.id === mediaId);
+    const change = existing.changes.find((change) => change.id === candidate?.changeId);
+    const replacement = input.proposal.changes.find(
+      (next) =>
+        next.entityType === change?.entityType &&
+        next.entityId === change?.entityId &&
+        next.operation === change?.operation,
+    );
+    const request = replacement?.media.find(
+      (request) => request.path === candidate?.path && request.kind === candidate?.kind,
+    );
+    if (
+      !candidate ||
+      !change ||
+      !request ||
+      candidate.source === "CATALOG" ||
+      request.catalogIds.length ||
+      request.search ||
+      request.generate
+    ) {
+      return {
+        ok: false,
+        status: 400,
+        reason:
+          "Retained media must belong to this proposal and use the same target, kind and path with no new search or generation",
+      };
+    }
+    const key = mediaRequestKey(change, candidate.path);
+    retained.set(key, [...(retained.get(key) ?? []), candidate]);
+  }
+  const proposal = {
+    ...input.proposal,
+    rationale: input.feedbackResponse
+      ? `${input.proposal.rationale}\n\nResponse to staff feedback: ${input.feedbackResponse}`
+      : input.proposal.rationale,
+  };
+  if (proposal.rationale.length > CONTENT_PROPOSAL_RATIONALE_LENGTH.max) {
+    return {
+      ok: false,
+      status: 400,
+      reason: "Rationale and feedback response are too long",
+    };
+  }
+  const refs = [
+    ...proposal.basis,
+    ...proposal.changes.flatMap((change) =>
+      change.entityId
+        ? [{ entityType: change.entityType, entityId: change.entityId }]
+        : [],
+    ),
+  ];
+  const ids = [...new Set(refs.map((ref) => ref.entityId))];
+  const drafts = proposal.changes.flatMap((change) => {
+    if (change.operation !== "CREATE") return [];
+    const name = draftName(
+      Object.fromEntries(
+        change.set.map((set) => [set.path, parsedJson(set.valueJson)]),
+      ),
+    );
+    return name ? [{ entityType: change.entityType, name }] : [];
+  });
+  const [entities, open, rejected, names] = await Promise.all([
+    loadEntities(client, refs),
+    ids.length ? openTargets(client, ids, id) : Promise.resolve(new Set<string>()),
+    ids.length
+      ? rejectedChanges(client, ids, input.reactivate ? id : undefined)
+      : Promise.resolve([]),
+    drafts.length ? takenNames(client, drafts, id) : Promise.resolve(new Set<string>()),
+  ]);
+  const uploaded: string[] = [];
+  let saved = false;
+  try {
+    const plan = await planAgentProposal(
+      client,
+      proposal,
+      entities,
+      {
+        searches: CONTENT_AUDIT_MAX_SOUND_SEARCHES,
+        generations: CONTENT_AUDIT_MAX_GENERATIONS,
+      },
+      { open, rejected, names, claimed: new Set() },
+      uploaded,
+      retained,
+    );
+    if (typeof plan === "string") return { ok: false, status: 422, reason: plan };
+    // Searches and generations can take minutes. Recheck the full basis after media
+    // preparation so a revision cannot deliberately revive an obsolete snapshot.
+    const latest = await loadEntities(client, plan.basis);
+    if (
+      plan.basis.some(
+        (basis) =>
+          latest.get(entityKey(basis.entityType, basis.entityId))?.version !==
+          basis.version,
+      )
+    ) {
+      return {
+        ok: false,
+        status: 409,
+        reason: "Content changed while revision media was prepared; fetch a new basis",
+      };
+    }
+    const nextAt = new Date(
+      Math.max(Date.now(), existing.statusChangedAt.getTime() + 1),
+    );
+    for (const row of [...plan.changes, ...plan.basis, ...plan.media])
+      row.proposalId = id;
+    saved = await client.transaction(async (tx) => {
+      const claim = await tx
+        .update(contentProposal)
+        .set({
+          title: plan.proposal.title,
+          rationale: plan.proposal.rationale,
+          category: plan.proposal.category,
+          confidence: plan.proposal.confidence,
+          expiresAt: plan.proposal.expiresAt,
+          runUrl: input.runUrl ?? existing.runUrl,
+          focus: input.focus ?? existing.focus,
+          status: "PENDING",
+          statusChangedAt: nextAt,
+          // Retain the decision metadata so staff can see the feedback that prompted a revision.
+        })
+        .where(
+          and(
+            eq(contentProposal.id, id),
+            eq(contentProposal.source, "AGENT"),
+            eq(contentProposal.status, existing.status),
+            eq(contentProposal.statusChangedAt, existing.statusChangedAt),
+          ),
+        );
+      if (claim.rowsAffected !== 1) return false;
+      await tx
+        .delete(contentProposalMedia)
+        .where(eq(contentProposalMedia.proposalId, id));
+      await tx
+        .delete(contentProposalBasis)
+        .where(eq(contentProposalBasis.proposalId, id));
+      await tx
+        .delete(contentProposalChange)
+        .where(eq(contentProposalChange.proposalId, id));
+      if (plan.changes.length)
+        await tx.insert(contentProposalChange).values(plan.changes);
+      if (plan.basis.length) await tx.insert(contentProposalBasis).values(plan.basis);
+      if (plan.media.length) await tx.insert(contentProposalMedia).values(plan.media);
+      return true;
+    });
+    if (!saved)
+      return {
+        ok: false,
+        status: 409,
+        reason: "Suggestion changed while the revision was prepared",
+      };
+    // A replacement may intentionally retain a previous image URL; do not delete its file.
+    const retainedValues = JSON.stringify([plan.changes, plan.media]);
+    await discardUploads(
+      existing.media.flatMap((media) =>
+        media.fileKey && !(media.url && retainedValues.includes(media.url))
+          ? [media.fileKey]
+          : [],
+      ),
+    );
+    return { ok: true, id, statusChangedAt: nextAt.toISOString() };
+  } finally {
+    if (!saved) await discardUploads(uploaded);
+  }
 };
 
 /**
@@ -274,6 +514,7 @@ const planAgentProposal = async (
   budget: MediaBudget,
   guards: Guards,
   uploaded: string[],
+  retained?: Map<string, (typeof contentProposalMedia.$inferSelect)[]>,
 ): Promise<Rows | string> => {
   const proposalId = nanoid();
   const rows: Rows = {
@@ -336,13 +577,11 @@ const planAgentProposal = async (
       ) {
         return `${request.path} cannot hold ${request.kind.toLowerCase()} media`;
       }
-      const candidates = await collectCandidates(
-        client,
-        request,
-        budget,
-        config.contentType,
-      );
-      uploaded.push(...candidates.flatMap((candidate) => candidate.fileKey ?? []));
+      const kept = retained?.get(mediaRequestKey(change, request.path));
+      const candidates =
+        kept ?? (await collectCandidates(client, request, budget, config.contentType));
+      if (!kept)
+        uploaded.push(...candidates.flatMap((candidate) => candidate.fileKey ?? []));
       if (candidates.length === 0) {
         return `No ${request.kind.toLowerCase()} candidates were found for ${request.path}`;
       }
@@ -353,16 +592,19 @@ const planAgentProposal = async (
         changeId,
         path: request.path,
         sortOrder,
+        chosen: false,
       }));
       rows.media.push(...media);
       // The field shows the first candidate: its final value, or `media:<candidate id>` for a
       // sound that only becomes an asset when the suggestion is approved.
       const preview = media[0] as MediaInsert;
       const value =
-        preview.source === "CATALOG" || preview.kind === "IMAGE"
+        preview.source === "CATALOG" ||
+        (preview.kind === "IMAGE" && !isSceneCharacterPath(request.path))
           ? materializeChoice(
               {
                 ...preview,
+                path: request.path,
                 externalId: preview.externalId ?? null,
                 url: preview.url ?? null,
               },
@@ -466,7 +708,11 @@ const submissionSummary = (submission: AgentSubmission, result: SubmissionResult
 };
 
 /** Targets that already have a pending suggestion, as `entityKey`s. */
-const openTargets = async (client: DrizzleClient, ids: string[]) => {
+const openTargets = async (
+  client: DrizzleClient,
+  ids: string[],
+  excludeId?: string,
+) => {
   const rows = await client
     .select({
       entityType: contentProposalChange.entityType,
@@ -480,6 +726,7 @@ const openTargets = async (client: DrizzleClient, ids: string[]) => {
     .where(
       and(
         eq(contentProposal.status, "PENDING"),
+        excludeId ? ne(contentProposal.id, excludeId) : undefined,
         inArray(contentProposalChange.entityId, ids),
       ),
     );
@@ -491,7 +738,11 @@ const openTargets = async (client: DrizzleClient, ids: string[]) => {
 };
 
 /** Rejected changes still within retention, so the audit cannot resubmit them unchanged. */
-const rejectedChanges = async (client: DrizzleClient, ids: string[]) =>
+const rejectedChanges = async (
+  client: DrizzleClient,
+  ids: string[],
+  excludeId?: string,
+) =>
   client
     .select({
       entityType: contentProposalChange.entityType,
@@ -506,6 +757,7 @@ const rejectedChanges = async (client: DrizzleClient, ids: string[]) =>
     .where(
       and(
         eq(contentProposal.status, "REJECTED"),
+        excludeId ? ne(contentProposal.id, excludeId) : undefined,
         inArray(contentProposalChange.entityId, ids),
       ),
     );
@@ -517,6 +769,7 @@ const rejectedChanges = async (client: DrizzleClient, ids: string[]) =>
 const takenNames = async (
   client: DrizzleClient,
   drafts: { entityType: ContentProposalEntityType; name: string }[],
+  excludeId?: string,
 ) => {
   const types = [...new Set(drafts.map((draft) => draft.entityType))];
   const [live, queued] = await Promise.all([
@@ -543,6 +796,7 @@ const takenNames = async (
         and(
           eq(contentProposal.status, "PENDING"),
           eq(contentProposalChange.operation, "CREATE"),
+          excludeId ? ne(contentProposal.id, excludeId) : undefined,
           inArray(contentProposalChange.entityType, types),
         ),
       ),
@@ -633,3 +887,9 @@ type ProposalInsert = typeof contentProposal.$inferInsert;
 type ChangeInsert = typeof contentProposalChange.$inferInsert;
 type BasisInsert = typeof contentProposalBasis.$inferInsert;
 type MediaInsert = typeof contentProposalMedia.$inferInsert;
+
+/** A candidate is tied to its original target and field when refining the same draft. */
+const mediaRequestKey = (
+  change: { entityType: string; entityId: string | null; operation: string },
+  path: string,
+) => JSON.stringify([change.entityType, change.entityId, change.operation, path]);

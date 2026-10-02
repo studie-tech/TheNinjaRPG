@@ -19,6 +19,11 @@ import {
   isEpidemicConfigured,
   searchEpidemicSfx,
 } from "./epidemic";
+import { isSceneCharacterPath } from "./paths";
+import {
+  SCENE_CHARACTER_PREPROMPT,
+  validateSceneCharacterImage,
+} from "./sceneCharacter";
 
 /**
  * Candidates for one field, in order: catalog assets the submitter picked, Epidemic Sound
@@ -33,6 +38,7 @@ export const collectCandidates = async (
   contentType: ContentType,
 ) => {
   const out: MediaCandidate[] = [];
+  const sceneCharacter = request.kind === "IMAGE" && isSceneCharacterPath(request.path);
   const room = () => CONTENT_PROPOSAL_MAX_CANDIDATES - out.length;
   if (request.catalogIds.length > 0) {
     const rows = await client
@@ -45,7 +51,12 @@ export const collectCandidates = async (
     );
     for (const asset of assets) {
       if (room() <= 0) break;
-      if (asset.hidden || asset.type !== ASSET_TYPE_FOR[request.kind]) continue;
+      if (
+        asset.hidden ||
+        asset.type !==
+          (sceneCharacter ? "SCENE_CHARACTER" : ASSET_TYPE_FOR[request.kind])
+      )
+        continue;
       out.push({
         source: "CATALOG",
         kind: request.kind,
@@ -99,15 +110,33 @@ export const collectCandidates = async (
       }
       if (request.kind !== "IMAGE") return null;
       const images = await txt2imgNanoBanana({
-        preprompt: getPrePrompts(contentType),
+        preprompt: sceneCharacter
+          ? SCENE_CHARACTER_PREPROMPT
+          : getPrePrompts(contentType),
         prompt,
-        removeBg: REMOVE_BG_TYPES.includes(contentType),
+        removeBg: sceneCharacter || REMOVE_BG_TYPES.includes(contentType),
         userId: "content-review",
         width: 512,
         height: 512,
         size: "square",
       });
-      return images[0] ?? null;
+      const url = images[0] ?? null;
+      if (url && sceneCharacter) {
+        try {
+          const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+          if (!response.ok)
+            throw new Error("Could not inspect generated scene character");
+          await validateSceneCharacterImage(Buffer.from(await response.arrayBuffer()));
+        } catch (error) {
+          const key = storageKeyOf(url);
+          if (key)
+            await deleteStoredFiles([key]).catch(
+              skipped("Discarding invalid character", undefined),
+            );
+          throw error;
+        }
+      }
+      return url;
     };
     const url = await generate().catch(skipped(`Generating "${prompt}"`, null));
     if (url) {
@@ -128,14 +157,20 @@ export const collectCandidates = async (
 
 /**
  * The value a chosen candidate writes into its field, plus the GameAsset to create, credited
- * to `reviewerId`, when a new sound becomes part of the game. Content image fields hold URLs;
- * effect fields hold asset ids.
+ * to `reviewerId`, when new media becomes part of the game. Ordinary image fields hold URLs;
+ * effects and quest scene cast slots hold asset ids.
  */
 export const materializeChoice = (
-  media: Pick<ContentProposalMedia, "source" | "kind" | "externalId" | "title" | "url">,
+  media: Pick<
+    ContentProposalMedia,
+    "source" | "kind" | "externalId" | "title" | "url"
+  > & { path?: string },
   reviewerId: string,
 ) => {
-  if (media.kind === "IMAGE") return { value: media.url, asset: null };
+  const sceneCharacter =
+    media.kind === "IMAGE" && isSceneCharacterPath(media.path ?? "");
+  if (media.kind === "IMAGE" && !sceneCharacter)
+    return { value: media.url, asset: null };
   if (media.source === "CATALOG") return { value: media.externalId, asset: null };
   const id =
     media.source === "EPIDEMIC" && media.externalId
@@ -146,8 +181,8 @@ export const materializeChoice = (
     asset: {
       id,
       name: media.title.slice(0, 191),
-      type: ASSET_TYPE_FOR[media.kind],
-      image: IMG_AVATAR_DEFAULT,
+      type: sceneCharacter ? "SCENE_CHARACTER" : ASSET_TYPE_FOR[media.kind],
+      image: sceneCharacter ? (media.url ?? IMG_AVATAR_DEFAULT) : IMG_AVATAR_DEFAULT,
       url: media.url ?? IMG_AVATAR_DEFAULT,
       frames: 1,
       speed: 1,

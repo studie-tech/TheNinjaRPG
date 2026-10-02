@@ -20,9 +20,10 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { DAY_S, HOUR_S, secondsFromNow } from "@/utils/time";
 import { agentAuditOutputSchema, visualCheckSchema } from "@/validators/contentReview";
-import { type ContentEntity, entityKey, loadAllEntities } from "./entities";
+import { type ContentEntity, editableOf, entityKey, loadAllEntities } from "./entities";
 import { isEpidemicConfigured } from "./epidemic";
 import { expireStaleEvidence } from "./outdate";
+import { contentVersion } from "./version";
 
 /**
  * Everything the audit reads: visible content of the run's focus with versions and usage,
@@ -48,14 +49,7 @@ export const buildAuditSnapshot = async (
       : Promise.resolve(new Map<string, number>()),
     view.assets.length
       ? client
-          .select({
-            id: gameAsset.id,
-            name: gameAsset.name,
-            type: gameAsset.type,
-            frames: gameAsset.frames,
-            speed: gameAsset.speed,
-            folder: gameAsset.folder,
-          })
+          .select()
           .from(gameAsset)
           .where(and(inArray(gameAsset.type, view.assets), eq(gameAsset.hidden, false)))
       : Promise.resolve([]),
@@ -110,7 +104,18 @@ export const buildAuditSnapshot = async (
           : [];
       }),
     ),
-    assets: assets.map((asset) => ({ ...asset, usedBy: assetUse.get(asset.id) ?? 0 })),
+    assets: assets.map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      type: asset.type,
+      image: asset.image,
+      url: asset.url,
+      frames: asset.frames,
+      speed: asset.speed,
+      folder: asset.folder,
+      v: contentVersion(editableOf("GAME_ASSET", asset)),
+      usedBy: assetUse.get(asset.id) ?? 0,
+    })),
     ...recent,
     proposalSchema: auditJsonSchema(),
     visualCheckSchema: visualCheckJsonSchema(),
@@ -244,6 +249,20 @@ const ownerCounts = async (client: DrizzleClient) => {
 const countAssetUse = (entities: ContentEntity[]) => {
   const used = new Map<string, number>();
   for (const entity of entities) {
+    if (entity.type === "QUEST") {
+      const countScene = (node: unknown) => {
+        if (!node || typeof node !== "object") return;
+        for (const [key, value] of Object.entries(node)) {
+          if (key === "sceneCharacters" && Array.isArray(value)) {
+            for (const id of value)
+              if (typeof id === "string") used.set(id, (used.get(id) ?? 0) + 1);
+          } else if (key === "sceneBackground" && typeof value === "string") {
+            used.set(value, (used.get(value) ?? 0) + 1);
+          } else if (value && typeof value === "object") countScene(value);
+        }
+      };
+      countScene(entity.editable.content);
+    }
     const effects = entity.editable.effects;
     if (!Array.isArray(effects)) continue;
     for (const effect of effects as Record<string, unknown>[]) {
@@ -445,28 +464,33 @@ const VIEWS: Record<ContentAuditFocus, View> = {
     assets: ["ANIMATION", "STATIC"],
   },
   visual: {
-    types: ["JUTSU", "ITEM", "BLOODLINE", "BADGE", "AI"],
+    types: ["JUTSU", "ITEM", "BLOODLINE", "QUEST", "BADGE", "AI"],
     fields: (entity) =>
-      pick(entity.editable, [
-        "name",
-        "image",
-        "avatar",
-        "jutsuRank",
-        "rarity",
-        "itemType",
-        "rank",
-      ]),
+      entity.type === "QUEST"
+        ? entity.editable
+        : pick(entity.editable, [
+            "name",
+            "image",
+            "avatar",
+            "jutsuRank",
+            "rarity",
+            "itemType",
+            "rank",
+          ]),
     hasUsage: true,
-    assets: [],
+    assets: ["SCENE_CHARACTER", "SCENE_BACKGROUND"],
   },
   consistency: {
-    types: ["JUTSU", "ITEM", "BLOODLINE"],
-    fields: (entity) => ({
-      ...omit(entity.editable, ["image"]),
-      effects: effectsWith(entity.editable.effects, isMechanicKey),
-    }),
+    types: ["JUTSU", "ITEM", "BLOODLINE", "QUEST"],
+    fields: (entity) =>
+      entity.type === "QUEST"
+        ? entity.editable
+        : {
+            ...omit(entity.editable, ["image"]),
+            effects: effectsWith(entity.editable.effects, isMechanicKey),
+          },
     hasUsage: false,
-    assets: [],
+    assets: ["SCENE_CHARACTER", "SCENE_BACKGROUND"],
   },
   new_content: {
     types: ["JUTSU", "ITEM", "QUEST", "AI"],
@@ -487,7 +511,7 @@ const VIEWS: Record<ContentAuditFocus, View> = {
         "primaryElement",
       ]),
     hasUsage: false,
-    assets: ["SFX", "ANIMATION"],
+    assets: ["SFX", "ANIMATION", "SCENE_CHARACTER", "SCENE_BACKGROUND"],
   },
 };
 
@@ -507,7 +531,7 @@ type View = {
   types: ContentProposalEntityType[];
   fields: (entity: ContentEntity) => Record<string, unknown>;
   hasUsage: boolean;
-  assets: ("SFX" | "ANIMATION" | "STATIC")[];
+  assets: ("SFX" | "ANIMATION" | "STATIC" | "SCENE_CHARACTER" | "SCENE_BACKGROUND")[];
 };
 
 /** Casts, and the share of decided battles won; null when no battle was decided. */

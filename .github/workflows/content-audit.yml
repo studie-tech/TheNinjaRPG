@@ -7,6 +7,7 @@
 #   snapshot     fetches the audit input with CRON_SECRET
 #   gallery      on animation runs, draws the most used animation and static assets with the
 #                game's combat renderer (/manual/review/battlefield) in headless Chrome
+#   scene-gallery renders scene character/background pixels on checkerboard contact sheets
 #   audit        runs Codex with no secret and a read-only sandbox; its final message must
 #                match the proposal JSON schema the server generates from its Zod validator
 #   battlefield  draws every suggestion that changes what content shows in battle
@@ -35,6 +36,7 @@ on:
       - ".github/workflows/content-audit.yml"
       - ".github/scripts/render-battlefield.mjs"
       - ".github/scripts/battlefield-labels.mjs"
+      - ".github/scripts/render-scene-catalog.mjs"
       - ".github/scripts/apply-visual-check.mjs"
       - ".agents/skills/tnr-content-audit/**"
       - "app/src/app/api/content-review/**"
@@ -154,11 +156,42 @@ jobs:
           path: battlefield
           retention-days: 7
 
+  scene-gallery:
+    needs: snapshot
+    if: contains(fromJSON('["visual", "consistency", "new_content"]'), needs.snapshot.outputs.focus)
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          sparse-checkout: .github/scripts
+      - uses: actions/download-artifact@v7
+        with:
+          name: audit-input
+          path: audit
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install Playwright
+        run: npm install --no-save --no-package-lock --prefix .github/scripts "playwright@$PLAYWRIGHT_VERSION"
+      - name: Draw scene characters and backgrounds on contact sheets
+        env:
+          SNAPSHOT: audit/snapshot.json
+          OUT_DIR: scene-catalog
+        run: node .github/scripts/render-scene-catalog.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: scene-catalog
+          path: scene-catalog
+          retention-days: 7
+
   audit:
-    needs: [snapshot, gallery]
+    needs: [snapshot, gallery, scene-gallery]
     if: >-
       always() && needs.snapshot.result == 'success'
       && (needs.gallery.result == 'success' || needs.gallery.result == 'skipped')
+      && (needs.scene-gallery.result == 'success' || needs.scene-gallery.result == 'skipped')
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 40
     outputs:
@@ -176,6 +209,11 @@ jobs:
         with:
           name: battlefield-gallery
           path: audit/battlefield
+      - uses: actions/download-artifact@v7
+        if: needs.scene-gallery.result == 'success'
+        with:
+          name: scene-catalog
+          path: audit/battlefield
       - name: Attach battlefield renders
         id: renders
         run: |
@@ -183,7 +221,7 @@ jobs:
           files=(audit/battlefield/*.png)
           if [ ${#files[@]} -gt 0 ]; then
             args=$(printf '%s\n' "${files[@]}" | jq -R . | jq -sc 'map(["--image", .]) | add')
-            note="Battlefield renders of the most used animation and static assets are attached; audit/battlefield/index.json lists the blocks on each image. Captions may be shortened; blocks[].description preserves the full asset labels."
+            note="Visual contact sheets are attached. audit/battlefield/index.json labels combat assets; audit/battlefield/scene-index.json labels scene characters/backgrounds with IDs, versions and failed-image IDs. Captions may be shortened; blocks[].description preserves full combat labels. Inspect actual pixels before choosing scene cast: a dark anonymous silhouette is not evidence of a village elder or award presenter. Never select a failed image."
           else
             args='[]'
             note="No battlefield renders are attached to this run."
