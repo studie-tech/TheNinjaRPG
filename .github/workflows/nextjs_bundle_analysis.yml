@@ -39,6 +39,7 @@ jobs:
       HAS_CLERK_KEY: ${{ steps.check-secret.outputs.hasSecret }}
     steps:
       - name: Check secret
+        working-directory: .
         id: check-secret
         env:
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY != '' }}
