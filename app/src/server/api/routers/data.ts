@@ -12,6 +12,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type {
@@ -116,9 +117,12 @@ export const dataRouter = createTRPCRouter({
       if (input?.utmSource && input.utmSource.length > 0)
         whereConds.push(eq(abEvent.source, input.utmSource));
 
-      // Fetch individual rows with userAgent for device filtering
+      // Join completions to filtered exposures: a later completion belongs to the
+      // first-visit cohort, without loading successes from unrelated experiments.
+      const completion = alias(abEvent, "completion");
       const rows = await ctx.drizzle
         .select({
+          completionId: completion.id,
           ipHash: abEvent.ipHash,
           experiment: abEvent.experiment,
           variant: abEvent.variant,
@@ -126,14 +130,23 @@ export const dataRouter = createTRPCRouter({
           userAgent: abEvent.userAgent,
         })
         .from(abEvent)
-        .where(
-          or(
-            eq(abEvent.event, "success"),
-            and(eq(abEvent.event, "loaded"), ...whereConds),
+        .leftJoin(
+          completion,
+          and(
+            eq(completion.experiment, abEvent.experiment),
+            eq(completion.ipHash, abEvent.ipHash),
+            eq(completion.variant, abEvent.variant),
+            eq(completion.event, "success"),
           ),
-        );
+        )
+        .where(and(eq(abEvent.event, "loaded"), ...whereConds));
 
-      return aggregateExperiments(rows, input.deviceType);
+      return aggregateExperiments(
+        rows.flatMap((row) =>
+          row.completionId ? [row, { ...row, event: "success" }] : [row],
+        ),
+        input.deviceType,
+      );
     }),
   // Visitor analytics
   getVisitorUtmSources: protectedProcedure.query(async ({ ctx }) => {
