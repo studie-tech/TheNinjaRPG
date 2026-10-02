@@ -2087,9 +2087,10 @@ export const jutsuDatabaseFilter = (
     ...(input?.element?.length
       ? [
           and(
-            ...input.element.map(
-              (e) =>
-                sql`JSON_SEARCH(${jutsu.effects}, 'one', ${e}, NULL, '$[*].elements[*]') IS NOT NULL`,
+            ...input.element.map((e) =>
+              e === "None"
+                ? sql`JSON_LENGTH(${jutsu.elements}) = 0`
+                : sql`JSON_CONTAINS(${jutsu.elements}, ${JSON.stringify(e)})`,
             ),
           ),
         ]
@@ -2250,9 +2251,10 @@ export const jutsuDatabaseFilter = (
     // Exclude elements/effects/stats in JSON
     // --------------------------
     ...(input?.excludedElements?.length
-      ? input.excludedElements.map(
-          (excludedEl) =>
-            sql`JSON_SEARCH(${jutsu.effects}, 'one', ${excludedEl}, NULL, '$[*].elements[*]') IS NULL`,
+      ? input.excludedElements.map((excludedEl) =>
+          excludedEl === "None"
+            ? sql`JSON_LENGTH(${jutsu.elements}) > 0`
+            : sql`NOT JSON_CONTAINS(${jutsu.elements}, ${JSON.stringify(excludedEl)})`,
         )
       : []),
     ...(input?.excludedEffects?.length

@@ -30,6 +30,11 @@ import type {
   UserItemWithRelations,
   VillageStructure,
 } from "@/drizzle/schema";
+import {
+  canUseElementalContent,
+  type ElementUser,
+  elementRequirementMessage,
+} from "@/libs/elements";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { getStrucBoost } from "@/utils/village";
 
@@ -515,7 +520,7 @@ export const buildItemLoadoutData = (
 export const computeLoadoutAssignments = (
   itemData: ItemLoadout["itemData"],
   useritems: UserItemWithRelations[],
-  user: { level: number; bloodlineId: string | null },
+  user: { level: number; bloodlineId: string | null } & ElementUser,
   now: Date = new Date(),
 ): ComputedLoadout => {
   const assignments: LoadoutAssignment[] = [];
@@ -547,6 +552,10 @@ export const computeLoadoutAssignments = (
       continue;
     }
     const item = useritem.item;
+    if (!canUseElementalContent(item, user)) {
+      invalidItems.push(`${item.name}: ${elementRequirementMessage(item)}`);
+      continue;
+    }
     // Inventory availability (home / auction / crafting) via the shared rule.
     const blockReason = getEquipBlockReason(useritem, now);
     if (blockReason) {
@@ -632,6 +641,7 @@ export interface AutoEquipUserItem {
   craftingFinishedAt: Date | null;
   imbuements: { craftingFinishedAt: Date | null }[];
   item: {
+    elements: Item["elements"];
     cost: number;
     slot: string;
     itemType: string;
@@ -656,7 +666,7 @@ export interface ComputedAutoEquip {
  */
 export const computeAutoEquipAssignments = (
   useritems: AutoEquipUserItem[],
-  user: { level: number; bloodlineId: string | null },
+  user: { level: number; bloodlineId: string | null } & ElementUser,
   now: Date = new Date(),
 ): ComputedAutoEquip => {
   const candidates = useritems.filter(
@@ -691,6 +701,7 @@ export const computeAutoEquipAssignments = (
       isCompatibleEquipSlot(candidate, useritem.item.slot),
     );
     if (!slot) continue;
+    if (!canUseElementalContent(useritem.item, user)) continue;
     if (useritem.item.requiredLevel > user.level) continue;
     if (useritem.item.bloodlineId && useritem.item.bloodlineId !== user.bloodlineId) {
       continue;

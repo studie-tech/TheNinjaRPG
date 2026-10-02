@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ItemValidator } from "@/validators/combat";
 
 const validItem = {
+  elements: [],
   name: "Farm item",
   image: "item.webp",
   description: "Farm item",

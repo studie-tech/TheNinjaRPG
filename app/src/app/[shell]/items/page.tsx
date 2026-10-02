@@ -51,6 +51,7 @@ import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { applyActiveVariant } from "@/libs/combat/util";
+import { canUseElementalContent, elementRequirementMessage } from "@/libs/elements";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
   byItemName,
@@ -1069,10 +1070,24 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 <Button
                   variant="info"
                   onClick={() => equip({ userItemId: useritem.id })}
+                  disabled={
+                    !canUseElementalContent(useritem.item, {
+                      ...userData,
+                      bloodline: userData.bloodline ?? null,
+                    })
+                  }
                 >
                   <Shirt className="mr-2 h-5 w-5" />
                   Equip
                 </Button>
+              )}
+              {!canUseElementalContent(useritem.item, {
+                ...userData,
+                bloodline: userData.bloodline ?? null,
+              }) && (
+                <p className="w-full text-muted-foreground text-sm">
+                  {elementRequirementMessage(useritem.item)}
+                </p>
               )}
               {useritem.item.canStack && (
                 <>
@@ -1492,10 +1507,26 @@ const Character: React.FC<CharacterProps> = (props) => {
                 showBgColor={false}
                 showLabels={false}
                 greyedIds={items
-                  ?.filter((item) => item.equipped !== "NONE")
+                  ?.filter(
+                    (item) =>
+                      item.equipped !== "NONE" ||
+                      !canUseElementalContent(item.item, {
+                        ...userData,
+                        bloodline: userData.bloodline ?? null,
+                      }),
+                  )
                   .map((item) => item.id)}
                 onClick={(id) => {
-                  setUserItem(items?.find((item) => item.id === id));
+                  const selected = items?.find((item) => item.id === id);
+                  if (
+                    !selected ||
+                    !canUseElementalContent(selected.item, {
+                      ...userData,
+                      bloodline: userData.bloodline ?? null,
+                    })
+                  )
+                    return;
+                  setUserItem(selected);
                   equip({ userItemId: id, slot: slot });
                 }}
               />

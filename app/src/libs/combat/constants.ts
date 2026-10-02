@@ -115,6 +115,8 @@ export const privateState = [
   "jutsuLoadout",
   "ninjutsuDefence",
   "ninjutsuOffence",
+  "primaryElement",
+  "secondaryElement",
   "speed",
   "strength",
   "taijutsuDefence",

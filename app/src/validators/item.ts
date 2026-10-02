@@ -3,6 +3,7 @@ import {
   AttackMethods,
   AttackTargets,
   BattleUsageTypes,
+  ElementNames,
   ITEM_LEVEL_CAP,
   ItemRarities,
   ItemSlots,
@@ -40,6 +41,7 @@ export const adjustUserItemSchema = z.object({
 });
 
 export const itemFilteringSchema = z.object({
+  element: z.array(z.enum(ElementNames)).optional(),
   limit: z.number().min(1).max(500),
   name: z.string().optional(),
   itemType: z.enum(ItemTypes).optional(),

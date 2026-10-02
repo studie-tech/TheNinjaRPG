@@ -8,7 +8,7 @@ import {
   UserRanks,
   UserRoles,
 } from "@/drizzle/constants";
-import type { UserWithRelations } from "@/routers/profile";
+import type { ElementUser } from "@/libs/elements";
 import type { ZodAllTags } from "@/validators/combat";
 import { genders, usernameSchema } from "@/validators/register";
 import {
@@ -60,7 +60,9 @@ export const getQuestCounterFieldName = (
 };
 export type QuestCounterFieldName = ReturnType<typeof getQuestCounterFieldName>;
 
-export const getUserElements = (user: UserWithRelations) => {
+export const getUserElements = (
+  user: Partial<Omit<ElementUser, "isAi">> | undefined,
+) => {
   // Natural elements
   const userElements: ElementName[] = [];
   if (user?.primaryElement) userElements.push(user.primaryElement);
@@ -97,7 +99,9 @@ export const getUserElements = (user: UserWithRelations) => {
   return Array.from(new Set(finalElements));
 };
 
-export const getBloodlineElements = (user: UserWithRelations) => {
+export const getBloodlineElements = (
+  user: Partial<Pick<ElementUser, "bloodline">> | undefined,
+) => {
   const bloodlineElements: ElementName[] = [];
   user?.bloodline?.effects.forEach((effect) => {
     if ("elements" in effect && effect.elements) {

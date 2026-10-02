@@ -2,6 +2,7 @@ import {
   AttackMethods,
   AttackTargets,
   BattleUsageTypes,
+  ElementNames,
   ItemRarities,
   ItemSlotTypes,
   ItemTypes,
@@ -22,6 +23,13 @@ import { effectFilters } from "@/validators/combat";
 const itemFilteringSchema = defineFilteringSchema({
   fields: [
     { id: "name", label: "Name", type: "text", defaultValue: "" },
+    {
+      id: "element",
+      label: "Element Classification",
+      type: "multi-select",
+      defaultValue: [],
+      options: toOptions(ElementNames),
+    },
     {
       id: "effect",
       label: "Effects",

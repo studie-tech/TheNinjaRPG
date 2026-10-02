@@ -153,6 +153,7 @@ export const getActiveSageLevel = (
  * charged from the mode in `applyActivateSageMode`.
  */
 export const SAGE_MODE_ACTIVATION_JUTSU: Jutsu = {
+  elements: [],
   id: SAGE_MODE_ACTIVATION_JUTSU_ID,
   name: "Activation",
   description:

@@ -1393,6 +1393,7 @@ export const item = mysqlTable(
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
     expireFromStoreAt: date("expireFromStoreAt", { mode: "string" }),
+    elements: json("elements").$type<consts.ElementName[]>().default([]).notNull(),
     effects: json("effects").$type<ZodAllTags[]>().notNull(),
     itemType: mysqlEnum("itemType", consts.ItemTypes).notNull(),
     rarity: mysqlEnum("rarity", consts.ItemRarities).notNull(),
@@ -1641,6 +1642,7 @@ export const jutsu = mysqlTable(
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
     extraBaseCost: smallint("extraBaseCost", { unsigned: true }).default(0).notNull(),
+    elements: json("elements").$type<consts.ElementName[]>().default([]).notNull(),
     effects: json("effects").$type<ZodAllTags[]>().notNull(),
     target: mysqlEnum("target", consts.AttackTargets).notNull(),
     range: int("range").notNull(),

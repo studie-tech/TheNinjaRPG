@@ -56,6 +56,7 @@ type UserStatData = Pick<
   | "willpower"
 >;
 
+import { matchesElementClassification } from "@/libs/elements";
 import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
@@ -188,14 +189,7 @@ export const checkJutsuBloodline = (jutsu: Jutsu | undefined, userdata: UserData
 };
 
 export const checkJutsuElements = (jutsu: Jutsu, userElements: Set<ElementName>) => {
-  const jutsuElements: ElementName[] = [];
-  jutsu.effects.forEach((effect) => {
-    if ("elements" in effect && effect.elements) {
-      jutsuElements.push(...effect.elements);
-    }
-  });
-  if (jutsuElements.length === 0) jutsuElements.push("None");
-  return jutsuElements.find((e) => userElements.has(e));
+  return matchesElementClassification(jutsu.elements ?? [], userElements);
 };
 
 export const filterValidElementsTypeguard = (elements: string[]): ElementName[] => {

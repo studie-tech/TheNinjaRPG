@@ -988,6 +988,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Minimum Rank</b>: {item.questRank}
                 </p>
               )}
+              {"elements" in item && Array.isArray(item.elements) && (
+                <p>
+                  <b>Element Classification</b>:{" "}
+                  {item.elements.length ? item.elements.join(" or ") : "None"}
+                </p>
+              )}
               {"requiredLevel" in item && item.requiredLevel && (
                 <p>
                   <b>Required Level</b>: {item.requiredLevel}

@@ -30,6 +30,7 @@ import {
 } from "@/drizzle/constants";
 import type { Item, UserData } from "@/drizzle/schema";
 import { DateTimeRegExp } from "@/utils/regex";
+import { elementClassificationSchema } from "@/validators/elements";
 import { rewardFields } from "@/validators/rewards";
 
 /**
@@ -1332,6 +1333,7 @@ const makeCappedNullableNumber = (max: number) =>
   );
 
 export const JutsuValidatorRawSchema = z.object({
+  elements: elementClassificationSchema,
   name: z.string().trim(),
   image: z.string(),
   description: z.string(),
@@ -1477,6 +1479,7 @@ export type ZodSkillTreeInput = z.input<typeof SkillTreeValidator>;
  * Item Type. Used for validating a item object is set up properly
  */
 export const ItemValidatorRawSchema = z.object({
+  elements: elementClassificationSchema,
   name: z.string().trim(),
   image: z.string(),
   description: z.string(),

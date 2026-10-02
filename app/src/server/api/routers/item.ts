@@ -65,6 +65,11 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import {
+  canUseElementalContent,
+  type ElementUser,
+  elementRequirementMessage,
+} from "@/libs/elements";
+import {
   filterVisibleEvolutions,
   isEvolution,
   meetsEvolutionStatRequirements,
@@ -744,9 +749,10 @@ export const itemRouter = createTRPCRouter({
       }
 
       const canKeepEquipped =
-        userItemObj.equipped === "NONE" ||
-        userItemObj.equipped === evolutionItem.slot ||
-        userItemObj.equipped.startsWith(`${evolutionItem.slot}_`);
+        canUseElementalContent(evolutionItem, user) &&
+        (userItemObj.equipped === "NONE" ||
+          userItemObj.equipped === evolutionItem.slot ||
+          userItemObj.equipped.startsWith(`${evolutionItem.slot}_`));
 
       let didEvolveThisCall = false;
       if (!alreadyEvolved) {
@@ -1668,7 +1674,7 @@ export const itemRouter = createTRPCRouter({
       // Fetch
       const [useritems, user, loadouts] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserWithElements(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
       ]);
       // Mutate
@@ -2543,7 +2549,7 @@ export const itemRouter = createTRPCRouter({
       const uid = ctx.userId;
       // Read userData before inventory so the transactional updatedAt CAS below
       // detects any capacity mutation that commits between these snapshots.
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const user = await fetchUserWithElements(ctx.drizzle, ctx.userId);
       const [info, useritems, structures, questState] = await Promise.all([
         fetchItem(ctx.drizzle, iid),
         fetchUserItems(ctx.drizzle, uid),
@@ -2608,6 +2614,7 @@ export const itemRouter = createTRPCRouter({
         (ui) => ui.itemId === info.id && ui.equipped !== "NONE",
       ).length;
       const canAutoEquip =
+        canUseElementalContent(info, user) &&
         !info.effects.find((e) => e.type.includes("bloodline")) &&
         instancesEquipped < info.maxEquips &&
         user.level >= info.requiredLevel &&
@@ -2730,7 +2737,7 @@ export const itemRouter = createTRPCRouter({
     .mutation(async ({ ctx }) => {
       const [useritems, user] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserWithElements(ctx.drizzle, ctx.userId),
       ]);
 
       // Slot exclusivity and category / maxEquips limits are decided against one
@@ -2838,7 +2845,7 @@ export const itemRouter = createTRPCRouter({
       // Query
       const [loadouts, user, useritems] = await Promise.all([
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserWithElements(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId, { includeHidden: true }),
       ]);
       // Mutate & return result
@@ -2898,7 +2905,8 @@ export const selectItemLoadout = async (
   user: Pick<
     UserData,
     "userId" | "federalStatus" | "staffAccount" | "level" | "bloodlineId"
-  >,
+  > &
+    ElementUser,
 ) => {
   // Guard: only loadouts within the user's current allowance are selectable, so
   // a downgraded user can't reach an out-of-range loadout by guessing its
@@ -3262,19 +3270,21 @@ export const fetchVariantOwnership = async (
     .limit(1);
 };
 
-/**
- * @param client - The database client
- * @param userItemId - The ID of the user item to toggle
- * @param useritems - The user items to toggle
- * @param user - The user data
- * @param slot - The slot to toggle (optional)
- * @returns A promise that resolves to the result of the toggle
- */
+/** Load element ownership alongside the account in the initial equip query. */
+const fetchUserWithElements = async (client: DrizzleClient, userId: string) => {
+  const user = await client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    with: { bloodline: { columns: { effects: true } } },
+  });
+  if (!user) throw serverError("NOT_FOUND", "User not found");
+  return user;
+};
+
 export const toggleEquipItem = async (
   client: DrizzleClient,
   userItemId: string,
   useritems: UserItemWithRelations[],
-  user: UserData,
+  user: UserData & ElementUser,
   slot?: ItemSlot,
 ) => {
   // Create a clone to be returned
@@ -3288,6 +3298,9 @@ export const toggleEquipItem = async (
 
   // Only check requirements when equipping (not when unequipping)
   if (doEquip) {
+    if (!canUseElementalContent(useritem.item, user)) {
+      return errorResponse(elementRequirementMessage(useritem.item));
+    }
     if (useritem.item.requiredLevel > user.level) {
       return errorResponse(
         `You need to be level ${useritem.item.requiredLevel} to equip this item`,
@@ -3437,6 +3450,17 @@ export const itemDatabaseFilter = (
 ): QueryCondition[] => {
   const { slot, itemType } = readItemListFilterSlot(input?.slot, input?.itemType);
   return [
+    ...(input?.element?.length
+      ? [
+          and(
+            ...input.element.map((element) =>
+              element === "None"
+                ? sql`JSON_LENGTH(${item.elements}) = 0`
+                : sql`JSON_CONTAINS(${item.elements}, ${JSON.stringify(element)})`,
+            ),
+          ),
+        ]
+      : []),
     // Name filter
     ...(input?.name ? [like(item.name, `%${input.name}%`)] : []),
 

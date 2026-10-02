@@ -73,6 +73,13 @@ describe("paths", () => {
 });
 
 describe("audit rules", () => {
+  it.each(["ITEM", "JUTSU"] as const)("preserves %s classification in editable fields and proposals", (type) => {
+    expect(ENTITY_CONFIG[type].editableKeys).toContain("elements");
+    const before = { elements: ["Fire"], effects: [{ type: "increasedamagegiven", elements: ["Water"] }] };
+    const result = applySetOperations(type, before, [{ path: "elements", value: ["Wind"] }]);
+    expect(result).toEqual({ ok: true, editable: { ...before, elements: ["Wind"] } });
+    expect(contentVersion(before)).not.toBe(contentVersion({ ...before, elements: ["Wind"] }));
+  });
   it("only lets the audit set editable fields of the entity", () => {
     const result = applySetOperations("BADGE", { name: "Old" }, [
       { path: "createdAt", value: "2020-01-01" },

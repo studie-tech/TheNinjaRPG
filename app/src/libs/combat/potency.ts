@@ -45,7 +45,7 @@ export const getPotencyDescription = (
         .map((element) => (element === "None" ? "None (non-elemental)" : element))
         .join(", ")}.`
     : "";
-  return `The power of ${affected} on ${owner} subsequent jutsu is ${change} by ${units} for ${effect.rounds} rounds.${elements}`;
+  return `The power of ${affected} on ${owner} subsequent jutsu and item actions is ${change} by ${units} for ${effect.rounds} rounds.${elements}`;
 };
 
 const supportedTags: ReadonlySet<string> = new Set(PotencyTagTypes);
@@ -56,12 +56,17 @@ const supportedTags: ReadonlySet<string> = new Set(PotencyTagTypes);
  * cast's power, without modifying the jutsu definition or applying potency twice.
  */
 export const resolvePotencyTags = (
-  action: Pick<CombatAction, "type" | "effects" | "level">,
+  action: Pick<CombatAction, "type" | "effects" | "level" | "elements">,
   usersEffects: UserEffect[],
   casterId: string,
 ): ZodAllTags[] => {
   const tags = structuredClone(action.effects);
-  if (action.type !== "jutsu") return tags;
+  if (action.type === "basic") return tags;
+  // Match the source action, not a buff's target elements. Power is baked into
+  // the cast below, so residual ticks and copied effects retain the same result.
+  const elements: readonly ElementName[] = action.elements?.length
+    ? action.elements
+    : ["None"];
 
   const sealEffects = usersEffects.filter(
     (effect) => effect.type === "seal" && !effect.isNew && isEffectActive(effect),
@@ -106,8 +111,6 @@ export const resolvePotencyTags = (
 
   for (const tag of tags) {
     if (!supportedTags.has(tag.type)) continue;
-    const elements: readonly ElementName[] =
-      "elements" in tag && tag.elements?.length ? tag.elements : ["None"];
     const matching = modifiers.filter((modifier) => {
       const matchesElement = modifier.affectedElements.some((element) =>
         elements.includes(element),

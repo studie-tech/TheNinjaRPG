@@ -2035,13 +2035,14 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         <p className="mb-3 text-muted-foreground text-sm">
           Static adds or subtracts power points. Percentage scales the selected tag’s
           power. For power 40, an increase of 20 gives 60 in Static mode or 48 in
-          Percentage mode. All affects every supported tag on subsequent jutsu. Active
-          modifiers add together within each mode; Static applies first. Affected
-          Elements limits those tags to any of the selected elements. With All or a
-          specific Affected Tag, leave elements empty to affect all elements, including
-          non-elemental tags. Choose None under Affected Tag to use elements only;
-          without selected elements, no tags are affected. None under Affected Elements
-          matches tags without an element.
+          Percentage mode. All affects every supported tag on subsequent jutsu and item
+          actions. Active modifiers add together within each mode; Static applies first.
+          Affected Elements matches the action's Element Classification, independently
+          of each tag's targeting elements. With All or a specific Affected Tag, leave
+          elements empty to affect all elements, including non-elemental actions. Choose
+          None under Affected Tag to use classification only; without selected elements,
+          no tags are affected. None under Affected Elements matches actions with an
+          empty classification.
         </p>
       )}
       <EditContent

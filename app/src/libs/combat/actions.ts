@@ -52,6 +52,7 @@ import {
   findBarrier,
   getAffectedTiles,
   getBarriersBetween,
+  getBloodline,
   getEffectiveCurPool,
   getEffectStackKey,
   getItem,
@@ -66,6 +67,7 @@ import {
   isUserSummonPrevented,
   tagHasSharedCooldown,
 } from "@/libs/combat/util";
+import { canUseElementalContent } from "@/libs/elements";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
 import { calcCombatHealPercentage } from "@/libs/hospital";
@@ -96,6 +98,15 @@ export const availableUserActions = (
 ): CombatAction[] => {
   const usersState = battle?.usersState;
   const user = usersState?.find((u) => u.userId === userId);
+  const elementUser =
+    user && battle
+      ? {
+          isAi: user.isAi,
+          primaryElement: user.primaryElement ?? null,
+          secondaryElement: user.secondaryElement ?? null,
+          bloodline: getBloodline(battle, user.bloodlineId) ?? null,
+        }
+      : undefined;
   const { availableActionPoints } = actionPointsAfterAction(user, battle);
   const isStealth = isUserStealthed(userId, battle?.usersEffects);
   const isStudent = user?.rank === "STUDENT";
@@ -154,6 +165,8 @@ export const availableUserActions = (
           .filter((userjutsu) => {
             const jutsu = getJutsu(battle, userjutsu.jutsuId);
             if (!jutsu) return false;
+            if (elementUser && !canUseElementalContent(jutsu, elementUser))
+              return false;
 
             // If quest battle, exclude PVP-only jutsus
             if (isQuestBattle && jutsu.battleUsageType === "PVP") {
@@ -225,6 +238,7 @@ export const availableUserActions = (
             if (ui.quantity <= 0) return false;
             const item = getItem(battle, ui.itemId);
             if (!item) return false;
+            if (elementUser && !canUseElementalContent(item, elementUser)) return false;
             if (item.preventBattleUsage) return false;
             // If quest battle, exclude PVP-only items
             if (isQuestBattle && item.battleUsageType === "PVP") {
@@ -731,6 +745,7 @@ export const userItemToAction = (
     staminaCost: Math.max(0, item.staminaCost - item.staminaCostReducePerLvl * level),
     actionCostPerc: item.actionCostPerc,
     effects: item.effects,
+    elements: item.elements ?? [],
     quantity: useritem.quantity,
     data: item,
     durability: useritem.durability,
@@ -784,6 +799,7 @@ export const userJutsuToAction = (
     ),
     actionCostPerc: jutsu.actionCostPerc,
     effects: jutsu.effects,
+    elements: jutsu.elements ?? [],
     level: userjutsu.level,
     data: jutsu,
   };

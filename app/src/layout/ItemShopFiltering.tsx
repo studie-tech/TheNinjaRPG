@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import {
   BattleUsageTypes,
+  ElementNames,
   ItemRarities,
   ItemSlotTypes,
   ItemTypes,
@@ -45,6 +46,13 @@ const makeItemShopSchema = (types: readonly string[], itemTypeDefault?: ItemType
         visibleIf: (ctx) => !(ctx as ItemShopFilterContext).hideItemType,
       },
       { id: "name", label: "Name", type: "text", defaultValue: "" },
+      {
+        id: "element",
+        label: "Element Classification",
+        type: "multi-select",
+        defaultValue: [],
+        options: toOptions(ElementNames),
+      },
       {
         id: "effect",
         label: "Effects",

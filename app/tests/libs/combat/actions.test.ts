@@ -159,6 +159,12 @@ describe("combat AP cost adjustments", () => {
     expect(getActionPointCost("user-1", battle, action)).toBe(50);
   });
 
+  it("keeps time targeting on effect-local elements regardless of classification", () => {
+    const fireEffect = { ...makeJutsuFireTopLevelOnly(), elements: ["Water"] as ElementName[] };
+    expect(getActionPointCost("user-1", makeBattle([makeTimeDilation({ elements: ["Fire"] })]), fireEffect)).toBe(50);
+    expect(getActionPointCost("user-1", makeBattle([makeTimeDilation({ elements: ["Water"] })]), fireEffect)).toBe(60);
+  });
+
   it("does not apply element-scoped time dilation when action elements do not overlap", () => {
     const battle = makeBattle([makeTimeDilation({ elements: ["Water"] })]);
     const action = makeJutsuFireTopLevelOnly();

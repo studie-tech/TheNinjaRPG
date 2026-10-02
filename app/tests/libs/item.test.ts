@@ -209,6 +209,7 @@ describe("checkEquipConstraints", () => {
 
 // Minimal user-item factory; only the fields the function reads are set.
 const ui = (over: {
+  elements?: UserItemWithRelations["item"]["elements"];
   id: string;
   itemId: string;
   name?: string;
@@ -234,6 +235,7 @@ const ui = (over: {
     craftingFinishedAt: over.craftingFinishedAt ?? null,
     imbuements: over.imbuements ?? [],
     item: {
+      elements: over.elements ?? [],
       id: over.itemId,
       name: over.name ?? over.itemId,
       hidden: over.hidden ?? false,
@@ -246,7 +248,7 @@ const ui = (over: {
     },
   }) as unknown as UserItemWithRelations;
 
-const USER = { level: 50, bloodlineId: "bl1" };
+const USER = { level: 50, bloodlineId: "bl1", primaryElement: null, secondaryElement: null, bloodline: null, isAi: false };
 
 describe("buildItemLoadoutData", () => {
   it("serializes the unique inventory row id for equipped rows only", () => {
@@ -260,6 +262,15 @@ describe("buildItemLoadoutData", () => {
 });
 
 describe("computeLoadoutAssignments", () => {
+  it("rejects restricted equipment but accepts any matching natural element or AI", () => {
+    const inventory = [ui({ id: "r1", itemId: "fire", slotType: "HEAD", elements: ["Fire", "Water"] })];
+    const loadout = [{ itemId: "fire", slot: "HEAD" as const }];
+    const denied = computeLoadoutAssignments(loadout, inventory, USER);
+    expect(denied.assignments).toEqual([]);
+    expect(denied.invalidItems[0]).toContain("Requires Fire or Water");
+    expect(computeLoadoutAssignments(loadout, inventory, { ...USER, primaryElement: "Water" }).assignments).toHaveLength(1);
+    expect(computeLoadoutAssignments(loadout, inventory, { ...USER, isAi: true }).assignments).toHaveLength(1);
+  });
   it("assigns a simple valid loadout", () => {
     const items = [ui({ id: "r1", itemId: "i1", slotType: "HEAD" })];
     const out = computeLoadoutAssignments(
@@ -578,6 +589,12 @@ describe("computeLoadoutAssignments", () => {
 });
 
 describe("computeAutoEquipAssignments", () => {
+  it("keeps incompatible owned items unequipped", () => {
+    const inventory = [ui({ id: "r1", itemId: "fire", slotType: "HEAD", elements: ["Fire"] })];
+    expect(computeAutoEquipAssignments(inventory, USER).assignments).toEqual([]);
+    expect(computeAutoEquipAssignments(inventory, { ...USER, primaryElement: "Fire" }).assignments).toHaveLength(1);
+    expect(inventory).toHaveLength(1);
+  });
   it("assigns the highest-cost item to a contended slot", () => {
     const items = [
       ui({ id: "cheap", itemId: "c", slotType: "HEAD", cost: 10 }),

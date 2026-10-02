@@ -504,6 +504,8 @@ export type CombatResult = {
 };
 
 export type CombatAction = {
+  /** Eligibility and Potency classification; never used as an effect's targeting elements. */
+  elements?: ElementName[];
   id: string;
   name: string;
   image: string;

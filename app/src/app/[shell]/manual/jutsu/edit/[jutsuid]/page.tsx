@@ -161,6 +161,11 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
               allowImageUpload={props.canSave}
               onAccept={handleJutsuSubmit}
             />
+            <p className="mt-2 text-muted-foreground text-sm">
+              Element Classification controls eligibility and Potency matching. Any
+              selected element qualifies; leave empty for unrestricted use. Each combat
+              tag keeps its own elemental behavior and targeting.
+            </p>
             <div className="mt-2 flex justify-end">
               <SuggestChange
                 entityType="JUTSU"

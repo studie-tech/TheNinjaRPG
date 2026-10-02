@@ -146,6 +146,7 @@ import {
   maskBattleDynamic,
   rollInitiative,
 } from "@/libs/combat/util";
+import { canUseElementalContent } from "@/libs/elements";
 import { fetchDmgConfig } from "@/libs/gamesettings";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import {
@@ -1063,7 +1064,12 @@ export const combatRouter = createTRPCRouter({
       const itemLoadoutResult =
         user.itemLoadout === iId || !iId
           ? { success: true, message: "Item loadout already selected" }
-          : await selectItemLoadout(ctx.drizzle, iId, itemLoadouts, useritems, user);
+          : await selectItemLoadout(ctx.drizzle, iId, itemLoadouts, useritems, {
+              ...user,
+              bloodline: user.bloodlineId
+                ? (userBattle.extraState.bloodlines?.[user.bloodlineId] ?? null)
+                : null,
+            });
       const jutsuLoadoutResult =
         user.jutsuLoadout === jId || !jId
           ? { success: true, message: "Jutsu loadout already selected" }
@@ -1079,9 +1085,14 @@ export const combatRouter = createTRPCRouter({
                   userjutsus,
                   maxEquip: calcJutsuEquipLimit(user),
                   validateJutsu: ({ jutsu }) =>
-                    checkJutsuBloodlineItem(jutsu, useritems)
+                    canUseElementalContent(jutsu, {
+                      ...user,
+                      bloodline: user.bloodlineId
+                        ? (userBattle.extraState.bloodlines?.[user.bloodlineId] ?? null)
+                        : null,
+                    }) && checkJutsuBloodlineItem(jutsu, useritems)
                       ? undefined
-                      : `${jutsu.name}: required bloodline item is not equipped`,
+                      : `${jutsu.name}: element or required bloodline item requirements are not met`,
                 }),
             );
 
@@ -3134,6 +3145,12 @@ export const processUsersForBattle = async (
       user.effects = []; // Reset to avoid storing in battle table
     }
 
+    // Restricted gear stays owned, but cannot supply prerequisites or passive
+    // effects. Keep droppable rows for loot accounting while marking them unequipped.
+    for (const ui of user.items) {
+      if (!canUseElementalContent(ui.item, user)) ui.equipped = "NONE";
+    }
+
     // Set jutsus updatedAt to now (we use it for determining usage cooldowns)
     const isQuestBattle = QuestBattleTypes.includes(battleType);
     // Filter and process jutsus - DO NOT apply reskins here, they are applied dynamically
@@ -3149,6 +3166,7 @@ export const processUsersForBattle = async (
         if (!userjutsu.jutsu) {
           return false;
         }
+        if (!canUseElementalContent(userjutsu.jutsu, user)) return false;
         // Filter by battleUsageType
         // If quest battle, exclude PVP-only jutsus
         if (isQuestBattle && userjutsu.jutsu.battleUsageType === "PVP") {

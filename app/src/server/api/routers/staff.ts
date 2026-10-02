@@ -80,6 +80,7 @@ import {
   village,
   warKill,
 } from "@/drizzle/schema";
+import { hasElementClassificationBackup } from "@/libs/elementClassificationMapping";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { fetchBadge } from "@/routers/badge";
 import { fetchAttributes, fetchUpdatedUser, fetchUser } from "@/routers/profile";
@@ -219,6 +220,14 @@ export const staffRouter = createTRPCRouter({
       if (!devUrl && !aiUrl) return errorResponse("No target database URLs configured");
       if (!backup.sqlText || backup.sqlText.startsWith("/* Empty backup")) {
         return errorResponse("Backup is empty");
+      }
+      if (
+        (backup.type === "jutsu" || backup.type === "item") &&
+        !hasElementClassificationBackup(backup.sqlText)
+      ) {
+        return errorResponse(
+          "This backup predates element classification. Create a new backup after applying Content's classification mapping.",
+        );
       }
 
       // Setup clients

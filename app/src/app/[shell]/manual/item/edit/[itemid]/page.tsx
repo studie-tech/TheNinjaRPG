@@ -185,6 +185,12 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
               submitLoading={isUpdating}
               submitLoadingText="Saving"
             />
+            <p className="mt-2 text-muted-foreground text-sm">
+              Element Classification controls equipping, combat use, and Potency
+              matching. Any selected element qualifies; leave empty for unrestricted
+              use. Items remain visible and obtainable. Each combat tag keeps its own
+              elemental behavior and targeting.
+            </p>
             <div className="mt-2 flex justify-end">
               <SuggestChange
                 entityType="ITEM"
