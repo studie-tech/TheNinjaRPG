@@ -413,6 +413,7 @@ export const profileRouter = createTRPCRouter({
       if (input.step === TUTORIAL_STEPS_COUNT && ipHash) {
         const experiments = getLayoutExperimentAssignments({
           abLemuReplacementVariant: ctx.abLemuReplacementVariant,
+          wallpaperVariant: ctx.wallpaperVariant,
         });
         await Promise.all(
           experiments.map(async (experiment) => {
@@ -430,14 +431,11 @@ export const profileRouter = createTRPCRouter({
                 id: nanoid(),
                 userId: ctx.userId,
                 experiment: experiment.experiment,
-                variant: experiment.variant,
+                variant: abLoadedEvent.variant,
                 event: "success",
                 source: abLoadedEvent.source,
                 ipHash,
-                userAgent:
-                  typeof ctx.userAgent === "string"
-                    ? ctx.userAgent.slice(0, 180)
-                    : undefined,
+                userAgent: abLoadedEvent.userAgent,
               })
               .onDuplicateKeyUpdate({ set: { id: sql`id` } });
           }),

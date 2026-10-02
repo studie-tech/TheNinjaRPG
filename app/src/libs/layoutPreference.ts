@@ -1,3 +1,8 @@
+import {
+  parseWallpaperVariant,
+  WALLPAPER_EXPERIMENT,
+} from "@/libs/wallpaperExperiment";
+
 export const LEGACY_AB_LAYOUT_COOKIE = "ab_lemu_replacement_2";
 export const LAYOUT_PREFERENCE_COOKIE = "tnr_layout_preference";
 
@@ -53,6 +58,7 @@ export const cookieValueToLayout = (
 
 export const getLayoutExperimentAssignments = (variants: {
   abLemuReplacementVariant?: string | null;
+  wallpaperVariant?: string | null;
 }): LayoutExperimentAssignment[] => {
   const assignments: LayoutExperimentAssignment[] = [];
   if (variants.abLemuReplacementVariant) {
@@ -61,6 +67,9 @@ export const getLayoutExperimentAssignments = (variants: {
       variant: variants.abLemuReplacementVariant,
     });
   }
+  const wallpaper = parseWallpaperVariant(variants.wallpaperVariant);
+  if (wallpaper)
+    assignments.push({ experiment: WALLPAPER_EXPERIMENT, variant: wallpaper });
   return assignments;
 };
 

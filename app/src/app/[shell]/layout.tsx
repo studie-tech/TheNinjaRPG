@@ -1,6 +1,5 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { extractRouterConfig } from "uploadthing/server";
@@ -16,6 +15,7 @@ import { InstallPromptProvider } from "@/hooks/useInstallPrompt";
 import AcceptWarning from "@/layout/AcceptWarning";
 import { ActiveSessionBoundary } from "@/layout/ActiveSessionBoundary";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
+import { ExperimentSpeedInsights } from "@/layout/ExperimentSpeedInsights";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
 import StructuredData from "@/layout/StructuredData";
 import { WebAnalytics } from "@/layout/WebAnalytics";
@@ -142,6 +142,7 @@ export default async function RootLayout({
                   <LayoutSwitcher
                     initialIsSignedIn={initialIsSignedIn}
                     initialLayout={initialLayout}
+                    wallpaper={variant.wallpaper}
                   >
                     {children}
                   </LayoutSwitcher>
@@ -151,7 +152,7 @@ export default async function RootLayout({
                   <PWAManager />
                   <NativeBridge />
                   <InstallPrompt />
-                  <SpeedInsights sampleRate={0.03} />
+                  <ExperimentSpeedInsights wallpaper={variant.wallpaper} />
                 </InstallPromptProvider>
               </UserContextProvider>
             </TrpcClientProvider>

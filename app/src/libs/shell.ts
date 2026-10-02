@@ -6,6 +6,12 @@ import {
   LEGACY_AB_LAYOUT_COOKIE,
 } from "@/libs/layoutPreference";
 import { parseNativeUserAgent } from "@/libs/native/userAgent";
+import {
+  parseWallpaperVariant,
+  WALLPAPER_EXPERIMENT,
+  WALLPAPER_VARIANTS,
+  type WallpaperVariant,
+} from "@/libs/wallpaperExperiment";
 
 /**
  * The application shell is prerendered once per variant and served from the CDN.
@@ -14,7 +20,8 @@ import { parseNativeUserAgent } from "@/libs/native/userAgent";
  * that matches it, so the root layout never reads the request: nothing in a document is
  * specific to the visitor, and a copy rendered for one can be served to the next. A
  * variant is the set of things that change the markup before hydration -- whether the
- * frame is the signed-in one, which layout family it uses, and which client it is for,
+ * frame is the signed-in one, which layout family it uses, which wallpaper it shows,
+ * and which client it is for,
  * as the native shells load Clerk through a proxy and Android takes a different
  * viewport. Everything the visitor actually sees arrives through tRPC after hydration.
  */
@@ -22,6 +29,7 @@ export interface ShellVariant {
   client: "web" | "ios" | "android";
   layout: EffectiveLayout;
   signedIn: boolean;
+  wallpaper?: WallpaperVariant;
 }
 
 export const SHELL_CLIENTS = ["web", "ios", "android"] as const;
@@ -31,13 +39,21 @@ export const SHELL_LAYOUTS = [
 ] as const satisfies readonly EffectiveLayout[];
 
 /** The URL segment a variant renders under, e.g. "web-pixel-in". */
-export const shellParam = ({ client, layout, signedIn }: ShellVariant) =>
-  `${client}-${layout}-${signedIn ? "in" : "out"}`;
+export const shellParam = ({ client, layout, signedIn, wallpaper }: ShellVariant) =>
+  `${client}-${layout}-${signedIn ? "in" : "out"}${wallpaper ? `-${wallpaper}` : ""}`;
 
 /** Inverse of shellParam; null for anything that is not a known variant. */
 export const parseShellParam = (param: string): ShellVariant | null => {
-  const [client, layout, session, ...rest] = param.split("-");
+  const [client, layout, session, wallpaper, ...rest] = param.split("-");
   if (rest.length > 0) return null;
+  if (
+    wallpaper !== undefined &&
+    (!parseWallpaperVariant(wallpaper) ||
+      client !== "web" ||
+      layout !== "default" ||
+      session !== "out")
+  )
+    return null;
   if (!SHELL_CLIENTS.includes(client as ShellVariant["client"])) return null;
   if (!SHELL_LAYOUTS.includes(layout as EffectiveLayout)) return null;
   if (session !== "in" && session !== "out") return null;
@@ -45,18 +61,26 @@ export const parseShellParam = (param: string): ShellVariant | null => {
     client: client as ShellVariant["client"],
     layout: layout as EffectiveLayout,
     signedIn: session === "in",
+    ...(wallpaper ? { wallpaper: parseWallpaperVariant(wallpaper) } : {}),
   };
 };
 
 /** Every variant, for generateStaticParams. */
-export const SHELL_PARAMS = SHELL_CLIENTS.flatMap((client) =>
+const BASE_SHELL_PARAMS = SHELL_CLIENTS.flatMap((client) =>
   SHELL_LAYOUTS.flatMap((layout) =>
     [false, true].map((signedIn) => shellParam({ client, layout, signedIn })),
   ),
 );
 
+export const SHELL_PARAMS = [
+  ...BASE_SHELL_PARAMS,
+  ...WALLPAPER_VARIANTS.map((wallpaper) =>
+    shellParam({ client: "web", layout: "default", signedIn: false, wallpaper }),
+  ),
+];
+
 const SHELL_PARAM_PATTERN = new RegExp(
-  `^/(?:${SHELL_CLIENTS.join("|")})-(?:${SHELL_LAYOUTS.join("|")})-(?:in|out)(?=/|$)`,
+  `^/(?:${SHELL_CLIENTS.join("|")})-(?:${SHELL_LAYOUTS.join("|")})-(?:in|out)(?:-(?:${WALLPAPER_VARIANTS.join("|")}))?(?=/|$)`,
 );
 
 /**
@@ -82,12 +106,15 @@ export interface ShellRequest {
   cookies: ReadonlyMap<string, string>;
   /** Draws an experiment assignment for a visitor who has none. */
   draw: () => AbVariant;
+  drawWallpaper?: () => WallpaperVariant;
+  /** Only a document visit can enroll a new visitor, never prefetch or RSC navigation. */
+  isDocument?: boolean;
 }
 
 export interface ShellChoice {
   variant: ShellVariant;
   /** Experiment assignments drawn for this visit, to be set on the response. */
-  assigned: Record<string, AbVariant>;
+  assigned: Record<string, string>;
 }
 
 /**
@@ -119,7 +146,7 @@ const clientHasSession = (cookies: ReadonlyMap<string, string>) => {
  * layout is an opt-in for signed-in players, read from their stored preference. A person
  * whose browser string happens to match the crawler pattern is told apart by their
  * session cookies. A signed-out visitor arriving on the landing page without an
- * assignment for the tutorial experiment is given one here so this very document and the
+ * assignments for the tutorial and wallpaper experiments is given them here so the document and the
  * cookie agree.
  */
 export const chooseShell = (request: ShellRequest): ShellChoice => {
@@ -130,12 +157,28 @@ export const chooseShell = (request: ShellRequest): ShellChoice => {
     return { variant: { client, layout: "default", signedIn: false }, assigned: {} };
   }
   const assigned: ShellChoice["assigned"] = {};
-  const isLandingVisit = !hasSession && request.pathname === "/";
+  const isLandingVisit =
+    !hasSession && request.pathname === "/" && request.isDocument !== false;
   if (isLandingVisit && request.cookies.get(LEGACY_AB_LAYOUT_COOKIE) === undefined) {
     assigned[LEGACY_AB_LAYOUT_COOKIE] = request.draw();
+  }
+  let wallpaper = parseWallpaperVariant(request.cookies.get(WALLPAPER_EXPERIMENT));
+  if (client === "web" && isLandingVisit && !wallpaper) {
+    wallpaper =
+      request.drawWallpaper?.() ??
+      WALLPAPER_VARIANTS[Math.floor(Math.random() * WALLPAPER_VARIANTS.length)];
+    if (wallpaper) assigned[WALLPAPER_EXPERIMENT] = wallpaper;
   }
   const layout = hasSession
     ? (cookieValueToLayout(request.cookies.get(LAYOUT_PREFERENCE_COOKIE)) ?? "default")
     : "default";
-  return { variant: { client, layout, signedIn: hasSession }, assigned };
+  return {
+    variant: {
+      client,
+      layout,
+      signedIn: hasSession,
+      ...(!hasSession && client === "web" && wallpaper ? { wallpaper } : {}),
+    },
+    assigned,
+  };
 };

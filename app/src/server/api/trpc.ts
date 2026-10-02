@@ -22,6 +22,10 @@ import { ZodError } from "zod";
 import { userData } from "@/drizzle/schema";
 import { LEGACY_AB_LAYOUT_COOKIE } from "@/libs/layoutPreference";
 import type { McpMeta } from "@/libs/mcp";
+import {
+  parseWallpaperVariant,
+  WALLPAPER_EXPERIMENT,
+} from "@/libs/wallpaperExperiment";
 /**
  * 1. CONTEXT
  *
@@ -66,6 +70,9 @@ export const createAppTRPCContext = async (options: {
     userId,
     userAgent,
     abLemuReplacementVariant,
+    wallpaperVariant: parseWallpaperVariant(
+      options.readCookies.get(WALLPAPER_EXPERIMENT)?.value,
+    ),
   };
 };
 
@@ -79,6 +86,7 @@ export const createCdnTRPCContext = (readHeaders: ReadonlyHeaders) => ({
   userId: null,
   userAgent: undefined,
   abLemuReplacementVariant: undefined,
+  wallpaperVariant: undefined,
 });
 
 /**
@@ -225,6 +233,7 @@ export const cdnCachedProcedure = publicProcedure
         userIp: undefined,
         userAgent: undefined,
         abLemuReplacementVariant: undefined,
+        wallpaperVariant: undefined,
       },
     }),
   );

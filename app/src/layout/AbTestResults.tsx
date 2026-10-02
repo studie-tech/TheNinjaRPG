@@ -18,6 +18,7 @@ import {
   quantile,
   sampleBeta,
 } from "@/libs/statistics";
+import { WALLPAPER_EXPERIMENT } from "@/libs/wallpaperExperiment";
 
 type VariantAgg = { variant: string; loaded: number; register: number };
 type ExperimentAgg = { experiment: string; variants: VariantAgg[] };
@@ -144,8 +145,8 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
     register: 0,
   };
 
-  const aPost = betaPosterior(aV.register, Math.max(1, aV.loaded));
-  const bPost = betaPosterior(bV.register, Math.max(1, bV.loaded));
+  const aPost = betaPosterior(aV.register, aV.loaded);
+  const bPost = betaPosterior(bV.register, bV.loaded);
   const aMean = aPost.mean;
   const bMean = bPost.mean;
 
@@ -380,26 +381,88 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
 export const AbTestResults: React.FC = () => {
   const visitorFilterState = useVisitorFiltering();
 
-  const { data, isFetching } = api.data.getAbTests.useQuery(
+  const { data, isFetching, isError, refetch } = api.data.getAbTests.useQuery(
     { ...getVisitorFilter(visitorFilterState) },
     { staleTime: 60_000 },
   );
 
   return (
     <ContentBox
-      title="A/B Tests"
-      subtitle="Live results from experiments"
+      title="A/B/C Tests"
+      subtitle="Unique visits and tutorial completions, grouped by first visit"
       initialBreak
       topRightContent={<VisitorFiltering state={visitorFilterState} />}
     >
       {isFetching && <Loader explanation="Loading A/B test results" />}
-      {!isFetching && (!data || data.length === 0) && <p>No experiments found.</p>}
+      {isError && (
+        <p role="alert">
+          Could not load experiment results.{" "}
+          <button type="button" onClick={() => void refetch()} className="underline">
+            Retry
+          </button>
+        </p>
+      )}
+      {!isFetching && !isError && (!data || data.length === 0) && (
+        <p>No experiments found.</p>
+      )}
       {!isFetching && data && data.length > 0 && (
         <div className="flex flex-col gap-4">
           {data.map((exp) => (
             <div key={exp.experiment} className="flex flex-col gap-2">
               <div className="font-bold text-lg">{exp.experiment}</div>
-              <ExperimentRow exp={exp} />
+              <p className="text-sm">
+                {exp.experiment === WALLPAPER_EXPERIMENT
+                  ? "Wallpaper experiment · control is the fall wallpaper · equal allocation across five candidates."
+                  : "Tutorial experiment"}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr>
+                      <th>Variant</th>
+                      <th>Visits</th>
+                      <th>Tutorial completions</th>
+                      <th>Conversion</th>
+                      <th>Traffic share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exp.variants.map((variant) => (
+                      <tr key={variant.variant}>
+                        <td>
+                          {variant.variant === "control" &&
+                          exp.experiment === WALLPAPER_EXPERIMENT
+                            ? "control (fall)"
+                            : variant.variant}
+                        </td>
+                        <td>{variant.loaded}</td>
+                        <td>{variant.register}</td>
+                        <td>
+                          {variant.loaded
+                            ? `${((100 * variant.register) / variant.loaded).toFixed(1)}%`
+                            : "—"}
+                        </td>
+                        <td>{`${(
+                          (100 * variant.loaded) /
+                            Math.max(
+                              1,
+                              exp.variants.reduce(
+                                (total, arm) => total + arm.loaded,
+                                0,
+                              ),
+                            )
+                        ).toFixed(1)}%`}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs">
+                Counts deduplicate by IP. Comparisons are exploratory; comparing several
+                candidates increases the chance of a false winner. Wait for sufficient
+                traffic and tutorial completions in every arm.
+              </p>
+              <ExperimentComparisons exp={exp} />
             </div>
           ))}
         </div>
@@ -409,3 +472,21 @@ export const AbTestResults: React.FC = () => {
 };
 
 export default AbTestResults;
+
+const ExperimentComparisons = ({ exp }: { exp: ExperimentAgg }) => {
+  const baseline =
+    exp.variants.find((arm) => arm.variant === "control") ?? exp.variants[0];
+  if (!baseline || exp.variants.length <= 2) return <ExperimentRow exp={exp} />;
+  return exp.variants
+    .filter((arm) => arm.variant !== baseline.variant)
+    .map((arm) => (
+      <div key={arm.variant}>
+        <h3 className="font-semibold">
+          {arm.variant} versus {baseline.variant}
+        </h3>
+        <ExperimentRow
+          exp={{ experiment: exp.experiment, variants: [baseline, arm] }}
+        />
+      </div>
+    ));
+};

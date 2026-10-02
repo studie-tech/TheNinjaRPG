@@ -38,6 +38,10 @@ export default clerkMiddleware(
       cookies: new Map(
         request.cookies.getAll().map(({ name, value }) => [name, value]),
       ),
+      isDocument:
+        !request.headers.has("rsc") &&
+        !request.headers.has("next-router-prefetch") &&
+        request.headers.get("purpose") !== "prefetch",
       draw: () => (Math.random() < 0.5 ? "treatment" : "control"),
     });
     // The public URL and its query are untouched, so the router, every link and the
@@ -50,7 +54,12 @@ export default clerkMiddleware(
     url.pathname = `/${shellParam(variant)}${pathname}`;
     const res = NextResponse.rewrite(url);
     for (const [name, value] of Object.entries(assigned)) {
-      res.cookies.set(name, value, { path: "/" });
+      res.cookies.set(name, value, {
+        path: "/",
+        maxAge: 365 * 24 * 60 * 60,
+        sameSite: "lax",
+        secure: request.nextUrl.protocol === "https:",
+      });
     }
     return res;
   },
@@ -85,6 +94,7 @@ export const config = {
      * the variant URL. Kept in step with SHELL_PARAMS by a test.
      */
     "/(web|ios|android)-(default|pixel)-(in|out)/:path*",
+    "/web-default-out-(control|spring|summer|winter|halloween)/:path*",
     /*
      * Optional catch-all routes are the exception to the file-like skip above:
      * they render the Clerk-dependent root layout for paths such as

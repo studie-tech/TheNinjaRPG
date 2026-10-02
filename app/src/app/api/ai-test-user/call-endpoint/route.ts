@@ -96,6 +96,7 @@ export async function POST(request: Request) {
     userId,
     userAgent: "tnr-reviewer-broker",
     abLemuReplacementVariant: undefined,
+    wallpaperVariant: undefined,
   });
 
   // The caller is a recursive proxy that returns a callable for any key, so

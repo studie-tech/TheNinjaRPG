@@ -3,8 +3,10 @@
 import { useState } from "react";
 import ReactDOM from "react-dom";
 import { cn } from "@/libs/shadui";
+import { WALLPAPER_IMAGES } from "@/libs/wallpaperExperiment";
 import type { UserWithRelations } from "@/routers/profile";
 import { bunnyImageUrl } from "@/utils/image";
+import { useWallpaperVariant } from "@/utils/LayoutContext";
 import {
   getImageSet,
   getPixelWallpaper,
@@ -111,6 +113,7 @@ export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
   isAnonymousLayout = false,
 }) => {
   const [loadedWallpaper, setLoadedWallpaper] = useState<string | null>(null);
+  const wallpaperVariant = useWallpaperVariant();
   const imageset = getImageSet(userData);
   const pixelWallpaper = getPixelWallpaper(userData);
   const isUserWallpaperLoaded = loadedWallpaper === pixelWallpaper;
@@ -129,7 +132,11 @@ export const LayoutBackground: React.FC<LayoutBackgroundProps> = ({
     return (
       <Wallpaper
         className="fixed z-[-1] aspect-[2/1] w-full select-none object-cover object-top md:top-0 md:left-0 md:h-full md:w-full md:object-center"
-        src={imageset.wallpaper}
+        src={
+          wallpaperVariant && !userData
+            ? WALLPAPER_IMAGES[wallpaperVariant]
+            : imageset.wallpaper
+        }
         alt=""
         priority
         ariaHidden
