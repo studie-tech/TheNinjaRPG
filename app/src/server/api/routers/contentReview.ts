@@ -215,7 +215,15 @@ export const contentReviewRouter = createTRPCRouter({
         ]),
       );
       for (const change of proposal.changes) {
-        for (const fields of [change.before, change.after, change.applied]) {
+        const entity = change.entityId
+          ? entities.get(entityKey(change.entityType, change.entityId))
+          : undefined;
+        for (const fields of [
+          entity?.payload,
+          change.before,
+          change.after,
+          change.applied,
+        ]) {
           for (const id of sceneAssetIds(fields)) assetIds.add(id);
         }
       }

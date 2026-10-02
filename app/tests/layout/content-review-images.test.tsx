@@ -52,6 +52,11 @@ vi.mock("@/app/_trpc/client", () => ({
   },
 }));
 vi.mock("@/layout/BattlefieldPreview", () => ({ BattlefieldPreview: () => null }));
+vi.mock("@/layout/Logbook", () => ({
+  QuestDialogScene: ({ background, characters }: { background: string; characters: string[] }) => (
+    <div data-scene="true"><img src={background} alt="Background" />{characters.map((image) => <img key={image} src={image} alt="Character" />)}</div>
+  ),
+}));
 vi.mock("@/layout/ItemWithEffects", () => ({ default: () => null }));
 vi.mock("@/libs/toast", () => ({ showMutationToast: vi.fn() }));
 vi.mock("@/layout/ContentImage", () => ({
@@ -117,6 +122,14 @@ describe("proposal scene images", () => {
     const html = render();
     expect(html).toContain('src="https://example.com/image.webp"');
     expect(html).not.toContain('src="https://example.com/new.webp"');
+  });
+
+  it("renders the proposed scene below the quest diff", () => {
+    state.before = { content: { sceneCharacters: ["old"] } };
+    state.after = { content: { sceneBackground: "background", sceneCharacters: ["next"] } };
+    const html = render();
+    expect(html).toContain("Quest scene");
+    expect(html).toContain('data-scene="true"');
   });
 
   it("collects only nonempty scene references at any nesting level", () => {

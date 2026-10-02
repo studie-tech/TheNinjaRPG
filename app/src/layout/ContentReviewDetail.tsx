@@ -35,6 +35,7 @@ import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { QuestDialogScene } from "@/layout/Logbook";
 import { battlefieldSceneOf } from "@/libs/contentReview/battlefield";
 import {
   CATEGORY_LABELS,
@@ -47,6 +48,7 @@ import {
   setAtPath,
   topLevelField,
 } from "@/libs/contentReview/paths";
+import { changedQuestScenes, questSceneOf } from "@/libs/contentReview/questScene";
 import { showMutationToast } from "@/libs/toast";
 import { formatSoundLength, formatTimeAgo } from "@/utils/time";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
@@ -537,6 +539,7 @@ const ChangeReview: React.FC<{
       ))}
       <InTheGame
         change={change}
+        assets={assets}
         proposed={{ ...change.payload, ...proposedFields(change, choices) }}
         mode={preview}
         onModeChange={onPreviewChange}
@@ -840,15 +843,17 @@ const MediaPreview: React.FC<{
 };
 
 /**
- * The change as players meet it: its card and what it draws in battle, current or proposed.
+ * The change as players meet it: its card, quest scene or battlefield, current or proposed.
  * Renders nothing when the entity has neither.
  */
 const InTheGame: React.FC<{
   change: Change;
+  assets: Record<string, Asset>;
   proposed: Record<string, unknown>;
   mode: PreviewMode;
   onModeChange: (mode: PreviewMode) => void;
-}> = ({ change, proposed, mode, onModeChange }) => {
+}> = ({ change, assets, proposed, mode, onModeChange }) => {
+  const [questSceneLabel, setQuestSceneLabel] = useState("");
   const current = change.payload;
   const fields = mode === "current" ? current : proposed;
   const sounds = Object.fromEntries(
@@ -862,7 +867,17 @@ const InTheGame: React.FC<{
   const hasBattlefield = [current, proposed].some(
     (entry) => entry && battlefieldSceneOf(change.entityType, change.entityId, entry),
   );
-  if (!hasCard && !hasBattlefield) return null;
+  const questScenes =
+    change.entityType === "QUEST"
+      ? changedQuestScenes(current ? { ...current, ...change.before } : null, proposed)
+      : [];
+  const activeQuestScene =
+    questScenes.find((scene) => scene.label === questSceneLabel) ?? questScenes[0];
+  const questScene =
+    fields && activeQuestScene
+      ? questSceneOf(fields, assets, activeQuestScene.objectiveIndex)
+      : null;
+  if (!hasCard && !hasBattlefield && questScenes.length === 0) return null;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -887,6 +902,49 @@ const InTheGame: React.FC<{
           item={fields as Parameters<typeof ItemWithEffects>[0]["item"]}
           hideDates
         />
+      )}
+      {activeQuestScene && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="font-bold text-xs opacity-70">Quest scene</h4>
+            {questScenes.length > 1 && (
+              <Select value={activeQuestScene.label} onValueChange={setQuestSceneLabel}>
+                <SelectTrigger className="h-8 w-auto" aria-label="Scene to preview">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {questScenes.map(({ label }) => (
+                    <SelectItem key={label} value={label}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {questScenes.length === 1 &&
+              activeQuestScene.objectiveIndex !== undefined && (
+                <span className="text-xs opacity-70">{activeQuestScene.label}</span>
+              )}
+          </div>
+          {questScene ? (
+            <>
+              <div className="overflow-hidden rounded-lg border">
+                <QuestDialogScene
+                  background={questScene.background}
+                  characters={questScene.characters}
+                  description={questScene.description}
+                />
+              </div>
+              {questScene.missing.length > 0 && (
+                <p className="text-xs opacity-70">
+                  Scene assets unavailable: {questScene.missing.join(", ")}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs opacity-70">It does not exist yet.</p>
+          )}
+        </div>
       )}
       {hasBattlefield && (
         <div className="flex flex-col gap-1">
