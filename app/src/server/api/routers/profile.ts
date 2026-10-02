@@ -258,7 +258,12 @@ export const profileRouter = createTRPCRouter({
         }),
       ]);
 
-      const raidRewards = raidParticipations.flatMap((participation) => {
+      // Participation history can outlive a deleted raid; only existing raids
+      // can contribute dashboard progress or claimable rewards.
+      const existingRaidParticipations = raidParticipations.filter(
+        (participation) => participation.quest,
+      );
+      const raidRewards = existingRaidParticipations.flatMap((participation) => {
         const claimableCount = participation.quest.raidDamageThresholds.filter(
           (threshold) => !raidRewardBlockMessage(participation, threshold),
         ).length;
@@ -274,7 +279,7 @@ export const profileRouter = createTRPCRouter({
 
       return {
         candidates,
-        raidProgress: raidParticipations.map((participation) => ({
+        raidProgress: existingRaidParticipations.map((participation) => ({
           raidId: participation.quest.id,
           damageDealt: participation.damageDealt,
         })),
