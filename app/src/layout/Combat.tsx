@@ -602,6 +602,13 @@ const Combat: React.FC<CombatProps> = (props) => {
           battleRef.current = data.battle;
           setBattleAtom(data.battle);
           setBattleState({ battle: data.battle, result: null, isPending: false });
+          if (data.message) {
+            showMutationToast({
+              success: true,
+              title: "Loadout updated",
+              message: data.message,
+            });
+          }
           void utils.combat.getBattle.invalidate().catch(() => undefined);
         }
       } else {

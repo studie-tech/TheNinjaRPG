@@ -55,6 +55,7 @@ import {
 import type {
   AiProfile,
   GameSetting,
+  Jutsu,
   RankedLoadout,
   Village,
   VillageAlliance,
@@ -154,6 +155,7 @@ import {
   highestJutsuMasteryType,
   isWornGear,
   isWornGearDisabled,
+  missingMasteryRequirement,
 } from "@/libs/mastery";
 import {
   calcActiveUserRegen,
@@ -1081,6 +1083,21 @@ export const combatRouter = createTRPCRouter({
               bloodline,
               userSkills: activatedSkills,
             });
+      const gateMasteries = effectiveMasteries({
+        ...user,
+        bloodline,
+        userSkills: activatedSkills,
+        items: useritems,
+      });
+      const validateLobbyJutsu = (jutsu: Jutsu) => {
+        if (!checkJutsuBloodlineItem(jutsu, useritems)) {
+          return `${jutsu.name}: required bloodline item is not equipped`;
+        }
+        const missing = missingMasteryRequirement(gateMasteries, jutsu);
+        return missing
+          ? `${jutsu.name}: requires ${missing.required} ${missing.label}`
+          : undefined;
+      };
       const jutsuLoadoutResult =
         user.jutsuLoadout === jId || !jId
           ? { success: true, message: "Jutsu loadout already selected" }
@@ -1095,29 +1112,20 @@ export const combatRouter = createTRPCRouter({
                   jutsuIds,
                   userjutsus,
                   maxEquip: calcJutsuEquipLimit(user),
-                  validateJutsu: ({ jutsu }) =>
-                    checkJutsuBloodlineItem(jutsu, useritems)
-                      ? undefined
-                      : `${jutsu.name}: required bloodline item is not equipped`,
+                  validateJutsu: ({ jutsu }) => validateLobbyJutsu(jutsu),
                 }),
             );
 
-      // When only the item loadout changed, selectJutsuLoadout (and its
-      // bloodline-item revalidation) never runs, so a jutsu gated on a bloodline
-      // item that the item switch just unequipped would otherwise stay equipped.
-      // Re-validate the currently-equipped jutsus against the post-switch items
-      // and unequip any that lost their required item — surgically, without
-      // touching the jutsu loadout pointer or the player's other equipped jutsus.
+      // An item-only switch can remove a required bloodline item or a mastery buff.
+      // Revalidate stored equips too: battle filtering alone leaves invalid equips
+      // consuming slots on the jutsu page after the fight.
       const itemChanged = !!iId && user.itemLoadout !== iId;
       const jutsuChanged = !!jId && user.jutsuLoadout !== jId;
       let invalidatedJutsuIds: string[] = [];
       if (itemChanged && !jutsuChanged && "items" in itemLoadoutResult) {
-        invalidatedJutsuIds = user.jutsus
-          .filter((ref) => {
-            const owned = userjutsus.find((uj) => uj.jutsuId === ref.jutsuId);
-            return owned ? !checkJutsuBloodlineItem(owned.jutsu, useritems) : false;
-          })
-          .map((ref) => ref.jutsuId);
+        invalidatedJutsuIds = userjutsus
+          .filter((owned) => owned.equipped && !!validateLobbyJutsu(owned.jutsu))
+          .map((owned) => owned.jutsuId);
         if (invalidatedJutsuIds.length > 0) {
           await ctx.drizzle
             .update(userJutsu)
@@ -1335,7 +1343,14 @@ export const combatRouter = createTRPCRouter({
         });
         return {
           success: true,
-          message: "",
+          message: [
+            ...[itemLoadoutResult, jutsuLoadoutResult]
+              .filter((loadout) => loadout.message.includes("Warnings:"))
+              .map((loadout) => loadout.message),
+            ...(invalidatedJutsuIds.length > 0
+              ? ["Jutsu with unmet loadout requirements were unequipped"]
+              : []),
+          ].join(". "),
           battle: maskBattle(userBattle, ctx.userId),
         };
       } else {

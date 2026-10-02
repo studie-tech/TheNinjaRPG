@@ -2340,7 +2340,7 @@ export const selectJutsuLoadout = async (
   user: Pick<UserData, "userId" | "federalStatus" | "staffAccount">,
   // Optional validator: when supplied, saved jutsuIds are filtered to those still
   // equippable. The jutsu-management path passes full canUseJutsu validation;
-  // combat passes a slimmer required-item validator against its battle state.
+  // combat checks bloodline items and effective masteries against its battle state.
   validateLoadout?: (jutsuIds: string[]) => ComputedJutsuLoadout,
 ) => {
   // Guard: only loadouts within the user's current allowance are selectable, so

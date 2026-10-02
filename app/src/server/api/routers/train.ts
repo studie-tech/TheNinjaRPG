@@ -20,6 +20,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { getShrineBoost, getStrucBoost } from "@/utils/village";
 import {
   startMasteryTrainingDataSchema,
@@ -130,8 +131,21 @@ export const trainRouter = createTRPCRouter({
           return errorResponse("Invalid captcha");
         }
       }
-      const { trainingAmount, minutes } = calcTrainingAmount(user, settings, startedAt);
+      const { trainingAmount } = calcTrainingAmount(user, settings, startedAt);
       const finishedAt = new Date();
+      // A combat stop settles the union of both active sessions up to its finish.
+      // This includes mastery-only time before combat started, but skips time
+      // already settled by an earlier combat stop.
+      const creditFrom = Math.max(
+        Math.min(
+          startedAt.getTime(),
+          user.currentlyTrainingMastery && user.masteryTrainingStartedAt
+            ? user.masteryTrainingStartedAt.getTime()
+            : startedAt.getTime(),
+        ),
+        user.lastCombatTrainingFinishedAt?.getTime() ?? 0,
+      );
+      const minutes = Math.max(0, (finishedAt.getTime() - creditFrom) / 60_000);
       const { trackers } = getNewTrackers(user, [
         { task: "stats_trained", increment: trainingAmount },
         { task: "minutes_training", increment: minutes },
@@ -139,9 +153,11 @@ export const trainRouter = createTRPCRouter({
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
       // Claims exactly the session read above: a stale stop must not credit it twice
       // or end a session started after it
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
           trainingStartedAt: null,
           currentlyTraining: null,
           ...(trainingAmount > 0
@@ -174,17 +190,11 @@ export const trainRouter = createTRPCRouter({
                 lastCombatTrainingFinishedAt: finishedAt,
               }
             : {}),
-        })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            eq(userData.currentlyTraining, trained),
-            eq(userData.trainingStartedAt, startedAt),
-            eq(userData.status, "AWAKE"),
-          ),
-        );
-      if (result.rowsAffected !== 1) {
-        return errorResponse("This training session has already ended");
+        },
+        where: [trainingSlotsUnchanged(user), eq(userData.status, "AWAKE")],
+      });
+      if (!result.success) {
+        return errorResponse("Training changed while stopping. Please try again");
       }
       if (trainingAmount > 0) {
         await ctx.drizzle.insert(trainingLog).values({
@@ -235,19 +245,19 @@ export const trainRouter = createTRPCRouter({
       const { trainingAmount } = calcTrainingAmount(user, settings, startedAt);
       const { mastery_cap } = getUserCaps(user.rank);
       const gained = Math.max(0, Math.min(trainingAmount, mastery_cap - user[trained]));
-      // Both slots share the wall clock and the combat slot credits all of its minutes,
-      // so only minutes it has not credited count: none while it runs, and none before
-      // the finish time stored on this row with those minutes.
+      // Combat owns its interval, including any overlap. If it is still running,
+      // mastery can settle only its earlier prefix; if it has stopped, that stop
+      // already settled the active mastery prefix too.
       const creditFrom = Math.max(
         startedAt.getTime(),
         user.lastCombatTrainingFinishedAt?.getTime() ?? 0,
       );
+      const creditUntil =
+        user.currentlyTraining && user.trainingStartedAt
+          ? user.trainingStartedAt.getTime()
+          : Date.now();
       const creditedMinutes =
-        gained > 0 && !user.currentlyTraining
-          ? Math.max(0, (Date.now() - creditFrom) / 60_000)
-          : 0;
-      // questData is written only when minutes are credited: the combat slot is idle
-      // then, so no concurrent combat stop can be overwritten by this snapshot.
+        gained > 0 ? Math.max(0, (creditUntil - creditFrom) / 60_000) : 0;
       const questData =
         creditedMinutes > 0
           ? filterQuestTrackersForDbPersist(
@@ -258,9 +268,11 @@ export const trainRouter = createTRPCRouter({
             )
           : undefined;
       // Claims exactly the session read above, as stopTraining does
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
           masteryTrainingStartedAt: null,
           currentlyTrainingMastery: null,
           ...(gained > 0
@@ -273,17 +285,11 @@ export const trainRouter = createTRPCRouter({
               }
             : {}),
           ...(questData ? { questData } : {}),
-        })
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            eq(userData.currentlyTrainingMastery, trained),
-            eq(userData.masteryTrainingStartedAt, startedAt),
-            eq(userData.status, "AWAKE"),
-          ),
-        );
-      if (result.rowsAffected !== 1) {
-        return errorResponse("This mastery training session has already ended");
+        },
+        where: [trainingSlotsUnchanged(user), eq(userData.status, "AWAKE")],
+      });
+      if (!result.success) {
+        return errorResponse("Training changed while stopping. Please try again");
       }
       if (gained > 0) {
         await ctx.drizzle.insert(trainingLog).values({
@@ -362,14 +368,13 @@ const calcTrainingAmount = (
   const clanBoost = user?.isOutlaw ? 0 : (user?.clan?.trainingBoost ?? 0) / 100;
   const factor = gameFactor * (1 + boost + clanBoost + shrineBoost) * warFactor;
   const seconds = (Date.now() - startedAt.getTime()) / 1000;
-  const minutes = seconds / 60;
   const energySpent = Math.min(
     Math.floor(energyPerSecond(user.trainingSpeed) * seconds),
     100,
   );
   const trainingAmount =
     factor * energySpent * trainEfficiency(user) * trainingMultiplier(user);
-  return { trainingAmount, minutes };
+  return { trainingAmount };
 };
 
 /**
@@ -400,3 +405,22 @@ const explainRejectedStart = async (
         : "You are already training a mastery"),
   );
 };
+
+/** Starts do not claim updatedAt, so also guard both intervals used to divide minutes. */
+const trainingSlotsUnchanged = (
+  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
+) =>
+  and(
+    user.currentlyTraining
+      ? eq(userData.currentlyTraining, user.currentlyTraining)
+      : isNull(userData.currentlyTraining),
+    user.trainingStartedAt
+      ? eq(userData.trainingStartedAt, user.trainingStartedAt)
+      : isNull(userData.trainingStartedAt),
+    user.currentlyTrainingMastery
+      ? eq(userData.currentlyTrainingMastery, user.currentlyTrainingMastery)
+      : isNull(userData.currentlyTrainingMastery),
+    user.masteryTrainingStartedAt
+      ? eq(userData.masteryTrainingStartedAt, user.masteryTrainingStartedAt)
+      : isNull(userData.masteryTrainingStartedAt),
+  );

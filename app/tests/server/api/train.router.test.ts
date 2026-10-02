@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { eq } from "drizzle-orm";
+import { setSystemTime } from "bun:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import { quest, questHistory, trainingLog, userData, userVote } from "@/drizzle/schema";
@@ -50,7 +51,12 @@ const trainee = async (patch: Record<string, unknown> = {}) => {
   const database = await getTestDatabase();
   await database
     .insert(userVote)
-    .values({ id: "vote-trainee", userId: USER_ID, secret: "secret01", lastVoteAt: new Date() });
+    .values({
+      id: "vote-trainee",
+      userId: USER_ID,
+      secret: "secret01",
+      lastVoteAt: new Date(),
+    });
 };
 
 const readUser = async () => {
@@ -90,7 +96,10 @@ describeWithDatabase("train router against a real MySQL", () => {
     expect(started.currentlyTraining).toBe("offence");
     expect(started.currentlyTrainingMastery).toBe("taijutsuMastery");
 
-    await backdate({ trainingStartedAt: minutesAgo(30), masteryTrainingStartedAt: minutesAgo(30) });
+    await backdate({
+      trainingStartedAt: minutesAgo(30),
+      masteryTrainingStartedAt: minutesAgo(30),
+    });
 
     const combat = await api.stopTraining({ villageId: null });
     expect(combat.success).toBe(true);
@@ -136,9 +145,9 @@ describeWithDatabase("train router against a real MySQL", () => {
       String(MAX_DAILY_TRAININGS),
     );
     const user = await readUser();
-    expect(Number(!!user.currentlyTraining) + Number(!!user.currentlyTrainingMastery)).toBe(
-      1,
-    );
+    expect(
+      Number(!!user.currentlyTraining) + Number(!!user.currentlyTrainingMastery),
+    ).toBe(1);
   });
 
   it("starts both slots when two daily trainings remain", async () => {
@@ -199,7 +208,9 @@ describeWithDatabase("train router against a real MySQL", () => {
 
   it("refuses to start a mastery that is already at the rank cap", async () => {
     await trainee({ genjutsuMastery: GENIN_MASTERY_CAP });
-    const result = await (await caller()).startMasteryTraining({ stat: "genjutsuMastery" });
+    const result = await (await caller()).startMasteryTraining({
+      stat: "genjutsuMastery",
+    });
 
     expect(result.success).toBe(false);
     expect(result.message).toBe("Already capped");
@@ -298,7 +309,9 @@ describeWithDatabase("train router against a real MySQL", () => {
 
   describe("minutes_training credit from the mastery slot", () => {
     const trackedMinutes = async () => {
-      const tracker = (await readUser()).questData?.find((entry) => entry.id === "q-train");
+      const tracker = (await readUser()).questData?.find(
+        (entry) => entry.id === "q-train",
+      );
       return tracker?.goals.find((goal) => goal.id === "o1")?.value ?? 0;
     };
 
@@ -309,7 +322,11 @@ describeWithDatabase("train router against a real MySQL", () => {
           questType: "daily",
           content: {
             objectives: [
-              SimpleObjective.parse({ id: "o1", task: "minutes_training", value: 10_000 }),
+              SimpleObjective.parse({
+                id: "o1",
+                task: "minutes_training",
+                value: 10_000,
+              }),
             ],
             reward: ObjectiveReward.parse({}),
             sceneBackground: "",
@@ -317,7 +334,9 @@ describeWithDatabase("train router against a real MySQL", () => {
           },
         },
       ]);
-      await insertQuestHistory([{ userId: USER_ID, questId: "q-train", questType: "daily" }]);
+      await insertQuestHistory([
+        { userId: USER_ID, questId: "q-train", questType: "daily" },
+      ]);
     });
 
     it("credits only the minutes after the combat finish stored on the user", async () => {
@@ -361,7 +380,116 @@ describeWithDatabase("train router against a real MySQL", () => {
       expect(await trackedMinutes()).toBeCloseTo(30, 0);
     });
 
-    it("credits nothing while the combat slot is still running", async () => {
+    it.each([
+      { windows: [[40, 50]] },
+      {
+        windows: [
+          [10, 20],
+          [40, 50],
+        ],
+      },
+    ])(
+      "credits a 60-minute mastery session around combat windows $windows",
+      async ({ windows }) => {
+        const beginning = Date.now();
+        setSystemTime(new Date(beginning));
+        try {
+          await trainee({ offence: 50, taijutsuMastery: 10 });
+          const api = await caller();
+          expect(
+            (await api.startMasteryTraining({ stat: "taijutsuMastery" })).success,
+          ).toBe(true);
+          for (const window of windows) {
+            const [start, finish] = window as [number, number];
+            setSystemTime(new Date(beginning + start * MINUTE));
+            expect((await api.startTraining({ stat: "offence" })).success).toBe(true);
+            setSystemTime(new Date(beginning + finish * MINUTE));
+            expect((await api.stopTraining({ villageId: null })).success).toBe(true);
+          }
+          setSystemTime(new Date(beginning + 60 * MINUTE));
+          expect((await api.stopMasteryTraining({ villageId: null })).success).toBe(
+            true,
+          );
+          expect(await trackedMinutes()).toBeCloseTo(60, 6);
+        } finally {
+          setSystemTime();
+        }
+      },
+    );
+
+    it.each(["combat", "mastery"] as const)(
+      "preserves the mastery-only prefix when %s stops first",
+      async (first) => {
+        await trainee({
+          offence: 50,
+          taijutsuMastery: 10,
+          currentlyTrainingMastery: "taijutsuMastery",
+          masteryTrainingStartedAt: minutesAgo(60),
+          currentlyTraining: "offence",
+          trainingStartedAt: minutesAgo(20),
+        });
+        const api = await caller();
+        if (first === "combat") {
+          expect((await api.stopTraining({ villageId: null })).success).toBe(true);
+          expect(await trackedMinutes()).toBeCloseTo(60, 0);
+          expect((await api.stopMasteryTraining({ villageId: null })).success).toBe(
+            true,
+          );
+        } else {
+          const mastery = await api.stopMasteryTraining({ villageId: null });
+          expect(mastery.success).toBe(true);
+          expect(mastery.data?.creditedMinutes).toBeCloseTo(40, 0);
+          expect((await api.stopTraining({ villageId: null })).success).toBe(true);
+        }
+        expect(await trackedMinutes()).toBeCloseTo(60, 0);
+        expect((await readUser()).dailyTrainings).toBe(2);
+      },
+    );
+
+    it.each(["combat", "mastery"] as const)(
+      "rejects stale %s quest minutes after the other slot stops, then permits retry",
+      async (first) => {
+        await trainee({
+          offence: 50,
+          taijutsuMastery: 10,
+          currentlyTrainingMastery: "taijutsuMastery",
+          masteryTrainingStartedAt: minutesAgo(60),
+          currentlyTraining: "offence",
+          trainingStartedAt: minutesAgo(20),
+        });
+        const database = await getTestDatabase();
+        const api = await caller();
+        const stale = callerForDatabase(
+          trainRouter,
+          USER_ID,
+          beforeStatements(database, userData, [
+            async () => undefined,
+            async () => {
+              const other =
+                first === "combat"
+                  ? await api.stopMasteryTraining({ villageId: null })
+                  : await api.stopTraining({ villageId: null });
+              expect(other.success).toBe(true);
+            },
+          ]),
+        );
+        const rejected =
+          first === "combat"
+            ? await stale.stopTraining({ villageId: null })
+            : await stale.stopMasteryTraining({ villageId: null });
+        expect(rejected.success).toBe(false);
+        expect(rejected.message).toContain("try again");
+        const retry =
+          first === "combat"
+            ? await api.stopTraining({ villageId: null })
+            : await api.stopMasteryTraining({ villageId: null });
+        expect(retry.success).toBe(true);
+        expect(await trackedMinutes()).toBeCloseTo(60, 0);
+        expect(await readLogs()).toHaveLength(2);
+      },
+    );
+
+    it("leaves overlapping minutes to the combat slot while it is still running", async () => {
       await trainee({
         taijutsuMastery: 10,
         currentlyTrainingMastery: "taijutsuMastery",
