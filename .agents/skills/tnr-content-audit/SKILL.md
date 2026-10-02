@@ -165,8 +165,8 @@ character or assert an affiliation the evidence does not establish.
 
 For delegated work, prepare shared evidence once: current full entity and version, relevant
 feedback, complete catalog metadata with versions, labeled inspected images, scene context,
-validator constraints and this skill. Remove stale dispatch policies that require generic
-protagonists or forbid the scene art generation now authorized by the user. Give each fresh subagent one content item and the
+validator constraints and this skill. Dispatch policies must preserve scene-specific art
+requirements and explicit user authorization for generation. Give each fresh subagent one content item and the
 shared evidence locations. Each agent must inspect the relevant pixels itself and report
 its evidence, candidate choice and validation result. Keep credentials with the submitting
 coordinator; a subagent's inference is not a visual check.
@@ -203,6 +203,8 @@ scheduled audit. With the same cron authentication as submission:
   kind and path, `catalogIds: []`, `search: null`, `generate: null`. Other candidates are
   removed. Retained candidates are not generated again; use this when recording a successful
   visual check in the rationale. Catalog candidates use their catalog ids as usual.
+  When retaining media for multiple CREATE changes of the same entity type, preserve their
+  relative order: their null entity ids are paired with the saved changes by occurrence.
 - After POST/PATCH generation, GET and inspect the resulting media and composed scene as
   above. Request a fresh candidate through media to replace a failed generation. A catalog
   character can be retained by its inspected id; ordinary image fields can retain their URL.

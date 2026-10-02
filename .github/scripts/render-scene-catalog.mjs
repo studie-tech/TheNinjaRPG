@@ -44,7 +44,7 @@ try {
       .failed img {display:none}.failed .pixels::after {content:'IMAGE FAILED — DO NOT SELECT'}
     </style></head><body><h1>Scene catalog — inspect role, clothing, expression, silhouette and transparency</h1>
     <div class="grid">${group.map((asset) => `<article data-id="${escape(asset.id)}"><div class="pixels"><img src="${escape(imageUrl(asset))}" alt=""></div>
-      <div class="label">${escape(asset.name)}</div><code>${escape(asset.id)}<br>${escape(asset.type)} · v ${escape(asset.v)}</code></article>`).join("")}</div></body></html>`);
+      <div class="label">${escape(asset.name)}</div><code>${escape(asset.id)}<br>${escape(asset.type)} · v ${escape(asset.v)}</code></article>`).join("")}</div></body></html>`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => [...document.images].every((image) => image.complete), undefined, { timeout: 45000 }).catch(() => {});
     const failedIds = await page.evaluate(() => [...document.querySelectorAll("article")].flatMap((article) => {
       const image = article.querySelector("img");

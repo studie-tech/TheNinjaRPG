@@ -16,6 +16,7 @@ import {
 } from "@/drizzle/schema";
 import { cleanupContentProposals } from "@/libs/contentReview/cleanup";
 import { entityKey, loadEntities } from "@/libs/contentReview/entities";
+import { refreshProposalFreshness } from "@/libs/contentReview/outdate";
 import * as media from "@/libs/contentReview/media";
 import { epidemicAssetId, importEpidemicSfx } from "@/libs/contentReview/media";
 import { ingestAgentSubmission, readAgentProposal, reviseAgentProposal } from "@/libs/contentReview/submit";
@@ -196,6 +197,99 @@ describeWithDatabase("content review", () => {
     expect(deleted).toHaveBeenCalledWith(["unused-revision-file"]);
   });
 
+  it("lets only one concurrent refinement commit and deletes the losing upload", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    const initial = (await readAgentProposal(database, id))!;
+    let release: () => void = () => {};
+    let bothPreparing: () => void = () => {};
+    let calls = 0;
+    const ready = new Promise<void>((resolve) => { bothPreparing = resolve; });
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const deleted = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
+    vi.spyOn(media, "collectCandidates").mockImplementation(async () => {
+      const key = `revision-${++calls}`;
+      if (calls === 2) bothPreparing();
+      await wait;
+      return [{ kind: "IMAGE", source: "GENERATED", externalId: null,
+        url: `https://ui0arpl8sm.ufs.sh/f/${key}.webp`, fileKey: key,
+        lengthMs: null, prompt: "A badge portrait", title: "Badge" }];
+    });
+    const proposal = await revisionProposal("Awarded for demonstrated bravery.");
+    const input = {
+      expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null,
+      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [{ kind: "IMAGE" as const, path: "image", catalogIds: [], search: null, generate: "A badge portrait" }] }] },
+    };
+    const first = reviseAgentProposal(database, id, input);
+    const second = reviseAgentProposal(database, id, input);
+    await ready;
+    release();
+    const results = await Promise.all([first, second]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.find((result) => !result.ok)).toMatchObject({ status: 409 });
+    const saved = (await readAgentProposal(database, id))!;
+    expect(saved.media).toHaveLength(1);
+    expect(saved.changes).toHaveLength(1);
+    const winnerKey = saved.media[0]!.fileKey;
+    const losingKey = winnerKey === "revision-1" ? "revision-2" : "revision-1";
+    expect(deleted).toHaveBeenCalledTimes(1);
+    expect(deleted).toHaveBeenCalledWith([losingKey]);
+    expect(saved.statusChangedAt.toISOString()).not.toBe(input.expectedStatusChangedAt);
+  });
+
+  it("refuses content edited while refinement media is prepared and cleans its upload", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    const initial = (await readAgentProposal(database, id))!;
+    let release: () => void = () => {};
+    let preparing: () => void = () => {};
+    const ready = new Promise<void>((resolve) => { preparing = resolve; });
+    const wait = new Promise<void>((resolve) => { release = resolve; });
+    const deleted = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
+    vi.spyOn(media, "collectCandidates").mockImplementation(async () => {
+      preparing();
+      await wait;
+      return [{ kind: "IMAGE", source: "GENERATED", externalId: null,
+        url: "https://ui0arpl8sm.ufs.sh/f/obsolete.webp", fileKey: "obsolete-file",
+        lengthMs: null, prompt: "A badge portrait", title: "Badge" }];
+    });
+    const proposal = await revisionProposal("Awarded for demonstrated bravery.");
+    const refining = reviseAgentProposal(database, id, {
+      expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false, feedbackResponse: null,
+      proposal: { ...proposal, changes: [{ ...proposal.changes[0]!, media: [{ kind: "IMAGE", path: "image", catalogIds: [], search: null, generate: "A badge portrait" }] }] },
+    });
+    await ready;
+    await database.update(badge).set({ description: "Edited while generating art." }).where(eq(badge.id, BADGE));
+    release();
+    expect(await refining).toMatchObject({ ok: false, status: 409 });
+    const saved = (await readAgentProposal(database, id))!;
+    expect(saved.statusChangedAt).toEqual(initial.statusChangedAt);
+    expect(saved.changes[0]!.after).toEqual(initial.changes[0]!.after);
+    expect(deleted).toHaveBeenCalledTimes(1);
+    expect(deleted).toHaveBeenCalledWith(["obsolete-file"]);
+  });
+
+  it("does not outdate a new refinement using an old freshness snapshot", async () => {
+    const database = await getTestDatabase();
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [await revisionProposal()] });
+    const id = submitted.accepted[0]!.id;
+    const initial = (await readAgentProposal(database, id))!;
+    expect(await reviseAgentProposal(database, id, {
+      expectedStatusChangedAt: initial.statusChangedAt.toISOString(), reactivate: false,
+      feedbackResponse: null, proposal: await revisionProposal("Awarded for demonstrated bravery."),
+    })).toMatchObject({ ok: true });
+    const revised = (await readAgentProposal(database, id))!;
+    await refreshProposalFreshness(database, [{
+      ...initial, expiresAt: new Date(Date.now() - 1000),
+    }]);
+    const saved = (await readAgentProposal(database, id))!;
+    expect(saved.status).toBe("PENDING");
+    expect(saved.statusChangedAt).toEqual(revised.statusChangedAt);
+    expect(saved.changes).toEqual(revised.changes);
+  });
+
   it("keeps generated scene art as a candidate until approval creates a character asset", async () => {
     const database = await getTestDatabase();
     await insertQuests([{ id: "cast-quest", name: "Village service award", questType: "achievement", description: "Recognize village service", hidden: false, consecutiveObjectives: false }]);
@@ -225,6 +319,49 @@ describeWithDatabase("content review", () => {
     expect(asset).toMatchObject({ type: "SCENE_CHARACTER", image: "https://ui0arpl8sm.ufs.sh/f/elder-cutout.png" });
     expect(saved.content.sceneCharacters).toEqual([asset!.id]);
     expect(saved.description).toBe("Recognize village service");
+  });
+
+  it("retains distinct media for multiple new entities of the same type", async () => {
+    const database = await getTestDatabase();
+    const collector = vi.spyOn(media, "collectCandidates").mockImplementation(async (client, request) => [{
+      kind: "IMAGE", source: "GENERATED", externalId: null,
+      title: request.generate!, prompt: request.generate!,
+      url: `https://ui0arpl8sm.ufs.sh/f/${request.generate}.webp`,
+      fileKey: `${request.generate}-file`, lengthMs: null,
+    }]);
+    const deleted = vi.spyOn(media, "deleteStoredFiles").mockResolvedValue(undefined);
+    const proposal = {
+      title: "Add separate achievement badges", category: "VISUAL" as const,
+      rationale: "Each achievement needs its own recognizable badge art.", confidence: 90,
+      usesUsageData: false, basis: [],
+      changes: ["bravery", "patience"].map((name) => ({
+        entityType: "BADGE" as const, entityId: null, operation: "CREATE" as const,
+        set: [{ path: "name", valueJson: JSON.stringify(name) },
+          { path: "description", valueJson: JSON.stringify(`Awarded for ${name}.`) }],
+        media: [{ kind: "IMAGE" as const, path: "image", catalogIds: [], search: null, generate: name }],
+      })),
+    };
+    const submitted = await ingestAgentSubmission(database, { agentName: "agent", proposals: [proposal] });
+    expect(submitted.refused).toEqual([]);
+    const id = submitted.accepted[0]!.id;
+    const original = (await readAgentProposal(database, id))!;
+    collector.mockClear();
+    expect(await reviseAgentProposal(database, id, {
+      expectedStatusChangedAt: original.statusChangedAt.toISOString(), reactivate: false,
+      feedbackResponse: null, retainMediaIds: original.media.map((row) => row.id),
+      proposal: { ...proposal, changes: proposal.changes.map((change) => ({
+        ...change, media: change.media.map((request) => ({ ...request, generate: null })),
+      })) },
+    })).toMatchObject({ ok: true });
+    const revised = (await readAgentProposal(database, id))!;
+    expect(revised.media).toHaveLength(2);
+    for (const change of revised.changes) {
+      const name = change.after.name as string;
+      expect(change.after.image).toBe(`https://ui0arpl8sm.ufs.sh/f/${name}.webp`);
+      expect(revised.media.filter((row) => row.changeId === change.id)).toHaveLength(1);
+    }
+    expect(collector).not.toHaveBeenCalled();
+    expect(deleted).not.toHaveBeenCalled();
   });
 
   it("stores only the changed fields of a staff suggestion", async () => {

@@ -203,18 +203,34 @@ export const reviseAgentProposal = async (
   for (const mediaId of new Set(input.retainMediaIds ?? [])) {
     const candidate = existing.media.find((media) => media.id === mediaId);
     const change = existing.changes.find((change) => change.id === candidate?.changeId);
-    const replacement = input.proposal.changes.find(
-      (next) =>
-        next.entityType === change?.entityType &&
-        next.entityId === change?.entityId &&
-        next.operation === change?.operation,
-    );
+    // CREATE targets have no entity id. Match repeated target tuples by occurrence,
+    // so separate drafts of the same type keep their own inspected candidates.
+    const matchesTarget = (next: {
+      entityType: string;
+      entityId: string | null;
+      operation: string;
+    }) =>
+      next.entityType === change?.entityType &&
+      next.entityId === change?.entityId &&
+      next.operation === change?.operation;
+    const occurrence = existing.changes
+      .filter(matchesTarget)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .findIndex((next) => next.id === change?.id);
+    const replacementIndex = input.proposal.changes
+      .map((next, index) => ({ next, index }))
+      .filter(({ next }) => matchesTarget(next))[occurrence]?.index;
+    const replacement =
+      replacementIndex === undefined
+        ? undefined
+        : input.proposal.changes[replacementIndex];
     const request = replacement?.media.find(
       (request) => request.path === candidate?.path && request.kind === candidate?.kind,
     );
     if (
       !candidate ||
       !change ||
+      replacementIndex === undefined ||
       !request ||
       candidate.source === "CATALOG" ||
       request.catalogIds.length ||
@@ -228,7 +244,7 @@ export const reviseAgentProposal = async (
           "Retained media must belong to this proposal and use the same target, kind and path with no new search or generation",
       };
     }
-    const key = mediaRequestKey(change, candidate.path);
+    const key = mediaRequestKey(replacementIndex, change, candidate.path);
     retained.set(key, [...(retained.get(key) ?? []), candidate]);
   }
   const proposal = {
@@ -577,7 +593,7 @@ const planAgentProposal = async (
       ) {
         return `${request.path} cannot hold ${request.kind.toLowerCase()} media`;
       }
-      const kept = retained?.get(mediaRequestKey(change, request.path));
+      const kept = retained?.get(mediaRequestKey(order, change, request.path));
       const candidates =
         kept ?? (await collectCandidates(client, request, budget, config.contentType));
       if (!kept)
@@ -890,6 +906,8 @@ type MediaInsert = typeof contentProposalMedia.$inferInsert;
 
 /** A candidate is tied to its original target and field when refining the same draft. */
 const mediaRequestKey = (
+  order: number,
   change: { entityType: string; entityId: string | null; operation: string },
   path: string,
-) => JSON.stringify([change.entityType, change.entityId, change.operation, path]);
+) =>
+  JSON.stringify([order, change.entityType, change.entityId, change.operation, path]);

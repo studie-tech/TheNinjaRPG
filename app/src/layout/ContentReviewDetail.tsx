@@ -69,9 +69,28 @@ interface ContentReviewDetailProps {
  * approving, a reviewer can leave fields out, rewrite text and pick among media candidates.
  */
 export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) => {
-  const { id, position, onMove, onDecided } = props;
+  const { data: proposal, isPending } = api.contentReview.getProposal.useQuery({
+    id: props.id,
+  });
+  if (isPending) return <Loader explanation="Loading suggestion" />;
+  if (!proposal) return <p className="p-3">This suggestion no longer exists.</p>;
+
+  // Refinements replace the draft, so choices and keyboard confirmation belong only to
+  // the revision the reviewer saw when making them.
+  return (
+    <ProposalReview
+      key={`${proposal.id}:${proposal.statusChangedAt.valueOf()}`}
+      {...props}
+      proposal={proposal}
+    />
+  );
+};
+
+const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }> = (
+  props,
+) => {
+  const { id, position, onMove, onDecided, proposal } = props;
   const utils = api.useUtils();
-  const { data: proposal, isPending } = api.contentReview.getProposal.useQuery({ id });
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [mediaChoice, setMediaChoice] = useState<Record<string, string>>({});
@@ -210,9 +229,6 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   });
-
-  if (isPending) return <Loader explanation="Loading suggestion" />;
-  if (!proposal) return <p className="p-3">This suggestion no longer exists.</p>;
 
   const choices: ReviewChoices = { excluded, edits, mediaChoice };
 

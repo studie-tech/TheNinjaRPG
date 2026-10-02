@@ -38,6 +38,8 @@ on:
       - ".github/scripts/battlefield-labels.mjs"
       - ".github/scripts/render-scene-catalog.mjs"
       - ".github/scripts/apply-visual-check.mjs"
+      - ".github/scripts/check-audit-media.mjs"
+      - ".github/scripts/check-audit-media.test.mjs"
       - ".agents/skills/tnr-content-audit/**"
       - "app/src/app/api/content-review/**"
       - "app/src/app/*/manual/review/battlefield/**"
@@ -381,6 +383,12 @@ jobs:
           fi
           PROPOSALS_FILE=proposals.json VERDICTS_FILE=verdicts.json OUT_FILE=checked.json \
             node .github/scripts/apply-visual-check.mjs
+      - name: Enforce automatic audit media policy
+        env:
+          PROPOSALS_FILE: checked.json
+        run: |
+          node --test .github/scripts/check-audit-media.test.mjs
+          node .github/scripts/check-audit-media.mjs
       - name: Submit suggestions
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

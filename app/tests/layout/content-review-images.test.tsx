@@ -1,13 +1,33 @@
+import { cleanup, fireEvent, render as renderInteractive } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import { sceneAssetIds } from "@/libs/contentReview/paths";
+import { ensureDom } from "../setup-dom.mjs";
 
 const state: {
   before: Record<string, unknown>;
   after: Record<string, unknown>;
   applied: Record<string, unknown> | null;
-} = { before: {}, after: {}, applied: null };
+  media: ReturnType<typeof sceneCandidate>[];
+  payload: Record<string, unknown> | null;
+} = { before: {}, after: {}, applied: null, media: [], payload: null };
+let canReview = false;
+let revision = new Date("2026-10-02T10:00:00.000Z");
+const approve = vi.fn();
+
+const sceneCandidate = (id: string, externalId: string | null = null, chosen = false) => ({
+  id,
+  path: "content.sceneCharacters.0",
+  kind: "IMAGE",
+  source: externalId ? "CATALOG" : "GENERATED",
+  externalId,
+  title: id,
+  url: externalId ? "https://example.com/new.webp" : `https://example.com/${id}.webp`,
+  lengthMs: null,
+  chosen,
+  currentValue: "old",
+});
 
 vi.mock("@/app/_trpc/client", () => ({
   api: {
@@ -19,12 +39,12 @@ vi.mock("@/app/_trpc/client", () => ({
           data: {
             id: "proposal",
             status: "PENDING",
-            canReview: false,
+            canReview,
             category: "VISUAL",
             title: "Update scene",
             rationale: "Show the cast",
             createdAt: new Date().toISOString(),
-            statusChangedAt: new Date().toISOString(),
+            statusChangedAt: revision,
             targets: [],
             basis: [],
             assets: {
@@ -38,14 +58,12 @@ vi.mock("@/app/_trpc/client", () => ({
               operation: "UPDATE",
               label: "Quest",
               name: "Scene quest",
-              payload: null,
-              media: [],
               ...state,
             }],
           },
         }),
       },
-      approve: { useMutation: () => ({ isPending: false }) },
+      approve: { useMutation: () => ({ isPending: false, mutate: approve }) },
       reject: { useMutation: () => ({ isPending: false }) },
       revert: { useMutation: () => ({ isPending: false }) },
     },
@@ -75,10 +93,17 @@ const render = () => renderToStaticMarkup(
 );
 
 describe("proposal scene images", () => {
+  afterEach(cleanup);
   beforeEach(() => {
+    ensureDom();
     state.before = {};
     state.after = {};
     state.applied = null;
+    state.media = [];
+    state.payload = null;
+    canReview = false;
+    revision = new Date("2026-10-02T10:00:00.000Z");
+    approve.mockClear();
   });
 
   it("shows both character images when a quest scene changes", () => {
@@ -142,5 +167,44 @@ describe("proposal scene images", () => {
       },
     })).toEqual(["background", "old", "next"]);
     expect(sceneAssetIds(null)).toEqual([]);
+  });
+
+  it("previews the chosen generated character and the current catalog cast", () => {
+    canReview = true;
+    state.payload = { content: { sceneCharacters: ["old"] } };
+    state.after = { content: { sceneCharacters: ["media:first"] } };
+    state.media = [sceneCandidate("first"), sceneCandidate("second", null, true)];
+    const view = renderInteractive(<ContentReviewDetail id="proposal" position={{ index: 0, total: 1 }} onMove={vi.fn()} onDecided={vi.fn()} />);
+    const scene = () => view.container.querySelector('[data-scene="true"]');
+    expect(scene()?.innerHTML).toContain("https://example.com/second.webp");
+    fireEvent.click(view.getAllByRole("radio")[0]!);
+    expect(scene()?.innerHTML).toContain("https://example.com/first.webp");
+    fireEvent.click(view.getByRole("button", { name: "Current" }));
+    expect(scene()?.innerHTML).toContain("https://example.com/old.webp");
+    expect(scene()?.innerHTML).not.toContain("https://example.com/first.webp");
+  });
+
+  it("clears media picks, exclusions and approval confirmation on a refined revision", () => {
+    canReview = true;
+    state.after = { description: "Proposed description", content: { sceneCharacters: ["media:first"] } };
+    state.media = [sceneCandidate("first"), sceneCandidate("second")];
+    const detail = <ContentReviewDetail id="proposal" position={{ index: 0, total: 1 }} onMove={vi.fn()} onDecided={vi.fn()} />;
+    const view = renderInteractive(detail);
+    fireEvent.click(view.getByRole("button", { name: /Edit/ }));
+    fireEvent.change(view.getByRole("textbox"), { target: { value: "Staff wording" } });
+    fireEvent.click(view.getAllByRole("radio")[1]!);
+    fireEvent.click(view.getAllByRole("checkbox")[1]!);
+    fireEvent.keyDown(document.body, { key: "a" });
+    expect(view.getByText("Press A again to apply")).toBeTruthy();
+
+    revision = new Date("2026-10-02T10:01:00.000Z");
+    view.rerender(<ContentReviewDetail id="proposal" position={{ index: 0, total: 1 }} onMove={vi.fn()} onDecided={vi.fn()} />);
+    expect(view.getAllByRole("checkbox").every((input) => (input as HTMLInputElement).checked)).toBe(true);
+    expect((view.getAllByRole("radio")[0] as HTMLInputElement).checked).toBe(true);
+    expect(view.queryByText("Press A again to apply")).toBeNull();
+    fireEvent.keyDown(document.body, { key: "a" });
+    expect(approve).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.body, { key: "a" });
+    expect(approve).toHaveBeenCalledWith(expect.objectContaining({ expectedStatusChangedAt: revision.toISOString(), exclude: [], edits: [], media: [] }));
   });
 });
