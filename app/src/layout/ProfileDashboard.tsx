@@ -258,7 +258,6 @@ export default function ProfileDashboard() {
               detail={`Day ${catchUpStreak.nextDayNumber}: ${getRewardPreview(catchUpStreak.nextRewards) || "Daily reward"}. ${COST_STREAK_CATCHUP_DAY} rep per day to catch up.`}
               note={
                 <>
-                  {!awake && <p>You can claim this once you are awake.</p>}
                   {claimStreak.error && (
                     <p className="text-destructive">{claimStreak.error.message}</p>
                   )}
@@ -272,7 +271,7 @@ export default function ProfileDashboard() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={!awake || claimStreak.isPending}
+                        disabled={claimStreak.isPending}
                         className="w-full gap-1.5 hover:text-black"
                       >
                         <RotateCcw className="h-4 w-4" />
@@ -295,7 +294,7 @@ export default function ProfileDashboard() {
                   <RowAction
                     icon={Timer}
                     variant="default"
-                    disabled={!awake || claimStreak.isPending}
+                    disabled={claimStreak.isPending}
                     onClick={() =>
                       claimStreak.mutate({
                         configId: catchUpStreak.configId,
@@ -319,7 +318,6 @@ export default function ProfileDashboard() {
               }
               note={
                 <>
-                  {!awake && <p>You can claim this once you are awake.</p>}
                   {claimStreak.error && (
                     <p className="text-destructive">{claimStreak.error.message}</p>
                   )}
@@ -329,7 +327,7 @@ export default function ProfileDashboard() {
                 <RowAction
                   icon={Gift}
                   variant="default"
-                  disabled={!awake || claimStreak.isPending}
+                  disabled={claimStreak.isPending}
                   onClick={() =>
                     claimStreak.mutate({ configId: claimableStreak.configId })
                   }
@@ -346,7 +344,6 @@ export default function ProfileDashboard() {
               detail={recurringReward || "Claim today’s activity reward."}
               note={
                 <>
-                  {!awake && <p>You can claim this once you are awake.</p>}
                   {claimStreak.error && (
                     <p className="text-destructive">{claimStreak.error.message}</p>
                   )}
@@ -356,7 +353,7 @@ export default function ProfileDashboard() {
                 <RowAction
                   icon={Gift}
                   variant="default"
-                  disabled={!awake || claimStreak.isPending}
+                  disabled={claimStreak.isPending}
                   onClick={() => claimStreak.mutate({ configId: recurringStreak.id })}
                 >
                   {claimStreak.isPending ? "Claiming..." : "Claim"}
