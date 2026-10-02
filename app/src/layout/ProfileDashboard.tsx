@@ -208,7 +208,6 @@ export default function ProfileDashboard() {
   const recurringReward = getRewardPreview(
     recurringStreak?.rewards.find((reward) => reward.dayNumber === 1)?.rewards ?? null,
   );
-  const awake = userData.status === "AWAKE";
   const craftTimer = craftingTimers.find((timer) => timer.kind === "crafting");
   const canStartTraining = !training && canStartStatTraining(userData);
   const raidTitle =
