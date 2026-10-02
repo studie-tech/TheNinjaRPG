@@ -991,7 +991,7 @@ function ContentCard({ entry }: { entry: DashboardCatalogueEntry }) {
             alt=""
             width={640}
             height={280}
-            className="h-full w-full object-cover object-bottom"
+            className="h-full w-full object-cover object-center"
           />
         ) : (
           <div className="flex h-full items-center justify-center">
