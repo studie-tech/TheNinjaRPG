@@ -7,8 +7,6 @@ import {
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   IMG_AVATAR_DEFAULT,
   IMG_SCENE_BACKGROUND,
-  IMG_URL_ASSISTANT,
-  IMG_URL_ASSISTANT_2,
   TERMINAL_DIALOG_PREFIX,
 } from "@/drizzle/constants";
 import type { UserQuest } from "@/drizzle/schema";
@@ -22,6 +20,7 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { EventTimer, Objective, Reward } from "@/layout/Objective";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
   getActiveObjective,
   isQuestComplete,
@@ -473,9 +472,8 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   }, [abandonIdentity]);
 
   // A/B test for starter quest assistant image
-  const { variant } = useAbVariant("ab_lemu_replacement_2");
-  const assistantImage =
-    variant === "treatment" ? IMG_URL_ASSISTANT_2 : IMG_URL_ASSISTANT;
+  const { variant } = useAbVariant(LEMU_EXPERIMENT);
+  const assistantImage = getLemuImage(variant);
 
   // Scene composition
   // - If not consecutive objectives, use background & scene from quest

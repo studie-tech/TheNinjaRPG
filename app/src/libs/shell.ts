@@ -1,10 +1,14 @@
-import type { AbVariant } from "@/hooks/useAbVariant";
 import {
   cookieValueToLayout,
   type EffectiveLayout,
   LAYOUT_PREFERENCE_COOKIE,
-  LEGACY_AB_LAYOUT_COOKIE,
 } from "@/libs/layoutPreference";
+import {
+  isLemuExperimentEnabled,
+  LEMU_EXPERIMENT,
+  type LemuVariant,
+  normalizeLemuVariant,
+} from "@/libs/lemuExperiment";
 import { parseNativeUserAgent } from "@/libs/native/userAgent";
 import {
   parseWallpaperVariant,
@@ -105,7 +109,7 @@ export interface ShellRequest {
   userId: string | null;
   cookies: ReadonlyMap<string, string>;
   /** Draws an experiment assignment for a visitor who has none. */
-  draw: () => AbVariant;
+  draw: () => LemuVariant;
   drawWallpaper?: () => WallpaperVariant;
   /** Only a document visit can enroll a new visitor, never prefetch or RSC navigation. */
   isDocument?: boolean;
@@ -159,8 +163,12 @@ export const chooseShell = (request: ShellRequest): ShellChoice => {
   const assigned: ShellChoice["assigned"] = {};
   const isLandingVisit =
     !hasSession && request.pathname === "/" && request.isDocument !== false;
-  if (isLandingVisit && request.cookies.get(LEGACY_AB_LAYOUT_COOKIE) === undefined) {
-    assigned[LEGACY_AB_LAYOUT_COOKIE] = request.draw();
+  if (
+    isLandingVisit &&
+    isLemuExperimentEnabled &&
+    !normalizeLemuVariant(request.cookies.get(LEMU_EXPERIMENT))
+  ) {
+    assigned[LEMU_EXPERIMENT] = request.draw();
   }
   let wallpaper = parseWallpaperVariant(request.cookies.get(WALLPAPER_EXPERIMENT));
   if (client === "web" && isLandingVisit && !wallpaper) {

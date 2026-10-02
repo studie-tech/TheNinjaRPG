@@ -20,7 +20,7 @@ import type { NextRequest } from "next/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 import { userData } from "@/drizzle/schema";
-import { LEGACY_AB_LAYOUT_COOKIE } from "@/libs/layoutPreference";
+import { LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
 import type { McpMeta } from "@/libs/mcp";
 import {
   parseWallpaperVariant,
@@ -37,10 +37,6 @@ import {
  */
 import { drizzleDB } from "@/server/db";
 import { getClientIp } from "@/utils/network";
-
-const normalizeAbVariant = (value?: string): "treatment" | "control" | undefined => {
-  return value === "treatment" || value === "control" ? value : undefined;
-};
 
 /**
  * This is the actual context you will use in your router. It will be used to process every request
@@ -61,8 +57,8 @@ export const createAppTRPCContext = async (options: {
   // Get agent
   const userAgent = readHeaders.get("user-agent") ?? undefined;
   // AB testing cookies
-  const abLemuReplacementVariant = normalizeAbVariant(
-    options.readCookies.get(LEGACY_AB_LAYOUT_COOKIE)?.value,
+  const abLemuReplacementVariant = normalizeLemuVariant(
+    options.readCookies.get(LEMU_EXPERIMENT)?.value,
   );
   return {
     drizzle: drizzleDB,

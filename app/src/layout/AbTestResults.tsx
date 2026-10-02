@@ -11,6 +11,7 @@ import VisitorFiltering, {
   getFilter as getVisitorFilter,
   useFiltering as useVisitorFiltering,
 } from "@/layout/VisitorFiltering";
+import { LEMU_EXPERIMENT, lemuLabel } from "@/libs/lemuExperiment";
 import {
   betaPdf,
   betaPosterior,
@@ -437,7 +438,11 @@ const ExperimentResults = ({ exp }: { exp: ExperimentAgg }) => {
   const selected =
     exp.variants.find((arm) => arm.variant === selectedVariant) ?? defaultVariant;
   const label = (variant: string) =>
-    exp.experiment === WALLPAPER_EXPERIMENT ? wallpaperLabel(variant) : variant;
+    exp.experiment === WALLPAPER_EXPERIMENT
+      ? wallpaperLabel(variant)
+      : exp.experiment === LEMU_EXPERIMENT
+        ? lemuLabel(variant)
+        : variant;
   const totalLoaded = exp.variants.reduce((total, arm) => total + arm.loaded, 0);
 
   return (
@@ -446,7 +451,9 @@ const ExperimentResults = ({ exp }: { exp: ExperimentAgg }) => {
       <p className="text-sm">
         {exp.experiment === WALLPAPER_EXPERIMENT
           ? `Wallpaper experiment · control is the fall wallpaper · equal allocation across ${WALLPAPER_VARIANTS.length} village and seasonal candidates.`
-          : "Tutorial experiment"}
+          : exp.experiment === LEMU_EXPERIMENT
+            ? "Lemu experiment · current Lemu baseline and six alternatives · equal allocation across seven arms."
+            : "Tutorial experiment"}
       </p>
       <p className="text-sm">
         Select a variant to view its graph and comparison with the baseline.

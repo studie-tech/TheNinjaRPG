@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-export type AbVariant = "control" | "treatment";
+import { type LemuVariant, normalizeLemuVariant } from "@/libs/lemuExperiment";
+
+export type AbVariant = LemuVariant;
 
 type Options = {
   defaultVariant?: AbVariant;
@@ -40,13 +42,7 @@ const normalizeVariant = (
 ): AbVariant | undefined => {
   if (!raw) return undefined;
   if (parser) return parser(raw);
-  const v = raw.trim().toLowerCase();
-  if (v === "control" || v === "treatment") return v;
-  // Allow a couple of common aliases if ever used
-  if (v === "a" || v === "variant-a" || v === "baseline" || v === "original")
-    return "control";
-  if (v === "b" || v === "variant-b") return "treatment";
-  return undefined;
+  return normalizeLemuVariant(raw);
 };
 
 /**
@@ -72,7 +68,7 @@ export const useAbVariant = (cookieName: string, options?: Options) => {
   }, [rawValue, options?.defaultVariant, options?.parse]);
 
   const isControl = variant === "control";
-  const isTreatment = variant === "treatment";
+  const isTreatment = variant !== undefined && variant !== "control";
 
   return {
     variant,

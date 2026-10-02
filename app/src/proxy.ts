@@ -1,6 +1,7 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { env } from "@/env/server.mjs";
+import { drawLemuVariant } from "@/libs/lemuExperiment";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { chooseShell, publicPathForShellPath, shellParam } from "@/libs/shell";
 
@@ -42,7 +43,7 @@ export default clerkMiddleware(
         !request.headers.has("rsc") &&
         !request.headers.has("next-router-prefetch") &&
         request.headers.get("purpose") !== "prefetch",
-      draw: () => (Math.random() < 0.5 ? "treatment" : "control"),
+      draw: drawLemuVariant,
     });
     // The public URL and its query are untouched, so the router, every link and the
     // referral parameters keep working. The response carries the prerendered page's

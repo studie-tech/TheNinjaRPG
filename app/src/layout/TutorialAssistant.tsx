@@ -17,8 +17,6 @@ import type { SortableItem } from "@/components/ui/sortable-list";
 import { SortableList } from "@/components/ui/sortable-list";
 import type { QuestType } from "@/drizzle/constants";
 import {
-  IMG_URL_ASSISTANT,
-  IMG_URL_ASSISTANT_2,
   IMG_URL_HANDPOINTER,
   OrderedQuestTypesInTutorial,
   TUTORIAL_STEPS_COUNT,
@@ -35,6 +33,7 @@ import { useAbVariant } from "@/hooks/useAbVariant";
 import Image from "@/layout/Image";
 import { useCheckRewards } from "@/layout/Logbook";
 import { Objective } from "@/layout/Objective";
+import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
   getActiveObjective,
   isQuestComplete,
@@ -106,14 +105,11 @@ const getPreferredHighlightCentre = (targetHeight: number) => {
 const AssistantPortrait: React.FC<{ characterImage?: string }> = ({
   characterImage,
 }) => {
-  const { variant } = useAbVariant("ab_lemu_replacement_2");
-  const defaultImage =
-    variant === "treatment" ? IMG_URL_ASSISTANT_2 : IMG_URL_ASSISTANT;
+  const { variant } = useAbVariant(LEMU_EXPERIMENT);
+  const defaultImage = getLemuImage(variant);
   const className = cn(
     "pointer-events-none absolute right-0 z-0 w-auto select-none object-contain drop-shadow-2xl",
-    variant === "treatment"
-      ? "-top-[10rem] h-[14rem] scale-x-[-1] md:-top-70 md:h-96"
-      : "-top-[9.5rem] h-[9.5rem] md:-top-48 md:h-48",
+    "-top-[10rem] h-[14rem] scale-x-[-1] md:-top-70 md:h-96",
   );
   return (
     <Image
@@ -255,9 +251,8 @@ const CancelTutorialConfirmDialog: React.FC<{
   isPending: boolean;
   errorMessage?: string;
 }> = ({ open, onOpenChange, onConfirm, isPending, errorMessage }) => {
-  const { variant } = useAbVariant("ab_lemu_replacement_2");
-  const assistantImage =
-    variant === "treatment" ? IMG_URL_ASSISTANT_2 : IMG_URL_ASSISTANT;
+  const { variant } = useAbVariant(LEMU_EXPERIMENT);
+  const assistantImage = getLemuImage(variant);
 
   return (
     <Dialog
@@ -323,10 +318,7 @@ const CancelTutorialConfirmDialog: React.FC<{
               width={100}
               height={100}
               alt="Assistant"
-              className={cn(
-                "object-contain drop-shadow-lg",
-                variant === "treatment" && "scale-x-[-1]",
-              )}
+              className="scale-x-[-1] object-contain drop-shadow-lg"
             />
           </div>
         </div>
