@@ -35,13 +35,21 @@ import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { QuestDialogScene } from "@/layout/Logbook";
 import { battlefieldSceneOf } from "@/libs/contentReview/battlefield";
 import {
   CATEGORY_LABELS,
   REJECT_REASON_LABELS,
   STATUS_LABELS,
 } from "@/libs/contentReview/labels";
-import { isMediaPath, setAtPath, topLevelField } from "@/libs/contentReview/paths";
+import {
+  isMediaPath,
+  isSceneAssetPath,
+  isSceneCharacterPath,
+  setAtPath,
+  topLevelField,
+} from "@/libs/contentReview/paths";
+import { questSceneOf } from "@/libs/contentReview/questScene";
 import { showMutationToast } from "@/libs/toast";
 import { formatSoundLength, formatTimeAgo } from "@/utils/time";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
@@ -61,9 +69,28 @@ interface ContentReviewDetailProps {
  * approving, a reviewer can leave fields out, rewrite text and pick among media candidates.
  */
 export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) => {
-  const { id, position, onMove, onDecided } = props;
+  const { data: proposal, isPending } = api.contentReview.getProposal.useQuery({
+    id: props.id,
+  });
+  if (isPending) return <Loader explanation="Loading suggestion" />;
+  if (!proposal) return <p className="p-3">This suggestion no longer exists.</p>;
+
+  // Refinements replace the draft, so choices and keyboard confirmation belong only to
+  // the revision the reviewer saw when making them.
+  return (
+    <ProposalReview
+      key={`${proposal.id}:${proposal.statusChangedAt.valueOf()}`}
+      {...props}
+      proposal={proposal}
+    />
+  );
+};
+
+const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }> = (
+  props,
+) => {
+  const { id, position, onMove, onDecided, proposal } = props;
   const utils = api.useUtils();
-  const { data: proposal, isPending } = api.contentReview.getProposal.useQuery({ id });
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [mediaChoice, setMediaChoice] = useState<Record<string, string>>({});
@@ -110,6 +137,7 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
     if (!proposal || !canDecide || isBusy) return;
     approve.mutate({
       id: proposal.id,
+      expectedStatusChangedAt: proposal.statusChangedAt.toISOString(),
       exclude: [...excluded].map((key) => {
         const [changeId = "", field = ""] = key.split("|");
         return { changeId, field };
@@ -123,7 +151,12 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
   };
   const doReject = () => {
     if (!proposal || !canDecide || isBusy) return;
-    reject.mutate({ id: proposal.id, reason, note: note.trim() || null });
+    reject.mutate({
+      id: proposal.id,
+      expectedStatusChangedAt: proposal.statusChangedAt.toISOString(),
+      reason,
+      note: note.trim() || null,
+    });
   };
   const toggleField = (key: string) =>
     setExcluded((previous) => {
@@ -196,9 +229,6 @@ export const ContentReviewDetail: React.FC<ContentReviewDetailProps> = (props) =
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   });
-
-  if (isPending) return <Loader explanation="Loading suggestion" />;
-  if (!proposal) return <p className="p-3">This suggestion no longer exists.</p>;
 
   const choices: ReviewChoices = { excluded, edits, mediaChoice };
 
@@ -504,6 +534,8 @@ const ChangeReview: React.FC<{
                 />
               ) : (
                 <FieldDiff
+                  path={field}
+                  assets={assets}
                   before={change.before[field] ?? null}
                   after={choices.edits[key] ?? values[field] ?? null}
                   hidePaths={mediaPaths
@@ -530,6 +562,7 @@ const ChangeReview: React.FC<{
       ))}
       <InTheGame
         change={change}
+        assets={assets}
         proposed={{ ...change.payload, ...proposedFields(change, choices) }}
         mode={preview}
         onModeChange={onPreviewChange}
@@ -543,12 +576,26 @@ const ChangeReview: React.FC<{
  * Leaves under `hidePaths` are left to the media pickers that show them.
  */
 const FieldDiff: React.FC<{
+  path: string;
+  assets: Record<string, Asset>;
   before: unknown;
   after: unknown;
   hidePaths: string[];
   isEditing: boolean;
   onEdit: (value: string) => void;
-}> = ({ before, after, hidePaths, isEditing, onEdit }) => {
+}> = ({ path: fieldPath, assets, before, after, hidePaths, isEditing, onEdit }) => {
+  if (isSceneAssetPath(fieldPath)) {
+    return (
+      <ImageDiff
+        before={before}
+        after={after}
+        assets={assets}
+        isAssetReference
+        isEditing={false}
+        onEdit={onEdit}
+      />
+    );
+  }
   if (typeof after === "string" && (typeof before === "string" || before === null)) {
     return (
       <div className="flex flex-col gap-2">
@@ -615,15 +662,34 @@ const FieldDiff: React.FC<{
   return (
     <table className="w-full text-xs">
       <tbody>
-        {rows.map((path) => (
-          <tr key={path} className="border-t first:border-t-0">
-            <td className="py-1 pr-2 font-mono">{path}</td>
-            <td className="py-1 pr-2 line-through opacity-60">
-              {formatScalar(old.get(path))}
-            </td>
-            <td className="py-1 font-bold">{formatScalar(next.get(path))}</td>
-          </tr>
-        ))}
+        {rows.map((path) => {
+          const fullPath = path ? `${fieldPath}.${path}` : fieldPath;
+          const isAssetReference = isSceneAssetPath(fullPath);
+          return (
+            <tr key={path} className="border-t first:border-t-0">
+              <td className="break-all py-1 pr-2 align-top font-mono">{path}</td>
+              {isAssetReference || isMediaPath("IMAGE", fullPath) ? (
+                <td colSpan={2} className="py-1">
+                  <ImageDiff
+                    before={old.get(path)}
+                    after={next.get(path)}
+                    assets={assets}
+                    isAssetReference={isAssetReference}
+                    isEditing={false}
+                    onEdit={onEdit}
+                  />
+                </td>
+              ) : (
+                <>
+                  <td className="py-1 pr-2 line-through opacity-60">
+                    {formatScalar(old.get(path))}
+                  </td>
+                  <td className="py-1 font-bold">{formatScalar(next.get(path))}</td>
+                </>
+              )}
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -633,9 +699,11 @@ const FieldDiff: React.FC<{
 const ImageDiff: React.FC<{
   before: unknown;
   after: unknown;
+  assets?: Record<string, Asset>;
+  isAssetReference?: boolean;
   isEditing: boolean;
   onEdit: (value: string) => void;
-}> = ({ before, after, isEditing, onEdit }) => {
+}> = ({ before, after, assets = {}, isAssetReference = false, isEditing, onEdit }) => {
   const pictures = [
     ["Current", typeof before === "string" ? before : ""],
     ["Proposed", typeof after === "string" ? after : ""],
@@ -650,22 +718,35 @@ const ImageDiff: React.FC<{
         />
       )}
       <div className="flex flex-wrap gap-4">
-        {pictures.map(([label, url]) =>
-          label === "Current" && !url ? null : (
+        {pictures.map(([label, value]) => {
+          const asset = isAssetReference ? assets[value] : undefined;
+          const url = isAssetReference ? asset?.image : value;
+          return label === "Current" && !value ? null : (
             <figure key={label} className="flex flex-col gap-1">
               <figcaption className="font-bold text-xs uppercase opacity-70">
                 {label}
               </figcaption>
               {url ? (
                 <div className="h-32 w-32">
-                  <ContentImage image={url} alt={`${label} image`} className="" />
+                  <ContentImage
+                    image={url}
+                    alt={asset?.name ?? `${label} image`}
+                    className="object-contain"
+                  />
                 </div>
               ) : (
-                <p className="text-xs opacity-70">No image</p>
+                <p className="text-xs opacity-70">
+                  {value ? "Image unavailable" : "No image"}
+                </p>
+              )}
+              {isAssetReference && value && (
+                <span className="max-w-32 break-all text-xs">
+                  {asset?.name ?? value}
+                </span>
               )}
             </figure>
-          ),
-        )}
+          );
+        })}
       </div>
     </div>
   );
@@ -692,11 +773,19 @@ const MediaChoice: React.FC<{
         <div className="rounded-lg border bg-card p-2 text-card-foreground">
           <p className="font-bold text-xs uppercase opacity-70">Current</p>
           <p className="truncate font-bold text-sm">
-            {kind === "IMAGE" ? "Current image" : (current?.name ?? "Nothing set")}
+            {kind === "IMAGE" && !isSceneCharacterPath(path)
+              ? "Current image"
+              : (current?.name ?? "Nothing set")}
           </p>
           <MediaPreview
             kind={kind}
-            url={kind === "IMAGE" ? currentId : null}
+            url={
+              kind === "IMAGE"
+                ? isSceneCharacterPath(path)
+                  ? (current?.image ?? null)
+                  : currentId
+                : null
+            }
             asset={current}
           />
         </div>
@@ -785,15 +874,17 @@ const MediaPreview: React.FC<{
 };
 
 /**
- * The change as players meet it: its card and what it draws in battle, current or proposed.
+ * The change as players meet it: its card, quest scene or battlefield, current or proposed.
  * Renders nothing when the entity has neither.
  */
 const InTheGame: React.FC<{
   change: Change;
+  assets: Record<string, Asset>;
   proposed: Record<string, unknown>;
   mode: PreviewMode;
   onModeChange: (mode: PreviewMode) => void;
-}> = ({ change, proposed, mode, onModeChange }) => {
+}> = ({ change, assets, proposed, mode, onModeChange }) => {
+  const [questSceneLabel, setQuestSceneLabel] = useState("");
   const current = change.payload;
   const fields = mode === "current" ? current : proposed;
   const sounds = Object.fromEntries(
@@ -807,7 +898,39 @@ const InTheGame: React.FC<{
   const hasBattlefield = [current, proposed].some(
     (entry) => entry && battlefieldSceneOf(change.entityType, change.entityId, entry),
   );
-  if (!hasCard && !hasBattlefield) return null;
+  const questScenes: { label: string; objectiveIndex?: number }[] =
+    change.entityType === "QUEST"
+      ? [
+          { label: "Quest scene" },
+          ...(
+            (proposed.content as { objectives?: unknown[] } | undefined)?.objectives ??
+            []
+          ).map((_, objectiveIndex) => ({
+            label: `Objective ${objectiveIndex + 1}`,
+            objectiveIndex,
+          })),
+        ]
+      : [];
+  const activeQuestScene =
+    questScenes.find((scene) => scene.label === questSceneLabel) ?? questScenes[0];
+  const questScene =
+    fields && activeQuestScene
+      ? questSceneOf(
+          fields,
+          {
+            ...assets,
+            ...Object.fromEntries(
+              change.media.flatMap((media) =>
+                media.kind === "IMAGE" && isSceneCharacterPath(media.path) && media.url
+                  ? [[mediaPlaceholder(media.id), { image: media.url }]]
+                  : [],
+              ),
+            ),
+          },
+          activeQuestScene.objectiveIndex,
+        )
+      : null;
+  if (!hasCard && !hasBattlefield && questScenes.length === 0) return null;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
@@ -832,6 +955,49 @@ const InTheGame: React.FC<{
           item={fields as Parameters<typeof ItemWithEffects>[0]["item"]}
           hideDates
         />
+      )}
+      {activeQuestScene && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="font-bold text-xs opacity-70">Quest scene</h4>
+            {questScenes.length > 1 && (
+              <Select value={activeQuestScene.label} onValueChange={setQuestSceneLabel}>
+                <SelectTrigger className="h-8 w-auto" aria-label="Scene to preview">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {questScenes.map(({ label }) => (
+                    <SelectItem key={label} value={label}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {questScenes.length === 1 &&
+              activeQuestScene.objectiveIndex !== undefined && (
+                <span className="text-xs opacity-70">{activeQuestScene.label}</span>
+              )}
+          </div>
+          {questScene ? (
+            <>
+              <div className="overflow-hidden rounded-lg border">
+                <QuestDialogScene
+                  background={questScene.background}
+                  characters={questScene.characters}
+                  description={questScene.description}
+                />
+              </div>
+              {questScene.missing.length > 0 && (
+                <p className="text-xs opacity-70">
+                  Scene assets unavailable: {questScene.missing.join(", ")}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs opacity-70">It does not exist yet.</p>
+          )}
+        </div>
       )}
       {hasBattlefield && (
         <div className="flex flex-col gap-1">
@@ -994,11 +1160,11 @@ const proposedFields = (change: Change, choices: ReviewChoices) => {
     // A sound outside the catalog stays a placeholder that names the chosen candidate, so the
     // battlefield can play it from that candidate's URL.
     const value =
-      pick.kind === "IMAGE"
+      pick.kind === "IMAGE" && !isSceneCharacterPath(path)
         ? pick.url
         : pick.source === "CATALOG"
           ? pick.externalId
-          : pick.kind === "SFX"
+          : pick.kind === "SFX" || isSceneCharacterPath(path)
             ? mediaPlaceholder(pick.id)
             : null;
     if (value) fields = setAtPath(fields, path, value);

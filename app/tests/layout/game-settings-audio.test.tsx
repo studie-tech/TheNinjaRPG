@@ -1,13 +1,17 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as audioHook from "@/hooks/useAudio";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
 import type { UserWithRelations } from "@/routers/profile";
+import * as audioUtils from "@/utils/audio";
 import { ensureDom } from "../setup-dom.mjs";
 
 type RemoteCommand = "play" | "pause" | "toggle";
 type AudioTestMocks = {
   remoteCommand?: (command: RemoteCommand) => void;
-  setEnabled: ReturnType<typeof vi.fn>;
+  setEnabled: ReturnType<
+    typeof vi.fn<(enabled: boolean, isPreferenceChange?: boolean) => Promise<void>>
+  >;
   activate: ReturnType<typeof vi.fn>;
   deactivate: ReturnType<typeof vi.fn>;
   isPlaying: boolean;
@@ -27,15 +31,6 @@ function getAudioTestMocks(): AudioTestMocks {
   };
   return globals.__audioTestMocks;
 }
-
-vi.mock("@/hooks/useAudio", () => ({
-  useAudio: () => ({
-    isPlaying: getAudioTestMocks().isPlaying,
-    requiresInteraction: false,
-    enabled: getAudioTestMocks().enabled,
-    setEnabled: getAudioTestMocks().setEnabled,
-  }),
-}));
 
 vi.mock("@/libs/native", () => ({
   platform: () => {
@@ -57,11 +52,6 @@ vi.mock("@/libs/native", () => ({
   },
 }));
 
-vi.mock("@/utils/audio", () => ({
-  playPreloadedAudio: vi.fn(),
-  preloadAudioBuffers: vi.fn(async () => undefined),
-}));
-
 const user = (level: number, musicOn = true) =>
   ({
     userId: "user-1",
@@ -72,8 +62,26 @@ const user = (level: number, musicOn = true) =>
 
 ensureDom();
 
+beforeEach(() => {
+  // Restore hook and utility exports between suites sharing Bun's module cache.
+  vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
+    isPlaying: getAudioTestMocks().isPlaying,
+    isLoading: false,
+    error: null,
+    canPlay: true,
+    requiresInteraction: false,
+    enabled: getAudioTestMocks().enabled,
+    setEnabled: getAudioTestMocks().setEnabled,
+    toggle: vi.fn(async () => undefined),
+    setVolume: vi.fn(),
+  }));
+  vi.spyOn(audioUtils, "playPreloadedAudio").mockResolvedValue(undefined);
+  vi.spyOn(audioUtils, "preloadAudioBuffers").mockResolvedValue(undefined);
+});
+
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   const audio = getAudioTestMocks();
   audio.setEnabled.mockClear();
   audio.activate.mockClear();
@@ -85,6 +93,95 @@ afterEach(() => {
 });
 
 describe("GlobalAudioProvider", () => {
+  it("ignores Android remote commands while the saved music preference is off", async () => {
+    const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
+    Object.defineProperty(window, "Capacitor", {
+      configurable: true,
+      value: { getPlatform: () => "android" },
+    });
+    const audio = getAudioTestMocks();
+    const view = render(
+      <GlobalAudioProvider userData={user(1, false)}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    try {
+      await waitFor(() => expect(audio.remoteCommand).toBeTypeOf("function"));
+      audio.setEnabled.mockClear();
+      act(() => {
+        audio.remoteCommand?.("play");
+        audio.remoteCommand?.("toggle");
+        audio.remoteCommand?.("pause");
+      });
+      expect(audio.setEnabled).not.toHaveBeenCalled();
+
+      view.rerender(
+        <GlobalAudioProvider userData={user(1, true)}>
+          <span>child</span>
+        </GlobalAudioProvider>,
+      );
+      await waitFor(() => expect(audio.setEnabled).toHaveBeenCalledWith(true, true));
+      audio.setEnabled.mockClear();
+      act(() => audio.remoteCommand?.("play"));
+      expect(audio.setEnabled).toHaveBeenCalledWith(true);
+    } finally {
+      view.unmount();
+      if (originalCapacitor) {
+        Object.defineProperty(window, "Capacitor", originalCapacitor);
+      } else {
+        Reflect.deleteProperty(window, "Capacitor");
+      }
+    }
+  });
+
+  it("starts iOS remote Play during the gesture and keeps a later Pause authoritative", async () => {
+    const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
+    Object.defineProperty(window, "Capacitor", {
+      configurable: true,
+      value: { getPlatform: () => "ios" },
+    });
+    const audio = getAudioTestMocks();
+    audio.enabled = false;
+    const view = render(
+      <GlobalAudioProvider userData={user(1)}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    let resolveActivation: (activated: boolean) => void = () => undefined;
+    try {
+      await waitFor(() => expect(audio.remoteCommand).toBeTypeOf("function"));
+      await act(async () => undefined);
+      audio.setEnabled.mockClear();
+      audio.deactivate.mockClear();
+      audio.activate.mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveActivation = resolve;
+          }),
+      );
+
+      act(() => audio.remoteCommand?.("play"));
+      // WebKit's playback gesture ends when the action handler returns. The bridge
+      // response must not be a prerequisite for asking the audio element to play.
+      expect(audio.setEnabled).toHaveBeenCalledTimes(1);
+      expect(audio.setEnabled).toHaveBeenCalledWith(true);
+      await waitFor(() => expect(audio.activate).toHaveBeenCalledTimes(1));
+
+      act(() => audio.remoteCommand?.("pause"));
+      await act(async () => resolveActivation(true));
+      await waitFor(() => expect(audio.deactivate).toHaveBeenCalledWith(true));
+      expect(audio.setEnabled.mock.calls).toEqual([[true], [false]]);
+    } finally {
+      resolveActivation(true);
+      view.unmount();
+      if (originalCapacitor) {
+        Object.defineProperty(window, "Capacitor", originalCapacitor);
+      } else {
+        Reflect.deleteProperty(window, "Capacitor");
+      }
+    }
+  });
+
   it("retries iOS session activation after a failed attempt", async () => {
     const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
     Object.defineProperty(window, "Capacitor", {

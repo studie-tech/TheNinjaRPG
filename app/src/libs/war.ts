@@ -1,5 +1,5 @@
 import type { WarType } from "@/drizzle/constants";
-import { SHRINE_HP_BY_LEVEL } from "@/drizzle/constants";
+import { FACTION_VILLAGE_TYPES, SHRINE_HP_BY_LEVEL } from "@/drizzle/constants";
 import type { Village, VillageAlliance } from "@/drizzle/schema";
 import type { BattleWar } from "@/libs/combat/types";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
@@ -164,7 +164,10 @@ export const getShrineHpByLevel = (level?: number | null) => {
  * @returns true if the village is involved in any active war, false otherwise
  */
 export const isVillageInvolvedInAnyWar = (
-  activeWars: FetchActiveWarsReturnType[],
+  activeWars: (Pick<
+    FetchActiveWarsReturnType,
+    "id" | "type" | "attackerVillageId" | "defenderVillageId"
+  > & { warAllies: { villageId: string }[] })[],
   villageId: string,
   excludeWarId?: string,
   types?: readonly WarType[],
@@ -189,3 +192,9 @@ export const isVillageInvolvedInAnyWar = (
     return war.warAllies.some((ally) => ally.villageId === villageId);
   });
 };
+
+/**
+ * Whether a village is a faction's hideout or town rather than a village with elders
+ */
+export const isFactionVillage = (target: Pick<Village, "type">) =>
+  FACTION_VILLAGE_TYPES.some((type) => type === target.type);

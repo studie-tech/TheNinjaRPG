@@ -16,7 +16,11 @@ import {
 import ContentBox from "@/layout/ContentBox";
 import { CategoryBadge, ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import Loader from "@/layout/Loader";
-import { CATEGORY_LABELS, STATUS_LABELS } from "@/libs/contentReview/labels";
+import {
+  CATEGORY_LABELS,
+  reviewStatsSourceLabel,
+  STATUS_LABELS,
+} from "@/libs/contentReview/labels";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
@@ -336,7 +340,7 @@ const ReviewStats: React.FC<{ canView: boolean }> = ({ canView }) => {
     { label: string; category: ContentProposalCategory; counts: Record<string, number> }
   >();
   for (const row of data ?? []) {
-    const label = row.source === "AGENT" ? (row.agentName ?? "Content audit") : "Staff";
+    const label = reviewStatsSourceLabel(row.source, row.agentName);
     const key = `${label}|${row.category}`;
     const entry = rows.get(key) ?? { label, category: row.category, counts: {} };
     entry.counts[row.status] = (entry.counts[row.status] ?? 0) + row.n;

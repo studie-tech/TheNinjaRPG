@@ -1,5 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
+import { and, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import {
   ELDER_MIN_VOTING_COUNT,
@@ -9,7 +8,6 @@ import {
   WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8,
   WAR_DECLARATION_COST,
   WAR_MAX_DURATION_DAYS,
-  WAR_RAID_SHRINE_HP,
   WAR_TOKEN_REDUCTION_INTERVAL_HOURS,
 } from "@/drizzle/constants";
 import {
@@ -33,7 +31,7 @@ import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { fetchActiveWars } from "@/server/api/routers/war";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
-import { handleWarEnd } from "@/server/utils/war";
+import { handleWarEnd, startDeclaredWar } from "@/server/utils/war";
 
 const ENDPOINT_NAME = "hourly-war";
 const DAILY_DECAY_TIMER = "daily-war-decay";
@@ -407,47 +405,21 @@ async function handleExpiredWarDeclaration(
     return;
   }
 
-  // Deduct tokens with DB guard — if this fails, war is never inserted
-  const tokenResult = await drizzleDB
-    .update(village)
-    .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
-    .where(
-      and(eq(village.id, vote.villageId), gte(village.tokens, WAR_DECLARATION_COST)),
-    );
-  if (tokenResult.rowsAffected === 0) {
+  const started = await startDeclaredWar(drizzleDB, {
+    attackerVillageId: vote.villageId,
+    attackerVillageName: attackerVillage.name,
+    defenderVillageId: vote.targetId,
+    defenderVillageName: defenderName,
+    defenderKageId: defenderVillage?.kageId,
+    initiatedByUserId: vote.initiatedByUserId,
+    warType: vote.warType ?? "VILLAGE_WAR",
+    targetStructureRoute: vote.targetStructureRoute ?? "/townhall",
+  });
+  if (!started) {
     await rejectWithNotification(
-      `War declaration against ${defenderName} was cancelled — the village no longer has enough tokens.`,
+      `War declaration against ${defenderName} was cancelled — a village is already involved in a war or there are no longer enough tokens.`,
     );
-    return;
   }
-
-  const warId = nanoid();
-  const warContent = `${attackerVillage.name} has declared war on ${defenderName}!`;
-  const notifyKageIds = [vote.initiatedByUserId];
-  if (defenderVillage?.kageId) notifyKageIds.push(defenderVillage.kageId);
-  await Promise.all([
-    drizzleDB.insert(war).values({
-      id: warId,
-      attackerVillageId: vote.villageId,
-      defenderVillageId: vote.targetId,
-      status: "ACTIVE",
-      type: vote.warType ?? "VILLAGE_WAR",
-      targetStructureRoute: vote.targetStructureRoute ?? "/townhall",
-      attackerShrineHp: WAR_RAID_SHRINE_HP,
-      attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
-      attackerShrineStatus: "ACTIVE",
-      defenderShrineHp: WAR_RAID_SHRINE_HP,
-      defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
-      defenderShrineStatus: "ACTIVE",
-    }),
-    drizzleDB
-      .insert(notification)
-      .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),
-    drizzleDB
-      .update(userData)
-      .set({ unreadNotifications: sql`unreadNotifications + 1` })
-      .where(inArray(userData.userId, notifyKageIds)),
-  ]);
 }
 
 /**

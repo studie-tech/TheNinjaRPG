@@ -17,7 +17,6 @@ import {
   WAR_MINIMUM_MEMBERS_REQUIRED,
   WAR_MINIMUM_TOKENS_FOR_BEING_ATTACKABLE,
   WAR_PURCHASE_SHRINE_TOKEN_COST,
-  WAR_RAID_SHRINE_HP,
   WAR_VILLAGE_MAX_SECTORS,
 } from "@/drizzle/constants";
 import type { Village, VillageStructure, War, WarAlly } from "@/drizzle/schema";
@@ -35,7 +34,12 @@ import {
 } from "@/drizzle/schema";
 import { castElderVoteEntry, fetchElderVote, fetchElderVotes } from "@/libs/elder";
 import { findActiveExclusiveRaidForSector } from "@/libs/raids";
-import { canJoinWar, getShrineHpByLevel, isVillageInvolvedInAnyWar } from "@/libs/war";
+import {
+  canJoinWar,
+  getShrineHpByLevel,
+  isFactionVillage,
+  isVillageInvolvedInAnyWar,
+} from "@/libs/war";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import {
   fetchRequest,
@@ -58,7 +62,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { handleWarEnd } from "@/server/utils/war";
+import { handleWarEnd, startDeclaredWar } from "@/server/utils/war";
 import { findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSeeSecretData } from "@/utils/permissions";
@@ -663,18 +667,27 @@ export const warRouter = createTRPCRouter({
         );
       }
 
-      // Re-check just before creation to avoid races
-      if (
-        isVillageInvolvedInAnyWar(activeWars, attackerVillage.id, undefined, [
-          "VILLAGE_WAR",
-          "WAR_RAID",
-        ]) ||
-        isVillageInvolvedInAnyWar(activeWars, defenderVillage.id, undefined, [
-          "VILLAGE_WAR",
-          "WAR_RAID",
-        ])
-      ) {
-        return errorResponse("A village is now already involved in an active war");
+      // Factions have no elder council, so their leader's declaration is the approval
+      if (isFactionVillage(attackerVillage)) {
+        const started = await startDeclaredWar(ctx.drizzle, {
+          attackerVillageId: attackerVillage.id,
+          attackerVillageName: attackerVillage.name,
+          defenderVillageId: defenderVillage.id,
+          defenderVillageName: defenderVillage.name,
+          defenderKageId: defenderVillage.kageId,
+          initiatedByUserId: user.userId,
+          warType,
+          targetStructureRoute: structure.route,
+        });
+        if (!started) {
+          return errorResponse(
+            "War could not start: a village is already involved in a war or your village no longer has enough tokens.",
+          );
+        }
+        return {
+          success: true,
+          message: `War against ${defenderVillage.name} has started!`,
+        };
       }
 
       // Require minimum elder count to proceed with war declaration
@@ -1419,17 +1432,17 @@ export const warRouter = createTRPCRouter({
           ]);
           return errorResponse("Village no longer has enough tokens to declare war");
         }
-        // Deduct tokens with DB guard — if this fails, war is never inserted
-        const tokenResult = await ctx.drizzle
-          .update(village)
-          .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
-          .where(
-            and(
-              eq(village.id, voteRecord.villageId),
-              gte(village.tokens, WAR_DECLARATION_COST),
-            ),
-          );
-        if (tokenResult.rowsAffected === 0) {
+        const started = await startDeclaredWar(ctx.drizzle, {
+          attackerVillageId: voteRecord.villageId,
+          attackerVillageName: attackerVillage.name,
+          defenderVillageId: voteRecord.targetId,
+          defenderVillageName: defenderVillage?.name ?? "another village",
+          defenderKageId: defenderVillage?.kageId,
+          initiatedByUserId: voteRecord.initiatedByUserId,
+          warType: voteRecord.warType ?? "VILLAGE_WAR",
+          targetStructureRoute: voteRecord.targetStructureRoute ?? "/townhall",
+        });
+        if (!started) {
           await Promise.all([
             ctx.drizzle
               .update(villageElderVote)
@@ -1437,42 +1450,17 @@ export const warRouter = createTRPCRouter({
               .where(eq(villageElderVote.id, input.voteId)),
             ctx.drizzle.insert(notification).values({
               userId: voteRecord.initiatedByUserId,
-              content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — the village no longer has enough tokens.`,
+              content: `War declaration against ${defenderVillage?.name ?? "another village"} was cancelled — a village is already involved in a war or there are no longer enough tokens.`,
             }),
             ctx.drizzle
               .update(userData)
               .set({ unreadNotifications: sql`unreadNotifications + 1` })
               .where(eq(userData.userId, voteRecord.initiatedByUserId)),
           ]);
-          return errorResponse("Village no longer has enough tokens to declare war");
+          return errorResponse(
+            "War could not start: a village is already involved in a war or your village no longer has enough tokens.",
+          );
         }
-        const warId = nanoid();
-        const warContent = `${attackerVillage.name} has declared war on ${defenderVillage?.name ?? "another village"}!`;
-        const notifyKageIds = [voteRecord.initiatedByUserId];
-        if (defenderVillage?.kageId) notifyKageIds.push(defenderVillage.kageId);
-        await Promise.all([
-          ctx.drizzle.insert(war).values({
-            id: warId,
-            attackerVillageId: voteRecord.villageId,
-            defenderVillageId: voteRecord.targetId,
-            status: "ACTIVE",
-            type: voteRecord.warType ?? "VILLAGE_WAR",
-            targetStructureRoute: voteRecord.targetStructureRoute ?? "/townhall",
-            attackerShrineHp: WAR_RAID_SHRINE_HP,
-            attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
-            attackerShrineStatus: "ACTIVE",
-            defenderShrineHp: WAR_RAID_SHRINE_HP,
-            defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
-            defenderShrineStatus: "ACTIVE",
-          }),
-          ctx.drizzle
-            .insert(notification)
-            .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),
-          ctx.drizzle
-            .update(userData)
-            .set({ unreadNotifications: sql`unreadNotifications + 1` })
-            .where(inArray(userData.userId, notifyKageIds)),
-        ]);
         return {
           success: true,
           message: "War declaration approved. War has started!",

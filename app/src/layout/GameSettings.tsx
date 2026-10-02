@@ -274,14 +274,14 @@ export const GlobalAudioProvider: React.FC<{
   useEffect(() => {
     if (!isClient) return;
     return audioSession.onRemoteCommand((command) => {
+      // A delayed transport command must not undo an explicit Music-off preference.
+      if (isMusicTurnedOff.current) return;
       if (platform() !== "ios") {
         if (command === "play") void setAudioEnabled(true);
         else if (command === "pause") void setAudioEnabled(false);
         else void setAudioEnabled(!audioEnabled);
         return;
       }
-      // A delayed transport command must not undo an explicit Music-off preference.
-      if (isMusicTurnedOff.current) return;
       if (command === "pause" || (command === "toggle" && audioEnabled)) {
         isRemotePaused.current = true;
         isMusicTurnedOff.current = false;
@@ -290,7 +290,11 @@ export const GlobalAudioProvider: React.FC<{
         void setAudioEnabled(false);
       } else {
         const requestedPauseVersion = pauseVersion.current;
-        // Restore the native session before asking the backgrounded WebView to play.
+        // WebKit grants a playback gesture only while its media action handler runs.
+        // Start the audio before asynchronous bridge work; keep native session changes
+        // serialised so a later Pause or Music Off still wins.
+        isRemotePaused.current = false;
+        void setAudioEnabled(true);
         audioSessionQueue.current = audioSessionQueue.current
           .catch(() => undefined)
           .then(async () => {
@@ -308,8 +312,6 @@ export const GlobalAudioProvider: React.FC<{
               return;
             }
             hasActiveAudioSession.current = true;
-            isRemotePaused.current = false;
-            void setAudioEnabled(true);
           });
       }
     });

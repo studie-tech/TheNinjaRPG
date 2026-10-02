@@ -39,6 +39,7 @@ import {
   canSubmitNotification,
 } from "@/utils/permissions";
 import { DAY_S, secondsFromNow } from "@/utils/time";
+import { trackVisitorSchema } from "@/validators/analytics";
 import { confSchema } from "@/validators/combat";
 import { changeSettingSchema } from "@/validators/misc";
 import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
@@ -46,12 +47,7 @@ import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
 export const miscRouter = createTRPCRouter({
   trackVisitor: publicProcedure
     .meta({ mcp: { enabled: true, description: "Track visitor for analytics" } })
-    .input(
-      z.object({
-        ref: z.string().max(191).optional(),
-        utmSource: z.string().max(191).optional(),
-      }),
-    )
+    .input(trackVisitorSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Only track if not logged in
@@ -61,6 +57,10 @@ export const miscRouter = createTRPCRouter({
 
       const experiments = getLayoutExperimentAssignments({
         abLemuReplacementVariant: ctx.abLemuReplacementVariant,
+        wallpaperVariant:
+          input.wallpaperVariant === ctx.wallpaperVariant
+            ? ctx.wallpaperVariant
+            : undefined,
       });
 
       // Insert new visitor and log AB test loaded events (if applicable) in parallel

@@ -21,21 +21,37 @@ export async function GET(request: Request) {
 
   // Create context and caller
   try {
-    const token = await getPaypalAccessToken();
-
-    // Subscriptions with orderId are from PayPal
-    const paypalSubscriptions = await drizzleDB.query.paypalSubscription.findMany({
-      where: and(
-        eq(paypalSubscription.status, "ACTIVE"),
-        isNotNull(paypalSubscription.orderId),
-        lte(
-          paypalSubscription.updatedAt,
-          new Date(Date.now() - 1000 * 60 * 60 * 24 * 31),
+    // PayPal subscriptions have orderIds; reputation subscriptions do not.
+    const [paypalSubscriptions, repSubscriptions] = await Promise.all([
+      drizzleDB.query.paypalSubscription.findMany({
+        where: and(
+          eq(paypalSubscription.status, "ACTIVE"),
+          isNotNull(paypalSubscription.orderId),
+          lte(
+            paypalSubscription.updatedAt,
+            new Date(Date.now() - 1000 * 60 * 60 * 24 * 31),
+          ),
         ),
-      ),
-    });
-    void paypalSubscriptions.map(async (subscription) => {
-      const paypalSub = await getPaypalSubscription(subscription.subscriptionId, token);
+      }),
+      drizzleDB.query.paypalSubscription.findMany({
+        where: and(
+          eq(paypalSubscription.status, "ACTIVE"),
+          isNull(paypalSubscription.orderId),
+          lte(
+            paypalSubscription.updatedAt,
+            new Date(Date.now() - 1000 * 60 * 60 * 24 * 31),
+          ),
+        ),
+      }),
+    ]);
+    const token = paypalSubscriptions.length
+      ? getPaypalAccessToken()
+      : Promise.resolve("");
+    const paypalUpdates = paypalSubscriptions.map(async (subscription) => {
+      const paypalSub = await getPaypalSubscription(
+        subscription.subscriptionId,
+        await token,
+      );
       if (paypalSub) {
         const paypalStatus = paypalSub.status;
         const newFedStatus = plan2FedStatus(paypalSub.plan_id);
@@ -66,17 +82,7 @@ export async function GET(request: Request) {
     });
 
     // Subscriptions without orderIds are from Reputation points
-    const repSubscriptions = await drizzleDB.query.paypalSubscription.findMany({
-      where: and(
-        eq(paypalSubscription.status, "ACTIVE"),
-        isNull(paypalSubscription.orderId),
-        lte(
-          paypalSubscription.updatedAt,
-          new Date(Date.now() - 1000 * 60 * 60 * 24 * 31),
-        ),
-      ),
-    });
-    void repSubscriptions.map(async (subscription) => {
+    const repUpdates = repSubscriptions.map(async (subscription) => {
       const isDone =
         new Date(subscription.updatedAt) <
         new Date(Date.now() - 1000 * 60 * 60 * 24 * 31);
@@ -95,6 +101,9 @@ export async function GET(request: Request) {
         isDone ? "NONE" : subscription.federalStatus,
       );
     });
+    const results = await Promise.allSettled([...paypalUpdates, ...repUpdates]);
+    const failedUpdate = results.find((result) => result.status === "rejected");
+    if (failedUpdate?.status === "rejected") throw failedUpdate.reason;
     return Response.json(`OK`);
   } catch (cause) {
     console.error(cause);

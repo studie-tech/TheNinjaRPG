@@ -31,7 +31,11 @@ import { readCampaignSource, storeCampaignSource } from "@/libs/campaignSource";
 import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { cn } from "@/libs/shadui";
 import { bunnyImageUrl } from "@/utils/image";
-import { useActiveLayout, useIsPixelLanding } from "@/utils/LayoutContext";
+import {
+  useActiveLayout,
+  useIsPixelLanding,
+  useWallpaperVariant,
+} from "@/utils/LayoutContext";
 import { getFirstOfNextMonth } from "@/utils/time";
 
 /**
@@ -1048,6 +1052,7 @@ const usePixelHeroVideoPlayback = (
 let isVisitReported = false;
 
 const SetReferal = () => {
+  const wallpaperVariant = useWallpaperVariant();
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded } = useUser();
   const hasStatisticsConsent = useCookieConsent("statistics");
@@ -1069,9 +1074,17 @@ const SetReferal = () => {
       trackVisitor({
         ref: safeLocalStorageGetItem("ref") ?? undefined,
         utmSource: utmSource ?? readCampaignSource(),
+        wallpaperVariant,
       });
     }
-  }, [searchParams, hasStatisticsConsent, isLoaded, isSignedIn, trackVisitor]);
+  }, [
+    searchParams,
+    hasStatisticsConsent,
+    isLoaded,
+    isSignedIn,
+    trackVisitor,
+    wallpaperVariant,
+  ]);
   return null;
 };
 

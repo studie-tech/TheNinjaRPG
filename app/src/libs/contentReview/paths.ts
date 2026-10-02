@@ -1,4 +1,5 @@
 import type { ContentProposalMediaKind } from "@/drizzle/constants";
+import { flattenLeaves } from "@/utils/wordDiff";
 
 /**
  * Top-level field a path starts in. Paths are dotted into an entity's editable fields:
@@ -49,9 +50,23 @@ export const setAtPath = <T>(root: T, path: string, value: unknown): T => {
 
 /** Whether `path` names a field a media candidate of `kind` may fill. */
 export const isMediaPath = (kind: ContentProposalMediaKind, path: string) => {
+  if (kind === "IMAGE" && isSceneCharacterPath(path)) return true;
   const last = pathSegments(path).pop() ?? "";
   return MEDIA_FIELDS[kind].includes(last);
 };
+
+/** Scene pictures reference catalog assets rather than image URLs. */
+export const isSceneAssetPath = (path: string) =>
+  /(?:^|\.)(?:sceneBackground|sceneCharacters\.\d+)$/.test(path);
+
+/** Catalog pictures used by quest scenes, including scenes nested in objectives. */
+export const sceneAssetIds = (fields: unknown) =>
+  [...flattenLeaves(fields)].flatMap(([path, value]) =>
+    isSceneAssetPath(path) && typeof value === "string" && value ? [value] : [],
+  );
+/** Quest cast slots hold asset IDs, including generated character candidates until approval. */
+export const isSceneCharacterPath = (path: string) =>
+  /^content(?:\.objectives\.\d+)?\.sceneCharacters\.\d+$/.test(path);
 
 const pathSegments = (path: string) => path.split(".");
 

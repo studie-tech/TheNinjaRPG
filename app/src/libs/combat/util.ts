@@ -761,15 +761,6 @@ export const tagHasSharedCooldown = (effect: { type: string }) => {
 };
 
 /**
- * Check if an action has any of the shared cooldown tags
- */
-export const actionHasSharedCooldown = (action: {
-  effects: Array<{ type: string }>;
-}): boolean => {
-  return action.effects.some((effect) => tagHasSharedCooldown(effect));
-};
-
-/**
  * Height of the rendered battlefield as a fraction of its width, for a grid of the given size
  */
 export const getBattlefieldHeightRatio = (width: number, height: number) =>

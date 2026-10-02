@@ -5,11 +5,21 @@ name: "Next.js Bundle Analysis"
 
 on:
   pull_request:
-    types: [review_requested, ready_for_review]
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - "app/**"
+      - ".github/workflows/nextjs_bundle_analysis.yml"
   push:
     branches:
-      - main # change this if your default branch is named differently
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/nextjs_bundle_analysis.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
@@ -23,24 +33,22 @@ permissions:
 
 jobs:
   secret-check:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
     outputs:
       HAS_CLERK_KEY: ${{ steps.check-secret.outputs.hasSecret }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          # No step here runs git, so the job never needs the token on disk.
-          persist-credentials: false
       - name: Check secret
+        working-directory: .
         id: check-secret
         env:
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY != '' }}
-        run: echo hasSecret=$CLERK_SECRET_KEY >> $GITHUB_OUTPUT
+        run: echo "hasSecret=$CLERK_SECRET_KEY" >> "$GITHUB_OUTPUT"
 
   analyze:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: secret-check
-    if: needs.secret-check.outputs.HAS_CLERK_KEY != ''
+    if: needs.secret-check.outputs.HAS_CLERK_KEY == 'true'
 
     steps:
       - uses: actions/checkout@v7
@@ -125,9 +133,12 @@ jobs:
         if: success() && github.event.number
         # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#multiline-strings
         run: |
-          echo "body<<EOF" >> $GITHUB_OUTPUT
-          echo "$(cat .next/analyze/__bundle_analysis_comment.txt)" >> $GITHUB_OUTPUT
-          echo EOF >> $GITHUB_OUTPUT
+          {
+            echo "body<<EOF"
+            cat .next/analyze/__bundle_analysis_comment.txt
+            echo
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
 
       - name: Find Comment
         uses: peter-evans/find-comment@v4

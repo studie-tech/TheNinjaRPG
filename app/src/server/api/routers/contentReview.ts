@@ -28,7 +28,13 @@ import {
   refreshProposalFreshness,
   reinstateProposalsFor,
 } from "@/libs/contentReview/outdate";
-import { getAtPath, setAtPath, topLevelField } from "@/libs/contentReview/paths";
+import {
+  getAtPath,
+  isSceneCharacterPath,
+  sceneAssetIds,
+  setAtPath,
+  topLevelField,
+} from "@/libs/contentReview/paths";
 import {
   createStaffProposal,
   normalizeEditable,
@@ -200,16 +206,28 @@ export const contentReviewRouter = createTRPCRouter({
         const value = entity ? getAtPath(entity.editable, path) : undefined;
         return typeof value === "string" && value ? value : null;
       };
-      // Assets the media comparisons show: every catalog candidate and the asset each
-      // sound or animation field points at today. Image fields hold a URL, not an asset.
+      // Resolve catalog media and both versions of scene pictures in one asset query.
       const assetIds = new Set(
         proposal.media.flatMap((media) => [
           ...(media.source === "CATALOG" && media.externalId ? [media.externalId] : []),
-          ...(media.kind !== "IMAGE"
+          ...(media.kind !== "IMAGE" || isSceneCharacterPath(media.path)
             ? [currentAt(media.changeId, media.path) ?? ""]
             : []),
         ]),
       );
+      for (const change of proposal.changes) {
+        const entity = change.entityId
+          ? entities.get(entityKey(change.entityType, change.entityId))
+          : undefined;
+        for (const fields of [
+          entity?.payload,
+          change.before,
+          change.after,
+          change.applied,
+        ]) {
+          for (const id of sceneAssetIds(fields)) assetIds.add(id);
+        }
+      }
       assetIds.delete("");
       const assets = assetIds.size
         ? await ctx.drizzle
@@ -365,7 +383,16 @@ export const contentReviewRouter = createTRPCRouter({
           statusChangedAt: new Date(),
         })
         .where(
-          and(eq(contentProposal.id, input.id), eq(contentProposal.status, "PENDING")),
+          and(
+            eq(contentProposal.id, input.id),
+            eq(contentProposal.status, "PENDING"),
+            input.expectedStatusChangedAt
+              ? eq(
+                  contentProposal.statusChangedAt,
+                  new Date(input.expectedStatusChangedAt),
+                )
+              : undefined,
+          ),
         );
       if (result.rowsAffected !== 1) {
         return errorResponse("This suggestion was already decided or went out of date");
@@ -604,6 +631,14 @@ const applyProposal = async (
   if (proposal.status !== "PENDING") {
     return errorResponse(`This suggestion is already ${proposal.status.toLowerCase()}`);
   }
+  if (
+    choices.expectedStatusChangedAt &&
+    choices.expectedStatusChangedAt !== proposal.statusChangedAt.toISOString()
+  ) {
+    return errorResponse(
+      "This suggestion was refined. Reload and review the revised draft before deciding.",
+    );
+  }
   const entities = await loadEntities(ctx.drizzle, [
     ...targetRefs([proposal]),
     ...proposal.basis,
@@ -685,7 +720,11 @@ const applyProposal = async (
       statusChangedAt: new Date(),
     })
     .where(
-      and(eq(contentProposal.id, proposal.id), eq(contentProposal.status, "PENDING")),
+      and(
+        eq(contentProposal.id, proposal.id),
+        eq(contentProposal.status, "PENDING"),
+        eq(contentProposal.statusChangedAt, proposal.statusChangedAt),
+      ),
     );
   if (claim.rowsAffected !== 1) {
     return errorResponse(

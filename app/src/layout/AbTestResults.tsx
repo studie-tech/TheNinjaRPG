@@ -2,14 +2,16 @@
 
 import { Chart as ChartJS } from "chart.js/auto";
 import type React from "react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import VisitorFiltering, {
   getFilter as getVisitorFilter,
   useFiltering as useVisitorFiltering,
 } from "@/layout/VisitorFiltering";
+import { LEMU_EXPERIMENT, lemuLabel } from "@/libs/lemuExperiment";
 import {
   betaPdf,
   betaPosterior,
@@ -18,6 +20,11 @@ import {
   quantile,
   sampleBeta,
 } from "@/libs/statistics";
+import {
+  WALLPAPER_EXPERIMENT,
+  WALLPAPER_VARIANTS,
+  wallpaperLabel,
+} from "@/libs/wallpaperExperiment";
 
 type VariantAgg = { variant: string; loaded: number; register: number };
 type ExperimentAgg = { experiment: string; variants: VariantAgg[] };
@@ -118,7 +125,7 @@ const DistributionChart: React.FC<{
       },
     });
     return () => chart.destroy();
-  }, [labels, datasets, title, yTitle, xZoomMax]);
+  }, [labels, datasets, title, yTitle, xZoomMin, xZoomMax]);
   return (
     <div className="w-full" style={{ height: 260 }}>
       <canvas ref={ref} />
@@ -144,8 +151,8 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
     register: 0,
   };
 
-  const aPost = betaPosterior(aV.register, Math.max(1, aV.loaded));
-  const bPost = betaPosterior(bV.register, Math.max(1, bV.loaded));
+  const aPost = betaPosterior(aV.register, aV.loaded);
+  const bPost = betaPosterior(bV.register, bV.loaded);
   const aMean = aPost.mean;
   const bMean = bPost.mean;
 
@@ -243,6 +250,11 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
 
   const moreThanTwo = exp.variants.length > 2;
 
+  const aLabel =
+    exp.experiment === WALLPAPER_EXPERIMENT ? wallpaperLabel(aV.variant) : aV.variant;
+  const bLabel =
+    exp.experiment === WALLPAPER_EXPERIMENT ? wallpaperLabel(bV.variant) : bV.variant;
+
   return (
     <div className="grid grid-cols-1 gap-3 rounded-md border p-3 md:grid-cols-2">
       {!haveTwo && (
@@ -295,12 +307,12 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
           labels={x}
           datasets={[
             {
-              label: `${aV.variant} (n=${aV.loaded}, conv=${aV.register})`,
+              label: `${aLabel} (n=${aV.loaded}, conv=${aV.register})`,
               data: aPdf,
               color: "hsl(42 90% 45%)",
             },
             {
-              label: `${bV.variant} (n=${bV.loaded}, conv=${bV.register})`,
+              label: `${bLabel} (n=${bV.loaded}, conv=${bV.register})`,
               data: bPdf,
               color: "hsl(210 70% 45%)",
             },
@@ -312,11 +324,11 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
           Improvement Distribution (Treatment − Control)
         </div>
         <DistributionChart
-          title={`Improvement (${bV.variant} - ${aV.variant})`}
+          title={`Improvement (${bLabel} - ${aLabel})`}
           labels={impGrid}
           datasets={[
             {
-              label: `${bV.variant} better`,
+              label: `${bLabel} better`,
               data: posPdf,
               color: "hsl(210 70% 45%)",
               fill: true,
@@ -324,7 +336,7 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
               borderWidth: 1,
             },
             {
-              label: `${aV.variant} better`,
+              label: `${aLabel} better`,
               data: negPdf,
               color: "hsl(42 90% 45%)",
               fill: true,
@@ -346,29 +358,29 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <div>
             <div>
-              What happened so far (raw data): out of every 100 visitors — {aV.variant}
+              What happened so far (raw data): out of every 100 visitors — {aLabel}
               {": "}
-              {(aObserved * 100).toFixed(1)}% convert, {bV.variant}
+              {(aObserved * 100).toFixed(1)}% convert, {bLabel}
               {": "}
               {(bObserved * 100).toFixed(1)}% convert.
             </div>
             <div>
-              Best estimate with 95% range (accounts for noise): {aV.variant}{" "}
+              Best estimate with 95% range (accounts for noise): {aLabel}{" "}
               {(aMean * 100).toFixed(1)}% [{(aCI[0] * 100).toFixed(1)}%,{" "}
-              {(aCI[1] * 100).toFixed(1)}%] and {bV.variant} {(bMean * 100).toFixed(1)}%
-              [{(bCI[0] * 100).toFixed(1)}%, {(bCI[1] * 100).toFixed(1)}%]. This is the
+              {(aCI[1] * 100).toFixed(1)}%] and {bLabel} {(bMean * 100).toFixed(1)}% [
+              {(bCI[0] * 100).toFixed(1)}%, {(bCI[1] * 100).toFixed(1)}%]. This is the
               range we expect the true conversion rates to fall within.
             </div>
           </div>
           <div>
             <div>
-              How likely {bV.variant} is better than {aV.variant}:{" "}
-              {(pBgtA * 100).toFixed(1)}%. This is the chance that {bV.variant} truly
-              converts better, given the data we have.
+              How likely {bLabel} is better than {aLabel}: {(pBgtA * 100).toFixed(1)}%.
+              This is the chance that {bLabel} truly converts better, given the data we
+              have.
             </div>
             <div>
-              Typical difference if you chose {bV.variant}:{" "}
-              {(relLiftMean * 100).toFixed(1)}% vs {aV.variant} (positive means better).
+              Typical difference if you chose {bLabel}: {(relLiftMean * 100).toFixed(1)}
+              % vs {aLabel} (positive means better).
             </div>
           </div>
         </div>
@@ -380,27 +392,34 @@ const ExperimentRow: React.FC<{ exp: ExperimentAgg }> = ({ exp }) => {
 export const AbTestResults: React.FC = () => {
   const visitorFilterState = useVisitorFiltering();
 
-  const { data, isFetching } = api.data.getAbTests.useQuery(
+  const { data, isFetching, isError, refetch } = api.data.getAbTests.useQuery(
     { ...getVisitorFilter(visitorFilterState) },
     { staleTime: 60_000 },
   );
 
   return (
     <ContentBox
-      title="A/B Tests"
-      subtitle="Live results from experiments"
+      title="A/B/C Tests"
+      subtitle="Unique visits and tutorial completions, grouped by first visit"
       initialBreak
       topRightContent={<VisitorFiltering state={visitorFilterState} />}
     >
       {isFetching && <Loader explanation="Loading A/B test results" />}
-      {!isFetching && (!data || data.length === 0) && <p>No experiments found.</p>}
+      {isError && (
+        <p role="alert">
+          Could not load experiment results.{" "}
+          <button type="button" onClick={() => void refetch()} className="underline">
+            Retry
+          </button>
+        </p>
+      )}
+      {!isFetching && !isError && (!data || data.length === 0) && (
+        <p>No experiments found.</p>
+      )}
       {!isFetching && data && data.length > 0 && (
         <div className="flex flex-col gap-4">
           {data.map((exp) => (
-            <div key={exp.experiment} className="flex flex-col gap-2">
-              <div className="font-bold text-lg">{exp.experiment}</div>
-              <ExperimentRow exp={exp} />
-            </div>
+            <ExperimentResults key={exp.experiment} exp={exp} />
           ))}
         </div>
       )}
@@ -409,3 +428,145 @@ export const AbTestResults: React.FC = () => {
 };
 
 export default AbTestResults;
+
+const ExperimentResults = ({ exp }: { exp: ExperimentAgg }) => {
+  const panelId = useId();
+  const baseline = inferControlTreatment(exp.variants).a ?? exp.variants[0];
+  const defaultVariant =
+    exp.variants.find((arm) => arm.variant !== baseline?.variant) ?? baseline;
+  const [selectedVariant, setSelectedVariant] = useState(defaultVariant?.variant);
+  const selected =
+    exp.variants.find((arm) => arm.variant === selectedVariant) ?? defaultVariant;
+  const label = (variant: string) =>
+    exp.experiment === WALLPAPER_EXPERIMENT
+      ? wallpaperLabel(variant)
+      : exp.experiment === LEMU_EXPERIMENT
+        ? lemuLabel(variant)
+        : variant;
+  const totalLoaded = exp.variants.reduce((total, arm) => total + arm.loaded, 0);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="font-bold text-lg">{exp.experiment}</div>
+      <p className="text-sm">
+        {exp.experiment === WALLPAPER_EXPERIMENT
+          ? `Wallpaper experiment · control is the fall wallpaper · equal allocation across ${WALLPAPER_VARIANTS.length} village and seasonal candidates.`
+          : exp.experiment === LEMU_EXPERIMENT
+            ? "Lemu experiment · current Lemu baseline and six alternatives · equal allocation across seven arms."
+            : "Tutorial experiment"}
+      </p>
+      <p className="text-sm">
+        Select a variant to view its graph and comparison with the baseline.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr>
+              <th>Variant</th>
+              <th>Visits</th>
+              <th>Tutorial completions</th>
+              <th>Conversion</th>
+              <th>Traffic share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {exp.variants.map((variant) => (
+              <tr
+                key={variant.variant}
+                className={
+                  selected?.variant === variant.variant ? "bg-accent" : undefined
+                }
+              >
+                <td>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start"
+                    aria-pressed={selected?.variant === variant.variant}
+                    aria-controls={panelId}
+                    onClick={() => setSelectedVariant(variant.variant)}
+                  >
+                    {label(variant.variant)}
+                  </Button>
+                </td>
+                <td>{variant.loaded}</td>
+                <td>{variant.register}</td>
+                <td>
+                  {variant.loaded
+                    ? `${((100 * variant.register) / variant.loaded).toFixed(1)}%`
+                    : "—"}
+                </td>
+                <td>
+                  {((100 * variant.loaded) / Math.max(1, totalLoaded)).toFixed(1)}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs">
+        Counts deduplicate by IP. Comparisons are exploratory; comparing several
+        candidates increases the chance of a false winner. Wait for sufficient traffic
+        and tutorial completions in every arm.
+      </p>
+      {baseline && selected && (
+        <section id={panelId} aria-label={`${label(selected.variant)} results`}>
+          <h3 className="font-semibold">
+            {label(selected.variant)}
+            {selected.variant !== baseline.variant &&
+              ` versus ${label(baseline.variant)}`}
+          </h3>
+          {selected.variant === baseline.variant ? (
+            <VariantDistribution
+              key={selected.variant}
+              variant={selected}
+              label={label(selected.variant)}
+            />
+          ) : (
+            <ExperimentRow
+              key={selected.variant}
+              exp={{ experiment: exp.experiment, variants: [baseline, selected] }}
+            />
+          )}
+        </section>
+      )}
+    </div>
+  );
+};
+
+const VariantDistribution = ({
+  variant,
+  label,
+}: {
+  variant: VariantAgg;
+  label: string;
+}) => {
+  const posterior = betaPosterior(variant.register, variant.loaded);
+  const x = useMemo(() => Array.from({ length: 200 }, (_, i) => i / 199), []);
+  const pdf = useMemo(
+    () =>
+      x.map((value) =>
+        betaPdf(Math.min(1 - 1e-9, Math.max(1e-9, value)), posterior.a, posterior.b),
+      ),
+    [x, posterior.a, posterior.b],
+  );
+  return (
+    <div className="rounded-md border p-3">
+      <p className="text-sm">
+        Baseline conversion rate distribution (Beta posterior). Select another variant
+        to compare it with this baseline.
+      </p>
+      <DistributionChart
+        title="Conversion rate"
+        labels={x}
+        datasets={[
+          {
+            label: `${label} (n=${variant.loaded}, conv=${variant.register})`,
+            data: pdf,
+            color: "hsl(42 90% 45%)",
+          },
+        ]}
+      />
+    </div>
+  );
+};

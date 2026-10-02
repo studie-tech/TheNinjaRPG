@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContentAuditFocuses } from "@/drizzle/constants";
 import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
@@ -287,5 +288,44 @@ describe("audit output schema", () => {
       ],
     });
     expect(parsed.success).toBe(true);
+  });
+});
+
+
+describe("scene cast media", () => {
+  it("uses indexed IMAGE media for main and objective casts, not whole arrays", () => {
+    expect(isMediaPath("IMAGE", "content.sceneCharacters.0")).toBe(true);
+    expect(isMediaPath("IMAGE", "content.objectives.2.sceneCharacters.1")).toBe(true);
+    expect(isMediaPath("IMAGE", "content.sceneCharacters")).toBe(false);
+    expect(isMediaPath("SFX", "content.sceneCharacters.0")).toBe(false);
+  });
+  it("writes catalog character ids and creates character assets for generated cutouts", () => {
+    const path = "content.sceneCharacters.0";
+    const base = { kind: "IMAGE" as const, path, title: "Village representative", url: "https://example.com/elder.png" };
+    expect(materializeChoice({ ...base, source: "CATALOG", externalId: "elder" }, "staff")).toEqual({ value: "elder", asset: null });
+    const generated = materializeChoice({ ...base, source: "GENERATED", externalId: null }, "staff");
+    expect(generated.asset).toMatchObject({ id: generated.value, type: "SCENE_CHARACTER", image: base.url, createdByUserId: "staff" });
+    expect(materializeChoice({ ...base, path: "image", source: "GENERATED", externalId: null }, "staff")).toEqual({ value: base.url, asset: null });
+  });
+});
+
+
+describe("generated scene candidates", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => { vi.restoreAllMocks(); globalThis.fetch = originalFetch; });
+  it("uses cutout generation for quest casts and rejects opaque output", async () => {
+    const generate = vi.spyOn(replicate, "txt2imgNanoBanana").mockResolvedValue(["https://example.com/character.png"]);
+    const pixels = Buffer.alloc(128 * 128 * 4);
+    for (let y = 20; y < 110; y += 1) for (let x = 40; x < 90; x += 1) pixels[(y * 128 + x) * 4 + 3] = 255;
+    const cutout = await sharp(pixels, { raw: { width: 128, height: 128, channels: 4 } }).png().toBuffer();
+    const fetchImage = vi.fn().mockResolvedValue(new Response(cutout));
+    globalThis.fetch = fetchImage;
+    const request = { kind: "IMAGE" as const, path: "content.objectives.0.sceneCharacters.0", catalogIds: [], search: null, generate: "A dignified village representative" };
+    const candidates = await collectCandidates({} as DrizzleClient, request, { searches: 0, generations: 1 }, "quest");
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ removeBg: true, width: 341, height: 512, size: "portrait", preprompt: expect.stringContaining("scene character") }));
+    expect(candidates).toHaveLength(1);
+    const opaque = await sharp({ create: { width: 128, height: 128, channels: 3, background: "white" } }).png().toBuffer();
+    fetchImage.mockResolvedValue(new Response(opaque));
+    expect(await collectCandidates({} as DrizzleClient, request, { searches: 0, generations: 1 }, "quest")).toEqual([]);
   });
 });

@@ -26,6 +26,7 @@ import {
   QuestBattleTypes,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   SAGE_MODE_DISABLED_BATTLES,
+  SHARED_COOLDOWN_ROUNDS,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { BARRIER_DAMAGE_TAG_TYPES, COMBAT_SECONDS } from "@/libs/combat/constants";
@@ -47,7 +48,6 @@ import type {
   UserEffect,
 } from "@/libs/combat/types";
 import {
-  actionHasSharedCooldown,
   calcApReduction,
   calcPoolCost,
   findBarrier,
@@ -422,7 +422,14 @@ export const getActiveBasicActions = (
     if (mod === 0) return;
     const ba = Object.values(active).find((a) => a.id === aid);
     if (ba) {
-      ba.cooldown = Math.max(0, ba.cooldown + mod);
+      // A basic-action GCD must remain a full shared lock even under cooldown reductions.
+      const hasSharedCooldown = tracking?.some(
+        (action) => action.id === aid && action.cooldown !== undefined,
+      );
+      ba.cooldown = Math.max(
+        hasSharedCooldown ? SHARED_COOLDOWN_ROUNDS : 0,
+        ba.cooldown + mod,
+      );
     }
   });
 
@@ -1289,124 +1296,86 @@ export const performBattleAction = (props: {
     }
   }
 
-  // Helper to find the performed action entry (lookup by jutsuId/itemId/id based on type)
-  const findPerformedAction = () => {
-    switch (action.type) {
-      case "jutsu":
-        return user.jutsus.find((j) => j.jutsuId === action.id);
-      case "item":
-        return user.items.find((i) => i.itemId === action.id);
-      case "basic":
-        return user.basicActions.find((ba) => ba.id === action.id);
-    }
-  };
-
-  // Always update the last used round for the performed action
-  const actionPerformed = findPerformedAction();
-  if (actionPerformed) {
-    actionPerformed.lastUsedRound = battle.round;
-    // Restore originalCooldown to base cooldown when action is used (in case it was modified by GCD)
-    if ("jutsuId" in actionPerformed) {
-      // It's a BattleUserJutsu
-      const jutsu = getJutsu(battle, actionPerformed.jutsuId);
-      if (jutsu) {
-        actionPerformed.originalCooldown = jutsu.cooldown;
-      }
-    } else if ("itemId" in actionPerformed) {
-      // It's a BattleUserItem
-      const item = getItem(battle, actionPerformed.itemId);
-      if (item) {
-        actionPerformed.originalCooldown = item.cooldown;
-      }
-    }
-  }
-
-  // If this action has a cooldown AND shared cooldown effects, apply GCD to related actions
-  if (action.cooldown && action.cooldown > 0 && actionHasSharedCooldown(action)) {
-    // Get all shared cooldown tags from the current action
-    const actionSharedTags = action.effects
-      .filter((effect) => tagHasSharedCooldown(effect))
-      .map((effect) => effect.type);
-
-    // Collect all actions with matching shared cooldown tags into a unified array
-    // Each entry includes the state object to mutate + lookup data for cooldown calc
-    const sharedActions = [
-      // Jutsus
-      ...user.jutsus
-        .filter((uj) => {
-          const jutsu = getJutsu(battle, uj.jutsuId);
-          if (!jutsu) return false;
-          return jutsu.effects
-            .filter((e) => tagHasSharedCooldown(e))
-            .some((e) => actionSharedTags.includes(e.type));
-        })
-        .map((uj) => ({
-          type: "jutsu" as const,
-          actionId: uj.jutsuId,
-          state: uj,
-          cooldown: getJutsu(battle, uj.jutsuId)?.cooldown ?? 0,
-        })),
-      // Items
-      ...user.items
-        .filter((ui) => {
-          const item = getItem(battle, ui.itemId);
-          if (!item) return false;
-          return item.effects
-            .filter((e) => tagHasSharedCooldown(e))
-            .some((e) => actionSharedTags.includes(e.type));
-        })
-        .map((ui) => ({
-          type: "item" as const,
-          actionId: ui.itemId,
-          state: ui,
-          cooldown: getItem(battle, ui.itemId)?.cooldown ?? 0,
-        })),
-      // Basic actions - regenerate full actions from slim tracking data
-      ...(() => {
-        const fullBasicActions = getDefaultBasicActions(user);
-        return Object.values(fullBasicActions)
-          .filter((ba) =>
-            ba.effects
-              .filter((e) => tagHasSharedCooldown(e))
-              .some((e) => actionSharedTags.includes(e.type)),
-          )
-          .map((ba) => {
-            // Find the tracking data in user.basicActions
-            const tracking = user.basicActions.find((t) => t.id === ba.id);
-            return {
-              type: "basic" as const,
-              actionId: ba.id,
-              state: tracking ?? { id: ba.id, lastUsedRound: ba.lastUsedRound ?? 0 },
-              cooldown: ba.cooldown ?? 0,
-            };
-          });
-      })(),
-    ];
-
-    // Apply GCD to all shared actions (excluding the one just used)
-    sharedActions
-      .filter((a) => a.actionId !== action.id)
-      .forEach((a) => {
-        const lastUsedRound = a.state.lastUsedRound || 0;
-        const roundsSinceLastUsed = battle.round - lastUsedRound;
-        const isOnCooldown = roundsSinceLastUsed < a.cooldown;
-        const turnsRemaining = a.cooldown - roundsSinceLastUsed;
-        if (!isOnCooldown || (isOnCooldown && turnsRemaining < 3)) {
-          a.state.lastUsedRound = battle.round;
-          // For basic actions, update cooldown directly; for jutsus/items, use originalCooldown
-          if (a.type === "basic") {
-            a.state.cooldown = 3;
-          } else {
-            a.state.originalCooldown = 3;
-          }
-        }
-      });
-  }
+  applyActionCooldowns(battle, user, action);
 
   // Apply relevant effects, and get back new state + active effects
   const { newBattle, actionEffects } = applyEffects(battle, actorId, action);
 
   return { newBattle, actionEffects };
+};
+
+/**
+ * Record that `user` performed `action` this round and apply the global cooldown (GCD).
+ *
+ * The performed action restarts its own base cooldown, dropping any GCD override it
+ * carried. Every other action sharing one of its shared-cooldown tags is then locked
+ * for SHARED_COOLDOWN_ROUNDS, unless it is already locked for longer. "Longer" is
+ * judged against the effective cooldown, including a previous GCD override and
+ * active basic-action modifiers, as availableUserActions enforces.
+ */
+export const applyActionCooldowns = (
+  battle: CompleteBattle,
+  user: BattleUserState,
+  action: CombatAction,
+) => {
+  const { round } = battle;
+  const sharedTags = new Set<string>(
+    action.effects.filter((effect) => tagHasSharedCooldown(effect)).map((e) => e.type),
+  );
+  const sharesCooldown = (effects: { type: string }[]) =>
+    effects.some((e) => sharedTags.has(e.type));
+  const applyGcd = !!action.cooldown && action.cooldown > 0 && sharedTags.size > 0;
+  // Mirrors availableUserActions, which treats a falsy lastUsedRound as never used
+  const lockedFor = (lastUsedRound: number, cooldown: number) =>
+    lastUsedRound ? lastUsedRound + cooldown - round : 0;
+
+  user.jutsus.forEach((uj) => {
+    const jutsu = getJutsu(battle, uj.jutsuId);
+    if (!jutsu) return;
+    if (uj.jutsuId === action.id && action.type === "jutsu") {
+      uj.lastUsedRound = round;
+      uj.originalCooldown = jutsu.cooldown;
+    } else if (applyGcd && sharesCooldown(jutsu.effects)) {
+      if (lockedFor(uj.lastUsedRound, uj.originalCooldown) < SHARED_COOLDOWN_ROUNDS) {
+        uj.lastUsedRound = round;
+        uj.originalCooldown = SHARED_COOLDOWN_ROUNDS;
+      }
+    }
+  });
+
+  user.items.forEach((ui) => {
+    const item = getItem(battle, ui.itemId);
+    if (!item) return;
+    if (ui.itemId === action.id && action.type === "item") {
+      ui.lastUsedRound = round;
+      ui.originalCooldown = item.cooldown;
+    } else if (applyGcd && sharesCooldown(item.effects)) {
+      if (lockedFor(ui.lastUsedRound, ui.originalCooldown) < SHARED_COOLDOWN_ROUNDS) {
+        ui.lastUsedRound = round;
+        ui.originalCooldown = SHARED_COOLDOWN_ROUNDS;
+      }
+    }
+  });
+
+  Object.values(getActiveBasicActions(battle, user)).forEach((ba) => {
+    let tracking = user.basicActions.find((t) => t.id === ba.id);
+    if (ba.id === action.id && action.type === "basic") {
+      if (!tracking) return;
+      tracking.lastUsedRound = round;
+      delete tracking.cooldown;
+    } else if (applyGcd && sharesCooldown(ba.effects)) {
+      const lastUsedRound = tracking?.lastUsedRound ?? ba.lastUsedRound ?? 0;
+      const cooldown = ba.cooldown;
+      if (lockedFor(lastUsedRound, cooldown) < SHARED_COOLDOWN_ROUNDS) {
+        if (!tracking) {
+          tracking = { id: ba.id, lastUsedRound };
+          user.basicActions.push(tracking);
+        }
+        tracking.lastUsedRound = round;
+        tracking.cooldown = SHARED_COOLDOWN_ROUNDS;
+      }
+    }
+  });
 };
 
 /**

@@ -12,6 +12,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type {
@@ -53,6 +54,7 @@ import {
   userSkill,
   visitorLog,
 } from "@/drizzle/schema";
+import { aggregateExperiments } from "@/libs/experimentAnalytics";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { fetchPublicUsers } from "@/routers/profile";
 import {
@@ -72,6 +74,7 @@ import {
   canViewRevenueAnalytics,
 } from "@/utils/permissions";
 import type { QueryCondition } from "@/utils/typeutils";
+import { abTestFilterSchema } from "@/validators/analytics";
 import { bloodlineFilteringSchema } from "@/validators/bloodline";
 import { itemFilteringSchema } from "@/validators/item";
 import { jutsuFilteringSchema } from "@/validators/jutsu";
@@ -90,14 +93,7 @@ import {
 export const dataRouter = createTRPCRouter({
   // AB tests summaries (protected)
   getAbTests: protectedProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-        utmSource: z.string().optional(),
-        deviceType: z.array(z.enum(["mobile", "desktop", "unknown"])).optional(),
-      }),
-    )
+    .input(abTestFilterSchema)
     .query(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -110,56 +106,47 @@ export const dataRouter = createTRPCRouter({
       if (input?.startDate)
         whereConds.push(gte(abEvent.createdAt, new Date(input.startDate)));
       if (input?.endDate)
-        whereConds.push(lte(abEvent.createdAt, new Date(input.endDate)));
+        whereConds.push(
+          input.endDate.length === 10
+            ? lt(
+                abEvent.createdAt,
+                new Date(new Date(input.endDate).getTime() + 24 * 60 * 60 * 1000),
+              )
+            : lte(abEvent.createdAt, new Date(input.endDate)),
+        );
       if (input?.utmSource && input.utmSource.length > 0)
         whereConds.push(eq(abEvent.source, input.utmSource));
 
-      // Fetch individual rows with userAgent for device filtering
+      // Join completions to filtered exposures: a later completion belongs to the
+      // first-visit cohort, without loading successes from unrelated experiments.
+      const completion = alias(abEvent, "completion");
       const rows = await ctx.drizzle
         .select({
-          id: abEvent.id,
+          completionId: completion.id,
+          ipHash: abEvent.ipHash,
           experiment: abEvent.experiment,
           variant: abEvent.variant,
           event: abEvent.event,
           userAgent: abEvent.userAgent,
         })
         .from(abEvent)
-        .where(whereConds.length > 0 ? and(...whereConds) : undefined);
+        .leftJoin(
+          completion,
+          and(
+            eq(completion.experiment, abEvent.experiment),
+            eq(completion.ipHash, abEvent.ipHash),
+            eq(completion.variant, abEvent.variant),
+            eq(completion.event, "success"),
+          ),
+        )
+        .where(and(eq(abEvent.event, "loaded"), ...whereConds));
 
-      // Filter by device type if specified
-      let filteredRows = rows;
-      if (input.deviceType && input.deviceType.length > 0) {
-        filteredRows = rows.filter((row) => {
-          const deviceType = getDeviceType(row.userAgent ?? undefined);
-          return input.deviceType?.includes(deviceType);
-        });
-      }
-
-      // Aggregate the filtered rows
-      const experiments = new Map<
-        string,
-        Record<string, { loaded: number; register: number }>
-      >();
-      filteredRows.forEach((r) => {
-        const exp = r.experiment ?? "";
-        const variant = r.variant ?? "";
-        const event = r.event ?? "";
-        if (!experiments.has(exp)) experiments.set(exp, {});
-        const map = experiments.get(exp);
-        if (!map) return;
-        if (!map[variant]) map[variant] = { loaded: 0, register: 0 };
-        if (event === "loaded") map[variant].loaded += 1;
-        if (event === "success") map[variant].register += 1;
-      });
-
-      return Array.from(experiments.entries()).map(([experiment, variants]) => ({
-        experiment,
-        variants: Object.entries(variants).map(([variant, vals]) => ({
-          variant,
-          loaded: vals.loaded,
-          register: vals.register,
-        })),
-      }));
+      return aggregateExperiments(
+        rows.flatMap((row) =>
+          row.completionId ? [row, { ...row, event: "success" }] : [row],
+        ),
+        input.deviceType,
+      );
     }),
   // Visitor analytics
   getVisitorUtmSources: protectedProcedure.query(async ({ ctx }) => {

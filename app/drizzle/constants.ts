@@ -253,6 +253,8 @@ export const SHARED_COOLDOWN_TAGS = [
   "summon",
   "vamp",
 ] as const;
+/** Rounds every action sharing a SHARED_COOLDOWN_TAGS tag is locked after one of them is used */
+export const SHARED_COOLDOWN_ROUNDS = 3;
 
 export const LOG_TYPES = [
   "ai",
@@ -1062,9 +1064,22 @@ export type SentimentType = (typeof Sentiment)[number];
 
 // Starter quest used for recruitment analytics
 export const IMG_URL_ASSISTANT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrCz0dVhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx.webp" as const;
-export const IMG_URL_ASSISTANT_2 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIG7HmDxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp" as const;
+/** Tutorial experiment alternatives, in treatment assignment order. */
+export const IMG_URL_ASSISTANT_ALTERNATIVES = [
+  // Silver blade
+  "https://ui0arpl8sm.ufs.sh/f/content-jlYDeVvWQIv0UDYJndtBn.webp",
+  // Golden hawk
+  "https://ui0arpl8sm.ufs.sh/f/content-6jMP1VF5X1Zu2wppt4vec.webp",
+  // Shadow mentor
+  "https://ui0arpl8sm.ufs.sh/f/content-NBVEXpYD8aRhwFof6jq45.webp",
+  // Copper lioness
+  "https://ui0arpl8sm.ufs.sh/f/content-2bwqugh_JdcS55ALvzfhV.webp",
+  // Tiger captain
+  "https://ui0arpl8sm.ufs.sh/f/content-r6_prvN1P_dntlkbOEJSL.webp",
+  // Moon sentinel
+  "https://ui0arpl8sm.ufs.sh/f/content-jMcyVJrtGlAclqlBlbJFR.webp",
+] as const;
 export const IMG_URL_HANDPOINTER =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIvN7gkJxfOewksxBoS1HQCihpL7c42Ky9uUF.webp" as const;
 export const TUTORIAL_JUTSU_ID = "clh4d6pxd0006tb0h4y1yudi5";
@@ -1319,6 +1334,8 @@ export const VILLAGE_LEAVE_REQUIRED_RANK = "CHUNIN";
 export const VILLAGE_REDUCED_GAINS_DAYS = 7;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
 export const ALLIANCE_VILLAGE_TYPES = ["VILLAGE", "HIDEOUT", "TOWN"] as const;
+/** Village types owned by a faction (clan), led by its leader without an elder council */
+export const FACTION_VILLAGE_TYPES = ["HIDEOUT", "TOWN"] as const;
 export type AllianceVillageType = (typeof ALLIANCE_VILLAGE_TYPES)[number];
 
 // ANBU config
@@ -2509,6 +2526,18 @@ export const IMG_WALLPAPER_FALL =
   "https://tnr-storage-cdn.b-cdn.net/wallpaper-fall.webp";
 export const IMG_WALLPAPER_HALLOWEEN =
   "https://tnr-storage-cdn.b-cdn.net/wallpaper-halloween.webp";
+export const IMG_WALLPAPER_AKIKAZE =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-current.webp";
+export const IMG_WALLPAPER_HYORIN =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-glacier.webp";
+export const IMG_WALLPAPER_TSUKIMORI =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-tsukimori.webp";
+export const IMG_WALLPAPER_AKASUMI =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-shroud.webp";
+export const IMG_WALLPAPER_SHIROHANA =
+  "https://tnr-storage-cdn.b-cdn.net/wallpaper-shine.webp";
+export const IMG_WALLPAPER_HORIZON =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhzw4N5MfUBdnwAX5LTajlNc4mrgzi0RJtqpM";
 export const IMG_LAYOUT_BUTTONDECOR =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYectQDOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d.webp";
 export const IMG_LAYOUT_NAVBAR =

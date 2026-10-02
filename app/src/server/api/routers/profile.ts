@@ -259,7 +259,12 @@ export const profileRouter = createTRPCRouter({
         }),
       ]);
 
-      const raidRewards = raidParticipations.flatMap((participation) => {
+      // Participation history can outlive a deleted raid; only existing raids
+      // can contribute dashboard progress or claimable rewards.
+      const existingRaidParticipations = raidParticipations.filter(
+        (participation) => participation.quest,
+      );
+      const raidRewards = existingRaidParticipations.flatMap((participation) => {
         const claimableCount = participation.quest.raidDamageThresholds.filter(
           (threshold) => !raidRewardBlockMessage(participation, threshold),
         ).length;
@@ -275,7 +280,7 @@ export const profileRouter = createTRPCRouter({
 
       return {
         candidates,
-        raidProgress: raidParticipations.map((participation) => ({
+        raidProgress: existingRaidParticipations.map((participation) => ({
           raidId: participation.quest.id,
           damageDealt: participation.damageDealt,
         })),
@@ -409,6 +414,7 @@ export const profileRouter = createTRPCRouter({
       if (input.step === TUTORIAL_STEPS_COUNT && ipHash) {
         const experiments = getLayoutExperimentAssignments({
           abLemuReplacementVariant: ctx.abLemuReplacementVariant,
+          wallpaperVariant: ctx.wallpaperVariant,
         });
         await Promise.all(
           experiments.map(async (experiment) => {
@@ -426,14 +432,11 @@ export const profileRouter = createTRPCRouter({
                 id: nanoid(),
                 userId: ctx.userId,
                 experiment: experiment.experiment,
-                variant: experiment.variant,
+                variant: abLoadedEvent.variant,
                 event: "success",
                 source: abLoadedEvent.source,
                 ipHash,
-                userAgent:
-                  typeof ctx.userAgent === "string"
-                    ? ctx.userAgent.slice(0, 180)
-                    : undefined,
+                userAgent: abLoadedEvent.userAgent,
               })
               .onDuplicateKeyUpdate({ set: { id: sql`id` } });
           }),

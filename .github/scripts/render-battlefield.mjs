@@ -18,6 +18,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
+import { prepareBattlefieldLabels } from "./battlefield-labels.mjs";
 import { setOutput } from "./ci-helpers.mjs";
 
 const VISUAL_FIELDS = [
@@ -175,6 +176,7 @@ const requests =
   mode === "gallery"
     ? galleryRequests()
     : verifyRequests(JSON.parse(await readFile(required("PROPOSALS"), "utf8")));
+const labels = prepareBattlefieldLabels(requests);
 
 await mkdir(outDir, { recursive: true });
 setOutput("suggestions", JSON.stringify([...rendered]));
@@ -214,7 +216,11 @@ try {
   });
   const result = await page.evaluate(
     (input) => window.tnrBattlefield.renderSheets(input),
-    { requests, perSheet: mode === "gallery" ? 2 : 1, background: "ground" },
+    {
+      requests: labels.requests,
+      perSheet: mode === "gallery" ? 2 : 1,
+      background: "ground",
+    },
   );
   const sheets = [];
   for (const [index, sheet] of result.sheets.entries()) {
@@ -227,7 +233,11 @@ try {
   }
   await writeFile(
     path.join(outDir, "index.json"),
-    JSON.stringify({ mode, sheets, texturesThatFailed: result.missing }, null, 2),
+    JSON.stringify(
+      { mode, sheets, blocks: labels.blocks, texturesThatFailed: result.missing },
+      null,
+      2,
+    ),
   );
   setOutput("count", sheets.length);
   console.log(`Rendered ${requests.length} blocks onto ${sheets.length} sheets.`);

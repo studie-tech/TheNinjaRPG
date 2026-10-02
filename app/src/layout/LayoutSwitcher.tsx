@@ -14,6 +14,7 @@ import {
   persistLayoutPreferenceCookie,
   storedValueToLayout,
 } from "@/libs/layoutPreference";
+import type { WallpaperVariant } from "@/libs/wallpaperExperiment";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
@@ -22,6 +23,7 @@ interface LayoutSwitcherProps {
   children: React.ReactNode;
   initialIsSignedIn: boolean;
   initialLayout: EffectiveLayout;
+  wallpaper?: WallpaperVariant;
 }
 
 /**
@@ -33,6 +35,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   children,
   initialIsSignedIn,
   initialLayout,
+  wallpaper,
 }) => {
   const pathname = usePublicPathname();
   const { data: userData, isClerkLoaded, userId } = useUserData();
@@ -72,7 +75,11 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   );
 
   return (
-    <LayoutContextProvider isPixelLanding={isPixelLanding} value={displayedLayout}>
+    <LayoutContextProvider
+      isPixelLanding={isPixelLanding}
+      value={displayedLayout}
+      wallpaper={wallpaper}
+    >
       {content}
       <ParticleProvider />
     </LayoutContextProvider>

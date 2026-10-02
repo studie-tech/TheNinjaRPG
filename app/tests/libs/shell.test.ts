@@ -1,5 +1,7 @@
+import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
+import { WALLPAPER_EXPERIMENT, WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
 import { describe, expect, it } from "vitest";
-import { LAYOUT_PREFERENCE_COOKIE, LEGACY_AB_LAYOUT_COOKIE } from "@/libs/layoutPreference";
+import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import {
   chooseShell,
   parseShellParam,
@@ -29,8 +31,8 @@ describe("shell variants", () => {
   );
 
   it("builds every variant once", () => {
-    expect(SHELL_PARAMS).toHaveLength(12);
-    expect(new Set(SHELL_PARAMS).size).toBe(12);
+    expect(SHELL_PARAMS).toHaveLength(12 + WALLPAPER_VARIANTS.length);
+    expect(new Set(SHELL_PARAMS).size).toBe(12 + WALLPAPER_VARIANTS.length);
     expect(SHELL_PARAMS).toContain("web-default-out");
     expect(SHELL_PARAMS).toContain("android-pixel-in");
   });
@@ -88,23 +90,37 @@ describe("chooseShell", () => {
     userAgent: CHROME,
     pathname: "/home",
     userId: null,
-    draw: () => "treatment",
+    draw: () => "treatment_1",
+    drawWallpaper: () => "winter",
     ...overrides,
     cookies: new Map(Object.entries(overrides.cookies ?? {})),
   });
 
   it("gives a first-time visitor on the landing page the default layout", () => {
     const { variant, assigned } = chooseShell(request({ pathname: "/" }));
-    expect(assigned).toEqual({ [LEGACY_AB_LAYOUT_COOKIE]: "treatment" });
-    expect(variant).toEqual({ client: "web", layout: "default", signedIn: false });
+    expect(assigned).toEqual({ [LEMU_EXPERIMENT]: "treatment_1", [WALLPAPER_EXPERIMENT]: "winter" });
+    expect(variant).toEqual({ client: "web", layout: "default", signedIn: false, wallpaper: "winter" });
   });
 
   it("draws nothing off the landing page, and nothing a visitor already carries", () => {
     expect(chooseShell(request({ pathname: "/home" })).assigned).toEqual({});
     const carried = chooseShell(
-      request({ pathname: "/", cookies: { [LEGACY_AB_LAYOUT_COOKIE]: "control" } }),
+      request({ pathname: "/", cookies: { [LEMU_EXPERIMENT]: "control", [WALLPAPER_EXPERIMENT]: "spring" } }),
     );
     expect(carried.assigned).toEqual({});
+  });
+
+  it("draws a fresh assignment when the browser only carries the previous experiment", () => {
+    const choice = chooseShell(request({ pathname: "/", cookies: { ab_lemu_replacement_2: "treatment", [WALLPAPER_EXPERIMENT]: "spring" } }));
+    expect(choice.assigned).toEqual({ [LEMU_EXPERIMENT]: "treatment_1" });
+  });
+
+  it.each(["treatment_1", "treatment_2", "treatment_3", "treatment_4", "treatment_5", "treatment_6"])("preserves %s across landing visits", (variant) => {
+    expect(chooseShell(request({ pathname: "/", cookies: { [LEMU_EXPERIMENT]: variant, [WALLPAPER_EXPERIMENT]: "spring" } })).assigned).toEqual({});
+  });
+
+  it("reassigns an invalid cookie rather than recording an unknown arm", () => {
+    expect(chooseShell(request({ pathname: "/", cookies: { [LEMU_EXPERIMENT]: "treatment", [WALLPAPER_EXPERIMENT]: "spring" } })).assigned).toEqual({ [LEMU_EXPERIMENT]: "treatment_1" });
   });
 
   it("ignores a pixel preference until the visitor is signed in", () => {
@@ -173,5 +189,33 @@ describe("chooseShell", () => {
     );
     expect(ios.variant.client).toBe("ios");
     expect(android.variant.client).toBe("android");
+  });
+});
+
+ describe("wallpaper shell isolation", () => {
+  for (const wallpaper of WALLPAPER_VARIANTS) {
+    it(`round trips ${wallpaper} and reuses its assignment off the landing page`, () => {
+      const variant = { client: "web" as const, layout: "default" as const, signedIn: false, wallpaper };
+      expect(parseShellParam(shellParam(variant))).toEqual(variant);
+      expect(publicPathForShellPath(`/${shellParam(variant)}/signup`)).toBe("/signup");
+      const choice = chooseShell({ userAgent: "Chrome", userId: null, pathname: "/signup", cookies: new Map([[WALLPAPER_EXPERIMENT, wallpaper]]), draw: () => "control" });
+      expect(choice.variant).toEqual(variant);
+      expect(choice.assigned).toEqual({});
+    });
+  }
+  it("does not enroll prefetch, native, crawlers or existing sessions", () => {
+    const base = { userAgent: "Chrome", userId: null, pathname: "/", cookies: new Map<string, string>(), draw: () => "control" as const, drawWallpaper: () => "winter" as const };
+    for (const overrides of [{ isDocument: false }, { userAgent: "Googlebot" }, { userId: "user_1" }, { cookies: new Map([["__client_uat", "17"]]) }, { userAgent: "TNR-Native/1.2.0 (ios)" }]) {
+      expect(chooseShell({ ...base, ...overrides }).assigned[WALLPAPER_EXPERIMENT]).toBeUndefined();
+    }
+  });
+  it("replaces an invalid assignment on a document landing visit", () => {
+    expect(chooseShell({ userAgent: "Chrome", userId: null, pathname: "/", cookies: new Map([[WALLPAPER_EXPERIMENT, "bogus"]]), draw: () => "control", drawWallpaper: () => "summer" }).variant.wallpaper).toBe("summer");
+  });
+ });
+describe("selected Lemu portraits", () => {
+  it("uses the baseline for visitors without a valid new assignment", () => {
+    expect(getLemuImage()).toBe(getLemuImage("control"));
+    expect(getLemuImage("treatment")).toBe(getLemuImage("control"));
   });
 });

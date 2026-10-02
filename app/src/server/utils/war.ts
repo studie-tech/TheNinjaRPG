@@ -1,13 +1,16 @@
-import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
-import type { WarState } from "@/drizzle/constants";
+import { and, asc, eq, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import type { WarState, WarType } from "@/drizzle/constants";
 import {
   BRACKET_IMMUNITY_LIFT_SECS,
   TERR_BOT_ID,
   WAR_ATTACKER_EXHAUSTION_MULTIPLIER,
+  WAR_DECLARATION_COST,
   WAR_DEFEAT_STRUCTURE_PENALTY_DAYS,
   WAR_DEFEAT_STRUCTURE_PENALTY_LEVELS,
   WAR_LOSING_COOLDOWN_DAYS,
   WAR_PARTICIPANT_SECS,
+  WAR_RAID_SHRINE_HP,
   WAR_SECTOR_LOSS_TOWNHALL_DAMAGE,
   WAR_VICTORY_BOOSTED_STRUCTURES,
   WAR_VICTORY_STRUCTURE_BOOST_DAYS,
@@ -29,8 +32,11 @@ import {
   villageStructure,
   war,
 } from "@/drizzle/schema";
+import { isVillageInvolvedInAnyWar } from "@/libs/war";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
-import { drizzleDB } from "@/server/db";
+import { type DrizzleClient, drizzleDB } from "@/server/db";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { logError } from "@/server/utils/sentry";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 
 /**
@@ -498,4 +504,100 @@ export const handleWarEnd = async (activeWar: FetchActiveWarsReturnType) => {
 
   // Return updated war
   return { ...activeWar, status, endedAt } as FetchActiveWarsReturnType;
+};
+
+/**
+ * Start an approved declaration only while both villages remain available and the
+ * attacker can afford it. The token charge and war commit together; leaders are
+ * notified after success. Rejected declarations leave tokens and wars unchanged.
+ */
+export const startDeclaredWar = async (
+  client: DrizzleClient,
+  declaration: {
+    attackerVillageId: string;
+    attackerVillageName: string;
+    defenderVillageId: string;
+    defenderVillageName: string;
+    defenderKageId?: string | null;
+    initiatedByUserId: string;
+    warType: WarType;
+    targetStructureRoute: string;
+  },
+) => {
+  const started = await retryOnDeadlock(() =>
+    client.transaction(async (tx) => {
+      // Shared village rows serialize overlapping declarations; sorted locks avoid inversion.
+      const villageIds = [
+        declaration.attackerVillageId,
+        declaration.defenderVillageId,
+      ].sort();
+      const lockedVillages = await tx
+        .select({ id: village.id })
+        .from(village)
+        .where(inArray(village.id, villageIds))
+        .orderBy(asc(village.id))
+        .for("update");
+      if (lockedVillages.length !== 2) return false;
+
+      const activeWars = await tx.query.war.findMany({
+        where: and(
+          eq(war.status, "ACTIVE"),
+          inArray(war.type, ["VILLAGE_WAR", "WAR_RAID"]),
+        ),
+        with: { warAllies: true },
+      });
+      if (villageIds.some((id) => isVillageInvolvedInAnyWar(activeWars, id)))
+        return false;
+
+      const tokenResult = await tx
+        .update(village)
+        .set({ tokens: sql`${village.tokens} - ${WAR_DECLARATION_COST}` })
+        .where(
+          and(
+            eq(village.id, declaration.attackerVillageId),
+            gte(village.tokens, WAR_DECLARATION_COST),
+          ),
+        );
+      if (tokenResult.rowsAffected === 0) return false;
+
+      await tx.insert(war).values({
+        id: nanoid(),
+        attackerVillageId: declaration.attackerVillageId,
+        defenderVillageId: declaration.defenderVillageId,
+        status: "ACTIVE",
+        type: declaration.warType,
+        targetStructureRoute: declaration.targetStructureRoute,
+        attackerShrineHp: WAR_RAID_SHRINE_HP,
+        attackerShrineMaxHp: WAR_RAID_SHRINE_HP,
+        attackerShrineStatus: "ACTIVE",
+        defenderShrineHp: WAR_RAID_SHRINE_HP,
+        defenderShrineMaxHp: WAR_RAID_SHRINE_HP,
+        defenderShrineStatus: "ACTIVE",
+      });
+      return true;
+    }),
+  );
+  if (!started) return false;
+
+  const warContent = `${declaration.attackerVillageName} has declared war on ${declaration.defenderVillageName}!`;
+  const notifyKageIds = [declaration.initiatedByUserId];
+  if (declaration.defenderKageId) notifyKageIds.push(declaration.defenderKageId);
+  try {
+    await Promise.all([
+      client
+        .insert(notification)
+        .values(notifyKageIds.map((userId) => ({ userId, content: warContent }))),
+      client
+        .update(userData)
+        .set({ unreadNotifications: sql`unreadNotifications + 1` })
+        .where(inArray(userData.userId, notifyKageIds)),
+    ]);
+  } catch (error) {
+    // The war has committed; keep the client's success response and war refresh intact.
+    logError(error, "Failed to notify leaders about a started war", {
+      attackerVillageId: declaration.attackerVillageId,
+      defenderVillageId: declaration.defenderVillageId,
+    });
+  }
+  return true;
 };

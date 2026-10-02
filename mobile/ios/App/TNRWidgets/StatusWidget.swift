@@ -71,10 +71,8 @@ struct StatusWidgetView: View {
     @ViewBuilder
     private func footer(_ snapshot: TNRSnapshot) -> some View {
         if snapshot.isHospitalised, let until = snapshot.hospitalUntil {
-            // A relative style keeps counting down without the widget being refreshed,
-            // which matters because WidgetKit budgets refreshes per day.
             Label {
-                Text(until, style: .timer).monospacedDigit()
+                countdownText(until: until).monospacedDigit()
             } icon: {
                 Image(systemName: "cross.case.fill")
             }
