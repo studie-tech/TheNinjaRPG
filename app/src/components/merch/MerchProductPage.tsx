@@ -108,55 +108,57 @@ export function MerchProductPage({ handle }: { handle: string }) {
             {(variant?.price ?? startingPrice) && " per item"}
           </p>
           <p>{(design?.graphic ?? product.description).split(/(?<=[.!?])\s+/)[0]}</p>
-          {product.options.map((option) => (
-            <fieldset key={option.name}>
-              <legend>
-                {option.name}
-                {selection[option.name] && <span> · {selection[option.name]}</span>}
-              </legend>
-              <div className="merch-option-values">
-                {option.values.map((value) => (
-                  <button
-                    type="button"
-                    key={value}
-                    aria-pressed={
-                      (selection[option.name] ??
-                        (option.values.length === 1 ? value : undefined)) === value
-                    }
-                    disabled={
-                      !product.variants.some(
-                        (item) =>
-                          item.available &&
-                          item.selectedOptions.every((selected) =>
-                            selected.name === option.name
-                              ? selected.value === value
-                              : /^(color|colour)$/i.test(option.name) ||
-                                !selection[selected.name] ||
-                                selected.value === selection[selected.name],
-                          ),
-                      )
-                    }
-                    onClick={() => {
-                      setShowArt(false);
-                      setSelection((current) => {
-                        const next = { ...current, [option.name]: value };
-                        const exists = product.variants.some((item) =>
-                          item.selectedOptions.every(
-                            (selected) =>
-                              !next[selected.name] ||
-                              next[selected.name] === selected.value,
-                          ),
-                        );
-                        return exists ? next : { [option.name]: value };
-                      });
-                    }}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-          ))}
+          {product.options
+            .filter((option) => option.values.length > 1)
+            .map((option) => (
+              <fieldset key={option.name}>
+                <legend>
+                  {option.name}
+                  {selection[option.name] && <span> · {selection[option.name]}</span>}
+                </legend>
+                <div className="merch-option-values">
+                  {option.values.map((value) => (
+                    <button
+                      type="button"
+                      key={value}
+                      aria-pressed={
+                        (selection[option.name] ??
+                          (option.values.length === 1 ? value : undefined)) === value
+                      }
+                      disabled={
+                        !product.variants.some(
+                          (item) =>
+                            item.available &&
+                            item.selectedOptions.every((selected) =>
+                              selected.name === option.name
+                                ? selected.value === value
+                                : /^(color|colour)$/i.test(option.name) ||
+                                  !selection[selected.name] ||
+                                  selected.value === selection[selected.name],
+                            ),
+                        )
+                      }
+                      onClick={() => {
+                        setShowArt(false);
+                        setSelection((current) => {
+                          const next = { ...current, [option.name]: value };
+                          const exists = product.variants.some((item) =>
+                            item.selectedOptions.every(
+                              (selected) =>
+                                !next[selected.name] ||
+                                next[selected.name] === selected.value,
+                            ),
+                          );
+                          return exists ? next : { [option.name]: value };
+                        });
+                      }}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            ))}
           <div className="merch-purchase">
             <div className="merch-quantity">
               <button

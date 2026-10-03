@@ -324,7 +324,9 @@ export function MerchProvider({ children }: { children: ReactNode }) {
                       >
                         {line.title}
                       </Link>
-                      <p>{line.variantTitle}</p>
+                      {line.variantTitle !== "Default Title" && (
+                        <p>{line.variantTitle}</p>
+                      )}
                       <strong>
                         {formatMerchMoney(line.price)}
                         {line.price && " per item"}
