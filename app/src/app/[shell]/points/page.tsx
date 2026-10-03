@@ -350,8 +350,9 @@ const ReputationStore = (props: { currency: string }) => {
             disabled={isPending || watchedPoints > maxPoints || watchedPoints < 5}
           />
         )}
-        {isResolved && userData && selectedUser && !isPending ? (
+        {isResolved && userData && selectedUser ? (
           <PayPalButtons
+            disabled={isPending}
             style={{ layout: "horizontal", tagline: false }}
             forceReRender={[amount, watchedUsers, props.currency]}
             createOrder={async () => {
