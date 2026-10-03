@@ -63,7 +63,7 @@ export const stripeRouter = createTRPCRouter({
                 eq(paypalTransaction.createdById, ctx.userId),
                 gte(paypalTransaction.createdAt, sql`NOW() - INTERVAL 30 DAY`),
                 sql`${paypalTransaction.status} NOT IN ('CANCELLED', 'REVIEW_REQUIRED')`,
-                sql`(${paypalTransaction.status} != 'RESERVED' OR ${paypalTransaction.createdAt} >= NOW() - INTERVAL 73 HOUR)`,
+                sql`(${paypalTransaction.status} != 'RESERVED' OR ${paypalTransaction.createdAt} >= NOW() - INTERVAL 3 HOUR)`,
               ),
             ),
           ctx.drizzle

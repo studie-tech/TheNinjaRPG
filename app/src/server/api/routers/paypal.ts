@@ -269,6 +269,10 @@ export const paypalRouter = createTRPCRouter({
           `capture_${receipt.id}`,
           {},
         );
+      // Some provider responses omit purchase-unit metadata even after capture. Fetch
+      // the completed order rather than interpreting an incomplete response as delivery.
+      if (order?.status === "COMPLETED" && !order.purchase_units?.[0]?.custom_id)
+        order = await getPaypalOrder({ orderId: input.orderId, token });
       return deliverPaypalOrder(ctx.drizzle, order, ctx.userId, input.orderId);
     }),
   // Recover orders approved by a previously loaded checkout client.
@@ -293,9 +297,8 @@ export const paypalRouter = createTRPCRouter({
         token,
         input.transactionId,
       );
-      const msgs = await syncTransactions(ctx.drizzle, transactions, token);
-
-      return { success: true, message: msgs.join(", ") };
+      const result = await syncTransactions(ctx.drizzle, transactions, token);
+      return { success: result.success, message: result.messages.join(", ") };
     }),
   resolveSubscription: protectedProcedure
     .input(
@@ -747,12 +750,29 @@ export const syncTransactions = async (
           }
         } else {
           const stored = await client.query.paypalTransaction.findFirst({
-            where: or(
-              eq(paypalTransaction.transactionId, info.transaction_id),
-              eq(paypalTransaction.invoiceId, info.invoice_id),
+            where: and(
+              eq(paypalTransaction.type, "REP_PURCHASE"),
+              or(
+                eq(paypalTransaction.transactionId, info.transaction_id),
+                ...(info.invoice_id
+                  ? [eq(paypalTransaction.invoiceId, info.invoice_id)]
+                  : []),
+              ),
             ),
           });
           const parsedValue = parseFloat(value);
+          if (stored?.status === "REVIEW_REQUIRED")
+            return errorResponse(
+              "Payment requires manual support review or refund; no points were delivered.",
+            );
+          if (
+            stored?.orderId &&
+            ["RESERVED", "CAPTURING", "DELIVERY_PENDING"].includes(stored.status)
+          ) {
+            const order = await getPaypalOrder({ orderId: stored.orderId, token });
+            const buyerId = await canonicalStoreUserId(client, createdByUserId);
+            return deliverPaypalOrder(client, order, buyerId, stored.orderId);
+          }
           if (parsedValue < 0) {
             return `Transaction ID ${info.transaction_id} invalid value`;
           } else if (
@@ -778,12 +798,24 @@ export const syncTransactions = async (
               type: "REP_PURCHASE",
               raw: t,
             });
-            return `Transaction ID ${info.transaction_id}: ${result && "message" in result ? result.message : "synced"}`;
+            return result && "message" in result
+              ? result
+              : {
+                  success: true,
+                  message: `Transaction ID ${info.transaction_id} synced`,
+                };
           }
         }
       }),
   );
-  return notifications;
+  return {
+    success: notifications.every(
+      (result) => typeof result === "string" || result.success,
+    ),
+    messages: notifications.map((result) =>
+      typeof result === "string" ? result : result.message,
+    ),
+  };
 };
 
 /**
@@ -910,6 +942,7 @@ const paypalOrderRequest = async (
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         "PayPal-Request-Id": requestId,
+        Prefer: "return=representation",
       },
       body: JSON.stringify(body),
     },
@@ -1029,6 +1062,10 @@ const deliverPaypalReputation = async (input: Parameters<typeof updateReps>[0]) 
           (stored.orderId && input.orderId && stored.orderId !== input.orderId))
       )
         throw new Error("PayPal payment does not match reserved terms");
+      if (stored?.status === "REVIEW_REQUIRED")
+        return errorResponse(
+          "Payment requires manual support review or refund; no points were delivered.",
+        );
       const id = stored?.id ?? `paypal_${input.transactionId}`;
       const terms = {
         createdById: input.createdById,

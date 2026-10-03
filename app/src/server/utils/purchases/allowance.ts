@@ -22,7 +22,7 @@ export const reputationAllowanceUsed = async (
       WHERE p.createdById = ${buyerId} AND p.id != ${excludedPaypalId}
         AND p.createdAt >= NOW() - INTERVAL 30 DAY
         AND p.status NOT IN ('CANCELLED', 'REVIEW_REQUIRED')
-        AND (p.status != 'RESERVED' OR p.createdAt >= NOW() - INTERVAL 73 HOUR)), 0)
+        AND (p.status != 'RESERVED' OR p.createdAt >= NOW() - INTERVAL 3 HOUR)), 0)
     + COALESCE((SELECT SUM(p.reputationPoints) FROM ${stripePayment} p
       WHERE p.createdById = ${buyerId} AND p.grantedAt IS NOT NULL
         ${env.NODE_ENV === "production" ? sql`AND p.isSandbox = FALSE` : sql``}
