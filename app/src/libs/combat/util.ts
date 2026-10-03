@@ -83,6 +83,7 @@ import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
 import {
   allState,
   BARRIER_DAMAGE_TAG_TYPES,
+  damageModifierTypes,
   POST_PIERCE_TAGS,
   publicState,
 } from "./constants";
@@ -3026,15 +3027,7 @@ export const getStatTypeLabels = (effect: {
   statTypes?: readonly StatType[] | null;
   direction?: string;
 }): (StatType | CombatStatType | "All damage")[] => {
-  if (
-    [
-      "increasedamagegiven",
-      "decreasedamagegiven",
-      "increasedamagetaken",
-      "decreasedamagetaken",
-    ].includes(effect.type)
-  )
-    return ["All damage"];
+  if (damageModifierTypes.includes(effect.type)) return ["All damage"];
   const statTypes = effect.statTypes ?? [];
   if (effect.type !== "increasestat" && effect.type !== "decreasestat") {
     return [...statTypes];
