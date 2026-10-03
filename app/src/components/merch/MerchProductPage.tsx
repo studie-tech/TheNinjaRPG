@@ -105,6 +105,7 @@ export function MerchProductPage({ handle }: { handle: string }) {
           <p className="merch-detail-price">
             {!variant && startingPrice && "From "}
             {formatMerchMoney(variant?.price ?? startingPrice)}
+            {(variant?.price ?? startingPrice) && " per item"}
           </p>
           <p>{(design?.graphic ?? product.description).split(/(?<=[.!?])\s+/)[0]}</p>
           {product.options.map((option) => (

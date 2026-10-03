@@ -325,7 +325,10 @@ export function MerchProvider({ children }: { children: ReactNode }) {
                         {line.title}
                       </Link>
                       <p>{line.variantTitle}</p>
-                      <strong>{formatMerchMoney(line.price)}</strong>
+                      <strong>
+                        {formatMerchMoney(line.price)}
+                        {line.price && " per item"}
+                      </strong>
                       <div className="merch-line-actions">
                         <div className="merch-quantity">
                           <button
