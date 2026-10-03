@@ -471,7 +471,7 @@ const PayPalSubscriptionButton = (props: {
       onSuccess: async (data) => {
         showMutationToast(data);
         await utils.profile.getUser.invalidate();
-        if (props.onSuccess) props.onSuccess();
+        if (data.success && props.onSuccess) props.onSuccess();
       },
       onError: (error) => {
         onError(error);
@@ -748,7 +748,12 @@ const PayPalSubscriptionButton = (props: {
           onAccept={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            buy({ userId: props.userId, status: props.buttonStatus });
+            if (userData)
+              buy({
+                userId: props.userId,
+                expectedUserId: userData.userId,
+                status: props.buttonStatus,
+              });
           }}
         >
           You are about to purchase a federal subscription with reputation points. You

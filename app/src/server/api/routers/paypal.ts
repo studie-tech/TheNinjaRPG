@@ -2,7 +2,7 @@ import { and, desc, eq, gte, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { TransactionType } from "@/drizzle/constants";
-import { FederalStatuses } from "@/drizzle/constants";
+import { FEDERAL_MONTHLY_USD_CENTS, FederalStatuses } from "@/drizzle/constants";
 import type { FederalStatus } from "@/drizzle/schema";
 import {
   paypalSubscription,
@@ -18,7 +18,7 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { reputationAllowanceUsed } from "@/server/utils/purchases/allowance";
 import {
   canonicalStoreUserId,
@@ -37,9 +37,12 @@ import { canSeeSecretData } from "@/utils/permissions";
 import { addDays, secondsFromNow } from "@/utils/time";
 import type { JsonData } from "@/utils/typeutils";
 import {
+  federalReputationPurchaseSchema,
+  federalUpgradeSchema,
   paypalCheckoutIdSchema,
   paypalCheckoutSchema,
   paypalOrderSchema,
+  paypalSubscriptionIdSchema,
   paypalSubscriptionSchema,
   searchPaypalTransactionSchema,
 } from "@/validators/points";
@@ -307,30 +310,13 @@ export const paypalRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const token = await getPaypalAccessToken();
       const subscription = await getPaypalSubscription(input.subscriptionId, token);
-      const owners = await verifiedPaypalSubscription(
-        ctx.drizzle,
-        subscription,
-        input.subscriptionId,
-      );
-      if (!owners || !subscription)
-        return errorResponse(
-          "Subscription ownership or paid plan could not be verified. Wait for payment to clear, then try again.",
-        );
-      if (ctx.userId !== owners.createdById && ctx.userId !== owners.affectedUserId)
-        return errorResponse("This subscription belongs to another account.");
-      const newStatus =
-        subscription.status === "ACTIVE"
-          ? getPaypalSubscriptionStatus(subscription).newStatus
-          : "NONE";
-      await updateSubscription({
+      return reconcilePaypalSubscription({
         client: ctx.drizzle,
-        ...owners,
+        subscription,
+        subscriptionId: input.subscriptionId,
         orderId: input.orderId,
-        federalStatus: newStatus,
-        status: subscription.status,
-        subscriptionId: subscription.id,
+        callerId: ctx.userId,
       });
-      return { success: true, message: "Subscription synchronized" };
     }),
   // Includes reservations from both web payment providers.
   getRecentRepsCount: protectedProcedure
@@ -385,51 +371,59 @@ export const paypalRouter = createTRPCRouter({
   }),
   // Buy subscription with reputation points
   subscribeWithReps: protectedProcedure
-    .input(z.object({ userId: z.string(), status: z.enum(FederalStatuses) }))
+    .input(federalReputationPurchaseSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch
-      const [buyer, target] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
-      ]);
-      // DERIVED
+      if (input.expectedUserId !== ctx.userId)
+        return errorResponse("Your account changed. Reload before purchasing.");
+      if (input.status === "NONE")
+        return errorResponse("Choose a federal support tier.");
       const cost = fedStatusRepsCost(input.status);
-      // Guard
-      if (!cost || cost < 0) return errorResponse("Negative cost?");
-      if (buyer.reputationPoints < cost) return errorResponse(`Insufficient funds`);
-      if (target.federalStatus !== "NONE") return errorResponse(`Already subscribed`);
-      // Mutate
-      await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set({ federalStatus: input.status })
-          .where(
-            and(eq(userData.userId, target.userId), eq(userData.federalStatus, "NONE")),
-          ),
-        ctx.drizzle
-          .update(userData)
-          .set({ reputationPoints: sql`${userData.reputationPoints} - ${cost}` })
-          .where(
-            and(
-              eq(userData.userId, buyer.userId),
-              gte(userData.reputationPoints, cost),
-            ),
-          ),
-        ctx.drizzle.insert(paypalSubscription).values({
-          id: nanoid(),
-          createdById: ctx.userId,
-          affectedUserId: input.userId,
-          federalStatus: input.status,
-          subscriptionId: nanoid(),
-          status: "ACTIVE",
-        }),
-      ]);
+      const changed = new Error(
+        "Your balance or recipient's subscription changed. Reload and try again.",
+      );
+      try {
+        await retryOnDeadlock(() =>
+          ctx.drizzle.transaction(async (tx) => {
+            const debited = await tx
+              .update(userData)
+              .set({ reputationPoints: sql`${userData.reputationPoints} - ${cost}` })
+              .where(
+                and(
+                  eq(userData.userId, ctx.userId),
+                  gte(userData.reputationPoints, cost),
+                ),
+              );
+            if (debited.rowsAffected !== 1) throw changed;
+            const claimed = await tx
+              .update(userData)
+              .set({ federalStatus: input.status })
+              .where(
+                and(
+                  eq(userData.userId, input.userId),
+                  eq(userData.federalStatus, "NONE"),
+                ),
+              );
+            if (claimed.rowsAffected !== 1) throw changed;
+            await tx.insert(paypalSubscription).values({
+              id: nanoid(),
+              createdById: ctx.userId,
+              affectedUserId: input.userId,
+              federalStatus: input.status,
+              subscriptionId: `reps_${nanoid()}`,
+              status: "ACTIVE",
+            });
+          }),
+        );
+      } catch (error) {
+        if (error === changed) return errorResponse(changed.message);
+        throw error;
+      }
       return { success: true, message: "OK" };
     }),
   // Upgrade a subscription for a user. Can only be done by the user who created the subscription
   upgradeSubscription: protectedProcedure
-    .input(z.object({ userId: z.string(), plan: z.enum(FederalStatuses) }))
+    .input(federalUpgradeSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Self only, which is all the UI ever offers. Without it the caller can name any
@@ -452,6 +446,8 @@ export const paypalRouter = createTRPCRouter({
           ),
           eq(paypalSubscription.federalStatus, target.federalStatus),
           eq(paypalSubscription.affectedUserId, target.userId),
+          eq(paypalSubscription.createdById, ctx.userId),
+          gte(paypalSubscription.updatedAt, sql`NOW() - INTERVAL 31 DAY`),
         ),
       });
       // If we could not find in paypal
@@ -471,70 +467,104 @@ export const paypalRouter = createTRPCRouter({
       if (upgrader.reputationPoints < cost) {
         return errorResponse(`Not enough reputation points`);
       }
-      // Update the database
-      await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set({
-            federalStatus: input.plan,
-            reputationPointsTotal: sql`${userData.reputationPointsTotal} - ${cost}`,
-            reputationPoints: sql`${userData.reputationPoints} - ${cost}`,
-          })
-          .where(eq(userData.userId, upgrader.userId)),
-        ctx.drizzle
-          .update(paypalSubscription)
-          .set({ federalStatus: input.plan, updatedAt: new Date() })
-          .where(eq(paypalSubscription.subscriptionId, subscription.subscriptionId)),
-      ]);
+      // The balance, displayed tier, and paid ledger must advance together. A single
+      // guarded joined update prevents duplicate upgrades and stale-plan debits.
+      const result = await retryOnDeadlock(() =>
+        ctx.drizzle.execute(sql`
+        UPDATE ${userData} u INNER JOIN ${paypalSubscription} p ON p.affectedUserId = u.userId
+        SET u.federalStatus = ${input.plan},
+            u.reputationPoints = u.reputationPoints - ${cost},
+            u.reputationPointsTotal = u.reputationPointsTotal - ${cost},
+            p.federalStatus = ${input.plan}, p.updatedAt = CURRENT_TIMESTAMP(3)
+        WHERE u.userId = ${ctx.userId} AND u.federalStatus = ${target.federalStatus}
+          AND u.reputationPoints >= ${cost} AND p.id = ${subscription.id}
+          AND p.createdById = ${ctx.userId} AND p.federalStatus = ${subscription.federalStatus}
+          AND p.status IN ('ACTIVE', 'CANCELLED')
+          AND p.updatedAt = ${subscription.updatedAt}
+          AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY`),
+      );
+      if (result.rowsAffected === 0)
+        return errorResponse(
+          "Your balance or subscription changed. Reload and try again.",
+        );
       return { success: true, message: "OK" };
     }),
   // Cancel paypal subscription
   cancelPaypalSubscription: protectedProcedure
-    .input(z.object({ subscriptionId: z.string() }))
+    .input(paypalSubscriptionIdSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const token = await getPaypalAccessToken();
-      // Get subscription from paypal & database
-      const paypalSub = await getPaypalSubscription(input.subscriptionId, token);
-      const dbSub = await ctx.drizzle.query.paypalSubscription.findFirst({
+      const stored = await ctx.drizzle.query.paypalSubscription.findFirst({
         where: eq(paypalSubscription.subscriptionId, input.subscriptionId),
       });
-      // If we could not find in paypal
-      if (paypalSub === undefined) {
-        throw serverError(
-          "INTERNAL_SERVER_ERROR",
-          `Subscription ${input.subscriptionId} not found in paypal`,
-        );
-      }
-      // If not found in local database
-      if (dbSub === undefined) {
-        throw serverError(
-          "INTERNAL_SERVER_ERROR",
-          `Subscription ${input.subscriptionId} not found in database`,
-        );
-      }
-      // Check that the user is related to this subscription
-      const createdByUserId = dbSub.createdById;
-      const affectedUserId = dbSub.affectedUserId;
-      const users = [createdByUserId, affectedUserId];
-      if (!users.includes(ctx.userId) || !createdByUserId || !affectedUserId) {
-        throw serverError("UNAUTHORIZED", "You are not related to this subscription");
-      }
-      // If status is not active on paypal, let us just cancel. Otherwise assume success cancel already
-      let status = 204;
-      if (["ACTIVE", "CREATED"].includes(paypalSub.status)) {
-        status = await cancelPaypalSubscription(input.subscriptionId, token);
-      }
-      // If successfull cancel, update database subscription
-      if (status === 204) {
+      if (!stored)
+        return errorResponse("Subscription was not found. Refresh your subscriptions.");
+      if (stored.createdById !== ctx.userId && stored.affectedUserId !== ctx.userId)
+        return errorResponse("This subscription belongs to another account.");
+      // Reputation purchases have no external renewal. The 21-character IDs are the
+      // former nanoid format; provider billing IDs are never generated this way.
+      if (
+        !stored.orderId &&
+        (/^reps_[A-Za-z0-9_-]{21}$/.test(stored.subscriptionId) ||
+          (/^[A-Za-z0-9_-]{21}$/.test(stored.subscriptionId) &&
+            !stored.subscriptionId.startsWith("I-")))
+      ) {
         await ctx.drizzle
           .update(paypalSubscription)
           .set({ status: "CANCELLED" })
-          .where(eq(paypalSubscription.subscriptionId, input.subscriptionId));
-        return { success: true, message: "Successfully canceled subscription" };
-      } else {
-        throw serverError("INTERNAL_SERVER_ERROR", "Could not cancel subscription");
+          .where(eq(paypalSubscription.id, stored.id));
+        return {
+          success: true,
+          message:
+            "Reputation-funded support ends after its paid period; it does not renew.",
+        };
       }
+      const token = await getPaypalAccessToken();
+      const subscription = await getPaypalSubscription(input.subscriptionId, token);
+      const owners = parsePaypalSubscriptionOwners(subscription?.custom_id);
+      if (
+        !subscription ||
+        subscription.id !== input.subscriptionId ||
+        !owners ||
+        !subscription.status
+      )
+        return errorResponse(
+          "PayPal could not verify this subscription. Try again before assuming future payments have stopped.",
+        );
+      const [buyer, recipient, expectedBuyer, expectedRecipient] = await Promise.all([
+        canonicalStoreUserId(ctx.drizzle, owners.buyer),
+        canonicalStoreUserId(ctx.drizzle, owners.recipient),
+        canonicalStoreUserId(ctx.drizzle, stored.createdById),
+        canonicalStoreUserId(ctx.drizzle, stored.affectedUserId),
+      ]);
+      if (buyer !== expectedBuyer || recipient !== expectedRecipient)
+        return errorResponse(
+          "PayPal subscription ownership does not match this account. Contact support.",
+        );
+      const status = ["CANCELLED", "EXPIRED"].includes(subscription.status)
+        ? 204
+        : await cancelPaypalSubscription(input.subscriptionId, token);
+      if (status !== 204)
+        return errorResponse(
+          "PayPal did not confirm cancellation. Try again or manage the subscription in PayPal.",
+        );
+      await ctx.drizzle
+        .update(paypalSubscription)
+        .set({ status: "CANCELLED" })
+        .where(eq(paypalSubscription.id, stored.id));
+      // Cancellation is allowed even when billing terms need support review. Only verified
+      // paid data can refresh coverage; stopping future charges does not fabricate a period.
+      await reconcilePaypalSubscription({
+        client: ctx.drizzle,
+        subscription: { ...subscription, status: "CANCELLED" },
+        subscriptionId: input.subscriptionId,
+        orderId: stored.orderId,
+        expected: {
+          createdById: stored.createdById,
+          affectedUserId: stored.affectedUserId,
+        },
+      });
+      return { success: true, message: "Future PayPal subscription payments stopped" };
     }),
 });
 
@@ -551,60 +581,88 @@ export const updateSubscription = async (input: {
   status: string;
   lastPayment?: Date;
 }) => {
-  return await input.client.transaction(async (tx) => {
-    // Get the subscription in question
-    const current = await tx.query.paypalSubscription.findFirst({
-      where: eq(paypalSubscription.subscriptionId, input.subscriptionId),
-    });
-    if (current && current.updatedAt > secondsFromNow(-3600 * 24 * 31)) {
-      return { rowsAffected: 0 };
-    }
-    // Get any other active subscriptions on this affected user. Update user if not found
-    const otherActive = await tx.query.paypalSubscription.findFirst({
-      where: and(
-        eq(paypalSubscription.affectedUserId, input.affectedUserId),
-        eq(paypalSubscription.status, "ACTIVE"),
-        ne(paypalSubscription.subscriptionId, input.subscriptionId),
-        gte(paypalSubscription.updatedAt, secondsFromNow(-3600 * 24 * 31)),
-      ),
-    });
-    const otherIdx = otherActive
-      ? FederalStatuses.indexOf(otherActive.federalStatus)
-      : -1;
-    const newIdx = FederalStatuses.indexOf(input.federalStatus);
-    if (newIdx > otherIdx) {
-      // otherActive only knows about PayPal. A store subscription is billed elsewhere and
-      // is invisible to it, so the tier still has to be floored by what the stores vouch
-      // for or a web sync would strip a subscription Apple or Google is charging for.
-      await setFederalStatusWithStoreFloor(
-        tx,
-        input.affectedUserId,
-        input.federalStatus,
-      );
-    }
-    // Update subscription
-    if (current) {
-      return await tx
-        .update(paypalSubscription)
-        .set({
-          status: input.status,
-          federalStatus: input.federalStatus,
-          updatedAt: input.lastPayment ?? new Date(),
-        })
-        .where(eq(paypalSubscription.subscriptionId, input.subscriptionId));
-    } else {
-      return await tx.insert(paypalSubscription).values({
-        id: nanoid(),
-        createdById: input.createdById,
-        subscriptionId: input.subscriptionId,
-        affectedUserId: input.affectedUserId,
-        orderId: input.orderId,
-        status: input.status,
-        federalStatus: input.federalStatus,
-        updatedAt: input.lastPayment ?? new Date(),
+  return retryOnDeadlock(() =>
+    input.client.transaction(async (tx) => {
+      const current = await tx.query.paypalSubscription.findFirst({
+        where: eq(paypalSubscription.subscriptionId, input.subscriptionId),
       });
-    }
-  });
+      if (
+        current &&
+        (current.createdById !== input.createdById ||
+          current.affectedUserId !== input.affectedUserId)
+      )
+        return errorResponse("Subscription ownership changed. Retry recovery.");
+      // Preserve the saved window of a reputation-funded upgrade. Otherwise, a newer
+      // confirmed payment advances the paid marker without inventing another billing date.
+      const retainsPeriod =
+        current &&
+        current.updatedAt > secondsFromNow(-3600 * 24 * 31) &&
+        (!input.lastPayment ||
+          input.lastPayment <= current.updatedAt ||
+          FederalStatuses.indexOf(current.federalStatus) >
+            FederalStatuses.indexOf(input.federalStatus));
+      const tier = retainsPeriod ? current.federalStatus : input.federalStatus;
+      const paidAt = retainsPeriod
+        ? current.updatedAt
+        : (input.lastPayment ?? new Date());
+      const approvalReference = current?.orderId ?? input.orderId;
+      if (
+        retainsPeriod &&
+        current.federalStatus === "NONE" &&
+        input.federalStatus !== "NONE"
+      )
+        return errorResponse(
+          "This paid period requires support review before coverage can be restored.",
+        );
+      if (
+        current &&
+        current.status === input.status &&
+        current.federalStatus === tier &&
+        current.updatedAt.getTime() === paidAt.getTime() &&
+        current.orderId === (approvalReference ?? null)
+      )
+        return { success: true, message: "Subscription already synchronized" };
+      if (current) {
+        const claimed = await tx
+          .update(paypalSubscription)
+          .set({
+            status: input.status,
+            federalStatus: tier,
+            updatedAt: paidAt,
+            orderId: approvalReference,
+          })
+          .where(
+            and(
+              eq(paypalSubscription.id, current.id),
+              eq(paypalSubscription.updatedAt, current.updatedAt),
+              eq(paypalSubscription.status, current.status),
+              eq(paypalSubscription.federalStatus, current.federalStatus),
+            ),
+          );
+        if (claimed.rowsAffected !== 1)
+          return errorResponse("Subscription changed. Retry recovery.");
+      } else {
+        try {
+          await tx.insert(paypalSubscription).values({
+            id: nanoid(),
+            createdById: input.createdById,
+            affectedUserId: input.affectedUserId,
+            orderId: input.orderId,
+            subscriptionId: input.subscriptionId,
+            federalStatus: tier,
+            status: input.status,
+            updatedAt: paidAt,
+          });
+        } catch (error) {
+          if (isMysqlDuplicateKeyError(error))
+            return errorResponse("Subscription changed. Retry recovery.");
+          throw error;
+        }
+      }
+      await setFederalStatusWithStoreFloor(tx, input.affectedUserId, tier);
+      return { success: true, message: "Subscription synchronized" };
+    }),
+  );
 };
 
 /**
@@ -743,28 +801,12 @@ export const syncTransactions = async (
             info.paypal_reference_id,
             token,
           );
-          const owners = await verifiedPaypalSubscription(
+          return reconcilePaypalSubscription({
             client,
-            externalSubscription,
-            info.paypal_reference_id,
-            { createdById: createdByUserId, affectedUserId },
-          );
-          if (!owners || !externalSubscription)
-            return errorResponse(
-              `Subscription ID ${info.paypal_reference_id} not found or ownership/payment could not be verified`,
-            );
-          const status = getPaypalSubscriptionStatus(externalSubscription);
-          await updateSubscription({
-            client,
-            ...owners,
-            federalStatus: status.newStatus,
-            status: externalSubscription.status,
-            subscriptionId: externalSubscription.id,
+            subscription: externalSubscription,
+            subscriptionId: info.paypal_reference_id,
+            expected: { createdById: createdByUserId, affectedUserId },
           });
-          return {
-            success: true,
-            message: `Subscription ID ${info.paypal_reference_id} synchronized`,
-          };
         } else {
           const stored = await client.query.paypalTransaction.findFirst({
             where: and(
@@ -872,7 +914,7 @@ export const getPaypalSubscription = async (subscriptionId: string, token: strin
       },
     },
   )
-    .then((response) => response.json())
+    .then((response) => (response.ok ? response.json() : undefined))
     .then((data: PaypalSubscription | undefined) => {
       return data;
     });
@@ -893,7 +935,7 @@ export const cancelPaypalSubscription = async (
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ reason: "Canceleted through site" }),
+      body: JSON.stringify({ reason: "Cancelled through the game" }),
     },
   ).then((response) => response.status);
 };
@@ -932,7 +974,7 @@ export const getPaypalOrder = async (input: { orderId: string; token: string }) 
     },
   )
     .then((response) => {
-      return response.json();
+      return response.ok ? response.json() : undefined;
     })
     .then((data: PaypalOrder) => {
       return data;
@@ -1151,20 +1193,15 @@ const verifiedPaypalSubscription = async (
     !["ACTIVE", "SUSPENDED", "CANCELLED", "EXPIRED"].includes(subscription.status)
   )
     return null;
-  const users = subscription.custom_id.split("-");
-  const buyer = users[0];
-  const recipient = users[1];
-  if (
-    users.length !== 2 ||
-    !buyer ||
-    !recipient ||
-    !users.every((id) => /^[A-Za-z0-9_]+$/.test(id))
-  )
-    return null;
+  const owners = parsePaypalSubscriptionOwners(subscription.custom_id);
+  if (!owners) return null;
+  const { buyer, recipient } = owners;
   const payment = subscription.billing_info?.last_payment;
   const lastPayment =
     typeof payment?.time === "string" ? new Date(payment.time) : new Date(Number.NaN);
   const amount = Number(payment?.amount?.value);
+  const tier = plan2FedStatus(subscription.plan_id);
+  if (tier === "NONE" || amount !== FEDERAL_MONTHLY_USD_CENTS[tier] / 100) return null;
   if (
     !Number.isFinite(lastPayment.getTime()) ||
     lastPayment > secondsFromNow(60) ||
@@ -1190,4 +1227,54 @@ const verifiedPaypalSubscription = async (
   )
     return null;
   return { createdById, affectedUserId, lastPayment };
+};
+
+/** All provider-driven subscription recovery uses the same ownership and paid-term checks. */
+export const reconcilePaypalSubscription = async (input: {
+  client: DrizzleClient;
+  subscription: PaypalSubscription | undefined;
+  subscriptionId: string;
+  expected?: { createdById: string; affectedUserId: string };
+  callerId?: string;
+  orderId?: string | null;
+}) => {
+  const owners = await verifiedPaypalSubscription(
+    input.client,
+    input.subscription,
+    input.subscriptionId,
+    input.expected,
+  );
+  if (!owners || !input.subscription)
+    return errorResponse(
+      `Subscription ID ${input.subscriptionId} not found or ownership/payment could not be verified. Wait for payment to clear, then retry.`,
+    );
+  if (
+    input.callerId &&
+    input.callerId !== owners.createdById &&
+    input.callerId !== owners.affectedUserId
+  )
+    return errorResponse("This subscription belongs to another account.");
+  // PayPal's subscription approval/reporting APIs can omit an order ID. Retain its
+  // provider reference so the renewal job does not classify paid billing as rep-funded.
+  return updateSubscription({
+    client: input.client,
+    ...owners,
+    subscriptionId: input.subscription.id,
+    orderId: input.orderId ?? input.subscription.id,
+    federalStatus: getPaypalSubscriptionStatus(input.subscription).newStatus,
+    status: input.subscription.status,
+  });
+};
+
+const parsePaypalSubscriptionOwners = (customId: unknown) => {
+  if (typeof customId !== "string") return null;
+  const users = customId.split("-");
+  const buyer = users[0];
+  const recipient = users[1];
+  return users.length === 2 &&
+    buyer &&
+    recipient &&
+    users.every((id) => /^[A-Za-z0-9_]+$/.test(id))
+    ? { buyer, recipient }
+    : null;
 };

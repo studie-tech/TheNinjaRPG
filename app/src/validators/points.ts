@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FederalStatuses } from "@/drizzle/constants";
 
 export const buyRepsSchema = z.object({
   reputationPoints: z.number().min(5).max(1000),
@@ -36,7 +37,19 @@ export const paypalOrderSchema = z.strictObject({
   orderId: z.string().min(15).max(20),
 });
 
-export const paypalSubscriptionSchema = z.strictObject({
+export const paypalSubscriptionIdSchema = z.strictObject({
   subscriptionId: z.string().min(1).max(191),
+});
+export const paypalSubscriptionSchema = paypalSubscriptionIdSchema.extend({
   orderId: z.string().min(1).max(191).optional(),
+});
+
+export const federalReputationPurchaseSchema = z.strictObject({
+  userId: z.string().min(1).max(191),
+  expectedUserId: z.string().min(1).max(191),
+  status: z.enum(FederalStatuses),
+});
+export const federalUpgradeSchema = z.strictObject({
+  userId: z.string().min(1).max(191),
+  plan: z.enum(FederalStatuses),
 });

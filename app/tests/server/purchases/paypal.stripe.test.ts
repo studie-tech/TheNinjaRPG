@@ -5,11 +5,12 @@ import type Stripe from "stripe";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { paypalSubscription, paypalTransaction, stripeCheckout, stripePayment, storeUserIdAlias, userData } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
-import { paypalRouter, syncTransactions, updateReps } from "@/server/api/routers/paypal";
+import { paypalRouter, reconcilePaypalSubscription, syncTransactions, updateReps } from "@/server/api/routers/paypal";
 import { stripeRouter } from "@/server/api/routers/stripe";
 import * as stripeClient from "@/server/utils/stripe/client";
+import { reconcileFederalStatuses, setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
 import { fulfillStripeSession } from "@/server/utils/stripe/fulfillment";
-import { dollars2reps, reps2dollars } from "@/utils/paypal";
+import { calcFedUgradeCost, dollars2reps, fedStatusRepsCost, reps2dollars } from "@/utils/paypal";
 import { insertUsers } from "../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
@@ -35,7 +36,11 @@ const fetchProvider = vi.fn(async (url: string, options?: RequestInit) => {
     if (createResponseFails) { createResponseFails = false; throw new Error("response lost"); }
     return Response.json(order);
   }
-  if (url.includes("/v1/billing/subscriptions/")) return Response.json(subscriptions.get(url.split("/subscriptions/")[1] ?? "") ?? {}, { status: subscriptions.has(url.split("/subscriptions/")[1] ?? "") ? 200 : 404 });
+  if (url.includes("/v1/billing/subscriptions/")) {
+    const id = url.split("/subscriptions/")[1]?.split("/")[0] ?? ""; const subscription = subscriptions.get(id);
+    if (url.endsWith("/cancel") && options?.method === "POST" && subscription) { subscription.status = "CANCELLED"; return new Response(null, { status: 204 }); }
+    return Response.json(subscription ?? {}, { status: subscription ? 200 : 404 });
+  }
   const id = url.split("/orders/")[1]?.split("/")[0] ?? "";
   const order = orders.get(id);
   if (!order) return Response.json({}, { status: 404 });
@@ -227,6 +232,141 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_unknown", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
     expect((await (await callerFor(paypalRouter, BUYER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
     expect((await target())?.federalStatus).toBe("GOLD");
+  });
+  it.each([0.01, 14.99, 15.01, 30])("neither recovery path grants GOLD for the wrong paid total: %s", async (amount) => {
+    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: amount.toFixed(2), currency_code: "USD" } } } });
+    const caller = await callerFor(paypalRouter, BUYER);
+    expect((await caller.resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
+    const info = { transaction_id: "SUB_CAPTURE", transaction_status: "S", transaction_updated_date: new Date().toISOString(), custom_field: `${BUYER}-${TARGET}`, transaction_amount: { value: amount.toFixed(2), currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "SUB_TEST" };
+    expect(await syncTransactions(await getTestDatabase(), [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject({ success: false });
+    expect((await target())?.federalStatus).toBe("NONE");
+    expect(await (await getTestDatabase()).query.paypalSubscription.findMany()).toHaveLength(0);
+  });
+  it.each([{ tier: "NORMAL", price: 5 }, { tier: "SILVER", price: 10 }])("accepts the configured USD amount for %s", async ({ tier, price }) => {
+    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: `plan_test_${tier.toLowerCase()}`, custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: price.toFixed(2), currency_code: "USD" } } } });
+    expect((await (await callerFor(paypalRouter, BUYER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
+    expect((await target())?.federalStatus).toBe(tier);
+  });
+  it("direct recovery retains a cancelled subscription's paid period through reconciliation, then expires it", async () => {
+    const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 86400000);
+    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "CANCELLED", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    const caller = await callerFor(paypalRouter, BUYER);
+    expect((await caller.resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
+    expect((await target())?.federalStatus).toBe("GOLD");
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ status: "CANCELLED", federalStatus: "GOLD", updatedAt: paidAt });
+    await setFederalStatusWithStoreFloor(db, TARGET, "NONE");
+    await reconcileFederalStatuses(db);
+    expect((await target())?.federalStatus).toBe("GOLD");
+    await db.update(paypalSubscription).set({ updatedAt: new Date(Date.now() - 32 * 86400000) }).where(eq(paypalSubscription.subscriptionId, "SUB_TEST"));
+    await reconcileFederalStatuses(db);
+    expect((await target())?.federalStatus).toBe("NONE");
+  });
+  it("a cancelled subscription with an expired paid period cannot restore coverage", async () => {
+    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "CANCELLED", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date(Date.now() - 32 * 86400000).toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    expect((await (await callerFor(paypalRouter, BUYER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
+    expect((await target())?.federalStatus).toBe("NONE");
+  });
+  it("scheduled reconciliation never turns an old active payment into a fresh paid period", async () => {
+    const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 40 * 86400000);
+    await db.insert(paypalSubscription).values({ id: "expired-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, orderId: "ORDER_TEST", status: "ACTIVE", federalStatus: "GOLD", updatedAt: paidAt });
+    const subscription = { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "15.00", currency_code: "USD" } } } };
+    expect(await reconcilePaypalSubscription({ client: db, subscription, subscriptionId: "SUB_TEST", expected: { createdById: BUYER, affectedUserId: TARGET } })).toMatchObject({ success: true });
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ updatedAt: paidAt, federalStatus: "NONE" });
+    expect((await target())?.federalStatus).toBe("NONE");
+  });
+  it("scheduled reconciliation uses the provider payment date and rejects a wrong paid amount", async () => {
+    const db = await getTestDatabase(); const oldPaidAt = new Date(Date.now() - 40 * 86400000); const paidAt = new Date(Date.now() - 2 * 86400000);
+    await db.insert(paypalSubscription).values({ id: "renew-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, orderId: "ORDER_TEST", status: "ACTIVE", federalStatus: "GOLD", updatedAt: oldPaidAt });
+    const subscription = { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "0.01", currency_code: "USD" } } } };
+    expect(await reconcilePaypalSubscription({ client: db, subscription, subscriptionId: "SUB_TEST", expected: { createdById: BUYER, affectedUserId: TARGET } })).toMatchObject({ success: false });
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ updatedAt: oldPaidAt });
+    subscription.billing_info.last_payment.amount.value = "15.00";
+    expect(await reconcilePaypalSubscription({ client: db, subscription, subscriptionId: "SUB_TEST", expected: { createdById: BUYER, affectedUserId: TARGET } })).toMatchObject({ success: true });
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ updatedAt: paidAt });
+    expect((await target())?.federalStatus).toBe("GOLD");
+  });
+  it("provider-only approvals retain a billing reference and a saved reputation upgrade", async () => {
+    const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 10 * 86400000); const upgradeAt = new Date(Date.now() - 5 * 86400000);
+    await db.insert(paypalSubscription).values({ id: "upgrade-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, status: "ACTIVE", federalStatus: "GOLD", updatedAt: upgradeAt });
+    await db.update(userData).set({ federalStatus: "GOLD" }).where(eq(userData.userId, TARGET));
+    const subscription = { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_normal", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "5.00", currency_code: "USD" } } } };
+    expect(await reconcilePaypalSubscription({ client: db, subscription, subscriptionId: "SUB_TEST" })).toMatchObject({ success: true });
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ orderId: "SUB_TEST", federalStatus: "GOLD", updatedAt: upgradeAt });
+    subscription.billing_info.last_payment.time = new Date().toISOString();
+    expect(await reconcilePaypalSubscription({ client: db, subscription, subscriptionId: "SUB_TEST" })).toMatchObject({ success: true });
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ federalStatus: "GOLD", updatedAt: upgradeAt });
+  });
+  it("concurrent gifts cannot spend the same reputation balance twice", async () => {
+    const db = await getTestDatabase(); const cost = fedStatusRepsCost("GOLD");
+    await db.update(userData).set({ reputationPoints: cost }).where(eq(userData.userId, BUYER));
+    const caller = await callerFor(paypalRouter, BUYER);
+    const results = await Promise.all([TARGET, OTHER].map((userId) => caller.subscribeWithReps({ userId, expectedUserId: BUYER, status: "GOLD" })));
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, BUYER) }))?.reputationPoints).toBe(0);
+    expect(await db.query.paypalSubscription.findMany()).toHaveLength(1);
+    expect((await db.query.userData.findMany()).filter((user) => user.federalStatus === "GOLD")).toHaveLength(1);
+  });
+  it("a changed recipient rolls back the reputation debit and ledger", async () => {
+    const db = await getTestDatabase(); const cost = fedStatusRepsCost("GOLD");
+    await db.update(userData).set({ reputationPoints: cost }).where(eq(userData.userId, BUYER));
+    await db.update(userData).set({ federalStatus: "SILVER" }).where(eq(userData.userId, TARGET));
+    expect((await (await callerFor(paypalRouter, BUYER)).subscribeWithReps({ userId: TARGET, expectedUserId: BUYER, status: "GOLD" })).success).toBe(false);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, BUYER) }))?.reputationPoints).toBe(cost);
+    expect(await db.query.paypalSubscription.findMany()).toHaveLength(0);
+  });
+  it("a changed account cannot spend the former account's reputation purchase", async () => {
+    const db = await getTestDatabase(); await db.update(userData).set({ reputationPoints: fedStatusRepsCost("GOLD") }).where(eq(userData.userId, OTHER));
+    expect((await (await callerFor(paypalRouter, OTHER)).subscribeWithReps({ userId: TARGET, expectedUserId: BUYER, status: "GOLD" })).success).toBe(false);
+    expect(await db.query.paypalSubscription.findMany()).toHaveLength(0);
+  });
+  it("concurrent self upgrades debit once and leave a matching paid ledger", async () => {
+    const db = await getTestDatabase(); const cost = calcFedUgradeCost("NORMAL", "GOLD");
+    if (!cost) throw new Error("missing upgrade cost");
+    await db.update(userData).set({ reputationPoints: cost, reputationPointsTotal: cost, federalStatus: "NORMAL" }).where(eq(userData.userId, BUYER));
+    await db.insert(paypalSubscription).values({ id: "self-upgrade", subscriptionId: `reps_${nanoid()}`, createdById: BUYER, affectedUserId: BUYER, status: "ACTIVE", federalStatus: "NORMAL" });
+    const caller = await callerFor(paypalRouter, BUYER);
+    const results = await Promise.all([caller.upgradeSubscription({ userId: BUYER, plan: "GOLD" }), caller.upgradeSubscription({ userId: BUYER, plan: "GOLD" })]);
+    expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, BUYER) })).toMatchObject({ reputationPoints: 0, reputationPointsTotal: 0, federalStatus: "GOLD" });
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ federalStatus: "GOLD" });
+  });
+  it("expired PayPal coverage cannot be used to buy a discounted upgrade", async () => {
+    const db = await getTestDatabase(); await db.update(userData).set({ reputationPoints: 1000, federalStatus: "SILVER" }).where(eq(userData.userId, BUYER));
+    await db.insert(paypalSubscription).values({ id: "expired-upgrade", subscriptionId: "I-EXPIRED", createdById: BUYER, affectedUserId: BUYER, status: "CANCELLED", federalStatus: "SILVER", updatedAt: new Date(Date.now() - 32 * 86400000) });
+    expect((await (await callerFor(paypalRouter, BUYER)).upgradeSubscription({ userId: BUYER, plan: "GOLD" })).success).toBe(false);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, BUYER) }))?.reputationPoints).toBe(1000);
+  });
+  it.each([`reps_${nanoid()}`, nanoid()])("reputation-funded cancellation retains coverage without a provider call (%s)", async (subscriptionId) => {
+    const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 86400000);
+    await db.update(userData).set({ federalStatus: "GOLD" }).where(eq(userData.userId, TARGET));
+    await db.insert(paypalSubscription).values({ id: "rep-sub", subscriptionId, createdById: BUYER, affectedUserId: TARGET, status: "ACTIVE", federalStatus: "GOLD", updatedAt: paidAt });
+    expect((await (await callerFor(paypalRouter, TARGET)).cancelPaypalSubscription({ subscriptionId })).success).toBe(true);
+    expect(fetchProvider).not.toHaveBeenCalled();
+    await reconcileFederalStatuses(db); expect((await target())?.federalStatus).toBe("GOLD");
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ status: "CANCELLED", updatedAt: paidAt });
+  });
+  it("failed provider lookups cannot claim cancellation or change the ledger", async () => {
+    const db = await getTestDatabase(); await db.insert(paypalSubscription).values({ id: "missing-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, orderId: "ORDER_TEST", status: "ACTIVE", federalStatus: "GOLD" });
+    expect((await (await callerFor(paypalRouter, BUYER)).cancelPaypalSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ status: "ACTIVE" });
+    expect(fetchProvider.mock.calls.filter(([url]) => url.endsWith("/cancel"))).toHaveLength(0);
+  });
+  it("cancellation verifies authoritative ownership before asking PayPal to stop billing", async () => {
+    const db = await getTestDatabase(); await db.insert(paypalSubscription).values({ id: "mismatch-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, orderId: "ORDER_TEST", status: "ACTIVE", federalStatus: "GOLD" });
+    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", custom_id: `${OTHER}-${TARGET}` });
+    expect((await (await callerFor(paypalRouter, BUYER)).cancelPaypalSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
+    expect(fetchProvider.mock.calls.filter(([url]) => url.endsWith("/cancel"))).toHaveLength(0);
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ status: "ACTIVE" });
+  });
+  it("a suspended subscription is actually cancelled and keeps its verified paid period", async () => {
+    const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 86400000);
+    await db.insert(paypalSubscription).values({ id: "suspended-sub", subscriptionId: "SUB_TEST", createdById: BUYER, affectedUserId: TARGET, orderId: "ORDER_TEST", status: "ACTIVE", federalStatus: "GOLD", updatedAt: paidAt });
+    await db.update(userData).set({ federalStatus: "GOLD" }).where(eq(userData.userId, TARGET));
+    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "SUSPENDED", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    expect((await (await callerFor(paypalRouter, BUYER)).cancelPaypalSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
+    expect(fetchProvider.mock.calls.filter(([url]) => url.endsWith("/cancel"))).toHaveLength(1);
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ status: "CANCELLED", updatedAt: paidAt });
+    await reconcileFederalStatuses(db); expect((await target())?.federalStatus).toBe("GOLD");
   });
   it("reporting recovery converts a captured reservation without duplicate credit", async () => {
     const caller = await callerFor(paypalRouter, BUYER); const input = request(); const result = await caller.createOrder(input);
