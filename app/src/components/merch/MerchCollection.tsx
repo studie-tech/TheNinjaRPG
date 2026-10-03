@@ -98,7 +98,14 @@ export function MerchCollection() {
     .map(({ key, kind }) =>
       products.find((p) => p.designKey === key && p.kind === kind),
     )
-    .filter((p): p is MerchProduct => Boolean(p));
+    .filter((p): p is MerchProduct => Boolean(p))
+    .map((product) => ({
+      product,
+      image:
+        (product.kind === "Black Glossy Mug"
+          ? product.images.find((image) => /-front-/.test(image.url))
+          : undefined) ?? product.images[0],
+    }));
 
   return (
     <>
@@ -138,7 +145,7 @@ export function MerchCollection() {
           </span>
         </div>
         <div className="merch-hero-pieces">
-          {heroPieces.map((p, i) => (
+          {heroPieces.map(({ product: p, image }, i) => (
             <Link
               key={p.id}
               href={`/merch/${p.handle}`}
@@ -147,12 +154,12 @@ export function MerchCollection() {
               <span className="merch-piece-number">
                 {String(i + 1).padStart(2, "0")} / SEICHI COLLECTION
               </span>
-              {p.images[0] && (
+              {image && (
                 <Image
-                  src={p.images[0].url}
+                  src={image.url}
                   width={300}
                   height={330}
-                  alt={p.images[0].alt}
+                  alt={image.alt}
                   loading="eager"
                 />
               )}
