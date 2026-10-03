@@ -14,4 +14,4 @@ Cart bearer IDs stay in an HTTP-only, same-site cookie. Regular cart responses c
 
 Without credentials, development displays the curated Printful review catalogue and a local review bag. Production displays a coming-soon collection and disables checkout. Review prices are deliberately unset. The preview fixture is not an inventory or availability guarantee.
 
-`designs.json` contains the graphic descriptions, lore and artwork interpretation. `products.ts` contains material, care and sizing information for the selected blanks, with manufacturer links. Confirm region-dependent compositions and sizing when changing a blank. Public art lives under `public/merch/art`.
+`designs.json` contains the graphic descriptions, lore and artwork interpretation. `products.ts` contains material, care and sizing information for the selected blanks, with manufacturer links. Confirm region-dependent compositions and sizing when changing a blank. Artwork is hosted on UploadThing and served through the existing Bunny CDN. `IMG_MERCH_ARTWORK` in `drizzle/constants.ts` maps design keys to hosted URLs; no artwork binaries are stored in `public`.

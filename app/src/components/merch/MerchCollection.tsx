@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { IMG_WALLPAPER_HORIZON } from "@/drizzle/constants";
+import { IMG_MERCH_ARTWORK, IMG_WALLPAPER_HORIZON } from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { formatMerchMoney, productFromPrice } from "@/libs/merch/catalog";
@@ -22,21 +22,21 @@ const COLLECTIONS = [
     name: "Villages",
     title: "Where you belong.",
     text: "Carry your village with you.",
-    image: "/merch/art/tsukimori.webp",
+    image: IMG_MERCH_ARTWORK.tsukimori,
     number: "01",
   },
   {
     name: "S-ranks",
     title: "The power you chase.",
     text: "Legendary bloodlines. Unmistakable art.",
-    image: "/merch/art/blueblade.webp",
+    image: IMG_MERCH_ARTWORK.blueblade,
     number: "02",
   },
   {
     name: "Community",
     title: "If you know, you know.",
     text: "For the jokes that never quite die.",
-    image: "/merch/art/ramen.webp",
+    image: IMG_MERCH_ARTWORK.ramen,
     number: "03",
   },
 ];
@@ -366,7 +366,7 @@ export function MerchCollection() {
       <section className="merch-world" aria-labelledby="community-feature-heading">
         <div className="merch-world-art">
           <Image
-            src="/merch/art/buffsr.webp"
+            src={IMG_MERCH_ARTWORK.buffsr}
             width={1000}
             height={1500}
             alt="Buff S Ranks Pls artwork with a ninja, training dummy and stats scroll"

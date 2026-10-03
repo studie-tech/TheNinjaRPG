@@ -2222,6 +2222,34 @@ export const IMG_FARM_BACKGROUND =
 export const IMG_FARM_PLOT_SOIL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ0jZR4BgrYldRWJcD6vE10SjNsXHeA9pVMfQi";
 
+// Merchandise artwork
+export const IMG_MERCH_ARTWORK = {
+  akasumi: "https://uploadthing.b-cdn.net/f/po9DNoBb_x-y2Ana-4R05.webp",
+  akikaze: "https://uploadthing.b-cdn.net/f/60C-fRrHl4nPl93HRMA0j.webp",
+  anbu: "https://uploadthing.b-cdn.net/f/TFLBQW_bBzYUn-VjQrpn4.webp",
+  bloodenchanted: "https://uploadthing.b-cdn.net/f/AiVd6l2jZgKW7kinKJWIX.webp",
+  blueblade: "https://uploadthing.b-cdn.net/f/5g1MOfv7TDgxsS_JiquKe.webp",
+  buffpotatoes: "https://uploadthing.b-cdn.net/f/VIQBvqjHwOwVlf-IgYQWb.webp",
+  buffsr: "https://uploadthing.b-cdn.net/f/Egfuy9wNzxbMXcXZVeF2T.webp",
+  core2: "https://uploadthing.b-cdn.net/f/m7fO-lHKGjd8MlOc8Ax3F.webp",
+  cosmic: "https://uploadthing.b-cdn.net/f/JjJQ23CUkXsdudyoBtyZ6.webp",
+  duckcontent: "https://uploadthing.b-cdn.net/f/SUBLqCOioXWryLaJVbyN4.webp",
+  forsaken: "https://uploadthing.b-cdn.net/f/FfEwU5uSjvoYtdbsEzJBA.webp",
+  horizon: "https://uploadthing.b-cdn.net/f/UhN8zPCGhYp-YrT__eAHv.webp",
+  hospital: "https://uploadthing.b-cdn.net/f/NSvaG7Svkb06qqdyhuxvQ.webp",
+  hyorin: "https://uploadthing.b-cdn.net/f/CyvEr4LV6tRTQSIRaH1RV.webp",
+  momo: "https://uploadthing.b-cdn.net/f/qxERGVGmCSpP-H6qAHp3L.webp",
+  monarch: "https://uploadthing.b-cdn.net/f/q46RMroKAMPBRVEVziHyM.webp",
+  ramen: "https://uploadthing.b-cdn.net/f/sZWZowANKa8AxzzoYgh6B.webp",
+  serverhamster: "https://uploadthing.b-cdn.net/f/Or0hBi_lBNZGhyvVF_MLj.webp",
+  shirohana: "https://uploadthing.b-cdn.net/f/BtjyPoE4U21HoMIxoC5mF.webp",
+  shiroi: "https://uploadthing.b-cdn.net/f/L-jeOmqr-DDjb3I6BT2Gf.webp",
+  spoonharvest: "https://uploadthing.b-cdn.net/f/Y8Bzjer2QQZ33GhH6z9cN.webp",
+  syndicate: "https://uploadthing.b-cdn.net/f/W2YlBcDJmZxctWEpOKitR.webp",
+  touchgrass: "https://uploadthing.b-cdn.net/f/Sc7QnstyxsnAPGCaYGtPR.webp",
+  tsukimori: "https://uploadthing.b-cdn.net/f/jQR3qzAuImY5zChRLCgRa.webp",
+} as const;
+
 // Marketing constants
 export const TOTAL_PLAYERS_MILESTONE = 1000000;
 
