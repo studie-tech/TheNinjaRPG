@@ -190,5 +190,21 @@
   {"handle": "shiroi-large-organic-tote", "designKey": "shiroi", "kind": "Organic Tote", "image": "https://files.cdn.printful.com/upload/product-templates/9c/9c30cd434b11ece42acd31a92029d885_t"},
   {"handle": "shiroi-black-glossy-mug", "designKey": "shiroi", "kind": "Black Glossy Mug", "image": "https://files.cdn.printful.com/upload/product-templates/0d/0d857eedec40efa8dcd38ed73fb17577_t"},
   {"handle": "shiroi-straw-lid-bottle", "designKey": "shiroi", "kind": "Straw Lid Water Bottle", "image": "https://files.cdn.printful.com/upload/product-templates/cc/cc1fc7424e5e7749901bf793c7281464_t"},
-  {"handle": "shiroi-utility-backpack", "designKey": "shiroi", "kind": "Utility Backpack", "image": "https://files.cdn.printful.com/upload/product-templates/44/449317cd9a49c418e7efe85a0ddf8b20_t"}
+  {"handle": "shiroi-utility-backpack", "designKey": "shiroi", "kind": "Utility Backpack", "image": "https://files.cdn.printful.com/upload/product-templates/44/449317cd9a49c418e7efe85a0ddf8b20_t"},
+  {"handle": "core3-utility-backpack", "designKey": "core3", "kind": "Utility Backpack", "image": "https://files.cdn.printful.com/upload/product-templates/51/51ff5f1c2cad5d6c2db69c259648d43c_t"},
+  {"handle": "core1-utility-backpack", "designKey": "core1", "kind": "Utility Backpack", "image": "https://files.cdn.printful.com/upload/product-templates/80/809ae8f9f4e0c9626f8f616219247506_t"},
+  {"handle": "core3-straw-lid-bottle", "designKey": "core3", "kind": "Straw Lid Water Bottle", "image": "https://files.cdn.printful.com/upload/product-templates/ed/ed711d4e03ede5d5e4535064d1d45410_t"},
+  {"handle": "core1-straw-lid-bottle", "designKey": "core1", "kind": "Straw Lid Water Bottle", "image": "https://files.cdn.printful.com/upload/product-templates/11/117925cfc607ce73a7a39067122868ae_t"},
+  {"handle": "core3-black-glossy-mug", "designKey": "core3", "kind": "Black Glossy Mug", "image": "https://files.cdn.printful.com/upload/product-templates/b4/b48c56d2eac4df15e4f998b3275e17fb_t"},
+  {"handle": "core1-black-glossy-mug", "designKey": "core1", "kind": "Black Glossy Mug", "image": "https://files.cdn.printful.com/upload/product-templates/67/6741b8cd98cbad26f751ec9c96fd4bb3_t"},
+  {"handle": "core3-large-organic-tote", "designKey": "core3", "kind": "Organic Tote", "image": "https://files.cdn.printful.com/upload/product-templates/4d/4d4bb8524d5bcd652e749d4eda8fed59_t"},
+  {"handle": "core1-large-organic-tote", "designKey": "core1", "kind": "Organic Tote", "image": "https://files.cdn.printful.com/upload/product-templates/64/642b468a88a3242ecc88da07b869abe3_t"},
+  {"handle": "core3-oversized-crewneck", "designKey": "core3", "kind": "Oversized Sweatshirt", "image": "https://files.cdn.printful.com/upload/product-templates/45/45381ca02cea48d614822571863c7f3d_t"},
+  {"handle": "core1-oversized-crewneck", "designKey": "core1", "kind": "Oversized Sweatshirt", "image": "https://files.cdn.printful.com/upload/product-templates/73/73efe78a4e2696f9ef635d4e000b92b6_t"},
+  {"handle": "core3-changer-crewneck", "designKey": "core3", "kind": "Organic Sweatshirt", "image": "https://files.cdn.printful.com/upload/product-templates/7a/7a2e55cf9e7a1a411b34bdc21a8ad097_t"},
+  {"handle": "core1-changer-crewneck", "designKey": "core1", "kind": "Organic Sweatshirt", "image": "https://files.cdn.printful.com/upload/product-templates/e9/e91fc2d4d430a6e259c2b35058386f5d_t"},
+  {"handle": "core3-sounder-hoodie", "designKey": "core3", "kind": "Organic Hoodie", "image": "https://files.cdn.printful.com/upload/product-templates/c2/c2a3b77294684908e3c282d0337a0400_t"},
+  {"handle": "core1-sounder-hoodie", "designKey": "core1", "kind": "Organic Hoodie", "image": "https://files.cdn.printful.com/upload/product-templates/43/43e915f85de9eee828ce5feea679df03_t"},
+  {"handle": "core3-organic-tee", "designKey": "core3", "kind": "Organic T-Shirt", "image": "https://files.cdn.printful.com/upload/product-templates/90/9006c3c6932c877e67fa0dc5c0f142b5_t"},
+  {"handle": "core1-organic-tee", "designKey": "core1", "kind": "Organic T-Shirt", "image": "https://files.cdn.printful.com/upload/product-templates/2d/2d3fe65879f0f512fa93b45de40bdb9e_t"}
 ]
