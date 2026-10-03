@@ -12,7 +12,12 @@ import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { reputationAllowanceUsed } from "@/server/utils/purchases/allowance";
+import {
+  reputationAllowanceUsed,
+  STRIPE_CHECKOUT_LIFETIME_SECONDS,
+  STRIPE_CHECKOUT_RESERVATION_SECONDS,
+  STRIPE_CHECKOUT_RETRY_SECONDS,
+} from "@/server/utils/purchases/allowance";
 import {
   getStripe,
   isStripeConfigured,
@@ -89,7 +94,10 @@ export const stripeRouter = createTRPCRouter({
               eq(stripeCheckout.createdById, ctx.userId),
               ne(stripeCheckout.id, input.requestId),
               isNull(stripeCheckout.closedAt),
-              gte(stripeCheckout.createdAt, sql`NOW() - INTERVAL 25 HOUR`),
+              gte(
+                stripeCheckout.createdAt,
+                sql`NOW() - INTERVAL ${STRIPE_CHECKOUT_RESERVATION_SECONDS} SECOND`,
+              ),
               sql`NOT EXISTS (SELECT 1 FROM ${stripePayment} p WHERE p.checkoutId = ${stripeCheckout.id} AND p.grantedAt IS NOT NULL)`,
             ),
           }),
@@ -122,10 +130,13 @@ export const stripeRouter = createTRPCRouter({
       if (
         existing?.closedAt ||
         (existing &&
-          Date.now() - existing.createdAt.getTime() > 60 * 60 * 1000 &&
+          Date.now() - existing.createdAt.getTime() >
+            STRIPE_CHECKOUT_RETRY_SECONDS * 1000 &&
           !existing.sessionId)
       )
-        return errorResponse("This checkout expired. Start a new checkout.");
+        return errorResponse(
+          "This checkout cannot be resumed. Its reservation expires 25 hours after it started; then start a new checkout.",
+        );
       if (existing?.sessionId) {
         const session = await getStripe().checkout.sessions.retrieve(
           existing.sessionId,
@@ -245,6 +256,9 @@ export const stripeRouter = createTRPCRouter({
         {
           mode: tier === "NONE" ? "payment" : "subscription",
           client_reference_id: saved.id,
+          expires_at:
+            Math.floor(saved.createdAt.getTime() / 1000) +
+            STRIPE_CHECKOUT_LIFETIME_SECONDS,
           metadata,
           allowed_payment_method_types: ["card"],
           adaptive_pricing: { enabled: false },
@@ -292,10 +306,25 @@ export const stripeRouter = createTRPCRouter({
       if (!checkout || checkout.createdById !== ctx.userId)
         return errorResponse("This checkout belongs to another account.");
       if (checkout.closedAt) return { success: true, message: "Checkout cancelled." };
-      if (!checkout.sessionId)
-        return errorResponse(
-          "Checkout is still being created. Please try again shortly.",
-        );
+      if (!checkout.sessionId) {
+        // A lost response may conceal a real payable session. Close it only after the
+        // fixed provider deadline; before then retry with the original idempotency key.
+        if (
+          Date.now() - checkout.createdAt.getTime() <
+          STRIPE_CHECKOUT_RESERVATION_SECONDS * 1000
+        )
+          return errorResponse(
+            "Checkout is still being created. Retry opening it, or wait until its 25-hour reservation expires.",
+          );
+        await ctx.drizzle
+          .update(stripeCheckout)
+          .set({ closedAt: new Date() })
+          .where(eq(stripeCheckout.id, checkout.id));
+        return {
+          success: true,
+          message: "Expired checkout closed. Start a new checkout.",
+        };
+      }
       const stripe = getStripe();
       const session = await stripe.checkout.sessions.retrieve(checkout.sessionId);
       if (session.status === "complete")

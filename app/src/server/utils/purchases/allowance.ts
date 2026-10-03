@@ -8,6 +8,13 @@ import {
 import { env } from "@/env/server.mjs";
 import type { DrizzleClient } from "@/server/db";
 
+// Send a fixed deadline to Stripe and retain an extra hour for payment reconciliation.
+// Leave thirty-one minutes for Stripe's creation minimum when resuming a lost response.
+export const STRIPE_CHECKOUT_LIFETIME_SECONDS = 24 * 60 * 60;
+export const STRIPE_CHECKOUT_RESERVATION_SECONDS =
+  STRIPE_CHECKOUT_LIFETIME_SECONDS + 60 * 60;
+export const STRIPE_CHECKOUT_RETRY_SECONDS = STRIPE_CHECKOUT_LIFETIME_SECONDS - 31 * 60;
+
 /** Count delivered purchases and unfinished orders in one consistent snapshot. */
 export const reputationAllowanceUsed = async (
   client: DrizzleClient,
@@ -29,7 +36,7 @@ export const reputationAllowanceUsed = async (
         AND p.purchasedAt >= NOW() - INTERVAL 30 DAY), 0)
     + COALESCE((SELECT SUM(c.reputationPoints) FROM ${stripeCheckout} c
       WHERE c.createdById = ${buyerId} AND c.id != ${excludedStripeId}
-        AND c.closedAt IS NULL AND c.createdAt >= NOW() - INTERVAL 25 HOUR
+        AND c.closedAt IS NULL AND c.createdAt >= NOW() - INTERVAL ${STRIPE_CHECKOUT_RESERVATION_SECONDS} SECOND
         AND NOT EXISTS (SELECT 1 FROM ${stripePayment} p
           WHERE p.checkoutId = c.id AND p.grantedAt IS NOT NULL)), 0)
   `.mapWith(Number),
