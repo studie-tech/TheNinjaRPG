@@ -117,14 +117,6 @@
   background: transparent;
   color: #314d3d !important;
 }
-.merch-text-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  border-bottom: 1px solid #8b978a;
-  padding-bottom: 5px;
-}
 .merch-hero-caption {
   display: block;
   margin-top: 35px;
@@ -771,9 +763,6 @@
   .merch-button {
     padding: 14px 17px;
     font-size: 11px;
-  }
-  .merch-text-button {
-    font-size: 10px;
   }
   .merch-hero-caption {
     margin-top: 20px;

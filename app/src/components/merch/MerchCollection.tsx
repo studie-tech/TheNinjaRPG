@@ -132,13 +132,6 @@ export function MerchCollection() {
             >
               Explore the collection <ArrowDown size={17} />
             </button>
-            <button
-              className="merch-text-button"
-              type="button"
-              onClick={() => selectCollection("S-ranks")}
-            >
-              Discover S-ranks <ArrowRight size={16} />
-            </button>
           </div>
           <span className="merch-hero-caption">
             Inspired by The Ninja RPG · Created for its community
