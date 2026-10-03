@@ -43,7 +43,7 @@
   overflow: hidden;
   display: flex;
   align-items: center;
-  padding: 75px 6%;
+  padding: 60px 6%;
   isolation: isolate;
   background: #d2cbb3;
 }
@@ -116,13 +116,6 @@
 .merch-button-outline {
   background: transparent;
   color: #314d3d !important;
-}
-.merch-hero-caption {
-  display: block;
-  margin-top: 35px;
-  font-size: 10px;
-  color: #647160;
-  letter-spacing: .3px;
 }
 .merch-hero-pieces {
   position: absolute;
@@ -764,10 +757,6 @@
     padding: 14px 17px;
     font-size: 11px;
   }
-  .merch-hero-caption {
-    margin-top: 20px;
-    font-size: 9px;
-  }
   .merch-hero-pieces {
     top: auto;
     bottom: -10px;
@@ -966,7 +955,7 @@
 .merch-store h1,.merch-store h2,.merch-store h3 {
   text-wrap: balance;
 }
-.merch-store p,.merch-store summary,.merch-hero-caption,.merch-bag p {
+.merch-store p,.merch-store summary,.merch-bag p {
   text-wrap: pretty;
 }
 .merch-button {
@@ -1009,7 +998,7 @@
   z-index: 100;
 }
 .merch-store .merch-hero {
-  min-height: 440px;
+  min-height: 400px;
 }
 .merch-store .merch-hero-copy {
   min-width: 0;
@@ -1018,7 +1007,7 @@
   .merch-hero {
     padding: 38px 5%;
     align-items: center;
-    min-height: 440px;
+    min-height: 400px;
   }
   .merch-hero-copy {
     width: 63%;
@@ -1056,9 +1045,6 @@
   }
   .merch-hero-piece-2 img {
     height: 105px;
-  }
-  .merch-hero-caption {
-    font-size: 8px;
   }
   .merch-hero-buttons {
     gap: 14px;

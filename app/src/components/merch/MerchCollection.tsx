@@ -140,9 +140,6 @@ export function MerchCollection() {
               Explore the collection <ArrowDown size={17} />
             </button>
           </div>
-          <span className="merch-hero-caption">
-            Inspired by The Ninja RPG · Created for its community
-          </span>
         </div>
         <div className="merch-hero-pieces">
           {heroPieces.map(({ product: p, image }, i) => (
