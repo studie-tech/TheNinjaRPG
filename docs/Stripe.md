@@ -18,7 +18,7 @@ Use a dedicated Stripe account and separate live and sandbox configurations. Cre
 
 Production checkout requires a live API key. Sandbox receipts cannot grant production reputation or Federal Support. Keep preview/development keys, price IDs, signing secrets and databases separate from production. A publishable key is unnecessary because the server redirects to hosted Checkout.
 
-Configure a Stripe webhook endpoint at `https://<application-host>/api/webhooks/stripe`, using the API version supported by the installed Stripe SDK (`2026-09-30.endive` for Stripe 23). Subscribe to:
+Configure a snapshot webhook endpoint at `https://<application-host>/api/webhooks/stripe`. Its payload version can follow the account's stable version: the handler uses only the signed event type, environment and object ID, then retrieves authoritative objects using the installed SDK's API version (`2026-09-30.endive` for Stripe 23). Subscribe to:
 
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`
@@ -26,7 +26,7 @@ Configure a Stripe webhook endpoint at `https://<application-host>/api/webhooks/
 - `charge.refunded`
 - `charge.dispute.created`
 
-The API key needs access to Checkout sessions (create/read/expire), prices (read), invoices (read), and subscriptions (read/update). Webhook requests must reach the application without deployment protection or an interactive login. Set `NEXT_PUBLIC_BASE_URL` to the environment's canonical application origin for return URLs.
+Use a limited API key with Checkout Sessions, Customers and Subscriptions write access, and Invoices, Prices and Products read access. Verify session creation with inline reputation products and recurring prices, session retrieval/expiration, and invoice/subscription retrieval before deployment. Payout, transfer and refund access is unnecessary. Webhook requests must reach the application without deployment protection or an interactive login. Set `NEXT_PUBLIC_BASE_URL` to the environment's canonical application origin for return URLs.
 
 Payout currency and schedule are Stripe account settings, independent of the USD prices. Configure monthly automatic payouts and a fixed DKK reserve in Stripe's bank/payout settings when using a DKK settlement bank account. Bank verification and business activation must be completed by the account holder.
 
