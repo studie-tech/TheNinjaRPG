@@ -35,7 +35,7 @@ import {
 export const bountyRouter = createTRPCRouter({
   // Get open bounty board
   board: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get bounty board listings" } })
+    .meta({ mcp: { description: "Get bounty board listings" } })
     .input(bountyBoardFilterSchema)
     .query(async ({ ctx, input }) => {
       const limit = input.limit ?? 30;
@@ -166,7 +166,7 @@ export const bountyRouter = createTRPCRouter({
     }),
 
   create: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Create bounty on target user" } })
+    .meta({ mcp: { description: "Create bounty on target user" } })
     .input(createBountySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -227,7 +227,7 @@ export const bountyRouter = createTRPCRouter({
     }),
 
   signup: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Sign up to track a bounty" } })
+    .meta({ mcp: { description: "Sign up to track a bounty" } })
     .input(signupBountySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -282,7 +282,7 @@ export const bountyRouter = createTRPCRouter({
     }),
 
   resign: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Resign from bounty tracking" } })
+    .meta({ mcp: { description: "Resign from bounty tracking" } })
     .input(resignBountySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -302,7 +302,7 @@ export const bountyRouter = createTRPCRouter({
     }),
 
   stopTracking: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Stop tracking a bounty" } })
+    .meta({ mcp: { description: "Stop tracking a bounty" } })
     .input(z.object({ bountyId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -330,7 +330,7 @@ export const bountyRouter = createTRPCRouter({
     }),
 
   collect: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Collect bounty reward after kill" } })
+    .meta({ mcp: { description: "Collect bounty reward after kill" } })
     .input(collectBountySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -376,7 +376,7 @@ export const bountyRouter = createTRPCRouter({
     }),
 
   addMoney: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Add ryo to existing bounty" } })
+    .meta({ mcp: { description: "Add ryo to existing bounty" } })
     .input(addBountyMoneySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -422,7 +422,7 @@ export const bountyRouter = createTRPCRouter({
     }),
 
   retract: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Retract bounty and get refund" } })
+    .meta({ mcp: { description: "Retract bounty and get refund" } })
     .input(retractBountySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -536,7 +536,7 @@ export const bountyRouter = createTRPCRouter({
 
   // Get user's tracked bounties for map display
   getTrackedBounties: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get bounties you are tracking" } })
+    .meta({ mcp: { description: "Get bounties you are tracking" } })
     .query(async ({ ctx }) => {
       // Get bounties the user is tracking
       const trackedBounties = await ctx.drizzle.query.bountySignup.findMany({

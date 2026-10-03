@@ -42,7 +42,7 @@ import {
 export const stealthRouter = createTRPCRouter({
   // Activate stealth mode
   activateStealth: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Activate stealth mode" } })
+    .meta({ mcp: { description: "Activate stealth mode" } })
     .output(
       baseServerResponse.extend({
         data: activateStealthDataSchema.optional(),
@@ -121,7 +121,7 @@ export const stealthRouter = createTRPCRouter({
 
   // Deactivate stealth mode
   deactivateStealth: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Deactivate stealth mode" } })
+    .meta({ mcp: { description: "Deactivate stealth mode" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
@@ -171,7 +171,7 @@ export const stealthRouter = createTRPCRouter({
 
   // Use sensory to scan for stealthed enemies in the sector
   useSensory: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Scan for stealthed users in sector" } })
+    .meta({ mcp: { description: "Scan for stealthed users in sector" } })
     .input(useSensoryInputSchema)
     .output(
       baseServerResponse.extend({
@@ -319,7 +319,7 @@ export const stealthRouter = createTRPCRouter({
 
   // Start covert training (stealth or sensory)
   trainCovert: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Start stealth or sensory training" } })
+    .meta({ mcp: { description: "Start stealth or sensory training" } })
     .input(trainInputSchema)
     .output(
       baseServerResponse.extend({
@@ -392,7 +392,7 @@ export const stealthRouter = createTRPCRouter({
   // Stop covert training and collect rewards
   stopCovertTraining: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Stop covert training and collect rewards" },
+      mcp: { description: "Stop covert training and collect rewards" },
     })
     .output(
       baseServerResponse.extend({
@@ -463,7 +463,7 @@ export const stealthRouter = createTRPCRouter({
 
   // Cancel covert training without rewards
   cancelCovertTraining: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Cancel covert training" } })
+    .meta({ mcp: { description: "Cancel covert training" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Mutation (with guard in WHERE clause)

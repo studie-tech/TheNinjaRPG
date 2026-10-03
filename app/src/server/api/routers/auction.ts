@@ -51,7 +51,7 @@ export const auctionRouter = createTRPCRouter({
   // Get single auction listing with all bids
   getAuctionListing: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get auction listing details and bids" },
+      mcp: { description: "Get auction listing details and bids" },
     })
     .input(z.object({ auctionId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -120,7 +120,7 @@ export const auctionRouter = createTRPCRouter({
 
   // Get auction listings with pagination and filters
   getAuctionListings: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get paginated auction listings" } })
+    .meta({ mcp: { description: "Get paginated auction listings" } })
     .input(getAuctionListingsSchema)
     .query(async ({ ctx, input }) => {
       const {
@@ -291,7 +291,7 @@ export const auctionRouter = createTRPCRouter({
   // Create new auction listing
   createAuctionListing: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Create new auction listing for item" },
+      mcp: { description: "Create new auction listing for item" },
     })
     .input(createAuctionListingSchema)
     .output(baseServerResponse)
@@ -485,7 +485,7 @@ export const auctionRouter = createTRPCRouter({
 
   // Place bid on auction
   placeBid: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Place bid on auction listing" } })
+    .meta({ mcp: { description: "Place bid on auction listing" } })
     .input(
       z.object({
         auctionId: z.string(),
@@ -710,7 +710,7 @@ export const auctionRouter = createTRPCRouter({
 
   // Complete auction (transfer userItem to winner)
   completeAuction: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Complete expired auction" } })
+    .meta({ mcp: { description: "Complete expired auction" } })
     .input(z.object({ auctionId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -745,7 +745,7 @@ export const auctionRouter = createTRPCRouter({
   // Cancel listing (seller only, no bids — atomic guard so a race cannot cancel after a bid)
   cancelAuction: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Cancel your auction listing with no bids" },
+      mcp: { description: "Cancel your auction listing with no bids" },
     })
     .input(z.object({ auctionId: z.string() }))
     .output(baseServerResponse)

@@ -39,7 +39,6 @@ export const tournamentRouter = createTRPCRouter({
   getTournament: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description:
           "Get tournament details and matches (includes automatic round sync / finalization)",
       },
@@ -52,7 +51,6 @@ export const tournamentRouter = createTRPCRouter({
   syncTournament: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description:
           "Synchronize tournament progression (also runs when loading tournament details)",
       },
@@ -63,7 +61,7 @@ export const tournamentRouter = createTRPCRouter({
       return await syncTournamentState(ctx.drizzle, input.tournamentId);
     }),
   createTournament: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Create a new tournament" } })
+    .meta({ mcp: { description: "Create a new tournament" } })
     .input(tournamentCreateSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -91,7 +89,7 @@ export const tournamentRouter = createTRPCRouter({
       return { success: true, message: "Tournament created." };
     }),
   joinTournament: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Join an existing tournament" } })
+    .meta({ mcp: { description: "Join an existing tournament" } })
     .input(z.object({ tournamentId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -138,7 +136,7 @@ export const tournamentRouter = createTRPCRouter({
       return { success: true, message: "Joined Tournament" };
     }),
   joinMatch: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Join a tournament match" } })
+    .meta({ mcp: { description: "Join a tournament match" } })
     .input(z.object({ matchId: z.string(), tournamentId: z.string() }))
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {

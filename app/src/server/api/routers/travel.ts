@@ -75,7 +75,7 @@ const pusher = getServerPusher();
 export const travelRouter = createTRPCRouter({
   // Rob another player
   robPlayer: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Rob another player for ryo" } })
+    .meta({ mcp: { description: "Rob another player for ryo" } })
     .use(ratelimitMiddleware)
     .input(
       z.object({
@@ -297,7 +297,7 @@ export const travelRouter = createTRPCRouter({
   // Get users within a given sector
   getSectorData: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get users and data within current sector" },
+      mcp: { description: "Get users and data within current sector" },
     })
     .input(z.object({ sector: sectorIdSchema })) // Note: this is not actively used, but is there for reloading the sector data
     .query(async ({ ctx }) => {
@@ -454,7 +454,7 @@ export const travelRouter = createTRPCRouter({
   // Get village & alliance information for a given sector
   getVillageInSector: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get village and alliance info for sector" },
+      mcp: { description: "Get village and alliance info for sector" },
     })
     .input(z.object({ sector: sectorIdSchema, isOutlaw: z.boolean().prefault(false) }))
     .query(async ({ input, ctx }) => {
@@ -463,7 +463,7 @@ export const travelRouter = createTRPCRouter({
   // Initiate travel on the globe
   startGlobalMove: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Start global travel to another sector" },
+      mcp: { description: "Start global travel to another sector" },
     })
     .input(startGlobalMoveSchema)
     .output(
@@ -600,7 +600,7 @@ export const travelRouter = createTRPCRouter({
     }),
   // Finish travel on the globe
   finishGlobalMove: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Complete global travel" } })
+    .meta({ mcp: { description: "Complete global travel" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -625,7 +625,7 @@ export const travelRouter = createTRPCRouter({
     }),
   // Get all sector ownership
   getAllSectors: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get all sector ownership info" } })
+    .meta({ mcp: { description: "Get all sector ownership info" } })
     .query(async ({ ctx }) => {
       const allSectors = await ctx.drizzle.query.sector.findMany({
         columns: {
@@ -653,7 +653,7 @@ export const travelRouter = createTRPCRouter({
    * origin and target sectors.
    */
   moveInSector: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Move user within current sector" } })
+    .meta({ mcp: { description: "Move user within current sector" } })
     .input(
       z.object({
         curLongitude: z.int(),

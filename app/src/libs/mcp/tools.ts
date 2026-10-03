@@ -20,7 +20,7 @@ export function mergeInputs(
 
 /**
  * Extracts MCP tools from a tRPC router by iterating through all procedures
- * and collecting those that have `meta.mcp.enabled` set to true.
+ * All game procedures are exposed; metadata customizes descriptions and responses.
  *
  * @param appRouter - The tRPC router to extract tools from
  * @param currentPath - Internal path tracking for nested routers
@@ -50,24 +50,20 @@ export function extractToolsFromProcedures<
       const inputs = proc._def.inputs;
       const meta = proc._def.meta;
 
-      // Skip procedures that don't have MCP enabled
-      if (!meta?.mcp?.enabled) {
-        continue;
-      }
-
       const pathInRouter = [...currentPath, ...name.split(".")];
 
       // Detect if this is a mutation - check explicit meta first, then procedure type
       const isMutation =
-        meta.mcp.isMutation !== undefined
-          ? meta.mcp.isMutation
+        meta?.mcp?.isMutation !== undefined
+          ? meta?.mcp?.isMutation
           : proc._def.type === "mutation" || proc._def.mutation === true;
 
       const tool: ModelContextProtocolTool = {
-        name: meta.mcp.name ?? name.replace(/\./g, "_"),
-        description: meta.mcp.description ?? "",
+        name: meta?.mcp?.name ?? name.replace(/\./g, "_"),
+        description:
+          meta?.mcp?.description ?? `${proc._def.type ?? "procedure"} ${name}`,
         pathInRouter,
-        transformMcpProcedure: meta.mcp.transformMcpProcedure,
+        transformMcpProcedure: meta?.mcp?.transformMcpProcedure,
         isMutation,
       };
 
@@ -75,16 +71,11 @@ export function extractToolsFromProcedures<
       if (inputs && inputs.length > 0) {
         const schema = inputs.length > 1 ? mergeInputs(inputs) : inputs[0];
         if (schema) {
-          const jsonSchema = z.toJSONSchema(schema, {
+          // Preserve unions, nullable inputs and references for endpoint discovery.
+          // The tRPC caller remains responsible for validating the original schema.
+          tool.inputSchema = z.toJSONSchema(schema, {
             unrepresentable: "any",
           });
-
-          if (jsonSchema.type === "object") {
-            const { type, properties = {}, required = [] } = jsonSchema;
-            tool.inputSchema = { type, properties, required };
-          } else {
-            console.error("[MCP] Procedure has non-object schema:", pathInRouter);
-          }
         }
       } else {
         // Procedure with no inputs gets an empty object schema

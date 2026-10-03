@@ -27,7 +27,7 @@ const pusher = getServerPusher();
 export const marriageRouter = createTRPCRouter({
   createRequest: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Send a marriage proposal to another user" },
+      mcp: { description: "Send a marriage proposal to another user" },
     })
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
@@ -55,12 +55,12 @@ export const marriageRouter = createTRPCRouter({
       return { success: true, message: "You have proposed!" };
     }),
   getRequests: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get pending marriage requests" } })
+    .meta({ mcp: { description: "Get pending marriage requests" } })
     .query(async ({ ctx }) => {
       return await fetchRequests(ctx.drizzle, ["MARRIAGE"], 3600 * 12, ctx.userId);
     }),
   rejectRequest: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Reject a marriage proposal" } })
+    .meta({ mcp: { description: "Reject a marriage proposal" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -76,7 +76,7 @@ export const marriageRouter = createTRPCRouter({
       return { success: true, message: "Proposal Rejected" };
     }),
   cancelRequest: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Cancel your marriage proposal" } })
+    .meta({ mcp: { description: "Cancel your marriage proposal" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -92,7 +92,7 @@ export const marriageRouter = createTRPCRouter({
       return { success: true, message: "Proposal cancelled" };
     }),
   acceptRequest: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Accept a marriage proposal" } })
+    .meta({ mcp: { description: "Accept a marriage proposal" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -134,7 +134,7 @@ export const marriageRouter = createTRPCRouter({
       return { success: true, message: "Proposal Accepted" };
     }),
   getMarriedUsers: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get list of married users" } })
+    .meta({ mcp: { description: "Get list of married users" } })
     .input(z.object({ id: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const associations = await fetchAssociations(
@@ -149,12 +149,12 @@ export const marriageRouter = createTRPCRouter({
       return marriedUsers;
     }),
   getDivorcedAssociations: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get divorce history" } })
+    .meta({ mcp: { description: "Get divorce history" } })
     .query(async ({ ctx }) => {
       return await fetchAssociations(ctx.drizzle, ctx.userId, ["DIVORCED"]);
     }),
   divorce: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Divorce a married user" } })
+    .meta({ mcp: { description: "Divorce a married user" } })
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

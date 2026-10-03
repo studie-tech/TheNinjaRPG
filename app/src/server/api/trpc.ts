@@ -269,5 +269,5 @@ export const errorResponse = (msg: string) => {
   return { success: false as const, message: msg };
 };
 
-/** Procedure meta: MCP exposure, and whether /api/trpc/cdn may cache the result. */
+/** Procedure meta: MCP presentation, and whether /api/trpc/cdn may cache the result. */
 export type ProcedureMeta = McpMeta & { cdnCached?: true };

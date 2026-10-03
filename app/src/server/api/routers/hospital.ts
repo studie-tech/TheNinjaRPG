@@ -45,7 +45,7 @@ const pusher = getServerPusher();
 export const hospitalRouter = createTRPCRouter({
   getHospitalizedUsers: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get hospitalized users in current sector" },
+      mcp: { description: "Get hospitalized users in current sector" },
     })
     .query(async ({ ctx }) => {
       // Query
@@ -96,7 +96,7 @@ export const hospitalRouter = createTRPCRouter({
     }),
   // Let users heal other users if they are GENIN or above
   userHeal: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Heal another user using chakra" } })
+    .meta({ mcp: { description: "Heal another user using chakra" } })
     .input(userHealInputSchema)
     .output(userHealOutputSchema)
     .mutation(async ({ ctx, input }) => {
@@ -278,7 +278,7 @@ export const hospitalRouter = createTRPCRouter({
     }),
   // Pay to heal & get out of hospital
   npcHeal: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Pay NPC to heal and leave hospital" } })
+    .meta({ mcp: { description: "Pay NPC to heal and leave hospital" } })
     .input(npcHealInputSchema)
     .output(npcHealOutputSchema)
     .mutation(async ({ ctx, input }) => {

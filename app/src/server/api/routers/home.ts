@@ -31,7 +31,7 @@ import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 export const homeRouter = createTRPCRouter({
   toggleSleep: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Toggle between awake and asleep status" },
+      mcp: { description: "Toggle between awake and asleep status" },
     })
     .output(
       baseServerResponse.extend({
@@ -124,7 +124,7 @@ export const homeRouter = createTRPCRouter({
     }),
 
   getUserHome: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get current user home info" } })
+    .meta({ mcp: { description: "Get current user home info" } })
     .query(async ({ ctx }) => {
       // Query
       const { user } = await fetchUpdatedUser({
@@ -142,7 +142,7 @@ export const homeRouter = createTRPCRouter({
     }),
 
   getAvailableUpgrades: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get available home upgrades" } })
+    .meta({ mcp: { description: "Get available home upgrades" } })
     .query(async ({ ctx }) => {
       // Query
       const { user } = await fetchUpdatedUser({
@@ -174,7 +174,7 @@ export const homeRouter = createTRPCRouter({
     }),
 
   upgradeHome: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Upgrade or downgrade home" } })
+    .meta({ mcp: { description: "Upgrade or downgrade home" } })
     .input(z.object({ homeType: z.enum(HomeTypes) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -269,7 +269,7 @@ export const homeRouter = createTRPCRouter({
     }),
 
   toggleStoreItem: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Store or retrieve item from home" } })
+    .meta({ mcp: { description: "Store or retrieve item from home" } })
     .input(z.object({ userItemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

@@ -25,7 +25,7 @@ import { QuestTracker } from "@/validators/objectives";
 export const trainRouter = createTRPCRouter({
   // Start training of a specific attribute
   startTraining: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Start training a specific stat" } })
+    .meta({ mcp: { description: "Start training a specific stat" } })
     .input(z.object({ stat: z.enum(UserStatNames) }))
     .output(
       baseServerResponse.extend({
@@ -70,7 +70,7 @@ export const trainRouter = createTRPCRouter({
   // Stop training
   stopTraining: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Stop training and collect stat gains" },
+      mcp: { description: "Stop training and collect stat gains" },
     })
     .input(z.object({ guess: z.string().optional(), villageId: z.string().nullable() }))
     .output(
@@ -228,7 +228,7 @@ export const trainRouter = createTRPCRouter({
     }),
   // Update user training speed
   updateTrainingSpeed: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Update training speed interval" } })
+    .meta({ mcp: { description: "Update training speed interval" } })
     .input(z.object({ speed: z.enum(TrainingSpeeds) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -256,7 +256,6 @@ export const trainRouter = createTRPCRouter({
   getTrainingLog: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get user training history from last 24 hours",
       },
     })

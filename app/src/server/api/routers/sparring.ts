@@ -24,12 +24,12 @@ const pusher = getServerPusher();
 
 export const sparringRouter = createTRPCRouter({
   getUserChallenges: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get pending sparring challenges" } })
+    .meta({ mcp: { description: "Get pending sparring challenges" } })
     .query(async ({ ctx }) => {
       return fetchRequests(ctx.drizzle, ["SPAR"], SPAR_EXPIRY_SECONDS * 2, ctx.userId);
     }),
   createChallenge: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Challenge another user to spar" } })
+    .meta({ mcp: { description: "Challenge another user to spar" } })
     .input(
       z.object({
         targetId: z.string(),
@@ -69,7 +69,7 @@ export const sparringRouter = createTRPCRouter({
       return { success: true, message: "Challenge created" };
     }),
   acceptChallenge: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Accept a sparring challenge" } })
+    .meta({ mcp: { description: "Accept a sparring challenge" } })
     .input(idSchema)
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -161,7 +161,7 @@ export const sparringRouter = createTRPCRouter({
       return result;
     }),
   rejectChallenge: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Reject a sparring challenge" } })
+    .meta({ mcp: { description: "Reject a sparring challenge" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -181,7 +181,7 @@ export const sparringRouter = createTRPCRouter({
       return await updateRequestState(ctx.drizzle, input.id, "REJECTED", "SPAR");
     }),
   cancelChallenge: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Cancel your sparring challenge" } })
+    .meta({ mcp: { description: "Cancel your sparring challenge" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

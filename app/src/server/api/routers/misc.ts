@@ -46,7 +46,7 @@ import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
 
 export const miscRouter = createTRPCRouter({
   trackVisitor: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Track visitor for analytics" } })
+    .meta({ mcp: { description: "Track visitor for analytics" } })
     .input(trackVisitorSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -97,13 +97,13 @@ export const miscRouter = createTRPCRouter({
       return { success: true, message: "Visitor tracked" };
     }),
   getAllGameAssetNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all game asset names" } })
+    .meta({ mcp: { description: "Get all game asset names" } })
     .input(z.object({ ids: z.array(z.string()) }).nullish())
     .query(async ({ ctx, input }) => {
       return await fetchGameAssets(ctx.drizzle, input?.ids);
     }),
   getCaptcha: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get captcha for verification" } })
+    .meta({ mcp: { description: "Get captcha for verification" } })
     .use(ratelimitMiddleware)
     .query(async ({ ctx }) => {
       return await generateCaptcha(ctx.drizzle, ctx.userId);
@@ -141,7 +141,7 @@ export const miscRouter = createTRPCRouter({
     }),
   getPreviousNotifications: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get paginated notifications history" },
+      mcp: { description: "Get paginated notifications history" },
     })
     .input(
       z.object({
@@ -165,7 +165,7 @@ export const miscRouter = createTRPCRouter({
       };
     }),
   getSetting: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a game setting by name" } })
+    .meta({ mcp: { description: "Get a game setting by name" } })
     .input(z.object({ name: z.string() }))
     .query(async ({ ctx, input }) => {
       const setting = await ctx.drizzle.query.gameSetting.findFirst({
@@ -174,7 +174,7 @@ export const miscRouter = createTRPCRouter({
       return setting ?? null;
     }),
   getGlobalTavernEnabled: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Check if global tavern is enabled" } })
+    .meta({ mcp: { description: "Check if global tavern is enabled" } })
     .query(async ({ ctx }) => {
       const convo = await ctx.drizzle.query.conversation.findFirst({
         where: eq(conversation.title, "Global"),
@@ -209,7 +209,7 @@ export const miscRouter = createTRPCRouter({
     }),
   getActivePlayers24h: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get active players in last 24 hours" },
+      mcp: { description: "Get active players in last 24 hours" },
     })
     .output(z.number())
     .query(async ({ ctx }) => {
@@ -236,7 +236,7 @@ export const miscRouter = createTRPCRouter({
     }),
   getDmgConfig: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get the current damage formula config" },
+      mcp: { description: "Get the current damage formula config" },
     })
     .query(async ({ ctx }) => {
       return await fetchDmgConfig(ctx.drizzle);
@@ -322,7 +322,7 @@ export const miscRouter = createTRPCRouter({
     }),
 
   getAllAwards: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all reputation awards" } })
+    .meta({ mcp: { description: "Get all reputation awards" } })
     .input(
       awardsFilteringSchema.extend({
         cursor: z.number().nullish(),
@@ -409,7 +409,7 @@ export const miscRouter = createTRPCRouter({
     }),
 
   getPersonalEmailReminder: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's email reminder settings" } })
+    .meta({ mcp: { description: "Get user's email reminder settings" } })
     .query(async ({ ctx }) => {
       const reminder = await ctx.drizzle.query.emailReminder.findFirst({
         where: eq(emailReminder.userId, ctx.userId),
@@ -418,7 +418,7 @@ export const miscRouter = createTRPCRouter({
     }),
 
   getEmailReminder: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get email reminder by secret" } })
+    .meta({ mcp: { description: "Get email reminder by secret" } })
     .input(z.object({ email: z.email(), secret: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await fetchEmailReminder(ctx.drizzle, input.email, input.secret);
@@ -426,7 +426,7 @@ export const miscRouter = createTRPCRouter({
     }),
 
   toggleEmailReminder: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Toggle email reminder on/off" } })
+    .meta({ mcp: { description: "Toggle email reminder on/off" } })
     .input(
       z.object({
         email: z.email(),
@@ -465,7 +465,7 @@ export const miscRouter = createTRPCRouter({
     }),
 
   deleteEmailReminder: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Delete email reminder" } })
+    .meta({ mcp: { description: "Delete email reminder" } })
     .input(
       z.object({
         email: z.email(),
@@ -502,7 +502,7 @@ export const miscRouter = createTRPCRouter({
     }),
 
   reviewSupportWithAI: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Submit AI support chat review" } })
+    .meta({ mcp: { description: "Submit AI support chat review" } })
     .input(
       z.object({
         apiRoute: z.string(),

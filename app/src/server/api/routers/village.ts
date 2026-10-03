@@ -63,7 +63,7 @@ const availRequests = ["SURRENDER", "ALLIANCE"];
 export const villageRouter = createTRPCRouter({
   // Get all village names
   getAllNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all village names and IDs" } })
+    .meta({ mcp: { description: "Get all village names and IDs" } })
     .query(async ({ ctx }) => {
       return await ctx.drizzle.query.village.findMany({
         columns: { id: true, name: true },
@@ -73,7 +73,7 @@ export const villageRouter = createTRPCRouter({
     }),
   // Get all villages
   getAll: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all villages with kage info" } })
+    .meta({ mcp: { description: "Get all villages with kage info" } })
     .query(async ({ ctx }) => {
       return await fetchVillages(ctx.drizzle);
     }),
@@ -106,7 +106,7 @@ export const villageRouter = createTRPCRouter({
     }),
   // Get a specific village & its structures∂
   get: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get village details and structures" } })
+    .meta({ mcp: { description: "Get village details and structures" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       // Fetch in parallel
@@ -137,7 +137,7 @@ export const villageRouter = createTRPCRouter({
     }),
   // Get sector ownership
   getSectorOwnerships: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get sector ownership and war data" } })
+    .meta({ mcp: { description: "Get sector ownership and war data" } })
     .input(z.object({ onlyOwnWar: z.boolean() }))
     .query(async ({ ctx, input }) => {
       const [user, sectors, colors, sectorWars] = await Promise.all([
@@ -185,7 +185,7 @@ export const villageRouter = createTRPCRouter({
     }),
   // Buying food in ramen shop
   buyFood: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Buy food at ramen shop to heal" } })
+    .meta({ mcp: { description: "Buy food at ramen shop to heal" } })
     .input(z.object({ ramen: z.enum(ramenOptions), villageId: z.string().nullish() }))
     .output(
       baseServerResponse.extend({
@@ -257,7 +257,7 @@ export const villageRouter = createTRPCRouter({
     }),
   leaveVillage: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Leave current village to become outlaw" },
+      mcp: { description: "Leave current village to become outlaw" },
     })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
@@ -299,7 +299,7 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "You have left the village" };
     }),
   joinVillage: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Join a village as an outlaw" } })
+    .meta({ mcp: { description: "Join a village as an outlaw" } })
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -414,7 +414,7 @@ export const villageRouter = createTRPCRouter({
     }),
   getAlliances: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get all village alliances and requests" },
+      mcp: { description: "Get all village alliances and requests" },
     })
     .query(async ({ ctx }) => {
       const [villages, relationships, requests] = await Promise.all([
@@ -425,14 +425,14 @@ export const villageRouter = createTRPCRouter({
       return { villages, relationships, requests };
     }),
   getVillageStructures: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get structures for a village" } })
+    .meta({ mcp: { description: "Get structures for a village" } })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
       return await fetchStructures(ctx.drizzle, input.villageId);
     }),
   createRequest: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Create alliance or surrender request" },
+      mcp: { description: "Create alliance or surrender request" },
     })
     .input(z.object({ targetId: z.string(), type: z.enum(UserRequestTypes) }))
     .output(baseServerResponse)
@@ -508,7 +508,7 @@ export const villageRouter = createTRPCRouter({
     }),
   acceptRequest: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Accept alliance or surrender request" },
+      mcp: { description: "Accept alliance or surrender request" },
     })
     .input(idSchema)
     .output(baseServerResponse)
@@ -555,7 +555,7 @@ export const villageRouter = createTRPCRouter({
     }),
   rejectRequest: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Reject alliance or surrender request" },
+      mcp: { description: "Reject alliance or surrender request" },
     })
     .input(idSchema)
     .output(baseServerResponse)
@@ -576,7 +576,7 @@ export const villageRouter = createTRPCRouter({
     }),
   cancelRequest: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Cancel alliance or surrender request" },
+      mcp: { description: "Cancel alliance or surrender request" },
     })
     .input(idSchema)
     .output(baseServerResponse)
@@ -596,7 +596,7 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "Alliance request rejected" };
     }),
   leaveAlliance: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Leave an alliance as kage" } })
+    .meta({ mcp: { description: "Leave an alliance as kage" } })
     .input(z.object({ allianceId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -618,7 +618,7 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "You have left the alliance" };
     }),
   releaseSector: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Release sector ownership as kage" } })
+    .meta({ mcp: { description: "Release sector ownership as kage" } })
     .input(z.object({ sector: z.int() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -659,7 +659,7 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "You have released the sector" };
     }),
   declareEnemy: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Declare another village as enemy" } })
+    .meta({ mcp: { description: "Declare another village as enemy" } })
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

@@ -63,7 +63,7 @@ export const kageRouter = createTRPCRouter({
    * Get the daily locked time for the current user
    */
   getDailyLockedTime: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get kage daily locked time" } })
+    .meta({ mcp: { description: "Get kage daily locked time" } })
     .query(async ({ ctx }) => {
       const dailyLockedTimeSeconds = await calculateDailyLockedTime(
         ctx.drizzle,
@@ -76,7 +76,7 @@ export const kageRouter = createTRPCRouter({
    * Kage challenge & request challenge system
    */
   getUserChallenges: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's kage challenges" } })
+    .meta({ mcp: { description: "Get user's kage challenges" } })
     .query(async ({ ctx }) => {
       return fetchRequests(
         ctx.drizzle,
@@ -87,7 +87,7 @@ export const kageRouter = createTRPCRouter({
     }),
   createChallenge: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Challenge the kage for position" },
+      mcp: { description: "Challenge the kage for position" },
     })
     .input(z.object({ kageId: z.string(), villageId: z.string() }))
     .output(baseServerResponse)
@@ -180,7 +180,7 @@ export const kageRouter = createTRPCRouter({
       return { success: true, message: "Challenge created" };
     }),
   acceptChallenge: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Accept a kage challenge" } })
+    .meta({ mcp: { description: "Accept a kage challenge" } })
     .input(idSchema)
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -237,7 +237,7 @@ export const kageRouter = createTRPCRouter({
       return result;
     }),
   rejectChallenge: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Reject a kage challenge" } })
+    .meta({ mcp: { description: "Reject a kage challenge" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -277,7 +277,7 @@ export const kageRouter = createTRPCRouter({
       return { success: true, message: "Challenge rejected" };
     }),
   cancelChallenge: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Cancel a kage challenge" } })
+    .meta({ mcp: { description: "Cancel a kage challenge" } })
     .input(idSchema)
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -347,7 +347,7 @@ export const kageRouter = createTRPCRouter({
    * Misc other kage features
    */
   resignKage: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Resign from kage position" } })
+    .meta({ mcp: { description: "Resign from kage position" } })
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -376,7 +376,7 @@ export const kageRouter = createTRPCRouter({
 
   sendKagePrestige: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Send prestige to the kage as elder" },
+      mcp: { description: "Send prestige to the kage as elder" },
     })
     .input(z.object({ kageId: z.string(), amount: z.number() }))
     .output(baseServerResponse)
@@ -499,7 +499,7 @@ export const kageRouter = createTRPCRouter({
     }),
   upsertNotice: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Update village notice as kage" },
+      mcp: { description: "Update village notice as kage" },
     })
     .input(z.object({ content: z.string() }))
     .output(baseServerResponse)
@@ -525,14 +525,14 @@ export const kageRouter = createTRPCRouter({
       return updateNindo(ctx.drizzle, village.id, input.content, "kageOrder");
     }),
   getElders: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get village elders" } })
+    .meta({ mcp: { description: "Get village elders" } })
     .input(z.object({ villageId: z.string() }))
     .query(async ({ ctx, input }) => {
       return await fetchElders(ctx.drizzle, input.villageId);
     }),
   upgradeStructure: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Upgrade village structure as kage" },
+      mcp: { description: "Upgrade village structure as kage" },
     })
     .input(
       z.object({
@@ -605,7 +605,7 @@ export const kageRouter = createTRPCRouter({
     }),
   toggleOpenForChallenges: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Toggle kage challenge availability" },
+      mcp: { description: "Toggle kage challenge availability" },
     })
     .input(z.object({ villageId: z.string() }))
     .output(baseServerResponse)
@@ -699,7 +699,6 @@ export const kageRouter = createTRPCRouter({
   initiateKageRemovalVote: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Initiate a vote to remove the current kage",
       },
     })
@@ -800,7 +799,6 @@ export const kageRouter = createTRPCRouter({
   voteOnKageRemoval: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Vote on a pending kage removal motion",
       },
     })

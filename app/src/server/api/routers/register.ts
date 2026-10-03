@@ -38,7 +38,7 @@ import { registrationSchema, utmSourceSchema } from "@/validators/register";
 export const registerRouter = createTRPCRouter({
   // Set referral source on sign-in (before character creation)
   setReferralSource: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Set referral source for analytics" } })
+    .meta({ mcp: { description: "Set referral source for analytics" } })
     .input(z.object({ utmSource: utmSourceSchema }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -89,7 +89,7 @@ export const registerRouter = createTRPCRouter({
     }),
   // Create Character
   createCharacter: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Create a new character" } })
+    .meta({ mcp: { description: "Create a new character" } })
     .input(registrationSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

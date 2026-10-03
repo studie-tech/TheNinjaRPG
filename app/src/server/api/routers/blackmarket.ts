@@ -50,7 +50,7 @@ import { fetchUser } from "./profile";
 
 export const blackMarketRouter = createTRPCRouter({
   getRyoOffers: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get ryo trade offers" } })
+    .meta({ mcp: { description: "Get ryo trade offers" } })
     .input(
       z.object({
         cursor: z.number().nullish(),
@@ -104,7 +104,7 @@ export const blackMarketRouter = createTRPCRouter({
       return { data: results, nextCursor };
     }),
   getGraph: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get ryo trade graph data" } })
+    .meta({ mcp: { description: "Get ryo trade graph data" } })
     .query(async ({ ctx }) => {
       const sender = alias(userData, "sender");
       const receiver = alias(userData, "receiver");
@@ -127,7 +127,7 @@ export const blackMarketRouter = createTRPCRouter({
       return transfers;
     }),
   createOffer: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Create a ryo trade offer" } })
+    .meta({ mcp: { description: "Create a ryo trade offer" } })
     .input(
       z.object({
         reps: z.coerce.number().int().min(1),
@@ -187,7 +187,7 @@ export const blackMarketRouter = createTRPCRouter({
       return { success: true, message: "Offer created" };
     }),
   delistOffer: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Remove a ryo trade offer" } })
+    .meta({ mcp: { description: "Remove a ryo trade offer" } })
     .input(z.object({ offerId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -220,7 +220,7 @@ export const blackMarketRouter = createTRPCRouter({
       return { success: true, message: "Offer delisted" };
     }),
   takeOffer: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Purchase a ryo trade offer" } })
+    .meta({ mcp: { description: "Purchase a ryo trade offer" } })
     .input(z.object({ offerId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch the offer, user, and seller data simultaneously
@@ -369,7 +369,7 @@ export const blackMarketRouter = createTRPCRouter({
     }),
   // Update custom title
   updateCustomTitle: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Update user's custom title" } })
+    .meta({ mcp: { description: "Update user's custom title" } })
     .input(titleChangeSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -418,7 +418,7 @@ export const blackMarketRouter = createTRPCRouter({
       }
     }),
   changeUserGender: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Change user's gender" } })
+    .meta({ mcp: { description: "Change user's gender" } })
     .input(z.object({ gender: z.enum(genders) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -444,7 +444,7 @@ export const blackMarketRouter = createTRPCRouter({
       }
     }),
   buyItemSlot: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Purchase an extra item slot" } })
+    .meta({ mcp: { description: "Purchase an extra item slot" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Fetch
@@ -477,7 +477,7 @@ export const blackMarketRouter = createTRPCRouter({
       }
     }),
   buyJutsuSlot: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Purchase an extra jutsu slot" } })
+    .meta({ mcp: { description: "Purchase an extra jutsu slot" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Fetch
@@ -514,7 +514,7 @@ export const blackMarketRouter = createTRPCRouter({
     }),
   rerollElement: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Reroll primary or secondary element" },
+      mcp: { description: "Reroll primary or secondary element" },
     })
     .input(z.object({ elementType: z.enum(["primary", "secondary"]) }))
     .output(baseServerResponse)
@@ -618,7 +618,7 @@ export const blackMarketRouter = createTRPCRouter({
     }),
   // Update stats
   updateStats: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Redistribute user stats" } })
+    .meta({ mcp: { description: "Redistribute user stats" } })
     .input(statSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

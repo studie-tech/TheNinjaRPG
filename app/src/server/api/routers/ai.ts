@@ -19,7 +19,7 @@ import { idSchema } from "@/validators/misc";
 
 export const aiRouter = createTRPCRouter({
   getAiProfile: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get AI profile by ID" } })
+    .meta({ mcp: { description: "Get AI profile by ID" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       // Query
@@ -163,7 +163,7 @@ export const aiRouter = createTRPCRouter({
       return { success: true, message: "AiProfile updated" };
     }),
   getAiRelations: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get quests referencing an AI" } })
+    .meta({ mcp: { description: "Get quests referencing an AI" } })
     .input(z.object({ aiId: z.string() }))
     .query(async ({ ctx, input }) => {
       const results = await getAiRelations(ctx.drizzle, input.aiId);

@@ -209,27 +209,18 @@ export const staffRouter = createTRPCRouter({
       ]);
       // Derived
       const devUrl = process.env.DEV_DATABASE_URL;
-      const aiUrl = process.env.AI_DATABASE_URL;
 
       // Guard
       if (!canControlBackups(user.role)) {
         return errorResponse("Not allowed for you");
       }
       if (!backup) return errorResponse("Backup not found");
-      if (!devUrl && !aiUrl) return errorResponse("No target database URLs configured");
+      if (!devUrl) return errorResponse("No development database URL configured");
       if (!backup.sqlText || backup.sqlText.startsWith("/* Empty backup")) {
         return errorResponse("Backup is empty");
       }
 
-      // Setup clients
-      const clients = [
-        ...(devUrl
-          ? [{ name: "dev", client: new PlanetScaleClient({ url: devUrl }) }]
-          : []),
-        ...(aiUrl
-          ? [{ name: "ai", client: new PlanetScaleClient({ url: aiUrl }) }]
-          : []),
-      ];
+      const client = new PlanetScaleClient({ url: devUrl });
 
       // Derived
       const tableMap: Record<typeof backup.type, string> = {
@@ -240,20 +231,19 @@ export const staffRouter = createTRPCRouter({
       };
       const tableName = tableMap[backup.type];
 
-      // Clear table content and push backup in parallel across all target databases
+      // Replace the development content with the selected backup.
       const deleteQuery =
         backup.type === "ai"
           ? `DELETE FROM \`${tableName}\` WHERE isAi = 1`
           : `DELETE FROM \`${tableName}\``;
 
-      await Promise.all(clients.map(({ client }) => client.execute(deleteQuery)));
+      await client.execute(deleteQuery);
 
       if (backup.sqlText && !backup.sqlText.startsWith("/* Empty backup")) {
-        await Promise.all(clients.map(({ client }) => client.execute(backup.sqlText)));
+        await client.execute(backup.sqlText);
       }
 
-      const targets = clients.map(({ name }) => name).join(" + ");
-      return { success: true, message: `Backup pushed to ${targets}` };
+      return { success: true, message: "Backup pushed to dev" };
     }),
   throwError: protectedProcedure
     .output(baseServerResponse)

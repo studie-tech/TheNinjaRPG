@@ -1863,7 +1863,7 @@ export const dataRouter = createTRPCRouter({
     }),
   getBattleLengthStatistics: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get battle length distribution data" },
+      mcp: { description: "Get battle length distribution data" },
     })
     .input(
       z.object({
