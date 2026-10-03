@@ -178,7 +178,7 @@ WHERE JSON_CONTAINS_PATH(
 -- stats is corrected here. Each update is guarded on the old wording and leaves a row that
 -- was edited since untouched.
 UPDATE `GuideArticle`
-SET `content` = REPLACE(`content`, 'Train offensive taijutsu (or another offence) in short 15-minute bouts when you can.', 'Train Offence in short 15-minute bouts when you can, and a mastery such as Taijutsu alongside it to unlock jutsu and gear of that type.')
+SET `content` = REPLACE(`content`, 'Train offensive taijutsu (or another offence) in short 15-minute bouts when you can.', 'Spend Energy to train Offence instantly, and train a mastery such as Taijutsu in timed sessions alongside it to unlock jutsu and gear of that type.')
 WHERE `slug` = 'getting-started' AND `content` LIKE '%Train offensive taijutsu (or another offence) in short 15-minute bouts when you can.%';
 -- Jutsu text that names a removed per-type stat, or credits a per-type stat buff or debuff
 -- to that type although it now moves the shared Offence.

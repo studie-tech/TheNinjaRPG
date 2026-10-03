@@ -57,7 +57,7 @@ const energyMigration = readFileSync(resolve(process.cwd(), "drizzle/migrations/
   .replaceAll("`_EnergyPool`", `\`${energyPool}\``)
   .replaceAll("`_EnergyTrainingGuard`", `\`${energyGuard}\``)
   .split("\n").filter(line => !line.startsWith("--")).join("\n")
-  .split(";").map(statement => statement.trim()).filter(Boolean);
+  .split(";").map(statement => statement.trim()).filter(statement => statement && !statement.startsWith("UPDATE `GuideArticle`"));
 
 describeWithDatabase("Energy SQL cutover", () => {
   afterEach(async () => {
@@ -82,5 +82,34 @@ describeWithDatabase("Energy SQL cutover", () => {
     const [rows] = await db.execute(sql.raw(`SELECT curEnergy,maxEnergy FROM \`${energyTable}\``)) as unknown as [Record<string, number>[], unknown];
     expect(rows).toEqual([{curEnergy:675, maxEnergy:675}]);
     await expect(runRawSql(`SELECT currentlyTraining FROM \`${energyTable}\``)).rejects.toThrow();
+  });
+});
+
+
+const guideTable = "EnergyGuideMigrationFixture";
+const legacyTrainingGuide = "Train offensive taijutsu (or another offence) in short 15-minute bouts when you can.";
+const masteryTrainingGuide = "Train Offence in short 15-minute bouts when you can, and a mastery such as Taijutsu alongside it to unlock jutsu and gear of that type.";
+const energyTrainingGuide = "Spend Energy to train Offence instantly, and train a mastery such as Taijutsu in timed sessions alongside it to unlock jutsu and gear of that type.";
+const guideMigration = readFileSync(resolve(process.cwd(), "drizzle/migrations/0054_elite_titanium_man.sql"), "utf8")
+  .split("\n").filter(line => !line.startsWith("--")).join("\n")
+  .split(";").map(statement => statement.trim()).filter(statement => statement.startsWith("UPDATE `GuideArticle`"))
+  .map(statement => statement.replaceAll("`GuideArticle`", `\`${guideTable}\``));
+
+describeWithDatabase("Energy getting-started guide migration", () => {
+  afterEach(async () => { await runRawSql(`DROP TABLE IF EXISTS \`${guideTable}\``); });
+  it.each([legacyTrainingGuide, masteryTrainingGuide])("replaces %s while preserving staff text and other articles", async oldText => {
+    await runRawSql(`CREATE TABLE \`${guideTable}\` (slug varchar(100) PRIMARY KEY, content text)`);
+    await runRawSql(`INSERT INTO \`${guideTable}\` VALUES ('getting-started','<p>Staff introduction.</p><li>${oldText}</li><p>Staff conclusion.</p>'),('other-guide','${oldText}')`);
+    for (const statement of guideMigration) await runRawSql(statement);
+    const db = await getTestDatabase();
+    const [rows] = await db.execute(sql.raw(`SELECT slug,content FROM \`${guideTable}\` ORDER BY slug`)) as unknown as [Record<string, string>[], unknown];
+    expect(rows).toEqual([
+      {slug: "getting-started", content: `<p>Staff introduction.</p><li>${energyTrainingGuide}</li><p>Staff conclusion.</p>`},
+      {slug: "other-guide", content: oldText},
+    ]);
+    await runRawSql(`UPDATE \`${guideTable}\` SET content = 'Staff training instructions.' WHERE slug = 'getting-started'`);
+    for (const statement of guideMigration) await runRawSql(statement);
+    const [edited] = await db.execute(sql.raw(`SELECT content FROM \`${guideTable}\` WHERE slug = 'getting-started'`)) as unknown as [Record<string, string>[], unknown];
+    expect(edited).toEqual([{content: "Staff training instructions."}]);
   });
 });

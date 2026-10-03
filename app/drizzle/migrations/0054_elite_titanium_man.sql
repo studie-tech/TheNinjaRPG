@@ -17,3 +17,11 @@ DROP TABLE `_EnergyPool`;
 ALTER TABLE `UserData` DROP COLUMN `trainingStartedAt`;
 ALTER TABLE `UserData` DROP COLUMN `lastCombatTrainingFinishedAt`;
 ALTER TABLE `UserData` DROP COLUMN `currentlyTraining`;
+
+-- Preserve staff edits while updating legacy and mastery-era getting-started guidance.
+UPDATE `GuideArticle`
+SET `content` = REPLACE(`content`, 'Train offensive taijutsu (or another offence) in short 15-minute bouts when you can.', 'Spend Energy to train Offence instantly, and train a mastery such as Taijutsu in timed sessions alongside it to unlock jutsu and gear of that type.')
+WHERE `slug` = 'getting-started' AND `content` LIKE '%Train offensive taijutsu (or another offence) in short 15-minute bouts when you can.%';
+UPDATE `GuideArticle`
+SET `content` = REPLACE(`content`, 'Train Offence in short 15-minute bouts when you can, and a mastery such as Taijutsu alongside it to unlock jutsu and gear of that type.', 'Spend Energy to train Offence instantly, and train a mastery such as Taijutsu in timed sessions alongside it to unlock jutsu and gear of that type.')
+WHERE `slug` = 'getting-started' AND `content` LIKE '%Train Offence in short 15-minute bouts when you can, and a mastery such as Taijutsu alongside it to unlock jutsu and gear of that type.%';

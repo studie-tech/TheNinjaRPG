@@ -79,6 +79,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
+import { calcCurrent } from "@/layout/StatusBar";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showTrainingCapcha } from "@/libs/captcha";
@@ -440,6 +441,14 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
   const { userData, updateUser, timeDiff } = props;
   const efficiency = trainEfficiency(userData);
   const [energy, setEnergy] = useState(1);
+  const availableEnergy = currentTrainingEnergy(userData, timeDiff);
+  const [, setEnergySample] = useState(availableEnergy);
+  useEffect(() => {
+    const update = () => setEnergySample(currentTrainingEnergy(userData, timeDiff));
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [userData, timeDiff]);
   const showCaptcha = userData && showTrainingCapcha(userData);
 
   // tRPC useUtils
@@ -636,13 +645,13 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           <Button
             variant="outline"
             disabled={isPending}
-            onClick={() => setEnergy(Math.floor(userData.curEnergy))}
+            onClick={() => setEnergy(currentTrainingEnergy(userData, timeDiff))}
           >
             Use available Energy
           </Button>
           <span>
-            {Math.floor(userData.curEnergy).toLocaleString()} /{" "}
-            {userData.maxEnergy.toLocaleString()} Energy
+            {availableEnergy.toLocaleString()} / {userData.maxEnergy.toLocaleString()}{" "}
+            Energy
           </span>
         </div>
         {showCaptcha && captcha && (
@@ -1420,6 +1429,23 @@ const getTrainingImage = (stat: CombatStatName | MasteryName) => {
       return IMG_TRAIN_BUKI_DEF;
   }
 };
+
+const currentTrainingEnergy = (
+  userData: NonNullable<UserWithRelations>,
+  timeDiff: number,
+) =>
+  Math.floor(
+    calcCurrent(
+      userData.curEnergy,
+      userData.maxEnergy,
+      ["BATTLE", "HOSPITALIZED", "TRAVEL"].includes(userData.status)
+        ? "AWAKE"
+        : userData.status,
+      userData.regeneration,
+      userData.regenAt,
+      timeDiff,
+    ).current,
+  );
 
 const getTrainingLabel = (stat: CombatStatName | MasteryName) => {
   switch (stat) {
