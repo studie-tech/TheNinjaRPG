@@ -7,7 +7,7 @@ import { validFederalPrice } from "@/server/utils/stripe/client";
 import { stripeCheckoutSchema } from "@/validators/stripe";
 
 const checkout = { federalStatus: "GOLD", priceId: "price_gold", amountCents: 1500 } as typeof stripeCheckout.$inferSelect;
-const invoice = (overrides: Record<string, unknown> = {}) => ({ status: "paid", currency: "usd", livemode: false, total: 1500, lines: { has_more: false, data: [{ amount: 1500, quantity: 1, pricing: { price_details: { price: "price_gold" } }, period: { start: 1700000000, end: 1702600000 }, parent: { subscription_item_details: { proration: false } } }] }, ...overrides }) as unknown as Stripe.Invoice;
+const invoice = (overrides: Record<string, unknown> = {}) => ({ automatic_tax: { enabled: true, status: "complete" }, status: "paid", currency: "usd", livemode: false, total: 1500, lines: { has_more: false, data: [{ amount: 1500, quantity: 1, pricing: { price_details: { price: "price_gold" } }, period: { start: 1700000000, end: 1702600000 }, parent: { subscription_item_details: { proration: false } } }] }, ...overrides }) as unknown as Stripe.Invoice;
 
 describe("Stripe checkout and paid coverage validation", () => {
   it("uses a paid invoice's exact billing period", () => {
@@ -23,6 +23,9 @@ describe("Stripe checkout and paid coverage validation", () => {
     }
     expect(invoiceCoverage(taxed, checkout)).not.toBeNull();
     expect(invoiceCoverage(invoice({ automatic_tax: { enabled: true, status: "complete" }, total_excluding_tax: 1500 }), checkout)).not.toBeNull();
+  });
+  it.each([undefined, { enabled: false, status: "complete" }])("rejects missing or disabled automatic tax: %j", (automatic_tax) => {
+    expect(invoiceCoverage(invoice({ automatic_tax }), checkout)).toBeNull();
   });
   it.each(["failed", "requires_location_inputs"])("rejects an incomplete tax calculation: %s", (status) => {
     expect(invoiceCoverage(invoice({ automatic_tax: { enabled: true, status } }), checkout)).toBeNull();

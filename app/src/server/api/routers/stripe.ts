@@ -12,6 +12,7 @@ import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { reputationAllowanceUsed } from "@/server/utils/purchases/allowance";
 import {
   getStripe,
   isStripeConfigured,
@@ -61,6 +62,8 @@ export const stripeRouter = createTRPCRouter({
               and(
                 eq(paypalTransaction.createdById, ctx.userId),
                 gte(paypalTransaction.createdAt, sql`NOW() - INTERVAL 30 DAY`),
+                sql`${paypalTransaction.status} NOT IN ('CANCELLED', 'REVIEW_REQUIRED')`,
+                sql`(${paypalTransaction.status} != 'RESERVED' OR ${paypalTransaction.createdAt} >= NOW() - INTERVAL 73 HOUR)`,
               ),
             ),
           ctx.drizzle
@@ -195,28 +198,13 @@ export const stripeRouter = createTRPCRouter({
             if (tier === "NONE") {
               // One statement sees a consistent receipt/reservation transition. Separate
               // upfront reads can miss a checkout that is being delivered between them.
-              const [allowance] = await tx
-                .select({
-                  total: sql<number>`
-                  COALESCE((SELECT SUM(p.reputationPoints) FROM ${paypalTransaction} p
-                    WHERE p.createdById = ${ctx.userId} AND p.createdAt >= NOW() - INTERVAL 30 DAY), 0)
-                  + COALESCE((SELECT SUM(p.reputationPoints) FROM ${stripePayment} p
-                    WHERE p.createdById = ${ctx.userId} AND p.grantedAt IS NOT NULL
-                      ${env.NODE_ENV === "production" ? sql`AND p.isSandbox = FALSE` : sql``}
-                      AND p.purchasedAt >= NOW() - INTERVAL 30 DAY), 0)
-                  + COALESCE((SELECT SUM(c.reputationPoints) FROM ${stripeCheckout} c
-                    WHERE c.createdById = ${ctx.userId} AND c.id != ${input.requestId}
-                      AND c.closedAt IS NULL AND c.createdAt >= NOW() - INTERVAL 25 HOUR
-                      AND NOT EXISTS (SELECT 1 FROM ${stripePayment} p
-                        WHERE p.checkoutId = c.id AND p.grantedAt IS NOT NULL)), 0)
-                `.mapWith(Number),
-                })
-                .from(userData)
-                .where(eq(userData.userId, ctx.userId));
-              if (
-                reputationPoints + (allowance?.total ?? 0) >
-                dynamicMonthlyRepCap(buyer)
-              )
+              const allowance = await reputationAllowanceUsed(
+                tx,
+                ctx.userId,
+                "",
+                input.requestId,
+              );
+              if (reputationPoints + allowance > dynamicMonthlyRepCap(buyer))
                 return false;
             }
             await tx

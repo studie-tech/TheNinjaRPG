@@ -234,6 +234,7 @@ const ReputationStore = (props: { currency: string }) => {
   const [amount, setAmount] = useState(0);
   const maxUsers = 1;
   const invoiceIdRef = useRef(nanoid());
+  const paypalTermsRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
 
   // Track mount state to prevent operations after unmount
@@ -246,12 +247,22 @@ const ReputationStore = (props: { currency: string }) => {
 
   const utils = api.useUtils();
 
-  const { mutate: buyReps, isPending } = api.paypal.resolveOrder.useMutation({
+  const { mutateAsync: buyReps, isPending } = api.paypal.captureOrder.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await utils.profile.getUser.invalidate();
+      await Promise.all([
+        utils.profile.getUser.invalidate(),
+        utils.paypal.getRecentRepsCount.invalidate(),
+        utils.paypal.getPaypalTransactions.invalidate(),
+      ]);
+      if (data.success) {
+        invoiceIdRef.current = nanoid();
+        paypalTermsRef.current = null;
+      }
     },
   });
+  const { mutateAsync: createPaypalOrder } = api.paypal.createOrder.useMutation();
+  const { mutateAsync: cancelPaypalOrder } = api.paypal.cancelOrder.useMutation();
 
   const { data: purchasedReps } = api.paypal.getRecentRepsCount.useQuery(
     { userId: userData?.userId ?? "-" },
@@ -343,66 +354,67 @@ const ReputationStore = (props: { currency: string }) => {
           <PayPalButtons
             style={{ layout: "horizontal", tagline: false }}
             forceReRender={[amount, watchedUsers, props.currency]}
-            createOrder={(_data, actions) => {
-              return actions.order.create({
-                intent: "CAPTURE",
-                purchase_units: [
-                  {
-                    amount: {
-                      currency_code: props.currency,
-                      value: amount.toString(),
-                    },
-                    invoice_id: invoiceIdRef.current,
-                    custom_id: `${userData.userId}-${selectedUser.userId}`,
-                  },
-                ],
+            createOrder={async () => {
+              const terms = `${userData.userId}:${selectedUser.userId}:${watchedPoints}`;
+              if (paypalTermsRef.current && paypalTermsRef.current !== terms) {
+                const cancelled = await cancelPaypalOrder({
+                  requestId: invoiceIdRef.current,
+                });
+                if (!cancelled.success) {
+                  showMutationToast(cancelled);
+                  throw new Error(cancelled.message);
+                }
+                invoiceIdRef.current = nanoid();
+              }
+              paypalTermsRef.current = terms;
+              const result = await createPaypalOrder({
+                requestId: invoiceIdRef.current,
+                expectedUserId: userData.userId,
+                userId: selectedUser.userId,
+                reputationPoints: watchedPoints,
               });
+              if (!result.success || !("orderId" in result) || !result.orderId) {
+                showMutationToast(result);
+                throw new Error(result.message);
+              }
+              await utils.paypal.getPaypalTransactions.invalidate();
+              return result.orderId;
             }}
-            onApprove={(_data, actions) => {
-              invoiceIdRef.current = nanoid();
-              if (actions.order) {
-                return actions.order.capture().then((details) => {
-                  // Only proceed if component is still mounted
-                  if (!isMountedRef.current) return;
-                  buyReps({ orderId: details.id ?? nanoid() });
-                  // Send GTM event with conversion data
-                  const purchaseUnit = details?.purchase_units?.[0];
-                  const transaction_id = purchaseUnit?.invoice_id;
-                  const currency = purchaseUnit?.amount?.currency_code;
-                  const value = purchaseUnit?.amount?.value;
-                  if (transaction_id && currency && value) {
-                    sendGTMEvent({ ecommerce: null });
-                    sendGTMEvent({
-                      event: "purchase",
-                      ecommerce: {
-                        transaction_id: transaction_id,
-                        value: Number(value),
-                        currency: currency,
-                        items: [
-                          {
-                            item_id: "BASIC_REPS",
-                            item_name: "REPUTATION POINTS",
-                            price: Number(value),
-                            quantity: 1,
-                          },
-                        ],
+            onApprove={async (data) => {
+              const result = await buyReps({ orderId: data.orderID });
+              if (result.success && isMountedRef.current) {
+                sendGTMEvent({ ecommerce: null });
+                sendGTMEvent({
+                  event: "purchase",
+                  ecommerce: {
+                    transaction_id: data.orderID,
+                    value: amount,
+                    currency: "USD",
+                    items: [
+                      {
+                        item_id: "BASIC_REPS",
+                        item_name: "REPUTATION POINTS",
+                        price: amount,
+                        quantity: 1,
                       },
-                    });
-                  }
+                    ],
+                  },
                 });
-              } else {
-                if (!isMountedRef.current) return Promise.resolve();
-                showMutationToast({
-                  success: false,
-                  message:
-                    "Order not fully completed yet. Please wait for the order to clear, or when you know your transaction ID, contact support through our paypal email",
-                  title: "No order",
-                });
-                return Promise.resolve();
               }
             }}
-            onCancel={() => {
-              // User closed the popup without completing payment - this is expected behavior
+            onCancel={async () => {
+              const result = await cancelPaypalOrder({
+                requestId: invoiceIdRef.current,
+              });
+              showMutationToast(result);
+              if (result.success) {
+                invoiceIdRef.current = nanoid();
+                paypalTermsRef.current = null;
+                await Promise.all([
+                  utils.paypal.getRecentRepsCount.invalidate(),
+                  utils.paypal.getPaypalTransactions.invalidate(),
+                ]);
+              }
             }}
             onError={(err) => {
               // Suppress PayPal cleanup errors (occur during navigation)

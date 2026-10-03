@@ -16,3 +16,22 @@ export const searchPaypalTransactionSchema = z
 export type SearchPaypalTransactionSchema = z.infer<
   typeof searchPaypalTransactionSchema
 >;
+
+export const paypalCheckoutSchema = z.strictObject({
+  requestId: z
+    .string()
+    .length(21)
+    .regex(/^[A-Za-z0-9_-]+$/),
+  expectedUserId: z.string().min(1).max(191),
+  userId: z.string().min(1).max(191),
+  reputationPoints: z.number().int().min(5),
+});
+export const paypalCheckoutIdSchema = z.strictObject({
+  requestId: z
+    .string()
+    .length(21)
+    .regex(/^[A-Za-z0-9_-]+$/),
+});
+export const paypalOrderSchema = z.strictObject({
+  orderId: z.string().min(15).max(20),
+});

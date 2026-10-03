@@ -8,10 +8,9 @@ import {
   paypalSubscription,
   paypalTransaction,
   recruitmentRewards,
-  stripePayment,
   userData,
 } from "@/drizzle/schema";
-import { env } from "@/env/server.mjs";
+import { isNativeUserAgent } from "@/libs/native/userAgent";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -19,18 +18,30 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
-import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { reputationAllowanceUsed } from "@/server/utils/purchases/allowance";
+import {
+  canonicalStoreUserId,
+  setFederalStatusWithStoreFloor,
+} from "@/server/utils/purchases/grant";
 import { upgradeStripeFederalWithReps } from "@/server/utils/stripe/fulfillment";
 import {
   calcFedUgradeCost,
   dollars2reps,
+  dynamicMonthlyRepCap,
   fedStatusRepsCost,
   plan2FedStatus,
+  reps2dollars,
 } from "@/utils/paypal";
 import { canSeeSecretData } from "@/utils/permissions";
 import { addDays, secondsFromNow } from "@/utils/time";
 import type { JsonData } from "@/utils/typeutils";
-import { searchPaypalTransactionSchema } from "@/validators/points";
+import {
+  paypalCheckoutIdSchema,
+  paypalCheckoutSchema,
+  paypalOrderSchema,
+  searchPaypalTransactionSchema,
+} from "@/validators/points";
 import type { DrizzleClient } from "../../db";
 import { fetchUser } from "./profile";
 
@@ -45,6 +56,7 @@ type PaypalOrder =
       status?: string;
       purchase_units?: {
         amount?: PaypalAmount;
+        invoice_id?: string;
         custom_id?: string;
         payments?: {
           captures?: {
@@ -94,62 +106,181 @@ type PaypalTransaction = {
 };
 
 export const paypalRouter = createTRPCRouter({
-  resolveOrder: protectedProcedure
-    .input(
-      z.object({
-        startDate: z.date().optional(),
-        endDate: z.date().optional(),
-        orderId: z.string().min(15).max(20),
-      }),
-    )
+  createOrder: protectedProcedure
+    .input(paypalCheckoutSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (isNativeUserAgent(ctx.userAgent))
+        return errorResponse("Use the in-app store to purchase in the native app.");
+      if (input.expectedUserId !== ctx.userId)
+        return errorResponse("Your account changed. Start checkout again.");
+      const amount = Math.round(reps2dollars(input.reputationPoints) * 100) / 100;
+      const reps = dollars2reps(amount);
+      const reserved = await retryOnDeadlock(() =>
+        ctx.drizzle.transaction(async (tx) => {
+          const buyer = await lockPaypalBuyer(tx, ctx.userId);
+          const [recipient, existing] = await Promise.all([
+            tx.query.userData.findFirst({ where: eq(userData.userId, input.userId) }),
+            tx.query.paypalTransaction.findFirst({
+              where: eq(paypalTransaction.id, input.requestId),
+            }),
+          ]);
+          if (!buyer || buyer.isBanned || !recipient || recipient.isBanned)
+            return false;
+          if (existing)
+            return (
+              existing.createdById === ctx.userId &&
+              existing.affectedUserId === input.userId &&
+              existing.amount === amount &&
+              existing.reputationPoints === reps &&
+              existing.status === "RESERVED" &&
+              existing.createdAt.getTime() > Date.now() - 3 * 3600000
+            );
+          if (
+            (await reputationAllowanceUsed(tx, ctx.userId)) + reps >
+            dynamicMonthlyRepCap(buyer)
+          )
+            return false;
+          await tx.insert(paypalTransaction).values({
+            id: input.requestId,
+            createdById: ctx.userId,
+            affectedUserId: input.userId,
+            transactionId: `reservation_${input.requestId}`,
+            transactionUpdatedDate: new Date().toISOString(),
+            invoiceId: input.requestId,
+            amount,
+            reputationPoints: reps,
+            currency: "USD",
+            status: "RESERVED",
+            type: "REP_PURCHASE",
+            rawData: {},
+          });
+          return true;
+        }),
+      );
+      if (!reserved)
+        return errorResponse(
+          "This purchase exceeds your remaining monthly allowance, or checkout changed. Cancel unfinished checkout and try again.",
+        );
+      const existing = await ctx.drizzle.query.paypalTransaction.findFirst({
+        where: eq(paypalTransaction.id, input.requestId),
+      });
+      if (existing?.orderId)
+        return {
+          success: true,
+          message: "Continue checkout",
+          orderId: existing.orderId,
+        };
+      // The same request resumes after an uncertain provider response; do not release its
+      // reservation until cancellation prevents our capture endpoint from charging it.
+      const token = await getPaypalAccessToken();
+      const order = await paypalOrderRequest("", token, input.requestId, {
+        intent: "CAPTURE",
+        purchase_units: [
+          {
+            amount: { currency_code: "USD", value: amount.toFixed(2) },
+            invoice_id: input.requestId,
+            custom_id: `${ctx.userId}-${input.userId}`,
+          },
+        ],
+      });
+      if (!order?.id) throw new Error("PayPal did not return an order ID");
+      const saved = await ctx.drizzle
+        .update(paypalTransaction)
+        .set({ orderId: order.id })
+        .where(
+          and(
+            eq(paypalTransaction.id, input.requestId),
+            eq(paypalTransaction.status, "RESERVED"),
+          ),
+        );
+      if (saved.rowsAffected !== 1) {
+        const current = await ctx.drizzle.query.paypalTransaction.findFirst({
+          where: eq(paypalTransaction.id, input.requestId),
+        });
+        if (current?.orderId !== order.id || current.status !== "RESERVED")
+          return errorResponse("Checkout was cancelled. Start checkout again.");
+      }
+      return { success: true, message: "Continue checkout", orderId: order.id };
+    }),
+  cancelOrder: protectedProcedure
+    .input(paypalCheckoutIdSchema)
+    .mutation(async ({ ctx, input }) => {
+      const result = await ctx.drizzle
+        .update(paypalTransaction)
+        .set({ status: "CANCELLED" })
+        .where(
+          and(
+            eq(paypalTransaction.id, input.requestId),
+            eq(paypalTransaction.createdById, ctx.userId),
+            eq(paypalTransaction.status, "RESERVED"),
+          ),
+        );
+      if (result.rowsAffected === 1)
+        return { success: true, message: "Checkout cancelled" };
+      const existing = await ctx.drizzle.query.paypalTransaction.findFirst({
+        where: eq(paypalTransaction.id, input.requestId),
+      });
+      if (
+        !existing ||
+        (existing.createdById === ctx.userId && existing.status === "CANCELLED")
+      )
+        return { success: true, message: "Checkout cancelled" };
+      return errorResponse(
+        "Payment may already be processing. Check your purchase history before trying again.",
+      );
+    }),
+  captureOrder: protectedProcedure
+    .input(paypalOrderSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const token = await getPaypalAccessToken();
-      const order = await getPaypalOrder({ orderId: input.orderId, token: token });
-      // Guarding
-      if (order === undefined) {
-        throw serverError("INTERNAL_SERVER_ERROR", "Could not fetch order");
-      }
-      const affectedUserId = order?.purchase_units?.[0]?.custom_id?.split("-")?.[1];
-      if (affectedUserId === undefined) {
-        throw serverError("INTERNAL_SERVER_ERROR", "Could not extract user ID");
-      }
-      const affectedUser = await fetchUser(ctx.drizzle, affectedUserId);
-      if (!affectedUser) {
-        throw serverError("INTERNAL_SERVER_ERROR", "Could not fetch target user");
-      }
-      const capture = order?.purchase_units?.[0]?.payments?.captures?.[0];
-      if (capture?.status !== "COMPLETED") {
-        throw serverError("INTERNAL_SERVER_ERROR", "Payments not completed");
-      }
-      const { currency_code, value } = capture.amount;
-      // Guards
-      if (value === undefined) {
-        throw serverError("INTERNAL_SERVER_ERROR", "Could not extract payment amount");
-      }
-      if (parseFloat(value) < 1) {
-        throw serverError("INTERNAL_SERVER_ERROR", "Too low payment amount");
-      }
-      if (currency_code !== "USD") {
-        throw serverError("INTERNAL_SERVER_ERROR", "Invalid currency");
-      }
-      // Update database - will fail if orderID already exists, due to unique constraint
-      await updateReps({
-        client: ctx.drizzle,
-        createdById: ctx.userId,
-        transactionId: capture.id,
-        transactionUpdatedDate: capture.update_time,
-        orderId: input.orderId,
-        affectedUserId: affectedUserId,
-        invoiceId: capture.invoice_id,
-        value: parseFloat(value),
-        currency: currency_code,
-        status: "COMPLETED",
-        reps: dollars2reps(parseFloat(value)),
-        type: "REP_PURCHASE",
-        raw: order,
+      if (isNativeUserAgent(ctx.userAgent))
+        return errorResponse("Use the in-app store to purchase in the native app.");
+      const receipt = await ctx.drizzle.query.paypalTransaction.findFirst({
+        where: and(
+          eq(paypalTransaction.orderId, input.orderId),
+          eq(paypalTransaction.type, "REP_PURCHASE"),
+        ),
       });
-      return { success: true, message: "Reputation points purchased" };
+      if (!receipt || receipt.createdById !== ctx.userId)
+        return errorResponse("This checkout belongs to another account.");
+      if (receipt.status === "COMPLETED")
+        return { success: true, message: "Reputation points already delivered" };
+      if (receipt.status === "RESERVED") {
+        const claimed = await ctx.drizzle
+          .update(paypalTransaction)
+          .set({ status: "CAPTURING" })
+          .where(
+            and(
+              eq(paypalTransaction.id, receipt.id),
+              eq(paypalTransaction.status, "RESERVED"),
+              gte(paypalTransaction.createdAt, sql`NOW() - INTERVAL 3 HOUR`),
+            ),
+          );
+        if (claimed.rowsAffected !== 1)
+          return errorResponse("Checkout expired or changed. Start checkout again.");
+      } else if (receipt.status !== "CAPTURING")
+        return errorResponse("Checkout is closed. Start checkout again.");
+      const token = await getPaypalAccessToken();
+      let order = await getPaypalOrder({ orderId: input.orderId, token });
+      if (order?.status !== "COMPLETED")
+        order = await paypalOrderRequest(
+          `${input.orderId}/capture`,
+          token,
+          `capture_${receipt.id}`,
+          {},
+        );
+      return deliverPaypalOrder(ctx.drizzle, order, ctx.userId, input.orderId);
+    }),
+  // Recover orders approved by a previously loaded checkout client.
+  resolveOrder: protectedProcedure
+    .input(paypalOrderSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      if (isNativeUserAgent(ctx.userAgent))
+        return errorResponse("Use the in-app store to purchase in the native app.");
+      const token = await getPaypalAccessToken();
+      const order = await getPaypalOrder({ orderId: input.orderId, token });
+      return deliverPaypalOrder(ctx.drizzle, order, ctx.userId, input.orderId);
     }),
   resolveTransaction: protectedProcedure
     .input(searchPaypalTransactionSchema)
@@ -206,46 +337,10 @@ export const paypalRouter = createTRPCRouter({
         message: `Synced with data from Paypal. UsedID ${affectedUserId} set to have ${newStatus} federal subscription.`,
       };
     }),
-  // Get reps from the last 30 days
+  // Includes reservations from both web payment providers.
   getRecentRepsCount: protectedProcedure
     .input(z.object({ userId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const [paypal, stripe] = await Promise.all([
-        ctx.drizzle
-          .select({
-            count:
-              sql<number>`COALESCE(SUM(${paypalTransaction.reputationPoints}), 0)`.mapWith(
-                Number,
-              ),
-          })
-          .from(paypalTransaction)
-          .where(
-            and(
-              eq(paypalTransaction.createdById, input.userId),
-              gte(paypalTransaction.createdAt, sql`NOW() - INTERVAL 30 DAY`),
-            ),
-          ),
-        ctx.drizzle
-          .select({
-            count:
-              sql<number>`COALESCE(SUM(${stripePayment.reputationPoints}), 0)`.mapWith(
-                Number,
-              ),
-          })
-          .from(stripePayment)
-          .where(
-            and(
-              eq(stripePayment.createdById, input.userId),
-              gte(stripePayment.purchasedAt, sql`NOW() - INTERVAL 30 DAY`),
-              sql`${stripePayment.grantedAt} IS NOT NULL`,
-              ...(env.NODE_ENV === "production"
-                ? [eq(stripePayment.isSandbox, false)]
-                : []),
-            ),
-          ),
-      ]);
-      return (paypal[0]?.count ?? 0) + (stripe[0]?.count ?? 0);
-    }),
+    .query(({ ctx, input }) => reputationAllowanceUsed(ctx.drizzle, input.userId)),
   // Get all paypal transactions by this user
   getPaypalTransactions: protectedProcedure
     .input(
@@ -535,6 +630,7 @@ export const updateReps = async (input: {
   type: TransactionType;
   raw: JsonData;
 }) => {
+  if (input.type === "REP_PURCHASE") return deliverPaypalReputation(input);
   // First see if we can insert transaction.
   await input.client.insert(paypalTransaction).values({
     id: nanoid(),
@@ -659,15 +755,20 @@ export const syncTransactions = async (
           const parsedValue = parseFloat(value);
           if (parsedValue < 0) {
             return `Transaction ID ${info.transaction_id} invalid value`;
-          } else if (stored) {
+          } else if (
+            stored &&
+            !["RESERVED", "CAPTURING", "DELIVERY_PENDING", "REVIEW_REQUIRED"].includes(
+              stored.status,
+            )
+          ) {
             return `Transaction ID ${info.transaction_id} already processed`;
           } else {
-            await updateReps({
+            const result = await updateReps({
               client: client,
               createdById: createdByUserId,
               transactionId: info.transaction_id,
               transactionUpdatedDate: info.transaction_updated_date,
-              orderId: nanoid(),
+              orderId: stored?.orderId ?? undefined,
               affectedUserId: affectedUserId,
               invoiceId: info.invoice_id,
               value: parsedValue,
@@ -677,7 +778,7 @@ export const syncTransactions = async (
               type: "REP_PURCHASE",
               raw: t,
             });
-            return `Transaction ID ${info.transaction_id} synced!`;
+            return `Transaction ID ${info.transaction_id}: ${result && "message" in result ? result.message : "synced"}`;
           }
         }
       }),
@@ -781,4 +882,193 @@ export const getPaypalOrder = async (input: { orderId: string; token: string }) 
       return data;
     });
   return order;
+};
+
+/** Serialize cross-provider allowance changes on the buyer row without missing-row locks. */
+const lockPaypalBuyer = async (client: DrizzleClient, buyerId: string) => {
+  const locked = await client
+    .update(userData)
+    .set({
+      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), ${userData.updatedAt} + INTERVAL 1000 MICROSECOND)`,
+    })
+    .where(eq(userData.userId, buyerId));
+  if (locked.rowsAffected !== 1) return undefined;
+  return client.query.userData.findFirst({ where: eq(userData.userId, buyerId) });
+};
+
+const paypalOrderRequest = async (
+  path: string,
+  token: string,
+  requestId: string,
+  body: JsonData,
+): Promise<PaypalOrder> => {
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_PAYPAL_URL}/v2/checkout/orders${path ? `/${path}` : ""}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "PayPal-Request-Id": requestId,
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!response.ok)
+    throw new Error(
+      `PayPal order request failed (${response.status}); retry the same checkout`,
+    );
+  return response.json();
+};
+
+const deliverPaypalOrder = async (
+  client: DrizzleClient,
+  order: PaypalOrder,
+  buyerId: string,
+  orderId: string,
+) => {
+  const unit = order?.purchase_units?.[0];
+  const capture = unit?.payments?.captures?.[0];
+  const [createdById, affectedUserId] = unit?.custom_id?.split("-") ?? [];
+  const value = Number(capture?.amount.value);
+  if (
+    order?.id !== orderId ||
+    order.status !== "COMPLETED" ||
+    order.purchase_units?.length !== 1 ||
+    unit?.payments?.captures?.length !== 1 ||
+    capture?.status !== "COMPLETED" ||
+    capture.amount.currency_code !== "USD" ||
+    !Number.isFinite(value) ||
+    value < 1 ||
+    !createdById ||
+    !affectedUserId
+  )
+    return errorResponse(
+      "Payment has not been verified. Check your purchase history before trying again.",
+    );
+  const canonicalBuyer = await canonicalStoreUserId(client, createdById);
+  if (canonicalBuyer !== buyerId)
+    return errorResponse("This payment belongs to another account.");
+  return deliverPaypalReputation({
+    client,
+    createdById,
+    affectedUserId,
+    orderId,
+    transactionId: capture.id,
+    transactionUpdatedDate: capture.update_time,
+    invoiceId: capture.invoice_id ?? unit.invoice_id,
+    value,
+    currency: "USD",
+    status: "COMPLETED",
+    reps: dollars2reps(value),
+    type: "REP_PURCHASE",
+    raw: order,
+  });
+};
+
+/** Receipt conversion and reward delivery commit together, including recovery imports. */
+const deliverPaypalReputation = async (input: Parameters<typeof updateReps>[0]) => {
+  const [createdById, affectedUserId] = await Promise.all([
+    canonicalStoreUserId(input.client, input.createdById),
+    canonicalStoreUserId(input.client, input.affectedUserId),
+  ]);
+  input = { ...input, createdById, affectedUserId };
+  return retryOnDeadlock(() =>
+    input.client.transaction(async (tx) => {
+      const buyer = await lockPaypalBuyer(tx, input.createdById);
+      if (!buyer)
+        return errorResponse(
+          "Payment requires support review: buyer account was not found.",
+        );
+      const stored = await tx.query.paypalTransaction.findFirst({
+        where: and(
+          eq(paypalTransaction.type, "REP_PURCHASE"),
+          or(
+            eq(paypalTransaction.transactionId, input.transactionId),
+            ...(input.invoiceId
+              ? [eq(paypalTransaction.invoiceId, input.invoiceId)]
+              : []),
+            ...(input.orderId ? [eq(paypalTransaction.orderId, input.orderId)] : []),
+          ),
+        ),
+      });
+      if (
+        stored &&
+        (stored.createdById !== input.createdById ||
+          stored.affectedUserId !== input.affectedUserId ||
+          stored.amount !== input.value ||
+          stored.currency !== input.currency)
+      )
+        throw new Error("PayPal payment does not match receipt ownership or amount");
+      if (
+        stored &&
+        ![
+          "RESERVED",
+          "CAPTURING",
+          "DELIVERY_PENDING",
+          "REVIEW_REQUIRED",
+          "CANCELLED",
+        ].includes(stored.status)
+      )
+        return { success: true, message: "Reputation points already delivered" };
+      if (
+        input.currency !== "USD" ||
+        !Number.isFinite(input.value) ||
+        input.value < 1 ||
+        input.reps !== dollars2reps(input.value)
+      )
+        return errorResponse(
+          "Payment requires support review: unexpected currency or amount.",
+        );
+      if (
+        stored &&
+        (stored.createdById !== input.createdById ||
+          stored.affectedUserId !== input.affectedUserId ||
+          stored.amount !== input.value ||
+          stored.reputationPoints !== input.reps ||
+          (stored.orderId && input.orderId && stored.orderId !== input.orderId))
+      )
+        throw new Error("PayPal payment does not match reserved terms");
+      const id = stored?.id ?? `paypal_${input.transactionId}`;
+      const terms = {
+        createdById: input.createdById,
+        affectedUserId: input.affectedUserId,
+        transactionId: input.transactionId,
+        transactionUpdatedDate: input.transactionUpdatedDate,
+        orderId: input.orderId,
+        invoiceId: input.invoiceId,
+        amount: input.value,
+        reputationPoints: input.reps,
+        currency: input.currency,
+        type: input.type,
+        rawData: input.raw,
+      };
+      const allowed =
+        (await reputationAllowanceUsed(tx, input.createdById, id)) + input.reps <=
+        dynamicMonthlyRepCap(buyer);
+      const status = allowed ? "COMPLETED" : "REVIEW_REQUIRED";
+      if (stored)
+        await tx
+          .update(paypalTransaction)
+          .set({ ...terms, status })
+          .where(eq(paypalTransaction.id, id));
+      else await tx.insert(paypalTransaction).values({ id, ...terms, status });
+      // A previously captured legacy order may arrive after another provider reserved the
+      // remaining allowance. Retain the payment for staff review; never silently over-grant.
+      if (!allowed)
+        return errorResponse(
+          "Payment received but exceeds your monthly allowance. Contact support with your PayPal transaction ID for review or refund; no points were delivered.",
+        );
+      const granted = await tx
+        .update(userData)
+        .set({
+          reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${input.reps}`,
+          reputationPoints: sql`${userData.reputationPoints} + ${input.reps}`,
+        })
+        .where(eq(userData.userId, input.affectedUserId));
+      if (granted.rowsAffected !== 1)
+        throw new Error("PayPal recipient not found; delivery will retry");
+      return { success: true, message: "Reputation points purchased" };
+    }),
+  );
 };
