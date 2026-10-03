@@ -697,14 +697,10 @@
   padding: 60px 8%;
   background: #e4e7dc;
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 10%;
-}
-.merch-design-story h3 {
-  font: 400 25px Georgia,serif;
-  margin: 30px 0 20px;
+  grid-template-columns: 1fr;
 }
 .merch-design-story p:not(.merch-eyebrow) {
+  max-width: 70ch;
   font-size: 13px;
   line-height: 1.9;
   color: #687260;
@@ -769,7 +765,7 @@
   }
 }
 @container merch (max-width:850px) {
-  .merch-faq,.merch-design-story {
+  .merch-faq {
     grid-template-columns: 1fr;
     gap: 25px;
   }
@@ -994,9 +990,6 @@
   }
   .merch-design-story h2 {
     font-size: 32px;
-  }
-  .merch-design-story h3 {
-    margin: 25px 0 0;
   }
 }
 .merch-collection-tile:after {

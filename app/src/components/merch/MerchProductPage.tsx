@@ -231,10 +231,6 @@ export function MerchProductPage({ handle }: { handle: string }) {
             <h2>{design.name}</h2>
             <p>{design.history}</p>
           </div>
-          <div>
-            <h3>From lore to artwork</h3>
-            <p>{design.interpretation}</p>
-          </div>
         </section>
       )}
       <section className="merch-related">
