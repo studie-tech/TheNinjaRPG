@@ -207,7 +207,12 @@ export const StripePaymentHistory = () => {
               : `${payment.federalStatusOverride ?? payment.federalStatus} support`}
           </p>
           <p className="text-xs">
-            {payment.id} · {payment.grantedAt ? "Delivered" : "Processing"}
+            {payment.id} ·{" "}
+            {payment.grantedAt
+              ? "Delivered"
+              : payment.reviewRequired
+                ? "Contact support for review or refund; no points delivered"
+                : "Processing"}
             {payment.expiresAt
               ? ` · Paid through ${payment.expiresAt.toLocaleDateString()}`
               : ""}

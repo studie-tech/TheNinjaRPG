@@ -1979,6 +1979,7 @@ export const stripeCheckout = mysqlTable("StripeCheckout", {
 
 /** A payment intent or paid invoice has one receipt and one atomic delivery marker. */
 export const stripePayment = mysqlTable("StripePayment", {
+  reviewRequired: boolean("reviewRequired").default(false).notNull(),
   federalStatusOverride: mysqlEnum("federalStatusOverride", consts.FederalStatuses),
   isSandbox: boolean("isSandbox").default(false).notNull(),
   id: varchar("id", { length: 191 }).primaryKey().notNull(),

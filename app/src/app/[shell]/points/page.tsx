@@ -380,8 +380,9 @@ const ReputationStore = (props: { currency: string }) => {
               await utils.paypal.getPaypalTransactions.invalidate();
               return result.orderId;
             }}
-            onApprove={async (data) => {
+            onApprove={async (data, actions) => {
               const result = await buyReps({ orderId: data.orderID });
+              if (result.restartFunding) return actions.restart();
               if (result.success && isMountedRef.current) {
                 sendGTMEvent({ ecommerce: null });
                 sendGTMEvent({

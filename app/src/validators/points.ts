@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FederalStatuses } from "@/drizzle/constants";
+import { baseServerResponse } from "./base";
 
 export const buyRepsSchema = z.object({
   reputationPoints: z.number().min(5).max(1000),
@@ -52,4 +53,8 @@ export const federalReputationPurchaseSchema = z.strictObject({
 export const federalUpgradeSchema = z.strictObject({
   userId: z.string().min(1).max(191),
   plan: z.enum(FederalStatuses),
+});
+
+export const paypalCaptureResponseSchema = baseServerResponse.extend({
+  restartFunding: z.boolean().optional(),
 });

@@ -45,3 +45,15 @@ export const reputationAllowanceUsed = async (
     .where(eq(userData.userId, buyerId));
   return row?.total ?? 0;
 };
+
+/** Serialize cross-provider allowance changes on the buyer row without missing-row locks. */
+export const lockPurchaseBuyer = async (client: DrizzleClient, buyerId: string) => {
+  const locked = await client
+    .update(userData)
+    .set({
+      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), ${userData.updatedAt} + INTERVAL 1000 MICROSECOND)`,
+    })
+    .where(eq(userData.userId, buyerId));
+  if (locked.rowsAffected !== 1) return undefined;
+  return client.query.userData.findFirst({ where: eq(userData.userId, buyerId) });
+};

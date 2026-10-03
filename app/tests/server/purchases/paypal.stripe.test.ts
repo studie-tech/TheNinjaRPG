@@ -22,8 +22,9 @@ const subscriptions = new Map<string, Record<string, unknown>>();
 const paypalPlans = Object.fromEntries(["NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL", "NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER", "NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD"].map((key) => [key, process.env[key]]));
 let createResponseFails = false;
 let captureResponseMinimal = false;
+let captureFailure: "declined" | "unknown" | undefined;
 const request = (reputationPoints = 20) => ({ requestId: nanoid(), expectedUserId: BUYER, userId: TARGET, reputationPoints });
-const stripeRequest = (points: number) => ({ requestId: nanoid(), expectedUserId: BUYER, userId: TARGET, purchase: { type: "reputation" as const, reputationPoints: points } });
+const stripeRequest = (points: number) => ({ requestId: nanoid().replace(/[-_]/g, "a"), expectedUserId: BUYER, userId: TARGET, purchase: { type: "reputation" as const, reputationPoints: points } });
 const fetchProvider = vi.fn(async (url: string, options?: RequestInit) => {
   if (url.endsWith("/token")) return Response.json({ access_token: "token" });
   if (options?.method === "POST" && url.endsWith("/orders")) {
@@ -44,6 +45,9 @@ const fetchProvider = vi.fn(async (url: string, options?: RequestInit) => {
   const id = url.split("/orders/")[1]?.split("/")[0] ?? "";
   const order = orders.get(id);
   if (!order) return Response.json({}, { status: 404 });
+  if (url.endsWith("/capture") && captureFailure === "declined")
+    return Response.json({ details: [{ issue: "INSTRUMENT_DECLINED" }] }, { status: 422 });
+  if (url.endsWith("/capture") && captureFailure === "unknown") throw new Error("capture response lost");
   if (url.endsWith("/capture")) {
     order.status = "COMPLETED";
     const units = order.purchase_units as { amount: unknown; invoice_id: string; payments?: unknown }[];
@@ -67,11 +71,94 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     await insertUsers([BUYER, TARGET, OTHER].map((userId) => ({ userId, username: userId, reputationPoints: 0, reputationPointsTotal: 0 })));
     Object.assign(env, { STRIPE_SECRET_KEY: "sk_test_placeholder", STRIPE_WEBHOOK_SECRET: "whsec_placeholder", STRIPE_PRICE_NORMAL: "price_normal", STRIPE_PRICE_SILVER: "price_silver", STRIPE_PRICE_GOLD: "price_gold" });
     orders.clear(); subscriptions.clear(); stripeSessions.clear();
-    Object.assign(process.env, { NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL: "plan_test_normal", NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER: "plan_test_silver", NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD: "plan_test_gold" }); createResponseFails = false; captureResponseMinimal = false; fetchProvider.mockClear();
+    Object.assign(process.env, { NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL: "plan_test_normal", NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER: "plan_test_silver", NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD: "plan_test_gold" }); createResponseFails = false; captureResponseMinimal = false; captureFailure = undefined; fetchProvider.mockClear();
     vi.spyOn(globalThis, "fetch").mockImplementation(fetchProvider as unknown as typeof fetch);
     vi.spyOn(stripeClient, "getStripe").mockReturnValue(stripeApi);
   });
   afterEach(() => { for (const [key, value] of Object.entries(paypalPlans)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } vi.restoreAllMocks(); Object.assign(env, original); });
+  const completeStripe = (input: ReturnType<typeof stripeRequest>, created = Date.now()) => {
+    const session = stripeSessions.get(`cs_test_${input.requestId}`);
+    Object.assign(session ?? {}, { status: "complete", payment_status: "paid", mode: "payment", payment_intent: `pi_${input.requestId}`, livemode: false, currency: "usd", amount_total: Math.round(reps2dollars(input.purchase.reputationPoints) * 100), client_reference_id: input.requestId, automatic_tax: { enabled: true, status: "complete" }, created: Math.floor(created / 1000) });
+    return `cs_test_${input.requestId}`;
+  };
+  it.each([false, true])("holds delayed Stripe payment for review when released allowance is consumed: PayPal=%s", async (usePaypal) => {
+    const db = await getTestDatabase(); const stripe = await callerFor(stripeRouter, BUYER); const paypal = await callerFor(paypalRouter, BUYER);
+    const first = stripeRequest(3000); await stripe.createCheckout(first);
+    const old = Date.now() - 26 * 3600000;
+    await db.update(stripeCheckout).set({ createdAt: new Date(old) }).where(eq(stripeCheckout.id, first.requestId));
+    expect(await paypal.getRecentRepsCount({ userId: BUYER })).toBe(0);
+    const second = stripeRequest(3000);
+    if (usePaypal) {
+      const order = await paypal.createOrder(request(3000));
+      if (!("orderId" in order)) throw new Error("missing order");
+      expect((await paypal.captureOrder({ orderId: order.orderId })).success).toBe(true);
+    } else {
+      expect((await stripe.createCheckout(second)).success).toBe(true);
+      completeStripe(second);
+    }
+    const sessionId = completeStripe(first, old);
+    const results = await Promise.all([
+      fulfillStripeSession(db, sessionId), fulfillStripeSession(db, sessionId),
+      ...(usePaypal ? [] : [fulfillStripeSession(db, `cs_test_${second.requestId}`)]),
+    ]);
+    expect(results.slice(0, 2)).toEqual(["review_required", "review_required"]);
+    expect((await target())?.reputationPoints).toBe(3000);
+    expect(await paypal.getRecentRepsCount({ userId: BUYER })).toBe(3000);
+    const outcome = await stripe.resolveSession({ sessionId });
+    expect(outcome).toMatchObject({ success: false }); expect(outcome.message).toContain("Contact support");
+    expect(await db.query.stripePayment.findFirst({ where: eq(stripePayment.checkoutId, first.requestId) })).toMatchObject({ grantedAt: null, reviewRequired: true });
+    await db.update(stripePayment).set({ purchasedAt: new Date(Date.now() - 31 * 86400000) }).where(eq(stripePayment.checkoutId, second.requestId));
+    await db.update(paypalTransaction).set({ createdAt: new Date(Date.now() - 31 * 86400000) });
+    expect(await fulfillStripeSession(db, sessionId)).toBe("review_required");
+    expect((await target())?.reputationPoints).toBe(3000);
+  });
+  it("serializes concurrent deliveries of expired Stripe reservations", async () => {
+    const db = await getTestDatabase(); const stripe = await callerFor(stripeRouter, BUYER);
+    const sessions: string[] = [];
+    for (const input of [stripeRequest(3000), stripeRequest(3000)]) {
+      expect((await stripe.createCheckout(input)).success).toBe(true);
+      const old = Date.now() - 26 * 3600000;
+      await db.update(stripeCheckout).set({ createdAt: new Date(old) }).where(eq(stripeCheckout.id, input.requestId));
+      sessions.push(completeStripe(input, old));
+    }
+    const outcomes = await Promise.all(sessions.map((id) => fulfillStripeSession(db, id)));
+    expect(outcomes.sort()).toEqual(["fulfilled", "review_required"]);
+    expect((await target())?.reputationPoints).toBe(3000);
+  });
+  it.each([false, true])("definite PayPal funding decline can be retried or cancelled: cancel=%s", async (cancel) => {
+    const db = await getTestDatabase(); const paypal = await callerFor(paypalRouter, BUYER); const input = request(3000);
+    const order = await paypal.createOrder(input); if (!("orderId" in order)) throw new Error("missing order");
+    captureFailure = "declined";
+    expect(await paypal.captureOrder({ orderId: order.orderId })).toMatchObject({ success: false, restartFunding: true });
+    expect(await db.query.paypalTransaction.findFirst()).toMatchObject({ status: "RESERVED" });
+    expect((await paypal.createOrder(input)).success).toBe(true);
+    expect((await target())?.reputationPoints).toBe(0);
+    captureFailure = undefined;
+    if (cancel) {
+      expect((await paypal.cancelOrder({ requestId: input.requestId })).success).toBe(true);
+      expect(await paypal.getRecentRepsCount({ userId: BUYER })).toBe(0);
+      expect((await paypal.captureOrder({ orderId: order.orderId })).success).toBe(false);
+    } else {
+      const outcomes = await Promise.all([paypal.captureOrder({ orderId: order.orderId }), paypal.captureOrder({ orderId: order.orderId })]);
+      expect(outcomes.some((r) => r.success)).toBe(true);
+      expect((await target())?.reputationPoints).toBe(3000);
+    }
+  });
+  it("an unknown PayPal capture outcome retains its reservation and recovers idempotently", async () => {
+    const db = await getTestDatabase(); const paypal = await callerFor(paypalRouter, BUYER); const input = request(3000);
+    const order = await paypal.createOrder(input); if (!("orderId" in order)) throw new Error("missing order");
+    captureFailure = "unknown";
+    await expect(paypal.captureOrder({ orderId: order.orderId })).rejects.toThrow("capture response lost");
+    await db.update(paypalTransaction).set({ createdAt: new Date(Date.now() - 4 * 3600000) }).where(eq(paypalTransaction.id, input.requestId));
+    expect(await db.query.paypalTransaction.findFirst()).toMatchObject({ status: "CAPTURING" });
+    expect((await paypal.cancelOrder({ requestId: input.requestId })).success).toBe(false);
+    expect((await (await callerFor(stripeRouter, BUYER)).createCheckout(stripeRequest(2000))).success).toBe(false);
+    captureFailure = undefined;
+    expect((await paypal.captureOrder({ orderId: order.orderId })).success).toBe(true);
+    expect((await target())?.reputationPoints).toBe(3000);
+    const ids = fetchProvider.mock.calls.filter(([url]) => url.endsWith("/capture")).map(([, options]) => (options?.headers as Record<string, string>)["PayPal-Request-Id"]);
+    expect(new Set(ids).size).toBe(1);
+  });
   it("blocks PayPal before charging when Stripe reserved the remaining allowance", async () => {
     const stripe = await callerFor(stripeRouter, BUYER);
     expect((await stripe.createCheckout(stripeRequest(3000))).success).toBe(true);

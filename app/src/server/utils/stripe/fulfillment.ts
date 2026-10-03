@@ -7,11 +7,15 @@ import { errorResponse } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
+  lockPurchaseBuyer,
+  reputationAllowanceUsed,
+} from "@/server/utils/purchases/allowance";
+import {
   canonicalStoreUserId,
   isRetiredStoreUserId,
   setFederalStatusWithStoreFloor,
 } from "@/server/utils/purchases/grant";
-import { calcFedUgradeCost } from "@/utils/paypal";
+import { calcFedUgradeCost, dynamicMonthlyRepCap } from "@/utils/paypal";
 import { getStripe, stripeIsLive } from "./client";
 
 type Checkout = typeof stripeCheckout.$inferSelect;
@@ -57,22 +61,52 @@ export const grantStripeReceipt = async (
           ),
         );
     }
-    if (!stored.grantedAt) {
-      // The marker and credit commit together; an interrupted response can safely retry.
-      const result =
-        await client.execute(sql`UPDATE ${userData} u INNER JOIN ${stripePayment} p ON p.affectedUserId = u.userId
+    // Reputation delivery shares the buyer lock with checkout reservations and PayPal
+    // grants, so released reservations cannot turn delayed payments into excess credit.
+    const claim = async (client: DrizzleClient) => {
+      if (stored.reputationPoints > 0) {
+        const buyer = await lockPurchaseBuyer(client, buyerId);
+        if (!buyer) throw new Error("Stripe receipt buyer is unavailable");
+        const current = await client.query.stripePayment.findFirst({
+          where: eq(stripePayment.id, stored.id),
+        });
+        if (current?.grantedAt) return;
+        if (current?.reviewRequired) return "review_required" as const;
+        if (
+          (await reputationAllowanceUsed(client, buyerId, "", stored.checkoutId)) +
+            stored.reputationPoints >
+          dynamicMonthlyRepCap(buyer)
+        ) {
+          await client
+            .update(stripePayment)
+            .set({ reviewRequired: true })
+            .where(eq(stripePayment.id, stored.id));
+          return "review_required" as const;
+        }
+      }
+      if (!stored.grantedAt) {
+        // The marker and credit commit together; an interrupted response can safely retry.
+        const result =
+          await client.execute(sql`UPDATE ${userData} u INNER JOIN ${stripePayment} p ON p.affectedUserId = u.userId
       SET u.reputationPoints = u.reputationPoints + p.reputationPoints,
           u.reputationPointsTotal = u.reputationPointsTotal + p.reputationPoints,
           p.grantedAt = CURRENT_TIMESTAMP(3)
-      WHERE p.id = ${receipt.id} AND p.grantedAt IS NULL`);
-      if (result.rowsAffected === 0) {
-        const current = await client.query.stripePayment.findFirst({
-          where: eq(stripePayment.id, receipt.id),
-        });
-        if (!current?.grantedAt && !(await isRetiredStoreUserId(client, recipientId)))
-          throw new Error("Stripe receipt recipient is unavailable");
+      WHERE p.id = ${receipt.id} AND p.grantedAt IS NULL AND p.reviewRequired = FALSE`);
+        if (result.rowsAffected === 0) {
+          const current = await client.query.stripePayment.findFirst({
+            where: eq(stripePayment.id, receipt.id),
+          });
+          if (!current?.grantedAt && !(await isRetiredStoreUserId(client, recipientId)))
+            throw new Error("Stripe receipt recipient is unavailable");
+        }
       }
-    }
+    };
+    const outcome = stored.grantedAt
+      ? undefined
+      : stored.reputationPoints > 0
+        ? await client.transaction(claim)
+        : await claim(client);
+    if (outcome) return outcome;
     // Recompute even on duplicate delivery: a failure after the claim must be recoverable.
     await setFederalStatusWithStoreFloor(client, recipientId, "NONE");
   });
@@ -211,7 +245,7 @@ export const fulfillStripeSession = async (
     const paymentIntentId = objectId(session.payment_intent);
     if (session.mode !== "payment" || !paymentIntentId)
       throw new Error("Stripe checkout has no payment intent");
-    await grantStripeReceipt(client, {
+    const outcome = await grantStripeReceipt(client, {
       id: paymentIntentId,
       isSandbox: !session.livemode,
       checkoutId,
@@ -222,6 +256,7 @@ export const fulfillStripeSession = async (
       federalStatus: "NONE",
       purchasedAt: new Date(session.created * 1000),
     });
+    if (outcome) return outcome;
   }
   return "fulfilled" as const;
 };

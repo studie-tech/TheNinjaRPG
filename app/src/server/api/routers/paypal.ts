@@ -19,7 +19,10 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { reputationAllowanceUsed } from "@/server/utils/purchases/allowance";
+import {
+  lockPurchaseBuyer,
+  reputationAllowanceUsed,
+} from "@/server/utils/purchases/allowance";
 import {
   canonicalStoreUserId,
   setFederalStatusWithStoreFloor,
@@ -39,6 +42,7 @@ import type { JsonData } from "@/utils/typeutils";
 import {
   federalReputationPurchaseSchema,
   federalUpgradeSchema,
+  paypalCaptureResponseSchema,
   paypalCheckoutIdSchema,
   paypalCheckoutSchema,
   paypalOrderSchema,
@@ -56,6 +60,7 @@ type PaypalAmount = {
 
 type PaypalOrder =
   | {
+      fundingDeclined?: boolean;
       id?: string;
       status?: string;
       purchase_units?: {
@@ -121,7 +126,7 @@ export const paypalRouter = createTRPCRouter({
       const reps = dollars2reps(amount);
       const reserved = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
-          const buyer = await lockPaypalBuyer(tx, ctx.userId);
+          const buyer = await lockPurchaseBuyer(tx, ctx.userId);
           const [recipient, existing] = await Promise.all([
             tx.query.userData.findFirst({ where: eq(userData.userId, input.userId) }),
             tx.query.paypalTransaction.findFirst({
@@ -235,7 +240,7 @@ export const paypalRouter = createTRPCRouter({
     }),
   captureOrder: protectedProcedure
     .input(paypalOrderSchema)
-    .output(baseServerResponse)
+    .output(paypalCaptureResponseSchema)
     .mutation(async ({ ctx, input }) => {
       if (isNativeUserAgent(ctx.userAgent))
         return errorResponse("Use the in-app store to purchase in the native app.");
@@ -273,6 +278,25 @@ export const paypalRouter = createTRPCRouter({
           `capture_${receipt.id}`,
           {},
         );
+      if (order?.fundingDeclined) {
+        // Only a definite provider decline can release a capture claim. Unknown
+        // outcomes retain it until the same idempotent capture is reconciled.
+        await ctx.drizzle
+          .update(paypalTransaction)
+          .set({ status: "RESERVED" })
+          .where(
+            and(
+              eq(paypalTransaction.id, receipt.id),
+              eq(paypalTransaction.status, "CAPTURING"),
+            ),
+          );
+        return {
+          ...errorResponse(
+            "PayPal declined this payment method. Choose another payment method or cancel checkout.",
+          ),
+          restartFunding: true,
+        };
+      }
       // Some provider responses omit purchase-unit metadata even after capture. Fetch
       // the completed order rather than interpreting an incomplete response as delivery.
       if (order?.status === "COMPLETED" && !order.purchase_units?.[0]?.custom_id)
@@ -982,18 +1006,6 @@ export const getPaypalOrder = async (input: { orderId: string; token: string }) 
   return order;
 };
 
-/** Serialize cross-provider allowance changes on the buyer row without missing-row locks. */
-const lockPaypalBuyer = async (client: DrizzleClient, buyerId: string) => {
-  const locked = await client
-    .update(userData)
-    .set({
-      updatedAt: sql`GREATEST(CURRENT_TIMESTAMP(3), ${userData.updatedAt} + INTERVAL 1000 MICROSECOND)`,
-    })
-    .where(eq(userData.userId, buyerId));
-  if (locked.rowsAffected !== 1) return undefined;
-  return client.query.userData.findFirst({ where: eq(userData.userId, buyerId) });
-};
-
 const paypalOrderRequest = async (
   path: string,
   token: string,
@@ -1013,10 +1025,20 @@ const paypalOrderRequest = async (
       body: JSON.stringify(body),
     },
   );
-  if (!response.ok)
+  if (!response.ok) {
+    const failure = (await response.json().catch(() => undefined)) as
+      | { details?: { issue?: string }[] }
+      | undefined;
+    if (
+      path.endsWith("/capture") &&
+      response.status === 422 &&
+      failure?.details?.[0]?.issue === "INSTRUMENT_DECLINED"
+    )
+      return { fundingDeclined: true };
     throw new Error(
       `PayPal order request failed (${response.status}); retry the same checkout`,
     );
+  }
   return response.json();
 };
 
@@ -1074,7 +1096,7 @@ const deliverPaypalReputation = async (input: Parameters<typeof updateReps>[0]) 
   input = { ...input, createdById, affectedUserId };
   return retryOnDeadlock(() =>
     input.client.transaction(async (tx) => {
-      const buyer = await lockPaypalBuyer(tx, input.createdById);
+      const buyer = await lockPurchaseBuyer(tx, input.createdById);
       if (!buyer)
         return errorResponse(
           "Payment requires support review: buyer account was not found.",

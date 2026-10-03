@@ -356,7 +356,9 @@ export const stripeRouter = createTRPCRouter({
         message:
           outcome === "fulfilled"
             ? "Your Stripe payment has been delivered."
-            : "Payment is still processing. You can check again; confirmed payments are delivered automatically.",
+            : outcome === "review_required"
+              ? "Payment received but exceeds your monthly allowance. Contact support with your Stripe payment ID for review or refund; no points were delivered."
+              : "Payment is still processing. You can check again; confirmed payments are delivered automatically.",
       };
     }),
   getPayments: protectedProcedure.query(async ({ ctx }) =>
