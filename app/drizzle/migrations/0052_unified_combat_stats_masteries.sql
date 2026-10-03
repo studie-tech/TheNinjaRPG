@@ -10,7 +10,7 @@
 --   1. Build the new production deployment without promoting it.
 --   2. Apply this script at low traffic, or behind a brief write freeze.
 --   3. Apply 0053_mixed_sentinel.sql, then promote the new deployment immediately.
---   4. Apply the same script to tnr/development and to the theninja-ai database.
+--   4. Apply both scripts to tnr/development before starting the new development build.
 ALTER TABLE `Item` ADD `requiredNinjutsuMastery` int;
 ALTER TABLE `Item` ADD `requiredGenjutsuMastery` int;
 ALTER TABLE `Item` ADD `requiredTaijutsuMastery` int;
