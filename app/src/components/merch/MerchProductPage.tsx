@@ -198,19 +198,7 @@ export function MerchProductPage({ handle }: { handle: string }) {
             <p>
               {details?.sizing ?? "See this product’s available options for sizing."}
             </p>
-            {details && (
-              <>
-                <p>{details.care}</p>
-                <a
-                  href={details.source}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="merch-spec-link"
-                >
-                  {details.model} · Full size & care guide ↗
-                </a>
-              </>
-            )}
+            {details && <p>{details.care}</p>}
           </details>
           <details className="merch-product-disclosure">
             <summary>Delivery & support</summary>

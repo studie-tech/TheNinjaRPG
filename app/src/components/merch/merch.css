@@ -985,12 +985,6 @@
 .merch-tile-03:after {
   background: linear-gradient(0deg,#eee3d0 0%,#eee3d0bb 25%,transparent 60%);
 }
-.merch-spec-link {
-  font-size: 11px;
-  text-decoration: underline !important;
-  display: inline-block;
-  margin-top: 15px;
-}
 .merch-store {
   container-type: inline-size;
   container-name: merch;
