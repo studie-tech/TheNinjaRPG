@@ -363,34 +363,29 @@ export function MerchCollection() {
           </>
         )}
       </section>
-      <section className="merch-world" id="our-world">
+      <section className="merch-world" aria-labelledby="community-feature-heading">
         <div className="merch-world-art">
           <Image
-            src="/merch/art/horizon.webp"
-            width={460}
-            height={480}
-            alt="Horizon Academy collection artwork"
+            src="/merch/art/serverhamster.webp"
+            width={1000}
+            height={1500}
+            alt="A ninja feeds a hamster powering a scroll-shaped server machine"
           />
         </div>
         <div>
-          <p className="merch-eyebrow">Our world, beyond the screen</p>
-          <h2>
-            For those who
-            <br />
-            <em>call Seichi home.</em>
-          </h2>
+          <p className="merch-eyebrow">Community jokes</p>
+          <h2 id="community-feature-heading">Feed the server hamster.</h2>
           <p>
-            Some stories stay with you. Your first village. A bloodline you finally
-            unlocked. Another trip to the hospital. The community that makes it all
-            worth coming back to.
+            A running joke about lag, outages, and the hamster supposedly keeping the
+            server running.
           </p>
-          <p>
-            These pieces are inspired by that shared history. Each design has a story
-            you can discover on its product page.
-          </p>
-          <Link href="/guide" className="merch-text-button">
-            New to the world? Meet The Ninja RPG <ArrowRight size={16} />
-          </Link>
+          <button
+            type="button"
+            className="merch-text-button"
+            onClick={() => selectCollection("Community")}
+          >
+            Browse community designs <ArrowRight size={16} />
+          </button>
         </div>
       </section>
       <section className="merch-faq" aria-labelledby="faq-heading">

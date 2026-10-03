@@ -82,7 +82,7 @@
   margin: 0 0 28px;
   font-weight: 400;
 }
-.merch-hero h1 em,.merch-world h2 em {
+.merch-hero h1 em {
   color: #526a52;
   font-weight: 400;
 }
@@ -454,9 +454,6 @@
   align-items: center;
   background: #e3e6d9;
   padding: 50px 8%;
-}
-.merch-world-art {
-  background: var(--merch-wallpaper) center/cover;
 }
 .merch-world-art img {
   width: 100%;
