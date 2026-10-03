@@ -17,6 +17,12 @@ import { formatMerchMoney, productFromPrice } from "@/libs/merch/catalog";
 import type { MerchProduct } from "@/validators/merch";
 import { useMerch } from "./MerchProvider";
 
+const FEATURED_COLLECTION_ORDER: Record<string, number> = {
+  Community: 0,
+  "S-ranks": 1,
+  Villages: 2,
+};
+
 const COLLECTIONS = [
   {
     name: "Villages",
@@ -44,7 +50,7 @@ const COLLECTIONS = [
 export function MerchCollection() {
   const { products, loading, error, retry } = useMerch();
   const [collection, setCollection] = useState("All designs");
-  const [kind, setKind] = useState("Organic T-Shirt");
+  const [kind, setKind] = useState("Organic Hoodie");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("featured");
   const [limit, setLimit] = useState(24);
@@ -66,7 +72,8 @@ export function MerchCollection() {
         : sort === "price"
           ? Number(productFromPrice(a)?.amount ?? Infinity) -
             Number(productFromPrice(b)?.amount ?? Infinity)
-          : 0,
+          : (FEATURED_COLLECTION_ORDER[a.category] ?? Infinity) -
+            (FEATURED_COLLECTION_ORDER[b.category] ?? Infinity),
     );
   const selectCollection = (name: string) => {
     setCollection(name);
@@ -224,7 +231,7 @@ export function MerchCollection() {
         <div className="merch-filters">
           <fieldset className="merch-category-tabs">
             <legend className="sr-only">Filter by collection</legend>
-            {["All designs", "Villages", "S-ranks", "Community"].map((c) => (
+            {["All designs", ...Object.keys(FEATURED_COLLECTION_ORDER)].map((c) => (
               <button
                 key={c}
                 type="button"
