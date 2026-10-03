@@ -476,13 +476,6 @@
   grid-template-columns: 1fr 1.5fr;
   gap: 10%;
 }
-.merch-faq a {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  margin-top: 25px;
-}
 .merch-faq details,.merch-product-disclosure {
   border-bottom: 1px solid #d8dccf;
   padding: 18px 0;

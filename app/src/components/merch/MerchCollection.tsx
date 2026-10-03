@@ -389,9 +389,6 @@ export function MerchCollection() {
         <div>
           <p className="merch-eyebrow">The little details</p>
           <h2 id="faq-heading">Good to know.</h2>
-          <a href="mailto:contact@theninja-rpg.com">
-            Ask us a question <ArrowRight size={16} />
-          </a>
         </div>
         <div>
           <details>
