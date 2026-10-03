@@ -72,7 +72,6 @@ describe("training start preconditions", () => {
     isBanned: false,
     rank: "GENIN" as const,
     dailyTrainings: MAX_DAILY_TRAININGS - 1,
-    currentlyTraining: null,
     currentlyTrainingMastery: null,
     offence: 10,
     defence: 10,
@@ -93,20 +92,14 @@ describe("training start preconditions", () => {
     expect(masteryTrainingBlockMessage(trainee)).toBeNull();
   });
 
-  it("counts the other slot's running session toward the daily limit", () => {
-    expect(
-      statTrainingBlockMessage({ ...trainee, currentlyTrainingMastery: "ninjutsuMastery" }),
-    ).toContain("24 hours");
-    expect(
-      masteryTrainingBlockMessage({ ...trainee, currentlyTraining: "offence" }),
-    ).toContain("24 hours");
+  it("Energy spending has no daily limit, while mastery retains its own limit", () => {
+    const capped = {...trainee, dailyTrainings: MAX_DAILY_TRAININGS};
+    expect(statTrainingBlockMessage(capped)).toBeNull();
+    expect(masteryTrainingBlockMessage(capped)).toContain("24 hours");
   });
 
   it("names the slot that is already running", () => {
     const rested = { ...trainee, dailyTrainings: 0 };
-    expect(statTrainingBlockMessage({ ...rested, currentlyTraining: "offence" })).toBe(
-      "You are already training a combat stat",
-    );
     expect(
       masteryTrainingBlockMessage({ ...rested, currentlyTrainingMastery: "sageMastery" }),
     ).toBe("You are already training a mastery");

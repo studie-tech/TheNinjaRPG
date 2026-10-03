@@ -363,6 +363,10 @@ export type PreBattleGearModifiers = {
  * Static data is stored once at battle initiation and looked up by ID.
  */
 export type ExtraState = {
+  /** Repeated-opponent eligibility captured before inserting this battle. */
+  energyRewardEligible?: boolean;
+  energyRegeneration?: Record<string, number>;
+  energyCapacity?: Record<string, number>;
   // Static data - never changes during battle (looked up by ID)
   jutsus: Record<string, Jutsu>; // jutsuId -> Jutsu (includes user jutsus + injectable jutsus)
   jutsuReskins: Record<string, JutsuReskin>; // reskinId -> Reskin data

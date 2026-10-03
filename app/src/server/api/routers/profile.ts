@@ -96,6 +96,7 @@ import {
   userNindo,
   userPollVote,
   userReport,
+  userSkill,
   userVote,
   village,
   war,
@@ -115,7 +116,9 @@ import { moderateContent, validateUserUpdateReason } from "@/libs/moderator";
 import {
   calcActiveUserRegen,
   calcCP,
+  calcEnergy,
   calcHP,
+  calcMaxEnergy,
   calcSP,
   getAssignedCombatStatTotal,
   levelUpBlockMessage,
@@ -596,6 +599,7 @@ export const profileRouter = createTRPCRouter({
           maxHealth: calcHP(newLevel),
           maxStamina: calcSP(newLevel),
           maxChakra: calcCP(newLevel),
+          maxEnergy: calcEnergy(newLevel),
           questData: filterQuestTrackersForDbPersist(trackers, user),
           ...(skillPointsGain > 0
             ? {
@@ -2834,7 +2838,8 @@ export const fetchUpdatedUser = async (props: {
         items: {
           where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
           with: {
-            item: { columns: { id: true, itemType: true, maxDurability: true } },
+            item: true,
+            imbuements: { with: { item: true } },
           },
         },
         userQuests: {
@@ -2852,6 +2857,7 @@ export const fetchUpdatedUser = async (props: {
           where: gte(questHistory.completed, 1),
         },
         votes: true,
+        userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
       },
     }),
     fetchHasUnvotedPolls(client, userId, now),
@@ -2962,6 +2968,7 @@ export const fetchUpdatedUser = async (props: {
   if (user) {
     // Add bloodline, structure, etc.  regen to regeneration
     user.regeneration = calcActiveUserRegen(user, settings);
+    user.maxEnergy = calcMaxEnergy(user);
   }
 
   // Handle village prestige situations
@@ -3084,6 +3091,7 @@ export const fetchUpdatedUser = async (props: {
       user.curHealth = Math.min(user.curHealth + regen, user.maxHealth);
       user.curStamina = Math.min(user.curStamina + regen, user.maxStamina);
       user.curChakra = Math.min(user.curChakra + regen, user.maxChakra);
+      user.curEnergy = Math.min(user.curEnergy + regen, user.maxEnergy);
       user.updatedAt = now;
       user.regenAt = now;
 
@@ -3123,6 +3131,24 @@ export const fetchUpdatedUser = async (props: {
           tags: { source: "persistPassiveRegenToDb" },
         });
       }
+    }
+  }
+  if (user?.status === "BATTLE" && forceRegen) {
+    const claim = await claimUserSnapshot({
+      client,
+      userId,
+      updatedAt: user.updatedAt,
+      set: {
+        curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${user.regeneration} * GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, NOW(3))) / ${REGEN_SECONDS * 1_000_000})`,
+        regenAt: new Date(),
+      },
+      where: [eq(userData.status, "BATTLE")],
+    });
+    if (claim.success) {
+      const fresh = await client.query.userData.findFirst({
+        where: eq(userData.userId, userId),
+      });
+      if (fresh) Object.assign(user, fresh, { maxEnergy: calcMaxEnergy(user) });
     }
   }
   if (user) {

@@ -242,7 +242,7 @@ const isMasteryTag = (tag: ZodAllTags): tag is MasteryTag =>
   tag.type === "increasemastery" || tag.type === "decreasemastery";
 
 /** Worn gear whose effects processUsersForBattle applies to its wearer. */
-const isActiveWornGear = (ui: MasteryGear, bloodlineId: string | null) =>
+export const isActiveWornGear = (ui: MasteryGear, bloodlineId: string | null) =>
   ui.equipped !== "NONE" &&
   isWornGear(ui.item) &&
   hasUsableDurability(ui) &&
@@ -252,7 +252,7 @@ const hasUsableDurability = (ui: Pick<MasteryGear, "durability" | "item">) =>
   Math.min(ui.durability, ui.item.maxDurability) > DURABILITY_USABILITY_THR;
 
 /** The gear's effects plus its finished imbuements, merged as processUsersForBattle does. */
-const wornGearTags = (ui: MasteryGear) => {
+export const wornGearTags = (ui: MasteryGear) => {
   if (!ui.item.canBeImbued) return ui.item.effects;
   const now = new Date();
   const imbued = (ui.imbuements ?? []).filter(

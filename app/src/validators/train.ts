@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { CombatStatNames, MasteryNames, TrainingSpeeds } from "@/drizzle/constants";
-import { QuestTracker } from "@/validators/objectives";
 
 // Input schemas
 export const startTrainingInputSchema = z.object({
   stat: z.enum(CombatStatNames),
+  energy: z.number().finite().positive(),
+  guess: z.string().optional(),
 });
 
 export const startMasteryTrainingInputSchema = z.object({
@@ -26,19 +27,15 @@ export const trainingLogInputSchema = z.object({
 
 // Output data schemas
 export const startTrainingDataSchema = z.object({
-  currentlyTraining: z.enum(CombatStatNames),
-  trainingStartedAt: z.date(),
+  experience: z.number(),
+  curEnergy: z.number(),
+  stat: z.enum(CombatStatNames),
+  amount: z.number(),
 });
 
 export const startMasteryTrainingDataSchema = z.object({
   currentlyTrainingMastery: z.enum(MasteryNames),
   masteryTrainingStartedAt: z.date(),
-});
-
-export const stopTrainingDataSchema = z.object({
-  experience: z.number(),
-  currentlyTraining: z.enum(CombatStatNames),
-  questData: z.array(QuestTracker),
 });
 
 export const stopMasteryTrainingDataSchema = z.object({

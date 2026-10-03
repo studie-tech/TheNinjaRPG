@@ -379,6 +379,13 @@
       "when": 1790964632222,
       "tag": "0053_mixed_sentinel",
       "breakpoints": false
+    },
+    {
+      "idx": 54,
+      "version": "5",
+      "when": 1791044279049,
+      "tag": "0054_elite_titanium_man",
+      "breakpoints": false
     }
   ]
 }

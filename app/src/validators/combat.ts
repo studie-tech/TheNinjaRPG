@@ -19,6 +19,7 @@ import {
   MAX_ITEM_STACK_SIZE,
   MAX_MASTERY_CAP,
   MasteryTypes,
+  MaxPoolTypes,
   PoolTypes,
   SAGE_MASTERY_EXP_CAP,
   SAGE_MODE_MAX_LEVEL,
@@ -285,7 +286,7 @@ export const IncreaseMaxPoolsTag = z.object({
   type: z.literal("increasemaxpools").prefault("increasemaxpools"),
   description: msg("Increase maximum and current pool values"),
   calculation: z.enum(["static", "percentage"]).prefault("static"),
-  poolsAffected: z.array(z.enum(PoolTypes)).prefault(["Health"]),
+  poolsAffected: z.array(z.enum(MaxPoolTypes)).prefault(["Health"]),
   target: z.enum(BaseTagTargets).optional().prefault("SELF"),
 });
 
@@ -296,7 +297,7 @@ export const DecreaseMaxPoolsTag = z.object({
   type: z.literal("decreasemaxpools").prefault("decreasemaxpools"),
   description: msg("Decrease maximum and current pool values"),
   calculation: z.enum(["static", "percentage"]).prefault("static"),
-  poolsAffected: z.array(z.enum(PoolTypes)).prefault(["Health"]),
+  poolsAffected: z.array(z.enum(MaxPoolTypes)).prefault(["Health"]),
   target: z.enum(BaseTagTargets).optional().prefault("SELF"),
 });
 

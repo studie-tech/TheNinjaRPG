@@ -10,7 +10,7 @@ import {
   questUiAccessBlockMessage,
 } from "@/libs/quest";
 import { raidRewardBlockMessage } from "@/libs/raids";
-import { statTrainingBlockMessage, statTrainingEndsAt } from "@/libs/train";
+import { statTrainingBlockMessage } from "@/libs/train";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { SectorVillage } from "@/utils/village";
 
@@ -67,25 +67,8 @@ describe("shared profile system contracts", () => {
     ).toContain("Horizon");
   });
 
-  it("shares banned-user and active-training rejection with recommendations", () => {
-    expect(
-      statTrainingBlockMessage({
-        ...user,
-        isBanned: true,
-        trainingSpeed: "1min" as never,
-      }),
-    ).toContain("8hrs");
-    expect(
-      statTrainingBlockMessage({ ...user, currentlyTraining: "strength" }),
-    ).toContain("already training");
-    const start = new Date("2026-10-01T00:00:00Z");
-    expect(
-      statTrainingEndsAt({
-        trainingStartedAt: start,
-        currentlyTraining: "strength",
-        trainingSpeed: "8hrs",
-      }),
-    ).toEqual(new Date("2026-10-01T08:00:00Z"));
+  it("rejects Energy spending for banned users", () => {
+    expect(statTrainingBlockMessage({...user, isBanned: true})).toContain("banned");
   });
 
   it("recognizes allied structure access instead of sending every visitor home", () => {

@@ -62,6 +62,8 @@ export const publicState = [
   "dailySageActivations",
   "controllerId",
   "curChakra",
+  "curEnergy",
+  "maxEnergy",
   "curHealth",
   "curStamina",
   "direction",

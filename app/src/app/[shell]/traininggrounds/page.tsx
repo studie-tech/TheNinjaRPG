@@ -57,6 +57,7 @@ import {
   MAX_DAILY_TRAININGS,
   MasteryNames,
   SENSEI_RANKS,
+  STATS_PER_ENERGY,
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
@@ -438,6 +439,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
   // Settings
   const { userData, updateUser, timeDiff } = props;
   const efficiency = trainEfficiency(userData);
+  const [energy, setEnergy] = useState(1);
   const showCaptcha = userData && showTrainingCapcha(userData);
 
   // tRPC useUtils
@@ -458,7 +460,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
       onSuccess: async (result) => {
         showMutationToast(result);
         if (result.success && result.data) {
-          await updateUser(result.data);
+          await utils.profile.getUser.invalidate();
           sendGTMEvent({ event: "stats_training" });
           if (currentStep?.title === "Training") {
             handleNextStep();
@@ -474,33 +476,6 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
         if (result.success && result.data) {
           await updateUser(result.data);
           sendGTMEvent({ event: "mastery_training" });
-        }
-      },
-    });
-
-  const { mutate: stopTraining, isPending: isStopping } =
-    api.train.stopTraining.useMutation({
-      onSuccess: async (result) => {
-        showMutationToast(result);
-        await utils.misc.getCaptcha.invalidate();
-        if (result.success && result.data) {
-          if (currentStep?.title === "Training") {
-            handleNextStep();
-          }
-          await updateUser(
-            {
-              currentlyTraining: null,
-              trainingStartedAt: null,
-              experience: userData.experience + result.data.experience,
-              [result.data.currentlyTraining]:
-                userData[result.data.currentlyTraining] + result.data.experience,
-              questData: result.data.questData,
-            },
-            { dailyTrainingsDelta: result.data.experience > 0 ? 1 : 0 },
-          );
-        } else if (!result.success) {
-          // The session may have ended elsewhere; refetch so the slot stops showing it
-          await utils.profile.getUser.invalidate();
         }
       },
     });
@@ -552,12 +527,11 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     if (captchaTarget === "mastery") {
       stopMasteryTraining({ ...data, villageId: userData.villageId });
     } else {
-      stopTraining({ ...data, villageId: userData.villageId });
+      // Combat training submits the captcha directly with its Energy spend.
     }
   });
 
-  const isPending =
-    isStarting || isStartingMastery || isStopping || isStoppingMastery || isChanging;
+  const isPending = isStarting || isStartingMastery || isStoppingMastery || isChanging;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   // Convenience definitions
@@ -573,7 +547,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
           className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
           onClick={() =>
             target === "combat"
-              ? stopTraining({ villageId: userData.villageId })
+              ? undefined
               : stopMasteryTraining({ villageId: userData.villageId })
           }
         />
@@ -659,27 +633,43 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     <>
       <ContentBox
         title="Training"
-        subtitle={`${efficiency}% efficiency [${userData.dailyTrainings} / ${MAX_DAILY_TRAININGS}]`}
+        subtitle={`Instant training: ${STATS_PER_ENERGY} stats per Energy before training bonuses.`}
         defaultBackHref="/village"
         initialBreak={props.initialBreak}
-        topRightContent={
-          <NavTabs
-            current={userData.trainingSpeed}
-            options={TrainingSpeeds}
-            setValue={(value) => {
-              if (isPending) return;
-              if (userData.currentlyTraining || userData.currentlyTrainingMastery) {
-                showMutationToast({
-                  success: false,
-                  message: "Cannot change training speed while training",
-                });
-                return;
-              }
-              changeSpeed({ speed: value as TrainingSpeed });
-            }}
-          />
-        }
       >
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <label htmlFor="training-energy">Energy to spend</label>
+          <Input
+            id="training-energy"
+            type="number"
+            min={1}
+            step={1}
+            value={energy}
+            onChange={(event) => setEnergy(Number(event.target.value))}
+            className="w-28"
+          />
+          <Button
+            variant="outline"
+            disabled={isPending}
+            onClick={() => setEnergy(Math.floor(userData.curEnergy))}
+          >
+            Use available Energy
+          </Button>
+          <span>
+            {Math.floor(userData.curEnergy).toLocaleString()} /{" "}
+            {userData.maxEnergy.toLocaleString()} Energy
+          </span>
+        </div>
+        {showCaptcha && captcha && (
+          <div className="mb-4">
+            {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element */}
+            <img
+              alt="captcha"
+              src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}
+            />
+            <Input placeholder="Enter captcha" {...captchaForm.register("guess")} />
+          </div>
+        )}
         {/* Inert while pending: the overlay hides the controls from pointers only */}
         <div inert={isPending}>
           <div className="grid grid-cols-3 text-center font-bold">
@@ -704,7 +694,12 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
                     if (block) showMutationToast({ success: false, message: block });
                     else if (overCap)
                       showMutationToast({ success: false, message: "Already capped" });
-                    else startTraining({ stat });
+                    else
+                      startTraining({
+                        stat,
+                        energy,
+                        guess: captchaForm.getValues("guess"),
+                      });
                   }}
                   className="relative"
                 >
@@ -730,18 +725,29 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               );
             })}
           </div>
-          {userData.currentlyTraining &&
-            renderTrainingOverlay(
-              userData.currentlyTraining,
-              userData.trainingStartedAt,
-              "combat",
-            )}
         </div>
         {pendingOverlay}
       </ContentBox>
       <ContentBox
         title="Masteries"
-        subtitle={`Unlock jutsu, items and armor; no experience or damage. Trains alongside combat stats and shares their daily limit [${userData.dailyTrainings} / ${MAX_DAILY_TRAININGS}].`}
+        subtitle={`No Energy cost, experience or damage. ${efficiency}% efficiency [${userData.dailyTrainings} / ${MAX_DAILY_TRAININGS}].`}
+        topRightContent={
+          <NavTabs
+            current={userData.trainingSpeed}
+            options={TrainingSpeeds}
+            setValue={(value) => {
+              if (isPending) return;
+              if (userData.currentlyTrainingMastery) {
+                showMutationToast({
+                  success: false,
+                  message: "Cannot change training speed while training",
+                });
+                return;
+              }
+              changeSpeed({ speed: value as TrainingSpeed });
+            }}
+          />
+        }
         initialBreak={true}
       >
         <div inert={isPending}>

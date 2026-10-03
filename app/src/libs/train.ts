@@ -679,40 +679,32 @@ type StatTrainingUser = UserStatData &
     | "rank"
     | "trainingSpeed"
     | "isBanned"
-    | "currentlyTraining"
     | "currentlyTrainingMastery"
   > & { village?: { sector: number } | null };
 
-/**
- * Preconditions for starting either training slot; the start write still guards status, the
- * slot and the daily budget atomically. A session running in the other slot spends one
- * training when it stops, so it counts toward the daily limit.
- */
-const trainingStartBlockMessage = (
-  user: StatTrainingUser,
-  otherSlotRunning: boolean,
-): string | null => {
+/** Training is available while awake in the player's village. */
+const trainingStartBlockMessage = (user: StatTrainingUser): string | null => {
   if (user.status !== "AWAKE") return "Must be awake to train";
   if (!user.isOutlaw) {
     if (!calcIsInVillage({ x: user.longitude, y: user.latitude }))
       return "Must be in your own village";
     if (user.sector !== user.village?.sector) return "Wrong sector";
   }
-  if (user.trainingSpeed !== "8hrs" && user.isBanned)
-    return "Only 8hrs training interval allowed when banned";
-  if (user.dailyTrainings + Number(otherSlotRunning) >= MAX_DAILY_TRAININGS)
-    return `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`;
   return null;
 };
 
-/** Preconditions for starting combat-stat training. */
 export const statTrainingBlockMessage = (user: StatTrainingUser): string | null =>
-  trainingStartBlockMessage(user, !!user.currentlyTrainingMastery) ??
-  (user.currentlyTraining ? "You are already training a combat stat" : null);
+  trainingStartBlockMessage(user) ??
+  (user.isBanned ? "Cannot spend Energy while banned" : null);
 
-/** Preconditions for starting mastery training. */
 export const masteryTrainingBlockMessage = (user: StatTrainingUser): string | null =>
-  trainingStartBlockMessage(user, !!user.currentlyTraining) ??
+  trainingStartBlockMessage(user) ??
+  (user.trainingSpeed !== "8hrs" && user.isBanned
+    ? "Only 8hrs training interval allowed when banned"
+    : null) ??
+  (user.dailyTrainings >= MAX_DAILY_TRAININGS
+    ? `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`
+    : null) ??
   (user.currentlyTrainingMastery ? "You are already training a mastery" : null);
 
 export const isStatTrainingCapped = (
@@ -729,13 +721,6 @@ export const isStatTrainingCapped = (
 export const canStartStatTraining = (user: StatTrainingUser) =>
   !statTrainingBlockMessage(user) &&
   CombatStatNames.some((stat) => !isStatTrainingCapped(user, stat));
-
-export const statTrainingEndsAt = (
-  user: Pick<UserData, "trainingStartedAt" | "currentlyTraining" | "trainingSpeed">,
-) =>
-  user.trainingStartedAt && user.currentlyTraining
-    ? secondsFromDate(trainingSpeedSeconds(user.trainingSpeed), user.trainingStartedAt)
-    : null;
 
 export const masteryTrainingEndsAt = (
   user: Pick<

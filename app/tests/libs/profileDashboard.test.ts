@@ -353,13 +353,13 @@ describe("canStartStatTraining", () => {
     expect(canStartStatTraining(trainableUser())).toBe(true);
   });
 
-  it("hides training once the daily limit or every stat cap is reached", () => {
+  it("ignores the mastery daily limit but hides training when every stat is capped", () => {
     expect(
       canStartStatTraining({
         ...trainableUser(),
         dailyTrainings: MAX_DAILY_TRAININGS,
       }),
-    ).toBe(false);
+    ).toBe(true);
     const caps = getUserCaps("STUDENT");
     const capped = trainableUser();
     for (const stat of CombatStatNames) {
@@ -384,7 +384,6 @@ describe("canStartStatTraining", () => {
         latitude: 0,
         trainingSpeed: "8hrs" as const,
         isBanned: false,
-        currentlyTraining: null,
       }),
     ).toBe(true);
   });

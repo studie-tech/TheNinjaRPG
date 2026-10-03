@@ -9,8 +9,9 @@
 -- name. Cut over in this order:
 --   1. Build the new production deployment without promoting it.
 --   2. Apply this script at low traffic, or behind a brief write freeze.
---   3. Apply 0053_mixed_sentinel.sql, then promote the new deployment immediately.
---   4. Apply both scripts to tnr/development before starting the new development build.
+--   3. Apply 0053_mixed_sentinel.sql, settle training with scripts/settle-energy-training.ts,
+--      apply 0054_elite_titanium_man.sql, then promote the new deployment immediately.
+--   4. Follow the same sequence on tnr/development before starting the new development build.
 ALTER TABLE `Item` ADD `requiredNinjutsuMastery` int;
 ALTER TABLE `Item` ADD `requiredGenjutsuMastery` int;
 ALTER TABLE `Item` ADD `requiredTaijutsuMastery` int;

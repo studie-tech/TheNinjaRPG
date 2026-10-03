@@ -162,6 +162,7 @@ import {
   calcHP,
   calcLevel,
   calcLevelRequirements,
+  calcMaxEnergy,
   calcSP,
   canAttackBracket,
   capUserStats,
@@ -2583,6 +2584,7 @@ export const initiateBattle = async (
       height: gridSize.height,
       extraState: {
         ...extraState,
+        energyRewardEligible: (previousBattleResults?.[0]?.count ?? 0) === 0,
         jutsus: {
           ...extraState.jutsus,
           ...Object.fromEntries(injectableJutsus.map((j) => [j.id, j])),
@@ -3480,6 +3482,12 @@ export const processUsersForBattle = async (
 
   // Build extraState from all users
   const extraState: ExtraState = {
+    energyRegeneration: Object.fromEntries(
+      users.map((user) => [user.userId, calcActiveUserRegen(user, settings)]),
+    ),
+    energyCapacity: Object.fromEntries(
+      users.map((user) => [user.userId, calcMaxEnergy(user)]),
+    ),
     jutsus: {},
     jutsuReskins: {},
     items: {},

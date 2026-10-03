@@ -71,7 +71,7 @@ import { useGameMenu } from "@/libs/menus";
 import { calcLevelRequirements, getExpBracket } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { calcCovertTrainingFinishAt } from "@/libs/stealth";
-import { masteryTrainingEndsAt, statTrainingEndsAt } from "@/libs/train";
+import { masteryTrainingEndsAt } from "@/libs/train";
 import { getDaysHoursMinutesSeconds, getGameTime } from "@/utils/time";
 import { userBattleAtom, useUserData } from "@/utils/UserContext";
 import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
@@ -276,6 +276,18 @@ const MenuBoxProfile: React.FC = () => {
               total={pools.maxStamina}
               timeDiff={timeDiff}
             />
+            <StatusBar
+              title="EP"
+              tooltip="Energy"
+              color="bg-yellow-500"
+              showText
+              lastRegenAt={userData?.regenAt}
+              regen={userData?.regeneration}
+              status={userData?.status === "BATTLE" ? "AWAKE" : userData?.status}
+              current={userData?.curEnergy}
+              total={userData?.maxEnergy}
+              timeDiff={timeDiff}
+            />
             {expRequired &&
             expForNextLevel &&
             expTowardsNextLevel &&
@@ -419,26 +431,6 @@ const MenuBoxProfile: React.FC = () => {
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>War Participant</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {userData?.trainingStartedAt && userData?.currentlyTraining && (
-            <TooltipProvider delayDuration={50}>
-              <Tooltip>
-                <TooltipTrigger className="w-full">
-                  <div className="flex flex-row items-center hover:text-orange-500">
-                    <Dumbbell className="mr-2 h-6 w-6" />
-                    <Link href="/traininggrounds">
-                      <Countdown
-                        targetDate={
-                          statTrainingEndsAt(userData) ?? userData.trainingStartedAt
-                        }
-                        timeDiff={timeDiff}
-                      />
-                    </Link>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>Combat stat training</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}

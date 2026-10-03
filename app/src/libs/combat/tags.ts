@@ -158,7 +158,7 @@ export const absorb = (
           const convert = Math.ceil(absorbAmount * ratio);
 
           // Apply absorption to each pool
-          pools.forEach((pool: PoolType) => {
+          pools.forEach((pool) => {
             switch (pool) {
               case "Health":
                 // Add to existing absorb value instead of overwriting
@@ -1510,8 +1510,10 @@ export const damageUser = (
     ...("statTypes" in effect && effect.statTypes ? effect.statTypes : []),
     ...("generalTypes" in effect && effect.generalTypes ? effect.generalTypes : []),
     ...("elements" in effect && effect.elements ? effect.elements : []),
-    ...("poolsAffected" in effect && effect.poolsAffected ? effect.poolsAffected : []),
-  ];
+    ...("poolsAffected" in effect && effect.poolsAffected
+      ? effect.poolsAffected.filter((pool): pool is PoolType => pool !== "Energy")
+      : []),
+  ].filter((type) => type !== "Energy");
 
   if (instant || residual) {
     consequences.set(effect.id, {
@@ -1723,7 +1725,7 @@ export const pooladjust = (effect: UserEffect, target: BattleUserState) => {
   const { adverb, qualifier } = getPower(effect);
   if ("poolsAffected" in effect) {
     const affected: string[] = [];
-    effect.poolsAffected?.forEach((pool: PoolType) => {
+    effect.poolsAffected?.forEach((pool) => {
       affected.push(pool);
     });
     return getInfo(
@@ -2060,7 +2062,7 @@ export const drain = (
     };
 
     // Calculate drain amount for each pool
-    pools.forEach((pool: PoolType) => {
+    pools.forEach((pool) => {
       const poolValue =
         pool === "Health"
           ? target.maxHealth

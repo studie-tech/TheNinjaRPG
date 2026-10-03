@@ -216,9 +216,10 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
   {
     id: "09RZadarkULsnPkbQUfzA",
     title: "Training",
-    elementIds: ["tutorial-traininggrounds-stopTraining"],
+    elementIds: ["training-energy"],
+    showNextButton: true,
     description:
-      "Training takes a bit of time, but you can stop any time you want. The most efficent way to train is bouts out 15min at a time - if you're squeezed on time, however, there are also options to train your character for 24 hours at a time. End your training when you're ready, then we'll go train a jutsu!",
+      "Stat training spends Energy instantly. Energy regenerates over time and from eligible activities. Mastery training is timed and costs no Energy. Next, let's train a jutsu!",
     page: "/traininggrounds",
   },
   {

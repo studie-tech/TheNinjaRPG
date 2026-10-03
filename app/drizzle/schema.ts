@@ -2311,6 +2311,8 @@ export const userData = mysqlTable(
     maxHealth: smallint("maxHealth", { unsigned: true }).default(100).notNull(),
     curChakra: smallint("curChakra", { unsigned: true }).default(100).notNull(),
     maxChakra: smallint("maxChakra", { unsigned: true }).default(100).notNull(),
+    curEnergy: double("curEnergy").default(100).notNull(),
+    maxEnergy: double("maxEnergy").default(100).notNull(),
     curStamina: smallint("curStamina", { unsigned: true }).default(100).notNull(),
     maxStamina: smallint("maxStamina", { unsigned: true }).default(100).notNull(),
     regeneration: tinyint("regeneration").default(60).notNull(),
@@ -2421,17 +2423,9 @@ export const userData = mysqlTable(
     })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
-    trainingStartedAt: datetime("trainingStartedAt", { mode: "date", fsp: 3 }),
-    // Written in the same update that records a combat session's quest minutes, so mastery
-    // training can exclude that window without reading TrainingLog in a second query.
-    lastCombatTrainingFinishedAt: datetime("lastCombatTrainingFinishedAt", {
-      mode: "date",
-      fsp: 3,
-    }),
     trainingSpeed: mysqlEnum("trainingSpeed", consts.TrainingSpeeds)
       .default("15min")
       .notNull(),
-    currentlyTraining: mysqlEnum("currentlyTraining", consts.CombatStatNames),
     masteryTrainingStartedAt: datetime("masteryTrainingStartedAt", {
       mode: "date",
       fsp: 3,
@@ -2594,10 +2588,7 @@ export const userData = mysqlTable(
 );
 export const insertAiSchema = createInsertSchema(userData)
   .omit({
-    trainingStartedAt: true,
-    lastCombatTrainingFinishedAt: true,
     occupationSignupAt: true,
-    currentlyTraining: true,
     masteryTrainingStartedAt: true,
     currentlyTrainingMastery: true,
     deletionAt: true,

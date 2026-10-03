@@ -4,6 +4,7 @@ import {
   CLAN_BOOST_PERCENT_PER_LEVEL,
   CombatStatNames,
   CP_PER_LVL,
+  ENERGY_PER_LVL,
   getUserCaps,
   HomeTypeDetails,
   HP_PER_LVL,
@@ -25,6 +26,12 @@ import type {
   VillageStructure,
 } from "@/drizzle/schema";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
+import {
+  gearMissingMastery,
+  isActiveWornGear,
+  type MasteryBuffUser,
+  wornGearTags,
+} from "@/libs/mastery";
 import { getReducedGainsDays } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { getStrucBoost } from "@/utils/village";
@@ -133,6 +140,8 @@ export const calcSP = (level: number) => {
 export const calcCP = (level: number) => {
   return 100 + CP_PER_LVL * (level - 1);
 };
+
+export const calcEnergy = (level: number) => 100 + ENERGY_PER_LVL * (level - 1);
 
 /** Copy of the user with stats capped to its rank; the original stays untouched */
 export const withCappedStats = <T extends UserData>(user: T): T => {
@@ -365,4 +374,45 @@ export const calcActiveUserRegen = (
   regeneration *= (100 + warFactor) / 100;
 
   return regeneration;
+};
+
+/** Energy capacity includes usable worn gear, bloodline and activated skill pool effects. */
+export const calcMaxEnergy = (user: MasteryBuffUser) => {
+  const base = calcEnergy(user.level);
+  const sources = [
+    { tags: user.bloodline?.effects ?? [], level: user.level },
+    ...(user.userSkills ?? []).map(({ skill }) => ({
+      tags: skill.effects.filter(
+        (tag) => skill.target === "SELF" || tag.friendlyFire !== "ENEMIES",
+      ),
+      level: user.level,
+    })),
+    ...(user.items ?? [])
+      .filter(
+        (ui) => isActiveWornGear(ui, user.bloodlineId) && !gearMissingMastery(ui, user),
+      )
+      .map((ui) => ({
+        tags: wornGearTags(ui),
+        level: user.isAi ? user.level : ui.level,
+      })),
+  ];
+  let maximum = base;
+  for (const { tags, level } of sources)
+    for (const tag of tags) {
+      if (
+        (tag.type !== "increasemaxpools" && tag.type !== "decreasemaxpools") ||
+        tag.rounds === 0 ||
+        !tag.poolsAffected.includes("Energy")
+      )
+        continue;
+      const signed =
+        tag.type === "decreasemaxpools"
+          ? -(Math.abs(tag.power) + level * Math.abs(tag.powerPerLevel))
+          : tag.power + level * tag.powerPerLevel;
+      maximum +=
+        tag.calculation === "percentage"
+          ? Math.floor((base * Math.min(signed, 100)) / 100)
+          : signed;
+    }
+  return Math.max(1, maximum);
 };

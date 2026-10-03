@@ -592,7 +592,7 @@ export const getPoolsAffected = (
     effect.poolsAffected &&
     effect.poolsAffected.length > 0
   ) {
-    return effect.poolsAffected as PoolType[];
+    return effect.poolsAffected.filter((pool) => pool !== "Energy") as PoolType[];
   }
   return ["Health"];
 };
@@ -1313,7 +1313,7 @@ export const calcPoolCost = (
       if (e.type === "decreasepoolcost" && power > 0) power *= -1;
       // Apply the power to the pools affected
       if ("poolsAffected" in e) {
-        e.poolsAffected?.forEach((pool: PoolType) => {
+        e.poolsAffected?.forEach((pool) => {
           if (pool === "Health") {
             hpCost =
               e.calculation === "static"

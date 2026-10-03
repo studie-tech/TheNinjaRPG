@@ -415,6 +415,7 @@ export const AdjustableBasicActions = [
 export type AdjustableBasicAction = (typeof AdjustableBasicActions)[number];
 
 export const PoolTypes = ["Health", "Chakra", "Stamina"] as const;
+export const MaxPoolTypes = [...PoolTypes, "Energy"] as const;
 export type PoolType = (typeof PoolTypes)[number];
 
 export const ItemRarities = ["COMMON", "RARE", "EPIC", "LEGENDARY"] as const;
@@ -1013,6 +1014,12 @@ export type ElementName = (typeof ElementNames)[number];
 export const HP_PER_LVL = 50;
 export const SP_PER_LVL = 50;
 export const CP_PER_LVL = 50;
+export const ENERGY_PER_LVL = 50;
+export const STATS_PER_ENERGY = 1.3;
+export const ENERGY_PVE_REWARD = 1;
+export const ENERGY_EVENT_REWARD = 10;
+export const ENERGY_PVP_WIN_REWARD = 5;
+export const ENERGY_PVP_LOSS_REWARD = 3;
 export const MAX_ATTRIBUTES = 5;
 export const BANK_INTEREST_CLAIM_DAYS = 8;
 export const RYO_CAP = 3000000000;
