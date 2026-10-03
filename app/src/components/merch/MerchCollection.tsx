@@ -220,11 +220,6 @@ export function MerchCollection() {
             <p className="merch-eyebrow">Make it yours</p>
             <h2 id="catalog-heading">The collection</h2>
           </div>
-          <p>
-            Bold back prints. Everyday favourites.
-            <br />
-            Choose your design, then your piece.
-          </p>
         </div>
         <div className="merch-filters">
           <fieldset className="merch-category-tabs">
