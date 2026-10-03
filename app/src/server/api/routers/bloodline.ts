@@ -98,7 +98,7 @@ const ALREADY_HAS_BLOODLINE_ERROR = "Already have a bloodline, please remove it 
 
 export const bloodlineRouter = createTRPCRouter({
   getAllNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all bloodline names and images" } })
+    .meta({ mcp: { description: "Get all bloodline names and images" } })
     .query(async ({ ctx }) => {
       return await ctx.drizzle.query.bloodline.findMany({
         columns: { id: true, name: true, image: true },
@@ -107,7 +107,7 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   getAll: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get paginated bloodlines with filters" },
+      mcp: { description: "Get paginated bloodlines with filters" },
     })
     .input(
       bloodlineFilteringSchema.extend({
@@ -136,7 +136,7 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   // Get a specific bloodline
   get: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a specific bloodline by ID" } })
+    .meta({ mcp: { description: "Get a specific bloodline by ID" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchBloodline(ctx.drizzle, input.id);
@@ -169,13 +169,13 @@ export const bloodlineRouter = createTRPCRouter({
   }),
   // Get all bloodlines a user has ever had
   getUserHistoricBloodlines: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's historic bloodlines" } })
+    .meta({ mcp: { description: "Get user's historic bloodlines" } })
     .query(async ({ ctx }) => {
       return await fetchUserHistoricBloodlines(ctx.drizzle, ctx.userId);
     }),
   getUserHistoricBloodlinesForStaff: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get a user's historic bloodlines (staff)" },
+      mcp: { description: "Get a user's historic bloodlines (staff)" },
     })
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -192,7 +192,6 @@ export const bloodlineRouter = createTRPCRouter({
   getSwapInfo: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get bloodline swap availability and cost info",
       },
     })
@@ -226,7 +225,7 @@ export const bloodlineRouter = createTRPCRouter({
   // Swap bloodline of session user
   swapBloodline: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Swap to a previously owned bloodline" },
+      mcp: { description: "Swap to a previously owned bloodline" },
     })
     .input(z.object({ bloodlineId: z.string() }))
     .output(baseServerResponse)
@@ -534,14 +533,14 @@ export const bloodlineRouter = createTRPCRouter({
       };
     }),
   getReskin: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get a specific bloodline reskin" } })
+    .meta({ mcp: { description: "Get a specific bloodline reskin" } })
     .input(z.object({ reskinId: z.string() }))
     .query(async ({ ctx, input }) => {
       const res = await fetchBloodlineReskin(ctx.drizzle, input.reskinId);
       return res ?? errorResponse("Reskin not found");
     }),
   getReskinsForBloodline: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get all reskins for a bloodline" } })
+    .meta({ mcp: { description: "Get all reskins for a bloodline" } })
     .input(z.object({ bloodlineId: z.string() }))
     .query(async ({ ctx, input }) => {
       const rows = await ctx.drizzle.query.bloodlineReskin.findMany({
@@ -551,7 +550,7 @@ export const bloodlineRouter = createTRPCRouter({
       return rows;
     }),
   getAllReskins: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get paginated bloodline reskins" } })
+    .meta({ mcp: { description: "Get paginated bloodline reskins" } })
     .input(
       bloodlineFilteringSchema.extend({
         cursor: z.number().nullish(),
@@ -705,19 +704,19 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   // Get bloodline roll of a specific user
   getNaturalRolls: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's natural bloodline roll" } })
+    .meta({ mcp: { description: "Get user's natural bloodline roll" } })
     .query(async ({ ctx }) => {
       return (await fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId)) ?? null;
     }),
   getItemRolls: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's item bloodline rolls" } })
+    .meta({ mcp: { description: "Get user's item bloodline rolls" } })
     .query(async ({ ctx }) => {
       return await fetchItemBloodlineRolls(ctx.drizzle, ctx.userId);
     }),
   // Get statistics about natural bloodline rolls grouped by rank
   getNaturalRollStatistics: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get bloodline roll statistics by rank" },
+      mcp: { description: "Get bloodline roll statistics by rank" },
     })
     .query(async ({ ctx }) => {
       const stats = await ctx.drizzle
@@ -764,7 +763,7 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   // Natural bloodline roll: CAS on userData.updatedAt before RNG; unique index allows one NATURAL row per user.
   roll: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Roll for a natural bloodline" } })
+    .meta({ mcp: { description: "Roll for a natural bloodline" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
@@ -906,7 +905,7 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   // Pity Roll a bloodline
   pityRoll: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Use pity roll for a bloodline" } })
+    .meta({ mcp: { description: "Use pity roll for a bloodline" } })
     .input(z.object({ rank: z.enum(LetterRanks).optional().nullish() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -998,7 +997,7 @@ export const bloodlineRouter = createTRPCRouter({
     }),
   // Remove a bloodline from session user
   removeBloodline: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Remove current bloodline" } })
+    .meta({ mcp: { description: "Remove current bloodline" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
@@ -1030,7 +1029,7 @@ export const bloodlineRouter = createTRPCRouter({
   // Purchase a bloodline for session user
   purchaseBloodline: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Purchase a bloodline with reputation" },
+      mcp: { description: "Purchase a bloodline with reputation" },
     })
     .input(z.object({ bloodlineId: z.string() }))
     .output(baseServerResponse)

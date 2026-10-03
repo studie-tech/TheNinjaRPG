@@ -1,14 +1,13 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { AlertTriangle, ChevronRight, UserPlus } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import type React from "react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { api } from "@/app/_trpc/client";
 import PixelPublicHeader from "@/components/layout/PixelPublicHeader";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   IMG_FRONTPAGE_SCREENSHOT_COMBAT,
@@ -21,10 +20,8 @@ import {
   IMG_PIXEL_HERO_POSTER,
   TOTAL_PLAYERS_MILESTONE,
 } from "@/drizzle/constants";
-import { env } from "@/env/client.mjs";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useCookieConsent } from "@/hooks/useCookieConsent";
-import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { readCampaignSource, storeCampaignSource } from "@/libs/campaignSource";
@@ -36,7 +33,6 @@ import {
   useIsPixelLanding,
   useWallpaperVariant,
 } from "@/utils/LayoutContext";
-import { getFirstOfNextMonth } from "@/utils/time";
 
 /**
  * The feature screenshots are 900x700 sources in a column that never renders wider than
@@ -61,10 +57,6 @@ const Welcome: React.FC = () => {
   const contentClass = cn(
     "mr-auto ml-auto flex w-[99%] max-w-[768px] flex-col items-center rounded-xl bg-popover/75",
   );
-
-  // Check if game features should be shown (not in MCP mode)
-  const isMcpEnabled = env.NEXT_PUBLIC_MCP_ENABLED === "true";
-  const showGameFeatures = !isMcpEnabled;
 
   if (activeLayout === "pixel" && isPixelLanding) {
     return (
@@ -157,345 +149,162 @@ const Welcome: React.FC = () => {
           )} */}
         </div>
       </div>
-      {env.NEXT_PUBLIC_MCP_ENABLED === "true" && (
-        <>
-          <div className={cn(backgroundClass, "justify-start")}>
-            <div className={cn(contentClass, "mb-6")}>
-              <Alert className="w-full">
-                <AlertTriangle className="h-5 w-5" />
-                <AlertTitle className="font-bold text-xl">
-                  MONTHLY SERVER RESET WARNING
-                </AlertTitle>
-                <AlertDescription className="flex flex-col gap-3">
-                  <p className="text-base">
-                    <strong>
-                      On this server all user data, villages, clans, and progress will
-                      be permanently deleted
-                    </strong>{" "}
-                    on the 1st of every month at midnight UTC. Time Until Next Reset:
-                  </p>
-                  <div className="flex flex-col items-center gap-2">
-                    <Countdown
-                      targetDate={getFirstOfNextMonth()}
-                      className="font-bold font-mono text-3xl text-destructive-foreground"
-                    />
-                  </div>
-                </AlertDescription>
-              </Alert>
+      <div className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}>
+        Game Features
+      </div>
+
+      <div className={backgroundClass}>
+        <div className={contentClass}>
+          <div className="w-full p-3">
+            <div className="flex flex-col gap-2">
+              <h2 className="font-bold text-2xl">Jutsus</h2>
+              <p>
+                Jutsu are the cornerstone of strategic combat, blending skill,
+                creativity, and tactical planning to overcome your opponents. Players
+                can harness the power of chakra to unleash a variety of techniques,
+                including Ninjutsu, Genjutsu, and Taijutsu, each offering unique combat
+                advantages.
+              </p>
+              <p>
+                By mastering intricate hand seals and managing your chakra reserves, you
+                can develop devastating combos, counter enemy moves, and dominate the
+                battlefield. Explore thousands of potential jutsu combinations and
+                refine your strategy to suit your playstyle—whether you prefer brute
+                strength, deception, or finesse.
+              </p>
+              <Image
+                src={IMG_FRONTPAGE_SCREENSHOT_JUTSUS}
+                {...FEATURE_SHOT}
+                className="w-full rounded-xl"
+                alt="Screenshot from Jutsus"
+              />
             </div>
           </div>
-          <div className="mb-4 flex flex-col gap-4">
-            <div
-              className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}
-            >
-              AI Agent Game
-            </div>
-            <div className={backgroundClass}>
-              <div className={contentClass}>
-                <div className="w-full p-3">
-                  <div className="flex flex-col gap-4">
-                    <h2 className="font-bold text-2xl">Play with AI Assistants</h2>
-                    <p>
-                      This server for TheNinja-RPG supports the Model Context Protocol
-                      (MCP), allowing AI assistants like Claude, ChatGPT, and Cursor to
-                      interact with the game on your behalf. Let your AI agent train
-                      your ninja, manage your village, engage in combat, and more - all
-                      through natural language conversations with your AI assistant.
-                    </p>
-
-                    <div className="rounded-lg border border-border bg-muted/50 p-4">
-                      <h3 className="mb-2 font-bold text-lg">MCP Server URL</h3>
-                      <code className="block rounded bg-background p-3 font-mono text-sm">
-                        {env.NEXT_PUBLIC_BASE_URL}/api/mcp
-                      </code>
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                      <h3 className="font-bold text-xl">Setup Instructions</h3>
-
-                      <McpSetupDetails title="Claude Code (CLI)">
-                        <p className="mb-2 text-sm">
-                          Add the MCP server using the Claude Code CLI command:
-                        </p>
-                        <code className="block rounded bg-background p-3 font-mono text-xs">
-                          claude mcp add --transport http theninja-rpg{" "}
-                          {env.NEXT_PUBLIC_BASE_URL}/api/mcp
-                        </code>
-                      </McpSetupDetails>
-
-                      <McpSetupDetails title="Claude Desktop">
-                        <p className="mb-2 text-sm">
-                          Add to your Claude Desktop configuration file
-                          (claude_desktop_config.json):
-                        </p>
-                        <pre className="overflow-x-auto rounded bg-background p-3 font-mono text-xs">
-                          {`{
-  "mcpServers": {
-    "theninja-rpg": {
-      "url": "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"
-    }
-  }
-}`}
-                        </pre>
-                      </McpSetupDetails>
-
-                      <McpSetupDetails title="Cursor / VS Code">
-                        <p className="mb-2 text-sm">
-                          Add to your MCP settings in the editor&apos;s configuration:
-                        </p>
-                        <pre className="overflow-x-auto rounded bg-background p-3 font-mono text-xs">
-                          {`{
-  "mcp": {
-    "servers": {
-      "theninja-rpg": {
-        "url": "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"
-      }
-    }
-  }
-}`}
-                        </pre>
-                      </McpSetupDetails>
-
-                      <McpSetupDetails title="Codex CLI">
-                        <p className="mb-2 text-sm">
-                          Add the MCP server using the Codex CLI command:
-                        </p>
-                        <code className="block rounded bg-background p-3 font-mono text-xs">
-                          codex mcp add theninja-rpg --url {env.NEXT_PUBLIC_BASE_URL}
-                          /api/mcp
-                        </code>
-                        <p className="mt-2 text-muted-foreground text-xs">
-                          Or add to your ~/.codex/config.toml:
-                        </p>
-                        <pre className="mt-1 overflow-x-auto rounded bg-background p-3 font-mono text-xs">
-                          {`[mcp_servers.theninja-rpg]
-url = "${env.NEXT_PUBLIC_BASE_URL}/api/mcp"`}
-                        </pre>
-                      </McpSetupDetails>
-
-                      <McpSetupDetails title="ChatGPT (Codex App)">
-                        <p className="mb-2 text-sm">
-                          In ChatGPT, workspace admins can add MCP servers via workspace
-                          settings. Add the following streamable HTTP server URL:
-                        </p>
-                        <code className="block rounded bg-background p-3 font-mono text-xs">
-                          {env.NEXT_PUBLIC_BASE_URL}/api/mcp
-                        </code>
-                        <p className="mt-2 text-muted-foreground text-xs">
-                          Go to Settings &rarr; Connected Apps &rarr; Add MCP Server,
-                          then paste the URL above.
-                        </p>
-                      </McpSetupDetails>
-                    </div>
-
-                    <p className="text-muted-foreground text-sm">
-                      When you first connect, you&apos;ll be prompted to authenticate
-                      with your TheNinja-RPG account via Clerk OAuth. This allows the AI
-                      assistant to perform actions on your behalf securely.
-                    </p>
-                  </div>
-                </div>
-              </div>
+        </div>
+      </div>
+      <div className={backgroundClass}>
+        <div className={contentClass}>
+          <div className="w-full p-3">
+            <div className="flex flex-col gap-2">
+              <h2 className="pt-4 font-bold text-2xl">Combat</h2>
+              <p>
+                Experience the thrill of ninja combat in dynamic, round-based 2D
+                strategic battle system. Every encounter is a test of wit and skill,
+                requiring players to carefully plan their moves, manage resources, and
+                outthink their opponents.
+              </p>
+              <p>
+                Choose from a wide arsenal of techniques, including powerful jutsu,
+                precise attacks, and defensive maneuvers, to adapt to any situation.
+                Each round challenges you to anticipate your opponent&apos;s strategy
+                while leveraging your unique abilities and character build. Timing,
+                positioning, and strategy are key as you engage in battles that demand
+                both tactical decision-making and foresight.
+              </p>
+              <Image
+                src={IMG_FRONTPAGE_SCREENSHOT_COMBAT}
+                {...FEATURE_SHOT}
+                className="w-full rounded-xl"
+                alt="Screenshot from Combat"
+              />
             </div>
           </div>
-          <div className="mb-4 flex flex-col gap-4">
-            <div
-              className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}
-            >
-              Human?
-            </div>
-            <div className={cn(backgroundClass, "justify-start")}>
-              <div className={cn(contentClass, "mb-10")}>
-                <div className="flex w-full flex-col items-start gap-2 p-3 text-center">
-                  <p>
-                    If you are looking to play yourself without an AI assistant, please
-                    visit
-                  </p>
-                  <Link
-                    href="https://theninja-rpg.com"
-                    aria-label="Signup"
-                    className="w-full px-3"
-                  >
-                    <Button
-                      id="signup_btn"
-                      className="w-full font-bold text-xl"
-                      size="xl2"
-                      animation="glow"
-                    >
-                      <UserPlus className="mr-2 h-6 w-6" />
-                      www.theninja-rpg.com
-                    </Button>
-                  </Link>
-                </div>
-              </div>
+        </div>
+      </div>
+      <div className={backgroundClass}>
+        <div className={contentClass}>
+          <div className="w-full p-3">
+            <div className="flex flex-col gap-2">
+              <h2 className="pt-4 font-bold text-2xl">Village</h2>
+              <p>
+                The ninja village is your home, your sanctuary, and the center of your
+                growth as a shinobi. This bustling hub is where strategy meets daily
+                life, offering countless opportunities to sharpen your skills, manage
+                your resources, and engage with fellow ninjas.
+              </p>
+              <p>
+                From training grounds that push your abilities to the limit, to the
+                ramen shop where you replenish your stamina, every corner of the village
+                plays a vital role in your journey. The village bank ensures your
+                hard-earned wealth is protected, while the item shop equips you with
+                tools and scrolls to gain an edge in combat. In the clan hall,
+                you&apos;ll collaborate with allies to build your reputation and
+                influence, while the town hall connects you to vital missions and
+                village-wide initiatives. Even your home offers a place of rest and
+                recovery, preparing you for the challenges ahead.
+              </p>
+              <Image
+                src={IMG_FRONTPAGE_SCREENSHOT_VILLAGE}
+                {...FEATURE_SHOT}
+                className="w-full rounded-xl"
+                alt="Screenshot from Village"
+              />
             </div>
           </div>
-        </>
-      )}
+        </div>
+      </div>
+      <div className={backgroundClass}>
+        <div className={contentClass}>
+          <div className="w-full p-3">
+            <div className="flex flex-col gap-2">
+              <h2 className="pt-4 font-bold text-2xl">Sectors</h2>
+              <p>
+                The 2D travel system brings the ninja world to life, allowing you to
+                explore local sectors, navigate terrain, and engage with players and
+                enemies in real-time. Every move you make across the map opens new
+                opportunities for discovery, combat, and strategy.
+              </p>
+              <p>
+                Travel isn&apos;t just about getting from one place to another—it&apos;s
+                a core part of the game&apos;s experience. Whether you&apos;re scouting
+                enemy territories, setting up ambushes, or evading rival ninjas, the 2D
+                system gives you the freedom to plan your movements and adapt on the
+                fly. Players can launch surprise attacks, defend key locations, or
+                simply traverse the map to reach mission objectives and hidden rewards.
+              </p>
+              <Image
+                src={IMG_FRONTPAGE_SCREENSHOT_SECTOR}
+                {...FEATURE_SHOT}
+                className="w-full rounded-xl"
+                alt="Screenshot from Sector"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className={backgroundClass}>
+        <div className={contentClass}>
+          <div className="w-full p-3">
+            <div className="flex flex-col gap-2">
+              <h2 className="pt-4 font-bold text-2xl">Travel</h2>
+              <p>
+                The 3D global travel system expands your journey beyond your village,
+                opening the gates to a vast world filled with diverse regions and hidden
+                secrets. Travel between villages, explore distant lands, and immerse
+                yourself in the rich lore of the ninja universe.
+              </p>
+              <p>
+                Global travel isn&apos;t just about exploration—it&apos;s an opportunity
+                to engage with new challenges and alliances. Visit other villages to
+                trade, forge alliances, or test your strength against foreign rivals.
+                Each region offers unique environments, from dense forests and sprawling
+                deserts to snow-capped mountains, each presenting its own set of
+                opportunities and dangers.
+              </p>
+              <Image
+                src={IMG_FRONTPAGE_SCREENSHOT_GLOBAL}
+                {...FEATURE_SHOT}
+                className="w-full rounded-xl"
+                alt="Screenshot from the global map"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
-      {showGameFeatures && (
-        <>
-          <div
-            className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}
-          >
-            Game Features
-          </div>
-
-          <div className={backgroundClass}>
-            <div className={contentClass}>
-              <div className="w-full p-3">
-                <div className="flex flex-col gap-2">
-                  <h2 className="font-bold text-2xl">Jutsus</h2>
-                  <p>
-                    Jutsu are the cornerstone of strategic combat, blending skill,
-                    creativity, and tactical planning to overcome your opponents.
-                    Players can harness the power of chakra to unleash a variety of
-                    techniques, including Ninjutsu, Genjutsu, and Taijutsu, each
-                    offering unique combat advantages.
-                  </p>
-                  <p>
-                    By mastering intricate hand seals and managing your chakra reserves,
-                    you can develop devastating combos, counter enemy moves, and
-                    dominate the battlefield. Explore thousands of potential jutsu
-                    combinations and refine your strategy to suit your playstyle—whether
-                    you prefer brute strength, deception, or finesse.
-                  </p>
-                  <Image
-                    src={IMG_FRONTPAGE_SCREENSHOT_JUTSUS}
-                    {...FEATURE_SHOT}
-                    className="w-full rounded-xl"
-                    alt="Screenshot from Jutsus"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className={backgroundClass}>
-            <div className={contentClass}>
-              <div className="w-full p-3">
-                <div className="flex flex-col gap-2">
-                  <h2 className="pt-4 font-bold text-2xl">Combat</h2>
-                  <p>
-                    Experience the thrill of ninja combat in dynamic, round-based 2D
-                    strategic battle system. Every encounter is a test of wit and skill,
-                    requiring players to carefully plan their moves, manage resources,
-                    and outthink their opponents.
-                  </p>
-                  <p>
-                    Choose from a wide arsenal of techniques, including powerful jutsu,
-                    precise attacks, and defensive maneuvers, to adapt to any situation.
-                    Each round challenges you to anticipate your opponent&apos;s
-                    strategy while leveraging your unique abilities and character build.
-                    Timing, positioning, and strategy are key as you engage in battles
-                    that demand both tactical decision-making and foresight.
-                  </p>
-                  <Image
-                    src={IMG_FRONTPAGE_SCREENSHOT_COMBAT}
-                    {...FEATURE_SHOT}
-                    className="w-full rounded-xl"
-                    alt="Screenshot from Combat"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className={backgroundClass}>
-            <div className={contentClass}>
-              <div className="w-full p-3">
-                <div className="flex flex-col gap-2">
-                  <h2 className="pt-4 font-bold text-2xl">Village</h2>
-                  <p>
-                    The ninja village is your home, your sanctuary, and the center of
-                    your growth as a shinobi. This bustling hub is where strategy meets
-                    daily life, offering countless opportunities to sharpen your skills,
-                    manage your resources, and engage with fellow ninjas.
-                  </p>
-                  <p>
-                    From training grounds that push your abilities to the limit, to the
-                    ramen shop where you replenish your stamina, every corner of the
-                    village plays a vital role in your journey. The village bank ensures
-                    your hard-earned wealth is protected, while the item shop equips you
-                    with tools and scrolls to gain an edge in combat. In the clan hall,
-                    you&apos;ll collaborate with allies to build your reputation and
-                    influence, while the town hall connects you to vital missions and
-                    village-wide initiatives. Even your home offers a place of rest and
-                    recovery, preparing you for the challenges ahead.
-                  </p>
-                  <Image
-                    src={IMG_FRONTPAGE_SCREENSHOT_VILLAGE}
-                    {...FEATURE_SHOT}
-                    className="w-full rounded-xl"
-                    alt="Screenshot from Village"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className={backgroundClass}>
-            <div className={contentClass}>
-              <div className="w-full p-3">
-                <div className="flex flex-col gap-2">
-                  <h2 className="pt-4 font-bold text-2xl">Sectors</h2>
-                  <p>
-                    The 2D travel system brings the ninja world to life, allowing you to
-                    explore local sectors, navigate terrain, and engage with players and
-                    enemies in real-time. Every move you make across the map opens new
-                    opportunities for discovery, combat, and strategy.
-                  </p>
-                  <p>
-                    Travel isn&apos;t just about getting from one place to
-                    another—it&apos;s a core part of the game&apos;s experience. Whether
-                    you&apos;re scouting enemy territories, setting up ambushes, or
-                    evading rival ninjas, the 2D system gives you the freedom to plan
-                    your movements and adapt on the fly. Players can launch surprise
-                    attacks, defend key locations, or simply traverse the map to reach
-                    mission objectives and hidden rewards.
-                  </p>
-                  <Image
-                    src={IMG_FRONTPAGE_SCREENSHOT_SECTOR}
-                    {...FEATURE_SHOT}
-                    className="w-full rounded-xl"
-                    alt="Screenshot from Sector"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className={backgroundClass}>
-            <div className={contentClass}>
-              <div className="w-full p-3">
-                <div className="flex flex-col gap-2">
-                  <h2 className="pt-4 font-bold text-2xl">Travel</h2>
-                  <p>
-                    The 3D global travel system expands your journey beyond your
-                    village, opening the gates to a vast world filled with diverse
-                    regions and hidden secrets. Travel between villages, explore distant
-                    lands, and immerse yourself in the rich lore of the ninja universe.
-                  </p>
-                  <p>
-                    Global travel isn&apos;t just about exploration—it&apos;s an
-                    opportunity to engage with new challenges and alliances. Visit other
-                    villages to trade, forge alliances, or test your strength against
-                    foreign rivals. Each region offers unique environments, from dense
-                    forests and sprawling deserts to snow-capped mountains, each
-                    presenting its own set of opportunities and dangers.
-                  </p>
-                  <Image
-                    src={IMG_FRONTPAGE_SCREENSHOT_GLOBAL}
-                    {...FEATURE_SHOT}
-                    className="w-full rounded-xl"
-                    alt="Screenshot from the global map"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className={backgroundClass}>
-            <div className={cn(contentClass, "p-3")}>{textSEO}</div>
-          </div>
-        </>
-      )}
+      <div className={backgroundClass}>
+        <div className={cn(contentClass, "p-3")}>{textSEO}</div>
+      </div>
 
       <Suspense>
         <SetReferal />
@@ -946,24 +755,6 @@ const PixelWelcome: React.FC = () => {
         </div>
       </footer>
     </main>
-  );
-};
-
-const McpSetupDetails = ({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) => {
-  return (
-    <details className="group rounded-lg border border-border">
-      <summary className="flex cursor-pointer list-none items-center gap-2 p-4 font-bold [&::-webkit-details-marker]:hidden">
-        <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-        {title}
-      </summary>
-      <div className="border-border border-t px-4 pt-3 pb-4">{children}</div>
-    </details>
   );
 };
 

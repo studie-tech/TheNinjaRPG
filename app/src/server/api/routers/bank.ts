@@ -18,7 +18,7 @@ import { getBankInterestDateRange } from "@/utils/time";
 
 export const bankRouter = createTRPCRouter({
   toBank: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Deposit ryo from pocket to bank" } })
+    .meta({ mcp: { description: "Deposit ryo from pocket to bank" } })
     .input(z.object({ amount: z.number().min(0) }))
     .output(
       baseServerResponse.extend({
@@ -29,7 +29,7 @@ export const bankRouter = createTRPCRouter({
       return transferRyo(ctx.drizzle, ctx.userId, input.amount, "toBank");
     }),
   toPocket: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Withdraw ryo from bank to pocket" } })
+    .meta({ mcp: { description: "Withdraw ryo from bank to pocket" } })
     .input(z.object({ amount: z.number().min(0) }))
     .output(
       baseServerResponse.extend({
@@ -42,7 +42,6 @@ export const bankRouter = createTRPCRouter({
   transfer: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Transfer ryo from your bank to another user",
       },
     })
@@ -94,7 +93,7 @@ export const bankRouter = createTRPCRouter({
       };
     }),
   getGraph: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get bank transfer graph data" } })
+    .meta({ mcp: { description: "Get bank transfer graph data" } })
     .input(
       z
         .object({
@@ -131,7 +130,7 @@ export const bankRouter = createTRPCRouter({
     }),
   getTransfers: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get paginated bank transfer history" },
+      mcp: { description: "Get paginated bank transfer history" },
     })
     .input(
       z.object({
@@ -164,7 +163,7 @@ export const bankRouter = createTRPCRouter({
       };
     }),
   getPendingInterest: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get pending daily bank interest" } })
+    .meta({ mcp: { description: "Get pending daily bank interest" } })
     .query(async ({ ctx }) => {
       // Query
       const pendingInterest = await ctx.drizzle.query.dailyBankInterest.findMany({
@@ -188,7 +187,7 @@ export const bankRouter = createTRPCRouter({
     }),
   claimInterest: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Claim accumulated daily bank interest" },
+      mcp: { description: "Claim accumulated daily bank interest" },
     })
     .output(
       baseServerResponse.extend({

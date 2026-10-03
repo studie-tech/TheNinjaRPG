@@ -27,7 +27,7 @@ import { idSchema } from "@/validators/misc";
 
 export const badgeRouter = createTRPCRouter({
   getAllNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all badge names and images" } })
+    .meta({ mcp: { description: "Get all badge names and images" } })
     .query(async ({ ctx }) => {
       return await ctx.drizzle.query.badge.findMany({
         columns: { id: true, name: true, image: true },
@@ -35,7 +35,7 @@ export const badgeRouter = createTRPCRouter({
       });
     }),
   getAll: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all badges with pagination" } })
+    .meta({ mcp: { description: "Get all badges with pagination" } })
     .input(
       z
         .object({
@@ -60,7 +60,7 @@ export const badgeRouter = createTRPCRouter({
       };
     }),
   get: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get badge by ID" } })
+    .meta({ mcp: { description: "Get badge by ID" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchBadge(ctx.drizzle, input.id);

@@ -25,7 +25,7 @@ import { idSchema } from "@/validators/misc";
 
 export const gameAssetRouter = createTRPCRouter({
   getNameTags: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get game asset name tags" } })
+    .meta({ mcp: { description: "Get game asset name tags" } })
     .input(
       z.object({
         type: z.enum(GameAssetTypes).optional(),
@@ -59,7 +59,7 @@ export const gameAssetRouter = createTRPCRouter({
       return { tags };
     }),
   getAllNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all game asset names" } })
+    .meta({ mcp: { description: "Get all game asset names" } })
     .input(
       z.object({
         type: z.enum(GameAssetTypes).optional(),
@@ -83,7 +83,7 @@ export const gameAssetRouter = createTRPCRouter({
     }),
   getAllGameAssetContentTagNames: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get all game asset content tag names" },
+      mcp: { description: "Get all game asset content tag names" },
     })
     .query(async ({ ctx }) => {
       return await ctx.drizzle
@@ -92,7 +92,7 @@ export const gameAssetRouter = createTRPCRouter({
         .innerJoin(contentTag, eq(gameAssetTag.tagId, contentTag.id));
     }),
   getAllFolders: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all game asset folders" } })
+    .meta({ mcp: { description: "Get all game asset folders" } })
     .query(async ({ ctx }) => {
       // Return unique folders with counts
       return await ctx.drizzle
@@ -106,7 +106,7 @@ export const gameAssetRouter = createTRPCRouter({
         .orderBy(gameAsset.folder);
     }),
   getAll: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all game assets with filtering" } })
+    .meta({ mcp: { description: "Get all game assets with filtering" } })
     .input(
       gameAssetSchema.extend({
         cursor: z.number().nullish(),
@@ -148,7 +148,7 @@ export const gameAssetRouter = createTRPCRouter({
       };
     }),
   getSceneAssets: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get scene assets by IDs" } })
+    .meta({ mcp: { description: "Get scene assets by IDs" } })
     .input(z.object({ assetIds: z.array(z.string()) }))
     .query(async ({ ctx, input }) => {
       return await ctx.drizzle.query.gameAsset.findMany({
@@ -156,7 +156,7 @@ export const gameAssetRouter = createTRPCRouter({
       });
     }),
   get: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a game asset by ID" } })
+    .meta({ mcp: { description: "Get a game asset by ID" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchGameAsset(ctx.drizzle, input.id);

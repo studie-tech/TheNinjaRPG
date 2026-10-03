@@ -147,7 +147,7 @@ import { getQuestCounterFieldName } from "@/validators/user";
 
 export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all quest names and IDs" } })
+    .meta({ mcp: { description: "Get all quest names and IDs" } })
     .query(async ({ ctx }) => {
       const [viewerRole, results] = await Promise.all([
         fetchViewerRole(ctx.drizzle, ctx.userId),
@@ -160,7 +160,7 @@ export const questsRouter = createTRPCRouter({
     }),
   getAll: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get paginated list of quests with filters" },
+      mcp: { description: "Get paginated list of quests with filters" },
     })
     .input(
       questFilteringSchema.extend({
@@ -219,7 +219,7 @@ export const questsRouter = createTRPCRouter({
     }),
   getAchievementCatalogue: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get the static achievement definitions" },
+      mcp: { description: "Get the static achievement definitions" },
     })
     .query(async ({ ctx }) => {
       // Achievement definitions are the same for every player and change only when staff edit
@@ -228,7 +228,7 @@ export const questsRouter = createTRPCRouter({
       return await fetchPublishedAchievements(ctx.drizzle);
     }),
   get: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a single quest by ID" } })
+    .meta({ mcp: { description: "Get a single quest by ID" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const [result, user] = await Promise.all([
@@ -252,7 +252,6 @@ export const questsRouter = createTRPCRouter({
   allianceBuilding: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get available event quests from alliance building",
       },
     })
@@ -285,7 +284,7 @@ export const questsRouter = createTRPCRouter({
     }),
   missionHall: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get available missions from mission hall" },
+      mcp: { description: "Get available missions from mission hall" },
     })
     .input(z.object({ villageId: z.string(), level: z.number() }))
     .query(async ({ ctx, input }) => {
@@ -320,7 +319,7 @@ export const questsRouter = createTRPCRouter({
     }),
   specificQuests: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get quests filtered by type and level" },
+      mcp: { description: "Get quests filtered by type and level" },
     })
     .input(z.object({ level: z.number(), questType: z.enum(QuestTypes) }))
     .query(async ({ ctx, input }) => {
@@ -345,7 +344,7 @@ export const questsRouter = createTRPCRouter({
       return quests.filter((e) => isAvailableUserQuests(e, user, true).check);
     }),
   startRandom: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Start a random mission or errand" } })
+    .meta({ mcp: { description: "Start a random mission or errand" } })
     .input(
       z.object({
         type: z.enum(["errand", "mission", "crime", "medical", "pvp"]),
@@ -518,7 +517,7 @@ export const questsRouter = createTRPCRouter({
       return { success: true, message: `Quest started: ${result.name}${rankInfo}` };
     }),
   startQuest: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Start a specific quest by ID" } })
+    .meta({ mcp: { description: "Start a specific quest by ID" } })
     .input(z.object({ questId: z.string(), userSector: z.number() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -551,7 +550,7 @@ export const questsRouter = createTRPCRouter({
       });
     }),
   abandon: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Abandon an active quest" } })
+    .meta({ mcp: { description: "Abandon an active quest" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -614,7 +613,7 @@ export const questsRouter = createTRPCRouter({
       return { success: true, message: `Quest abandoned` };
     }),
   getQuestHistory: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's quest history" } })
+    .meta({ mcp: { description: "Get user's quest history" } })
     .input(
       z.object({
         cursor: z.number().nullish(),
@@ -640,7 +639,7 @@ export const questsRouter = createTRPCRouter({
     }),
   update: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Update quest content (content editors)" },
+      mcp: { description: "Update quest content (content editors)" },
     })
     .input(z.object({ id: z.string(), data: QuestValidator }))
     .output(baseServerResponse)
@@ -812,7 +811,7 @@ export const questsRouter = createTRPCRouter({
     }),
   create: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Create a new quest (content editors)" },
+      mcp: { description: "Create a new quest (content editors)" },
     })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
@@ -874,7 +873,7 @@ export const questsRouter = createTRPCRouter({
     }),
   clone: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Clone an existing quest (content editors)" },
+      mcp: { description: "Clone an existing quest (content editors)" },
     })
     .input(idSchema)
     .output(baseServerResponse)
@@ -935,7 +934,7 @@ export const questsRouter = createTRPCRouter({
       return { success: true, message: questData.id };
     }),
   delete: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Delete a quest (content editors)" } })
+    .meta({ mcp: { description: "Delete a quest (content editors)" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -990,7 +989,7 @@ export const questsRouter = createTRPCRouter({
       }
     }),
   checkRewards: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Check and claim quest rewards" } })
+    .meta({ mcp: { description: "Check and claim quest rewards" } })
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
     .output(
       z.union([
@@ -1117,7 +1116,6 @@ export const questsRouter = createTRPCRouter({
   checkLocationQuest: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Update quest progress for location-based objectives",
       },
     })
@@ -1265,7 +1263,7 @@ export const questsRouter = createTRPCRouter({
       return { success: true, message: "Quest deleted successfully" };
     }),
   retryBattle: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Retry a quest battle after failure" } })
+    .meta({ mcp: { description: "Retry a quest battle after failure" } })
     .input(z.object({ questId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {

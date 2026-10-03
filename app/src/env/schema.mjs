@@ -11,7 +11,6 @@ export const serverSchema = z.object({
   PUSHER_APP_SECRET: z.string().optional(),
   DATABASE_URL: z.url().optional(),
   DEV_DATABASE_URL: z.url().optional(),
-  AI_DATABASE_URL: z.url().optional(),
   NODE_ENV: z.enum(["development", "test", "production"]),
   /**
    * Pull zone in front of production; unset serves everything from the app itself. Its
@@ -93,7 +92,6 @@ export const serverEnv = {
   PUSHER_APP_SECRET: process.env.PUSHER_APP_SECRET,
   DATABASE_URL: process.env.DATABASE_URL,
   DEV_DATABASE_URL: process.env.DEV_DATABASE_URL,
-  AI_DATABASE_URL: process.env.AI_DATABASE_URL,
   NODE_ENV: process.env.NODE_ENV,
   DISCORD_CONTENT_UPDATES: process.env.DISCORD_CONTENT_UPDATES,
   DISCORD_NEWS_UPDATES: process.env.DISCORD_NEWS_UPDATES,
@@ -157,8 +155,6 @@ export const clientSchema = z.object({
   // SpacetimeDB for Tower Defense
   NEXT_PUBLIC_SPACETIMEDB_HOST: z.string().optional(),
   NEXT_PUBLIC_SPACETIMEDB_MODULE: z.string().optional(),
-  // MCP Server (disabled by default, enable for MCP-enabled deployments)
-  NEXT_PUBLIC_MCP_ENABLED: z.enum(["true", "false"]).optional().prefault("false"),
   // RevenueCat public SDK keys. Public by design -- they only identify the app.
   NEXT_PUBLIC_REVENUECAT_IOS_KEY: z.string().optional(),
   NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: z.string().optional(),
@@ -179,9 +175,6 @@ export const clientEnv = {
   // SpacetimeDB for Tower Defense
   NEXT_PUBLIC_SPACETIMEDB_HOST: process.env.NEXT_PUBLIC_SPACETIMEDB_HOST,
   NEXT_PUBLIC_SPACETIMEDB_MODULE: process.env.NEXT_PUBLIC_SPACETIMEDB_MODULE,
-  // MCP Server
-  NEXT_PUBLIC_MCP_ENABLED:
-    /** @type {"true" | "false" | undefined} */ (process.env.NEXT_PUBLIC_MCP_ENABLED),
   // RevenueCat
   NEXT_PUBLIC_REVENUECAT_IOS_KEY: process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY,
   NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: process.env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY,

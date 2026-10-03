@@ -72,13 +72,13 @@ import type { AllObjectiveTask } from "@/validators/objectives";
 
 export const farmingRouter = createTRPCRouter({
   getFarmState: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get farm state" } })
+    .meta({ mcp: { description: "Get farm state" } })
     .query(async ({ ctx }) => {
       return await buildFarmState(ctx.drizzle, ctx.userId);
     }),
 
   plantSeed: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Plant a seed on a farm plot" } })
+    .meta({ mcp: { description: "Plant a seed on a farm plot" } })
     .input(z.object({ plotId: z.string(), seedItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
@@ -225,7 +225,7 @@ export const farmingRouter = createTRPCRouter({
     }),
 
   waterPlot: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Water a growing farm plot" } })
+    .meta({ mcp: { description: "Water a growing farm plot" } })
     .input(z.object({ plotId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
@@ -292,7 +292,7 @@ export const farmingRouter = createTRPCRouter({
     }),
 
   applyFertilizer: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Apply fertilizer to a farm plot" } })
+    .meta({ mcp: { description: "Apply fertilizer to a farm plot" } })
     .input(z.object({ plotId: z.string(), userItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
@@ -416,7 +416,7 @@ export const farmingRouter = createTRPCRouter({
     }),
 
   harvestPlot: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Harvest a ready farm plot" } })
+    .meta({ mcp: { description: "Harvest a ready farm plot" } })
     .input(z.object({ plotId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
@@ -519,7 +519,7 @@ export const farmingRouter = createTRPCRouter({
 
   plantAllEmpty: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Plant a seed in every empty farm plot" },
+      mcp: { description: "Plant a seed in every empty farm plot" },
     })
     .input(z.object({ seedItemId: z.string() }))
     .output(farmMutationResponseSchema)
@@ -644,7 +644,7 @@ export const farmingRouter = createTRPCRouter({
     }),
 
   waterAll: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Water every eligible farm plot" } })
+    .meta({ mcp: { description: "Water every eligible farm plot" } })
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx }) => {
       const [user, plots, questState] = await Promise.all([
@@ -714,7 +714,7 @@ export const farmingRouter = createTRPCRouter({
     }),
 
   fertilizeAll: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Fertilize every eligible farm plot" } })
+    .meta({ mcp: { description: "Fertilize every eligible farm plot" } })
     .input(z.object({ userItemId: z.string() }))
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
@@ -830,7 +830,7 @@ export const farmingRouter = createTRPCRouter({
     }),
 
   harvestAll: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Harvest every ready farm plot" } })
+    .meta({ mcp: { description: "Harvest every ready farm plot" } })
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx }) => {
       const [user, userItems, plots, questState] = await Promise.all([
@@ -935,7 +935,7 @@ export const farmingRouter = createTRPCRouter({
     }),
 
   sellCrop: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Sell a farm crop for farm currency" } })
+    .meta({ mcp: { description: "Sell a farm crop for farm currency" } })
     .input(
       z.object({
         userItemId: z.string(),
@@ -998,7 +998,7 @@ export const farmingRouter = createTRPCRouter({
     }),
 
   buyShopItem: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Buy an item from the farm shop" } })
+    .meta({ mcp: { description: "Buy an item from the farm shop" } })
     .input(farmShopPurchaseInputSchema)
     .output(farmMutationResponseSchema)
     .mutation(async ({ ctx, input }) => {
@@ -1152,7 +1152,6 @@ export const farmingRouter = createTRPCRouter({
   extractSeeds: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Extract seeds from a crop using an extractor",
       },
     })

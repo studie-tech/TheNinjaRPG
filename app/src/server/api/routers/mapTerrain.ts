@@ -23,7 +23,6 @@ export const mapTerrainRouter = createTRPCRouter({
   getAll: publicProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get all map terrain kinds (the shared terrain library)",
       },
     })

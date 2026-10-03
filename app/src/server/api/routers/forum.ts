@@ -36,7 +36,7 @@ import type { DrizzleClient } from "../../db";
 export const forumRouter = createTRPCRouter({
   // Get all boards in the system
   getAll: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all forum boards" } })
+    .meta({ mcp: { description: "Get all forum boards" } })
     .query(async ({ ctx }) => {
       return await ctx.drizzle.query.forumBoard.findMany({
         orderBy: asc(forumBoard.createdAt),
@@ -44,7 +44,7 @@ export const forumRouter = createTRPCRouter({
     }),
   // The user read the news
   readNews: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Mark news as read for current user" } })
+    .meta({ mcp: { description: "Mark news as read for current user" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       await readNews(ctx.drizzle, ctx.userId);
@@ -52,7 +52,7 @@ export const forumRouter = createTRPCRouter({
     }),
   // Get board in the system
   getThreads: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get threads for a forum board" } })
+    .meta({ mcp: { description: "Get threads for a forum board" } })
     .input(
       z.object({
         boardId: z.string().optional(),
@@ -72,7 +72,7 @@ export const forumRouter = createTRPCRouter({
       });
     }),
   createThread: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Create a new forum thread" } })
+    .meta({ mcp: { description: "Create a new forum thread" } })
     .input(forumBoardSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -159,7 +159,6 @@ export const forumRouter = createTRPCRouter({
   pinThread: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Pin or unpin a forum thread (requires moderation permissions)",
       },
     })
@@ -187,7 +186,6 @@ export const forumRouter = createTRPCRouter({
   lockThread: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Lock or unlock a forum thread (requires moderation permissions)",
       },
     })
@@ -215,7 +213,6 @@ export const forumRouter = createTRPCRouter({
   deleteThread: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Delete a forum thread (requires moderation permissions)",
       },
     })

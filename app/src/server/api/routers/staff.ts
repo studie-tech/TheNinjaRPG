@@ -209,27 +209,18 @@ export const staffRouter = createTRPCRouter({
       ]);
       // Derived
       const devUrl = process.env.DEV_DATABASE_URL;
-      const aiUrl = process.env.AI_DATABASE_URL;
 
       // Guard
       if (!canControlBackups(user.role)) {
         return errorResponse("Not allowed for you");
       }
       if (!backup) return errorResponse("Backup not found");
-      if (!devUrl && !aiUrl) return errorResponse("No target database URLs configured");
+      if (!devUrl) return errorResponse("No development database URL configured");
       if (!backup.sqlText || backup.sqlText.startsWith("/* Empty backup")) {
         return errorResponse("Backup is empty");
       }
 
-      // Setup clients
-      const clients = [
-        ...(devUrl
-          ? [{ name: "dev", client: new PlanetScaleClient({ url: devUrl }) }]
-          : []),
-        ...(aiUrl
-          ? [{ name: "ai", client: new PlanetScaleClient({ url: aiUrl }) }]
-          : []),
-      ];
+      const client = new PlanetScaleClient({ url: devUrl });
 
       // Derived
       const tableMap: Record<typeof backup.type, string> = {
@@ -240,42 +231,25 @@ export const staffRouter = createTRPCRouter({
       };
       const tableName = tableMap[backup.type];
 
-      // Replace the table content in parallel across all target databases. Each target runs
-      // its delete and insert in one transaction: the insert names the columns the table had
-      // when the backup was taken, and one that no longer fits must not leave it empty.
+      // Replace content atomically: an incompatible backup must not leave the table empty.
       const deleteQuery =
         backup.type === "ai"
           ? `DELETE FROM \`${tableName}\` WHERE isAi = 1`
           : `DELETE FROM \`${tableName}\``;
-      const { sqlText } = backup;
-      const results = await Promise.allSettled(
-        clients.map(({ client }) =>
-          client.transaction(async (tx) => {
-            await tx.execute(deleteQuery);
-            await tx.execute(sqlText);
-          }),
-        ),
-      );
-
-      const pushed = clients.filter((_, i) => results[i]?.status === "fulfilled");
-      // Database errors can echo the whole insert statement, so keep only their head
-      const failed = results.flatMap((result, i) => {
-        if (result.status !== "rejected") return [];
-        const { reason } = result;
-        const message = reason instanceof Error ? reason.message : String(reason);
-        return [`${clients[i]?.name}: ${message.slice(0, 200)}`];
-      });
-      if (failed.length > 0) {
-        const pushedNote = pushed.length
-          ? ` Pushed to ${pushed.map(({ name }) => name).join(" + ")}.`
-          : "";
+      try {
+        await client.transaction(async (tx) => {
+          await tx.execute(deleteQuery);
+          await tx.execute(backup.sqlText);
+        });
+      } catch (error) {
+        // Database errors can echo the insert statement; expose only the error head.
+        const message = error instanceof Error ? error.message : String(error);
         return errorResponse(
-          `Push failed and was rolled back on ${failed.join("; ")}.${pushedNote}`,
+          `Push failed and was rolled back: ${message.slice(0, 200)}`,
         );
       }
 
-      const targets = clients.map(({ name }) => name).join(" + ");
-      return { success: true, message: `Backup pushed to ${targets}` };
+      return { success: true, message: "Backup pushed to dev" };
     }),
   throwError: protectedProcedure
     .output(baseServerResponse)

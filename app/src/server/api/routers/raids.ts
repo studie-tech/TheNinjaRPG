@@ -78,7 +78,6 @@ export const raidsRouter = createTRPCRouter({
   getCompletedRaids: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get completed raids for history and rewards",
       },
     })
@@ -137,7 +136,6 @@ export const raidsRouter = createTRPCRouter({
   getAvailableRaids: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get available raids for current user",
       },
     })
@@ -248,7 +246,7 @@ export const raidsRouter = createTRPCRouter({
    */
   getRaidDetails: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get details for a specific raid" },
+      mcp: { description: "Get details for a specific raid" },
     })
     .input(z.object({ questId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -311,7 +309,7 @@ export const raidsRouter = createTRPCRouter({
    */
   getRaidLeaderboard: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get raid damage leaderboard" },
+      mcp: { description: "Get raid damage leaderboard" },
     })
     .input(
       z.object({
@@ -364,7 +362,6 @@ export const raidsRouter = createTRPCRouter({
   getUserRaidQueue: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get user's current raid queue status",
       },
     })
@@ -441,7 +438,7 @@ export const raidsRouter = createTRPCRouter({
    */
   getUserRaidBuffs: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get user's active raid buffs" },
+      mcp: { description: "Get user's active raid buffs" },
     })
     .query(async ({ ctx }) => {
       // Derived
@@ -471,7 +468,7 @@ export const raidsRouter = createTRPCRouter({
    */
   getQuestThresholds: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get damage thresholds for a raid" },
+      mcp: { description: "Get damage thresholds for a raid" },
     })
     .input(z.object({ questId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -612,7 +609,7 @@ export const raidsRouter = createTRPCRouter({
    */
   getActiveRaidTeams: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get active teams for a raid" },
+      mcp: { description: "Get active teams for a raid" },
     })
     .input(z.object({ questId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -839,7 +836,7 @@ export const raidsRouter = createTRPCRouter({
    */
   joinRaidQueue: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Join or create a raid team queue" },
+      mcp: { description: "Join or create a raid team queue" },
     })
     .use(ratelimitMiddleware)
     .input(
@@ -1103,7 +1100,7 @@ export const raidsRouter = createTRPCRouter({
    * Leave raid queue
    */
   leaveRaidQueue: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Leave the raid queue" } })
+    .meta({ mcp: { description: "Leave the raid queue" } })
     .use(ratelimitMiddleware)
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
@@ -1197,7 +1194,7 @@ export const raidsRouter = createTRPCRouter({
    */
   startRaidBattle: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Start a raid battle with the team" },
+      mcp: { description: "Start a raid battle with the team" },
     })
     .use(ratelimitMiddleware)
     .input(z.object({ teamId: z.string() }))
@@ -1394,7 +1391,6 @@ export const raidsRouter = createTRPCRouter({
   claimDamageReward: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Claim raid damage threshold rewards",
       },
     })

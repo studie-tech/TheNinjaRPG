@@ -15,7 +15,7 @@ import type { DrizzleClient } from "../../db";
 
 export const simulatorRouter = createTRPCRouter({
   getDamageSimulations: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's damage simulations" } })
+    .meta({ mcp: { description: "Get user's damage simulations" } })
     .query(async ({ ctx }) => {
       return await ctx.drizzle.query.damageSimulation.findMany({
         where: eq(damageSimulation.userId, ctx.userId),
@@ -23,13 +23,13 @@ export const simulatorRouter = createTRPCRouter({
       });
     }),
   getDamageSimulation: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a specific damage simulation" } })
+    .meta({ mcp: { description: "Get a specific damage simulation" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       return await fetchEntry(ctx.drizzle, input.id);
     }),
   createDamageSimulation: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Create a new damage simulation" } })
+    .meta({ mcp: { description: "Create a new damage simulation" } })
     .input(damageSimulationStateSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -62,7 +62,7 @@ export const simulatorRouter = createTRPCRouter({
     }),
   updateDamageSimulation: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Update damage simulation active state" },
+      mcp: { description: "Update damage simulation active state" },
     })
     .input(z.object({ id: z.string().optional(), active: z.boolean() }))
     .output(baseServerResponse)
@@ -86,7 +86,7 @@ export const simulatorRouter = createTRPCRouter({
       return { success: true, message: "Damage simulation updated" };
     }),
   deleteDamageSimulation: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Delete a damage simulation" } })
+    .meta({ mcp: { description: "Delete a damage simulation" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

@@ -14,12 +14,10 @@ export type TransformMcpProcedureFunction = (
 ) => MaybePromise<ContentBlock[]>;
 
 /**
- * Metadata type for tRPC procedures to enable MCP exposure.
+ * Metadata type for customizing tRPC procedures exposed through MCP.
  */
 export type McpMeta = {
   mcp?: {
-    /** Whether this procedure should be exposed as an MCP tool */
-    enabled?: boolean;
     /** Description for the MCP tool */
     description?: string;
     /** Custom name for the MCP tool (defaults to procedure path with dots replaced by underscores) */

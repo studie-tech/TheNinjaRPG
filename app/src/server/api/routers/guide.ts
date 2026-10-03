@@ -23,7 +23,7 @@ import { idSchema } from "@/validators/misc";
 
 export const guideRouter = createTRPCRouter({
   getAll: publicProcedure
-    .meta({ mcp: { enabled: true, description: "List player guide articles" } })
+    .meta({ mcp: { description: "List player guide articles" } })
     .input(GuideListFilterSchema.optional())
     .query(async ({ ctx, input }) => {
       const viewer = ctx.userId
@@ -42,7 +42,7 @@ export const guideRouter = createTRPCRouter({
       });
     }),
   get: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a guide article by ID" } })
+    .meta({ mcp: { description: "Get a guide article by ID" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const article = await fetchGuide(ctx.drizzle, input.id);

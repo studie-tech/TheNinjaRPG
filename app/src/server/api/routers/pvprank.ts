@@ -49,7 +49,7 @@ export const pvpRankRouter = createTRPCRouter({
   // Get the user's season rewards
   getUnclaimedUserSeasonRewards: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get unclaimed ranked season rewards" },
+      mcp: { description: "Get unclaimed ranked season rewards" },
     })
     .query(async ({ ctx }) => {
       return await getUnclaimedUserSeasonRewards(ctx.drizzle, ctx.userId);
@@ -57,7 +57,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Claim the user's season rewards
   claimSeasonRewards: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Claim ranked season rewards" } })
+    .meta({ mcp: { description: "Claim ranked season rewards" } })
     .mutation(async ({ ctx }) => {
       // Fetch unclaimed rewards for the user
       const [rewards, user] = await Promise.all([
@@ -108,7 +108,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Get all ranked seasons
   getSeasons: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get all ranked PvP seasons" } })
+    .meta({ mcp: { description: "Get all ranked PvP seasons" } })
     .query(async ({ ctx }) => {
       const seasons = await fetchAllSeasons(ctx.drizzle);
       return seasons;
@@ -116,7 +116,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Get a specific season
   getSeason: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get a specific ranked season" } })
+    .meta({ mcp: { description: "Get a specific ranked season" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const season = await ctx.drizzle.query.rankedSeason.findFirst({
@@ -131,7 +131,7 @@ export const pvpRankRouter = createTRPCRouter({
   // Get the current season
   getCurrentSeason: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get the current active ranked season" },
+      mcp: { description: "Get the current active ranked season" },
     })
     .query(async ({ ctx }) => {
       return await fetchCurrentSeason(ctx.drizzle);
@@ -141,7 +141,6 @@ export const pvpRankRouter = createTRPCRouter({
   getCurrentTopPlayers: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get LP values of the top Legend players used for Sannin rank",
       },
     })
@@ -294,7 +293,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Get the ranked loadout
   getRankedLoadout: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's ranked PvP loadout" } })
+    .meta({ mcp: { description: "Get user's ranked PvP loadout" } })
     .query(async ({ ctx }) => {
       let loadout = await ctx.drizzle.query.rankedLoadout.findFirst({
         where: eq(rankedLoadout.userId, ctx.userId),
@@ -321,7 +320,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Get the ranked PvP queue
   getRankedPvpQueue: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's ranked PvP queue status" } })
+    .meta({ mcp: { description: "Get user's ranked PvP queue status" } })
     .query(async ({ ctx }) => {
       // Query
       const [user, queueEntry] = await Promise.all([
@@ -352,7 +351,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Update the ranked loadout
   updateRankedLoadout: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Update user's ranked PvP loadout" } })
+    .meta({ mcp: { description: "Update user's ranked PvP loadout" } })
     .input(rankedLoadoutSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -400,7 +399,7 @@ export const pvpRankRouter = createTRPCRouter({
 
   // Enter the ranked season
   enterRankedSeason: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Enter the current ranked season" } })
+    .meta({ mcp: { description: "Enter the current ranked season" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
@@ -433,7 +432,7 @@ export const pvpRankRouter = createTRPCRouter({
   // Queue for ranked PVP battle
   queueForRankedPvp: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Join the ranked PvP matchmaking queue" },
+      mcp: { description: "Join the ranked PvP matchmaking queue" },
     })
     .output(
       baseServerResponse.extend({
@@ -522,7 +521,7 @@ export const pvpRankRouter = createTRPCRouter({
   // Leave the ranked PvP queue
   leaveRankedPvpQueue: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Leave the ranked PvP matchmaking queue" },
+      mcp: { description: "Leave the ranked PvP matchmaking queue" },
     })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
@@ -564,7 +563,7 @@ export const pvpRankRouter = createTRPCRouter({
   // Check for ranked PvP matches
   checkRankedPvpMatches: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Check for available ranked PvP matches" },
+      mcp: { description: "Check for available ranked PvP matches" },
     })
     .output(baseServerResponse.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx }) => {

@@ -171,7 +171,7 @@ const MIN_ITEM_SHOP_DISCOUNT_FACTOR = 0.05;
 
 export const itemRouter = createTRPCRouter({
   getAllNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all item names and images" } })
+    .meta({ mcp: { description: "Get all item names and images" } })
     .query(async ({ ctx }) => {
       return await ctx.drizzle.query.item.findMany({
         columns: {
@@ -187,7 +187,6 @@ export const itemRouter = createTRPCRouter({
   getBloodlineItemNames: publicProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get names of items associated with a bloodline",
       },
     })
@@ -207,7 +206,6 @@ export const itemRouter = createTRPCRouter({
   get: publicProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get a specific item by ID, or null if no such item exists",
       },
     })
@@ -252,7 +250,7 @@ export const itemRouter = createTRPCRouter({
     }),
   getItemWithCraftingRequirements: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get item with crafting requirements" },
+      mcp: { description: "Get item with crafting requirements" },
     })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
@@ -263,7 +261,7 @@ export const itemRouter = createTRPCRouter({
       return result;
     }),
   getUserItem: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get a specific user item" } })
+    .meta({ mcp: { description: "Get a specific user item" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchUserItem(ctx.drizzle, ctx.userId, input.id);
@@ -665,7 +663,6 @@ export const itemRouter = createTRPCRouter({
   getEvolutions: publicProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get all evolution items for a parent item",
       },
     })
@@ -688,7 +685,7 @@ export const itemRouter = createTRPCRouter({
     }),
 
   evolveItem: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Evolve an item into its evolution" } })
+    .meta({ mcp: { description: "Evolve an item into its evolution" } })
     .input(evolveItemSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -895,7 +892,7 @@ export const itemRouter = createTRPCRouter({
     }),
 
   getAll: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get paginated items with filters" } })
+    .meta({ mcp: { description: "Get paginated items with filters" } })
     .input(
       itemFilteringSchema.extend({
         cursor: z.number().nullish(),
@@ -928,7 +925,7 @@ export const itemRouter = createTRPCRouter({
 
   // Get counts of user items grouped by item ID
   getUserItemCounts: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user item counts by item ID" } })
+    .meta({ mcp: { description: "Get user item counts by item ID" } })
     .query(async ({ ctx }) => {
       const counts = await ctx.drizzle
         .select({
@@ -943,13 +940,13 @@ export const itemRouter = createTRPCRouter({
     }),
   // Get user items
   getUserItems: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get all user items" } })
+    .meta({ mcp: { description: "Get all user items" } })
     .query(async ({ ctx }) => {
       return await fetchUserItems(ctx.drizzle, ctx.userId);
     }),
   getUserItemsWithVariants: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get all user items including variant data" },
+      mcp: { description: "Get all user items including variant data" },
     })
     .query(async ({ ctx }) => {
       return await fetchUserItemsWithVariants(ctx.drizzle, ctx.userId);
@@ -1447,7 +1444,7 @@ export const itemRouter = createTRPCRouter({
     }),
   getItemRelations: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get item relations and dependencies" },
+      mcp: { description: "Get item relations and dependencies" },
     })
     .input(z.object({ itemId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -1458,7 +1455,6 @@ export const itemRouter = createTRPCRouter({
   mergeStacks: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description:
           "Merge carried stacks for one item type (storedAtHome=false). Per (storedAtHome+equipped) bucket; home storage is not included",
       },
@@ -1487,7 +1483,6 @@ export const itemRouter = createTRPCRouter({
   mergeAllStacks: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description:
           "Merge all mergeable item stacks in carried inventory (storedAtHome=false) or home storage (storedAtHome=true)",
       },
@@ -1574,7 +1569,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Split item stack
   splitStack: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Split an item stack" } })
+    .meta({ mcp: { description: "Split an item stack" } })
     .use(ratelimitMiddleware)
     .input(
       z.object({
@@ -1596,7 +1591,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Drop user item
   sellUserItem: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Sell or drop a user item" } })
+    .meta({ mcp: { description: "Sell or drop a user item" } })
     .input(z.object({ userItemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -1667,7 +1662,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Use user item
   toggleEquip: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Toggle item equip status" } })
+    .meta({ mcp: { description: "Toggle item equip status" } })
     .input(z.object({ userItemId: z.string(), slot: z.enum(ItemSlots).optional() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -1713,7 +1708,6 @@ export const itemRouter = createTRPCRouter({
   unequipAllItems: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description:
           "Unequip all items on the character and clear the active item loadout",
       },
@@ -1800,7 +1794,7 @@ export const itemRouter = createTRPCRouter({
 
   // Consume item — atomic quantity decrement runs before effects (see handler below).
   consume: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Consume a consumable item" } })
+    .meta({ mcp: { description: "Consume a consumable item" } })
     .input(z.object({ userItemId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -2144,7 +2138,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Repair user item
   repair: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Repair an item with ryo" } })
+    .meta({ mcp: { description: "Repair an item with ryo" } })
     .input(z.object({ userItemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -2205,7 +2199,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Repair all user items
   repairAll: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Repair all items with ryo" } })
+    .meta({ mcp: { description: "Repair all items with ryo" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
@@ -2284,7 +2278,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Use repair item on another item
   useRepairItem: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Use repair kit on an item" } })
+    .meta({ mcp: { description: "Use repair kit on an item" } })
     .input(z.object({ repairItemId: z.string(), targetItemId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -2392,7 +2386,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Use repair items to repair all items
   useRepairAll: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Use repair kits to fix all items" } })
+    .meta({ mcp: { description: "Use repair kits to fix all items" } })
     .output(
       baseServerResponse.extend({
         kitsUsed: z
@@ -2541,7 +2535,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Buy user item
   buy: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Buy an item from shop" } })
+    .meta({ mcp: { description: "Buy an item from shop" } })
     .input(itemBuySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -2738,7 +2732,7 @@ export const itemRouter = createTRPCRouter({
     }),
   // Auto-equip optimal items based on cost
   autoEquipOptimal: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Auto-equip best items by cost" } })
+    .meta({ mcp: { description: "Auto-equip best items by cost" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       const [useritems, user, masterySources] = await Promise.all([
@@ -2807,7 +2801,7 @@ export const itemRouter = createTRPCRouter({
       };
     }),
   getItemLoadouts: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's item loadouts" } })
+    .meta({ mcp: { description: "Get user's item loadouts" } })
     .query(async ({ ctx }) => {
       // Query
       const [loadouts, user] = await Promise.all([
@@ -2846,7 +2840,7 @@ export const itemRouter = createTRPCRouter({
       });
     }),
   selectItemLoadout: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Select an item loadout" } })
+    .meta({ mcp: { description: "Select an item loadout" } })
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -2866,7 +2860,7 @@ export const itemRouter = createTRPCRouter({
     }),
 
   renameLoadout: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Rename an item loadout" } })
+    .meta({ mcp: { description: "Rename an item loadout" } })
     .input(renameLoadoutSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

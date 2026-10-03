@@ -37,7 +37,7 @@ import {
 
 export const trainRouter = createTRPCRouter({
   startTraining: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Start training a combat stat" } })
+    .meta({ mcp: { description: "Start training a combat stat" } })
     .input(startTrainingInputSchema)
     .output(baseServerResponse.extend({ data: startTrainingDataSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
@@ -68,7 +68,7 @@ export const trainRouter = createTRPCRouter({
       return { success: true, message: `Started training`, data };
     }),
   startMasteryTraining: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Start training a mastery" } })
+    .meta({ mcp: { description: "Start training a mastery" } })
     .input(startMasteryTrainingInputSchema)
     .output(
       baseServerResponse.extend({ data: startMasteryTrainingDataSchema.optional() }),
@@ -108,7 +108,6 @@ export const trainRouter = createTRPCRouter({
   stopTraining: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Stop combat stat training and collect gains",
       },
     })
@@ -197,7 +196,7 @@ export const trainRouter = createTRPCRouter({
     }),
   stopMasteryTraining: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Stop mastery training and collect gains" },
+      mcp: { description: "Stop mastery training and collect gains" },
     })
     .input(stopTrainingInputSchema)
     .output(
@@ -293,7 +292,7 @@ export const trainRouter = createTRPCRouter({
       };
     }),
   updateTrainingSpeed: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Update training speed interval" } })
+    .meta({ mcp: { description: "Update training speed interval" } })
     .input(updateTrainingSpeedInputSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -317,7 +316,6 @@ export const trainRouter = createTRPCRouter({
   getTrainingLog: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get user training history from last 24 hours",
       },
     })

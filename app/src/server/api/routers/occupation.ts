@@ -45,7 +45,7 @@ import { getShrineBoost } from "@/utils/village";
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get all craftable items" } })
+    .meta({ mcp: { description: "Get all craftable items" } })
     .query(async ({ ctx }) => {
       return await ctx.drizzle.query.item.findMany({
         where: sql`${item.canBeCrafted} = true AND ${item.hidden} = false`,
@@ -60,7 +60,7 @@ export const occupationRouter = createTRPCRouter({
     }),
 
   selectOccupation: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Select a crafting occupation" } })
+    .meta({ mcp: { description: "Select a crafting occupation" } })
     .input(z.object({ occupation: z.enum(OCCUPATIONS) }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -94,7 +94,7 @@ export const occupationRouter = createTRPCRouter({
     }),
 
   craftItem: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Craft an item using materials" } })
+    .meta({ mcp: { description: "Craft an item using materials" } })
     .input(
       z.object({
         itemId: z.string(),
@@ -366,7 +366,7 @@ export const occupationRouter = createTRPCRouter({
     }),
 
   imbueItem: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Imbue an item with a crystal" } })
+    .meta({ mcp: { description: "Imbue an item with a crystal" } })
     .input(
       z.object({
         userItemId: z.string(),
@@ -651,7 +651,7 @@ export const occupationRouter = createTRPCRouter({
     }),
 
   removeImbuement: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Remove an imbuement from an item" } })
+    .meta({ mcp: { description: "Remove an imbuement from an item" } })
     .input(z.object({ userItemImbuementId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

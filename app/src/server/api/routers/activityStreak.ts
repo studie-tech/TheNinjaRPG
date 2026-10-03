@@ -46,7 +46,7 @@ export const activityStreakRouter = createTRPCRouter({
 
   // Get all user's active streaks (RECURRING + in-progress EVENT_PASSes)
   getUserStreaks: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's active activity streaks" } })
+    .meta({ mcp: { description: "Get user's active activity streaks" } })
     .query(async ({ ctx }) => {
       // Get user's progress entries and active RECURRING config in parallel
       const [progressEntries, activeRecurring, completionLogs] = await Promise.all([
@@ -193,7 +193,7 @@ export const activityStreakRouter = createTRPCRouter({
   // Get purchasable EVENT_PASSes (active, within date range, never purchased)
   getAvailablePasses: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get available event passes for purchase" },
+      mcp: { description: "Get available event passes for purchase" },
     })
     .query(async ({ ctx }) => {
       // Historical completion logs cover passes completed before progress rows
@@ -258,7 +258,7 @@ export const activityStreakRouter = createTRPCRouter({
 
   // Purchase an EVENT_PASS
   purchaseEventPass: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Purchase an event pass" } })
+    .meta({ mcp: { description: "Purchase an event pass" } })
     .input(purchaseEventPassSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -394,7 +394,7 @@ export const activityStreakRouter = createTRPCRouter({
 
   // Claim daily reward for a specific config
   claimStreakDay: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Claim daily streak reward" } })
+    .meta({ mcp: { description: "Claim daily streak reward" } })
     .input(claimStreakDaySchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

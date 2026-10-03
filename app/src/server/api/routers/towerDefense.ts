@@ -84,7 +84,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * Get all available upgrade definitions
    */
   getUpgrades: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all tower defense upgrades" } })
+    .meta({ mcp: { description: "Get all tower defense upgrades" } })
     .query(async ({ ctx }) => {
       return await ctx.drizzle.query.towerDefenseUpgrade.findMany({
         orderBy: [desc(towerDefenseUpgrade.upgradeType)],
@@ -95,7 +95,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * Get all character asset configs for rendering
    */
   getAssetConfigs: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get tower defense asset configs" } })
+    .meta({ mcp: { description: "Get tower defense asset configs" } })
     .query(async ({ ctx }) => {
       const characters = await ctx.drizzle.query.towerDefenseCharacter.findMany();
       return {
@@ -112,7 +112,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * Get user's purchased permanent upgrades
    */
   getUserUpgrades: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's tower defense upgrades" } })
+    .meta({ mcp: { description: "Get user's tower defense upgrades" } })
     .use(ratelimitMiddleware)
     .query(async ({ ctx }) => {
       const [upgrades, user] = await Promise.all([
@@ -150,7 +150,7 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   initiateSecureSession: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Start a secure tower defense session" },
+      mcp: { description: "Start a secure tower defense session" },
     })
     .use(ratelimitMiddleware)
     .mutation(async ({ ctx }) => {
@@ -198,7 +198,7 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   initiateGuestSession: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Start a guest tower defense session" },
+      mcp: { description: "Start a guest tower defense session" },
     })
     .mutation(async ({ ctx }) => {
       const [upgradeDefinitions, enemyDefinitionsDb, playerCharactersDb] =
@@ -234,7 +234,7 @@ export const towerDefenseRouter = createTRPCRouter({
    */
   getRunHistory: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get user's tower defense run history" },
+      mcp: { description: "Get user's tower defense run history" },
     })
     .use(ratelimitMiddleware)
     .input(
@@ -264,7 +264,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * Get leaderboard - top scores
    */
   getLeaderboard: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get tower defense leaderboard" } })
+    .meta({ mcp: { description: "Get tower defense leaderboard" } })
     .input(z.object({ limit: z.number().min(1).max(100).prefault(20) }))
     .query(async ({ ctx, input }) => {
       const runs = await ctx.drizzle.query.towerDefenseRun.findMany({
@@ -289,7 +289,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * Purchase or upgrade a permanent upgrade
    */
   purchasePermanentUpgrade: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Purchase tower defense upgrade" } })
+    .meta({ mcp: { description: "Purchase tower defense upgrade" } })
     .use(ratelimitMiddleware)
     .input(purchaseUpgradeInputSchema)
     .output(
@@ -392,7 +392,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * 8. Only if valid, points are awarded
    */
   claimCompletedRun: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Claim completed tower defense run" } })
+    .meta({ mcp: { description: "Claim completed tower defense run" } })
     .use(ratelimitMiddleware)
     .input(
       z.object({
@@ -570,7 +570,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * Get all character definitions (both players and enemies)
    */
   getCharacters: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get tower defense characters" } })
+    .meta({ mcp: { description: "Get tower defense characters" } })
     .input(
       z
         .object({
@@ -593,7 +593,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * Get a single character definition by ID
    */
   getCharacter: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a tower defense character" } })
+    .meta({ mcp: { description: "Get a tower defense character" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       return await ctx.drizzle.query.towerDefenseCharacter.findFirst({
@@ -605,7 +605,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * Get all character names for dropdowns
    */
   getAllCharacterNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get tower defense character names" } })
+    .meta({ mcp: { description: "Get tower defense character names" } })
     .input(
       z
         .object({
@@ -956,7 +956,7 @@ export const towerDefenseRouter = createTRPCRouter({
    * Get a single upgrade definition by ID
    */
   getUpgrade: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a tower defense upgrade by ID" } })
+    .meta({ mcp: { description: "Get a tower defense upgrade by ID" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       return await ctx.drizzle.query.towerDefenseUpgrade.findFirst({

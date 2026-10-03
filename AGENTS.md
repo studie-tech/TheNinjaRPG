@@ -39,7 +39,7 @@ SQL tests **truncate every table in the configured database**. Use only a throwa
 TEST_MYSQL_ALLOW_DESTRUCTIVE=1 TEST_MYSQL_URL='mysql://root:placeholder@127.0.0.1:3307/tnr_test' make test
 ```
 
-PlanetScale organization: `nano-mathias`. Production: `tnr` / `main-1`; development: `tnr` / `development`; separate AI deployment: `theninja-ai` / `main`.
+PlanetScale organization: `nano-mathias`. Production: `tnr` / `main-1`; development: `tnr` / `development`.
 
 - `CDN_URL` points production at a pull zone (bunny.net) that fronts `/_next/static` only. `next.config.mjs` resolves it once through `cdnOrigin` in `app/src/libs/cdn.mjs`, which feeds `assetPrefix` and the CSP hosts; read the origin from there and never introduce a second source for it. It stays off outside production, whose assets are the only ones the zone holds, and it belongs to the `tnr` project's Production environment alone — another project building this repo would serve its own chunks from a zone that does not have them. The zone's own settings are part of the contract: origin over https, "respect origin Cache-Control", vary on the query string, strip response cookies, and an edge rule answering for `/_next/static/*` and nothing else, so no page or cookie-bearing response can be cached on its hostname.
 

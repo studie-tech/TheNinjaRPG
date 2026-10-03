@@ -222,7 +222,6 @@ export const profileRouter = createTRPCRouter({
   getDashboard: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get compact profile dashboard discovery and reward summaries",
       },
     })
@@ -370,7 +369,7 @@ export const profileRouter = createTRPCRouter({
   // Update battle description setting
   updateBattleDescription: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Toggle battle description visibility" },
+      mcp: { description: "Toggle battle description visibility" },
     })
     .input(z.object({ showBattleDescription: z.boolean() }))
     .output(baseServerResponse)
@@ -393,7 +392,7 @@ export const profileRouter = createTRPCRouter({
   // Update tutorial step
   updateTutorialStep: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Update user's tutorial progress step" },
+      mcp: { description: "Update user's tutorial progress step" },
     })
     .input(z.object({ step: z.number() }))
     .output(
@@ -453,7 +452,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Update user preferences
   updatePreferences: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Update user game preferences" } })
+    .meta({ mcp: { description: "Update user game preferences" } })
     .input(updateUserPreferencesSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -490,7 +489,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Get user blacklist
   getBlacklist: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's blocked players list" } })
+    .meta({ mcp: { description: "Get user's blocked players list" } })
     .query(async ({ ctx }) => {
       return await ctx.drizzle.query.userBlackList.findMany({
         where: eq(userBlackList.creatorUserId, ctx.userId),
@@ -501,7 +500,7 @@ export const profileRouter = createTRPCRouter({
     }),
   toggleBlacklistEntry: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Add or remove a player from blacklist" },
+      mcp: { description: "Add or remove a player from blacklist" },
     })
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
@@ -541,7 +540,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Get all AI names
   getAllAiNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get list of all AI character names" } })
+    .meta({ mcp: { description: "Get list of all AI character names" } })
     .query(async ({ ctx }) => {
       return ctx.drizzle.query.userData.findMany({
         where: and(eq(userData.isAi, true), ne(userData.rank, "ELDER")),
@@ -561,7 +560,6 @@ export const profileRouter = createTRPCRouter({
   levelUp: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Level up user when experience threshold met",
       },
     })
@@ -637,7 +635,7 @@ export const profileRouter = createTRPCRouter({
   // Get all information on logged in user
   getUser: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get current user's full profile data" },
+      mcp: { description: "Get current user's full profile data" },
     })
     .query(async ({ ctx }) => {
       const now = new Date();
@@ -1221,7 +1219,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Get an AI
   getAi: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get AI character details by ID" } })
+    .meta({ mcp: { description: "Get AI character details by ID" } })
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       const user = await ctx.drizzle.query.userData.findFirst({
@@ -1240,7 +1238,6 @@ export const profileRouter = createTRPCRouter({
   create: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Create a new AI character (content editors)",
       },
     })
@@ -1272,7 +1269,6 @@ export const profileRouter = createTRPCRouter({
   cloneAi: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Clone an existing AI character (content editors)",
       },
     })
@@ -1338,7 +1334,7 @@ export const profileRouter = createTRPCRouter({
   // Delete a AI
   delete: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Delete an AI character (content editors)" },
+      mcp: { description: "Delete an AI character (content editors)" },
     })
     .input(idSchema)
     .output(baseServerResponse)
@@ -1363,7 +1359,7 @@ export const profileRouter = createTRPCRouter({
   // Update user
   updateUser: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Update user profile data (content editors)" },
+      mcp: { description: "Update user profile data (content editors)" },
     })
     .input(z.object({ id: z.string(), data: updateUserSchema }))
     .output(baseServerResponse)
@@ -1596,7 +1592,7 @@ export const profileRouter = createTRPCRouter({
   // Update a AI
   updateAi: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Update AI character data (content editors)" },
+      mcp: { description: "Update AI character data (content editors)" },
     })
     .input(z.object({ id: z.string(), data: insertAiSchema }))
     .output(baseServerResponse)
@@ -1701,13 +1697,13 @@ export const profileRouter = createTRPCRouter({
     }),
   // Get user attributes
   getUserAttributes: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's character attributes" } })
+    .meta({ mcp: { description: "Get user's character attributes" } })
     .query(async ({ ctx }) => {
       return fetchAttributes(ctx.drizzle, ctx.userId);
     }),
   // Check if username exists in database already
   getUsername: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Check if a username is taken" } })
+    .meta({ mcp: { description: "Check if a username is taken" } })
     .input(
       z.object({
         username: z.string().trim(),
@@ -1723,7 +1719,7 @@ export const profileRouter = createTRPCRouter({
   // Update username
   updateUsername: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Change user's username for reputation cost" },
+      mcp: { description: "Change user's username for reputation cost" },
     })
     .input(z.object({ username: usernameSchema }))
     .output(baseServerResponse)
@@ -1773,7 +1769,6 @@ export const profileRouter = createTRPCRouter({
   updateTavernColor: protectedProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Change a controlled tavern username or title color",
       },
     })
@@ -1847,7 +1842,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Use earned experience points for stats
   useUnusedExperiencePoints: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Assign earned experience to stats" } })
+    .meta({ mcp: { description: "Assign earned experience to stats" } })
     .input(createStatSchema(0, 0).schema)
     .output(
       baseServerResponse.extend({
@@ -1917,7 +1912,7 @@ export const profileRouter = createTRPCRouter({
   // Get nindo text of user
   getNindo: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get user's nindo (way of ninja) text" },
+      mcp: { description: "Get user's nindo (way of ninja) text" },
     })
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -1928,7 +1923,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Update nindo
   updateNindo: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Update user's nindo text" } })
+    .meta({ mcp: { description: "Update user's nindo text" } })
     .input(mutateContentSchema.extend({ userId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -1945,7 +1940,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Insert attribute
   insertAttribute: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Add a character attribute to user" } })
+    .meta({ mcp: { description: "Add a character attribute to user" } })
     .input(
       z.object({
         attribute: z.enum([...attributes, "Hair", "Skin", "Eyes"]),
@@ -1986,7 +1981,7 @@ export const profileRouter = createTRPCRouter({
   // Delete attribute
   deleteAttribute: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Remove a character attribute from user" },
+      mcp: { description: "Remove a character attribute from user" },
     })
     .input(z.object({ attribute: z.string() }))
     .output(baseServerResponse)
@@ -2007,7 +2002,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Return list of 5 most similar users in database
   searchUsers: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Search users by username" } })
+    .meta({ mcp: { description: "Search users by username" } })
     .input(
       z.object({
         username: z.string().trim(),
@@ -2050,7 +2045,7 @@ export const profileRouter = createTRPCRouter({
     }),
   // Get public information on a user
   getPublicUser: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get public profile info for a user" } })
+    .meta({ mcp: { description: "Get public profile info for a user" } })
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
       // Query
@@ -2200,7 +2195,7 @@ export const profileRouter = createTRPCRouter({
     }),
   countOnlineUsers: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get count of currently online users" },
+      mcp: { description: "Get count of currently online users" },
     })
     .query(async ({ ctx }) => {
       // Fetch
@@ -2228,7 +2223,7 @@ export const profileRouter = createTRPCRouter({
   // Get public users
   getPublicUsers: publicProcedure
     .meta({
-      mcp: { enabled: true, description: "Get paginated list of users with filters" },
+      mcp: { description: "Get paginated list of users with filters" },
     })
     .input(getPublicUsersSchema)
     .query(async ({ ctx, input }) => {
@@ -2238,7 +2233,7 @@ export const profileRouter = createTRPCRouter({
   // whose rows carry real IPs for staff, so the CDN can serve it.
   getStrongestUsers: cdnCachedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get the users with the most ranked LP" },
+      mcp: { description: "Get the users with the most ranked LP" },
     })
     .query(async ({ ctx }) => {
       return ctx.drizzle.query.userData.findMany({
@@ -2252,7 +2247,7 @@ export const profileRouter = createTRPCRouter({
   // Get recruitment rewards for current user
   getRecruitmentRewards: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get user's recruitment bonus history" },
+      mcp: { description: "Get user's recruitment bonus history" },
     })
     .input(
       z.object({
@@ -2306,7 +2301,7 @@ export const profileRouter = createTRPCRouter({
   // Delete user
   confirmDeletion: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Confirm and execute account deletion" },
+      mcp: { description: "Confirm and execute account deletion" },
     })
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
@@ -2337,7 +2332,7 @@ export const profileRouter = createTRPCRouter({
       return { success: true, message: "User deleted" };
     }),
   claimVotes: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Claim reputation points for voting" } })
+    .meta({ mcp: { description: "Claim reputation points for voting" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Get user's vote record
@@ -2388,7 +2383,7 @@ export const profileRouter = createTRPCRouter({
   // response so spendable-currency balances aren't exposed to every viewer.
   getSeichiSilverForStaff: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get a user's Seichi Silver balance (staff)" },
+      mcp: { description: "Get a user's Seichi Silver balance (staff)" },
     })
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {

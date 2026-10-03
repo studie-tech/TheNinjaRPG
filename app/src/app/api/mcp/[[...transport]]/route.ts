@@ -13,8 +13,6 @@ import { isFetchOriginError } from "@/utils/error";
 import { fetchWithTimeout } from "@/utils/http";
 import { getClientIp } from "@/utils/network";
 
-const mcpEnabled = process.env.NEXT_PUBLIC_MCP_ENABLED === "true";
-
 // Timeout for OAuth userinfo endpoint (10s to prevent hanging requests while allowing for network latency)
 const OAUTH_USERINFO_TIMEOUT_MS = 10000;
 
@@ -407,9 +405,6 @@ const mcpRequestHandlerWithContext = async (req: Request) => {
   );
 };
 
-const notFoundResponse = () =>
-  NextResponse.json({ error: "MCP not enabled" }, { status: 404 });
-
-export const GET = mcpEnabled ? mcpRequestHandlerWithContext : notFoundResponse;
-export const POST = mcpEnabled ? mcpRequestHandlerWithContext : notFoundResponse;
-export const DELETE = mcpEnabled ? mcpRequestHandlerWithContext : notFoundResponse;
+export const GET = mcpRequestHandlerWithContext;
+export const POST = mcpRequestHandlerWithContext;
+export const DELETE = mcpRequestHandlerWithContext;

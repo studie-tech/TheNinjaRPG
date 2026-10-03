@@ -24,7 +24,6 @@ export const mapAssetRouter = createTRPCRouter({
   getAll: publicProcedure
     .meta({
       mcp: {
-        enabled: true,
         description: "Get all map decoration assets (the shared sprite library)",
       },
     })

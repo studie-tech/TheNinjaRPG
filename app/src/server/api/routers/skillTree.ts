@@ -63,7 +63,7 @@ import {
 export const skillTreeRouter = createTRPCRouter({
   // Get all skill names for selectors
   getAllNames: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all skill names for selectors" } })
+    .meta({ mcp: { description: "Get all skill names for selectors" } })
     .query(async ({ ctx }) => {
       const [user, skills] = await Promise.all([
         fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
@@ -79,7 +79,7 @@ export const skillTreeRouter = createTRPCRouter({
     }),
   // Get single skill by ID
   get: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get a skill by ID" } })
+    .meta({ mcp: { description: "Get a skill by ID" } })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const [user, skill] = await Promise.all([
@@ -96,7 +96,7 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Get all skills for tree view
   getAll: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all skills with filtering" } })
+    .meta({ mcp: { description: "Get all skills with filtering" } })
     .input(
       z
         .object({
@@ -148,7 +148,7 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Get user's purchased skills
   getUserSkills: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's purchased skills" } })
+    .meta({ mcp: { description: "Get user's purchased skills" } })
     .query(async ({ ctx }) => {
       const [user, skills] = await Promise.all([
         fetchSkillTreeViewer(ctx.drizzle, ctx.userId),
@@ -172,7 +172,7 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Purchase a skill or activate an unlocked skill
   purchaseSkill: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Purchase or activate a skill" } })
+    .meta({ mcp: { description: "Purchase or activate a skill" } })
     .input(z.object({ skillId: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -415,7 +415,7 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Reset user's skill points (clear all skills and refund points)
   resetSkillPoints: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Reset user's skill tree" } })
+    .meta({ mcp: { description: "Reset user's skill tree" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Fetch user data
@@ -507,7 +507,7 @@ export const skillTreeRouter = createTRPCRouter({
   // Info: whether current user has a free reset available this month
   getResetInfo: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get skill reset info and free resets" },
+      mcp: { description: "Get skill reset info and free resets" },
     })
     .query(async ({ ctx }) => {
       // Query
@@ -618,7 +618,7 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Get all folders (with optional hidden filter for admins)
   getAllFolders: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get all skill tree folders" } })
+    .meta({ mcp: { description: "Get all skill tree folders" } })
     .input(z.object({ includeHidden: z.boolean().optional() }).nullish())
     .query(async ({ ctx, input }) => {
       const [user, folders] = await Promise.all([
@@ -638,7 +638,7 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Get folder stats (owned/total skill counts per folder for current user)
   getFolderStats: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get skill folder progress stats" } })
+    .meta({ mcp: { description: "Get skill folder progress stats" } })
     .query(async ({ ctx }) => {
       // Fetch all data in parallel for efficiency
       const [allFolders, skills, userSkillsData, user] = await Promise.all([

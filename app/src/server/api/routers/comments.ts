@@ -65,7 +65,7 @@ export const commentsRouter = createTRPCRouter({
    * Creating, editing, deleting and getting comments on user reports
    */
   getReportComments: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get comments on a user report" } })
+    .meta({ mcp: { description: "Get comments on a user report" } })
     .input(
       z.object({
         id: z.string(),
@@ -124,7 +124,7 @@ export const commentsRouter = createTRPCRouter({
       };
     }),
   createReportComment: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Add a comment to a user report" } })
+    .meta({ mcp: { description: "Add a comment to a user report" } })
     .use(ratelimitMiddleware)
     .output(baseServerResponse)
     .input(reportCommentSchema)
@@ -152,7 +152,7 @@ export const commentsRouter = createTRPCRouter({
    * Creating, editing, deleting and getting comments on forum threads
    */
   getForumComments: publicProcedure
-    .meta({ mcp: { enabled: true, description: "Get comments on a forum thread" } })
+    .meta({ mcp: { description: "Get comments on a forum thread" } })
     .input(
       z.object({
         thread_id: z.string(),
@@ -164,7 +164,7 @@ export const commentsRouter = createTRPCRouter({
       return await fetchForumThreadPage(ctx.drizzle, input);
     }),
   createForumComment: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Post a comment on a forum thread" } })
+    .meta({ mcp: { description: "Post a comment on a forum thread" } })
     .use(ratelimitMiddleware)
     .input(mutateCommentSchema)
     .output(baseServerResponse)
@@ -214,7 +214,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Comment posted" };
     }),
   editForumComment: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Edit your forum comment" } })
+    .meta({ mcp: { description: "Edit your forum comment" } })
     .input(mutateCommentSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -252,7 +252,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Comment edited" };
     }),
   deleteForumComment: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Delete your forum comment" } })
+    .meta({ mcp: { description: "Delete your forum comment" } })
     .input(deleteCommentSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -279,7 +279,7 @@ export const commentsRouter = createTRPCRouter({
    * Creating, editing, deleting and getting comments on forum threads
    */
   getUserConversations: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's conversations" } })
+    .meta({ mcp: { description: "Get user's conversations" } })
     .input(z.object({ selectedConvo: z.string().nullish().optional() }))
     .query(async ({ ctx }) => {
       // Query
@@ -339,7 +339,7 @@ export const commentsRouter = createTRPCRouter({
       return filteredConverations ?? [];
     }),
   createConversation: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Create a new private conversation" } })
+    .meta({ mcp: { description: "Create a new private conversation" } })
     .use(ratelimitMiddleware)
     .input(createConversationSchema)
     .output(baseServerResponse.extend({ conversationId: z.string().optional() }))
@@ -370,7 +370,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Message sent.", conversationId: convoId };
     }),
   exitConversation: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Leave a conversation" } })
+    .meta({ mcp: { description: "Leave a conversation" } })
     .input(z.object({ convo_id: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -421,7 +421,7 @@ export const commentsRouter = createTRPCRouter({
     }),
   fetchConversationComment: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Fetch a single conversation comment" },
+      mcp: { description: "Fetch a single conversation comment" },
     })
     .input(z.object({ commentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -486,7 +486,7 @@ export const commentsRouter = createTRPCRouter({
       return comment?.[0] || null;
     }),
   getConversationComments: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get messages in a conversation" } })
+    .meta({ mcp: { description: "Get messages in a conversation" } })
     .input(
       z
         .object({
@@ -637,7 +637,7 @@ export const commentsRouter = createTRPCRouter({
       };
     }),
   createConversationComment: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Send a message in a conversation" } })
+    .meta({ mcp: { description: "Send a message in a conversation" } })
     .use(ratelimitMiddleware)
     .input(mutateCommentSchema)
     .output(baseServerResponse.extend({ commentId: z.string().optional() }))
@@ -801,7 +801,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Comment posted", commentId: commentId };
     }),
   reactConversationComment: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Add emoji reaction to a message" } })
+    .meta({ mcp: { description: "Add emoji reaction to a message" } })
     .input(z.object({ commentId: z.string(), emoji: z.string() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -845,7 +845,7 @@ export const commentsRouter = createTRPCRouter({
     }),
   sendTypingIndicator: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Send typing indicator to conversation" },
+      mcp: { description: "Send typing indicator to conversation" },
     })
     .input(z.object({ conversationId: z.string() }))
     .use(ratelimitMiddleware)
@@ -861,7 +861,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true };
     }),
   editConversationComment: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Edit your conversation message" } })
+    .meta({ mcp: { description: "Edit your conversation message" } })
     .input(mutateCommentSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -899,7 +899,7 @@ export const commentsRouter = createTRPCRouter({
       return { success: true, message: "Comment edited" };
     }),
   deleteConversationComment: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Delete your conversation message" } })
+    .meta({ mcp: { description: "Delete your conversation message" } })
     .input(deleteCommentSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {

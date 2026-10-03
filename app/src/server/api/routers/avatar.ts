@@ -20,7 +20,7 @@ import { canChangeContent } from "@/utils/permissions";
 
 export const avatarRouter = createTRPCRouter({
   createAvatar: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Generate a new AI avatar" } })
+    .meta({ mcp: { description: "Generate a new AI avatar" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Fetch user directly with a query that returns null if not found
@@ -72,7 +72,7 @@ export const avatarRouter = createTRPCRouter({
       }
     }),
   getHistoricalAvatars: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Get user's historical avatars" } })
+    .meta({ mcp: { description: "Get user's historical avatars" } })
     .input(
       z.object({
         relationId: z.string().nullish(),
@@ -105,7 +105,7 @@ export const avatarRouter = createTRPCRouter({
       };
     }),
   updateAvatar: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Set active avatar from history" } })
+    .meta({ mcp: { description: "Set active avatar from history" } })
     .input(z.object({ avatar: z.number(), type: z.enum(ContentTypes) }))
     .output(baseServerResponse.extend({ url: z.string().nullish() }))
     .mutation(async ({ ctx, input }) => {
@@ -143,7 +143,7 @@ export const avatarRouter = createTRPCRouter({
       return { success: true, message: "Avatar updated", url: avatar.avatar };
     }),
   deleteAvatar: protectedProcedure
-    .meta({ mcp: { enabled: true, description: "Delete an avatar from history" } })
+    .meta({ mcp: { description: "Delete an avatar from history" } })
     .input(z.object({ avatar: z.number() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
