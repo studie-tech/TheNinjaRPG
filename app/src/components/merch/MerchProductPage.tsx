@@ -4,7 +4,11 @@ import { ArrowLeft, ArrowRight, Minus, Plus, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import { formatMerchMoney, getMerchDesign } from "@/libs/merch/catalog";
+import {
+  formatMerchMoney,
+  getMerchDesign,
+  productFromPrice,
+} from "@/libs/merch/catalog";
 import { MERCH_PRODUCT_DETAILS } from "@/libs/merch/products";
 import { MerchProductCard } from "./MerchCollection";
 import { useMerch } from "./MerchProvider";
@@ -27,6 +31,7 @@ export function MerchProductPage({ handle }: { handle: string }) {
     ),
   );
   const details = product ? MERCH_PRODUCT_DETAILS[product.kind] : undefined;
+  const startingPrice = product ? productFromPrice(product) : null;
   const image =
     showArt && design
       ? { url: design.art, alt: `${design.name} artwork` }
@@ -111,7 +116,8 @@ export function MerchProductPage({ handle }: { handle: string }) {
           <h1>{product.designName}</h1>
           <p className="merch-detail-kind">{product.kind}</p>
           <p className="merch-detail-price">
-            {formatMerchMoney(variant?.price ?? product.variants[0]?.price ?? null)}
+            {!variant && startingPrice && "From "}
+            {formatMerchMoney(variant?.price ?? startingPrice)}
           </p>
           <p>{(design?.graphic ?? product.description).split(/(?<=[.!?])\s+/)[0]}</p>
           {product.options.map((option) => (
