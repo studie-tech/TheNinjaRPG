@@ -6,6 +6,7 @@ import {
 } from "@/validators/merch";
 import { env } from "@/env/server.mjs";
 import {
+  completeShopifyCart,
   fetchMerchCatalog,
   isMerchCheckoutEnabled,
   isShopifyCheckoutUrl,
@@ -112,13 +113,90 @@ describe("Shopify merch connection", () => {
             },
           },
         ],
-        pageInfo: { hasNextPage: false },
+        pageInfo: { hasNextPage: false, endCursor: null },
       },
     });
     expect(JSON.stringify(publicMerchCart(cart))).not.toMatch(
       /secret|private|checkoutUrl/,
     );
     expect(publicMerchCart(cart).lines[0]?.variantTitle).toBe("Black / M");
+  });
+  it("returns all 101 cart lines so the last item remains removable", async () => {
+    const line = (index: number) => ({
+      id: `gid://shopify/CartLine/${index}`,
+      quantity: 1,
+      merchandise: {
+        id: `gid://shopify/ProductVariant/${index}`,
+        title: "Black / M",
+        price: money,
+        image: null,
+        product: { handle: `tee-${index}`, title: "Blue Blade Eyes" },
+      },
+    });
+    const cart = shopifyCartSchema.parse({
+      id: "gid://shopify/Cart/secret?key=private",
+      checkoutUrl: "https://test-shop.myshopify.com/checkouts/private",
+      totalQuantity: 101,
+      cost: { subtotalAmount: money },
+      lines: {
+        nodes: Array.from({ length: 100 }, (_, index) => line(index)),
+        pageInfo: { hasNextPage: true, endCursor: "line-99" },
+      },
+    });
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          cart: {
+            lines: {
+              nodes: [line(100)],
+              pageInfo: { hasNextPage: false, endCursor: "line-100" },
+            },
+          },
+        },
+      }),
+    });
+    vi.spyOn(globalThis, "fetch").mockImplementation(request);
+    const result = publicMerchCart(await completeShopifyCart(cart));
+    expect(result.lines).toHaveLength(101);
+    expect(result.lines[100]?.id).toBe("gid://shopify/CartLine/100");
+    expect(JSON.parse(request.mock.calls[0]?.[1].body).variables).toEqual({
+      id: cart.id,
+      after: "line-99",
+    });
+    expect(JSON.stringify(result)).not.toMatch(/private|checkoutUrl/);
+  });
+  it("stops if a cart connection repeats a cursor", async () => {
+    const cart = shopifyCartSchema.parse({
+      id: "gid://shopify/Cart/secret?key=private",
+      checkoutUrl: "https://test-shop.myshopify.com/checkouts/private",
+      totalQuantity: 101,
+      cost: { subtotalAmount: money },
+      lines: { nodes: [], pageInfo: { hasNextPage: true, endCursor: "repeat" } },
+    });
+    const request = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { cart: { lines: cart.lines } } }),
+    });
+    vi.spyOn(globalThis, "fetch").mockImplementation(request);
+    await expect(completeShopifyCart(cart)).rejects.toThrow(
+      "Your bag could not be loaded completely",
+    );
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+  it("allows reducing a quantity accumulated by repeated additions", () => {
+    expect(
+      merchUpdateSchema.safeParse({
+        lineId: "gid://shopify/CartLine/line",
+        quantity: 19,
+      }).success,
+    ).toBe(true);
+    expect(
+      merchAddSchema.safeParse({
+        variantId: "gid://shopify/ProductVariant/123",
+        quantity: 11,
+      }).success,
+    ).toBe(false);
   });
   it("rejects injected checkout destinations and non-HTTPS URLs", () => {
     for (const url of [
@@ -140,12 +218,10 @@ describe("Shopify merch connection", () => {
   });
   it("does not leak Shopify error payloads", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: true,
-          json: async () => ({ errors: [{ message: "private-cart-secret" }] }),
-        }),
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ errors: [{ message: "private-cart-secret" }] }),
+      }),
     );
     await expect(shopifyRequest("query Test { shop { name } }")).rejects.toThrow(
       "The shop could not complete this request. Please try again.",
@@ -170,7 +246,7 @@ describe("Shopify merch connection", () => {
     expect(
       merchUpdateSchema.safeParse({
         lineId: "gid://shopify/CartLine/line",
-        quantity: 11,
+        quantity: 2147483648,
       }).success,
     ).toBe(false);
   });

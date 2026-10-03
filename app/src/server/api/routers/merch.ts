@@ -3,6 +3,7 @@ import { createMerchPreviewCatalog } from "@/libs/merch/preview";
 import { createTRPCRouter, errorResponse, publicProcedure } from "@/server/api/trpc";
 import {
   CART_FIELDS,
+  completeShopifyCart,
   fetchMerchCatalog,
   isMerchCheckoutEnabled,
   isShopifyCheckoutUrl,
@@ -63,7 +64,7 @@ export const merchRouter = createTRPCRouter({
       success: true as const,
       message:
         payload.warnings?.map((w) => w.message).join(" ") || "Added to your bag.",
-      cart: publicMerchCart(payload.cart),
+      cart: publicMerchCart(await completeShopifyCart(payload.cart)),
     };
   }),
   updateCart: publicProcedure.input(merchUpdateSchema).mutation(async ({ input }) => {
@@ -92,7 +93,7 @@ export const merchRouter = createTRPCRouter({
     return {
       success: true as const,
       message: payload.warnings?.map((w) => w.message).join(" ") || "Bag updated.",
-      cart: publicMerchCart(payload.cart),
+      cart: publicMerchCart(await completeShopifyCart(payload.cart)),
     };
   }),
   checkout: publicProcedure.mutation(async () => {
@@ -101,6 +102,10 @@ export const merchRouter = createTRPCRouter({
         "Checkout is not open yet. Please check back for the collection launch.",
       );
     const cart = await readCart();
+    if (!cart) {
+      (await cookies()).delete(CART_COOKIE);
+      return errorResponse("Your bag has expired. Please add your items again.");
+    }
     if (!cart?.totalQuantity)
       return errorResponse("Your bag is empty. Add something you love first.");
     // Refresh the checkout URL rather than reusing a stale link from an earlier render.
@@ -135,9 +140,10 @@ async function saveCartId(id: string) {
 async function readCart() {
   const id = await readCartId();
   if (!id) return null;
-  return shopifyCartQuerySchema.parse(
+  const cart = shopifyCartQuerySchema.parse(
     await shopifyRequest(`query Bag($id: ID!) { cart(id: $id) { ${CART_FIELDS} } }`, {
       id,
     }),
   ).cart;
+  return cart ? completeShopifyCart(cart) : null;
 }

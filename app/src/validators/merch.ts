@@ -45,7 +45,8 @@ export const merchAddSchema = z.object({
 });
 export const merchUpdateSchema = z.object({
   lineId: z.string().regex(/^gid:\/\/shopify\/CartLine\/[A-Za-z0-9?=&_%.-]+$/),
-  quantity: z.number().int().min(0).max(10),
+  // Updates must accommodate quantities accumulated by repeated additions.
+  quantity: z.number().int().min(0).max(2147483647),
 });
 
 export type MerchProduct = z.infer<typeof merchProductSchema>;
@@ -86,31 +87,39 @@ export const shopifyCatalogSchema = z.object({
     pageInfo: z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() }),
   }),
 });
+export const shopifyCartLinesSchema = z.object({
+  nodes: z.array(
+    z.object({
+      id: z.string(),
+      quantity: z.number(),
+      merchandise: z.object({
+        id: z.string(),
+        title: z.string(),
+        price: merchMoneySchema,
+        image: shopifyImageSchema.nullable(),
+        product: z.object({ handle: z.string(), title: z.string() }),
+      }),
+    }),
+  ),
+  pageInfo: z.object({
+    hasNextPage: z.boolean(),
+    endCursor: z.string().nullable(),
+  }),
+});
 export const shopifyCartSchema = z.object({
   id: z.string(),
   checkoutUrl: z.url(),
   totalQuantity: z.number(),
   cost: z.object({ subtotalAmount: merchMoneySchema }),
-  lines: z.object({
-    nodes: z.array(
-      z.object({
-        id: z.string(),
-        quantity: z.number(),
-        merchandise: z.object({
-          id: z.string(),
-          title: z.string(),
-          price: merchMoneySchema,
-          image: shopifyImageSchema.nullable(),
-          product: z.object({ handle: z.string(), title: z.string() }),
-        }),
-      }),
-    ),
-    pageInfo: z.object({ hasNextPage: z.boolean() }),
-  }),
+  lines: shopifyCartLinesSchema,
 });
 export const shopifyCartQuerySchema = z.object({ cart: shopifyCartSchema.nullable() });
 export const shopifyCartPayloadSchema = z.object({
   cart: shopifyCartSchema.nullable(),
   userErrors: z.array(z.object({ message: z.string(), code: z.string().nullable() })),
   warnings: z.array(z.object({ message: z.string() })).optional(),
+});
+
+export const shopifyCartLinesQuerySchema = z.object({
+  cart: z.object({ lines: shopifyCartLinesSchema }).nullable(),
 });

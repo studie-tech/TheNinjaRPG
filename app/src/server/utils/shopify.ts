@@ -3,7 +3,11 @@ import { env } from "@/env/server.mjs";
 import { findMerchDesign } from "@/libs/merch/catalog";
 import { normalizeMerchKind } from "@/libs/merch/products";
 import type { MerchProduct } from "@/validators/merch";
-import { type shopifyCartSchema, shopifyCatalogSchema } from "@/validators/merch";
+import {
+  shopifyCartLinesQuerySchema,
+  type shopifyCartSchema,
+  shopifyCatalogSchema,
+} from "@/validators/merch";
 
 export const isShopifyConfigured = () =>
   Boolean(env.SHOPIFY_STORE_DOMAIN && env.SHOPIFY_STOREFRONT_ACCESS_TOKEN);
@@ -92,8 +96,35 @@ export async function fetchMerchCatalog(): Promise<MerchProduct[]> {
   throw new Error("The shop catalogue is larger than the supported collection.");
 }
 
+const CART_LINE_FIELDS = `nodes { id quantity merchandise { ... on ProductVariant { id title price { amount currencyCode } image { url altText } product { handle title } } } } pageInfo { hasNextPage endCursor }`;
 export const CART_FIELDS = `id checkoutUrl totalQuantity cost { subtotalAmount { amount currencyCode } }
-  lines(first: 100) { nodes { id quantity merchandise { ... on ProductVariant { id title price { amount currencyCode } image { url altText } product { handle title } } } } pageInfo { hasNextPage } }`;
+  lines(first: 100) { ${CART_LINE_FIELDS} }`;
+
+/** Complete the connection before exposing a cart so every line remains removable. */
+export async function completeShopifyCart(cart: z.infer<typeof shopifyCartSchema>) {
+  const nodes = [...cart.lines.nodes];
+  let pageInfo = cart.lines.pageInfo;
+  const seenCursors = new Set<string>();
+  while (pageInfo.hasNextPage) {
+    const after = pageInfo.endCursor;
+    if (!after || seenCursors.has(after))
+      throw new Error("Your bag could not be loaded completely. Please try again.");
+    seenCursors.add(after);
+    const result = shopifyCartLinesQuerySchema.parse(
+      await shopifyRequest(
+        `query BagLines($id: ID!, $after: String!) { cart(id: $id) { lines(first: 100, after: $after) { ${CART_LINE_FIELDS} } } }`,
+        { id: cart.id, after },
+      ),
+    );
+    if (!result.cart)
+      throw new Error(
+        "Your bag has expired. Please reload it and add your items again.",
+      );
+    nodes.push(...result.cart.lines.nodes);
+    pageInfo = result.cart.lines.pageInfo;
+  }
+  return { ...cart, lines: { nodes, pageInfo } };
+}
 
 export const publicMerchCart = (cart: z.infer<typeof shopifyCartSchema> | null) => {
   if (!cart) return { lines: [], subtotal: null, quantity: 0 };

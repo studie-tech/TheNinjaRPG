@@ -161,7 +161,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
     if (result.success) {
       utils.merch.getCart.setData(undefined, result.cart);
       setBagOpen(true);
-    }
+    } else void cart.refetch();
   };
   const update = async (line: MerchCartLine, quantity: number) => {
     if (busy) return;
@@ -189,6 +189,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
     if (!result) return;
     setMessage(result.message);
     if (result.success) window.location.assign(result.checkoutUrl);
+    else void cart.refetch();
   };
 
   return (
