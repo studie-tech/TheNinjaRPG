@@ -366,19 +366,15 @@ export function MerchCollection() {
       <section className="merch-world" aria-labelledby="community-feature-heading">
         <div className="merch-world-art">
           <Image
-            src="/merch/art/serverhamster.webp"
+            src="/merch/art/buffsr.webp"
             width={1000}
             height={1500}
-            alt="A ninja feeds a hamster powering a scroll-shaped server machine"
+            alt="Buff S Ranks Pls artwork with a ninja, training dummy and stats scroll"
           />
         </div>
         <div>
-          <p className="merch-eyebrow">Community jokes</p>
-          <h2 id="community-feature-heading">Feed the server hamster.</h2>
-          <p>
-            A running joke about lag, outages, and the hamster supposedly keeping the
-            server running.
-          </p>
+          <p className="merch-eyebrow">Community</p>
+          <h2 id="community-feature-heading">Buff S Ranks Pls</h2>
           <button
             type="button"
             className="merch-text-button"
