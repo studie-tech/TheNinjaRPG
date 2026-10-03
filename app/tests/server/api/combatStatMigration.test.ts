@@ -34,12 +34,12 @@ describeWithDatabase("uniform combat-stat SQL migration", () => {
       const row=byId[id]!;
       const invested=old.reduce((total, field) => total + Number(row[field]) - 10, 0);
       const retained=Number(row.offence)+Number(row.defence)-20;
-      expect(retained/invested).toBeCloseTo(0.7346885486, 9);
+      expect(retained/invested).toBeCloseTo(0.7222327163, 9);
       expect(row.experience).toBe(777);
     }
     expect(Number(byId.specialist!.offence)).toBeCloseTo(Number(byId.broad!.offence), 8);
-    expect(byId.capped!.offence).toBe(1322420);
-    expect(Number(byId.overcap!.offence)).toBeGreaterThan(1322420);
+    expect(byId.capped!.offence).toBe(1300000);
+    expect(Number(byId.overcap!.offence)).toBeGreaterThan(1300000);
     expect(byId.defaults!.offence).toBe(10);
     expect(byId.ai!.offence).toBe(200);
     expect(byId.ai!.defence).toBe(500);

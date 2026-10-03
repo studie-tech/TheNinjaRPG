@@ -1017,7 +1017,7 @@ export const MAX_ATTRIBUTES = 5;
 export const BANK_INTEREST_CLAIM_DAYS = 8;
 export const RYO_CAP = 3000000000;
 // Independent base progression caps. Effective mastery buffs may exceed these caps.
-export const MAX_STATS_CAP = 1322420;
+export const MAX_STATS_CAP = 1300000;
 export const MAX_GENS_CAP = 400000;
 export const MAX_MASTERY_CAP = 1500000;
 export const PVP_MASTERY_WIN_REWARD = 200;

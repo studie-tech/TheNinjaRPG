@@ -96,7 +96,7 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
   it("preserves converted overflow when it exceeds the rank's total capacity", async () => {
     await resetter();
     const database = await getTestDatabase();
-    const convertedStat = 10 + (4 * 60_000 - 40) * (1_322_410 / 1_799_960);
+    const convertedStat = 10 + (4 * 60_000 - 40) * (1_299_990 / 1_799_960);
     await database
       .update(userData)
       .set({
