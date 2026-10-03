@@ -126,6 +126,18 @@ export async function completeShopifyCart(cart: z.infer<typeof shopifyCartSchema
   return { ...cart, lines: { nodes, pageInfo } };
 }
 
+/** A read failure after a committed mutation must never invite a duplicate write. */
+export async function reconcileCommittedShopifyCart(
+  cart: z.infer<typeof shopifyCartSchema>,
+) {
+  try {
+    return publicMerchCart(await completeShopifyCart(cart));
+  } catch {
+    // The browser refreshes the bag and prevents more changes until that read succeeds.
+    return null;
+  }
+}
+
 export const publicMerchCart = (cart: z.infer<typeof shopifyCartSchema> | null) => {
   if (!cart) return { lines: [], subtotal: null, quantity: 0 };
   if (cart.lines.pageInfo.hasNextPage)

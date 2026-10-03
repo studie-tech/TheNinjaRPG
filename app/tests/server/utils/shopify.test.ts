@@ -11,6 +11,7 @@ import {
   isMerchCheckoutEnabled,
   isShopifyCheckoutUrl,
   publicMerchCart,
+  reconcileCommittedShopifyCart,
   shopifyRequest,
 } from "@/server/utils/shopify";
 const originalConfiguration = {
@@ -203,6 +204,21 @@ describe("Shopify merch connection", () => {
       "Your bag could not be loaded completely",
     );
     expect(request).toHaveBeenCalledTimes(1);
+  });
+  it("requests a bag refresh without repeating an already committed cart change", async () => {
+    const cart = shopifyCartSchema.parse({
+      id: "gid://shopify/Cart/secret?key=private",
+      checkoutUrl: "https://test-shop.myshopify.com/checkouts/private",
+      totalQuantity: 101,
+      cost: { subtotalAmount: money },
+      lines: { nodes: [], pageInfo: { hasNextPage: true, endCursor: "line-99" } },
+    });
+    const request = vi.fn().mockRejectedValue(new Error("Network unavailable"));
+    vi.spyOn(globalThis, "fetch").mockImplementation(request);
+    expect(await reconcileCommittedShopifyCart(cart)).toBeNull();
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(request.mock.calls[0]?.[1].body).query).toContain("query BagLines");
+    expect(cart.totalQuantity).toBe(101);
   });
   it("allows reducing a quantity accumulated by repeated additions", () => {
     expect(

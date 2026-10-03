@@ -9,6 +9,7 @@ import {
   isShopifyCheckoutUrl,
   isShopifyConfigured,
   publicMerchCart,
+  reconcileCommittedShopifyCart,
   shopifyRequest,
 } from "@/server/utils/shopify";
 import {
@@ -60,11 +61,14 @@ export const merchRouter = createTRPCRouter({
           "Your cart has expired. Please add your item again.",
       );
     await saveCartId(payload.cart.id);
+    const cart = await reconcileCommittedShopifyCart(payload.cart);
     return {
       success: true as const,
       message:
-        payload.warnings?.map((w) => w.message).join(" ") || "Added to your bag.",
-      cart: publicMerchCart(await completeShopifyCart(payload.cart)),
+        cart === null
+          ? "Item added. Your bag needs to refresh before you make another change."
+          : payload.warnings?.map((w) => w.message).join(" ") || "Added to your bag.",
+      cart,
     };
   }),
   updateCart: publicProcedure.input(merchUpdateSchema).mutation(async ({ input }) => {
@@ -90,10 +94,14 @@ export const merchRouter = createTRPCRouter({
         payload.userErrors[0]?.message ||
           "Your bag could not be updated. Please try again.",
       );
+    const cart = await reconcileCommittedShopifyCart(payload.cart);
     return {
       success: true as const,
-      message: payload.warnings?.map((w) => w.message).join(" ") || "Bag updated.",
-      cart: publicMerchCart(await completeShopifyCart(payload.cart)),
+      message:
+        cart === null
+          ? "Bag updated. Your bag needs to refresh before you make another change."
+          : payload.warnings?.map((w) => w.message).join(" ") || "Bag updated.",
+      cart,
     };
   }),
   checkout: publicProcedure.mutation(async () => {

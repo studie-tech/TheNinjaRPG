@@ -65,6 +65,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
   const [reviewLines, setReviewLines] = useState<MerchCartLine[]>([]);
   const [storageReady, setStorageReady] = useState(false);
   const [message, setMessage] = useState("");
+  const [needsCartRefresh, setNeedsCartRefresh] = useState(false);
   const addMutation = api.merch.addToCart.useMutation({
     onError: () => setMessage("We couldn’t add that item. Please try again."),
   });
@@ -75,7 +76,15 @@ export function MerchProvider({ children }: { children: ReactNode }) {
     onError: () => setMessage("Checkout couldn’t be opened. Please try again."),
   });
   const busy =
-    addMutation.isPending || updateMutation.isPending || checkoutMutation.isPending;
+    addMutation.isPending ||
+    updateMutation.isPending ||
+    checkoutMutation.isPending ||
+    (!preview && (needsCartRefresh || cart.isFetching));
+
+  const refreshCart = async () => {
+    const result = await cart.refetch();
+    if (result.isSuccess) setNeedsCartRefresh(false);
+  };
 
   useEffect(() => {
     try {
@@ -159,7 +168,11 @@ export function MerchProvider({ children }: { children: ReactNode }) {
     if (!result) return;
     setMessage(result.message);
     if (result.success) {
-      utils.merch.getCart.setData(undefined, result.cart);
+      if (result.cart) utils.merch.getCart.setData(undefined, result.cart);
+      else {
+        setNeedsCartRefresh(true);
+        void refreshCart();
+      }
       setBagOpen(true);
     } else void cart.refetch();
   };
@@ -179,8 +192,13 @@ export function MerchProvider({ children }: { children: ReactNode }) {
       .catch(() => null);
     if (!result) return;
     setMessage(result.message);
-    if (result.success) utils.merch.getCart.setData(undefined, result.cart);
-    else void cart.refetch();
+    if (result.success) {
+      if (result.cart) utils.merch.getCart.setData(undefined, result.cart);
+      else {
+        setNeedsCartRefresh(true);
+        void refreshCart();
+      }
+    } else void cart.refetch();
   };
   const checkout = async () => {
     if (busy || preview) return;
@@ -252,11 +270,11 @@ export function MerchProvider({ children }: { children: ReactNode }) {
                 : "Your favourites, ready for their next adventure."}
             </SheetDescription>
           </SheetHeader>
-          {cart.isError && !preview && (
+          {(cart.isError || needsCartRefresh) && !preview && (
             <div className="merch-inline-error">
               <p>Your bag couldn’t be loaded.</p>
-              <button type="button" onClick={() => void cart.refetch()}>
-                Try again
+              <button type="button" onClick={() => void refreshCart()}>
+                Refresh bag
               </button>
             </div>
           )}
@@ -346,11 +364,13 @@ export function MerchProvider({ children }: { children: ReactNode }) {
                 }
                 onClick={() => void checkout()}
               >
-                {busy
-                  ? "One moment…"
-                  : preview || !catalog.data?.checkoutEnabled
-                    ? "Checkout opens at launch"
-                    : "Secure checkout"}
+                {needsCartRefresh
+                  ? "Refresh your bag to continue"
+                  : busy
+                    ? "One moment…"
+                    : preview || !catalog.data?.checkoutEnabled
+                      ? "Checkout opens at launch"
+                      : "Secure checkout"}
                 <ArrowRight size={17} />
               </button>
               <SheetClose className="merch-continue">Continue exploring</SheetClose>
