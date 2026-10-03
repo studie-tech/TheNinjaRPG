@@ -40,6 +40,7 @@ import {
   paypalCheckoutIdSchema,
   paypalCheckoutSchema,
   paypalOrderSchema,
+  paypalSubscriptionSchema,
   searchPaypalTransactionSchema,
 } from "@/validators/points";
 import type { DrizzleClient } from "../../db";
@@ -301,44 +302,35 @@ export const paypalRouter = createTRPCRouter({
       return { success: result.success, message: result.messages.join(", ") };
     }),
   resolveSubscription: protectedProcedure
-    .input(
-      z.object({
-        subscriptionId: z.string(),
-        orderId: z.string().optional(),
-      }),
-    )
+    .input(paypalSubscriptionSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const token = await getPaypalAccessToken();
       const subscription = await getPaypalSubscription(input.subscriptionId, token);
-      if (subscription === undefined) {
-        throw serverError("INTERNAL_SERVER_ERROR", "Could not fetch subscription");
-      }
-      const users = subscription.custom_id?.split("-");
-      const createdByUserId = users?.[0];
-      const affectedUserId = users?.[1];
-      if (affectedUserId === undefined || createdByUserId === undefined) {
-        throw serverError("INTERNAL_SERVER_ERROR", "Could not extract user ID");
-      }
+      const owners = await verifiedPaypalSubscription(
+        ctx.drizzle,
+        subscription,
+        input.subscriptionId,
+      );
+      if (!owners || !subscription)
+        return errorResponse(
+          "Subscription ownership or paid plan could not be verified. Wait for payment to clear, then try again.",
+        );
+      if (ctx.userId !== owners.createdById && ctx.userId !== owners.affectedUserId)
+        return errorResponse("This subscription belongs to another account.");
       const newStatus =
         subscription.status === "ACTIVE"
-          ? plan2FedStatus(subscription.plan_id)
+          ? getPaypalSubscriptionStatus(subscription).newStatus
           : "NONE";
-
-      const result = await updateSubscription({
+      await updateSubscription({
         client: ctx.drizzle,
-        createdById: createdByUserId,
+        ...owners,
         orderId: input.orderId,
-        affectedUserId: affectedUserId,
         federalStatus: newStatus,
         status: subscription.status,
         subscriptionId: subscription.id,
       });
-
-      return {
-        success: result.rowsAffected !== 0,
-        message: `Synced with data from Paypal. UsedID ${affectedUserId} set to have ${newStatus} federal subscription.`,
-      };
+      return { success: true, message: "Subscription synchronized" };
     }),
   // Includes reservations from both web payment providers.
   getRecentRepsCount: protectedProcedure
@@ -751,34 +743,28 @@ export const syncTransactions = async (
             info.paypal_reference_id,
             token,
           );
-          // Update if we found external and it's time to update internal
-          if (
-            externalSubscription?.id === info.paypal_reference_id &&
-            externalSubscription.billing_info?.last_payment?.time &&
-            Number.isFinite(
-              new Date(externalSubscription.billing_info.last_payment.time).getTime(),
-            ) &&
-            externalSubscription.plan_id
-          ) {
-            const status = getPaypalSubscriptionStatus(externalSubscription);
-            await updateSubscription({
-              client: client,
-              createdById: createdByUserId,
-              affectedUserId: affectedUserId,
-              federalStatus: status.newStatus,
-              status: externalSubscription.status,
-              subscriptionId: externalSubscription.id,
-              lastPayment: status.lastPayment,
-            });
-            return {
-              success: true,
-              message: `Subscription ID ${info.paypal_reference_id} synced to ${status.newStatus}`,
-            };
-          } else {
+          const owners = await verifiedPaypalSubscription(
+            client,
+            externalSubscription,
+            info.paypal_reference_id,
+            { createdById: createdByUserId, affectedUserId },
+          );
+          if (!owners || !externalSubscription)
             return errorResponse(
-              `Subscription ID ${info.paypal_reference_id} not found or payment could not be verified`,
+              `Subscription ID ${info.paypal_reference_id} not found or ownership/payment could not be verified`,
             );
-          }
+          const status = getPaypalSubscriptionStatus(externalSubscription);
+          await updateSubscription({
+            client,
+            ...owners,
+            federalStatus: status.newStatus,
+            status: externalSubscription.status,
+            subscriptionId: externalSubscription.id,
+          });
+          return {
+            success: true,
+            message: `Subscription ID ${info.paypal_reference_id} synchronized`,
+          };
         } else {
           const stored = await client.query.paypalTransaction.findFirst({
             where: and(
@@ -1146,4 +1132,62 @@ const deliverPaypalReputation = async (input: Parameters<typeof updateReps>[0]) 
       return { success: true, message: "Reputation points purchased" };
     }),
   );
+};
+
+/** Only configured paid plans and consistent provider ownership can change coverage. */
+const verifiedPaypalSubscription = async (
+  client: DrizzleClient,
+  subscription: PaypalSubscription | undefined,
+  subscriptionId: string,
+  expected?: { createdById: string; affectedUserId: string },
+) => {
+  if (
+    !subscription ||
+    subscription.id !== subscriptionId ||
+    typeof subscription.plan_id !== "string" ||
+    !subscription.plan_id ||
+    plan2FedStatus(subscription.plan_id) === "NONE" ||
+    typeof subscription.custom_id !== "string" ||
+    !["ACTIVE", "SUSPENDED", "CANCELLED", "EXPIRED"].includes(subscription.status)
+  )
+    return null;
+  const users = subscription.custom_id.split("-");
+  const buyer = users[0];
+  const recipient = users[1];
+  if (
+    users.length !== 2 ||
+    !buyer ||
+    !recipient ||
+    !users.every((id) => /^[A-Za-z0-9_]+$/.test(id))
+  )
+    return null;
+  const payment = subscription.billing_info?.last_payment;
+  const lastPayment =
+    typeof payment?.time === "string" ? new Date(payment.time) : new Date(Number.NaN);
+  const amount = Number(payment?.amount?.value);
+  if (
+    !Number.isFinite(lastPayment.getTime()) ||
+    lastPayment > secondsFromNow(60) ||
+    payment?.amount?.currency_code !== "USD" ||
+    !Number.isFinite(amount) ||
+    amount <= 0
+  )
+    return null;
+  const [createdById, affectedUserId, expectedBuyer, expectedRecipient] =
+    await Promise.all([
+      canonicalStoreUserId(client, buyer),
+      canonicalStoreUserId(client, recipient),
+      expected
+        ? canonicalStoreUserId(client, expected.createdById)
+        : Promise.resolve(undefined),
+      expected
+        ? canonicalStoreUserId(client, expected.affectedUserId)
+        : Promise.resolve(undefined),
+    ]);
+  if (
+    expected &&
+    (createdById !== expectedBuyer || affectedUserId !== expectedRecipient)
+  )
+    return null;
+  return { createdById, affectedUserId, lastPayment };
 };

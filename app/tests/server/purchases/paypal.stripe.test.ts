@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type Stripe from "stripe";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { paypalTransaction, stripeCheckout, stripePayment, storeUserIdAlias, userData } from "@/drizzle/schema";
+import { paypalSubscription, paypalTransaction, stripeCheckout, stripePayment, storeUserIdAlias, userData } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
 import { paypalRouter, syncTransactions, updateReps } from "@/server/api/routers/paypal";
 import { stripeRouter } from "@/server/api/routers/stripe";
@@ -17,6 +17,8 @@ const BUYER = "web_buyer";
 const TARGET = "web_recipient";
 const OTHER = "web_other";
 const orders = new Map<string, Record<string, unknown>>();
+const subscriptions = new Map<string, Record<string, unknown>>();
+const paypalPlans = Object.fromEntries(["NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL", "NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER", "NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD"].map((key) => [key, process.env[key]]));
 let createResponseFails = false;
 let captureResponseMinimal = false;
 const request = (reputationPoints = 20) => ({ requestId: nanoid(), expectedUserId: BUYER, userId: TARGET, reputationPoints });
@@ -33,6 +35,7 @@ const fetchProvider = vi.fn(async (url: string, options?: RequestInit) => {
     if (createResponseFails) { createResponseFails = false; throw new Error("response lost"); }
     return Response.json(order);
   }
+  if (url.includes("/v1/billing/subscriptions/")) return Response.json(subscriptions.get(url.split("/subscriptions/")[1] ?? "") ?? {}, { status: subscriptions.has(url.split("/subscriptions/")[1] ?? "") ? 200 : 404 });
   const id = url.split("/orders/")[1]?.split("/")[0] ?? "";
   const order = orders.get(id);
   if (!order) return Response.json({}, { status: 404 });
@@ -55,14 +58,15 @@ const target = async () => (await getTestDatabase()).query.userData.findFirst({ 
 
 describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
   beforeEach(async () => {
-    await resetTables(paypalTransaction, stripeCheckout, stripePayment, storeUserIdAlias, userData);
+    await resetTables(paypalSubscription, paypalTransaction, stripeCheckout, stripePayment, storeUserIdAlias, userData);
     await insertUsers([BUYER, TARGET, OTHER].map((userId) => ({ userId, username: userId, reputationPoints: 0, reputationPointsTotal: 0 })));
     Object.assign(env, { STRIPE_SECRET_KEY: "sk_test_placeholder", STRIPE_WEBHOOK_SECRET: "whsec_placeholder", STRIPE_PRICE_NORMAL: "price_normal", STRIPE_PRICE_SILVER: "price_silver", STRIPE_PRICE_GOLD: "price_gold" });
-    orders.clear(); stripeSessions.clear(); createResponseFails = false; captureResponseMinimal = false; fetchProvider.mockClear();
+    orders.clear(); subscriptions.clear(); stripeSessions.clear();
+    Object.assign(process.env, { NEXT_PUBLIC_PAYPAL_PLAN_ID_NORMAL: "plan_test_normal", NEXT_PUBLIC_PAYPAL_PLAN_ID_SILVER: "plan_test_silver", NEXT_PUBLIC_PAYPAL_PLAN_ID_GOLD: "plan_test_gold" }); createResponseFails = false; captureResponseMinimal = false; fetchProvider.mockClear();
     vi.spyOn(globalThis, "fetch").mockImplementation(fetchProvider as unknown as typeof fetch);
     vi.spyOn(stripeClient, "getStripe").mockReturnValue(stripeApi);
   });
-  afterEach(() => { vi.restoreAllMocks(); Object.assign(env, original); });
+  afterEach(() => { for (const [key, value] of Object.entries(paypalPlans)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } vi.restoreAllMocks(); Object.assign(env, original); });
   it("blocks PayPal before charging when Stripe reserved the remaining allowance", async () => {
     const stripe = await callerFor(stripeRouter, BUYER);
     expect((await stripe.createCheckout(stripeRequest(3000))).success).toBe(true);
@@ -200,6 +204,29 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
   it("missing subscription details return failure without granting coverage", async () => {
     const info = { transaction_id: "SUB_CAPTURE", transaction_status: "S", custom_field: `${BUYER}-${TARGET}`, transaction_amount: { value: "10", currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "MISSING_SUBSCRIPTION", transaction_updated_date: new Date().toISOString() };
     expect(await syncTransactions(await getTestDatabase(), [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject({ success: false, messages: [expect.stringContaining("not found")] });
+  });
+  it.each([{ plan_id: "plan_unknown" }, { custom_id: `${OTHER}-${TARGET}` }, { custom_id: `${BUYER}-${OTHER}` }, { custom_id: undefined }, { custom_id: `${BUYER}-${TARGET}-extra` }, { billing_info: { last_payment: { time: new Date(Date.now() + 86400000).toISOString(), amount: { value: "15.00", currency_code: "USD" } } } }, { billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "DKK" } } } }])("subscription recovery rejects unknown or inconsistent paid terms: %j", async (overrides) => {
+    const subscription = { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } }, ...overrides };
+    subscriptions.set("SUB_TEST", subscription);
+    const info = { transaction_id: "SUB_CAPTURE", transaction_status: "S", transaction_updated_date: new Date().toISOString(), custom_field: `${BUYER}-${TARGET}`, transaction_amount: { value: "15", currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "SUB_TEST" };
+    expect(await syncTransactions(await getTestDatabase(), [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject({ success: false });
+    expect((await target())?.federalStatus).toBe("NONE");
+    expect(await (await getTestDatabase()).query.paypalSubscription.findMany()).toHaveLength(0);
+  });
+  it("a configured, owned paid subscription grants the gift once and sync retries succeed", async () => {
+    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    const caller = await callerFor(paypalRouter, BUYER);
+    expect((await caller.resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
+    expect((await target())?.federalStatus).toBe("GOLD");
+    expect((await caller.resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
+    expect(await (await getTestDatabase()).query.paypalSubscription.findMany()).toHaveLength(1);
+    expect((await (await callerFor(paypalRouter, OTHER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
+  });
+  it("direct subscription recovery rejects an unknown paid plan without downgrading coverage", async () => {
+    const db = await getTestDatabase(); await db.update(userData).set({ federalStatus: "GOLD" }).where(eq(userData.userId, TARGET));
+    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_unknown", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    expect((await (await callerFor(paypalRouter, BUYER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
+    expect((await target())?.federalStatus).toBe("GOLD");
   });
   it("reporting recovery converts a captured reservation without duplicate credit", async () => {
     const caller = await callerFor(paypalRouter, BUYER); const input = request(); const result = await caller.createOrder(input);

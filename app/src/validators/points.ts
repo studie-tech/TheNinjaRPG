@@ -35,3 +35,8 @@ export const paypalCheckoutIdSchema = z.strictObject({
 export const paypalOrderSchema = z.strictObject({
   orderId: z.string().min(15).max(20),
 });
+
+export const paypalSubscriptionSchema = z.strictObject({
+  subscriptionId: z.string().min(1).max(191),
+  orderId: z.string().min(1).max(191).optional(),
+});
