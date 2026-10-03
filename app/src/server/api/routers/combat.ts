@@ -1885,8 +1885,8 @@ export const initiateBattle = async (
                   inArray(battleHistory.defenderId, targetIds),
                 ),
                 and(
-                  inArray(battleHistory.attackedId, userIds),
-                  inArray(battleHistory.defenderId, targetIds),
+                  inArray(battleHistory.attackedId, targetIds),
+                  inArray(battleHistory.defenderId, userIds),
                 ),
               ),
               gt(battleHistory.createdAt, secondsFromDate(-60 * 60, new Date())),

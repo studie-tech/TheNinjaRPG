@@ -547,34 +547,33 @@ export const trainEfficiency = (user: UserData) => {
  * Get training multiplier
  */
 export const trainingMultiplier = (user: UserData) => {
-  const reducedDays = getReducedGainsDays(user);
-  const factor = reducedDays > 0 ? 0.5 : 1;
+  const factor = getTrainingMultiplierBoost(user);
   switch (user.trainingSpeed) {
     case "15min":
-      return 0.01 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.01 * factor;
     case "1hr":
-      return 0.04 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.04 * factor;
     case "4hrs":
-      return 0.16 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.16 * factor;
     case "8hrs":
-      return 0.32 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.32 * factor;
     case "12hrs":
-      return 0.48 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.48 * factor;
     case "24hrs":
-      return 0.96 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.96 * factor;
     default:
       throw Error("Invalid training speed");
   }
 };
 
 /**
- * Extra multiplier based on rank perks
+ * Player training modifiers independent of the selected training interval.
  */
-const getRankTrainingMultiplierBoost = (user: UserData) => {
-  if (user.rank === "GENIN" && user.senseiId) {
-    return 1 + SENSEI_GENIN_TRAIN_EXP_BOOST_PERC / 100;
-  }
-  return 1;
+export const getTrainingMultiplierBoost = (user: UserData) => {
+  const factor = getReducedGainsDays(user) > 0 ? 0.5 : 1;
+  return user.rank === "GENIN" && user.senseiId
+    ? factor * (1 + SENSEI_GENIN_TRAIN_EXP_BOOST_PERC / 100)
+    : factor;
 };
 
 /**

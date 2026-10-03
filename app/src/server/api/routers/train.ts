@@ -10,6 +10,7 @@ import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
   energyPerSecond,
+  getTrainingMultiplierBoost,
   masteryTrainingBlockMessage,
   statTrainingBlockMessage,
   trainEfficiency,
@@ -62,7 +63,10 @@ export const trainRouter = createTRPCRouter({
       const { stats_cap, gens_cap } = getUserCaps(user.rank);
       const cap =
         input.stat === "offence" || input.stat === "defence" ? stats_cap : gens_cap;
-      const rate = STATS_PER_ENERGY * trainingBoost(user, settings);
+      const rate =
+        STATS_PER_ENERGY *
+        trainingBoost(user, settings) *
+        getTrainingMultiplierBoost(user);
       const availableRoom = Math.max(0, cap - user[input.stat]);
       if (availableRoom === 0) return errorResponse("Already capped");
       if (input.energy > user.curEnergy) return errorResponse("Not enough Energy");
@@ -142,7 +146,7 @@ export const trainRouter = createTRPCRouter({
           ),
         );
       if (result.rowsAffected === 0) {
-        return explainRejectedStart(ctx, "mastery");
+        return explainRejectedStart(ctx);
       }
       return { success: true, message: `Started mastery training`, data };
     }),
@@ -187,7 +191,7 @@ export const trainRouter = createTRPCRouter({
               user,
             )
           : undefined;
-      // Claims exactly the session read above, as stopTraining does
+      // Claim exactly the session read above so concurrent collections cannot reuse it.
       const result = await claimUserSnapshot({
         client: ctx.drizzle,
         userId: ctx.userId,
@@ -312,10 +316,10 @@ export const calcTrainingAmount = (
     trainingMultiplier(user),
 });
 
-const explainRejectedStart = async (
-  ctx: { drizzle: DrizzleClient; userId: string },
-  _slot: "mastery",
-) => {
+const explainRejectedStart = async (ctx: {
+  drizzle: DrizzleClient;
+  userId: string;
+}) => {
   const { user } = await fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId });
   return errorResponse(
     user

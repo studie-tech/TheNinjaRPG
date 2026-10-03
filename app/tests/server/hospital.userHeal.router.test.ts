@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MEDNIN_REQUIRED_EXP,
+  REGEN_SECONDS,
   SENSEI_GENIN_MED_EXP_SHARE_PERC,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
@@ -327,6 +328,24 @@ describeWithDatabase("hospital healing another user", () => {
       "event",
       expect.objectContaining({ type: "userMessage" }),
     );
+  });
+
+  it("settles a hospitalized target's Energy before resetting its recovery clock", async () => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({
+      curEnergy: 20,
+      regeneration: 60,
+      regenAt: new Date(Date.now() - 30000),
+    }).where(eq(userData.userId, TARGET_ID));
+    const api = await callerFor(hospitalRouter, USER_ID);
+    const result = await api.userHeal({ userId: TARGET_ID, healPercentage: 100 });
+    expect(result.success).toBe(true);
+    const saved = await readHealer(TARGET_ID);
+    const expectedEnergy = 20 + (60 * 30) / REGEN_SECONDS;
+    expect(saved?.curEnergy).toBeGreaterThanOrEqual(expectedEnergy);
+    expect(saved?.curEnergy).toBeLessThan(expectedEnergy + 5);
+    expect(saved?.status).toBe("HOSPITALIZED");
+    expect(saved?.regenAt.getTime()).toBeGreaterThan(Date.now() - 5000);
   });
 
   it("adds healing to the target's current pool when another write follows the snapshot", async () => {

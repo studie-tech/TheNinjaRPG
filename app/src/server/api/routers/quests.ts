@@ -2788,7 +2788,10 @@ export const commitQuestObjectiveRewards = async (info: {
   const energyPatch =
     energyReward > 0
       ? {
-          curEnergy: sql`LEAST(${userData.maxEnergy}, ${userData.curEnergy} + ${energyReward})`,
+          maxEnergy: user.maxEnergy,
+          curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${energyReward})`,
+          // Invalidate passive-regeneration snapshots taken between the claim and payout.
+          updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
         }
       : undefined;
   const mergedUserDataPatch =

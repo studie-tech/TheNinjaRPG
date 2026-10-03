@@ -2,7 +2,6 @@ import { useAtomValue } from "jotai";
 import {
   Atom,
   ClipboardList,
-  Dumbbell,
   EyeOff,
   Filter,
   Gem,
@@ -283,7 +282,12 @@ const MenuBoxProfile: React.FC = () => {
               showText
               lastRegenAt={userData?.regenAt}
               regen={userData?.regeneration}
-              status={userData?.status === "BATTLE" ? "AWAKE" : userData?.status}
+              status={
+                userData &&
+                ["BATTLE", "HOSPITALIZED", "TRAVEL"].includes(userData.status)
+                  ? "AWAKE"
+                  : userData?.status
+              }
               current={userData?.curEnergy}
               total={userData?.maxEnergy}
               timeDiff={timeDiff}

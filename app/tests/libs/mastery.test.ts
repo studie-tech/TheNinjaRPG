@@ -10,6 +10,7 @@ import {
   missingMasteryRequirement,
 } from "@/libs/mastery";
 import type { ZodAllTags } from "@/validators/combat";
+import { calcEnergy, calcMaxEnergy } from "@/libs/profile";
 
 const emptyMasteries = (value = 0): Record<MasteryName, number> =>
   Object.fromEntries(MasteryNames.map((name) => [name, value])) as Record<
@@ -142,6 +143,53 @@ const wearer = (over: Partial<MasteryBuffUser> = {}): MasteryBuffUser & { isAi: 
   bloodlineId: "bl",
   isAi: false,
   ...over,
+});
+
+describe("Energy capacity", () => {
+  const energyTag = (power = 100): Extract<ZodAllTags, {type: "increasemaxpools" | "decreasemaxpools"}> => ({
+    ...masteryTag(),
+    type: "increasemaxpools",
+    poolsAffected: ["Energy"],
+    power,
+  }) as Extract<ZodAllTags, {type: "increasemaxpools" | "decreasemaxpools"}>;
+
+  it("grows by 50 per level and includes owner bloodline and skill bonuses", () => {
+    expect(calcEnergy(1)).toBe(100);
+    expect(calcEnergy(10)).toBe(550);
+    expect(calcMaxEnergy(wearer({
+      bloodline: { effects: [energyTag()] },
+      userSkills: [
+        { skill: { target: "SELF", effects: [energyTag(50)] } },
+        { skill: { target: "ENEMIES", effects: [{ ...energyTag(500), friendlyFire: "ENEMIES" }] } },
+      ],
+    }))).toBe(700);
+  });
+
+  it("includes completed imbuements but excludes unavailable gear", () => {
+    const armor = gear("usable", [energyTag()], { level: 2 });
+    armor.item.canBeImbued = true;
+    armor.imbuements = [
+      { craftingFinishedAt: new Date(0), item: { effects: [energyTag(25)] } },
+      { craftingFinishedAt: new Date(Date.now() + 60_000), item: { effects: [energyTag(500)] } },
+    ];
+    expect(calcMaxEnergy(wearer({ items: [
+      armor,
+      gear("broken", [energyTag(500)], { durability: 0 }),
+      gear("unequipped", [energyTag(500)], { equipped: "NONE" }),
+      gear("locked", [energyTag(500)], { requiredNinjutsuMastery: 2000 }),
+      gear("wrong-bloodline", [energyTag(500)], { bloodlineId: "other" }),
+    ] }))).toBe(675);
+  });
+
+  it("scales percentages from base capacity and keeps the pool positive", () => {
+    expect(calcMaxEnergy(wearer({ bloodline: { effects: [
+      { ...energyTag(20), calculation: "percentage" },
+      { ...energyTag(100), type: "decreasemaxpools" },
+    ] } }))).toBe(560);
+    expect(calcMaxEnergy(wearer({ bloodline: { effects: [
+      { ...energyTag(1000), type: "decreasemaxpools" },
+    ] } }))).toBe(1);
+  });
 });
 
 describe("effectiveMasteries", () => {

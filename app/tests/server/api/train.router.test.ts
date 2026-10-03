@@ -74,6 +74,26 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(await readLogs()).toHaveLength(1);
   });
 
+  it("Energy training retains the Genin sensei bonus", async () => {
+    await trainee({ curEnergy: 100, regeneration: 0, senseiId: "sensei" });
+    const before = await readUser();
+    const result = await (await caller()).startTraining({ stat: "offence", energy: 100 });
+    expect(result.success).toBe(true);
+    const after = await readUser();
+    expect(after.offence - before.offence).toBeCloseTo(136.5);
+    expect(after.curEnergy).toBe(0);
+  });
+
+  it("Energy training retains reduced gains after joining a village", async () => {
+    await trainee({ rank: "JONIN", curEnergy: 100, regeneration: 0, joinedVillageAt: new Date() });
+    const before = await readUser();
+    const result = await (await caller()).startTraining({ stat: "offence", energy: 100 });
+    expect(result.success).toBe(true);
+    const after = await readUser();
+    expect(after.offence - before.offence).toBeCloseTo(65);
+    expect(after.curEnergy).toBe(0);
+  });
+
   it("rejects overspending without granting stats", async () => {
     await trainee({curEnergy: 5, regeneration: 0});
     const before = await readUser();

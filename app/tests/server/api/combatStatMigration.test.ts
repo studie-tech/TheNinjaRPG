@@ -47,3 +47,40 @@ describeWithDatabase("uniform combat-stat SQL migration", () => {
     expect(byId.capped!.sageMastery).toBe(10);
   });
 });
+
+
+const energyTable = "EnergyMigrationFixture";
+const energyPool = "EnergyPoolFixture";
+const energyGuard = "EnergyGuardFixture";
+const energyMigration = readFileSync(resolve(process.cwd(), "drizzle/migrations/0054_elite_titanium_man.sql"), "utf8")
+  .replaceAll("`UserData`", `\`${energyTable}\``)
+  .replaceAll("`_EnergyPool`", `\`${energyPool}\``)
+  .replaceAll("`_EnergyTrainingGuard`", `\`${energyGuard}\``)
+  .split("\n").filter(line => !line.startsWith("--")).join("\n")
+  .split(";").map(statement => statement.trim()).filter(Boolean);
+
+describeWithDatabase("Energy SQL cutover", () => {
+  afterEach(async () => {
+    for (const name of [energyTable, energyPool, energyGuard]) await runRawSql(`DROP TABLE IF EXISTS \`${name}\``);
+  });
+  it.each(["currentlyTraining", "currentlyTrainingMastery", "unstaged", "settled"])("guards %s sessions and fills staged capacities", async state => {
+    await runRawSql(`CREATE TABLE \`${energyTable}\` (userId varchar(30) PRIMARY KEY, currentlyTraining varchar(30), currentlyTrainingMastery varchar(30), trainingStartedAt datetime, lastCombatTrainingFinishedAt datetime)`);
+    await runRawSql(`CREATE TABLE \`${energyPool}\` (userId varchar(30) PRIMARY KEY, capacity double NOT NULL)`);
+    await runRawSql(`INSERT INTO \`${energyTable}\` (userId) VALUES ('player')`);
+    if (state === "currentlyTraining" || state === "currentlyTrainingMastery") await runRawSql(`UPDATE \`${energyTable}\` SET \`${state}\` = 'active'`);
+    if (state !== "unstaged") await runRawSql(`INSERT INTO \`${energyPool}\` VALUES ('player',675)`);
+    if (state !== "settled") {
+      const failingIndex = state === "unstaged" ? 3 : 2;
+      for (const statement of energyMigration.slice(0, failingIndex)) await runRawSql(statement);
+      await expect(runRawSql(energyMigration[failingIndex]!)).rejects.toThrow();
+      // No column removal or backfill is allowed before both guards pass.
+      await runRawSql(`SELECT currentlyTraining, trainingStartedAt FROM \`${energyTable}\``);
+      return;
+    }
+    for (const statement of energyMigration) await runRawSql(statement);
+    const db = await getTestDatabase();
+    const [rows] = await db.execute(sql.raw(`SELECT curEnergy,maxEnergy FROM \`${energyTable}\``)) as unknown as [Record<string, number>[], unknown];
+    expect(rows).toEqual([{curEnergy:675, maxEnergy:675}]);
+    await expect(runRawSql(`SELECT currentlyTraining FROM \`${energyTable}\``)).rejects.toThrow();
+  });
+});

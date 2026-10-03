@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { MAX_DAILY_TRAININGS } from "@/drizzle/constants";
-import type { Jutsu } from "@/drizzle/schema";
+import type { Jutsu, UserData } from "@/drizzle/schema";
 import {
+  getTrainingMultiplierBoost,
   jutsuRequirementWarning,
   masteryTrainingBlockMessage,
   statTrainingBlockMessage,
+  trainingMultiplier,
 } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import type { ZodAllTags } from "@/validators/combat";
@@ -103,5 +105,30 @@ describe("training start preconditions", () => {
     expect(
       masteryTrainingBlockMessage({ ...rested, currentlyTrainingMastery: "sageMastery" }),
     ).toBe("You are already training a mastery");
+  });
+});
+
+
+describe("player training modifiers", () => {
+  const trainee = {
+    rank: "GENIN",
+    senseiId: null,
+    joinedVillageAt: new Date("2020-01-01"),
+    trainingSpeed: "15min",
+  } as UserData;
+
+  it("preserves the sensei bonus independently of the mastery interval", () => {
+    const student = { ...trainee, senseiId: "sensei" };
+    expect(getTrainingMultiplierBoost(student)).toBeCloseTo(1.05);
+    expect(trainingMultiplier(student)).toBeCloseTo(0.0105);
+    expect(getTrainingMultiplierBoost({ ...student, trainingSpeed: "24hrs" })).toBeCloseTo(1.05);
+    expect(trainingMultiplier({ ...student, trainingSpeed: "24hrs" })).toBeCloseTo(1.008);
+  });
+
+  it("retains reduced training gains after joining a village", () => {
+    const joined = { ...trainee, rank: "JONIN" as const, joinedVillageAt: new Date() };
+    expect(getTrainingMultiplierBoost(joined)).toBe(0.5);
+    expect(trainingMultiplier(joined)).toBe(0.005);
+    expect(getTrainingMultiplierBoost({ ...joined, joinedVillageAt: trainee.joinedVillageAt })).toBe(1);
   });
 });

@@ -459,6 +459,8 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     api.train.startTraining.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
+        await utils.misc.getCaptcha.invalidate();
+        captchaForm.reset();
         if (result.success && result.data) {
           await utils.profile.getUser.invalidate();
           sendGTMEvent({ event: "stats_training" });
@@ -515,20 +517,15 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
-  // Captcha form, shared by both slots; captchaTarget records which stop it submits
+  // The same captcha verifies Energy spending and mastery collection.
   const captchaForm = useForm<CaptchaVerifySchema>({
     resolver: zodResolver(captchaVerifySchema),
     defaultValues: { guess: "" },
   });
-  const [captchaTarget, setCaptchaTarget] = useState<"combat" | "mastery">("combat");
 
   // Form handlers
   const onSubmit = captchaForm.handleSubmit((data) => {
-    if (captchaTarget === "mastery") {
-      stopMasteryTraining({ ...data, villageId: userData.villageId });
-    } else {
-      // Combat training submits the captcha directly with its Energy spend.
-    }
+    stopMasteryTraining({ ...data, villageId: userData.villageId });
   });
 
   const isPending = isStarting || isStartingMastery || isStoppingMastery || isChanging;
@@ -539,27 +536,19 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
   const iconClassName = "w-5 h-5 absolute top-1 right-1 text-blue-500";
   const { mastery_cap } = getUserCaps(userData.rank);
 
-  const renderCaptchaStop = (target: "combat" | "mastery") => {
+  const renderCaptchaStop = () => {
     if (!showCaptcha) {
       return (
         <XCircle
-          id={target === "combat" ? "tutorial-traininggrounds-stopTraining" : undefined}
           className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-          onClick={() =>
-            target === "combat"
-              ? undefined
-              : stopMasteryTraining({ villageId: userData.villageId })
-          }
+          onClick={() => stopMasteryTraining({ villageId: userData.villageId })}
         />
       );
     }
     if (!captcha) return <Loader explanation="Loading captcha" />;
     return (
       <Popover>
-        <PopoverTrigger
-          onClick={() => setCaptchaTarget(target)}
-          className="absolute top-4 right-4 z-30"
-        >
+        <PopoverTrigger className="absolute top-4 right-4 z-30">
           <XCircle className="h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
         </PopoverTrigger>
         <PopoverContent>
@@ -594,11 +583,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     );
   };
 
-  const renderTrainingOverlay = (
-    stat: CombatStatName | MasteryName,
-    startedAt: Date | null,
-    target: "combat" | "mastery",
-  ) => (
+  const renderTrainingOverlay = (stat: MasteryName, startedAt: Date | null) => (
     <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
       <div className="m-auto flex flex-col items-center text-center text-white">
         <p className="p-5 text-2xl">Training {getTrainingLabel(stat)}</p>
@@ -616,7 +601,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
               />
             </p>
           )}
-          {renderCaptchaStop(target)}
+          {renderCaptchaStop()}
         </div>
       </div>
     </div>
@@ -795,7 +780,6 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
             renderTrainingOverlay(
               userData.currentlyTrainingMastery,
               userData.masteryTrainingStartedAt,
-              "mastery",
             )}
         </div>
         {pendingOverlay}

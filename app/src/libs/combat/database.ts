@@ -237,6 +237,7 @@ export const updateBattle = async (
               .update(userData)
               .set({
                 battleId: null,
+                updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
                 maxEnergy:
                   newBattle.extraState.energyCapacity?.[teammate.userId] ??
                   teammate.maxEnergy,
@@ -1578,6 +1579,8 @@ export const updateUser = async (
         .update(userData)
         .set({
           maxEnergy: curBattle.extraState.energyCapacity?.[userId] ?? user.maxEnergy,
+          // Settlement invalidates delayed passive-regeneration snapshots.
+          updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
           curEnergy: sql`LEAST(${curBattle.extraState.energyCapacity?.[userId] ?? user.maxEnergy ?? userData.maxEnergy}, ${userData.curEnergy} + ${curBattle.extraState.energyRegeneration?.[userId] ?? user.regeneration ?? 0} * GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, NOW(3))) / ${REGEN_SECONDS * 1_000_000} + ${hasHumanOpponent && PvpBattleTypes.includes(curBattle.battleType) && !["SPARRING", "RANKED_SPARRING"].includes(curBattle.battleType) && curBattle.extraState.energyRewardEligible === true && (result.outcome === "Won" || result.outcome === "Lost") ? (result.didWin ? ENERGY_PVP_WIN_REWARD : ENERGY_PVP_LOSS_REWARD) : 0})`,
           experience: sql`experience + ${result.experience}`,
           earnedExperience: sql`earnedExperience + ${result.earnedExperience}`,
