@@ -314,6 +314,34 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     expect(await (await getTestDatabase()).query.paypalSubscription.findMany()).toHaveLength(1);
     expect((await (await callerFor(paypalRouter, OTHER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
   });
+  it.each([
+    ["GOLD", "NORMAL", "plan_test_normal", "5.00"],
+    ["GOLD", "SILVER", "plan_test_silver", "10.00"],
+    ["SILVER", "NORMAL", "plan_test_normal", "5.00"],
+  ] as const)("preserves paid PayPal %s while synchronizing and cancelling %s, then expires the higher tier", async (higher, lower, plan, amount) => {
+    const db = await getTestDatabase(); const paidAt = new Date(Date.now() - 86400000);
+    await db.update(userData).set({ federalStatus: higher }).where(eq(userData.userId, TARGET));
+    await db.insert(paypalSubscription).values({ id: "higher-sub", subscriptionId: "SUB_HIGH", createdById: BUYER, affectedUserId: TARGET, orderId: "SUB_HIGH", status: "ACTIVE", federalStatus: higher, updatedAt: paidAt });
+    const subscription = { id: "SUB_LOW", status: "ACTIVE", plan_id: plan, custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: paidAt.toISOString(), amount: { value: amount, currency_code: "USD" } } } };
+    subscriptions.set("SUB_LOW", subscription);
+    const caller = await callerFor(paypalRouter, BUYER);
+    expect((await caller.resolveSubscription({ subscriptionId: "SUB_LOW" })).success).toBe(true);
+    expect((await target())?.federalStatus).toBe(higher);
+    subscription.billing_info.last_payment.time = new Date().toISOString();
+    expect((await caller.resolveSubscription({ subscriptionId: "SUB_LOW" })).success).toBe(true);
+    expect((await target())?.federalStatus).toBe(higher);
+    expect((await caller.cancelPaypalSubscription({ subscriptionId: "SUB_LOW" })).success).toBe(true);
+    expect((await caller.resolveSubscription({ subscriptionId: "SUB_LOW" })).success).toBe(true);
+    expect((await target())?.federalStatus).toBe(higher);
+    expect(await db.query.paypalSubscription.findFirst({ where: eq(paypalSubscription.subscriptionId, "SUB_HIGH") })).toMatchObject({ status: "ACTIVE", federalStatus: higher, updatedAt: paidAt });
+    expect(await db.query.paypalSubscription.findFirst({ where: eq(paypalSubscription.subscriptionId, "SUB_LOW") })).toMatchObject({ status: "CANCELLED", federalStatus: lower });
+    await db.update(paypalSubscription).set({ updatedAt: new Date(Date.now() - 32 * 86400000) }).where(eq(paypalSubscription.subscriptionId, "SUB_HIGH"));
+    await reconcileFederalStatuses(db);
+    expect((await target())?.federalStatus).toBe(lower);
+    await db.update(paypalSubscription).set({ updatedAt: new Date(Date.now() - 32 * 86400000) }).where(eq(paypalSubscription.subscriptionId, "SUB_LOW"));
+    await reconcileFederalStatuses(db);
+    expect((await target())?.federalStatus).toBe("NONE");
+  });
   it("direct subscription recovery rejects an unknown paid plan without downgrading coverage", async () => {
     const db = await getTestDatabase(); await db.update(userData).set({ federalStatus: "GOLD" }).where(eq(userData.userId, TARGET));
     subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_unknown", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });

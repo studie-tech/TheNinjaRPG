@@ -1592,6 +1592,12 @@ export const setFederalStatusWithStoreFloor = async (
       ${env.NODE_ENV === "production" ? sql`AND ${stripePayment.isSandbox} = FALSE` : sql``}
       AND ${stripePayment.purchasedAt} <= CURRENT_TIMESTAMP(3)
       AND ${stripePayment.expiresAt} > CURRENT_TIMESTAMP(3)
+  ) OR EXISTS (
+    SELECT 1 FROM ${paypalSubscription}
+    WHERE ${paypalSubscription.affectedUserId} = ${userId}
+      AND ${paypalSubscription.status} = 'ACTIVE'
+      AND ${paypalSubscription.updatedAt} >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
+      AND ${paypalSubscription.federalStatus} = ${tier}
   )`;
   const paypalRank = rankOf(paypalStatus);
   // The same grace reconcileFederalStatuses applies, and for the same reason: cancelling on
@@ -1605,8 +1611,8 @@ export const setFederalStatusWithStoreFloor = async (
   // Only when the caller reports no PayPal tier at all. That is the case the grace exists
   // for: paypalFederalFloor counts only ACTIVE rows, so a web cancellation reads as NONE
   // while the period the player paid for is still running. A caller naming a real tier is
-  // asserting one, and holding a higher tier over it would change what the web flow has
-  // always done -- a subscriber moving to a lower tier has to land on it.
+  // asserting one; other current ACTIVE subscriptions are independently protected by
+  // hasTier, while this grace only preserves coverage when no PayPal tier was supplied.
   //
   // "At least this tier" rather than "exactly", because the column may have been raised
   // above the PayPal tier by a store receipt. Gated on equality, a store subscription
