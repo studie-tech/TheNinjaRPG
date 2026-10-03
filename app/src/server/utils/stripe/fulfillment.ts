@@ -91,6 +91,8 @@ export const invoiceCoverage = (invoice: Stripe.Invoice, checkout: Checkout) => 
     invoice.livemode !== stripeIsLive()
   )
     return null;
+  if (invoice.automatic_tax?.enabled && invoice.automatic_tax.status !== "complete")
+    return null;
   const line = invoice.lines.data.find(
     (candidate) =>
       candidate.pricing?.price_details?.price === checkout.priceId &&
@@ -189,6 +191,8 @@ export const fulfillStripeSession = async (
     throw new Error("Stripe session does not match checkout");
   if (session.status !== "complete" || session.payment_status !== "paid")
     return "pending" as const;
+  if (session.automatic_tax?.enabled && session.automatic_tax.status !== "complete")
+    throw new Error("Stripe tax calculation is incomplete");
   if (session.currency !== "usd" || session.amount_total !== checkout.amountCents)
     throw new Error("Stripe payment amount does not match checkout");
   if (checkout.federalStatus !== "NONE") {

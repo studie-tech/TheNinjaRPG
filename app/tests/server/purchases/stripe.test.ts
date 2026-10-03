@@ -13,6 +13,20 @@ describe("Stripe checkout and paid coverage validation", () => {
   it("uses a paid invoice's exact billing period", () => {
     expect(invoiceCoverage(invoice(), checkout)).toEqual({ purchasedAt: new Date(1700000000000), expiresAt: new Date(1702600000000) });
   });
+  it("retains the billed tier when Danish VAT is included in the fixed total", () => {
+    // Stripe keeps line.amount inclusive while subtotal excludes the VAT.
+    const taxed = invoice({ automatic_tax: { enabled: true, status: "complete" }, total_excluding_tax: 1200 });
+    const line = taxed.lines.data[0];
+    if (line) {
+      line.subtotal = 1200;
+      line.taxes = [{ amount: 300, tax_behavior: "inclusive" }] as Stripe.InvoiceLineItem.Tax[];
+    }
+    expect(invoiceCoverage(taxed, checkout)).not.toBeNull();
+    expect(invoiceCoverage(invoice({ automatic_tax: { enabled: true, status: "complete" }, total_excluding_tax: 1500 }), checkout)).not.toBeNull();
+  });
+  it.each(["failed", "requires_location_inputs"])("rejects an incomplete tax calculation: %s", (status) => {
+    expect(invoiceCoverage(invoice({ automatic_tax: { enabled: true, status } }), checkout)).toBeNull();
+  });
   it.each([{ status: "open" }, { currency: "dkk" }, { livemode: true }, { total: 1000 }, { lines: { data: [], has_more: false } }])("rejects unpaid, foreign, sandbox-mismatched and wrong-price invoices: %j", (changes) => {
     expect(invoiceCoverage(invoice(changes), checkout)).toBeNull();
   });
@@ -24,10 +38,12 @@ describe("Stripe checkout and paid coverage validation", () => {
     expect(invoiceCoverage(paginated, checkout)).toBeNull();
   });
   it("only accepts the configured fixed USD monthly price", () => {
-    const price = { active: true, currency: "usd", unit_amount: 1500, type: "recurring", recurring: { interval: "month", interval_count: 1 } } as Stripe.Price;
+    const price = { active: true, currency: "usd", tax_behavior: "inclusive", unit_amount: 1500, type: "recurring", recurring: { interval: "month", interval_count: 1 } } as Stripe.Price;
     expect(validFederalPrice(price, "GOLD")).toBe(true);
     expect(validFederalPrice({ ...price, currency: "dkk" }, "GOLD")).toBe(false);
     expect(validFederalPrice({ ...price, unit_amount: 1000 }, "GOLD")).toBe(false);
+    expect(validFederalPrice({ ...price, tax_behavior: "exclusive" }, "GOLD")).toBe(false);
+    expect(validFederalPrice({ ...price, tax_behavior: "unspecified" }, "GOLD")).toBe(false);
   });
   it("rejects fractional, negative and client-supplied monetary purchase inputs", () => {
     const input = { requestId: "abcdefghijklmnopqrstu", expectedUserId: "buyer", userId: "recipient", purchase: { type: "reputation", reputationPoints: 20 } };

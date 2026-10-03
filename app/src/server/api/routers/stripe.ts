@@ -260,6 +260,8 @@ export const stripeRouter = createTRPCRouter({
           metadata,
           allowed_payment_method_types: ["card"],
           adaptive_pricing: { enabled: false },
+          automatic_tax: { enabled: true },
+          billing_address_collection: "required",
           line_items: [
             {
               quantity: 1,
@@ -268,6 +270,7 @@ export const stripeRouter = createTRPCRouter({
                     price_data: {
                       currency: "usd",
                       unit_amount: amountCents,
+                      tax_behavior: "inclusive",
                       product_data: {
                         name: `${reputationPoints} reputation points — TheNinjaRPG`,
                       },
@@ -277,7 +280,7 @@ export const stripeRouter = createTRPCRouter({
             },
           ],
           ...(tier === "NONE"
-            ? { payment_intent_data: { metadata } }
+            ? { payment_intent_data: { metadata }, customer_creation: "always" }
             : { subscription_data: { metadata } }),
           success_url: `${stripeReturnUrl()}?stripe_session={CHECKOUT_SESSION_ID}`,
           cancel_url: `${stripeReturnUrl()}?stripe_cancelled=${saved.id}`,

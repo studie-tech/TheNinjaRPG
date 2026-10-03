@@ -31,6 +31,7 @@ export const validFederalPrice = (
 ) =>
   price.active &&
   price.currency === "usd" &&
+  price.tax_behavior === "inclusive" &&
   price.unit_amount === FEDERAL_MONTHLY_USD_CENTS[tier] &&
   price.recurring?.interval === "month" &&
   price.recurring.interval_count === 1 &&

@@ -41,6 +41,10 @@ describeWithDatabase("Stripe router guards and durable checkout terms", () => {
     expect(result.success).toBe(true);
     const params = create.mock.calls[0]?.[0];
     expect(params?.adaptive_pricing).toEqual({ enabled: false });
+    expect(params?.automatic_tax).toEqual({ enabled: true });
+    expect(params?.billing_address_collection).toBe("required");
+    expect(params?.customer_creation).toBe("always");
+    expect(params?.line_items?.[0]?.price_data?.tax_behavior).toBe("inclusive");
     expect(params?.allowed_payment_method_types).toEqual(["card"]);
     expect(params?.line_items?.[0]?.price_data?.currency).toBe("usd");
     expect(await (await getTestDatabase()).query.stripeCheckout.findFirst({ where: eq(stripeCheckout.id, purchase.requestId) })).toMatchObject({ createdById: BUYER, affectedUserId: RECIPIENT });

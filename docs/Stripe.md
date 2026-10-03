@@ -6,7 +6,7 @@ The web points shop supports Stripe Checkout alongside PayPal. Native shells use
 
 Apply the migration creating `StripeCheckout` and `StripePayment` before deploying application code. Federal reconciliation references these tables even when card checkout is disabled. Preserve both tables and their audit rows when rolling back application code.
 
-Use a dedicated Stripe account and separate live and sandbox configurations. Create three active, fixed USD recurring prices with a one-month interval, quantity one, and the exact amounts above. Configure these server-only variables:
+Use a dedicated Stripe account and separate live and sandbox configurations. Create three active, fixed USD recurring prices with a one-month interval, quantity one, explicit inclusive tax behavior, and the exact amounts above. Configure these server-only variables:
 
 | Variable | Value |
 | --- | --- |
@@ -29,6 +29,14 @@ Configure a Stripe webhook endpoint at `https://<application-host>/api/webhooks/
 The API key needs access to Checkout sessions (create/read/expire), prices (read), invoices (read), and subscriptions (read/update). Webhook requests must reach the application without deployment protection or an interactive login. Set `NEXT_PUBLIC_BASE_URL` to the environment's canonical application origin for return URLs.
 
 Payout currency and schedule are Stripe account settings, independent of the USD prices. Configure monthly automatic payouts and a fixed DKK reserve in Stripe's bank/payout settings when using a DKK settlement bank account. Bank verification and business activation must be completed by the account holder.
+
+## Tax
+
+Checkout enables Stripe Tax for both reputation payments and Federal Support subscriptions and collects the payer's billing address, including for gifts. One-time purchases create a Stripe customer to retain the tax location. All displayed USD prices include applicable tax: tax does not increase the charged total or reduce the purchased reputation or Federal tier. Federal prices with exclusive or unspecified tax behavior are rejected.
+
+Complete Stripe Tax settings in each environment before enabling checkout: business head-office address, a default product tax code appropriate to the digital game benefits, and active registrations matching the business's actual VAT/sales-tax registrations. Inline reputation products inherit the account's default product tax code; Federal products can have their own codes. Stripe calculates only for configured active registrations. A Danish domestic registration does not establish Union OSS registration; choose the EU small-seller option only when the business qualifies, considering sales through all providers.
+
+Stripe retains the calculation and tax breakdown for reporting. The application retains the fixed gross USD amount in its receipt ledger and validates completed automatic tax calculations before delivery. Filing and remitting VAT remain the business's responsibility unless a separate filing service is configured. Stripe Tax configuration does not change PayPal or native-store tax handling.
 
 ## Delivery and Federal Support
 
