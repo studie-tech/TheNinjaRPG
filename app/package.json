@@ -109,7 +109,7 @@
     "dotenv": "^18.0.8",
     "drizzle-orm": "0.45.4",
     "drizzle-zod": "^0.8.3",
-    "effect": "3.17.7",
+    "effect": "3.22.2",
     "embla-carousel-auto-height": "8.6.0",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
@@ -197,7 +197,8 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@types/react-cytoscapejs": {
       "cytoscape": "$cytoscape"
-    }
+    },
+    "effect": "3.22.2"
   },
   "resolutions": {
     "@types/react": "19.3.0",
