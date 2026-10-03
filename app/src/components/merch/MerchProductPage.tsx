@@ -8,6 +8,8 @@ import {
   formatMerchMoney,
   getMerchDesign,
   productFromPrice,
+  selectedMerchImage,
+  selectedMerchVariant,
 } from "@/libs/merch/catalog";
 import { MERCH_PRODUCT_DETAILS } from "@/libs/merch/products";
 import { MerchProductCard } from "./MerchCollection";
@@ -20,22 +22,15 @@ export function MerchProductPage({ handle }: { handle: string }) {
   const [showArt, setShowArt] = useState(false);
   const product = products.find((p) => p.handle === handle);
   const design = product ? getMerchDesign(product.designKey) : undefined;
-  const variant = product?.variants.find((v) =>
-    v.selectedOptions.every(
-      (o) =>
-        o.value ===
-        (selection[o.name] ??
-          (product.options.find((option) => option.name === o.name)?.values.length === 1
-            ? o.value
-            : undefined)),
-    ),
-  );
+  const variant = product ? selectedMerchVariant(product, selection) : undefined;
   const details = product ? MERCH_PRODUCT_DETAILS[product.kind] : undefined;
   const startingPrice = product ? productFromPrice(product) : null;
   const image =
     showArt && design
       ? { url: design.art, alt: `${design.name} artwork` }
-      : product?.images[0];
+      : product
+        ? selectedMerchImage(product, selection)
+        : undefined;
 
   if (loading)
     return (
@@ -127,9 +122,33 @@ export function MerchProductPage({ handle }: { handle: string }) {
                       (selection[option.name] ??
                         (option.values.length === 1 ? value : undefined)) === value
                     }
-                    onClick={() =>
-                      setSelection((current) => ({ ...current, [option.name]: value }))
+                    disabled={
+                      !product.variants.some(
+                        (item) =>
+                          item.available &&
+                          item.selectedOptions.every((selected) =>
+                            selected.name === option.name
+                              ? selected.value === value
+                              : /^(color|colour)$/i.test(option.name) ||
+                                !selection[selected.name] ||
+                                selected.value === selection[selected.name],
+                          ),
+                      )
                     }
+                    onClick={() => {
+                      setShowArt(false);
+                      setSelection((current) => {
+                        const next = { ...current, [option.name]: value };
+                        const exists = product.variants.some((item) =>
+                          item.selectedOptions.every(
+                            (selected) =>
+                              !next[selected.name] ||
+                              next[selected.name] === selected.value,
+                          ),
+                        );
+                        return exists ? next : { [option.name]: value };
+                      });
+                    }}
                   >
                     {value}
                   </button>

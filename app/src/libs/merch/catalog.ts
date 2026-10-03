@@ -24,3 +24,39 @@ export const productFromPrice = (product: MerchProduct) => {
   const prices = product.variants.flatMap((v) => (v.price ? [v.price] : []));
   return prices.sort((a, b) => Number(a.amount) - Number(b.amount))[0] ?? null;
 };
+
+export const selectedMerchVariant = (
+  product: MerchProduct,
+  selection: Record<string, string>,
+) =>
+  product.variants.find((variant) =>
+    variant.selectedOptions.every(
+      (option) =>
+        option.value ===
+        (selection[option.name] ??
+          (product.options.find((item) => item.name === option.name)?.values.length ===
+          1
+            ? option.value
+            : undefined)),
+    ),
+  );
+
+export const selectedMerchImage = (
+  product: MerchProduct,
+  selection: Record<string, string>,
+) => {
+  const variant = selectedMerchVariant(product, selection);
+  const color = product.options.find((option) => /^(color|colour)$/i.test(option.name));
+  const colorVariant =
+    color && selection[color.name]
+      ? product.variants.find(
+          (item) =>
+            item.image &&
+            item.selectedOptions.some(
+              (option) =>
+                option.name === color.name && option.value === selection[color.name],
+            ),
+        )
+      : undefined;
+  return variant?.image ?? colorVariant?.image ?? product.images[0];
+};

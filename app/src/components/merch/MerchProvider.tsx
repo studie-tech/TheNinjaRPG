@@ -163,7 +163,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
             title: product.title,
             variantTitle: variant.title,
             quantity,
-            image: product.images[0] ?? null,
+            image: variant.image ?? product.images[0] ?? null,
             price: null,
           },
         ];

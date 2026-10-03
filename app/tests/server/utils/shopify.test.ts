@@ -68,6 +68,7 @@ const product = (title: string) => ({
         availableForSale: true,
         price: money,
         selectedOptions: [{ name: "Size", value: "M" }],
+        image: null,
       },
     ],
     pageInfo: { hasNextPage: false },
@@ -75,6 +76,22 @@ const product = (title: string) => ({
 });
 
 describe("Shopify merch connection", () => {
+  it("keeps colour-specific variant mockups in the public catalogue", async () => {
+    const shirt = product("Ethereal Monarch — Organic T-Shirt");
+    const image = { url: "https://example.com/navy.jpg", altText: "Navy back print" };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { products: {
+        nodes: [{ ...shirt, variants: { ...shirt.variants,
+          nodes: [{ ...shirt.variants.nodes[0], image }] } }],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      } } }),
+    } as Response);
+    const catalogue = await fetchMerchCatalog();
+    expect(catalogue[0]?.variants[0]?.image).toEqual({
+      url: image.url, alt: image.altText,
+    });
+  });
   it("loads every catalogue page and excludes unrelated products", async () => {
     const request = vi
       .fn()

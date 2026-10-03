@@ -12,6 +12,7 @@ export const merchVariantSchema = z.object({
   available: z.boolean(),
   price: merchMoneySchema.nullable(),
   selectedOptions: z.array(merchOptionSchema),
+  image: merchImageSchema.nullable().default(null),
 });
 export const merchProductSchema = z.object({
   id: z.string(),
@@ -76,6 +77,7 @@ export const shopifyProductSchema = z.object({
         availableForSale: z.boolean(),
         price: merchMoneySchema,
         selectedOptions: z.array(merchOptionSchema),
+        image: shopifyImageSchema.nullable(),
       }),
     ),
     pageInfo: z.object({ hasNextPage: z.boolean() }),

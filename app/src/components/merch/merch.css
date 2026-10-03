@@ -670,6 +670,10 @@
   background: #314d3d;
   color: white;
 }
+.merch-option-values button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
 .merch-purchase {
   display: flex;
   gap: 12px;

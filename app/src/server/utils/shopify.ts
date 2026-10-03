@@ -44,7 +44,7 @@ export async function shopifyRequest(
 const PRODUCT_FIELDS = `id handle title description productType tags
   images(first: 12) { nodes { url altText } }
   options { name values }
-  variants(first: 250) { nodes { id title availableForSale price { amount currencyCode } selectedOptions { name value } } pageInfo { hasNextPage } }`;
+  variants(first: 250) { nodes { id title availableForSale price { amount currencyCode } selectedOptions { name value } image { url altText } } pageInfo { hasNextPage } }`;
 
 export async function fetchMerchCatalog(): Promise<MerchProduct[]> {
   const products: MerchProduct[] = [];
@@ -81,6 +81,9 @@ export async function fetchMerchCatalog(): Promise<MerchProduct[]> {
         variants: product.variants.nodes.map((v) => ({
           ...v,
           available: v.availableForSale,
+          image: v.image
+            ? { url: v.image.url, alt: v.image.altText || `${title} — ${v.title}` }
+            : null,
         })),
         tags: [
           ...product.tags,
