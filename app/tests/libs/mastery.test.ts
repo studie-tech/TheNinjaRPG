@@ -244,6 +244,47 @@ describe("effectiveMasteries", () => {
     expect(isWornGearDisabled(gear("chest", [], gated), user)).toBe(true);
   });
 
+  it.each([false, true])("counts an anchored gear chain regardless of inventory order (%s)", (reverse) => {
+    const items = [
+      gear("helm", [masteryTag()], { equipped: "HEAD" }),
+      gear("chest", [masteryTag()], { requiredNinjutsuMastery: 200 }),
+      gear("accessory", [masteryTag()], { requiredNinjutsuMastery: 300, equipped: "ITEM_1" }),
+    ];
+    const user = wearer({ ninjutsuMastery: 100, items: reverse ? items.reverse() : items });
+    expect(effectiveMasteries(user).ninjutsuMastery).toBe(400);
+    expect(hasMasteryRequirements(effectiveMasteries(user), { requiredNinjutsuMastery: 400 })).toBe(true);
+    for (const piece of items) expect(gearMissingMastery(piece, user)).toBeNull();
+    expect(effectiveMasteries(user, "helm").ninjutsuMastery).toBe(100);
+  });
+
+  it("does not count a piece's own buff toward its requirement", () => {
+    const armor = gear("chest", [masteryTag()], { requiredNinjutsuMastery: 200 });
+    const user = wearer({ ninjutsuMastery: 100, items: [armor] });
+    expect(effectiveMasteries(user).ninjutsuMastery).toBe(100);
+    expect(gearMissingMastery(armor, user)?.current).toBe(100);
+  });
+
+  it("applies independently usable penalties before admitting positive chains", () => {
+    const penalty = gear("penalty", [masteryTag({ type: "decreasemastery", power: 50 })]);
+    const helm = gear("helm", [masteryTag()], { equipped: "HEAD" });
+    const chest = gear("chest", [masteryTag()], { requiredNinjutsuMastery: 200 });
+    const user = wearer({ ninjutsuMastery: 100, items: [chest, helm, penalty] });
+    expect(effectiveMasteries(user).ninjutsuMastery).toBe(150);
+    expect(gearMissingMastery(chest, user)?.current).toBe(150);
+    expect(gearMissingMastery(helm, user)).toBeNull();
+    expect(gearMissingMastery(penalty, user)).toBeNull();
+  });
+
+  it("keeps penalty gear anchored in non-gear sources instead of disabling its support", () => {
+    const helm = gear("helm", [masteryTag()], { equipped: "HEAD", requiredNinjutsuMastery: 100 });
+    const chest = gear("chest", [masteryTag({ type: "decreasemastery", power: 150 })], { requiredNinjutsuMastery: 200 });
+    const user = wearer({ ninjutsuMastery: 100, items: [helm, chest] });
+    expect(effectiveMasteries(user).ninjutsuMastery).toBe(200);
+    expect(gearMissingMastery(helm, user)).toBeNull();
+    expect(gearMissingMastery(chest, user)).toEqual({ label: "Ninjutsu Mastery", required: 200, current: 100 });
+    expect(isWornGearDisabled(chest, user)).toBe(true);
+  });
+
   it("lets the bloodline unlock gear, which then counts", () => {
     const user = wearer({
       bloodline: { effects: [masteryTag({ power: 500 })] },

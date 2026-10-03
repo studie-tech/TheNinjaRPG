@@ -1,5 +1,9 @@
 import { eq } from "drizzle-orm";
 import { RANKED_PVP_STATS } from "@/drizzle/constants";
+import { refreshMasteries } from "@/libs/combat/util";
+import { effectiveMasteries } from "@/libs/mastery";
+import { jutsuRequirementWarning } from "@/libs/train";
+import type { UserWithRelations } from "@/routers/profile";
 import { manuallyAssignUserStats } from "@/libs/profile";
 import { validateItemLoadout } from "@/libs/ranked_pvp";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -234,6 +238,40 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
       expect(equipped.find((ui) => ui.id === broken.id)?.equipped).toBe("NONE");
     },
   );
+
+  it("keeps jutsu unlocked by an anchored gear chain during battle preparation", async () => {
+    const { raw, essentials } = await seedLobby(true);
+    const armor = raw.items[0]!;
+    const helm = {
+      ...armor,
+      id: "owned-helm",
+      equipped: "HEAD" as const,
+      item: { ...armor.item, id: "helm", effects: armor.item.effects.map((tag) => ({ ...tag, power: 100 })) },
+    };
+    const chest = {
+      ...armor,
+      item: { ...armor.item, requiredNinjutsuMastery: 200 },
+    };
+    raw.items = [chest, helm];
+    expect(effectiveMasteries(raw).ninjutsuMastery).toBe(600);
+    expect(jutsuRequirementWarning(raw.jutsus[0]!.jutsu, raw as unknown as NonNullable<UserWithRelations>, raw.items)).toBe("");
+    const result = await processUsersForBattle(await getTestDatabase(), {
+      users: [raw],
+      ...essentials,
+      wars: essentials.activeWars,
+      battleType: "COMBAT",
+      hide: false,
+      isSummon: false,
+      width: 13,
+      height: 9,
+    });
+    const actor = result.usersState[0]!;
+    expect(actor.items.find((ui) => ui.id === chest.id)?.equipped).toBe("CHEST");
+    expect(actor.items.find((ui) => ui.id === helm.id)?.equipped).toBe("HEAD");
+    expect(actor.jutsus.map((uj) => uj.jutsuId)).toContain("gated");
+    refreshMasteries(result.usersState, result.userEffects);
+    expect(actor.ninjutsuMastery).toBe(600);
+  });
 
   it("persists only eligible jutsu and keeps usable entries in the selected loadout", async () => {
     await seedLobby();

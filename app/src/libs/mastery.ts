@@ -114,15 +114,19 @@ export const missingMasteryRequirement = (
  * Masteries as the pre-battle gates see them: the stored values, capped at the user's rank
  * as battle caps them, plus the increasemastery
  * and decreasemastery tags processUsersForBattle applies from the bloodline, skills and worn
- * gear, sized as the combat tags size them. Gear counts only when it clears its own gates
- * without any gear, so two pieces cannot unlock each other.
+ * gear, sized as the combat tags size them. Positive gear buffs can unlock more gear,
+ * starting from non-gear sources, so self-unlocks and unsupported cycles cannot count.
+ * Gear with mastery penalties stays anchored in non-gear sources: admitting a penalty
+ * later could invalidate the gear supporting it.
  * @param user - stored masteries and the sources of their tags
  * @param excludeUserItemId - the gear being gated, so it cannot unlock itself
  */
 export const effectiveMasteries = (
   user: MasteryBuffUser,
   excludeUserItemId?: string,
-): MasteryStatSource => {
+): MasteryStatSource => resolveMasteryGear(user, excludeUserItemId).masteries;
+
+const resolveMasteryGear = (user: MasteryBuffUser, excludeUserItemId?: string) => {
   const cap = user.rank ? getUserCaps(user.rank).mastery_cap : Number.POSITIVE_INFINITY;
   const stored = Object.fromEntries(
     MasteryNames.map((name) => [name, Math.min(user[name], cap)]),
@@ -136,24 +140,81 @@ export const effectiveMasteries = (
     );
     addMasteryTags(withoutGear, stored, ownTags, user.level);
   }
-  const result = { ...withoutGear };
-  for (const ui of user.items ?? []) {
-    if (ui.id === excludeUserItemId) continue;
-    if (!isActiveWornGear(ui, user.bloodlineId)) continue;
-    if (!hasMasteryRequirements(withoutGear, ui.item)) continue;
-    // AI gear never earns item levels, so it scales with the wearer as in battle
-    addMasteryTags(result, stored, wornGearTags(ui), user.isAi ? user.level : ui.level);
+  const candidates = (user.items ?? [])
+    .filter((ui) => isActiveWornGear(ui, user.bloodlineId))
+    .map((ui) => ({ ui, delta: gearMasteryDelta(ui, user, stored) }));
+  const penalties = candidates.filter(
+    ({ ui, delta }) =>
+      MasteryNames.some((name) => delta[name] < 0) &&
+      hasMasteryRequirements(withoutGear, ui.item),
+  );
+  // Penalties cannot borrow gear buffs; count other independently eligible penalties
+  // conservatively so disabling a supporting piece never leaves an enabled cycle.
+  const penaltyGate = (id: string) => {
+    const result = { ...withoutGear };
+    for (const { ui, delta } of penalties) {
+      if (ui.id === id) continue;
+      for (const name of MasteryNames) result[name] += Math.min(delta[name], 0);
+    }
+    return result;
+  };
+  const masteries = { ...withoutGear };
+  for (const { ui, delta } of penalties) {
+    if (
+      ui.id !== excludeUserItemId &&
+      hasMasteryRequirements(penaltyGate(ui.id), ui.item)
+    ) {
+      addMasteryDelta(masteries, delta);
+    }
   }
-  return result;
+  let pending = candidates.filter(
+    ({ ui, delta }) =>
+      ui.id !== excludeUserItemId && MasteryNames.every((name) => delta[name] >= 0),
+  );
+  while (pending.length > 0) {
+    // Admit a whole layer before adding its buffs, independent of inventory order.
+    const enabled = pending.filter(({ ui }) =>
+      hasMasteryRequirements(masteries, ui.item),
+    );
+    if (enabled.length === 0) break;
+    for (const { delta } of enabled) addMasteryDelta(masteries, delta);
+    pending = pending.filter((candidate) => !enabled.includes(candidate));
+  }
+  return { masteries, stored, penaltyGate };
+};
+
+const addMasteryDelta = (target: MasteryStatSource, delta: MasteryStatSource) => {
+  for (const name of MasteryNames) target[name] += delta[name];
+};
+
+const gearMasteryDelta = (
+  ui: MasteryGear,
+  user: MasteryBuffUser,
+  stored: MasteryStatSource,
+) => {
+  const delta = Object.fromEntries(
+    MasteryNames.map((name) => [name, 0]),
+  ) as MasteryStatSource;
+  // AI gear never earns item levels, so it scales with the wearer as in battle.
+  addMasteryTags(delta, stored, wornGearTags(ui), user.isAi ? user.level : ui.level);
+  return delta;
 };
 
 /**
- * The first mastery gate equipped gear misses once every other source is counted, or null.
+ * The first mastery gate equipped gear misses, or null. Positive gear counts other
+ * enabled sources; penalty gear uses the conservative non-gear gate above.
  * @param ui - the equipped gear
  * @param wearer - its owner with the sources of their mastery tags
  */
-export const gearMissingMastery = (ui: MasteryGear, wearer: MasteryBuffUser) =>
-  missingMasteryRequirement(effectiveMasteries(wearer, ui.id), ui.item);
+export const gearMissingMastery = (ui: MasteryGear, wearer: MasteryBuffUser) => {
+  const resolved = resolveMasteryGear(wearer, ui.id);
+  const delta = gearMasteryDelta(ui, wearer, resolved.stored);
+  const gate =
+    isWornGear(ui.item) && MasteryNames.some((name) => delta[name] < 0)
+      ? resolved.penaltyGate(ui.id)
+      : resolved.masteries;
+  return missingMasteryRequirement(gate, ui.item);
+};
 
 /**
  * Whether worn gear stops working for a battle: durability at the floor, or a mastery gate
