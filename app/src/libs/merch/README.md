@@ -12,6 +12,8 @@ Publish curated products to the Headless sales channel. Products match a design 
 
 Cart bearer IDs stay in an HTTP-only, same-site cookie. Regular cart responses contain line items and totals only. The checkout mutation refreshes the cart and validates its destination before returning the checkout URL. Customer and payment details are entered in Shopify checkout.
 
+`/merch/cart` opens the existing bag over the collection and restores its Shopify cart through the same cookie. Shopify storefront redirects can use this route for cart links and `/merch` for collection links. Redirect only storefront pages, preserving Shopify checkout and policy pages, and enable redirects after the game routes are deployed.
+
 Without credentials, development displays the curated Printful review catalogue and a local review bag. Production displays a coming-soon collection and disables checkout. Review prices are deliberately unset. The preview fixture is not an inventory or availability guarantee.
 
 `designs.json` contains the graphic descriptions, lore and artwork interpretation. `products.ts` contains material, care and sizing information for the selected blanks, with manufacturer links. Confirm region-dependent compositions and sizing when changing a blank. Artwork is hosted on UploadThing and served through the existing Bunny CDN. `IMG_MERCH_ARTWORK` in `drizzle/constants.ts` maps design keys to hosted URLs; no artwork binaries are stored in `public`.

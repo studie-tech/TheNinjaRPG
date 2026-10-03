@@ -19,6 +19,7 @@ import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/locals
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { formatMerchMoney } from "@/libs/merch/catalog";
+import { usePublicPathname } from "@/utils/routing";
 import {
   type MerchCartLine,
   type MerchProduct,
@@ -50,6 +51,7 @@ export const useMerch = () => {
 };
 
 export function MerchProvider({ children }: { children: ReactNode }) {
+  const pathname = usePublicPathname();
   const catalog = api.merch.getCatalog.useQuery(undefined, {
     staleTime: 60000,
     refetchOnWindowFocus: false,
@@ -85,6 +87,10 @@ export function MerchProvider({ children }: { children: ReactNode }) {
     const result = await cart.refetch();
     if (result.isSuccess) setNeedsCartRefresh(false);
   };
+
+  useEffect(() => {
+    if (pathname === "/merch/cart") setBagOpen(true);
+  }, [pathname]);
 
   useEffect(() => {
     try {
