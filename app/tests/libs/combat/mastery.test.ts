@@ -414,6 +414,33 @@ describe("availableUserActions mastery gating", () => {
     expect(canUse(battle, "actor", GATED_BLADE)).toBe(true);
   });
 
+  describe.each(["RANKED_PVP", "RANKED_SPARRING"] as const)("%s", (battleType) => {
+    it.each(["jutsu", "armor"] as const)(
+      "keeps gated actions available after a mastery penalty from %s, but hides broken weapons",
+      (fromType) => {
+        const battle = makeBattle(
+          [makeActor()],
+          [masteryEffect("decreasemastery", { fromType }, { power: 900 })],
+          2,
+        );
+        battle.battleType = battleType;
+        expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
+        expect(canUse(battle, "actor", GATED_BLADE)).toBe(true);
+
+        const { newBattle } = applyEffects(battle, "actor");
+        const actor = actorOf(newBattle);
+        expect(actor?.ninjutsuMastery).toBe(100);
+        expect(canUse(newBattle, "actor", GATED_JUTSU)).toBe(true);
+        expect(canUse(newBattle, "actor", GATED_BLADE)).toBe(true);
+
+        const weapon = actor?.items.find((item) => item.itemId === GATED_BLADE);
+        if (weapon) weapon.durability = 0;
+        expect(canUse(newBattle, "actor", GATED_JUTSU)).toBe(true);
+        expect(canUse(newBattle, "actor", GATED_BLADE)).toBe(false);
+      },
+    );
+  });
+
   it("locks gated actions once a decreasemastery lands", () => {
     const battle = makeBattle(
       [makeActor({ ninjutsuMastery: 600 })],
