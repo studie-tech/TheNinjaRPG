@@ -8,8 +8,10 @@ import {
   paypalSubscription,
   paypalTransaction,
   recruitmentRewards,
+  stripePayment,
   userData,
 } from "@/drizzle/schema";
+import { env } from "@/env/server.mjs";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -18,6 +20,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
+import { upgradeStripeFederalWithReps } from "@/server/utils/stripe/fulfillment";
 import {
   calcFedUgradeCost,
   dollars2reps,
@@ -207,20 +210,41 @@ export const paypalRouter = createTRPCRouter({
   getRecentRepsCount: protectedProcedure
     .input(z.object({ userId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const result = await ctx.drizzle
-        .select({
-          count: sql<number>`SUM(${paypalTransaction.reputationPoints})`.mapWith(
-            Number,
+      const [paypal, stripe] = await Promise.all([
+        ctx.drizzle
+          .select({
+            count:
+              sql<number>`COALESCE(SUM(${paypalTransaction.reputationPoints}), 0)`.mapWith(
+                Number,
+              ),
+          })
+          .from(paypalTransaction)
+          .where(
+            and(
+              eq(paypalTransaction.createdById, input.userId),
+              gte(paypalTransaction.createdAt, sql`NOW() - INTERVAL 30 DAY`),
+            ),
           ),
-        })
-        .from(paypalTransaction)
-        .where(
-          and(
-            eq(paypalTransaction.createdById, input.userId),
-            gte(paypalTransaction.createdAt, sql`NOW() - INTERVAL 30 DAY`),
+        ctx.drizzle
+          .select({
+            count:
+              sql<number>`COALESCE(SUM(${stripePayment.reputationPoints}), 0)`.mapWith(
+                Number,
+              ),
+          })
+          .from(stripePayment)
+          .where(
+            and(
+              eq(stripePayment.createdById, input.userId),
+              gte(stripePayment.purchasedAt, sql`NOW() - INTERVAL 30 DAY`),
+              sql`${stripePayment.grantedAt} IS NOT NULL`,
+              ...(env.NODE_ENV === "production"
+                ? [eq(stripePayment.isSandbox, false)]
+                : []),
+            ),
           ),
-        );
-      return result?.[0]?.count ?? 0;
+      ]);
+      return (paypal[0]?.count ?? 0) + (stripe[0]?.count ?? 0);
     }),
   // Get all paypal transactions by this user
   getPaypalTransactions: protectedProcedure
@@ -341,9 +365,13 @@ export const paypalRouter = createTRPCRouter({
         ),
       });
       // If we could not find in paypal
-      if (!subscription) {
-        return errorResponse("Could not find such a subscription");
-      }
+      if (!subscription)
+        return await upgradeStripeFederalWithReps(
+          ctx.drizzle,
+          ctx.userId,
+          target.federalStatus,
+          input.plan,
+        );
       // Get cost, and ensure that we are actually upgrading
       const cost = calcFedUgradeCost(subscription.federalStatus, input.plan);
       if (!cost || cost < 0) {

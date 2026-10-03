@@ -1959,6 +1959,45 @@ export const notificationRelations = relations(notification, ({ one }) => ({
   }),
 }));
 
+/** Server-authored checkout terms; Stripe metadata contains only this durable id. */
+export const stripeCheckout = mysqlTable("StripeCheckout", {
+  closedAt: datetime("closedAt", { mode: "date", fsp: 3 }),
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  sessionId: varchar("sessionId", { length: 191 }).unique(),
+  createdById: varchar("createdById", { length: 191 }).notNull(),
+  affectedUserId: varchar("affectedUserId", { length: 191 }).notNull(),
+  reputationPoints: int("reputationPoints").default(0).notNull(),
+  amountCents: int("amountCents").notNull(),
+  federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses).default("NONE").notNull(),
+  priceId: varchar("priceId", { length: 191 }),
+  subscriptionId: varchar("subscriptionId", { length: 191 }).unique(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+}, (table) => ({
+  buyerIdx: index("StripeCheckout_createdById_idx").on(table.createdById),
+  recipientIdx: index("StripeCheckout_affectedUserId_idx").on(table.affectedUserId),
+}));
+
+/** A payment intent or paid invoice has one receipt and one atomic delivery marker. */
+export const stripePayment = mysqlTable("StripePayment", {
+  federalStatusOverride: mysqlEnum("federalStatusOverride", consts.FederalStatuses),
+  isSandbox: boolean("isSandbox").default(false).notNull(),
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  checkoutId: varchar("checkoutId", { length: 191 }).notNull(),
+  createdById: varchar("createdById", { length: 191 }).notNull(),
+  affectedUserId: varchar("affectedUserId", { length: 191 }).notNull(),
+  amountCents: int("amountCents").notNull(),
+  reputationPoints: int("reputationPoints").default(0).notNull(),
+  federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses).default("NONE").notNull(),
+  purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 }).notNull(),
+  expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
+  grantedAt: datetime("grantedAt", { mode: "date", fsp: 3 }),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+}, (table) => ({
+  buyerIdx: index("StripePayment_createdById_idx").on(table.createdById),
+  recipientIdx: index("StripePayment_affectedUserId_idx").on(table.affectedUserId),
+  checkoutIdx: index("StripePayment_checkoutId_idx").on(table.checkoutId),
+}));
+
 export const paypalSubscription = mysqlTable(
   "PaypalSubscription",
   {

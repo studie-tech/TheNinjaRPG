@@ -37,6 +37,7 @@ import {
   storePurchase,
   storePurchaseTransfer,
   storeUserIdAlias,
+  stripePayment,
   userData,
 } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
@@ -1077,7 +1078,7 @@ const applyFederalRevocation = async (
     if (!settled || settled.revokedAt) break;
     ownerUserId = settled.userId;
   }
-  // Then fall back to whatever still vouches -- both sources, not just PayPal, for every
+  // Then fall back to whatever still vouches -- all payment sources, for every
   // account the receipt sat under. The bound above deliberately spares a receipt bought
   // after the expiry, and reading only PayPal here would drop the tier anyway and leave a
   // paying subscriber with a live receipt and nothing to show for it, until their next
@@ -1528,7 +1529,7 @@ const paypalFederalFloor = async (
  * player is still a subscriber — `revokedAt` is what separates the two, stamped by
  * `revokeFederalStatus` when the store reports the subscription has ended. Reading it here
  * rather than inferring from the player's current status is what lets the PayPal writers
- * take a tier away once both sources have finished, while still refusing to take one away
+ * take a tier away once all sources have finished, while still refusing to take one away
  * from a store subscription that is very much alive.
  */
 export const storeFederalFloor = async (
@@ -1583,6 +1584,14 @@ export const setFederalStatusWithStoreFloor = async (
     SELECT 1 FROM ${storePurchase}
     WHERE ${liveStoreReceipt}
       AND ${storePurchase.federalStatus} = ${tier}
+  ) OR EXISTS (
+    SELECT 1 FROM ${stripePayment}
+    WHERE ${stripePayment.affectedUserId} = ${userId}
+      AND COALESCE(${stripePayment.federalStatusOverride}, ${stripePayment.federalStatus}) = ${tier}
+      AND ${stripePayment.grantedAt} IS NOT NULL
+      ${env.NODE_ENV === "production" ? sql`AND ${stripePayment.isSandbox} = FALSE` : sql``}
+      AND ${stripePayment.purchasedAt} <= CURRENT_TIMESTAMP(3)
+      AND ${stripePayment.expiresAt} > CURRENT_TIMESTAMP(3)
   )`;
   const paypalRank = rankOf(paypalStatus);
   // The same grace reconcileFederalStatuses applies, and for the same reason: cancelling on
@@ -1631,7 +1640,7 @@ export const setFederalStatusWithStoreFloor = async (
  * Re-derive every non-NONE or currently subscribed player's tier in one correlated write.
  *
  * This is the bulk cleaner counterpart of `setFederalStatusWithStoreFloor`: GOLD wins over
- * SILVER, which wins over NORMAL, across both active PayPal rows and live store receipts.
+ * SILVER, which wins over NORMAL, across active PayPal rows, paid Stripe periods and live store receipts.
  * It therefore performs downgrades as well as clearing or restoring a status.
  */
 export const reconcileFederalStatuses = async (
@@ -1675,6 +1684,14 @@ export const reconcileFederalStatuses = async (
             AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
             AND p.federalStatus = 'GOLD'
         )
+      ) OR EXISTS (
+        SELECT 1 FROM ${stripePayment} sp
+        WHERE sp.affectedUserId = ${userData.userId}
+          AND COALESCE(sp.federalStatusOverride, sp.federalStatus) = 'GOLD'
+          AND sp.grantedAt IS NOT NULL
+          ${env.NODE_ENV === "production" ? sql`AND sp.isSandbox = FALSE` : sql``}
+          AND sp.purchasedAt <= CURRENT_TIMESTAMP(3)
+          AND sp.expiresAt > CURRENT_TIMESTAMP(3)
       ) THEN 'GOLD'
       WHEN EXISTS (
         SELECT 1 FROM ${paypalSubscription} p
@@ -1703,6 +1720,14 @@ export const reconcileFederalStatuses = async (
             AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
             AND p.federalStatus = 'SILVER'
         )
+      ) OR EXISTS (
+        SELECT 1 FROM ${stripePayment} sp
+        WHERE sp.affectedUserId = ${userData.userId}
+          AND COALESCE(sp.federalStatusOverride, sp.federalStatus) = 'SILVER'
+          AND sp.grantedAt IS NOT NULL
+          ${env.NODE_ENV === "production" ? sql`AND sp.isSandbox = FALSE` : sql``}
+          AND sp.purchasedAt <= CURRENT_TIMESTAMP(3)
+          AND sp.expiresAt > CURRENT_TIMESTAMP(3)
       ) THEN 'SILVER'
       WHEN EXISTS (
         SELECT 1 FROM ${paypalSubscription} p
@@ -1731,11 +1756,21 @@ export const reconcileFederalStatuses = async (
             AND p.updatedAt >= CURRENT_TIMESTAMP(3) - INTERVAL 31 DAY
             AND p.federalStatus = 'NORMAL'
         )
+      ) OR EXISTS (
+        SELECT 1 FROM ${stripePayment} sp
+        WHERE sp.affectedUserId = ${userData.userId}
+          AND COALESCE(sp.federalStatusOverride, sp.federalStatus) = 'NORMAL'
+          AND sp.grantedAt IS NOT NULL
+          ${env.NODE_ENV === "production" ? sql`AND sp.isSandbox = FALSE` : sql``}
+          AND sp.purchasedAt <= CURRENT_TIMESTAMP(3)
+          AND sp.expiresAt > CURRENT_TIMESTAMP(3)
       ) THEN 'NORMAL'
       ELSE 'NONE'
     END`,
     })
     .where(sql`${userData.federalStatus} != 'NONE'
+      OR EXISTS (SELECT 1 FROM ${stripePayment} sp WHERE sp.affectedUserId = ${userData.userId} AND sp.grantedAt IS NOT NULL ${env.NODE_ENV === "production" ? sql`AND sp.isSandbox = FALSE` : sql``} AND sp.purchasedAt <= CURRENT_TIMESTAMP(3)
+          AND sp.expiresAt > CURRENT_TIMESTAMP(3))
       OR EXISTS (
         SELECT 1 FROM ${paypalSubscription} p
         WHERE p.affectedUserId = ${userData.userId}
