@@ -261,7 +261,15 @@ const ReputationStore = (props: { currency: string }) => {
       }
     },
   });
-  const { mutateAsync: createPaypalOrder } = api.paypal.createOrder.useMutation();
+  const { mutateAsync: createPaypalOrder } = api.paypal.createOrder.useMutation({
+    onSuccess: (data) => {
+      // Renew only after the server confirms this reservation cannot be captured.
+      if (!data.success && data.restartCheckout) {
+        invoiceIdRef.current = nanoid();
+        paypalTermsRef.current = null;
+      }
+    },
+  });
   const { mutateAsync: cancelPaypalOrder } = api.paypal.cancelOrder.useMutation();
 
   const { data: purchasedReps } = api.paypal.getRecentRepsCount.useQuery(

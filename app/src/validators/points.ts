@@ -58,3 +58,14 @@ export const federalUpgradeSchema = z.strictObject({
 export const paypalCaptureResponseSchema = baseServerResponse.extend({
   restartFunding: z.boolean().optional(),
 });
+
+export const paypalCheckoutResponseSchema = z.discriminatedUnion("success", [
+  baseServerResponse.extend({
+    success: z.literal(true),
+    orderId: z.string(),
+  }),
+  baseServerResponse.extend({
+    success: z.literal(false),
+    restartCheckout: z.boolean().optional(),
+  }),
+]);

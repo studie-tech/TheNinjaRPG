@@ -44,6 +44,7 @@ import {
   federalUpgradeSchema,
   paypalCaptureResponseSchema,
   paypalCheckoutIdSchema,
+  paypalCheckoutResponseSchema,
   paypalCheckoutSchema,
   paypalOrderSchema,
   paypalSubscriptionIdSchema,
@@ -117,6 +118,7 @@ type PaypalTransaction = {
 export const paypalRouter = createTRPCRouter({
   createOrder: protectedProcedure
     .input(paypalCheckoutSchema)
+    .output(paypalCheckoutResponseSchema)
     .mutation(async ({ ctx, input }) => {
       if (isNativeUserAgent(ctx.userAgent))
         return errorResponse("Use the in-app store to purchase in the native app.");
@@ -135,6 +137,13 @@ export const paypalRouter = createTRPCRouter({
           ]);
           if (!buyer || buyer.isBanned || !recipient || recipient.isBanned)
             return false;
+          if (
+            existing?.createdById === ctx.userId &&
+            (existing.status === "CANCELLED" ||
+              (existing.status === "RESERVED" &&
+                existing.createdAt.getTime() <= Date.now() - 3 * 3600000))
+          )
+            return "restart";
           if (existing)
             return (
               existing.createdById === ctx.userId &&
@@ -166,6 +175,11 @@ export const paypalRouter = createTRPCRouter({
           return true;
         }),
       );
+      if (reserved === "restart")
+        return {
+          ...errorResponse("Checkout was cancelled or expired. Please try again."),
+          restartCheckout: true,
+        };
       if (!reserved)
         return errorResponse(
           "This purchase exceeds your remaining monthly allowance, or checkout changed. Cancel unfinished checkout and try again.",
@@ -175,7 +189,7 @@ export const paypalRouter = createTRPCRouter({
       });
       if (existing?.orderId)
         return {
-          success: true,
+          success: true as const,
           message: "Continue checkout",
           orderId: existing.orderId,
         };
@@ -206,10 +220,19 @@ export const paypalRouter = createTRPCRouter({
         const current = await ctx.drizzle.query.paypalTransaction.findFirst({
           where: eq(paypalTransaction.id, input.requestId),
         });
+        if (current?.status === "CANCELLED")
+          return {
+            ...errorResponse("Checkout was cancelled. Please try again."),
+            restartCheckout: true,
+          };
         if (current?.orderId !== order.id || current.status !== "RESERVED")
           return errorResponse("Checkout was cancelled. Start checkout again.");
       }
-      return { success: true, message: "Continue checkout", orderId: order.id };
+      return {
+        success: true as const,
+        message: "Continue checkout",
+        orderId: order.id,
+      };
     }),
   cancelOrder: protectedProcedure
     .input(paypalCheckoutIdSchema)

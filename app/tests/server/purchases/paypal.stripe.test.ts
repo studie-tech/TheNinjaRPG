@@ -151,6 +151,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     await expect(paypal.captureOrder({ orderId: order.orderId })).rejects.toThrow("capture response lost");
     await db.update(paypalTransaction).set({ createdAt: new Date(Date.now() - 4 * 3600000) }).where(eq(paypalTransaction.id, input.requestId));
     expect(await db.query.paypalTransaction.findFirst()).toMatchObject({ status: "CAPTURING" });
+    expect(await paypal.createOrder(input)).not.toHaveProperty("restartCheckout", true);
     expect((await paypal.cancelOrder({ requestId: input.requestId })).success).toBe(false);
     expect((await (await callerFor(stripeRouter, BUYER)).createCheckout(stripeRequest(2000))).success).toBe(false);
     captureFailure = undefined;
@@ -181,7 +182,7 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     createResponseFails = true;
     await expect(caller.createOrder(input)).rejects.toThrow("response lost");
     const result = await caller.createOrder(input);
-    expect(result.success).toBe(true); expect(orders.size).toBe(1);
+    expect(result.success).toBe(true); expect(result).not.toHaveProperty("restartCheckout", true); expect(orders.size).toBe(1);
     const units = [...orders.values()][0]?.purchase_units as { amount: unknown; custom_id: string }[];
     expect(units[0]).toMatchObject({ amount: { currency_code: "USD", value: reps2dollars(20).toFixed(2) }, custom_id: `${BUYER}-${TARGET}` });
     expect((await caller.createOrder({ ...input, userId: OTHER })).success).toBe(false);
@@ -221,7 +222,24 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     const db = await getTestDatabase(); const caller = await callerFor(paypalRouter, BUYER); const input = request(3000); await caller.createOrder(input);
     await db.update(paypalTransaction).set({ status: "CAPTURING" }).where(eq(paypalTransaction.id, input.requestId));
     expect((await caller.cancelOrder({ requestId: input.requestId })).success).toBe(false);
+    expect(await caller.createOrder(input)).not.toHaveProperty("restartCheckout", true);
     expect((await (await callerFor(stripeRouter, BUYER)).createCheckout(stripeRequest(2000))).success).toBe(false);
+  });
+  it.each(["cancelled", "expired"])("renews checkout after a confirmed %s reservation", async (state) => {
+    const db = await getTestDatabase(); const caller = await callerFor(paypalRouter, BUYER); const input = request();
+    const first = await caller.createOrder(input);
+    if (!("orderId" in first)) throw new Error("missing order");
+    if (state === "cancelled") expect((await caller.cancelOrder({ requestId: input.requestId })).success).toBe(true);
+    else await db.update(paypalTransaction).set({ createdAt: new Date(Date.now() - 4 * 3600000) }).where(eq(paypalTransaction.id, input.requestId));
+    const count = fetchProvider.mock.calls.length;
+    expect(await caller.createOrder(input)).toMatchObject({ success: false, restartCheckout: true });
+    expect(fetchProvider.mock.calls.length).toBe(count);
+    expect((await caller.captureOrder({ orderId: first.orderId })).success).toBe(false);
+    const next = await caller.createOrder({ ...input, requestId: nanoid() });
+    expect(next.success).toBe(true);
+    if (!("orderId" in next)) throw new Error("missing renewed order");
+    expect(next.orderId).not.toBe(first.orderId);
+    expect(await (await callerFor(paypalRouter, OTHER)).createOrder(input)).not.toHaveProperty("restartCheckout", true);
   });
   it("rejects capture and cancellation by another account", async () => {
     const caller = await callerFor(paypalRouter, BUYER); const input = request(); const result = await caller.createOrder(input);
