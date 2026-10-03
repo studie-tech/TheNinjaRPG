@@ -42,3 +42,7 @@ Various `make` commands are available; type `make help` at the root directory fo
 # :lock: Licensing
 
 This source code is released with [no license](https://choosealicense.com/no-permission/), meaning that the work is under exclusive copyright. We do not wish for countless of online copies to be released and float around.
+
+## Dependency security
+
+The Bun override keeps Effect on the patched 3.x runtime throughout the application, including UploadThing packages that pin an older Effect version. Keep the direct dependency and override aligned; remove the override when upstream constraints permit the patched runtime. Validate uploads, Clerk request isolation and the shared game bridge when changing it.
