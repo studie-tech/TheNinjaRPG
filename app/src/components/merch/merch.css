@@ -205,10 +205,20 @@
 }
 .merch-section-heading {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 30px;
+  gap: 18px 30px;
   align-items: end;
   margin-bottom: 30px;
+}
+.merch-section-heading>div {
+  flex: 1 0 26rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.merch-section-heading>p {
+  flex: 1 0 18rem;
+  max-width: 100%;
 }
 .merch-section-heading h2,.merch-faq h2,.merch-design-story h2 {
   font: 400 39px/1.15 Georgia,serif;
@@ -222,7 +232,7 @@
 }
 .merch-collection-grid {
   display: grid;
-  grid-template-columns: repeat(3,1fr);
+  grid-template-columns: repeat(3,minmax(0,1fr));
   gap: 20px;
 }
 .merch-collection-tile {
@@ -639,6 +649,7 @@
 }
 .merch-product-copy {
   padding-top: 30px;
+  min-width: 0;
 }
 .merch-product-copy h1 {
   font: 400 48px/1.1 Georgia,serif;
@@ -728,6 +739,12 @@
   }
 }
 @container merch (max-width:1000px) {
+  .merch-section-heading {
+    display: block;
+  }
+  .merch-section-heading>p {
+    margin-top: 16px;
+  }
   .merch-hero {
     min-height: 560px;
   }
@@ -759,6 +776,19 @@
   }
   .merch-product-copy h1 {
     font-size: 36px;
+  }
+}
+@container merch (max-width:850px) {
+  .merch-faq,.merch-design-story {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+  .merch-product-detail {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .merch-product-copy h1 {
+    font-size: clamp(30px,6cqi,37px);
   }
 }
 @container merch (max-width:650px) {
@@ -965,7 +995,7 @@
     padding-top: 15px;
   }
   .merch-product-copy h1 {
-    font-size: 37px;
+    font-size: clamp(30px,6cqi,37px);
   }
   .merch-design-story {
     grid-template-columns: 1fr;
@@ -1030,6 +1060,12 @@
 }
 .merch-hero h1,.merch-section-heading h2,.merch-product-copy h1 {
   color: hsl(var(--primary));
+}
+.merch-store h1,.merch-store h2,.merch-store h3 {
+  text-wrap: balance;
+}
+.merch-store p,.merch-store summary,.merch-hero-caption,.merch-bag p {
+  text-wrap: pretty;
 }
 .merch-button {
   background: hsl(var(--primary));
@@ -1162,9 +1198,6 @@
   }
   .merch-collections,.merch-catalog,.merch-related {
     padding: 30px 5%;
-  }
-  .merch-section-heading p:not(.merch-eyebrow) {
-    display: none;
   }
 }
 @container merch (max-width:479px) {
