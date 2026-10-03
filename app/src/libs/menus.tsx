@@ -18,7 +18,6 @@ import {
   Paintbrush,
   Receipt,
   ShieldHalf,
-  ShoppingBag,
   User,
   XCircle,
 } from "lucide-react";
@@ -86,12 +85,6 @@ export const getMainNavbarLinks = (notifications?: NavBarDropdownLink[]) => {
       href: "/conceptart",
       name: "Art",
       icon: <Paintbrush className="h-6 w-6" />,
-    },
-    {
-      id: "merch",
-      href: "/merch",
-      name: "Merch",
-      icon: <ShoppingBag className="h-6 w-6" />,
     },
   ];
   return links;
