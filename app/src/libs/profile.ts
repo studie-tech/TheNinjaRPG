@@ -248,6 +248,7 @@ export const getAssignedCombatStatTotal = (
 /**
  * Points a paid stat reset redistributes: every assigned point, including any stored above
  * a rank cap (it counts again after a rank-up), limited to what the rank's caps can hold.
+ * Resets must be rejected when the assigned total exceeds this capacity.
  */
 export const getRedistributableStatTotal = (
   user: Pick<

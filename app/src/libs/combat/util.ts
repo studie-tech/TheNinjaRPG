@@ -3163,8 +3163,9 @@ export const resetMasteriesToBase = (user: BattleUserState) => {
 
 /**
  * Re-derive masteries from their bases and the mastery tags active now, with applyEffects'
- * seal, stacking and prevent rules, for state that is read before the next applyEffects: a
- * new battle, or a new round whose expired or newly landed tags change what is usable.
+ * seal, stacking and prevent rules, for state that is read before the next applyEffects:
+ * a new battle, a completed action, or a new round whose expired or newly landed tags
+ * change what is usable.
  */
 export const refreshMasteries = (
   usersState: BattleUserState[],

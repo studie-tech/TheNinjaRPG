@@ -22,7 +22,10 @@ import {
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { actionLog, ryoTrade, userData } from "@/drizzle/schema";
-import { getRedistributableStatTotal } from "@/libs/profile";
+import {
+  getAssignedCombatStatTotal,
+  getRedistributableStatTotal,
+} from "@/libs/profile";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import { fetchVillages } from "@/routers/village";
 import {
@@ -630,6 +633,11 @@ export const blackMarketRouter = createTRPCRouter({
         return errorResponse("Not enough reputation points");
       }
       const { stats_cap, gens_cap } = getUserCaps(user.rank);
+      if (getAssignedCombatStatTotal(user) > getRedistributableStatTotal(user)) {
+        return errorResponse(
+          "Your stored stats exceed your rank's redistribution capacity. Resetting is unavailable until your rank caps can hold all your points; your stored stats are preserved.",
+        );
+      }
       if (input.offence > stats_cap || input.defence > stats_cap) {
         return errorResponse(
           `Offence and defence cannot exceed ${stats_cap.toLocaleString()} at your rank`,

@@ -91,6 +91,38 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
     expect(user.reputationPoints).toBe(COST_RESET_STATS);
   });
 
+  it("preserves converted overflow when it exceeds the rank's total capacity", async () => {
+    await resetter();
+    const database = await getTestDatabase();
+    const convertedStat = 10 + (4 * 60_000 - 40) * (1_322_410 / 1_799_960);
+    await database
+      .update(userData)
+      .set({
+        offence: convertedStat,
+        defence: convertedStat,
+        strength: GENIN_GENS_CAP,
+        speed: GENIN_GENS_CAP,
+        intelligence: GENIN_GENS_CAP,
+        willpower: GENIN_GENS_CAP,
+      })
+      .where(eq(userData.userId, USER_ID));
+    const before = await readUser();
+    const api = await callerFor(blackMarketRouter, USER_ID);
+    const result = await api.updateStats({
+      offence: GENIN_STATS_CAP,
+      defence: GENIN_STATS_CAP,
+      strength: GENIN_GENS_CAP,
+      speed: GENIN_GENS_CAP,
+      intelligence: GENIN_GENS_CAP,
+      willpower: GENIN_GENS_CAP,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Resetting is unavailable");
+    expect(await readUser()).toEqual(before);
+    expect(await database.select().from(actionLog)).toHaveLength(0);
+  });
+
   it("rejects a stat placed above the rank cap without charging", async () => {
     await resetter();
     const api = await callerFor(blackMarketRouter, USER_ID);

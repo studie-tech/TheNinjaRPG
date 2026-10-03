@@ -10,7 +10,12 @@ import {
   updateStatUsage,
 } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";
-import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
+import type {
+  BattleUserState,
+  CompleteBattle,
+  GroundEffect,
+  UserEffect,
+} from "@/libs/combat/types";
 import { alignBattle, refreshMasteries } from "@/libs/combat/util";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { ZodAllTags } from "@/validators/combat";
@@ -264,6 +269,60 @@ const actorOf = (battle: CompleteBattle, userId = "actor") =>
   battle.usersState.find((u) => u.userId === userId);
 
 describe("applyEffects mastery persistence", () => {
+  it.each(["increasemastery", "decreasemastery"] as const)(
+    "preserves active ground %s when refreshing action gates",
+    (type) => {
+      const actor = makeActor({ ninjutsuMastery: 400 });
+      const battle = makeBattle([actor], [], 2);
+      battle.groundEffects = [
+        {
+          ...masteryEffect(type, {}, { power: 200 }),
+          longitude: actor.longitude,
+          latitude: actor.latitude,
+        } as GroundEffect,
+      ];
+      const { newBattle } = applyEffects(battle, "actor");
+      expect(actorOf(newBattle)?.ninjutsuMastery).toBe(
+        type === "increasemastery" ? 600 : 200,
+      );
+      expect(canUse(newBattle, "actor", GATED_JUTSU)).toBe(type === "increasemastery");
+      expect(newBattle.usersEffects).toHaveLength(0);
+      expect(newBattle.groundEffects).toHaveLength(1);
+    },
+  );
+
+  it.each([100, 0])("updates action gates after a %s%% bloodline seal", (chance) => {
+    const buff = masteryEffect(
+      "increasemastery",
+      { fromType: "bloodline", actionId: "bloodline" },
+      { power: 200, rounds: undefined },
+    );
+    const seal = makeEffect(
+      "seal",
+      { power: chance, powerPerLevel: 0, rounds: 3 },
+      {
+        id: "seal-effect",
+        creatorId: "other",
+        targetId: "actor",
+        targetType: "user",
+        isNew: true,
+        createdRound: 2,
+      },
+    );
+    const battle = makeBattle(
+      [makeActor({ ninjutsuMastery: 400 }), makeUser({ userId: "other" })],
+      [buff, seal],
+      2,
+    );
+    refreshMasteries(battle.usersState, battle.usersEffects);
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
+
+    const { newBattle } = applyEffects(battle, "other");
+    expect(actorOf(newBattle)?.ninjutsuMastery).toBe(chance === 100 ? 400 : 600);
+    expect(canUse(newBattle, "actor", GATED_JUTSU)).toBe(chance === 0);
+    expect(canUse(newBattle, "actor", GATED_BLADE)).toBe(chance === 0);
+  });
+
   it("persists increasemastery onto the returned usersState without stacking", () => {
     const battle = makeBattle(
       [makeActor({ ninjutsuMastery: 1000 })],

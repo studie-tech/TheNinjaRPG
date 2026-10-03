@@ -712,10 +712,9 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                 </Button>
               </form>
               <FormDescription>
-                Preferred Mastery is the jutsu type your &quot;Highest&quot;-typed
-                attacks, such as the basic attack, count as for type-specific effects
-                like reflects and damage modifiers; Highest uses your top jutsu mastery.
-                Generals 1 and 2 are the generals those attacks scale with.
+                Preferred Generals 1 and 2 select the general stats used by attacks with
+                &quot;Highest&quot; general scaling, such as the basic attack. Selecting
+                Highest uses your strongest available generals.
               </FormDescription>
             </Form>
           </TabsContent>
@@ -1510,9 +1509,9 @@ const ResetStats: React.FC = () => {
       </p>
       {unplaceable > 0 && (
         <p className="font-bold text-orange-500">
-          Every stat is at your rank&apos;s cap, so the{" "}
-          {round(unplaceable).toLocaleString()} points above it cannot be placed and
-          will be lost.
+          Your stored stats exceed your rank&apos;s redistribution capacity by{" "}
+          {round(unplaceable).toLocaleString()} points. Resetting is unavailable until
+          your rank caps can hold all your points. Your stored stats are preserved.
         </p>
       )}
       {!canAfford && (
@@ -1521,7 +1520,7 @@ const ResetStats: React.FC = () => {
           your stats.
         </p>
       )}
-      {canAfford && (
+      {canAfford && unplaceable === 0 && (
         <DistributeStatsForm
           userData={userData}
           availableStats={round(totalStats)}

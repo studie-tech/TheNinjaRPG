@@ -133,6 +133,7 @@ import {
   getItem,
   isEffectActive,
   recordUsedTag,
+  refreshMasteries,
   resetMasteriesToBase,
   resolveDamageCreditUser,
   sortEffects,
@@ -1056,6 +1057,13 @@ export const applyEffects = (
       applyPoolAdjustmentsToBase(user, newUsersEffects);
     }
   });
+
+  // Eligibility for the next action must reflect seals and removals settled by this action.
+  // Ground-derived effects apply at the user's current tile but are not persisted as user tags.
+  refreshMasteries(newUsersState, [
+    ...newUsersEffects,
+    ...usersEffects.filter((effect) => effect.fromGround && isEffectActive(effect)),
+  ]);
 
   return {
     newBattle: {
