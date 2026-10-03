@@ -363,28 +363,6 @@ export function MerchCollection() {
           </>
         )}
       </section>
-      <section className="merch-world" aria-labelledby="community-feature-heading">
-        <div className="merch-world-art">
-          <Image
-            src={IMG_MERCH_ARTWORK.buffsr}
-            width={1000}
-            height={1500}
-            alt="Buff S Ranks Pls artwork with a ninja, training dummy and stats scroll"
-          />
-        </div>
-        <div>
-          <p className="merch-eyebrow">Community</p>
-          <h2 id="community-feature-heading">Buff S Ranks Pls</h2>
-          <p>The stats could use some work. The artwork is ready.</p>
-          <button
-            type="button"
-            className="merch-text-button"
-            onClick={() => selectCollection("Community")}
-          >
-            Browse community designs <ArrowRight size={16} />
-          </button>
-        </div>
-      </section>
       <section className="merch-faq" aria-labelledby="faq-heading">
         <div>
           <p className="merch-eyebrow">The little details</p>
