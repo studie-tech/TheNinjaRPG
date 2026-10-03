@@ -587,8 +587,13 @@ export const activityStreakRouter = createTRPCRouter({
         .set({
           currentDay: newCurrentDay,
           lastClaimDate: now,
-          // Reset startedAt when streak is reset so theoreticalMaxDay calculates from new start
-          ...((streakReset || normalizedCompletion) && { startedAt: now }),
+          // A recurring cycle starts with its first claim, not the previous
+          // cycle's completion; otherwise day one immediately appears behind.
+          ...((streakReset ||
+            normalizedCompletion ||
+            (config.streakType === "RECURRING" && progress.currentDay === 0)) && {
+            startedAt: now,
+          }),
         })
         .where(
           and(
