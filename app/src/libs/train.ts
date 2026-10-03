@@ -1,10 +1,12 @@
 import type {
   BattleType,
+  CombatStatName,
   ElementName,
   LetterRank,
   TrainingSpeed,
 } from "@/drizzle/constants";
 import {
+  CombatStatNames,
   DURABILITY_USABILITY_THR,
   ElementNames,
   FED_GOLD_JUTSU_SLOTS,
@@ -22,7 +24,6 @@ import {
   SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
   SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC,
   SENSEI_MAX_STUDENT_LEVEL,
-  UserStatNames,
   VILLAGE_LEAVE_REQUIRED_RANK,
   VILLAGE_REDUCED_GAINS_DAYS,
   VILLAGE_SYNDICATE_ID,
@@ -37,29 +38,29 @@ import type {
 } from "@/drizzle/schema";
 import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
+import type { MasterySources, MasteryStatSource } from "@/libs/mastery";
+import { effectiveMasteries, hasMasteryRequirements } from "@/libs/mastery";
 import { calcIsInVillage } from "@/libs/travel";
-import { secondsFromDate } from "@/utils/time";
+import type { UserWithRelations } from "@/routers/profile";
+import { getUserFederalStatus } from "@/utils/paypal";
+import { secondsFromDate, secondsPassed } from "@/utils/time";
+import { getUserElements } from "@/validators/user";
 
 type UserStatData = Pick<
   UserData,
-  | "ninjutsuOffence"
-  | "ninjutsuDefence"
-  | "genjutsuOffence"
-  | "genjutsuDefence"
-  | "taijutsuOffence"
-  | "taijutsuDefence"
-  | "bukijutsuOffence"
-  | "bukijutsuDefence"
+  | "offence"
+  | "defence"
+  | "ninjutsuMastery"
+  | "genjutsuMastery"
+  | "taijutsuMastery"
+  | "bukijutsuMastery"
+  | "bloodlineMastery"
+  | "sageMastery"
   | "strength"
   | "speed"
   | "intelligence"
   | "willpower"
 >;
-
-import type { UserWithRelations } from "@/routers/profile";
-import { getUserFederalStatus } from "@/utils/paypal";
-import { secondsPassed } from "@/utils/time";
-import { getUserElements } from "@/validators/user";
 
 export type JutsuBloodlineItemUserItems = NonNullable<UserWithRelations>["items"];
 
@@ -259,11 +260,12 @@ export const remainingXpToLevel = (xpToLevel: number, experience: number): numbe
 export const canTrainJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
+  masteries?: MasteryStatSource,
 ): boolean => {
   if (isJutsuEvolution(jutsu)) return false;
   // Learning a jutsu is intentionally allowed without the required bloodline item;
   // the item only gates equipping and in-combat use, so skip that check here.
-  return canUseJutsu(jutsu, userdata, true);
+  return canUseJutsu(jutsu, userdata, true, masteries);
 };
 
 /** True for jutsu types that cannot be initially learned via training (owned ones can still be leveled). */
@@ -272,23 +274,111 @@ export const isJutsuTrainToLearnRestricted = (jutsuType: Jutsu["jutsuType"]) =>
     jutsuType,
   );
 
+/**
+ * Every requirement for using a jutsu, paired with the message shown when it fails. Single
+ * source of truth for `canUseJutsu` and for the requirement labels and section grouping on
+ * /jutsus, so a new requirement is one row here rather than three lists that can drift.
+ */
+const jutsuRequirementChecks = (
+  jutsu: Jutsu,
+  userdata: NonNullable<UserWithRelations>,
+  opts?: {
+    /**
+     * Full user items. Required to evaluate the weapon requirement, because
+     * `userdata.items` carries a narrowed `item` without `weaponType`. When omitted the
+     * weapon check is skipped rather than silently failing.
+     */
+    userItems?: UserItemWithItem[];
+    ignoreBloodlineItem?: boolean;
+    /** Activated skills, counted toward masteries as the server gates count them. */
+    userSkills?: MasterySources["userSkills"];
+    /** Masteries to gate on; defaults to effectiveMasteries over the bloodline, `userItems` and `userSkills`. */
+    masteries?: MasteryStatSource;
+  },
+): { ok: boolean; warning: string }[] => {
+  const bloodlineItems = opts?.userItems ?? userdata.items;
+  const userElements = new Set(getUserElements(userdata));
+  const masteries =
+    opts?.masteries ??
+    effectiveMasteries({
+      ...userdata,
+      items: opts?.userItems ?? [],
+      userSkills: opts?.userSkills,
+    });
+  return [
+    {
+      ok: hasRequiredRank(userdata.rank, jutsu.requiredRank),
+      warning: "You do not have the required rank to use this jutsu.",
+    },
+    {
+      ok: hasRequiredLevel(userdata.level, jutsu.requiredLevel),
+      warning: "You do not have the required level to use this jutsu.",
+    },
+    {
+      ok: checkJutsuRank(jutsu.jutsuRank, userdata.rank),
+      warning: "You do not have the required rank to use this jutsu.",
+    },
+    {
+      ok: checkJutsuVillage(jutsu, userdata),
+      warning: "You do not have the required village to use this jutsu.",
+    },
+    {
+      ok: checkJutsuBloodline(jutsu, userdata),
+      warning: "You do not have the required bloodline to use this jutsu.",
+    },
+    {
+      ok: hasMasteryRequirements(masteries, jutsu),
+      warning: "You do not have the required mastery to use this jutsu.",
+    },
+    {
+      ok: !!checkJutsuElements(jutsu, userElements),
+      warning: "You do not have the required elements to use this jutsu.",
+    },
+    {
+      ok: !opts?.userItems || checkJutsuItems(jutsu, opts.userItems),
+      warning: `No ${jutsu.jutsuWeapon.toLowerCase()} weapon equipped.`,
+    },
+    {
+      ok: !!opts?.ignoreBloodlineItem || checkJutsuBloodlineItem(jutsu, bloodlineItems),
+      warning: "You do not have the required bloodline item equipped.",
+    },
+  ];
+};
+
+/**
+ * @param masteries - effectiveMasteries over every source the caller loaded; without it only
+ *   the bloodline counts
+ */
 export const canUseJutsu = (
   jutsu: Jutsu,
   userdata: NonNullable<UserWithRelations>,
   ignoreBloodlineItem = false,
+  masteries?: MasteryStatSource,
 ): boolean => {
-  const userElements = new Set(getUserElements(userdata));
   if (userdata.isAi) return true;
-  return (
-    hasRequiredRank(userdata.rank, jutsu.requiredRank) &&
-    hasRequiredLevel(userdata.level, jutsu.requiredLevel) &&
-    checkJutsuRank(jutsu.jutsuRank, userdata.rank) &&
-    checkJutsuVillage(jutsu, userdata) &&
-    checkJutsuBloodline(jutsu, userdata) &&
-    !!checkJutsuElements(jutsu, userElements) &&
-    (ignoreBloodlineItem || checkJutsuBloodlineItem(jutsu, userdata.items))
-  );
+  // No userItems passed, so the weapon requirement is not checked: toggleEquip allows
+  // equipping without the weapon, and non-ranked battles drop such jutsu via
+  // checkJutsuItems.
+  return jutsuRequirementChecks(jutsu, userdata, {
+    ignoreBloodlineItem,
+    masteries,
+  }).every(({ ok }) => ok);
 };
+
+/**
+ * The first unmet requirement as a user-facing message, or "" when the jutsu is usable.
+ * Passing `userItems` also evaluates the weapon requirement, which toggleEquip does not,
+ * and counts worn gear toward masteries.
+ */
+export const jutsuRequirementWarning = (
+  jutsu: Jutsu,
+  userdata: NonNullable<UserWithRelations>,
+  userItems?: UserItemWithItem[],
+  userSkills?: MasterySources["userSkills"],
+): string =>
+  jutsuRequirementChecks(jutsu, userdata, { userItems, userSkills }).find(
+    ({ ok }) => !ok,
+  )?.warning ?? "";
 
 export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5;
 
@@ -457,34 +547,33 @@ export const trainEfficiency = (user: UserData) => {
  * Get training multiplier
  */
 export const trainingMultiplier = (user: UserData) => {
-  const reducedDays = getReducedGainsDays(user);
-  const factor = reducedDays > 0 ? 0.5 : 1;
+  const factor = getTrainingMultiplierBoost(user);
   switch (user.trainingSpeed) {
     case "15min":
-      return 0.01 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.01 * factor;
     case "1hr":
-      return 0.04 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.04 * factor;
     case "4hrs":
-      return 0.16 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.16 * factor;
     case "8hrs":
-      return 0.32 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.32 * factor;
     case "12hrs":
-      return 0.48 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.48 * factor;
     case "24hrs":
-      return 0.96 * factor * getRankTrainingMultiplierBoost(user);
+      return 0.96 * factor;
     default:
       throw Error("Invalid training speed");
   }
 };
 
 /**
- * Extra multiplier based on rank perks
+ * Player training modifiers independent of the selected training interval.
  */
-const getRankTrainingMultiplierBoost = (user: UserData) => {
-  if (user.rank === "GENIN" && user.senseiId) {
-    return 1 + SENSEI_GENIN_TRAIN_EXP_BOOST_PERC / 100;
-  }
-  return 1;
+export const getTrainingMultiplierBoost = (user: UserData) => {
+  const factor = getReducedGainsDays(user) > 0 ? 0.5 : 1;
+  return user.rank === "GENIN" && user.senseiId
+    ? factor * (1 + SENSEI_GENIN_TRAIN_EXP_BOOST_PERC / 100)
+    : factor;
 };
 
 /**
@@ -589,45 +678,58 @@ type StatTrainingUser = UserStatData &
     | "rank"
     | "trainingSpeed"
     | "isBanned"
-    | "currentlyTraining"
+    | "currentlyTrainingMastery"
   > & { village?: { sector: number } | null };
 
-/** Preconditions for starting stat training; the write still atomically guards status and training. */
-export const statTrainingBlockMessage = (user: StatTrainingUser): string | null => {
+/** Training is available while awake in the player's village. */
+const trainingStartBlockMessage = (user: StatTrainingUser): string | null => {
   if (user.status !== "AWAKE") return "Must be awake to train";
   if (!user.isOutlaw) {
     if (!calcIsInVillage({ x: user.longitude, y: user.latitude }))
       return "Must be in your own village";
     if (user.sector !== user.village?.sector) return "Wrong sector";
   }
-  if (user.trainingSpeed !== "8hrs" && user.isBanned)
-    return "Only 8hrs training interval allowed when banned";
-  if (user.dailyTrainings >= MAX_DAILY_TRAININGS)
-    return `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`;
-  if (user.currentlyTraining) return "You are already training";
   return null;
 };
 
+export const statTrainingBlockMessage = (user: StatTrainingUser): string | null =>
+  trainingStartBlockMessage(user) ??
+  (user.isBanned ? "Cannot spend Energy while banned" : null);
+
+export const masteryTrainingBlockMessage = (user: StatTrainingUser): string | null =>
+  trainingStartBlockMessage(user) ??
+  (user.trainingSpeed !== "8hrs" && user.isBanned
+    ? "Only 8hrs training interval allowed when banned"
+    : null) ??
+  (user.dailyTrainings >= MAX_DAILY_TRAININGS
+    ? `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`
+    : null) ??
+  (user.currentlyTrainingMastery ? "You are already training a mastery" : null);
+
 export const isStatTrainingCapped = (
   user: UserStatData & Pick<UserData, "rank">,
-  stat: (typeof UserStatNames)[number],
+  stat: CombatStatName,
 ) => {
-  const caps = getUserCaps(user.rank);
-  const cap =
-    stat.includes("Offence") || stat.includes("Defence")
-      ? caps.stats_cap
-      : caps.gens_cap;
-  return user[stat] >= cap;
+  const { stats_cap, gens_cap } = getUserCaps(user.rank);
+  return (
+    user[stat] >= (stat === "offence" || stat === "defence" ? stats_cap : gens_cap)
+  );
 };
 
-/** Offer training only when the player can start and at least one stat can gain. */
+/** Offer training only when the player can start and at least one combat stat can gain. */
 export const canStartStatTraining = (user: StatTrainingUser) =>
   !statTrainingBlockMessage(user) &&
-  UserStatNames.some((stat) => !isStatTrainingCapped(user, stat));
+  CombatStatNames.some((stat) => !isStatTrainingCapped(user, stat));
 
-export const statTrainingEndsAt = (
-  user: Pick<UserData, "trainingStartedAt" | "currentlyTraining" | "trainingSpeed">,
+export const masteryTrainingEndsAt = (
+  user: Pick<
+    UserData,
+    "masteryTrainingStartedAt" | "currentlyTrainingMastery" | "trainingSpeed"
+  >,
 ) =>
-  user.trainingStartedAt && user.currentlyTraining
-    ? secondsFromDate(trainingSpeedSeconds(user.trainingSpeed), user.trainingStartedAt)
+  user.masteryTrainingStartedAt && user.currentlyTrainingMastery
+    ? secondsFromDate(
+        trainingSpeedSeconds(user.trainingSpeed),
+        user.masteryTrainingStartedAt,
+      )
     : null;

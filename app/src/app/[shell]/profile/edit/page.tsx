@@ -112,6 +112,10 @@ import {
 } from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
 import {
+  getAssignedCombatStatTotal,
+  getRedistributableStatTotal,
+} from "@/libs/profile";
+import {
   getTavernTitleClass,
   getTavernUsernameClass,
   TAVERN_COLOR_STYLES,
@@ -302,9 +306,9 @@ export default function EditProfile() {
         <Accordion
           title="Reset Stats"
           selectedTitle={activeElement}
-          unselectedSubtitle="Redistribute your experience points"
+          unselectedSubtitle="Redistribute your combat stat points"
           selectedSubtitle={`You can redistribute your stats for ${COST_RESET_STATS} reputation points. You
-          have ${userData.reputationPoints} reputation points. You have ${userData.experience + 120} experience points to distribute.`}
+          have ${userData.reputationPoints} reputation points. You have ${round(getRedistributableStatTotal(userData))} combat stat points to distribute.`}
           icon={BarChart3}
           onClick={setActiveElement}
         >
@@ -512,7 +516,6 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   const form = useForm<z.infer<typeof updateUserPreferencesSchema>>({
     resolver: zodResolver(updateUserPreferencesSchema),
     defaultValues: {
-      preferredStat: null,
       preferredGeneral1: null,
       preferredGeneral2: null,
     },
@@ -583,7 +586,6 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
   useEffect(() => {
     if (userData) {
       form.reset({
-        preferredStat: userData.preferredStat,
         preferredGeneral1: userData.preferredGeneral1,
         preferredGeneral2: userData.preferredGeneral2,
       });
@@ -600,7 +602,6 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
       showMutationToast(result);
       if (result.success) {
         await updateUser({
-          preferredStat: values.preferredStat,
           preferredGeneral1: values.preferredGeneral1,
           preferredGeneral2: values.preferredGeneral2,
         });
@@ -636,37 +637,6 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                 className="grid w-full grid-cols-4 items-end gap-3 p-4"
                 aria-busy={isUpdatingPreferences}
               >
-                <FormField
-                  control={form.control}
-                  name="preferredStat"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Offense</FormLabel>
-                      <Select
-                        disabled={isUpdatingPreferences}
-                        onValueChange={(value) =>
-                          field.onChange(value === "__highest__" ? null : value)
-                        }
-                        value={field.value ?? "__highest__"}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Highest" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="__highest__">Highest</SelectItem>
-                          <SelectItem value="Ninjutsu">Ninjutsu</SelectItem>
-                          <SelectItem value="Genjutsu">Genjutsu</SelectItem>
-                          <SelectItem value="Taijutsu">Taijutsu</SelectItem>
-                          <SelectItem value="Bukijutsu">Bukijutsu</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <FormField
                   control={form.control}
                   name="preferredGeneral1"
@@ -742,8 +712,9 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
                 </Button>
               </form>
               <FormDescription>
-                This will be used as your highest offense type in combat instead of
-                automatically choosing the highest stat.
+                Preferred Generals 1 and 2 select the general stats used by attacks with
+                &quot;Highest&quot; general scaling, such as the basic attack. Selecting
+                Highest uses your strongest available generals.
               </FormDescription>
             </Form>
           </TabsContent>
@@ -1522,20 +1493,9 @@ const ResetStats: React.FC = () => {
   // Only show if we have userData
   if (!userData) return <Loader explanation="Loading user" />;
 
-  // Calculate total stats available for redistribution
-  const totalStats =
-    userData.ninjutsuOffence +
-    userData.taijutsuOffence +
-    userData.genjutsuOffence +
-    userData.bukijutsuOffence +
-    userData.ninjutsuDefence +
-    userData.taijutsuDefence +
-    userData.genjutsuDefence +
-    userData.bukijutsuDefence +
-    userData.strength +
-    userData.speed +
-    userData.intelligence +
-    userData.willpower;
+  // Redistribution budget: the same total the server checks against
+  const totalStats = getRedistributableStatTotal(userData);
+  const unplaceable = getAssignedCombatStatTotal(userData) - totalStats;
 
   const cost = canChangeContent(userData.role) ? 0 : COST_RESET_STATS;
   const canAfford = userData.reputationPoints >= cost;
@@ -1544,19 +1504,26 @@ const ResetStats: React.FC = () => {
   return (
     <div className="flex flex-col gap-3">
       <p>
-        Redistribute all your stats ({totalStats} total points). This will cost {cost}{" "}
-        reputation points.
+        Redistribute all your stats ({round(totalStats)} total points). This will cost{" "}
+        {cost} reputation points.
       </p>
+      {unplaceable > 0 && (
+        <p className="font-bold text-orange-500">
+          Your stored stats exceed your rank&apos;s redistribution capacity by{" "}
+          {round(unplaceable).toLocaleString()} points. Resetting is unavailable until
+          your rank caps can hold all your points. Your stored stats are preserved.
+        </p>
+      )}
       {!canAfford && (
         <p className="font-bold text-red-500">
           You need {cost - userData.reputationPoints} more reputation points to reset
           your stats.
         </p>
       )}
-      {canAfford && (
+      {canAfford && unplaceable === 0 && (
         <DistributeStatsForm
           userData={userData}
-          availableStats={round(userData.experience + 120)}
+          availableStats={round(totalStats)}
           onAccept={submitStatRedistribution}
           forceUseAll={true}
           isRedistribution={true}

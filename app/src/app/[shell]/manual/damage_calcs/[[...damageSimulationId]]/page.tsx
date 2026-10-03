@@ -34,7 +34,13 @@ import { calcHP, calcLevel } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import { canModifyCombatSettings } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
-import { actSchema, confSchema, statSchema } from "@/validators/combat";
+import {
+  actSchema,
+  confSchema,
+  type DamageSimulationState,
+  type LoadedProgress,
+  statSchema,
+} from "@/validators/combat";
 
 // Default user
 type StatSchemaInput = z.input<typeof statSchema>;
@@ -87,6 +93,8 @@ export default function Simulator(props: {
   // Page state
   const [selectedDmg, setSelectedDmg] = useState<number | undefined>(undefined);
   const [showAll, setShowAll] = useState<boolean | undefined>(undefined);
+  const [attProgress, setAttProgress] = useState<LoadedProgress | undefined>();
+  const [defProgress, setDefProgress] = useState<LoadedProgress | undefined>();
 
   // Forms setup
   const conf1 = { defaultValues: defaultsStats, mode: "all" as const };
@@ -154,22 +162,21 @@ export default function Simulator(props: {
 
   const isPending = isSaving || isUpdating || isDeleting;
 
-  // Calculate experience from stats
+  // Calculate experience from stats. Every stat starts at 10, so the starting total is not
+  // earned experience — derive the baseline from the schema instead of hardcoding it, or the
+  // number goes negative whenever the number of stats changes.
   const calcExperience = (values: StatSchemaOutput) => {
-    return (
-      statNames
-        .map((k) => values[k])
-        .map((v) => Number(v))
-        .reduce((a, b) => a + b, 0) - 120
-    );
+    const assigned = statNames.map((k) => Number(values[k])).reduce((a, b) => a + b, 0);
+    return assigned - statNames.length * 10;
   };
 
-  // Extract information from schema to use for showing forms
-  const attExp = calcExperience(attValues);
-  const attLevel = calcLevel(attExp);
+  // Extract information from schema to use for showing forms. A player's own stats
+  // carry their real level, since experience can exceed what the stats sum to.
+  const attExp = attProgress?.experience ?? calcExperience(attValues);
+  const attLevel = attProgress?.level ?? calcLevel(attExp);
   const attHp = calcHP(attLevel);
-  const defExp = calcExperience(defValues);
-  const defLevel = calcLevel(defExp);
+  const defExp = defProgress?.experience ?? calcExperience(defValues);
+  const defLevel = defProgress?.level ?? calcLevel(defExp);
   const defHp = calcHP(defLevel);
 
   // Monkey-wrap the damage function
@@ -177,11 +184,12 @@ export default function Simulator(props: {
     attValues: StatSchemaOutput,
     defValues: StatSchemaOutput,
     actValues: ActSchemaOutput,
+    progress?: { attacker?: LoadedProgress; defender?: LoadedProgress },
   ) => {
-    const attackerExp = calcExperience(attValues);
-    const attackerLevel = calcLevel(attackerExp);
-    const defenderExp = calcExperience(defValues);
-    const defenderLevel = calcLevel(defenderExp);
+    const attackerExp = progress?.attacker?.experience ?? calcExperience(attValues);
+    const attackerLevel = progress?.attacker?.level ?? calcLevel(attackerExp);
+    const defenderExp = progress?.defender?.experience ?? calcExperience(defValues);
+    const defenderLevel = progress?.defender?.level ?? calcLevel(defenderExp);
     const attacker = {
       ...attValues,
       level: attackerLevel,
@@ -243,12 +251,12 @@ export default function Simulator(props: {
             })
             .filter((e) => e.active === 1)
             .map((entry, i) => {
-              const { attacker, defender, action } = entry.state as {
-                attacker: StatSchemaOutput;
-                defender: StatSchemaOutput;
-                action: ActSchemaOutput;
-              };
-              const stateDmg = getDamage(attacker, defender, action);
+              const { attacker, defender, action, attackerProgress, defenderProgress } =
+                entry.state as DamageSimulationState;
+              const stateDmg = getDamage(attacker, defender, action, {
+                attacker: attackerProgress,
+                defender: defenderProgress,
+              });
               return {
                 data: [{ x: i + 1, y: stateDmg }],
                 backgroundColor: colors[entry.colorId % colors.length],
@@ -270,8 +278,13 @@ export default function Simulator(props: {
 
   // Handle updating damage whenever form changes
   useEffect(() => {
-    setSelectedDmg(getDamage(attValues, defValues, actValues));
-  }, [attValues, defValues, actValues]);
+    setSelectedDmg(
+      getDamage(attValues, defValues, actValues, {
+        attacker: attProgress,
+        defender: defProgress,
+      }),
+    );
+  }, [attValues, defValues, actValues, attProgress, defProgress]);
 
   // Handle simulation
   const onSubmit = attForm.handleSubmit(
@@ -280,19 +293,20 @@ export default function Simulator(props: {
         attacker: attValues,
         defender: defValues,
         action: actValues,
+        attackerProgress: attProgress,
+        defenderProgress: defProgress,
       }),
     (errors) => console.error(errors),
   );
 
   // Handle inserting historical entry into form
   const activateEntry = (entry: DamageSimulation) => {
-    const { attacker, defender, action } = entry.state as {
-      attacker: StatSchemaOutput;
-      defender: StatSchemaOutput;
-      action: ActSchemaOutput;
-    };
+    const { attacker, defender, action, attackerProgress, defenderProgress } =
+      entry.state as DamageSimulationState;
     let statKey: keyof typeof attacker;
     let actKey: keyof typeof action;
+    setAttProgress(attackerProgress);
+    setDefProgress(defenderProgress);
     for (statKey in attacker) {
       attForm.setValue(statKey, attacker[statKey]);
     }
@@ -307,10 +321,14 @@ export default function Simulator(props: {
   // Handle setting user data into form
   const setUserData = (
     form: UseFormReturn<StatSchemaInput, unknown, StatSchemaOutput>,
+    setProgress: (progress: LoadedProgress | undefined) => void,
   ) => {
     statNames.forEach((stat) => {
       form.setValue(stat, userData?.[stat] ?? 0);
     });
+    setProgress(
+      userData ? { level: userData.level, experience: userData.experience } : undefined,
+    );
   };
 
   return (
@@ -350,7 +368,7 @@ export default function Simulator(props: {
               <div className="grow"></div>
               <Users
                 className="mt-3 mr-3 h-5 w-5"
-                onClick={() => setUserData(attForm)}
+                onClick={() => setUserData(attForm, setAttProgress)}
               />
             </div>
             <p className="px-3 text-sm italic">Experience: {attExp}</p>
@@ -359,7 +377,7 @@ export default function Simulator(props: {
             <hr />
             <UserInput
               id="u1"
-              ignoreContains={showAll ? "Defence" : "None"}
+              ignoreContains={showAll ? "defence" : "None"}
               selectForm={attForm}
             />
           </div>
@@ -369,7 +387,7 @@ export default function Simulator(props: {
               <div className="grow"></div>
               <Users
                 className="mt-3 mr-3 h-5 w-5"
-                onClick={() => setUserData(defForm)}
+                onClick={() => setUserData(defForm, setDefProgress)}
               />
             </div>
             <p className="px-3 text-sm italic">Experience: {defExp}</p>
@@ -378,7 +396,7 @@ export default function Simulator(props: {
             <hr />
             <UserInput
               id="u2"
-              ignoreContains={showAll ? "Offence" : "None"}
+              ignoreContains={showAll ? "offence" : "None"}
               selectForm={defForm}
             />
           </div>
@@ -406,7 +424,7 @@ export default function Simulator(props: {
                 name="statTypes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Set Stats</FormLabel>
+                    <FormLabel>Stat Types (any adds Offence vs Defence)</FormLabel>
                     <MultiSelect
                       selected={field.value ? field.value : []}
                       options={StatTypes.map((o) => ({ label: o, value: o }))}

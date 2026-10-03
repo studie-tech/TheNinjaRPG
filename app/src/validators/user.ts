@@ -3,7 +3,6 @@ import type { ElementName, LetterRank, QuestType } from "@/drizzle/constants";
 import {
   GeneralTypes,
   SEICHI_SILVER_ADJUST_LIMIT,
-  StatTypes,
   TavernColorPresets,
   UserRanks,
   UserRoles,
@@ -15,6 +14,17 @@ import {
   isReservedCustomTitle,
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
+
+export const assignedExperienceDataSchema = z.object({
+  offence: z.number(),
+  defence: z.number(),
+  strength: z.number(),
+  speed: z.number(),
+  intelligence: z.number(),
+  willpower: z.number(),
+  experience: z.number(),
+  earnedExperience: z.number(),
+});
 
 export const updateUserSchema = z.object({
   username: usernameSchema,
@@ -119,6 +129,7 @@ export const isBloodlineEffectBeneficial = (effect: ZodAllTags) => {
       "increasedamagetaken",
       "decreaseheal",
       "decreasestat",
+      "decreasemastery",
       "damage",
     ].includes(effect.type)
   )
@@ -160,7 +171,6 @@ export type GetPublicUsersSchema = z.infer<typeof getPublicUsersSchema>;
 // For updating highest preferences
 export const updateUserPreferencesSchema = z
   .object({
-    preferredStat: z.enum(StatTypes).nullable().optional(),
     preferredGeneral1: z.enum(GeneralTypes).nullable().optional(),
     preferredGeneral2: z.enum(GeneralTypes).nullable().optional(),
     // Audio preferences

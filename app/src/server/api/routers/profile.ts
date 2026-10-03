@@ -28,6 +28,7 @@ import {
   ALLIANCEHALL_LONG,
   BasicElementName,
   COST_CHANGE_USERNAME,
+  CombatStatNames,
   getTavernColorChangeCost,
   getUserCaps,
   IMG_AVATAR_DEFAULT,
@@ -95,6 +96,7 @@ import {
   userNindo,
   userPollVote,
   userReport,
+  userSkill,
   userVote,
   village,
   war,
@@ -114,9 +116,11 @@ import { moderateContent, validateUserUpdateReason } from "@/libs/moderator";
 import {
   calcActiveUserRegen,
   calcCP,
+  calcEnergy,
   calcHP,
+  calcMaxEnergy,
   calcSP,
-  capUserStats,
+  getAssignedCombatStatTotal,
   levelUpBlockMessage,
   scaleUserStats,
 } from "@/libs/profile";
@@ -208,6 +212,7 @@ import {
 import type { GetPublicUsersSchema } from "@/validators/user";
 import {
   adjustSeichiSilverSchema,
+  assignedExperienceDataSchema,
   getPublicUsersSchema,
   tavernColorChangeSchema,
   updateUserPreferencesSchema,
@@ -469,9 +474,6 @@ export const profileRouter = createTRPCRouter({
           ...(input.defaultAutoCombat !== undefined
             ? { defaultAutoCombat: input.defaultAutoCombat }
             : {}),
-          ...(input.preferredStat !== undefined
-            ? { preferredStat: input.preferredStat }
-            : {}),
           ...(input.preferredGeneral1 !== undefined
             ? { preferredGeneral1: input.preferredGeneral1 }
             : {}),
@@ -597,6 +599,7 @@ export const profileRouter = createTRPCRouter({
           maxHealth: calcHP(newLevel),
           maxStamina: calcSP(newLevel),
           maxChakra: calcCP(newLevel),
+          maxEnergy: calcEnergy(newLevel),
           questData: filterQuestTrackersForDbPersist(trackers, user),
           ...(skillPointsGain > 0
             ? {
@@ -1123,14 +1126,8 @@ export const profileRouter = createTRPCRouter({
         if (user.earnedExperience > 0) {
           const { stats_cap, gens_cap } = getUserCaps(user.rank);
           const allStatsCapped =
-            user.ninjutsuOffence >= stats_cap &&
-            user.ninjutsuDefence >= stats_cap &&
-            user.genjutsuOffence >= stats_cap &&
-            user.genjutsuDefence >= stats_cap &&
-            user.taijutsuOffence >= stats_cap &&
-            user.taijutsuDefence >= stats_cap &&
-            user.bukijutsuOffence >= stats_cap &&
-            user.bukijutsuDefence >= stats_cap &&
+            user.offence >= stats_cap &&
+            user.defence >= stats_cap &&
             user.strength >= gens_cap &&
             user.speed >= gens_cap &&
             user.intelligence >= gens_cap &&
@@ -1657,7 +1654,7 @@ export const profileRouter = createTRPCRouter({
       const newAi = { ...ai, ...input.data } as UserData;
 
       // Level-based stats / pools
-      scaleUserStats(newAi);
+      scaleEditedAi(ai, newAi);
 
       // Calculate diff
       const oldContent = Object.fromEntries(
@@ -1853,24 +1850,7 @@ export const profileRouter = createTRPCRouter({
     .input(createStatSchema(0, 0).schema)
     .output(
       baseServerResponse.extend({
-        data: z
-          .object({
-            ninjutsuOffence: z.number(),
-            taijutsuOffence: z.number(),
-            genjutsuOffence: z.number(),
-            bukijutsuOffence: z.number(),
-            ninjutsuDefence: z.number(),
-            taijutsuDefence: z.number(),
-            genjutsuDefence: z.number(),
-            bukijutsuDefence: z.number(),
-            strength: z.number(),
-            speed: z.number(),
-            intelligence: z.number(),
-            willpower: z.number(),
-            experience: z.number(),
-            earnedExperience: z.number(),
-          })
-          .optional(),
+        data: assignedExperienceDataSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1887,48 +1867,48 @@ export const profileRouter = createTRPCRouter({
       if (inputSum > user.earnedExperience) {
         return errorResponse("Trying to assign more stats than available");
       }
-      // Mutate & cap
-      user.ninjutsuOffence += Math.floor(input.ninjutsuOffence);
-      user.taijutsuOffence += Math.floor(input.taijutsuOffence);
-      user.genjutsuOffence += Math.floor(input.genjutsuOffence);
-      user.bukijutsuOffence += Math.floor(input.bukijutsuOffence);
-      user.ninjutsuDefence += Math.floor(input.ninjutsuDefence);
-      user.taijutsuDefence += Math.floor(input.taijutsuDefence);
-      user.genjutsuDefence += Math.floor(input.genjutsuDefence);
-      user.bukijutsuDefence += Math.floor(input.bukijutsuDefence);
-      user.strength += Math.floor(input.strength);
-      user.speed += Math.floor(input.speed);
-      user.intelligence += Math.floor(input.intelligence);
-      user.willpower += Math.floor(input.willpower);
-      capUserStats(user);
+      // Mutate: points stop at the rank cap and only the points that land are spent. A
+      // stat already stored above its cap keeps its value; it counts again after a rank-up.
+      const { stats_cap, gens_cap } = getUserCaps(user.rank);
+      const assign = (current: number, points: number, cap: number) =>
+        Math.max(current, Math.min(current + Math.floor(points), cap));
+      const stats = {
+        offence: assign(user.offence, input.offence, stats_cap),
+        defence: assign(user.defence, input.defence, stats_cap),
+        strength: assign(user.strength, input.strength, gens_cap),
+        speed: assign(user.speed, input.speed, gens_cap),
+        intelligence: assign(user.intelligence, input.intelligence, gens_cap),
+        willpower: assign(user.willpower, input.willpower, gens_cap),
+      };
+      const spent = Math.round(
+        getAssignedCombatStatTotal(stats) - getAssignedCombatStatTotal(user),
+      );
+      if (spent <= 0) return errorResponse("Those stats are already capped");
       // Update
       const data = {
-        ninjutsuOffence: user.ninjutsuOffence,
-        taijutsuOffence: user.taijutsuOffence,
-        genjutsuOffence: user.genjutsuOffence,
-        bukijutsuOffence: user.bukijutsuOffence,
-        ninjutsuDefence: user.ninjutsuDefence,
-        taijutsuDefence: user.taijutsuDefence,
-        genjutsuDefence: user.genjutsuDefence,
-        bukijutsuDefence: user.bukijutsuDefence,
-        strength: user.strength,
-        speed: user.speed,
-        intelligence: user.intelligence,
-        willpower: user.willpower,
-        experience: user.experience + inputSum,
-        earnedExperience: user.earnedExperience - inputSum,
+        ...stats,
+        experience: user.experience + spent,
+        earnedExperience: user.earnedExperience - spent,
       };
-      const result = await ctx.drizzle
-        .update(userData)
-        .set(data)
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            gte(userData.earnedExperience, inputSum),
-          ),
-        );
-      if (result.rowsAffected === 0) {
-        return errorResponse("Could not update user");
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
+          ...stats,
+          experience: sql`${userData.experience} + ${spent}`,
+          earnedExperience: sql`${userData.earnedExperience} - ${spent}`,
+        },
+        where: [
+          eq(userData.rank, user.rank),
+          ...CombatStatNames.map((stat) => eq(userData[stat], user[stat])),
+          eq(userData.experience, user.experience),
+          eq(userData.earnedExperience, user.earnedExperience),
+          gte(userData.earnedExperience, spent),
+        ],
+      });
+      if (!result.success) {
+        return errorResponse("Stats changed while assigning points. Please try again");
       } else {
         return { success: true, message: "User stats updated", data };
       }
@@ -2858,7 +2838,8 @@ export const fetchUpdatedUser = async (props: {
         items: {
           where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
           with: {
-            item: { columns: { id: true, itemType: true, maxDurability: true } },
+            item: true,
+            imbuements: { with: { item: true } },
           },
         },
         userQuests: {
@@ -2876,6 +2857,7 @@ export const fetchUpdatedUser = async (props: {
           where: gte(questHistory.completed, 1),
         },
         votes: true,
+        userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
       },
     }),
     fetchHasUnvotedPolls(client, userId, now),
@@ -2986,6 +2968,7 @@ export const fetchUpdatedUser = async (props: {
   if (user) {
     // Add bloodline, structure, etc.  regen to regeneration
     user.regeneration = calcActiveUserRegen(user, settings);
+    user.maxEnergy = calcMaxEnergy(user);
   }
 
   // Handle village prestige situations
@@ -3108,6 +3091,7 @@ export const fetchUpdatedUser = async (props: {
       user.curHealth = Math.min(user.curHealth + regen, user.maxHealth);
       user.curStamina = Math.min(user.curStamina + regen, user.maxStamina);
       user.curChakra = Math.min(user.curChakra + regen, user.maxChakra);
+      user.curEnergy = Math.min(user.curEnergy + regen, user.maxEnergy);
       user.updatedAt = now;
       user.regenAt = now;
 
@@ -3147,6 +3131,24 @@ export const fetchUpdatedUser = async (props: {
           tags: { source: "persistPassiveRegenToDb" },
         });
       }
+    }
+  }
+  if (user?.status === "BATTLE" && forceRegen) {
+    const claim = await claimUserSnapshot({
+      client,
+      userId,
+      updatedAt: user.updatedAt,
+      set: {
+        curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${user.regeneration} * GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, NOW(3))) / ${REGEN_SECONDS * 1_000_000})`,
+        regenAt: new Date(),
+      },
+      where: [eq(userData.status, "BATTLE")],
+    });
+    if (claim.success) {
+      const fresh = await client.query.userData.findFirst({
+        where: eq(userData.userId, userId),
+      });
+      if (fresh) Object.assign(user, fresh, { maxEnergy: calcMaxEnergy(user) });
     }
   }
   if (user) {
@@ -3657,6 +3659,22 @@ export const fetchAttributes = async (client: DrizzleClient, userId: string) => 
   return await client.query.userAttribute.findMany({
     where: eq(userAttribute.userId, userId),
   });
+};
+
+/**
+ * Scale an edited AI row to its level before it is saved. Changed combat stats are the
+ * editor's focus weights and spread the whole AI budget; otherwise the stored experience
+ * makes a save the identity at the same level and a proportional rescale on a level
+ * change, and a new stats multiplier applies to the stored stats.
+ */
+export const scaleEditedAi = (stored: UserData, edited: UserData) => {
+  const reweight = CombatStatNames.some((stat) => edited[stat] !== stored[stat]);
+  if (!reweight && edited.statsMultiplier !== stored.statsMultiplier) {
+    for (const stat of CombatStatNames) {
+      edited[stat] = (stored[stat] / stored.statsMultiplier) * edited.statsMultiplier;
+    }
+  }
+  scaleUserStats(edited, "ai", { reweight });
 };
 
 export type UserWithRelations =

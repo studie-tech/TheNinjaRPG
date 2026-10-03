@@ -1,0 +1,72 @@
+import type { MasteryName } from "@/drizzle/constants";
+import {
+  getUserCaps,
+  MasteryNames,
+  PVP_MASTERY_LOSS_REWARD,
+  PVP_MASTERY_WIN_REWARD,
+} from "@/drizzle/constants";
+import type {
+  BattleUserState,
+  CombatAction,
+  CompleteBattle,
+} from "@/libs/combat/types";
+import { MASTERY_REQUIREMENT_FIELDS, MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
+
+/** Count the disciplines of a successfully performed action once, not once per effect. */
+export const recordMasteryUsage = (user: BattleUserState, action: CombatAction) => {
+  if (!action.data) return;
+  const names = new Set<MasteryName>();
+  const classification =
+    "statClassification" in action.data ? action.data.statClassification : null;
+  if (classification && classification !== "None") {
+    names.add(MASTERY_TYPE_TO_STAT[classification]);
+  }
+  for (const [requirement, mastery] of MASTERY_REQUIREMENT_FIELDS) {
+    if ((action.data[requirement] ?? 0) > 0) names.add(mastery);
+  }
+  if (action.data.bloodlineId) names.add("bloodlineMastery");
+  user.usedMasteries ??= {};
+  for (const mastery of names) {
+    user.usedMasteries[mastery] = (user.usedMasteries[mastery] ?? 0) + 1;
+  }
+};
+
+/** One battle reward budget, weighted by actual discipline usage; mastery grants no XP. */
+export const combatMasteryGains = (
+  battle: Pick<CompleteBattle, "battleType" | "rewardScaling">,
+  user: BattleUserState,
+  targets: BattleUserState[],
+  outcome: "Won" | "Lost" | "Draw" | "Fled",
+  pveGrowth: number,
+): Partial<Record<MasteryName, number>> => {
+  if (
+    user.isAi ||
+    user.isSummon ||
+    ["SPARRING", "TRAINING", "RANKED_PVP", "RANKED_SPARRING"].includes(
+      battle.battleType,
+    ) ||
+    outcome === "Fled" ||
+    outcome === "Draw"
+  )
+    return {};
+  const usage = { ...user.usedMasteries };
+  if (user.sageModeUsedThisBattle) usage.sageMastery = (usage.sageMastery ?? 0) + 1;
+  const total = Object.values(usage).reduce((sum, n) => sum + n, 0);
+  if (total <= 0) return {};
+  const isPvp = targets.some((target) => !target.isAi && !target.isSummon);
+  const budget = isPvp
+    ? (outcome === "Won" ? PVP_MASTERY_WIN_REWARD : PVP_MASTERY_LOSS_REWARD) *
+      battle.rewardScaling
+    : Math.max(0, pveGrowth);
+  const cap = getUserCaps(user.rank).mastery_cap;
+  return Object.fromEntries(
+    MasteryNames.map((mastery) => {
+      const base = user.baseStatsForModifiers?.[mastery] ?? user[mastery];
+      const gain = Math.min(
+        Math.max(0, cap - base),
+        (budget * (usage[mastery] ?? 0)) / total,
+      );
+      return [mastery, Math.floor(gain * 100) / 100];
+    }),
+  );
+};

@@ -361,9 +361,7 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
     rewards.push(`${questReward.reward_gathering_experience} gathering experience`);
   }
   if (questReward.reward_sage_mastery_experience) {
-    rewards.push(
-      `${questReward.reward_sage_mastery_experience} sage mastery experience`,
-    );
+    rewards.push(`${questReward.reward_sage_mastery_experience} sage mode experience`);
   }
   if (questReward.reward_hunter_items) {
     if (questReward.reward_hunter_items_ids.length > 0) {

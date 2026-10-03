@@ -46,6 +46,8 @@ export default function Hospital() {
         await updateNotifications(notifications?.filter((n) => n.href !== "/hospital"));
         await updateUser({
           curHealth: result.data.curHealth,
+          curEnergy: result.data.curEnergy,
+          maxEnergy: result.data.maxEnergy,
           money: result.data.money,
           regenAt: result.data.regenAt,
           status: "AWAKE",

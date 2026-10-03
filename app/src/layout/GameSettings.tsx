@@ -525,7 +525,6 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
     void setAudioEnabled(checked);
     if (userData) {
       updatePreferences({
-        preferredStat: userData.preferredStat ?? null,
         preferredGeneral1: userData.preferredGeneral1 ?? null,
         preferredGeneral2: userData.preferredGeneral2 ?? null,
         musicOn: checked,
@@ -542,7 +541,6 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
     setSfxOn(checked);
     if (userData) {
       updatePreferences({
-        preferredStat: userData.preferredStat ?? null,
         preferredGeneral1: userData.preferredGeneral1 ?? null,
         preferredGeneral2: userData.preferredGeneral2 ?? null,
         sfxOn: checked,
@@ -559,7 +557,6 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
     setButtonSfxOn(checked);
     if (userData) {
       updatePreferences({
-        preferredStat: userData.preferredStat ?? null,
         preferredGeneral1: userData.preferredGeneral1 ?? null,
         preferredGeneral2: userData.preferredGeneral2 ?? null,
         buttonSfxOn: checked,

@@ -30,6 +30,12 @@ import type {
   UserItemWithRelations,
   VillageStructure,
 } from "@/drizzle/schema";
+import type {
+  MasteryBuffUser,
+  MasteryRequirementFields,
+  MasteryStatSource,
+} from "@/libs/mastery";
+import { gearMissingMastery, missingMasteryRequirement } from "@/libs/mastery";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { getStrucBoost } from "@/utils/village";
 
@@ -509,13 +515,14 @@ export const buildItemLoadoutData = (
 /**
  * Pure decision logic for applying an item loadout. Validates every saved
  * entry against the user's current inventory and equip limits, assigning each
- * to a unique slot and a unique owned row. Skipped entries are reported in
- * `invalidItems`. No database access — fully unit-testable.
+ * to a unique slot and a unique owned row. Mastery gates run last, against the
+ * gear this loadout equips rather than the gear worn now. Skipped entries are
+ * reported in `invalidItems`. No database access — fully unit-testable.
  */
 export const computeLoadoutAssignments = (
   itemData: ItemLoadout["itemData"],
   useritems: UserItemWithRelations[],
-  user: { level: number; bloodlineId: string | null },
+  user: Omit<MasteryBuffUser, "items">,
   now: Date = new Date(),
 ): ComputedLoadout => {
   const assignments: LoadoutAssignment[] = [];
@@ -619,7 +626,27 @@ export const computeLoadoutAssignments = (
     current.push({ slot: resolvedSlot, info });
   }
 
-  return { assignments, invalidItems };
+  const wearer = {
+    ...user,
+    items: assignments.flatMap((a) => {
+      const useritem = useritems.find((it) => it.id === a.userItemId);
+      return useritem ? [{ ...useritem, equipped: a.slot }] : [];
+    }),
+  };
+  const gatedIds = new Set<string>();
+  for (const gear of wearer.items) {
+    const missing = gearMissingMastery(gear, wearer);
+    if (!missing) continue;
+    gatedIds.add(gear.id);
+    invalidItems.push(
+      `${gear.item.name} requires ${missing.required.toLocaleString()} ${missing.label}`,
+    );
+  }
+
+  return {
+    assignments: assignments.filter((a) => !gatedIds.has(a.userItemId)),
+    invalidItems,
+  };
 };
 
 /** Inventory row shape read by auto-equip planning. */
@@ -631,7 +658,7 @@ export interface AutoEquipUserItem {
   isInAuction: boolean;
   craftingFinishedAt: Date | null;
   imbuements: { craftingFinishedAt: Date | null }[];
-  item: {
+  item: MasteryRequirementFields & {
     cost: number;
     slot: string;
     itemType: string;
@@ -653,10 +680,12 @@ export interface ComputedAutoEquip {
  * against a single in-memory snapshot so two items never share a slot and
  * category / maxEquips checks see prior assignments in this batch. Does not
  * unequip occupied slots. No database access — fully unit-testable.
+ * @param user - with effectiveMasteries over the gear worn now, so gear equipped in
+ *   this batch does not unlock other candidates
  */
 export const computeAutoEquipAssignments = (
   useritems: AutoEquipUserItem[],
-  user: { level: number; bloodlineId: string | null },
+  user: { level: number; bloodlineId: string | null } & MasteryStatSource,
   now: Date = new Date(),
 ): ComputedAutoEquip => {
   const candidates = useritems.filter(
@@ -695,6 +724,7 @@ export const computeAutoEquipAssignments = (
     if (useritem.item.bloodlineId && useritem.item.bloodlineId !== user.bloodlineId) {
       continue;
     }
+    if (missingMasteryRequirement(user, useritem.item)) continue;
     if (isImbuing(useritem, now)) continue;
 
     const info: EquipConstraintInfo = {

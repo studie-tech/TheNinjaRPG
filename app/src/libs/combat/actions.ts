@@ -30,6 +30,7 @@ import {
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { BARRIER_DAMAGE_TAG_TYPES, COMBAT_SECONDS } from "@/libs/combat/constants";
+import { recordMasteryUsage } from "@/libs/combat/mastery";
 import { resolvePotencyTags } from "@/libs/combat/potency";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { getPower, realizeTag, updateStatUsage } from "@/libs/combat/tags";
@@ -69,6 +70,7 @@ import {
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
 import { calcCombatHealPercentage } from "@/libs/hospital";
+import { hasMasteryRequirements } from "@/libs/mastery";
 import { getSageDailyCap, getSageModeActivationCost } from "@/libs/sageMode";
 import {
   CleanseTag,
@@ -105,6 +107,8 @@ export const availableUserActions = (
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
   const isQuestBattle = battle ? QuestBattleTypes.includes(battle.battleType) : false;
+  const isRankedBattle =
+    battle?.battleType === "RANKED_PVP" || battle?.battleType === "RANKED_SPARRING";
 
   // Handle injected jutsus
   if (battle && user) {
@@ -182,6 +186,11 @@ export const availableUserActions = (
             if (isDisarmed && jutsu.jutsuWeapon !== "NONE") {
               return false;
             }
+            // Ranked and AI loadouts bypass mastery gates even when penalties or
+            // level scaling lower their battle masteries below the requirements.
+            if (!user.isAi && !isRankedBattle && !hasMasteryRequirements(user, jutsu)) {
+              return false;
+            }
             // Filter out movement jutsu when immobilized
             if (isImmobilized) {
               const hasMoveTag = jutsu.effects.some(
@@ -236,6 +245,9 @@ export const availableUserActions = (
             }
             if (NonActionItemTypes.includes(item.itemType)) return false;
             if (ui.equipped === "NONE") return false;
+            if (!user.isAi && !isRankedBattle && !hasMasteryRequirements(user, item)) {
+              return false;
+            }
             if (item.itemType === "WEAPON") {
               // Hide weapons when disarmed
               if (isDisarmed) return false;
@@ -470,7 +482,7 @@ export const getDefaultBasicActions = (
         DamageTag.parse({
           power: 10,
           powerPerLevel: 0.05,
-          statTypes: ["Highest"],
+          statTypes: ["None"],
           generalTypes: ["Highest"],
           rounds: 0,
           appearAnimation: ID_ANIMATION_HIT,
@@ -1120,6 +1132,7 @@ export const insertAction = (info: {
     action.effects.forEach((effect) => {
       updateStatUsage(user, effect as UserEffect);
     });
+    recordMasteryUsage(user, action);
     user.usedActions.push({ id: action.id, type: action.type });
     // Check if action affected anything
     if (affectedTiles.size > 0) {

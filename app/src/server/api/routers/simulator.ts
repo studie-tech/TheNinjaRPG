@@ -9,7 +9,7 @@ import {
   publicProcedure,
   serverError,
 } from "@/server/api/trpc";
-import { actSchema, statSchema } from "@/validators/combat";
+import { damageSimulationStateSchema } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
 import type { DrizzleClient } from "../../db";
 
@@ -30,13 +30,7 @@ export const simulatorRouter = createTRPCRouter({
     }),
   createDamageSimulation: protectedProcedure
     .meta({ mcp: { description: "Create a new damage simulation" } })
-    .input(
-      z.object({
-        attacker: statSchema,
-        defender: statSchema,
-        action: actSchema,
-      }),
-    )
+    .input(damageSimulationStateSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const maxEntries = 20;

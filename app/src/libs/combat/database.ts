@@ -3,6 +3,9 @@ import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
 import {
+  ENERGY_PVP_LOSS_REWARD,
+  ENERGY_PVP_WIN_REWARD,
+  getUserCaps,
   HOSPITAL_LAT,
   HOSPITAL_LONG,
   ITEM_LEVEL_CAP,
@@ -10,6 +13,9 @@ import {
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_XP_TO_LEVEL,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MasteryNames,
+  PvpBattleTypes,
+  REGEN_SECONDS,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   VILLAGE_SYNDICATE_ID,
   WAR_RECAPTURE_THRESHOLD,
@@ -231,6 +237,11 @@ export const updateBattle = async (
               .update(userData)
               .set({
                 battleId: null,
+                updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+                maxEnergy:
+                  newBattle.extraState.energyCapacity?.[teammate.userId] ??
+                  teammate.maxEnergy,
+                curEnergy: sql`LEAST(${newBattle.extraState.energyCapacity?.[teammate.userId] ?? teammate.maxEnergy ?? userData.maxEnergy}, ${userData.curEnergy} + ${newBattle.extraState.energyRegeneration?.[teammate.userId] ?? teammate.regeneration ?? 0} * GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, NOW(3))) / ${REGEN_SECONDS * 1_000_000})`,
                 regenAt: new Date(),
                 curHealth: teammate.curHealth,
                 curStamina: teammate.curStamina,
@@ -1567,6 +1578,10 @@ export const updateUser = async (
       client
         .update(userData)
         .set({
+          maxEnergy: curBattle.extraState.energyCapacity?.[userId] ?? user.maxEnergy,
+          // Settlement invalidates delayed passive-regeneration snapshots.
+          updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+          curEnergy: sql`LEAST(${curBattle.extraState.energyCapacity?.[userId] ?? user.maxEnergy ?? userData.maxEnergy}, ${userData.curEnergy} + ${curBattle.extraState.energyRegeneration?.[userId] ?? user.regeneration ?? 0} * GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, NOW(3))) / ${REGEN_SECONDS * 1_000_000} + ${hasHumanOpponent && PvpBattleTypes.includes(curBattle.battleType) && !["SPARRING", "RANKED_SPARRING"].includes(curBattle.battleType) && curBattle.extraState.energyRewardEligible === true && (result.outcome === "Won" || result.outcome === "Lost") ? (result.didWin ? ENERGY_PVP_WIN_REWARD : ENERGY_PVP_LOSS_REWARD) : 0})`,
           experience: sql`experience + ${result.experience}`,
           earnedExperience: sql`earnedExperience + ${result.earnedExperience}`,
           pvpStreak: result.pvpStreak,
@@ -1587,14 +1602,15 @@ export const updateUser = async (
           seichiSilver: result.seichiSilver
             ? sql`seichiSilver + ${result.seichiSilver}`
             : sql`seichiSilver`,
-          ninjutsuOffence: sql`ninjutsuOffence + ${result.ninjutsuOffence}`,
-          genjutsuOffence: sql`genjutsuOffence + ${result.genjutsuOffence}`,
-          taijutsuOffence: sql`taijutsuOffence + ${result.taijutsuOffence}`,
-          bukijutsuOffence: sql`bukijutsuOffence + ${result.bukijutsuOffence}`,
-          ninjutsuDefence: sql`ninjutsuDefence + ${result.ninjutsuDefence}`,
-          genjutsuDefence: sql`genjutsuDefence + ${result.genjutsuDefence}`,
-          taijutsuDefence: sql`taijutsuDefence + ${result.taijutsuDefence}`,
-          bukijutsuDefence: sql`bukijutsuDefence + ${result.bukijutsuDefence}`,
+          // Preserve stored over-cap entitlement; concurrent gains cannot exceed the cap.
+          ...Object.fromEntries(
+            MasteryNames.map((mastery) => [
+              mastery,
+              sql`${userData[mastery]} + LEAST(${result.masteryGains?.[mastery] ?? 0}, GREATEST(0, ${getUserCaps(user.rank).mastery_cap} - ${userData[mastery]}))`,
+            ]),
+          ),
+          offence: sql`offence + ${result.offence}`,
+          defence: sql`defence + ${result.defence}`,
           villagePrestige: sql`villagePrestige + ${result.villagePrestige}`,
           dailyArenaFights: sql`dailyArenaFights + ${curBattle.battleType === "ARENA" ? 1 : 0}`,
           dailySageActivations: sql`dailySageActivations + ${user.sageModeUsedThisBattle ? 1 : 0}`,

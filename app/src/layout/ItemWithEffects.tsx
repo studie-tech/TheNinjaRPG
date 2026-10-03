@@ -30,7 +30,8 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { getPotencyDescription, POTENCY_TAG_LABELS } from "@/libs/combat/potency";
-import { getPreventTypeName } from "@/libs/combat/util";
+import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
+import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFarmPlantExperience } from "@/libs/farming";
 import { getRewardArray } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
@@ -437,6 +438,14 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   const farmExtractSeedItemName = itemNames?.find(
     (itemName) => itemName.id === farmExtractSeedItemId,
   )?.name;
+  // SageMode rows carry a `requiredSageMastery` that gates their level-2 effects behind
+  // `userData.sageMasteryExperience`, which is a different thing from the Sage Mastery
+  // stat requirement of the same name on Item/Jutsu. Discriminate before rendering either.
+  const isSageMode = "activationRounds" in item;
+  // General stat gates are listed only where evolving checks them
+  const isEvolutionRow =
+    ("parentJutsuId" in item && !!item.parentJutsuId) ||
+    ("parentItemId" in item && !!item.parentItemId);
   const { data: jutsuEvolutions } = api.jutsu.getEvolutions.useQuery(
     { jutsuId: item.id },
     { enabled: isJutsuItem && !hideData && !!showEvolutions, staleTime: 5 * 60 * 1000 },
@@ -800,16 +809,18 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"level" in item &&
                 item.level !== undefined &&
                 item.level > 0 &&
-                !("requiredSageMastery" in item) && (
+                !isSageMode && (
                   <p>
                     <b>Level</b>: {item.level}
                   </p>
                 )}
-              {"requiredSageMastery" in item && item.requiredSageMastery > 0 && (
-                <p>
-                  <b>Lvl 2 Mastery</b>: {item.requiredSageMastery.toLocaleString()}
-                </p>
-              )}
+              {isSageMode &&
+                "requiredSageMastery" in item &&
+                item.requiredSageMastery > 0 && (
+                  <p>
+                    <b>Lvl 2 Mastery</b>: {item.requiredSageMastery.toLocaleString()}
+                  </p>
+                )}
               {"activationRounds" in item && item.activationRounds > 0 && (
                 <p>
                   <b>Active Duration</b>: {item.activationRounds} rounds
@@ -1024,31 +1035,22 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Evolution</b>: Yes (evolves from a parent item)
                 </p>
               )}
-              {(
-                [
-                  ["requiredNinjutsuOffence", "Req. Nin. Offence"],
-                  ["requiredNinjutsuDefence", "Req. Nin. Defence"],
-                  ["requiredGenjutsuOffence", "Req. Gen. Offence"],
-                  ["requiredGenjutsuDefence", "Req. Gen. Defence"],
-                  ["requiredTaijutsuOffence", "Req. Tai. Offence"],
-                  ["requiredTaijutsuDefence", "Req. Tai. Defence"],
-                  ["requiredBukijutsuOffence", "Req. Buki. Offence"],
-                  ["requiredBukijutsuDefence", "Req. Buki. Defence"],
-                  ["requiredStrength", "Req. Strength"],
-                  ["requiredSpeed", "Req. Speed"],
-                  ["requiredIntelligence", "Req. Intelligence"],
-                  ["requiredWillpower", "Req. Willpower"],
-                ] as const
-              )
-                .filter(([key]) => {
-                  const value = (item as unknown as Record<string, unknown>)[key];
-                  return value != null;
-                })
-                .map(([key, label]) => (
-                  <p key={key}>
-                    <b>{label}</b>: {(item as unknown as Record<string, number>)[key]}
+              {EVOLUTION_STAT_FIELDS.filter(({ id, evolveOnly }) => {
+                if (id === "requiredSageMastery" && isSageMode) return false;
+                if (evolveOnly && !isEvolutionRow) return false;
+                return (item as unknown as Record<string, unknown>)[id] != null;
+              }).map(({ id, label, evolveOnly }) => {
+                const value = (item as unknown as Record<string, number>)[id];
+                return evolveOnly ? (
+                  <p key={id}>
+                    <b>Req. to evolve</b>: {value?.toLocaleString()} {label}
                   </p>
-                ))}
+                ) : (
+                  <p key={id}>
+                    <b>Req. {label}</b>: {value?.toLocaleString()}
+                  </p>
+                );
+              })}
               {"maxLevel" in item && item.maxLevel && (
                 <p>
                   <b>Max Level</b>: {item.maxLevel}
@@ -1371,7 +1373,15 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                           parsedEffect.statTypes.length > 0 && (
                             <span>
                               <b>Stats: </b>
-                              {parsedEffect.statTypes.join(", ")}
+                              {getStatTypeLabels(parsedEffect).join(", ")}
+                            </span>
+                          )}
+                        {"masteryTypes" in parsedEffect &&
+                          parsedEffect.masteryTypes &&
+                          parsedEffect.masteryTypes.length > 0 && (
+                            <span>
+                              <b>Masteries: </b>
+                              {parsedEffect.masteryTypes.join(", ")}
                             </span>
                           )}
                         {"elements" in parsedEffect &&
@@ -1498,8 +1508,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                           parsedEffect.reward_sage_mastery_experience &&
                           parsedEffect.reward_sage_mastery_experience > 0 && (
                             <p>
-                              <b>Reward Sage Mastery</b>:{" "}
-                              {parsedEffect.reward_sage_mastery_experience}
+                              <b>Reward Sage Mode Exp</b>:{" "}
+                              {parsedEffect.reward_sage_mastery_experience.toLocaleString()}
                             </p>
                           )}
                         {"reward_seichi_silver" in parsedEffect &&

@@ -11,7 +11,9 @@ import {
   COST_EXTRA_JUTSU_SLOT,
   COST_REROLL_ELEMENT,
   COST_RESET_STATS,
+  CombatStatNames,
   ElementNames,
+  getUserCaps,
   MAX_EXTRA_JUTSU_SLOTS,
   REP_TRADE_MIN_LEVEL,
   RYO_CAP,
@@ -21,6 +23,10 @@ import {
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { actionLog, ryoTrade, userData } from "@/drizzle/schema";
+import {
+  getAssignedCombatStatTotal,
+  getRedistributableStatTotal,
+} from "@/libs/profile";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import { fetchVillages } from "@/routers/village";
 import {
@@ -30,6 +36,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { getRandomElement } from "@/utils/array";
 import { round } from "@/utils/math";
 import {
@@ -625,34 +632,60 @@ export const blackMarketRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const cost = canChangeContent(user.role) ? 0 : COST_RESET_STATS;
       if (user.reputationPoints < cost) {
-        return { success: false, message: "Not enough reputation points" };
+        return errorResponse("Not enough reputation points");
+      }
+      const { stats_cap, gens_cap } = getUserCaps(user.rank);
+      if (getAssignedCombatStatTotal(user) > getRedistributableStatTotal(user)) {
+        return errorResponse(
+          "Your stored stats exceed your rank's redistribution capacity. Resetting is unavailable until your rank caps can hold all your points; your stored stats are preserved.",
+        );
+      }
+      if (input.offence > stats_cap || input.defence > stats_cap) {
+        return errorResponse(
+          `Offence and defence cannot exceed ${stats_cap.toLocaleString()} at your rank`,
+        );
+      }
+      const generals = [
+        input.strength,
+        input.speed,
+        input.intelligence,
+        input.willpower,
+      ];
+      if (generals.some((value) => value > gens_cap)) {
+        return errorResponse(
+          `General stats cannot exceed ${gens_cap.toLocaleString()} at your rank`,
+        );
       }
       const inputSum = round(Object.values(input).reduce((a, b) => a + b, 0));
-      const availableStats = round(user.experience + 120);
+      const availableStats = round(getRedistributableStatTotal(user));
       if (inputSum !== availableStats) {
-        const message = `Requested points ${inputSum} for not match experience points ${availableStats}`;
-        return { success: false, message };
+        return errorResponse(
+          `Requested points ${inputSum} do not match your ${availableStats} assigned combat stat points`,
+        );
       }
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
-          ninjutsuOffence: input.ninjutsuOffence,
-          taijutsuOffence: input.taijutsuOffence,
-          genjutsuOffence: input.genjutsuOffence,
-          bukijutsuOffence: input.bukijutsuOffence,
-          ninjutsuDefence: input.ninjutsuDefence,
-          taijutsuDefence: input.taijutsuDefence,
-          genjutsuDefence: input.genjutsuDefence,
-          bukijutsuDefence: input.bukijutsuDefence,
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
+          offence: input.offence,
+          defence: input.defence,
           strength: input.strength,
           speed: input.speed,
           intelligence: input.intelligence,
           willpower: input.willpower,
           reputationPoints: sql`reputationPoints - ${cost}`,
-        })
-        .where(eq(userData.userId, ctx.userId));
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
+        },
+        where: [
+          eq(userData.rank, user.rank),
+          ...CombatStatNames.map((stat) => eq(userData[stat], user[stat])),
+          gte(userData.reputationPoints, cost),
+        ],
+      });
+      if (!result.success) {
+        return errorResponse(
+          "Stats or balance changed while resetting. Please try again",
+        );
       } else {
         await ctx.drizzle.insert(actionLog).values({
           id: nanoid(),

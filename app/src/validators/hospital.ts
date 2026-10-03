@@ -11,6 +11,8 @@ export const healerAfterHealSchema = z.object({
   curHealth: z.number(),
   curChakra: z.number(),
   curStamina: z.number(),
+  curEnergy: z.number(),
+  maxEnergy: z.number(),
   medicalExperience: z.number(),
   regenAt: z.date(),
 });
@@ -27,6 +29,8 @@ export const npcHealOutputSchema = baseServerResponse.extend({
   data: z
     .object({
       curHealth: z.number(),
+      curEnergy: z.number(),
+      maxEnergy: z.number(),
       money: z.number(),
       regenAt: z.date(),
     })

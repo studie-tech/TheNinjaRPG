@@ -8,18 +8,28 @@ import {
   ring,
   spiral,
 } from "honeycomb-grid";
-import type { AvatarFacing, BattleType, PoolType } from "@/drizzle/constants";
+import type {
+  AvatarFacing,
+  BattleType,
+  CombatStatType,
+  PoolType,
+  StatType,
+} from "@/drizzle/constants";
 import {
   AutoBattleTypes,
+  BATTLE_TAG_STACKING,
   CLAN_BATTLE_REWARD_POINTS,
+  CombatStatTypes,
   FRIENDLY_PRESTIGE_COST,
   getUserCaps,
   HEX_ASPECT_RATIO,
   HEX_STACKING_DISPLACEMENT,
+  isPreBattleGearFromType,
   KAGE_CHALLENGE_WIN_PRESTIGE,
   KAGE_PRESTIGE_COST,
   KILLING_NOTORIETY_GAIN,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MasteryNames,
   PVP_KILL_ANBU_POINTS_REWARD,
   PVP_KILL_PRESTIGE_REWARD,
   PVP_KILL_PRESTIGE_REWARD_ANBU,
@@ -56,6 +66,7 @@ import type {
   VillageAlliance,
 } from "@/drizzle/schema";
 import { actionPointsAfterAction } from "@/libs/combat/actions";
+import { combatMasteryGains } from "@/libs/combat/mastery";
 import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
 import type { ObjectiveTrackerTaskInput as ObjectiveTrackerTask } from "@/libs/quest";
@@ -72,11 +83,12 @@ import { availableUserActions, calcActiveUser, stillInBattle } from "./actions";
 import {
   allState,
   BARRIER_DAMAGE_TAG_TYPES,
+  damageModifierTypes,
   POST_PIERCE_TAGS,
   publicState,
 } from "./constants";
 import { checkFriendlyFire } from "./process";
-import { getPower } from "./tags";
+import { decreaseMastery, getPower, increaseMastery, sealCheck } from "./tags";
 import type {
   BattleRoundContext,
   BattleUserState,
@@ -580,7 +592,7 @@ export const getPoolsAffected = (
     effect.poolsAffected &&
     effect.poolsAffected.length > 0
   ) {
-    return effect.poolsAffected as PoolType[];
+    return effect.poolsAffected.filter((pool) => pool !== "Energy") as PoolType[];
   }
   return ["Health"];
 };
@@ -1034,6 +1046,8 @@ export const calcApplyRatio = (
     "decreasepotency",
     "increasepoolcost",
     "increasestat",
+    "increasemastery",
+    "decreasemastery",
     "lifesteal",
     "moveprevent",
     "onehitkillprevent",
@@ -1108,6 +1122,15 @@ export const getEffectStackKey = (effect: UserEffect) => {
   }
   return key;
 };
+
+/** Whether an effect may apply in a pass that has already applied the `applied` stack keys. */
+export const canStackEffect = (effect: UserEffect, applied: Set<string>) =>
+  BATTLE_TAG_STACKING ||
+  !applied.has(getEffectStackKey(effect)) ||
+  effect.fromType === "bloodline" ||
+  effect.fromType === "sageMode" ||
+  effect.fromType === "sageModeAfter" ||
+  isPreBattleGearFromType(effect.fromType);
 
 /**
  * Determines the processing stage for a damage modifier effect.
@@ -1184,8 +1207,10 @@ export const sortEffects = (
     "decreasepotency",
     "decreasepoolcost",
     "decreasestat",
+    "decreasemastery",
     "increasepoolcost",
     "increasestat",
+    "increasemastery",
     // Mid-modifiers
     "barrier",
     "shield",
@@ -1288,7 +1313,7 @@ export const calcPoolCost = (
       if (e.type === "decreasepoolcost" && power > 0) power *= -1;
       // Apply the power to the pools affected
       if ("poolsAffected" in e) {
-        e.poolsAffected?.forEach((pool: PoolType) => {
+        e.poolsAffected?.forEach((pool) => {
           if (pool === "Health") {
             hpCost =
               e.calculation === "static"
@@ -2254,14 +2279,8 @@ export const calcBattleResult = (
         intelligence: 0,
         willpower: 0,
         speed: 0,
-        ninjutsuOffence: 0,
-        genjutsuOffence: 0,
-        taijutsuOffence: 0,
-        bukijutsuOffence: 0,
-        ninjutsuDefence: 0,
-        genjutsuDefence: 0,
-        taijutsuDefence: 0,
-        bukijutsuDefence: 0,
+        offence: 0,
+        defence: 0,
         money: 0,
         seichiSilver: 0,
         villagePrestige: deltaPrestige,
@@ -2299,14 +2318,8 @@ export const calcBattleResult = (
         let total = statsTotal + gensTotal;
         if (total === 0) {
           user.usedStats = {
-            ninjutsuOffence: 1,
-            genjutsuOffence: 1,
-            taijutsuOffence: 1,
-            bukijutsuOffence: 1,
-            ninjutsuDefence: 1,
-            genjutsuDefence: 1,
-            taijutsuDefence: 1,
-            bukijutsuDefence: 1,
+            offence: 1,
+            defence: 1,
           };
           user.usedGenerals = {
             strength: 1,
@@ -2314,7 +2327,7 @@ export const calcBattleResult = (
             willpower: 1,
             speed: 1,
           };
-          total = 12;
+          total = 6;
         }
         let assignedExp = 0;
         const { stats_cap, gens_cap } = getUserCaps(user.rank);
@@ -2398,6 +2411,14 @@ export const calcBattleResult = (
         result.money = -moneyToLose;
       }
 
+      result.masteryGains = combatMasteryGains(
+        battle,
+        user,
+        targets,
+        outcome,
+        experience,
+      );
+
       // Return results
       return result;
     }
@@ -2420,7 +2441,7 @@ const distributeExpToStat = (
 ): number => {
   const expWeighted = (count / total) * experience;
   const expRounded = Math.floor(expWeighted * 100) / 100;
-  const expResult = user[stat] + expRounded > cap ? cap - user[stat] : expRounded;
+  const expResult = Math.max(0, Math.min(expRounded, cap - user[stat]));
   result[stat] += expResult;
   return expResult;
 };
@@ -2600,6 +2621,8 @@ export const alignBattle = (
       }
       return true; // Keep active effects
     });
+    // Tags that expired or landed last round change what the next actor may use
+    refreshMasteries(battle.usersState, battle.usersEffects);
     // Sage exhaustion + clearing `sageModeActivated` runs in `applySageModeAfterRoundTransition`
     // (called from combat router when `progressRound` — avoids util ↔ process circular imports).
     // Note: Pool adjustments are handled centrally in applyEffects post-pass
@@ -2995,6 +3018,28 @@ export const getPreventTypeName = (preventType: string): string => {
 };
 
 /**
+ * What an effect's statTypes stand for. increasestat/decreasestat move the unified
+ * Offence/Defence, picked by direction, and any statTypes only switch that on; every
+ * other tag uses them to match jutsu types.
+ */
+export const getStatTypeLabels = (effect: {
+  type: string;
+  statTypes?: readonly StatType[] | null;
+  direction?: string;
+}): (StatType | CombatStatType | "All damage")[] => {
+  if (damageModifierTypes.includes(effect.type)) return ["All damage"];
+  const statTypes = effect.statTypes ?? [];
+  if (effect.type !== "increasestat" && effect.type !== "decreasestat") {
+    return [...statTypes];
+  }
+  if (statTypes.length === 0) return [];
+  const direction = effect.direction ?? "both";
+  return CombatStatTypes.filter(
+    (stat) => direction === "both" || direction === stat.toLowerCase(),
+  );
+};
+
+/**
  * Determines which participant rows the battle-start update should claim.
  *
  * AI opponents are left out. One row backs every fight against a given AI, so
@@ -3083,4 +3128,65 @@ export const selectTransferEffects = (
       return a.id.localeCompare(b.id);
     })
     .slice(0, cap);
+};
+
+/** Remember unbuffed masteries so residual mastery tags can be reapplied without stacking. */
+export const storeMasteryBases = (user: BattleUserState) => {
+  if (!user.baseStatsForModifiers) {
+    user.baseStatsForModifiers = {};
+  }
+  for (const key of MasteryNames) {
+    if (user.baseStatsForModifiers[key] === undefined) {
+      user.baseStatsForModifiers[key] = user[key];
+    }
+  }
+};
+
+/** Restore masteries to the values stored before residual mastery tags were applied. */
+export const resetMasteriesToBase = (user: BattleUserState) => {
+  const base = user.baseStatsForModifiers;
+  if (!base) return;
+  for (const key of MasteryNames) {
+    const stored = base[key];
+    if (stored !== undefined) {
+      user[key] = stored;
+    }
+  }
+};
+
+/**
+ * Re-derive masteries from their bases and the mastery tags active now, with applyEffects'
+ * seal, stacking and prevent rules, for state that is read before the next applyEffects:
+ * a new battle, a completed action, or a new round whose expired or newly landed tags
+ * change what is usable.
+ */
+export const refreshMasteries = (
+  usersState: BattleUserState[],
+  usersEffects: UserEffect[],
+) => {
+  usersState.forEach(resetMasteriesToBase);
+  const sealEffects = usersEffects.filter(
+    (e) => e.type === "seal" && !e.isNew && isEffectActive(e),
+  );
+  const applied = new Set<string>();
+  usersEffects
+    .filter(
+      (e) =>
+        (e.type === "increasemastery" || e.type === "decreasemastery") &&
+        e.targetType === "user" &&
+        isEffectActive(e),
+    )
+    .sort(sortEffects)
+    .forEach((effect) => {
+      const creator = usersState.find((u) => u.userId === effect.creatorId);
+      const target = usersState.find((u) => u.userId === effect.targetId);
+      if (!creator || !target || !canStackEffect(effect, applied)) return;
+      if (sealCheck(effect, sealEffects)) return;
+      applied.add(getEffectStackKey(effect));
+      if (effect.type === "increasemastery") {
+        increaseMastery(effect, usersEffects, target);
+      } else {
+        decreaseMastery(effect, usersEffects, target);
+      }
+    });
 };

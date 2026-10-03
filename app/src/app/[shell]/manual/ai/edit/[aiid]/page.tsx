@@ -121,7 +121,7 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
     <>
       <ContentBox
         title="Content Panel"
-        subtitle="Note: stats scaled by level!"
+        subtitle="Stats scale by level; editing a stat reweights the level budget"
         defaultBackHref="/manual/ai"
         topRightContent={
           <div className="flex flex-row gap-1">

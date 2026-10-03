@@ -288,7 +288,7 @@ function CharacterProfile() {
             </p>
             <p>Medical: {capitalizeFirstLetter(calcMedninRank(userData))}</p>
             <p>
-              Sage:{" "}
+              Sage Mode Rank:{" "}
               {capitalizeFirstLetter(
                 getSageMasteryDisplayRank(
                   userData.sageMasteryExperience ?? 0,

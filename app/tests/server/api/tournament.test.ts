@@ -44,10 +44,6 @@ vi.mock("@/libs/pusher", () => ({
   }),
 }));
 
-vi.mock("@/routers/combat", () => ({
-  initiateBattle: vi.fn(),
-}));
-
 import { syncTournamentState } from "@/routers/tournament";
 const FINALIZATION_INCOMPLETE =
   "Tournament finalization incomplete. Staff recovery required.";

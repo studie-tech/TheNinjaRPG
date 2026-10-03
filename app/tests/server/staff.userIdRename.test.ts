@@ -852,6 +852,27 @@ describeWithDatabase("staff user-id rename", () => {
     expect(user?.userId).toBe(OLD_USER_ID);
   });
 
+  it("answers a failed rename only after its other moves have landed", async () => {
+    const database = await getTestDatabase();
+    await database.insert(notification).values({ userId: OLD_USER_ID, content: "rename" });
+    // Hold every account statement back, so the account move is still in flight when the
+    // notification move fails
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 150));
+    const slowAccount = beforeStatements(database, userData, Array(6).fill(pause));
+    await expect(
+      callerForDatabase(
+        staffRouter,
+        STAFF,
+        failStatements(slowAccount, notification),
+      ).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
+    ).rejects.toThrow();
+    const moved = await database.query.userData.findFirst({
+      columns: { userId: true },
+      where: eq(userData.userId, NEW_USER_ID),
+    });
+    expect(moved?.userId).toBe(NEW_USER_ID);
+  });
+
   it("leaves its intent behind when a write fails, and finishes when run again", async () => {
     const database = await getTestDatabase();
     await Promise.all([

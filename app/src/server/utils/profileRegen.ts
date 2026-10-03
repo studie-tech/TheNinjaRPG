@@ -19,6 +19,8 @@ export const buildDerivedUserRegenUpdate = (props: {
     | "curHealth"
     | "curStamina"
     | "curChakra"
+    | "curEnergy"
+    | "maxEnergy"
     | "updatedAt"
     | "regenAt"
     | "questData"
@@ -39,6 +41,8 @@ export const buildDerivedUserRegenUpdate = (props: {
     curHealth: user.curHealth,
     curStamina: user.curStamina,
     curChakra: user.curChakra,
+    curEnergy: user.curEnergy,
+    maxEnergy: user.maxEnergy,
     updatedAt: user.updatedAt,
     regenAt: user.regenAt,
     questData: user.questData,

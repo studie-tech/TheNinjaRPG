@@ -1,15 +1,19 @@
-import type { UserRank } from "@/drizzle/constants";
+import type { CombatStatName, MasteryName, UserRank } from "@/drizzle/constants";
 import {
   CLAN_BOOST_MAX_LEVEL,
   CLAN_BOOST_PERCENT_PER_LEVEL,
+  CombatStatNames,
   CP_PER_LVL,
+  ENERGY_PER_LVL,
   getUserCaps,
   HomeTypeDetails,
   HP_PER_LVL,
+  MasteryNames,
   PLAYER_LEVEL_XP_BASE_FACTOR,
   PLAYER_LEVEL_XP_HIGH_FACTOR,
   PLAYER_LEVEL_XP_HIGH_THRESHOLD,
   RANKS_RESTRICTED_FROM_PVP,
+  SCALED_AI_STAT_BUDGET_SHARE,
   SP_PER_LVL,
   XP_BRACKETS,
 } from "@/drizzle/constants";
@@ -22,10 +26,16 @@ import type {
   VillageStructure,
 } from "@/drizzle/schema";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
+import {
+  gearMissingMastery,
+  isActiveWornGear,
+  type MasteryBuffUser,
+  wornGearTags,
+} from "@/libs/mastery";
 import { getReducedGainsDays } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { getStrucBoost } from "@/utils/village";
-import type { StatSchemaType } from "@/validators/combat";
+import type { AssignableUserStats } from "@/validators/combat";
 
 /**
  * Calculate the experience requirements for a given level
@@ -131,54 +141,50 @@ export const calcCP = (level: number) => {
   return 100 + CP_PER_LVL * (level - 1);
 };
 
-type StatDistribution = {
-  ninjutsuOffence: number;
-  ninjutsuDefence: number;
-  genjutsuOffence: number;
-  genjutsuDefence: number;
-  taijutsuOffence: number;
-  taijutsuDefence: number;
-  bukijutsuOffence: number;
-  bukijutsuDefence: number;
-  strength: number;
-  intelligence: number;
-  willpower: number;
-  speed: number;
+export const calcEnergy = (level: number) => 100 + ENERGY_PER_LVL * (level - 1);
+
+/** Copy of the user with stats capped to its rank; the original stays untouched */
+export const withCappedStats = <T extends UserData>(user: T): T => {
+  const capped = { ...user };
+  capUserStats(capped);
+  return capped;
 };
 
 /**
- * Cap user stats to the user's rank's caps
+ * Cap user stats to a rank's caps
  * @param user - the user to cap the stats of
+ * @param rank - the rank whose caps apply, the user's own by default
  * @returns void
  */
-export function capUserStats(user: UserData) {
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  if (user.ninjutsuOffence > stats_cap) user.ninjutsuOffence = stats_cap;
-  if (user.genjutsuOffence > stats_cap) user.genjutsuOffence = stats_cap;
-  if (user.taijutsuOffence > stats_cap) user.taijutsuOffence = stats_cap;
-  if (user.bukijutsuOffence > stats_cap) user.bukijutsuOffence = stats_cap;
-  if (user.ninjutsuDefence > stats_cap) user.ninjutsuDefence = stats_cap;
-  if (user.genjutsuDefence > stats_cap) user.genjutsuDefence = stats_cap;
-  if (user.taijutsuDefence > stats_cap) user.taijutsuDefence = stats_cap;
-  if (user.bukijutsuDefence > stats_cap) user.bukijutsuDefence = stats_cap;
+export function capUserStats(user: UserData, rank: UserRank = user.rank) {
+  const { stats_cap, gens_cap, mastery_cap } = getUserCaps(rank);
+  if (user.offence > stats_cap) user.offence = stats_cap;
+  if (user.defence > stats_cap) user.defence = stats_cap;
   if (user.strength > gens_cap) user.strength = gens_cap;
   if (user.speed > gens_cap) user.speed = gens_cap;
   if (user.intelligence > gens_cap) user.intelligence = gens_cap;
   if (user.willpower > gens_cap) user.willpower = gens_cap;
+  if (user.ninjutsuMastery > mastery_cap) user.ninjutsuMastery = mastery_cap;
+  if (user.genjutsuMastery > mastery_cap) user.genjutsuMastery = mastery_cap;
+  if (user.taijutsuMastery > mastery_cap) user.taijutsuMastery = mastery_cap;
+  if (user.bukijutsuMastery > mastery_cap) user.bukijutsuMastery = mastery_cap;
+  if (user.bloodlineMastery > mastery_cap) user.bloodlineMastery = mastery_cap;
+  if (user.sageMastery > mastery_cap) user.sageMastery = mastery_cap;
 }
+
+/** Which scale a unit's stored stats are on; see scaleUserStats. */
+export type StatScale = "ai" | "player";
 
 /**
- * The purpose of this function is to calculate the user experience, capped at the soft experience cap
- * i.e. the point where the user has one full offence, all 4 defences, and all 4 generals.
- * @param user
- * @returns
+ * Scale pools, combat stats and masteries to the user's level. Each stat's points above
+ * the base 10 scale by `share * levelBudget / (share * experience + points beyond
+ * experience)`: stats the experience paid for stay exact at their own level however
+ * uneven, and unpaid ones (a new AI at 0 experience) land on the budget and then stay.
+ * Masteries scale by the level budget over the experience, apart from the combat stats.
+ * @param statScale - "ai" takes SCALED_AI_STAT_BUDGET_SHARE of the budget, "player" all.
+ * @param options.reweight - treat the combat stats as unpaid weights, so the whole
+ *   budget is spread by their points above the base.
  */
-export function getSoftCappedExperience(user: UserData) {
-  const { stats_cap, gens_cap } = getUserCaps(user.rank);
-  return 5 * stats_cap + 4 * gens_cap;
-}
-
-/** Scale stats of user, and return total number of experience / stat points */
 export function scaleUserStats(
   user: Pick<
     UserData,
@@ -192,19 +198,11 @@ export function scaleUserStats(
     | "curChakra"
     | "maxChakra"
     | "experience"
-    | "ninjutsuOffence"
-    | "ninjutsuDefence"
-    | "genjutsuOffence"
-    | "genjutsuDefence"
-    | "taijutsuOffence"
-    | "taijutsuDefence"
-    | "bukijutsuOffence"
-    | "bukijutsuDefence"
-    | "strength"
-    | "intelligence"
-    | "willpower"
-    | "speed"
+    | CombatStatName
+    | MasteryName
   >,
+  statScale: StatScale,
+  options: { reweight?: boolean } = {},
 ) {
   // Multipliers
   const poolMod = user.poolsMultiplier ?? 1;
@@ -216,55 +214,70 @@ export function scaleUserStats(
   user.maxStamina = calcSP(user.level) * poolMod;
   user.curChakra = calcCP(user.level) * poolMod;
   user.maxChakra = calcCP(user.level) * poolMod;
-  // Stats
-  const exp = calcLevelRequirements(user.level) - 500;
-  user.experience = exp;
-  const sum = [
-    user.ninjutsuOffence ?? 0,
-    user.ninjutsuDefence ?? 0,
-    user.genjutsuOffence ?? 0,
-    user.genjutsuDefence ?? 0,
-    user.taijutsuOffence ?? 0,
-    user.taijutsuDefence ?? 0,
-    user.bukijutsuOffence ?? 0,
-    user.bukijutsuDefence ?? 0,
-    user.strength ?? 0,
-    user.intelligence ?? 0,
-    user.willpower ?? 0,
-    user.speed ?? 0,
-  ].reduce((a, b) => a + b, 0);
-  const calcStat = (stat: keyof StatDistribution) => {
-    return 10 + Math.floor(((user[stat] ?? 0) / sum) * exp * 100) / 100;
-  };
-  user.ninjutsuOffence = calcStat("ninjutsuOffence") * statMod;
-  user.ninjutsuDefence = calcStat("ninjutsuDefence") * statMod;
-  user.genjutsuOffence = calcStat("genjutsuOffence") * statMod;
-  user.genjutsuDefence = calcStat("genjutsuDefence") * statMod;
-  user.taijutsuOffence = calcStat("taijutsuOffence") * statMod;
-  user.taijutsuDefence = calcStat("taijutsuDefence") * statMod;
-  user.bukijutsuOffence = calcStat("bukijutsuOffence") * statMod;
-  user.bukijutsuDefence = calcStat("bukijutsuDefence") * statMod;
-  user.strength = calcStat("strength") * statMod;
-  user.intelligence = calcStat("intelligence") * statMod;
-  user.willpower = calcStat("willpower") * statMod;
-  user.speed = calcStat("speed") * statMod;
+  // Combat stats
+  const levelBudget = calcLevelRequirements(user.level) - 500;
+  const experience = user.experience ?? 0;
+  user.experience = levelBudget;
+  const share = statScale === "ai" ? SCALED_AI_STAT_BUDGET_SHARE : 1;
+  const budget = share * levelBudget;
+  const combatSum = CombatStatNames.reduce((sum, stat) => sum + (user[stat] ?? 0), 0);
+  const earned = combatSum / statMod - CombatStatNames.length * 10;
+  const paid = options.reweight ? 0 : experience;
+  const divisor = share * paid + Math.max(0, earned - paid);
+  for (const stat of CombatStatNames) {
+    const points =
+      earned > 0
+        ? (Math.max(0, (user[stat] ?? 0) / statMod - 10) * budget) / divisor
+        : budget / CombatStatNames.length;
+    user[stat] = (10 + roundCombatStat(points)) * statMod;
+  }
+  // Masteries
+  const masteryFactor = experience > 0 ? levelBudget / experience : 1;
+  for (const mastery of MasteryNames) {
+    user[mastery] = Math.max(10, roundCombatStat((user[mastery] ?? 0) * masteryFactor));
+  }
 }
 
-/** Assign stats of user, meant for the training dummy */
-export function manuallyAssignUserStats(user: UserData, stats: StatSchemaType) {
-  // Stats
-  user.ninjutsuOffence = stats.ninjutsuOffence;
-  user.ninjutsuDefence = stats.ninjutsuDefence;
-  user.genjutsuOffence = stats.genjutsuOffence;
-  user.genjutsuDefence = stats.genjutsuDefence;
-  user.taijutsuOffence = stats.taijutsuOffence;
-  user.taijutsuDefence = stats.taijutsuDefence;
-  user.bukijutsuOffence = stats.bukijutsuOffence;
-  user.bukijutsuDefence = stats.bukijutsuDefence;
+// Scaling can produce scientific-notation values, which the exponent-string round helper cannot accept.
+const roundCombatStat = (stat: number) => Math.round(stat * 100) / 100;
+
+/** Sum of the six redistributable combat stats (offence, defence, generals). */
+export const getAssignedCombatStatTotal = (
+  user: Pick<
+    UserData,
+    "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
+  >,
+) => CombatStatNames.reduce((sum, stat) => sum + roundCombatStat(user[stat]), 0);
+
+/**
+ * Points a paid stat reset redistributes: every assigned point, including any stored above
+ * a rank cap (it counts again after a rank-up), limited to what the rank's caps can hold.
+ * Resets must be rejected when the assigned total exceeds this capacity.
+ */
+export const getRedistributableStatTotal = (
+  user: Pick<
+    UserData,
+    "rank" | "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
+  >,
+) => {
+  const { stats_cap, gens_cap } = getUserCaps(user.rank);
+  return Math.min(getAssignedCombatStatTotal(user), 2 * stats_cap + 4 * gens_cap);
+};
+
+/** Assign stats of user, meant for the training dummy and ranked equalization */
+export function manuallyAssignUserStats(user: UserData, stats: AssignableUserStats) {
+  user.offence = stats.offence;
+  user.defence = stats.defence;
   user.strength = stats.strength;
   user.intelligence = stats.intelligence;
   user.willpower = stats.willpower;
   user.speed = stats.speed;
+  if (stats.ninjutsuMastery != null) user.ninjutsuMastery = stats.ninjutsuMastery;
+  if (stats.genjutsuMastery != null) user.genjutsuMastery = stats.genjutsuMastery;
+  if (stats.taijutsuMastery != null) user.taijutsuMastery = stats.taijutsuMastery;
+  if (stats.bukijutsuMastery != null) user.bukijutsuMastery = stats.bukijutsuMastery;
+  if (stats.bloodlineMastery != null) user.bloodlineMastery = stats.bloodlineMastery;
+  if (stats.sageMastery != null) user.sageMastery = stats.sageMastery;
 }
 
 export const activityStreakRewards = (streak: number) => {
@@ -361,4 +374,45 @@ export const calcActiveUserRegen = (
   regeneration *= (100 + warFactor) / 100;
 
   return regeneration;
+};
+
+/** Energy capacity includes usable worn gear, bloodline and activated skill pool effects. */
+export const calcMaxEnergy = (user: MasteryBuffUser) => {
+  const base = calcEnergy(user.level);
+  const sources = [
+    { tags: user.bloodline?.effects ?? [], level: user.level },
+    ...(user.userSkills ?? []).map(({ skill }) => ({
+      tags: skill.effects.filter(
+        (tag) => skill.target === "SELF" || tag.friendlyFire !== "ENEMIES",
+      ),
+      level: user.level,
+    })),
+    ...(user.items ?? [])
+      .filter(
+        (ui) => isActiveWornGear(ui, user.bloodlineId) && !gearMissingMastery(ui, user),
+      )
+      .map((ui) => ({
+        tags: wornGearTags(ui),
+        level: user.isAi ? user.level : ui.level,
+      })),
+  ];
+  let maximum = base;
+  for (const { tags, level } of sources)
+    for (const tag of tags) {
+      if (
+        (tag.type !== "increasemaxpools" && tag.type !== "decreasemaxpools") ||
+        tag.rounds === 0 ||
+        !tag.poolsAffected.includes("Energy")
+      )
+        continue;
+      const signed =
+        tag.type === "decreasemaxpools"
+          ? -(Math.abs(tag.power) + level * Math.abs(tag.powerPerLevel))
+          : tag.power + level * tag.powerPerLevel;
+      maximum +=
+        tag.calculation === "percentage"
+          ? Math.floor((base * Math.min(signed, 100)) / 100)
+          : signed;
+    }
+  return Math.max(1, maximum);
 };

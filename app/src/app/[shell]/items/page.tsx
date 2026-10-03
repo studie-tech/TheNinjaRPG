@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   ArrowDownToLine,
   CircleDollarSign,
   CircleFadingArrowUp,
@@ -67,6 +68,7 @@ import {
   showsItemLevelBadge,
   userItemActionBadges,
 } from "@/libs/item";
+import { gearMissingMastery } from "@/libs/mastery";
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { hasRequiredLevel, remainingXpToLevel } from "@/libs/train";
@@ -1351,14 +1353,32 @@ const Character: React.FC<CharacterProps> = (props) => {
   const [variantItem, setVariantItem] = useState<UserItemWithVariants | undefined>(
     undefined,
   );
+  const { data: userSkills } = api.skillTree.getUserSkills.useQuery(undefined, {
+    enabled: !!userData,
+  });
 
-  // The item on the current slot
+  // Battles unequip worn gear and hide weapons whose mastery gate is unmet; activated
+  // skills count toward masteries as they do there
+  const wearer = {
+    ...userData,
+    items: useritems ?? [],
+    userSkills: userSkills?.skills.filter((userSkill) => userSkill.activated),
+  };
+  const masteryWarning = (useritem: UserItemWithRelations) => {
+    if (useritem.equipped === "NONE") return undefined;
+    const missing = gearMissingMastery(useritem, wearer);
+    if (!missing) return undefined;
+    const current = Math.floor(missing.current).toLocaleString();
+    return `Unusable in battle: requires ${missing.required.toLocaleString()} ${missing.label} (you have ${current})`;
+  };
+  const selectedMasteryWarning = useritem ? masteryWarning(useritem) : undefined;
 
   // Collapse UserItem and Item
   const items = useritems
     ?.map((useritem) => ({
       ...applyActiveVariant(useritem as UserItemWithVariants),
       ...useritem,
+      masteryWarning: masteryWarning(useritem),
     }))
     .sort(byItemName);
   const itemBadges = userItemActionBadges(useritems);
@@ -1520,6 +1540,9 @@ const Character: React.FC<CharacterProps> = (props) => {
                     XP more to level
                   </p>
                 )}
+              {selectedMasteryWarning && (
+                <p className="text-destructive text-sm">{selectedMasteryWarning}</p>
+              )}
             </div>
             <ItemWithEffects
               item={{
@@ -1605,7 +1628,7 @@ interface EquipProps {
   txt: string;
   pos: string;
   slot: ItemSlot;
-  items: (UserItem & Item)[] | undefined;
+  items: (UserItem & Item & { masteryWarning?: string })[] | undefined;
   act: (slot: ItemSlot) => void;
 }
 
@@ -1640,6 +1663,14 @@ const Equip: React.FC<EquipProps> = (props) => {
                 size="medium"
               />
             )}
+          {item.masteryWarning && (
+            <div
+              className="absolute top-0 left-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-red-600 bg-slate-300 text-red-600"
+              title={item.masteryWarning}
+            >
+              <AlertTriangle className="h-4 w-4" aria-label={item.masteryWarning} />
+            </div>
+          )}
           {!showsItemLevelBadge(item) && item.quantity > 1 ? (
             <div className="absolute right-0 bottom-0 flex h-7 w-7 flex-row items-center justify-center rounded-full border-2 border-amber-300 bg-slate-300 font-bold text-black">
               {item.quantity}

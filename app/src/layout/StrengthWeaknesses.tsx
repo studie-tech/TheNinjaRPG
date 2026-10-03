@@ -1,7 +1,7 @@
 "use client";
 
 import { Chart as ChartJS } from "chart.js/auto";
-import { CircleHelp, Eye, Lock, Search, Sparkles } from "lucide-react";
+import { CircleHelp, Eye, Leaf, Lock, Search } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
+  getUserCaps,
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
@@ -19,15 +20,15 @@ import ElementImage from "@/layout/ElementImage";
 import NavTabs from "@/layout/NavTabs";
 import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
 import SkillTreeFolderModal from "@/layout/SkillTreeFolderModal";
-import { capUserStats } from "@/libs/profile";
+import { withCappedStats } from "@/libs/profile";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { getStealthStatus } from "@/libs/stealth";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useActiveLayout } from "@/utils/LayoutContext";
-import { useRequiredUserData } from "@/utils/UserContext";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
+import { useRequiredUserData } from "@/utils/UserContext";
 import { getUserElements } from "@/validators/user";
 
 // Main StrengthWeaknesses Component
@@ -37,11 +38,11 @@ const StrengthWeaknesses: React.FC = () => {
 
   // State
   type TabOptions = (typeof tabOptions)[number];
-  const { data: userData } = useRequiredUserData();
+  const { data: storedUserData } = useRequiredUserData();
   const [currentTab, setCurrentTab] = useState<TabOptions>("Graphs");
 
-  // Implement stats cap
-  if (userData) capUserStats(userData);
+  // Show rank-capped stats from a copy; the cached user keeps its stored values
+  const userData = storedUserData ? withCappedStats(storedUserData) : undefined;
 
   // Render info button for Stats and Graphs tabs
   const renderInfoButton = () => (
@@ -73,16 +74,16 @@ const StrengthWeaknesses: React.FC = () => {
           </ul>
           <ul>
             <li>
-              <b>Ninjutsu:</b> Ninja techniques infused with chakra
+              <b>Offence:</b> how hard your attacks hit
             </li>
             <li>
-              <b>Genjutsu:</b> Illusions and mental techniques
+              <b>Defence:</b> how well you resist incoming damage
             </li>
+          </ul>
+          <ul>
             <li>
-              <b>Taijutsu:</b> Physical combat techniques
-            </li>
-            <li>
-              <b>Bukijutsu:</b> Proficiency with weapons
+              <b>Masteries:</b> unlock jutsu, items, and armor. They do not deal damage
+              or grant experience.
             </li>
           </ul>
         </div>
@@ -130,50 +131,46 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
     <>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <b>Offences</b>
+          <b>Combat</b>
           <div className="flex flex-row items-center">
-            <ElementImage element="Ninjutsu" className="mr-1 mb-1 h-6 w-6" />
-            Ninjutsu offence:{" "}
-            {Number((userData.ninjutsuOffence ?? 0).toFixed(2)).toLocaleString()}
+            <ElementImage element="offensiveStance" className="mr-1 mb-1 h-6 w-6" />
+            Offence: {Number((userData.offence ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
-            <ElementImage element="Genjutsu" className="mr-1 mb-1 h-6 w-6" />
-            Genjutsu offence:{" "}
-            {Number((userData.genjutsuOffence ?? 0).toFixed(2)).toLocaleString()}
-          </div>
-          <div className="flex flex-row items-center">
-            <ElementImage element="Taijutsu" className="mr-1 mb-1 h-6 w-6" />
-            Taijutsu offence:{" "}
-            {Number((userData.taijutsuOffence ?? 0).toFixed(2)).toLocaleString()}
-          </div>
-          <div className="flex flex-row items-center">
-            <ElementImage element="Bukijutsu" className="mr-1 mb-1 h-6 w-6" />
-            Bukijutsu offence:{" "}
-            {Number((userData.bukijutsuOffence ?? 0).toFixed(2)).toLocaleString()}
+            <ElementImage element="defensiveStance" className="mr-1 mb-1 h-6 w-6" />
+            Defence: {Number((userData.defence ?? 0).toFixed(2)).toLocaleString()}
           </div>
         </div>
-
         <div>
-          <b>Defences</b>
+          <b>Masteries</b>
           <div className="flex flex-row items-center">
             <ElementImage element="Ninjutsu" className="mr-1 mb-1 h-6 w-6" />
-            Ninjutsu defence:{" "}
-            {Number((userData.ninjutsuDefence ?? 0).toFixed(2)).toLocaleString()}
+            Ninjutsu:{" "}
+            {Number((userData.ninjutsuMastery ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Genjutsu" className="mr-1 mb-1 h-6 w-6" />
-            Genjutsu defence:{" "}
-            {Number((userData.genjutsuDefence ?? 0).toFixed(2)).toLocaleString()}
+            Genjutsu:{" "}
+            {Number((userData.genjutsuMastery ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Taijutsu" className="mr-1 mb-1 h-6 w-6" />
-            Taijutsu defence:{" "}
-            {Number((userData.taijutsuDefence ?? 0).toFixed(2)).toLocaleString()}
+            Taijutsu:{" "}
+            {Number((userData.taijutsuMastery ?? 0).toFixed(2)).toLocaleString()}
           </div>
           <div className="flex flex-row items-center">
             <ElementImage element="Bukijutsu" className="mr-1 mb-1 h-6 w-6" />
-            Bukijutsu defence:{" "}
-            {Number((userData.bukijutsuDefence ?? 0).toFixed(2)).toLocaleString()}
+            Bukijutsu:{" "}
+            {Number((userData.bukijutsuMastery ?? 0).toFixed(2)).toLocaleString()}
+          </div>
+          <div className="flex flex-row items-center">
+            <ElementImage element="Bloodline" className="mr-1 mb-1 h-6 w-6" />
+            Bloodline:{" "}
+            {Number((userData.bloodlineMastery ?? 0).toFixed(2)).toLocaleString()}
+          </div>
+          <div className="flex flex-row items-center">
+            <ElementImage element="Sage" className="mr-1 mb-1 h-6 w-6" />
+            Sage: {Number((userData.sageMastery ?? 0).toFixed(2)).toLocaleString()}
           </div>
         </div>
       </div>
@@ -200,10 +197,10 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
             </div>
           </div>
           <div>
-            <b>Mastery</b>
+            <b>Sage Mode</b>
             <div className="flex flex-row items-center">
-              <Sparkles className="mr-1 mb-1 h-6 w-6" />
-              Sage Mastery:{" "}
+              <Leaf className="mr-1 mb-1 h-6 w-6" />
+              Rank:{" "}
               {getSageMasteryDisplayRank(
                 userData.sageMasteryExperience ?? 0,
                 !!userData.sageModeId,
@@ -283,28 +280,17 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
           },
         },
         data: {
-          labels: [
-            "Nin Off",
-            "Gen Off",
-            "Tai Off",
-            "Buki Off",
-            "Nin Def",
-            "Gen Def",
-            "Tai Def",
-            "Buki Def",
-          ],
+          labels: ["Nin", "Gen", "Tai", "Buki", "Bloodline", "Sage"],
           datasets: [
             {
               label: "Value",
               data: [
-                userData.ninjutsuOffence ?? 0,
-                userData.genjutsuOffence ?? 0,
-                userData.taijutsuOffence ?? 0,
-                userData.bukijutsuOffence ?? 0,
-                userData.ninjutsuDefence ?? 0,
-                userData.genjutsuDefence ?? 0,
-                userData.taijutsuDefence ?? 0,
-                userData.bukijutsuDefence ?? 0,
+                userData.ninjutsuMastery ?? 0,
+                userData.genjutsuMastery ?? 0,
+                userData.taijutsuMastery ?? 0,
+                userData.bukijutsuMastery ?? 0,
+                userData.bloodlineMastery ?? 0,
+                userData.sageMastery ?? 0,
               ],
               fill: true,
               backgroundColor: "rgba(255, 99, 132, 0.2)",
@@ -376,8 +362,30 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
     }
   }, [activeLayout, userData]);
 
+  const { stats_cap } = getUserCaps(userData.rank);
+  const combatStats = [
+    { label: "Offence", value: userData.offence ?? 0 },
+    { label: "Defence", value: userData.defence ?? 0 },
+  ];
+
   return (
     <div className="grid grid-cols-1 pt-3 sm:grid-cols-2">
+      <div className="sm:col-span-2">
+        <p className="font-bold">Combat</p>
+        <div className="grid grid-cols-2 gap-3 p-3">
+          {combatStats.map(({ label, value }) => (
+            <div key={label}>
+              <p className="text-sm">
+                {label}: <b>{Math.floor(value).toLocaleString()}</b>
+              </p>
+              <Progress value={Math.min(100, (value / stats_cap) * 100)} />
+              <p className="text-muted-foreground text-xs">
+                of {stats_cap.toLocaleString()} cap
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
       <div>
         <p className="font-bold">Generals</p>
         <div className="relative w-[99%] p-3">
@@ -385,7 +393,8 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
         </div>
       </div>
       <div>
-        <p className="font-bold">Strengths</p>
+        <p className="font-bold">Masteries</p>
+        <p className="text-muted-foreground text-xs">Gates content, no damage</p>
         <div className="relative w-[99%]">
           <canvas ref={statsChartRef} id="statsChartRef"></canvas>
         </div>

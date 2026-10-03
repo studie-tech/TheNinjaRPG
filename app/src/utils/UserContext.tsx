@@ -129,7 +129,10 @@ export function UserContextProvider(props: {
     async (updatedData: Partial<UserWithRelations>) => {
       await utils.profile.getUser.cancel();
       utils.profile.getUser.setData(undefined, (old) => {
-        return { ...old, userData: { ...old?.userData, ...updatedData } } as typeof old;
+        return {
+          ...old,
+          userData: { ...old?.userData, ...updatedData },
+        } as typeof old;
       });
     },
     [utils],

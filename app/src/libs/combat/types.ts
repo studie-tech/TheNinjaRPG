@@ -6,6 +6,7 @@ import type {
   CombatBiome,
   ElementName,
   GeneralType,
+  MasteryName,
   PoolType,
   StatType,
 } from "@/drizzle/constants";
@@ -153,8 +154,6 @@ export type CombatUserFields = {
   controllerId: string;
   direction: "left" | "right";
   isAggressor: boolean;
-  highestOffence: (typeof StatNames)[number];
-  highestDefence: (typeof StatNames)[number];
   highestGenerals: (typeof GenNames)[number][];
   round: number;
   iAmHere: boolean;
@@ -165,6 +164,7 @@ export type CombatUserFields = {
   actionPoints: number;
   isOriginal: boolean;
   usedGenerals: Record<(typeof GenNames)[number], number>;
+  usedMasteries?: Partial<Record<MasteryName, number>>;
   usedStats: Record<(typeof StatNames)[number], number>;
   leftBattle: boolean;
   fledBattle: boolean;
@@ -206,14 +206,14 @@ export type CombatUserFields = {
   warIds: string[];
   /** Base stat values used for additive percentage modifier calculations (e.g., increaseStat, decreaseStat) */
   baseStatsForModifiers?: {
-    ninjutsuOffence?: number;
-    ninjutsuDefence?: number;
-    genjutsuOffence?: number;
-    genjutsuDefence?: number;
-    taijutsuOffence?: number;
-    taijutsuDefence?: number;
-    bukijutsuOffence?: number;
-    bukijutsuDefence?: number;
+    offence?: number;
+    defence?: number;
+    ninjutsuMastery?: number;
+    genjutsuMastery?: number;
+    taijutsuMastery?: number;
+    bukijutsuMastery?: number;
+    bloodlineMastery?: number;
+    sageMastery?: number;
     strength?: number;
     speed?: number;
     intelligence?: number;
@@ -363,6 +363,10 @@ export type PreBattleGearModifiers = {
  * Static data is stored once at battle initiation and looked up by ID.
  */
 export type ExtraState = {
+  /** Repeated-opponent eligibility captured before inserting this battle. */
+  energyRewardEligible?: boolean;
+  energyRegeneration?: Record<string, number>;
+  energyCapacity?: Record<string, number>;
   // Static data - never changes during battle (looked up by ID)
   jutsus: Record<string, Jutsu>; // jutsuId -> Jutsu (includes user jutsus + injectable jutsus)
   jutsuReskins: Record<string, JutsuReskin>; // reskinId -> Reskin data
@@ -462,6 +466,7 @@ export type DroppedItem = {
  * Result type for users when battle is ended
  */
 export type CombatResult = {
+  masteryGains?: Partial<Record<MasteryName, number>>;
   outcome: "Won" | "Lost" | "Draw" | "Fled";
   didWin: number;
   eloDiff: number;
@@ -478,14 +483,8 @@ export type CombatResult = {
   speed: number;
   money: number;
   seichiSilver: number;
-  ninjutsuOffence: number;
-  ninjutsuDefence: number;
-  genjutsuOffence: number;
-  genjutsuDefence: number;
-  taijutsuOffence: number;
-  taijutsuDefence: number;
-  bukijutsuOffence: number;
-  bukijutsuDefence: number;
+  offence: number;
+  defence: number;
   villagePrestige: number;
   friendsLeft: number;
   targetsLeft: number;
@@ -601,11 +600,7 @@ export type BattleEffect = ZodAllTags & {
     | "sageModeAfter";
   targetType?: "user" | "barrier";
   power?: number;
-  highestOffence?: (typeof StatNames)[number];
-  highestDefence?: (typeof StatNames)[number];
   highestGenerals?: (typeof GenNames)[number][];
-  targetHighestOffence?: (typeof StatNames)[number];
-  targetHighestDefence?: (typeof StatNames)[number];
   targetHighestGenerals?: (typeof GenNames)[number][];
   longitude: number;
   latitude: number;

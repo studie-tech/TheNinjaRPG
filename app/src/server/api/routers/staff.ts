@@ -231,16 +231,22 @@ export const staffRouter = createTRPCRouter({
       };
       const tableName = tableMap[backup.type];
 
-      // Replace the development content with the selected backup.
+      // Replace content atomically: an incompatible backup must not leave the table empty.
       const deleteQuery =
         backup.type === "ai"
           ? `DELETE FROM \`${tableName}\` WHERE isAi = 1`
           : `DELETE FROM \`${tableName}\``;
-
-      await client.execute(deleteQuery);
-
-      if (backup.sqlText && !backup.sqlText.startsWith("/* Empty backup")) {
-        await client.execute(backup.sqlText);
+      try {
+        await client.transaction(async (tx) => {
+          await tx.execute(deleteQuery);
+          await tx.execute(backup.sqlText);
+        });
+      } catch (error) {
+        // Database errors can echo the insert statement; expose only the error head.
+        const message = error instanceof Error ? error.message : String(error);
+        return errorResponse(
+          `Push failed and was rolled back: ${message.slice(0, 200)}`,
+        );
       }
 
       return { success: true, message: "Backup pushed to dev" };
@@ -614,14 +620,14 @@ export const staffRouter = createTRPCRouter({
             intelligence: target.intelligence,
             willpower: target.willpower,
             gender: target.gender,
-            ninjutsuOffence: target.ninjutsuOffence,
-            ninjutsuDefence: target.ninjutsuDefence,
-            genjutsuOffence: target.genjutsuOffence,
-            genjutsuDefence: target.genjutsuDefence,
-            taijutsuOffence: target.taijutsuOffence,
-            taijutsuDefence: target.taijutsuDefence,
-            bukijutsuOffence: target.bukijutsuOffence,
-            bukijutsuDefence: target.bukijutsuDefence,
+            offence: target.offence,
+            defence: target.defence,
+            ninjutsuMastery: target.ninjutsuMastery,
+            genjutsuMastery: target.genjutsuMastery,
+            taijutsuMastery: target.taijutsuMastery,
+            bukijutsuMastery: target.bukijutsuMastery,
+            bloodlineMastery: target.bloodlineMastery,
+            sageMastery: target.sageMastery,
             questData: target.questData,
             isOutlaw: target.isOutlaw,
             sector: target.sector,
@@ -862,7 +868,7 @@ export const staffRouter = createTRPCRouter({
       if (claim?.newUserId !== input.newUserId) {
         return { success: false, message: "UserId was already renamed to another id" };
       }
-      await Promise.all([
+      const moves = await Promise.allSettled([
         ctx.drizzle
           .update(aiProfile)
           .set({ userId: input.newUserId })
@@ -1135,6 +1141,10 @@ export const staffRouter = createTRPCRouter({
           .set({ userId: input.newUserId })
           .where(eq(userData.userId, input.userId)),
       ]);
+      // Answer only once every move has settled, so the retry a failure invites never
+      // races moves still in flight.
+      const failed = moves.find((move) => move.status === "rejected");
+      if (failed) throw failed.reason;
       return { success: true, message: "UserId updated" };
     }),
   // Delete referral from user

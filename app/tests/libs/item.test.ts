@@ -30,8 +30,11 @@ import {
   showsItemLevelBadge,
   userItemActionBadges,
 } from "@/libs/item";
-import type { ItemSlot } from "@/drizzle/constants";
+import type { ItemSlot, MasteryName } from "@/drizzle/constants";
+import { MasteryNames } from "@/drizzle/constants";
 import type { UserData, UserItemWithRelations } from "@/drizzle/schema";
+import type { MasteryRequirementFields } from "@/libs/mastery";
+import type { ZodAllTags } from "@/validators/combat";
 
 const NOW = new Date("2026-06-17T00:00:00Z");
 const PAST = new Date("2026-06-16T00:00:00Z");
@@ -224,6 +227,8 @@ const ui = (over: {
   equipped?: ItemSlot;
   cost?: number;
   imbuements?: Array<{ craftingFinishedAt: Date | null }>;
+  effects?: ZodAllTags[];
+  requirements?: MasteryRequirementFields;
 }): UserItemWithRelations =>
   ({
     id: over.id,
@@ -233,6 +238,8 @@ const ui = (over: {
     isInAuction: over.isInAuction ?? false,
     craftingFinishedAt: over.craftingFinishedAt ?? null,
     imbuements: over.imbuements ?? [],
+    durability: 100,
+    level: 1,
     item: {
       id: over.itemId,
       name: over.name ?? over.itemId,
@@ -243,10 +250,28 @@ const ui = (over: {
       slot: over.slotType ?? "ITEM",
       maxEquips: over.maxEquips ?? 1,
       cost: over.cost ?? 0,
+      maxDurability: 100,
+      canBeImbued: false,
+      effects: over.effects ?? [],
+      ...over.requirements,
     },
   }) as unknown as UserItemWithRelations;
 
-const USER = { level: 50, bloodlineId: "bl1" };
+const MASTERIES = Object.fromEntries(MasteryNames.map((name) => [name, 10])) as Record<
+  MasteryName,
+  number
+>;
+const USER = { level: 50, bloodlineId: "bl1", ...MASTERIES };
+
+/** A worn-gear mastery buff, as content authors would configure it. */
+const ninjutsuBuff = (power: number): ZodAllTags =>
+  ({
+    type: "increasemastery",
+    masteryTypes: ["Ninjutsu"],
+    calculation: "static",
+    power,
+    powerPerLevel: 0,
+  }) as ZodAllTags;
 
 describe("buildItemLoadoutData", () => {
   it("serializes the unique inventory row id for equipped rows only", () => {
@@ -575,6 +600,108 @@ describe("computeLoadoutAssignments", () => {
     expect(out.assignments).toEqual([{ userItemId: "r1", slot: "HEAD" }]);
     expect(out.invalidItems).toEqual([]);
   });
+
+  describe("mastery gates", () => {
+    const gatedBlade = ui({
+      id: "blade",
+      itemId: "blade",
+      name: "Gated Blade",
+      slotType: "HAND",
+      requirements: { requiredNinjutsuMastery: 500 },
+    });
+    const buffArmor = (id: string, requirement?: number, slotType = "CHEST") =>
+      ui({
+        id,
+        itemId: id,
+        name: id,
+        slotType,
+        itemType: "ARMOR",
+        effects: [ninjutsuBuff(600)],
+        requirements: requirement ? { requiredNinjutsuMastery: requirement } : {},
+      });
+
+    it("rejects an item whose mastery requirement is unmet", () => {
+      const out = computeLoadoutAssignments(
+        [{ itemId: "blade", slot: "HAND_1" }],
+        [gatedBlade],
+        USER,
+        NOW,
+      );
+      expect(out.assignments).toEqual([]);
+      expect(out.invalidItems).toEqual(["Gated Blade requires 500 Ninjutsu Mastery"]);
+    });
+
+    it("assigns the item once the stored mastery meets it", () => {
+      const out = computeLoadoutAssignments(
+        [{ itemId: "blade", slot: "HAND_1" }],
+        [gatedBlade],
+        { ...USER, ninjutsuMastery: 500 },
+        NOW,
+      );
+      expect(out.assignments).toEqual([{ userItemId: "blade", slot: "HAND_1" }]);
+    });
+
+    it("counts a mastery buff from armor in the same loadout", () => {
+      const out = computeLoadoutAssignments(
+        [
+          { itemId: "armor", slot: "CHEST" },
+          { itemId: "blade", slot: "HAND_1" },
+        ],
+        [buffArmor("armor"), gatedBlade],
+        USER,
+        NOW,
+      );
+      expect(out.assignments).toEqual([
+        { userItemId: "armor", slot: "CHEST" },
+        { userItemId: "blade", slot: "HAND_1" },
+      ]);
+    });
+
+    it("ignores the buff of armor worn now but left out of the loadout", () => {
+      const worn = { ...buffArmor("armor"), equipped: "CHEST" as const };
+      const out = computeLoadoutAssignments(
+        [{ itemId: "blade", slot: "HAND_1" }],
+        [worn, gatedBlade],
+        USER,
+        NOW,
+      );
+      expect(out.assignments).toEqual([]);
+    });
+
+    it("counts a mastery buff from the equipped bloodline", () => {
+      const out = computeLoadoutAssignments(
+        [{ itemId: "blade", slot: "HAND_1" }],
+        [gatedBlade],
+        { ...USER, bloodline: { effects: [ninjutsuBuff(600)] } },
+        NOW,
+      );
+      expect(out.assignments).toEqual([{ userItemId: "blade", slot: "HAND_1" }]);
+    });
+
+    it("does not let gated armor unlock itself", () => {
+      const out = computeLoadoutAssignments(
+        [{ itemId: "armor", slot: "CHEST" }],
+        [buffArmor("armor", 500)],
+        USER,
+        NOW,
+      );
+      expect(out.assignments).toEqual([]);
+    });
+
+    it("does not let two gated pieces unlock each other", () => {
+      const out = computeLoadoutAssignments(
+        [
+          { itemId: "armor", slot: "CHEST" },
+          { itemId: "helm", slot: "HEAD" },
+        ],
+        [buffArmor("armor", 500), buffArmor("helm", 500, "HEAD")],
+        USER,
+        NOW,
+      );
+      expect(out.assignments).toEqual([]);
+      expect(out.invalidItems).toHaveLength(2);
+    });
+  });
 });
 
 describe("computeAutoEquipAssignments", () => {
@@ -636,6 +763,29 @@ describe("computeAutoEquipAssignments", () => {
     ];
     const out = computeAutoEquipAssignments(items, USER, NOW);
     expect(out.assignments).toEqual([{ userItemId: "ok", slot: "HEAD" }]);
+  });
+
+  it("prefers a cheaper armor the user can wear over a costlier mastery-gated one", () => {
+    const items = [
+      ui({
+        id: "gated",
+        itemId: "gated",
+        slotType: "CHEST",
+        itemType: "ARMOR",
+        cost: 999,
+        requirements: { requiredTaijutsuMastery: 50_000 },
+      }),
+      ui({ id: "usable", itemId: "usable", slotType: "CHEST", itemType: "ARMOR", cost: 1 }),
+    ];
+    const out = computeAutoEquipAssignments(items, USER, NOW);
+    expect(out.assignments).toEqual([{ userItemId: "usable", slot: "CHEST" }]);
+
+    const trained = computeAutoEquipAssignments(
+      items,
+      { ...USER, taijutsuMastery: 50_000 },
+      NOW,
+    );
+    expect(trained.assignments).toEqual([{ userItemId: "gated", slot: "CHEST" }]);
   });
 
   it("enforces a single accessory across already-equipped and new assignments", () => {

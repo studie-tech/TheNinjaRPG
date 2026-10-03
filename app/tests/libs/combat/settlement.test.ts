@@ -1,15 +1,24 @@
 // @vitest-environment node
+import { REGEN_SECONDS } from "@/drizzle/constants";
 import * as nextServer from "next/server";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { battle, battleAction, logBattleLengths, userData } from "@/drizzle/schema";
+import {
+  aiProfile,
+  battle,
+  battleAction,
+  battleHistory,
+  logBattleLengths,
+  userData,
+} from "@/drizzle/schema";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { updateBattle, updateUser } from "@/libs/combat/database";
 import { applyEffects } from "@/libs/combat/process";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { alignBattle, calcBattleResult } from "@/libs/combat/util";
 import { Pusher, type PusherClient } from "@/libs/pusher";
-import { combatRouter } from "@/server/api/routers/combat";
+import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { insertUsers } from "../../setup/factories";
 import {
   callerFor,
@@ -40,6 +49,11 @@ const scenario = (final: boolean) =>
     roundStartAt: new Date(),
     usersState: [
       makeBattleUser("winner", {
+        direction: "left",
+        rank: "JONIN",
+        rankedLp: 100,
+        rankedStreak: 0,
+        rankedWins: 0,
         villageId: "red",
         curHealth: 100,
         money: 100000,
@@ -50,6 +64,10 @@ const scenario = (final: boolean) =>
         isSummon: false,
       }),
       makeBattleUser("loser", {
+        rank: "JONIN",
+        rankedLp: 100,
+        rankedStreak: 0,
+        rankedWins: 0,
         villageId: "blue",
         curHealth: 0,
         leftBattle: final,
@@ -99,7 +117,14 @@ const persisted = async () =>
 
 describeWithDatabase("CAS combat settlement", () => {
   beforeEach(async () => {
-    await resetTables(battle, battleAction, logBattleLengths, userData);
+    await resetTables(
+      battle,
+      battleAction,
+      battleHistory,
+      aiProfile,
+      logBattleLengths,
+      userData,
+    );
     trigger.mockClear();
     vi.spyOn(await getTestDatabase(), "transaction").mockImplementation(() => {
       throw new Error("Combat settlement must not open a transaction");
@@ -121,11 +146,117 @@ describeWithDatabase("CAS combat settlement", () => {
         money: 100000,
         battleId: "settlement",
         status: "BATTLE",
+        curEnergy: 10,
+        maxEnergy: 100,
+        regeneration: 0,
       })),
     );
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it.each([100, 15])(
+    "settles elapsed combat Energy regeneration up to capacity %s",
+    async (capacity) => {
+      const database = await getTestDatabase();
+      await database
+        .update(userData)
+        .set({ regenAt: new Date(Date.now() - 120_000) })
+        .where(eq(userData.userId, "winner"));
+      const snapshot = scenario(true);
+      snapshot.extraState.energyRegeneration = { winner: 3 };
+      snapshot.extraState.energyCapacity = { winner: capacity };
+      await database.insert(battle).values(snapshot);
+      await settle(snapshot);
+      const after = (await database.query.userData.findFirst({
+        where: eq(userData.userId, "winner"),
+      }))!;
+      expect(after.curEnergy).toBeCloseTo(Math.min(capacity, 10 + 3 * 120 / REGEN_SECONDS), 1);
+      expect(after.maxEnergy).toBe(capacity);
+    },
+  );
+
+  it.each([
+    { type: "COMBAT", outcome: "Won", eligible: true, reward: 5 },
+    { type: "COMBAT", outcome: "Lost", eligible: true, reward: 3 },
+    { type: "RANKED_PVP", outcome: "Won", eligible: true, reward: 5 },
+    { type: "RANKED_PVP", outcome: "Lost", eligible: true, reward: 3 },
+    { type: "COMBAT", outcome: "Won", eligible: false, reward: 0 },
+    { type: "SPARRING", outcome: "Won", eligible: true, reward: 0 },
+    { type: "RANKED_SPARRING", outcome: "Won", eligible: true, reward: 0 },
+    { type: "COMBAT", outcome: "Draw", eligible: true, reward: 0 },
+    { type: "ARENA", outcome: "Won", eligible: true, reward: 0 },
+    { type: "KAGE_AI", outcome: "Won", eligible: true, reward: 0 },
+  ] as const)(
+    "$type $outcome restores $reward Energy (eligible=$eligible)",
+    async ({ type, outcome, eligible, reward }) => {
+      const snapshot = scenario(false);
+      snapshot.battleType = type;
+      snapshot.extraState.energyRewardEligible = eligible;
+      snapshot.extraState.energyCapacity = { winner: 100, loser: 100 };
+      snapshot.extraState.energyRegeneration = { winner: 0, loser: 0 };
+      if (type === "ARENA" || type === "KAGE_AI") snapshot.usersState[1]!.isAi = true;
+      if (outcome === "Draw") snapshot.usersState[0]!.curHealth = 0;
+      const userId = outcome === "Lost" ? "loser" : "winner";
+      const database = await getTestDatabase();
+      await database.insert(battle).values(snapshot);
+      const before = (await database.query.userData.findFirst({
+        where: eq(userData.userId, userId),
+      }))!;
+      expect((await settle(structuredClone(snapshot), userId))?.outcome).toBe(outcome);
+      const after = (await database.query.userData.findFirst({
+        where: eq(userData.userId, userId),
+      }))!;
+      expect(after.curEnergy).toBe(10 + reward);
+      expect(after.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+      expect(
+        (
+          await claimUserSnapshot({
+            client: database,
+            userId,
+            updatedAt: before.updatedAt,
+            set: { curEnergy: before.curEnergy },
+          })
+        ).success,
+      ).toBe(false);
+      expect(await settle(structuredClone(snapshot), userId)).toBeNull();
+      expect(
+        (await database.query.userData.findFirst({
+          where: eq(userData.userId, userId),
+        }))!.curEnergy,
+      ).toBe(10 + reward);
+    },
+  );
+
+  it.each([false, true])(
+    "blocks Energy for a rematch in either direction (reverse=%s)",
+    async (reverse) => {
+      const database = await getTestDatabase();
+      await database.update(userData).set({
+        status: "AWAKE",
+        battleId: null,
+        rank: "JONIN",
+        isOutlaw: true,
+      });
+      await database
+        .insert(aiProfile)
+        .values({ id: "Default", userId: "default-ai", rules: [] });
+      await database.insert(battleHistory).values({
+        battleId: "previous",
+        battleType: "COMBAT",
+        attackedId: reverse ? "loser" : "winner",
+        defenderId: reverse ? "winner" : "loser",
+        createdAt: new Date(),
+      });
+      const result = await initiateBattle(
+        { client: database, userIds: ["winner"], targetIds: ["loser"] },
+        "COMBAT",
+      );
+      expect(result.success, result.message).toBe(true);
+      const saved = await database.query.battle.findFirst();
+      expect(saved?.extraState.energyRewardEligible).toBe(false);
+    },
+  );
 
   it("getBattle settles a non-final result without an actor or round change exactly once", async () => {
     const snapshot = scenario(false);
@@ -152,7 +283,10 @@ describeWithDatabase("CAS combat settlement", () => {
     snapshot.usersState[1]!.isAi = true;
     await (await getTestDatabase()).insert(battle).values(snapshot);
     const api = await callerFor(combatRouter, "winner");
-    const response = await api.performAction({ battleId: snapshot.id, version: 1 });
+    const response = await api.performAction({
+      battleId: snapshot.id,
+      version: 1,
+    });
     if (!("result" in response) || !response.result)
       throw new Error("Expected settlement result");
     expect(response.result.didWin).toBe(1);
@@ -384,7 +518,9 @@ describeWithDatabase("CAS combat settlement", () => {
         settle(structuredClone(snapshot)),
         settle(structuredClone(snapshot)),
       ]);
-      expect(results.filter((r) => r.status === "fulfilled" && r.value)).toHaveLength(1);
+      expect(results.filter((r) => r.status === "fulfilled" && r.value)).toHaveLength(
+        1,
+      );
       expect(await balance()).toBe(109600);
       const saved = await persisted();
       if (final) {

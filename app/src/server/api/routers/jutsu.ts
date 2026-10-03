@@ -63,6 +63,7 @@ import {
   decideRename,
   resolveSelectableLoadout,
 } from "@/libs/loadout";
+import { effectiveMasteries } from "@/libs/mastery";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
@@ -384,13 +385,15 @@ export const jutsuRouter = createTRPCRouter({
       // Pass the validator here (full user relations are loaded) so a stale
       // loadout cannot re-equip hidden/ineligible jutsu or exceed equip caps.
       const id = input.id;
+      const masteries = effectiveMasteries(user);
       return await selectJutsuLoadout(
         ctx.drizzle,
         id,
         loadouts,
         userjutsus,
         user,
-        (jutsuIds) => computeJutsuLoadoutAssignments({ jutsuIds, userjutsus, user }),
+        (jutsuIds) =>
+          computeJutsuLoadoutAssignments({ jutsuIds, userjutsus, user, masteries }),
       );
     }),
 
@@ -411,7 +414,7 @@ export const jutsuRouter = createTRPCRouter({
         requiredLevel: 1,
         target: "OTHER_USER",
         jutsuType: "AI",
-        statClassification: "Highest",
+        statClassification: "None",
         image: IMG_AVATAR_DEFAULT,
       });
       return { success: true, message: id };
@@ -1000,6 +1003,8 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
+      // Gear and skill mastery buffs count, as they do for equipping
+      const masteries = effectiveMasteries(user);
 
       // Derived
       const userjutsuObj = userjutsus.find((j) => j.jutsuId === input.jutsuId);
@@ -1009,7 +1014,7 @@ export const jutsuRouter = createTRPCRouter({
       const equippedCapCounts = countEquippedByCap(equippedJutsus);
 
       if (!info) return errorResponse("Jutsu not found");
-      if (!canTrainJutsu(info, user) && !info.parentJutsuId)
+      if (!canTrainJutsu(info, user, masteries) && !info.parentJutsuId)
         return errorResponse("Jutsu not for you");
       if (!userjutsuObj && isJutsuTrainToLearnRestricted(info.jutsuType)) {
         return errorResponse("This jutsu cannot be learned through training");
@@ -1018,7 +1023,11 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse(
           "Evolution jutsus can only be obtained by evolving the parent jutsu",
         );
-      if (info.parentJutsuId && userjutsuObj && !canUseJutsu(info, user, true))
+      if (
+        info.parentJutsuId &&
+        userjutsuObj &&
+        !canUseJutsu(info, user, true, masteries)
+      )
         return errorResponse("Jutsu not for you");
       if (
         userjutsus.some(
@@ -1276,7 +1285,8 @@ export const jutsuRouter = createTRPCRouter({
 
       // Check if jutsu can be equipped (bloodline item handled separately below for a
       // clearer error message, so skip it inside canUseJutsu here)
-      if (!isEquipped && !canUseJutsu(userjutsuObj.jutsu, user, true)) {
+      const masteries = effectiveMasteries(user);
+      if (!isEquipped && !canUseJutsu(userjutsuObj.jutsu, user, true, masteries)) {
         return errorResponse("You cannot equip this jutsu due to missing requirements");
       }
       if (!isEquipped && !checkJutsuBloodlineItem(userjutsuObj.jutsu, user.items)) {
@@ -2155,7 +2165,7 @@ export const jutsuDatabaseFilter = (
       ? input.excludedClassifications.map((c) =>
           ne(
             jutsu.statClassification,
-            c as "Highest" | "Ninjutsu" | "Genjutsu" | "Taijutsu" | "Bukijutsu",
+            c as "None" | "Ninjutsu" | "Genjutsu" | "Taijutsu" | "Bukijutsu",
           ),
         )
       : []),
@@ -2324,7 +2334,7 @@ export const selectJutsuLoadout = async (
   user: Pick<UserData, "userId" | "federalStatus" | "staffAccount">,
   // Optional validator: when supplied, saved jutsuIds are filtered to those still
   // equippable. The jutsu-management path passes full canUseJutsu validation;
-  // combat passes a slimmer required-item validator against its battle state.
+  // combat checks bloodline items and effective masteries against its battle state.
   validateLoadout?: (jutsuIds: string[]) => ComputedJutsuLoadout,
 ) => {
   // Guard: only loadouts within the user's current allowance are selectable, so

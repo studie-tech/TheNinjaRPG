@@ -1432,14 +1432,16 @@ export const item = mysqlTable(
     xpToLevel: int("xpToLevel").default(consts.ITEM_XP_TO_LEVEL).notNull(),
     // Evolution fields (shared pattern with jutsu — see libs/evolution.ts)
     parentItemId: varchar("parentItemId", { length: 191 }),
-    requiredNinjutsuOffence: int("requiredNinjutsuOffence"),
-    requiredNinjutsuDefence: int("requiredNinjutsuDefence"),
-    requiredGenjutsuOffence: int("requiredGenjutsuOffence"),
-    requiredGenjutsuDefence: int("requiredGenjutsuDefence"),
-    requiredTaijutsuOffence: int("requiredTaijutsuOffence"),
-    requiredTaijutsuDefence: int("requiredTaijutsuDefence"),
-    requiredBukijutsuOffence: int("requiredBukijutsuOffence"),
-    requiredBukijutsuDefence: int("requiredBukijutsuDefence"),
+    // Mastery gates, checked against the UserData mastery stats of the same name. Note
+    // that SageMode.requiredSageMastery is unrelated: it gates level-2 sage effects on
+    // UserData.sageMasteryExperience.
+    requiredNinjutsuMastery: int("requiredNinjutsuMastery"),
+    requiredGenjutsuMastery: int("requiredGenjutsuMastery"),
+    requiredTaijutsuMastery: int("requiredTaijutsuMastery"),
+    requiredBukijutsuMastery: int("requiredBukijutsuMastery"),
+    requiredBloodlineMastery: int("requiredBloodlineMastery"),
+    requiredSageMastery: int("requiredSageMastery"),
+    // General stat gates, checked only when evolving into this item
     requiredStrength: int("requiredStrength"),
     requiredSpeed: int("requiredSpeed"),
     requiredIntelligence: int("requiredIntelligence"),
@@ -1670,14 +1672,16 @@ export const jutsu = mysqlTable(
       .notNull(),
     // Evolution fields
     parentJutsuId: varchar("parentJutsuId", { length: 191 }),
-    requiredNinjutsuOffence: int("requiredNinjutsuOffence"),
-    requiredNinjutsuDefence: int("requiredNinjutsuDefence"),
-    requiredGenjutsuOffence: int("requiredGenjutsuOffence"),
-    requiredGenjutsuDefence: int("requiredGenjutsuDefence"),
-    requiredTaijutsuOffence: int("requiredTaijutsuOffence"),
-    requiredTaijutsuDefence: int("requiredTaijutsuDefence"),
-    requiredBukijutsuOffence: int("requiredBukijutsuOffence"),
-    requiredBukijutsuDefence: int("requiredBukijutsuDefence"),
+    // Mastery gates, checked against the UserData mastery stats of the same name. Note
+    // that SageMode.requiredSageMastery is unrelated: it gates level-2 sage effects on
+    // UserData.sageMasteryExperience.
+    requiredNinjutsuMastery: int("requiredNinjutsuMastery"),
+    requiredGenjutsuMastery: int("requiredGenjutsuMastery"),
+    requiredTaijutsuMastery: int("requiredTaijutsuMastery"),
+    requiredBukijutsuMastery: int("requiredBukijutsuMastery"),
+    requiredBloodlineMastery: int("requiredBloodlineMastery"),
+    requiredSageMastery: int("requiredSageMastery"),
+    // General stat gates, checked only when evolving into this jutsu
     requiredStrength: int("requiredStrength"),
     requiredSpeed: int("requiredSpeed"),
     requiredIntelligence: int("requiredIntelligence"),
@@ -2307,6 +2311,8 @@ export const userData = mysqlTable(
     maxHealth: smallint("maxHealth", { unsigned: true }).default(100).notNull(),
     curChakra: smallint("curChakra", { unsigned: true }).default(100).notNull(),
     maxChakra: smallint("maxChakra", { unsigned: true }).default(100).notNull(),
+    curEnergy: double("curEnergy").default(100).notNull(),
+    maxEnergy: double("maxEnergy").default(100).notNull(),
     curStamina: smallint("curStamina", { unsigned: true }).default(100).notNull(),
     maxStamina: smallint("maxStamina", { unsigned: true }).default(100).notNull(),
     regeneration: tinyint("regeneration").default(60).notNull(),
@@ -2327,14 +2333,14 @@ export const userData = mysqlTable(
     intelligence: double("intelligence").default(10).notNull(),
     willpower: double("willpower").default(10).notNull(),
     speed: double("speed").default(10).notNull(),
-    ninjutsuOffence: double("ninjutsuOffence").default(10).notNull(),
-    ninjutsuDefence: double("ninjutsuDefence").default(10).notNull(),
-    genjutsuOffence: double("genjutsuOffence").default(10).notNull(),
-    genjutsuDefence: double("genjutsuDefence").default(10).notNull(),
-    taijutsuOffence: double("taijutsuOffence").default(10).notNull(),
-    taijutsuDefence: double("taijutsuDefence").default(10).notNull(),
-    bukijutsuDefence: double("bukijutsuDefence").default(10).notNull(),
-    bukijutsuOffence: double("bukijutsuOffence").default(10).notNull(),
+    offence: double("offence").default(10).notNull(),
+    defence: double("defence").default(10).notNull(),
+    ninjutsuMastery: double("ninjutsuMastery").default(10).notNull(),
+    genjutsuMastery: double("genjutsuMastery").default(10).notNull(),
+    taijutsuMastery: double("taijutsuMastery").default(10).notNull(),
+    bukijutsuMastery: double("bukijutsuMastery").default(10).notNull(),
+    bloodlineMastery: double("bloodlineMastery").default(10).notNull(),
+    sageMastery: double("sageMastery").default(10).notNull(),
     statsMultiplier: double("statsMultiplier").default(1).notNull(),
     poolsMultiplier: double("poolsMultiplier").default(1).notNull(),
     primaryElement: mysqlEnum("primaryElement", consts.ElementNames),
@@ -2417,11 +2423,17 @@ export const userData = mysqlTable(
     })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
-    trainingStartedAt: datetime("trainingStartedAt", { mode: "date", fsp: 3 }),
     trainingSpeed: mysqlEnum("trainingSpeed", consts.TrainingSpeeds)
       .default("15min")
       .notNull(),
-    currentlyTraining: mysqlEnum("currentlyTraining", consts.UserStatNames),
+    masteryTrainingStartedAt: datetime("masteryTrainingStartedAt", {
+      mode: "date",
+      fsp: 3,
+    }),
+    currentlyTrainingMastery: mysqlEnum(
+      "currentlyTrainingMastery",
+      consts.MasteryNames,
+    ),
     unreadNotifications: smallint("unreadNotifications").default(0).notNull(),
     unreadNews: smallint("unreadNews").default(0).notNull(),
     questData: json("questData").$type<QuestTrackerType[]>(),
@@ -2440,7 +2452,6 @@ export const userData = mysqlTable(
       .default(0)
       .notNull(),
     // Settings
-    preferredStat: mysqlEnum("preferredStat", consts.StatTypes),
     preferredGeneral1: mysqlEnum("preferredGeneral1", consts.GeneralTypes),
     preferredGeneral2: mysqlEnum("preferredGeneral2", consts.GeneralTypes),
     showBattleDescription: boolean("showBattleDescription").default(true).notNull(),
@@ -2577,9 +2588,9 @@ export const userData = mysqlTable(
 );
 export const insertAiSchema = createInsertSchema(userData)
   .omit({
-    trainingStartedAt: true,
     occupationSignupAt: true,
-    currentlyTraining: true,
+    masteryTrainingStartedAt: true,
+    currentlyTrainingMastery: true,
     deletionAt: true,
     travelFinishAt: true,
     questData: true,
@@ -2606,14 +2617,14 @@ export const insertAiSchema = createInsertSchema(userData)
           secondaryElement: z.enum([...consts.ElementNames, ""]).nullish(),
           level: z.coerce.number().min(1).max(200),
           regeneration: z.coerce.number().min(1).max(100),
-          ninjutsuOffence: z.coerce.number().min(10),
-          ninjutsuDefence: z.coerce.number().min(10),
-          genjutsuOffence: z.coerce.number().min(10),
-          genjutsuDefence: z.coerce.number().min(10),
-          taijutsuOffence: z.coerce.number().min(10),
-          taijutsuDefence: z.coerce.number().min(10),
-          bukijutsuOffence: z.coerce.number().min(10),
-          bukijutsuDefence: z.coerce.number().min(10),
+          offence: z.coerce.number().min(10),
+          defence: z.coerce.number().min(10),
+          ninjutsuMastery: z.coerce.number().min(10),
+          genjutsuMastery: z.coerce.number().min(10),
+          taijutsuMastery: z.coerce.number().min(10),
+          bukijutsuMastery: z.coerce.number().min(10),
+          bloodlineMastery: z.coerce.number().min(10),
+          sageMastery: z.coerce.number().min(10),
           statsMultiplier: z.coerce.number().min(1).max(50),
           poolsMultiplier: z.coerce.number().min(1).max(50),
           strength: z.coerce.number().min(10),

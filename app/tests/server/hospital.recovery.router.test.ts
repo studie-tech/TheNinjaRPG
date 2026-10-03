@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
+import { HOSPITAL_BASE_HEAL_SECONDS, REGEN_SECONDS } from "@/drizzle/constants";
 import { userData, villageStructure } from "@/drizzle/schema";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { insertUsers } from "../setup/factories";
@@ -55,6 +55,8 @@ describeWithDatabase("hospital recovery with a village bonus", () => {
         maxHealth: 100,
         money: 0,
         regenAt: admission,
+        curEnergy: 0,
+        regeneration: 60,
       },
     ]);
     const api = await callerFor(hospitalRouter, USER_ID);
@@ -68,5 +70,36 @@ describeWithDatabase("hospital recovery with a village bonus", () => {
     expect(saved?.status).toBe(recovered ? "AWAKE" : "HOSPITALIZED");
     expect(saved?.curHealth).toBe(recovered ? 100 : 0);
     expect(saved?.money).toBe(0);
+    expect(saved?.curEnergy).toBe(recovered ? 100 : 0);
+    if (!recovered) expect(saved?.regenAt.getTime()).toBe(admission.getTime());
+  });
+
+  it("keeps accumulated Energy when paying for an early checkout", async () => {
+    await insertUsers([
+      {
+        userId: USER_ID,
+        username: "HospitalRecovery",
+        villageId: VILLAGE_ID,
+        status: "HOSPITALIZED",
+        curHealth: 0,
+        maxHealth: 100,
+        money: 10000,
+        curEnergy: 20,
+        regeneration: 60,
+        regenAt: new Date(Date.now() - 30000),
+      },
+    ]);
+    const api = await callerFor(hospitalRouter, USER_ID);
+    const result = await api.npcHeal({ villageId: VILLAGE_ID });
+    expect(result.success).toBe(true);
+    const database = await getTestDatabase();
+    const saved = await database.query.userData.findFirst({
+      where: eq(userData.userId, USER_ID),
+    });
+    expect(saved?.status).toBe("AWAKE");
+    const expectedEnergy = 20 + (60 * 30) / REGEN_SECONDS;
+    expect(saved?.curEnergy).toBeGreaterThanOrEqual(expectedEnergy);
+    expect(saved?.curEnergy).toBeLessThan(expectedEnergy + 5);
+    expect(result.data?.curEnergy).toBeCloseTo(saved?.curEnergy ?? 0, 0);
   });
 });
