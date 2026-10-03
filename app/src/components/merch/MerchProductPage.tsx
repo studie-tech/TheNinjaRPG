@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Minus, Plus, ShoppingBag } from "lucide-react";
+import { ArrowRight, Minus, Plus, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -64,14 +64,6 @@ export function MerchProductPage({ handle }: { handle: string }) {
 
   return (
     <>
-      <div className="merch-product-breadcrumb">
-        <Link href="/merch">
-          <ArrowLeft size={16} /> The collection
-        </Link>
-        <span>
-          {product.category} / {product.kind}
-        </span>
-      </div>
       <section className="merch-product-detail">
         <div>
           <div className={`merch-detail-photo ${showArt ? "merch-detail-art" : ""}`}>

@@ -588,23 +588,11 @@
   margin-bottom: 25px;
   line-height: 1.8;
 }
-.merch-product-breadcrumb {
-  display: flex;
-  justify-content: space-between;
-  padding: 30px 6%;
-  font-size: 11px;
-  color: #697565;
-}
-.merch-product-breadcrumb a {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 .merch-product-detail {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
   gap: 7%;
-  padding: 0 6% 70px;
+  padding: 24px 6% 70px;
 }
 .merch-detail-photo {
   position: relative;
@@ -965,16 +953,9 @@
   .merch-bag {
     padding: 25px 20px !important;
   }
-  .merch-product-breadcrumb {
-    padding: 22px 5%;
-    font-size: 10px;
-  }
-  .merch-product-breadcrumb>span {
-    display: none;
-  }
   .merch-product-detail {
     grid-template-columns: 1fr;
-    padding: 0 5% 40px;
+    padding: 20px 5% 40px;
     gap: 15px;
   }
   .merch-product-copy {

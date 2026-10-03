@@ -119,6 +119,10 @@ export function MerchProvider({ children }: { children: ReactNode }) {
   }, [preview, storageReady, catalog.data]);
 
   const products = catalog.data?.products ?? [];
+  const currentProduct = products.find(
+    (product) => pathname === `/merch/${product.handle}`,
+  );
+  const isProductPage = pathname.startsWith("/merch/") && pathname !== "/merch/cart";
   // Retired preview items cannot reappear from an older saved bag.
   const lines = preview
     ? reviewLines.filter((line) =>
@@ -244,7 +248,12 @@ export function MerchProvider({ children }: { children: ReactNode }) {
         </a>
         <ContentBox
           title="Merch"
-          subtitle="The Seichi collection"
+          subtitle={
+            currentProduct
+              ? `${currentProduct.category} / ${currentProduct.kind}`
+              : "The Seichi collection"
+          }
+          defaultBackHref={isProductPage ? "/merch" : undefined}
           alreadyHasH1
           padding={false}
           topRightContent={
