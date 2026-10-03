@@ -163,7 +163,9 @@ export const StripeSubscriptions = () => {
             {subscription.federalStatus} — {subscription.status}
             {subscription.cancelAtPeriodEnd ? " (renewal cancelled)" : ""}
           </p>
-          <p className="text-xs">Recipient: {subscription.affectedUserId}</p>
+          <p className="text-xs">
+            Recipient: {subscription.recipientUsername ?? "Deleted character"}
+          </p>
           {!subscription.cancelAtPeriodEnd &&
             !["canceled", "incomplete_expired"].includes(subscription.status) && (
               <Button

@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { FEDERAL_MONTHLY_USD_CENTS } from "@/drizzle/constants";
 import {
   paypalTransaction,
@@ -346,21 +347,26 @@ export const stripeRouter = createTRPCRouter({
     }),
   ),
   getSubscriptions: protectedProcedure.query(async ({ ctx }) => {
-    const checkouts = await ctx.drizzle.query.stripeCheckout.findMany({
-      where: and(
-        or(
-          eq(stripeCheckout.createdById, ctx.userId),
-          eq(stripeCheckout.affectedUserId, ctx.userId),
+    const recipient = alias(userData, "recipient");
+    const checkouts = await ctx.drizzle
+      .select({ checkout: stripeCheckout, recipientUsername: recipient.username })
+      .from(stripeCheckout)
+      .leftJoin(recipient, eq(recipient.userId, stripeCheckout.affectedUserId))
+      .where(
+        and(
+          or(
+            eq(stripeCheckout.createdById, ctx.userId),
+            eq(stripeCheckout.affectedUserId, ctx.userId),
+          ),
+          isNotNull(stripeCheckout.subscriptionId),
         ),
-        isNotNull(stripeCheckout.subscriptionId),
-      ),
-      orderBy: desc(stripeCheckout.createdAt),
-      limit: 100,
-    });
+      )
+      .orderBy(desc(stripeCheckout.createdAt))
+      .limit(100);
     if (!checkouts.length || !isStripeConfigured()) return [];
     const stripe = getStripe();
     return Promise.all(
-      checkouts.map(async (checkout) => {
+      checkouts.map(async ({ checkout, recipientUsername }) => {
         const subscription = await stripe.subscriptions.retrieve(
           checkout.subscriptionId as string,
         );
@@ -368,6 +374,7 @@ export const stripeRouter = createTRPCRouter({
           checkoutId: checkout.id,
           federalStatus: checkout.federalStatus,
           affectedUserId: checkout.affectedUserId,
+          recipientUsername,
           createdById: checkout.createdById,
           status: subscription.status,
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
