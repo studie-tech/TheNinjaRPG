@@ -18,6 +18,26 @@ const originalConfiguration = {
   SHOPIFY_STOREFRONT_ACCESS_TOKEN: env.SHOPIFY_STOREFRONT_ACCESS_TOKEN,
   MERCH_CHECKOUT_ENABLED: env.MERCH_CHECKOUT_ENABLED,
 };
+describe("optional Shopify configuration", () => {
+  it("accepts the blank example configuration and keeps checkout closed", async () => {
+    const { serverSchema } = await import("@/env/schema.mjs");
+    const configuration = {
+      SHOPIFY_STORE_DOMAIN: "",
+      SHOPIFY_STOREFRONT_ACCESS_TOKEN: "",
+      MERCH_CHECKOUT_ENABLED: "false",
+    };
+    for (const key of ["SHOPIFY_STORE_DOMAIN", "SHOPIFY_STOREFRONT_ACCESS_TOKEN"] as const) {
+      expect(serverSchema.shape[key].safeParse(configuration[key]).success).toBe(true);
+    }
+    Object.assign(env, configuration);
+    expect(isMerchCheckoutEnabled()).toBe(false);
+  });
+
+  it("continues to reject a non-Shopify host", async () => {
+    const { serverSchema } = await import("@/env/schema.mjs");
+    expect(serverSchema.shape.SHOPIFY_STORE_DOMAIN.safeParse("example.com").success).toBe(false);
+  });
+});
 beforeEach(() =>
   Object.assign(env, {
     SHOPIFY_STORE_DOMAIN: "test-shop.myshopify.com",
