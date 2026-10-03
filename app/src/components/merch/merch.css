@@ -27,13 +27,6 @@
   display: grid;
   place-items: center;
 }
-.merch-preview-note {
-  text-align: center;
-  font-size: 11px;
-  background: #ece6d9;
-  padding: 8px;
-  color: #5a5e53;
-}
 .merch-skip {
   position: absolute;
   top: -100px;
@@ -772,14 +765,6 @@
   .merch-bag-trigger>span {
     display: none;
   }
-  .merch-preview-note {
-    font-size: 9px;
-    padding: 9px 15px;
-  }
-  .merch-preview-note span {
-    display: block;
-    margin-top: 3px;
-  }
   .merch-hero {
     padding: 45px 6% 280px;
     min-height: 650px;
@@ -1056,10 +1041,6 @@
 .merch-button-outline {
   background: transparent;
   color: hsl(var(--primary)) !important;
-}
-.merch-preview-note {
-  background: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
 }
 .merch-bag {
   color: hsl(var(--card-foreground)) !important;

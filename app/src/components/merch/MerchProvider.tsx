@@ -236,14 +236,6 @@ export function MerchProvider({ children }: { children: ReactNode }) {
             </Button>
           }
         >
-          {preview && (
-            <div className="merch-preview-note">
-              Collection preview{" "}
-              <span>
-                · Explore designs and save a review bag. Orders aren’t open yet.
-              </span>
-            </div>
-          )}
           <div id="merch-main">{children}</div>
           <div className="merch-support">
             <span>Questions about a piece or your order?</span>
