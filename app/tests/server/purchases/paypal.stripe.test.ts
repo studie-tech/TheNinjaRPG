@@ -186,6 +186,21 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
     await insertUsers([{ userId: TARGET, username: TARGET, reputationPoints: 0 }]);
     expect(await paid()).toMatchObject({ success: true });
   });
+  it("transaction lookup reports not found as failure with a recovery message", async () => {
+    const caller = await callerFor(paypalRouter, BUYER);
+    expect(await caller.resolveTransaction({ transactionId: "MISSING_CAPTURE", transactionDate: new Date() })).toMatchObject({ success: false, message: expect.stringContaining("No completed PayPal transaction was found") });
+  });
+  it.each([{ custom_field: "", transaction_amount: { value: "10", currency_code: "USD" } }, { transaction_amount: undefined }, { transaction_amount: { value: "NaN", currency_code: "USD" } }, { transaction_amount: { value: "1invalid", currency_code: "USD" } }, { transaction_amount: { value: "0", currency_code: "USD" } }, { transaction_amount: { value: "-1", currency_code: "USD" } }, { transaction_amount: { value: "10", currency_code: "DKK" } }])("malformed or invalid reporting data is a failed recovery: %j", async (overrides) => {
+    const info = { transaction_id: "INVALID_CAPTURE", transaction_status: "S", custom_field: `${BUYER}-${TARGET}`, transaction_updated_date: new Date().toISOString(), ...overrides };
+    const outcome = await syncTransactions(await getTestDatabase(), [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token");
+    expect(outcome.success).toBe(false); expect(outcome.messages[0]).toContain("invalid");
+    expect((await target())?.reputationPoints).toBe(0);
+    expect(await (await getTestDatabase()).query.paypalTransaction.findMany()).toHaveLength(0);
+  });
+  it("missing subscription details return failure without granting coverage", async () => {
+    const info = { transaction_id: "SUB_CAPTURE", transaction_status: "S", custom_field: `${BUYER}-${TARGET}`, transaction_amount: { value: "10", currency_code: "USD" }, paypal_reference_id_type: "SUB", paypal_reference_id: "MISSING_SUBSCRIPTION", transaction_updated_date: new Date().toISOString() };
+    expect(await syncTransactions(await getTestDatabase(), [{ transaction_info: info }] as Parameters<typeof syncTransactions>[1], "token")).toMatchObject({ success: false, messages: [expect.stringContaining("not found")] });
+  });
   it("reporting recovery converts a captured reservation without duplicate credit", async () => {
     const caller = await callerFor(paypalRouter, BUYER); const input = request(); const result = await caller.createOrder(input);
     if (!("orderId" in result)) throw new Error("missing order");

@@ -710,17 +710,36 @@ export const syncTransactions = async (
 ) => {
   const notifications = await Promise.all(
     transactions
-      .filter((t) => t.transaction_info.transaction_status === "S")
+      .filter((t) => t?.transaction_info?.transaction_status === "S")
       .map(async (t) => {
         // Derived
         const info = t.transaction_info;
-        const createdByUserId = info.custom_field?.split("-")?.[0];
-        const affectedUserId = info.custom_field?.split("-")?.[1];
-        const value = info.transaction_amount.value;
-        const currency = info.transaction_amount.currency_code;
+        const createdByUserId =
+          typeof info.custom_field === "string"
+            ? info.custom_field.split("-")[0]
+            : undefined;
+        const affectedUserId =
+          typeof info.custom_field === "string"
+            ? info.custom_field.split("-")[1]
+            : undefined;
+        const value = info.transaction_amount?.value;
+        const currency = info.transaction_amount?.currency_code;
         // If data could not be parsed
-        if (!value || !currency || !createdByUserId || !affectedUserId) {
-          return `Transaction ID ${info.transaction_id} invalid`;
+        if (
+          typeof value !== "string" ||
+          !value ||
+          typeof currency !== "string" ||
+          !currency ||
+          !createdByUserId ||
+          !affectedUserId ||
+          typeof info.transaction_id !== "string" ||
+          !info.transaction_id ||
+          typeof info.transaction_updated_date !== "string" ||
+          !Number.isFinite(new Date(info.transaction_updated_date).getTime())
+        ) {
+          return errorResponse(
+            `Transaction ID ${info.transaction_id} has invalid payment data`,
+          );
         }
         // Handle different cases
         if (
@@ -733,7 +752,14 @@ export const syncTransactions = async (
             token,
           );
           // Update if we found external and it's time to update internal
-          if (externalSubscription) {
+          if (
+            externalSubscription?.id === info.paypal_reference_id &&
+            externalSubscription.billing_info?.last_payment?.time &&
+            Number.isFinite(
+              new Date(externalSubscription.billing_info.last_payment.time).getTime(),
+            ) &&
+            externalSubscription.plan_id
+          ) {
             const status = getPaypalSubscriptionStatus(externalSubscription);
             await updateSubscription({
               client: client,
@@ -744,9 +770,14 @@ export const syncTransactions = async (
               subscriptionId: externalSubscription.id,
               lastPayment: status.lastPayment,
             });
-            return `Subscription ID ${info.paypal_reference_id} synced to ${status.newStatus}`;
+            return {
+              success: true,
+              message: `Subscription ID ${info.paypal_reference_id} synced to ${status.newStatus}`,
+            };
           } else {
-            return `Subscription ID ${info.paypal_reference_id} not found`;
+            return errorResponse(
+              `Subscription ID ${info.paypal_reference_id} not found or payment could not be verified`,
+            );
           }
         } else {
           const stored = await client.query.paypalTransaction.findFirst({
@@ -760,7 +791,7 @@ export const syncTransactions = async (
               ),
             ),
           });
-          const parsedValue = parseFloat(value);
+          const parsedValue = Number(value);
           if (stored?.status === "REVIEW_REQUIRED")
             return errorResponse(
               "Payment requires manual support review or refund; no points were delivered.",
@@ -773,15 +804,20 @@ export const syncTransactions = async (
             const buyerId = await canonicalStoreUserId(client, createdByUserId);
             return deliverPaypalOrder(client, order, buyerId, stored.orderId);
           }
-          if (parsedValue < 0) {
-            return `Transaction ID ${info.transaction_id} invalid value`;
+          if (!Number.isFinite(parsedValue) || parsedValue < 1 || currency !== "USD") {
+            return errorResponse(
+              `Transaction ID ${info.transaction_id} has invalid USD payment amount`,
+            );
           } else if (
             stored &&
             !["RESERVED", "CAPTURING", "DELIVERY_PENDING", "REVIEW_REQUIRED"].includes(
               stored.status,
             )
           ) {
-            return `Transaction ID ${info.transaction_id} already processed`;
+            return {
+              success: true,
+              message: `Transaction ID ${info.transaction_id} already processed`,
+            };
           } else {
             const result = await updateReps({
               client: client,
@@ -809,12 +845,14 @@ export const syncTransactions = async (
       }),
   );
   return {
-    success: notifications.every(
-      (result) => typeof result === "string" || result.success,
-    ),
-    messages: notifications.map((result) =>
-      typeof result === "string" ? result : result.message,
-    ),
+    success:
+      notifications.length > 0 && notifications.every((result) => result.success),
+    messages:
+      notifications.length > 0
+        ? notifications.map((result) => result.message)
+        : [
+            "No completed PayPal transaction was found for that ID and date. Check the details and try again.",
+          ],
   };
 };
 
