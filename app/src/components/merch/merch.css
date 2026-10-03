@@ -1040,18 +1040,6 @@
 .merch-store [data-content-box]>div:first-child {
   margin-bottom: 10px;
 }
-.merch-support {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  padding: 20px;
-  border-top: 1px solid hsl(var(--border));
-  font-size: 11px;
-}
-.merch-support a {
-  text-decoration: underline;
-}
 .merch-hero h1 {
   font-size: clamp(36px,6cqi,60px);
 }

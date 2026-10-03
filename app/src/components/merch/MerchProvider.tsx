@@ -237,10 +237,6 @@ export function MerchProvider({ children }: { children: ReactNode }) {
           }
         >
           <div id="merch-main">{children}</div>
-          <div className="merch-support">
-            <span>Questions about a piece or your order?</span>
-            <a href="mailto:contact@theninja-rpg.com">contact@theninja-rpg.com</a>
-          </div>
         </ContentBox>
       </div>
       <Sheet open={bagOpen} onOpenChange={setBagOpen}>
