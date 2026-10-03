@@ -434,63 +434,6 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
 };
 
 /** Each tile gets its own art; the per-type images are matched by look, not by name */
-const getTrainingImage = (stat: CombatStatName | MasteryName) => {
-  switch (stat) {
-    case "intelligence":
-      return IMG_TRAIN_INTELLIGENCE;
-    case "willpower":
-      return IMG_TRAIN_WILLPOWER;
-    case "strength":
-      return IMG_TRAIN_STRENGTH;
-    case "speed":
-      return IMG_TRAIN_SPEED;
-    case "offence":
-      return IMG_TRAIN_TAI_DEF;
-    case "defence":
-      return IMG_TRAIN_NIN_DEF;
-    case "ninjutsuMastery":
-      return IMG_TRAIN_NIN_OFF;
-    case "genjutsuMastery":
-      return IMG_TRAIN_GEN_OFF;
-    case "taijutsuMastery":
-      return IMG_TRAIN_TAI_OFF;
-    case "bukijutsuMastery":
-      return IMG_TRAIN_BUKI_OFF;
-    case "bloodlineMastery":
-      return IMG_TRAIN_GEN_DEF;
-    case "sageMastery":
-      return IMG_TRAIN_BUKI_DEF;
-  }
-};
-
-const getTrainingLabel = (stat: CombatStatName | MasteryName) => {
-  switch (stat) {
-    case "offence":
-      return "Offence";
-    case "defence":
-      return "Defence";
-    case "ninjutsuMastery":
-      return "Ninjutsu";
-    case "genjutsuMastery":
-      return "Genjutsu";
-    case "taijutsuMastery":
-      return "Taijutsu";
-    case "bukijutsuMastery":
-      return "Bukijutsu";
-    case "bloodlineMastery":
-      return "Bloodline";
-    case "sageMastery":
-      return "Sage";
-    default:
-      return stat.charAt(0).toUpperCase() + stat.slice(1);
-  }
-};
-
-/**
- * Component for stats training
- * @param props
- * @returns
- */
 const StatsTraining: React.FC<TrainingProps> = (props) => {
   // Settings
   const { userData, updateUser, timeDiff } = props;
@@ -1458,3 +1401,61 @@ const CovertTraining: React.FC<TrainingProps> = (props) => {
     </ContentBox>
   );
 };
+
+const getTrainingImage = (stat: CombatStatName | MasteryName) => {
+  switch (stat) {
+    case "intelligence":
+      return IMG_TRAIN_INTELLIGENCE;
+    case "willpower":
+      return IMG_TRAIN_WILLPOWER;
+    case "strength":
+      return IMG_TRAIN_STRENGTH;
+    case "speed":
+      return IMG_TRAIN_SPEED;
+    case "offence":
+      return IMG_TRAIN_TAI_DEF;
+    case "defence":
+      return IMG_TRAIN_NIN_DEF;
+    case "ninjutsuMastery":
+      return IMG_TRAIN_NIN_OFF;
+    case "genjutsuMastery":
+      return IMG_TRAIN_GEN_OFF;
+    case "taijutsuMastery":
+      return IMG_TRAIN_TAI_OFF;
+    case "bukijutsuMastery":
+      return IMG_TRAIN_BUKI_OFF;
+    case "bloodlineMastery":
+      return IMG_TRAIN_GEN_DEF;
+    case "sageMastery":
+      return IMG_TRAIN_BUKI_DEF;
+  }
+};
+
+const getTrainingLabel = (stat: CombatStatName | MasteryName) => {
+  switch (stat) {
+    case "offence":
+      return "Offence";
+    case "defence":
+      return "Defence";
+    case "ninjutsuMastery":
+      return "Ninjutsu";
+    case "genjutsuMastery":
+      return "Genjutsu";
+    case "taijutsuMastery":
+      return "Taijutsu";
+    case "bukijutsuMastery":
+      return "Bukijutsu";
+    case "bloodlineMastery":
+      return "Bloodline";
+    case "sageMastery":
+      return "Sage";
+    default:
+      return stat.charAt(0).toUpperCase() + stat.slice(1);
+  }
+};
+
+/**
+ * Component for stats training
+ * @param props
+ * @returns
+ */

@@ -6,8 +6,10 @@ import { getUserCaps } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import { profileRouter } from "@/server/api/routers/profile";
 import { insertUsers } from "../../setup/factories";
+import { beforeStatements } from "../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -89,5 +91,29 @@ describeWithDatabase("profile useUnusedExperiencePoints against a real MySQL", (
     const user = await readUser();
     expect(user.earnedExperience).toBe(100);
     expect(user.experience).toBe(5_000);
+  });
+
+  it("rejects a stale assignment without overwriting a concurrent grant", async () => {
+    await assigner({});
+    const database = await getTestDatabase();
+    const stale = callerForDatabase(
+      profileRouter,
+      USER_ID,
+      beforeStatements(database, userData, [async () => {
+        await database
+          .update(userData)
+          .set({ defence: 1_050, experience: 5_050 })
+          .where(eq(userData.userId, USER_ID));
+      }]),
+    );
+    const result = await stale.useUnusedExperiencePoints(assign(20, 0));
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Please try again");
+    const user = await readUser();
+    expect(user.offence).toBe(1_000);
+    expect(user.defence).toBe(1_050);
+    expect(user.experience).toBe(5_050);
+    expect(user.earnedExperience).toBe(100);
   });
 });

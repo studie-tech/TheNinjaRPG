@@ -209,6 +209,7 @@ import {
 import type { GetPublicUsersSchema } from "@/validators/user";
 import {
   adjustSeichiSilverSchema,
+  assignedExperienceDataSchema,
   getPublicUsersSchema,
   tavernColorChangeSchema,
   updateUserPreferencesSchema,
@@ -1850,18 +1851,7 @@ export const profileRouter = createTRPCRouter({
     .input(createStatSchema(0, 0).schema)
     .output(
       baseServerResponse.extend({
-        data: z
-          .object({
-            offence: z.number(),
-            defence: z.number(),
-            strength: z.number(),
-            speed: z.number(),
-            intelligence: z.number(),
-            willpower: z.number(),
-            experience: z.number(),
-            earnedExperience: z.number(),
-          })
-          .optional(),
+        data: assignedExperienceDataSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1901,14 +1891,25 @@ export const profileRouter = createTRPCRouter({
         experience: user.experience + spent,
         earnedExperience: user.earnedExperience - spent,
       };
-      const result = await ctx.drizzle
-        .update(userData)
-        .set(data)
-        .where(
-          and(eq(userData.userId, ctx.userId), gte(userData.earnedExperience, spent)),
-        );
-      if (result.rowsAffected === 0) {
-        return errorResponse("Could not update user");
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
+          ...stats,
+          experience: sql`${userData.experience} + ${spent}`,
+          earnedExperience: sql`${userData.earnedExperience} - ${spent}`,
+        },
+        where: [
+          eq(userData.rank, user.rank),
+          ...CombatStatNames.map((stat) => eq(userData[stat], user[stat])),
+          eq(userData.experience, user.experience),
+          eq(userData.earnedExperience, user.earnedExperience),
+          gte(userData.earnedExperience, spent),
+        ],
+      });
+      if (!result.success) {
+        return errorResponse("Stats changed while assigning points. Please try again");
       } else {
         return { success: true, message: "User stats updated", data };
       }

@@ -15,6 +15,17 @@ import {
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
 
+export const assignedExperienceDataSchema = z.object({
+  offence: z.number(),
+  defence: z.number(),
+  strength: z.number(),
+  speed: z.number(),
+  intelligence: z.number(),
+  willpower: z.number(),
+  experience: z.number(),
+  earnedExperience: z.number(),
+});
+
 export const updateUserSchema = z.object({
   username: usernameSchema,
   // Existing records may predate title reservations. The update handler validates

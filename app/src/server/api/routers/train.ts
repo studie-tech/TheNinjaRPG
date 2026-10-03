@@ -21,6 +21,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { secondsPassed } from "@/utils/time";
 import { getShrineBoost, getStrucBoost } from "@/utils/village";
 import {
   startMasteryTrainingDataSchema,
@@ -367,7 +368,7 @@ const calcTrainingAmount = (
   const boost = getStrucBoost("trainBoostPerLvl", user.village?.structures) / 100;
   const clanBoost = user?.isOutlaw ? 0 : (user?.clan?.trainingBoost ?? 0) / 100;
   const factor = gameFactor * (1 + boost + clanBoost + shrineBoost) * warFactor;
-  const seconds = (Date.now() - startedAt.getTime()) / 1000;
+  const seconds = secondsPassed(startedAt, undefined, false);
   const energySpent = Math.min(
     Math.floor(energyPerSecond(user.trainingSpeed) * seconds),
     100,

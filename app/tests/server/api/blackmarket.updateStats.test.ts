@@ -6,8 +6,10 @@ import { COST_RESET_STATS, getUserCaps } from "@/drizzle/constants";
 import { actionLog, userData } from "@/drizzle/schema";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";
 import { insertUsers } from "../../setup/factories";
+import { beforeStatements } from "../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -141,5 +143,36 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
     const user = await readUser();
     expect(user.strength).toBe(1_000);
     expect(user.reputationPoints).toBe(COST_RESET_STATS);
+  });
+
+  it("rejects a stale reset without charging or erasing a concurrent gain", async () => {
+    await resetter();
+    const database = await getTestDatabase();
+    const stale = callerForDatabase(
+      blackMarketRouter,
+      USER_ID,
+      beforeStatements(database, userData, [async () => {
+        await database
+          .update(userData)
+          .set({ defence: 1_050 })
+          .where(eq(userData.userId, USER_ID));
+      }]),
+    );
+    const result = await stale.updateStats({
+      offence: 30_000,
+      defence: 30_000,
+      strength: 1_000,
+      speed: 1_000,
+      intelligence: 1_000,
+      willpower: 2_500,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("Please try again");
+    const user = await readUser();
+    expect(user.offence).toBe(GENIN_STATS_CAP + 500);
+    expect(user.defence).toBe(1_050);
+    expect(user.reputationPoints).toBe(COST_RESET_STATS);
+    expect(await database.select().from(actionLog)).toHaveLength(0);
   });
 });

@@ -11,6 +11,7 @@ import {
   COST_EXTRA_JUTSU_SLOT,
   COST_REROLL_ELEMENT,
   COST_RESET_STATS,
+  CombatStatNames,
   ElementNames,
   getUserCaps,
   MAX_EXTRA_JUTSU_SLOTS,
@@ -35,6 +36,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { getRandomElement } from "@/utils/array";
 import { round } from "@/utils/math";
 import {
@@ -661,9 +663,11 @@ export const blackMarketRouter = createTRPCRouter({
           `Requested points ${inputSum} do not match your ${availableStats} assigned combat stat points`,
         );
       }
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
           offence: input.offence,
           defence: input.defence,
           strength: input.strength,
@@ -671,12 +675,17 @@ export const blackMarketRouter = createTRPCRouter({
           intelligence: input.intelligence,
           willpower: input.willpower,
           reputationPoints: sql`reputationPoints - ${cost}`,
-        })
-        .where(
-          and(eq(userData.userId, ctx.userId), gte(userData.reputationPoints, cost)),
+        },
+        where: [
+          eq(userData.rank, user.rank),
+          ...CombatStatNames.map((stat) => eq(userData[stat], user[stat])),
+          gte(userData.reputationPoints, cost),
+        ],
+      });
+      if (!result.success) {
+        return errorResponse(
+          "Stats or balance changed while resetting. Please try again",
         );
-      if (result.rowsAffected === 0) {
-        return errorResponse("Not enough reputation points");
       } else {
         await ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
