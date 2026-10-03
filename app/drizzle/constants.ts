@@ -2231,6 +2231,8 @@ export const IMG_MERCH_ARTWORK = {
   blueblade: "https://uploadthing.b-cdn.net/f/5g1MOfv7TDgxsS_JiquKe.webp",
   buffpotatoes: "https://uploadthing.b-cdn.net/f/VIQBvqjHwOwVlf-IgYQWb.webp",
   buffsr: "https://uploadthing.b-cdn.net/f/Egfuy9wNzxbMXcXZVeF2T.webp",
+  core1: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJW22nAzvszvj71yaSYC0MDOmbko5q9JAGuLHf",
+  core3: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJfoY9HLfKL5D7TAFe29bymSaPCIQ846MdzG",
   core2: "https://uploadthing.b-cdn.net/f/m7fO-lHKGjd8MlOc8Ax3F.webp",
   cosmic: "https://uploadthing.b-cdn.net/f/JjJQ23CUkXsdudyoBtyZ6.webp",
   duckcontent: "https://uploadthing.b-cdn.net/f/SUBLqCOioXWryLaJVbyN4.webp",

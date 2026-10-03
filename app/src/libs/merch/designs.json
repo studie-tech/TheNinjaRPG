@@ -136,12 +136,28 @@
     "interpretation": "Night Operations is a merch subtitle, not the name of the verified convoy quest. The moon and smoke are new; the source agent is not asserted to be the protagonist of every ANBU story."
   },
   {
+    "key": "core1",
+    "name": "Core 1 Veteran",
+    "category": "Community",
+    "graphic": "A bronze and forest-green veteran emblem featuring the ninja mascot carrying a rolled quest scroll, compass stars and an engraved parchment title.",
+    "history": "Core 1 is an earlier version of The Ninja RPG, preserved in the developer’s official legacy repository. This design recognizes players who spent time in that era and the memories they bring to the current game.",
+    "interpretation": "The mascot composition, colors and ornamental badge are newly created merchandise artwork. Veteran is a community identity label, not an official achievement or eligibility check. The illustration does not reproduce an original Core 1 logo or claim exact era dates."
+  },
+  {
     "key": "core2",
     "name": "Core 2 Veteran",
     "category": "Community",
     "graphic": "The official mascot is illustrated on nostalgic parchment with veteran-style ornament.",
     "history": "Core 2 is an earlier era of The Ninja RPG, fondly remembered in community nostalgia. This piece celebrates the time, friendships and stories that returning players carry with them.",
     "interpretation": "Veteran is a playful identity label. The parchment badge is newly created, not an official achievement, age verification, or old unchanged Core 2 logo. No exact era dates are supplied because the saved evidence does not verify them."
+  },
+  {
+    "key": "core3",
+    "name": "Core 3 Veteran",
+    "category": "Community",
+    "graphic": "A silver and blue veteran emblem featuring the ninja mascot holding a kunai above the title, compass stars and an engraved parchment title.",
+    "history": "Core 3 is an earlier version of The Ninja RPG, preserved in the developer’s official legacy repository. This design recognizes players who spent time in that era and the memories they bring to the current game.",
+    "interpretation": "The mascot composition, colors and ornamental badge are newly created merchandise artwork. Veteran is a community identity label, not an official achievement or eligibility check. The illustration does not reproduce an original Core 3 logo or claim exact era dates."
   },
   {
     "key": "buffsr",
