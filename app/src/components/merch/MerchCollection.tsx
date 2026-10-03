@@ -375,6 +375,7 @@ export function MerchCollection() {
         <div>
           <p className="merch-eyebrow">Community</p>
           <h2 id="community-feature-heading">Buff S Ranks Pls</h2>
+          <p>The stats could use some work. The artwork is ready.</p>
           <button
             type="button"
             className="merch-text-button"
