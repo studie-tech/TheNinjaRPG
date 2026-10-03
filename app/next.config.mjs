@@ -42,6 +42,8 @@ const config = {
   images: {
     unoptimized: true,
     remotePatterns: [
+      { protocol: "https", hostname: "cdn.shopify.com" },
+      { protocol: "https", hostname: "files.cdn.printful.com" },
       {
         protocol: "https",
         hostname: "theninja-user-uploads.s3.amazonaws.com",

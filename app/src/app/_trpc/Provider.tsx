@@ -92,8 +92,14 @@ const TrpcClientProvider = (props: {
         }),
         loggerLink({
           enabled: (opts) =>
-            process.env.NODE_ENV === "development" ||
-            (opts.direction === "down" && opts.result instanceof Error),
+            // Checkout responses contain a private cart URL; never log merch payloads.
+            !(
+              "path" in opts &&
+              typeof opts.path === "string" &&
+              opts.path.startsWith("merch.")
+            ) &&
+            (process.env.NODE_ENV === "development" ||
+              (opts.direction === "down" && opts.result instanceof Error)),
         }),
         // CDN-cached queries get their own batch, so their URL is the same for every
         // visitor.

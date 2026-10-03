@@ -29,6 +29,7 @@ import { blockingPopupOpenAtom, useUserData } from "@/utils/UserContext";
 
 const ActivityStreakPopup: React.FC = () => {
   const pathname = usePublicPathname();
+  const isMerch = pathname === "/merch" || pathname.startsWith("/merch/");
   // The profile dashboard owns this claim surface. Suppressing the global dialog on
   // the profile route prevents the same reward appearing twice.
   const dashboardOwnsStreak = pathname === "/profile";
@@ -65,7 +66,7 @@ const ActivityStreakPopup: React.FC = () => {
   // for a popup that cannot appear. Re-enables when those latches clear (tutorial
   // finished, date rollover) so an unclaimed reward is not dropped.
   const shouldFetchStreaks = shouldFetchActivityStreaksForPopup({
-    hasUser: !!userData && !dashboardOwnsStreak,
+    hasUser: !!userData && !dashboardOwnsStreak && !isMerch,
     tutorialActive,
     dismissedToday,
     userClosed,
@@ -82,33 +83,38 @@ const ActivityStreakPopup: React.FC = () => {
   const hasRecurringToEnroll = !!userStreaks?.activeRecurringConfig;
   const shouldShowPopup =
     !dashboardOwnsStreak &&
+    !isMerch &&
     (hasUnclaimedRewards || needsCatchUp || hasRecurringToEnroll);
 
   useEffect(() => {
-    setIsModalOpen((isOpen) =>
-      resolveActivityStreakPopupOpen({
-        isOpen,
-        isLoading,
-        shouldShowPopup,
-        dismissedToday,
-        userClosed,
-        tutorialActive,
-      }),
+    setIsModalOpen(
+      (isOpen) =>
+        !isMerch &&
+        resolveActivityStreakPopupOpen({
+          isOpen,
+          isLoading,
+          shouldShowPopup,
+          dismissedToday,
+          userClosed,
+          tutorialActive,
+        }),
     );
-  }, [isLoading, shouldShowPopup, dismissedToday, userClosed, tutorialActive]);
+  }, [isLoading, shouldShowPopup, dismissedToday, userClosed, tutorialActive, isMerch]);
 
   // This popup blocks the overworld arrival prompt while it is on screen OR while its
   // show-decision is still loading — the latter closes a fresh-login race where the arrival
   // prompt would otherwise open in the gap before this dialog mounts. Gated on `userClosed`
   // so that once the user closes it, the arrival prompt is free to fire.
-  const isBlocking = isActivityStreakPopupBlocking(!!userData, {
-    isOpen: isModalOpen,
-    isLoading,
-    shouldShowPopup,
-    dismissedToday,
-    userClosed,
-    tutorialActive,
-  });
+  const isBlocking =
+    !isMerch &&
+    isActivityStreakPopupBlocking(!!userData, {
+      isOpen: isModalOpen,
+      isLoading,
+      shouldShowPopup,
+      dismissedToday,
+      userClosed,
+      tutorialActive,
+    });
   useEffect(() => {
     setBlockingPopupOpen(isBlocking);
     return () => setBlockingPopupOpen(false);
@@ -128,7 +134,7 @@ const ActivityStreakPopup: React.FC = () => {
   };
 
   // Don't render anything if no user, loading, dismissed today, or no rewards
-  if (!userData || !isModalOpen) {
+  if (isMerch || !userData || !isModalOpen) {
     return null;
   }
 

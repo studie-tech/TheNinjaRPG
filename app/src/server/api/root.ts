@@ -31,6 +31,7 @@ import { logsRouter } from "./routers/logs";
 import { mapAssetRouter } from "./routers/mapAsset";
 import { mapTerrainRouter } from "./routers/mapTerrain";
 import { marriageRouter } from "./routers/marriage";
+import { merchRouter } from "./routers/merch";
 import { miscRouter } from "./routers/misc";
 import { occupationRouter } from "./routers/occupation";
 import { generativeAiRouter } from "./routers/openai";
@@ -97,6 +98,7 @@ export const appRouter = createTRPCRouter({
   mapAsset: mapAssetRouter,
   mapTerrain: mapTerrainRouter,
   misc: miscRouter,
+  merch: merchRouter,
   generativeAi: generativeAiRouter,
   paypal: paypalRouter,
   poll: pollRouter,

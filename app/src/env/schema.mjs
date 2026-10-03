@@ -6,6 +6,9 @@ import { z } from "zod";
  * This way you can ensure the app isn't built with invalid env vars.
  */
 export const serverSchema = z.object({
+  SHOPIFY_STORE_DOMAIN: z.string().regex(/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/).optional(),
+  SHOPIFY_STOREFRONT_ACCESS_TOKEN: z.string().min(1).optional(),
+  MERCH_CHECKOUT_ENABLED: z.enum(["true", "false"]).optional(),
   OPENAI_API_KEY: z.string().optional(),
   PUSHER_APP_ID: z.string().optional(),
   PUSHER_APP_SECRET: z.string().optional(),
@@ -87,6 +90,9 @@ export const serverSchema = z.object({
  * @type {{ [k in keyof z.infer<typeof serverSchema>]: z.infer<typeof serverSchema>[k] | undefined }}
  */
 export const serverEnv = {
+  SHOPIFY_STORE_DOMAIN: process.env.SHOPIFY_STORE_DOMAIN,
+  SHOPIFY_STOREFRONT_ACCESS_TOKEN: process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN,
+  MERCH_CHECKOUT_ENABLED: /** @type {"true" | "false" | undefined} */ (process.env.MERCH_CHECKOUT_ENABLED),
   CDN_URL: process.env.CDN_URL,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   PUSHER_APP_ID: process.env.PUSHER_APP_ID,
