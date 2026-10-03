@@ -7,7 +7,9 @@ import ContentBox from "@/layout/ContentBox";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
 import type { ArrayElement } from "@/utils/typeutils";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 /**
  * Transaction History component
@@ -19,6 +21,17 @@ import type { ArrayElement } from "@/utils/typeutils";
  */
 export const TransactionHistory: React.FC<{ userId?: string }> = (props) => {
   const { userId } = props;
+  const { data: user } = useRequiredUserData();
+  const utils = api.useUtils();
+  const { mutate: cancelOrder, isPending } = api.paypal.cancelOrder.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      await Promise.all([
+        utils.paypal.getPaypalTransactions.invalidate(),
+        utils.paypal.getRecentRepsCount.invalidate(),
+      ]);
+    },
+  });
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   const {
@@ -52,6 +65,7 @@ export const TransactionHistory: React.FC<{ userId?: string }> = (props) => {
     { key: "reputationPoints", header: "Points", type: "string" },
     { key: "value", header: "Amount", type: "string" },
     { key: "type", header: "Type", type: "capitalized" },
+    { key: "status", header: "Status", type: "string" },
     { key: "transactionUpdatedDate", header: "Last Update", type: "string" },
   ];
 
@@ -61,13 +75,31 @@ export const TransactionHistory: React.FC<{ userId?: string }> = (props) => {
   return (
     <ContentBox
       title="Transaction History"
-      subtitle="Previous purchases"
+      subtitle="Payments and unfinished checkouts. Points are delivered when payment is completed."
       initialBreak={true}
       padding={false}
     >
       <Table
         data={allTransactions}
         columns={columns}
+        buttons={
+          allTransactions.some(
+            (transaction) =>
+              transaction.createdById === user?.userId &&
+              transaction.status === "RESERVED",
+          )
+            ? [
+                {
+                  label: "Cancel checkout",
+                  disabled: (transaction) =>
+                    isPending ||
+                    transaction.status !== "RESERVED" ||
+                    transaction.createdById !== user?.userId,
+                  onClick: (transaction) => cancelOrder({ requestId: transaction.id }),
+                },
+              ]
+            : []
+        }
         linkPrefix="/userid/"
         setLastElement={setLastElement}
       />

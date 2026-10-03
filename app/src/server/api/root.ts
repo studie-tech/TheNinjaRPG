@@ -53,6 +53,7 @@ import { skillTreeRouter } from "./routers/skillTree";
 import { sparringRouter } from "./routers/sparring";
 import { staffRouter } from "./routers/staff";
 import { stealthRouter } from "./routers/stealth";
+import { stripeRouter } from "./routers/stripe";
 import { supportRouter } from "./routers/support";
 import { tournamentRouter } from "./routers/tournament";
 import { towerDefenseRouter } from "./routers/towerDefense";
@@ -99,6 +100,7 @@ export const appRouter = createTRPCRouter({
   misc: miscRouter,
   generativeAi: generativeAiRouter,
   paypal: paypalRouter,
+  stripe: stripeRouter,
   poll: pollRouter,
   profile: profileRouter,
   push: pushRouter,

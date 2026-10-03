@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     const transactions = await getPaypalTransactions(new Date(), token);
 
     // Sync transactions & get messages
-    const msgs = await syncTransactions(drizzleDB, transactions, token);
+    const { messages: msgs } = await syncTransactions(drizzleDB, transactions, token);
 
     // Get transactions where refereal reputation points have not been added
     const mainTransaction = alias(paypalTransaction, "mainTransaction");
@@ -66,6 +66,7 @@ export async function GET(request: Request) {
           gt(mainTransaction.reputationPoints, 0),
           gt(mainTransaction.amount, 0),
           eq(mainTransaction.type, "REP_PURCHASE"),
+          eq(mainTransaction.status, "COMPLETED"),
           isNotNull(mainTransaction.invoiceId),
           isNotNull(buyerUser.recruiterId),
           isNull(refTransaction.id),

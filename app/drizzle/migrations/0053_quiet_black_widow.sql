@@ -1,0 +1,1 @@
+ALTER TABLE `StripePayment` ADD `reviewRequired` boolean DEFAULT false NOT NULL;

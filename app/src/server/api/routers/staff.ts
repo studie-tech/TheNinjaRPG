@@ -51,6 +51,8 @@ import {
   staffApplication,
   storePurchase,
   storeUserIdAlias,
+  stripeCheckout,
+  stripePayment,
   supportReview,
   trainingLog,
   user2conversation,
@@ -931,6 +933,22 @@ export const staffRouter = createTRPCRouter({
           .update(notification)
           .set({ userId: input.newUserId })
           .where(eq(notification.userId, input.userId)),
+        ctx.drizzle
+          .update(stripeCheckout)
+          .set({ createdById: input.newUserId })
+          .where(eq(stripeCheckout.createdById, input.userId)),
+        ctx.drizzle
+          .update(stripeCheckout)
+          .set({ affectedUserId: input.newUserId })
+          .where(eq(stripeCheckout.affectedUserId, input.userId)),
+        ctx.drizzle
+          .update(stripePayment)
+          .set({ createdById: input.newUserId })
+          .where(eq(stripePayment.createdById, input.userId)),
+        ctx.drizzle
+          .update(stripePayment)
+          .set({ affectedUserId: input.newUserId })
+          .where(eq(stripePayment.affectedUserId, input.userId)),
         ctx.drizzle
           .update(paypalSubscription)
           .set({ createdById: input.newUserId })

@@ -6,11 +6,11 @@ import { paypalSubscription } from "@/drizzle/schema";
 import {
   getPaypalAccessToken,
   getPaypalSubscription,
+  reconcilePaypalSubscription,
 } from "@/server/api/routers/paypal";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { setFederalStatusWithStoreFloor } from "@/server/utils/purchases/grant";
-import { plan2FedStatus } from "@/utils/paypal";
 
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
@@ -52,32 +52,25 @@ export async function GET(request: Request) {
         subscription.subscriptionId,
         await token,
       );
-      if (paypalSub) {
-        const paypalStatus = paypalSub.status;
-        const newFedStatus = plan2FedStatus(paypalSub.plan_id);
-        const isDone = !["CREATED", "ACTIVE"].includes(paypalStatus);
-        // Update database
-        await drizzleDB
-          .update(paypalSubscription)
-          .set({
-            status: paypalStatus,
-            federalStatus: newFedStatus,
-            // Only while the subscription is live. updatedAt is the last-payment marker
-            // that every federal window keys on, so refreshing it on the row being marked
-            // done would read as a fresh payment and hand the player another 31 days of a
-            // tier they have stopped paying for. A finished row is never selected again --
-            // this query takes only ACTIVE ones -- so leaving it is safe.
-            ...(isDone ? {} : { updatedAt: new Date() }),
-          })
-          .where(eq(paypalSubscription.id, subscription.id));
-        // PayPal decides its own tier, but not the column: a player may also be paying
-        // a store for federal status, and writing this straight over would strip a
-        // subscription Apple or Google is still billing.
+      const result = await reconcilePaypalSubscription({
+        client: drizzleDB,
+        subscription: paypalSub,
+        subscriptionId: subscription.subscriptionId,
+        orderId: subscription.orderId,
+        expected: {
+          createdById: subscription.createdById,
+          affectedUserId: subscription.affectedUserId,
+        },
+      });
+      if (!result.success) {
+        // The recorded paid period is already expired. Clear only unsupported coverage;
+        // another valid PayPal/Stripe/native period remains protected by the shared floor.
         await setFederalStatusWithStoreFloor(
           drizzleDB,
           subscription.affectedUserId,
-          isDone ? "NONE" : newFedStatus,
+          "NONE",
         );
+        throw new Error(result.message);
       }
     });
 

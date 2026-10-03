@@ -15,6 +15,7 @@ import {
   referralSource,
   storePurchase,
   storeUserIdAlias,
+  stripePayment,
   userAttribute,
   userData,
   village,
@@ -31,6 +32,7 @@ import {
   isDeletedStoreUserId,
   settleRecordedLedger,
 } from "@/server/utils/purchases/grant";
+import { settleStripePayments } from "@/server/utils/stripe/fulfillment";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromNow } from "@/utils/time";
 import { registrationSchema, utmSourceSchema } from "@/validators/register";
@@ -105,6 +107,7 @@ export const registerRouter = createTRPCRouter({
         storeAlias,
         storeHistory,
         paypalHistory,
+        stripeHistory,
       ] = await Promise.all([
         ctx.drizzle.query.village.findFirst({
           where: eq(village.name, "Horizon"),
@@ -140,18 +143,28 @@ export const registerRouter = createTRPCRouter({
           columns: { id: true },
           where: eq(paypalSubscription.affectedUserId, ctx.userId),
         }),
+        ctx.drizzle.query.stripePayment.findFirst({
+          columns: { id: true },
+          where: eq(stripePayment.affectedUserId, ctx.userId),
+        }),
       ]);
       // Whatever the ledger holds for this identity is settled once a character row exists,
       // on every path that reaches one. A tombstone seen here means receipts can still be
-      // landing under it until it is removed below; store or PayPal history means there is
+      // landing under it until it is removed below; payment history means there is
       // a tier or a delivery to derive. A plain first registration has none of these.
-      const hasLedger = Boolean(storeAlias || storeHistory || paypalHistory);
+      const hasLedger = Boolean(
+        storeAlias || storeHistory || paypalHistory || stripeHistory,
+      );
 
       // Guard
       if (!moderationResult.success) return moderationResult;
       if (existingUser) {
         // A retry after registration failed part-way settles what it did not get to.
-        if (hasLedger) await settleRecordedLedger(ctx.drizzle, ctx.userId);
+        if (hasLedger)
+          await Promise.all([
+            settleRecordedLedger(ctx.drizzle, ctx.userId),
+            settleStripePayments(ctx.drizzle, ctx.userId),
+          ]);
         return errorResponse("Character already created for this account");
       }
       if (usernameTaken) return errorResponse("Username already taken");
@@ -233,7 +246,11 @@ export const registerRouter = createTRPCRouter({
         })
         .onDuplicateKeyUpdate({ set: { userId: sql`userId` } });
       // The row exists either way now, so settle before answering a duplicate.
-      if (hasLedger) await settleRecordedLedger(ctx.drizzle, ctx.userId);
+      if (hasLedger)
+        await Promise.all([
+          settleRecordedLedger(ctx.drizzle, ctx.userId),
+          settleStripePayments(ctx.drizzle, ctx.userId),
+        ]);
       if (createdUser.rowsAffected === 0) {
         return errorResponse("Character already created for this account");
       }

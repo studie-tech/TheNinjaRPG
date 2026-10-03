@@ -338,6 +338,7 @@ export const dataRouter = createTRPCRouter({
               ...(input.utmSource && input.utmSource.length > 0
                 ? [eq(visitorLog.utmSource, input.utmSource)]
                 : [isNotNull(visitorLog.utmSource)]),
+              inArray(paypalTransaction.status, ["COMPLETED", "REVIEW_REQUIRED"]),
               eq(userData.isAi, false),
               gte(userData.createdAt, visitorLog.createdAt),
             ),
@@ -727,6 +728,9 @@ export const dataRouter = createTRPCRouter({
         eq(userData.isAi, false),
         gte(userData.createdAt, visitorLog.createdAt),
       ];
+      whereConditions.push(
+        inArray(paypalTransaction.status, ["COMPLETED", "REVIEW_REQUIRED"]),
+      );
       if (input.startDate)
         whereConditions.push(
           gte(paypalTransaction.createdAt, new Date(input.startDate)),

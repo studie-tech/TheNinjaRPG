@@ -3320,3 +3320,6 @@ export const STORE_FEDERAL_PRODUCTS = [
 
 /** RevenueCat entitlement that grants federal status, whichever plan is active. */
 export const STORE_FEDERAL_ENTITLEMENT = "federal";
+
+// USD monthly prices shared by Stripe checkout validation and federal support UI.
+export const FEDERAL_MONTHLY_USD_CENTS = { NORMAL: 500, SILVER: 1000, GOLD: 1500 } as const;
