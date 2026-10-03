@@ -157,14 +157,17 @@ export const gearMissingMastery = (ui: MasteryGear, wearer: MasteryBuffUser) =>
 
 /**
  * Whether worn gear stops working for a battle: durability at the floor, or a mastery gate
- * its wearer misses. AI are exempt from mastery gates, as in availableUserActions.
+ * its wearer misses. AI and ranked battles are exempt from mastery gates, as in availableUserActions.
  * @param ui - equipped armor, accessory or keystone
  * @param wearer - its owner with the sources of their mastery tags
  */
 export const isWornGearDisabled = (
   ui: MasteryGear,
   wearer: MasteryBuffUser & { isAi: boolean },
-) => !hasUsableDurability(ui) || (!wearer.isAi && !!gearMissingMastery(ui, wearer));
+  isRankedBattle = false,
+) =>
+  !hasUsableDurability(ui) ||
+  (!wearer.isAi && !isRankedBattle && !!gearMissingMastery(ui, wearer));
 
 /** Armor, accessories and keystones: the gear whose effects apply for the whole battle. */
 export const isWornGear = (item: { itemType: string }) =>

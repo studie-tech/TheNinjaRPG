@@ -229,6 +229,7 @@ export function scaleUserStats(
   }
 }
 
+// Scaling can produce scientific-notation values, which the exponent-string round helper cannot accept.
 const roundCombatStat = (stat: number) => Math.round(stat * 100) / 100;
 
 /** Sum of the six redistributable combat stats (offence, defence, generals). */
@@ -237,13 +238,7 @@ export const getAssignedCombatStatTotal = (
     UserData,
     "offence" | "defence" | "strength" | "speed" | "intelligence" | "willpower"
   >,
-) =>
-  roundCombatStat(user.offence) +
-  roundCombatStat(user.defence) +
-  roundCombatStat(user.strength) +
-  roundCombatStat(user.speed) +
-  roundCombatStat(user.intelligence) +
-  roundCombatStat(user.willpower);
+) => CombatStatNames.reduce((sum, stat) => sum + roundCombatStat(user[stat]), 0);
 
 /**
  * Points a paid stat reset redistributes: every assigned point, including any stored above

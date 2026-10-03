@@ -165,28 +165,7 @@ export const trainRouter = createTRPCRouter({
             ? {
                 experience: sql`experience + ${trainingAmount}`,
                 dailyTrainings: sql`dailyTrainings + 1`,
-                offence:
-                  trained === "offence"
-                    ? sql`offence + ${trainingAmount}`
-                    : sql`offence`,
-                defence:
-                  trained === "defence"
-                    ? sql`defence + ${trainingAmount}`
-                    : sql`defence`,
-                strength:
-                  trained === "strength"
-                    ? sql`strength + ${trainingAmount}`
-                    : sql`strength`,
-                intelligence:
-                  trained === "intelligence"
-                    ? sql`intelligence + ${trainingAmount}`
-                    : sql`intelligence`,
-                willpower:
-                  trained === "willpower"
-                    ? sql`willpower + ${trainingAmount}`
-                    : sql`willpower`,
-                speed:
-                  trained === "speed" ? sql`speed + ${trainingAmount}` : sql`speed`,
+                [trained]: sql`${userData[trained]} + ${trainingAmount}`,
                 questData: questDataForDb,
                 lastCombatTrainingFinishedAt: finishedAt,
               }

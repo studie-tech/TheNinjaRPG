@@ -1,4 +1,7 @@
 import { eq } from "drizzle-orm";
+import { RANKED_PVP_STATS } from "@/drizzle/constants";
+import { manuallyAssignUserStats } from "@/libs/profile";
+import { validateItemLoadout } from "@/libs/ranked_pvp";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   aiProfile,
@@ -147,6 +150,7 @@ const seedLobby = async (wearArmor = false) => {
       extraState: processed.extraState,
       groundEffects: [],
     });
+  return { raw, essentials };
 };
 
 const equippedIds = async () => {
@@ -173,6 +177,63 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
     );
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each(["RANKED_PVP", "RANKED_SPARRING"] as const)(
+    "%s keeps mastery-gated worn gear despite another item's mastery penalty, but disables broken gear",
+    async (battleType) => {
+      const { raw, essentials } = await seedLobby(true);
+      const armor = raw.items[0]!;
+      const gated = {
+        ...armor,
+        id: "gated-armor",
+        equipped: "ITEM_1" as const,
+        item: {
+          ...armor.item,
+          id: "gated-armor",
+          inShop: true,
+          effects: [],
+          requiredNinjutsuMastery: RANKED_PVP_STATS.ninjutsuMastery,
+        },
+      };
+      const penalty = {
+        ...armor,
+        id: "penalty-armor",
+        equipped: "ITEM_1" as const,
+        item: {
+          ...armor.item,
+          id: "penalty-armor",
+          inShop: true,
+          effects: [
+            getTagSchema("decreasemastery").parse({
+              masteryTypes: ["Ninjutsu"],
+              power: 100,
+              powerPerLevel: 0,
+              calculation: "static",
+              rounds: 10,
+            }),
+          ],
+        },
+      };
+      const broken = { ...gated, id: "broken-armor", durability: 0 };
+      // Ranked's item validator accepts these shop items, and forced loadouts equip them in ITEM_1.
+      expect(validateItemLoadout([gated.item, penalty.item]).check).toBe(true);
+      manuallyAssignUserStats(raw, RANKED_PVP_STATS);
+      raw.items = [gated, penalty, broken];
+      const result = await processUsersForBattle(await getTestDatabase(), {
+        users: [raw],
+        ...essentials,
+        wars: essentials.activeWars,
+        battleType,
+        hide: false,
+        isSummon: false,
+        width: 13,
+        height: 9,
+      });
+      const equipped = result.usersState[0]!.items;
+      expect(equipped.find((ui) => ui.id === gated.id)?.equipped).toBe("ITEM_1");
+      expect(equipped.find((ui) => ui.id === broken.id)?.equipped).toBe("NONE");
+    },
+  );
 
   it("persists only eligible jutsu and keeps usable entries in the selected loadout", async () => {
     await seedLobby();

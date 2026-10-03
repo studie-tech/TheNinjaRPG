@@ -3062,7 +3062,7 @@ export const processUsersForBattle = async (
         (ui) =>
           ui.equipped !== "NONE" &&
           isWornGear(ui.item) &&
-          isWornGearDisabled(ui, wearer),
+          isWornGearDisabled(ui, wearer, isRankedBattle),
       )
       .forEach((ui) => {
         ui.equipped = "NONE";

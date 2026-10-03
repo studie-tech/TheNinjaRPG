@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { setSystemTime } from "bun:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
+import { CombatStatNames, getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import { quest, questHistory, trainingLog, userData, userVote } from "@/drizzle/schema";
 import { trainRouter } from "@/server/api/routers/train";
 import { SimpleObjective } from "@/validators/objectives";
@@ -82,6 +82,35 @@ const backdate = async (patch: Partial<typeof userData.$inferInsert>) => {
 describeWithDatabase("train router against a real MySQL", () => {
   beforeEach(async () => {
     await resetTables(trainingLog, questHistory, quest, userVote, userData);
+  });
+
+  it.each(CombatStatNames)("credits only the trained %s stat", async (stat) => {
+    await trainee({
+      offence: 10,
+      defence: 20,
+      strength: 30,
+      intelligence: 40,
+      willpower: 50,
+      speed: 60,
+      experience: 0,
+      currentlyTraining: stat,
+      trainingStartedAt: minutesAgo(30),
+    });
+    const before = await readUser();
+    expect((await (await caller()).stopTraining({ villageId: null })).success).toBe(
+      true,
+    );
+    const after = await readUser();
+    for (const combatStat of CombatStatNames) {
+      expect(after[combatStat]).toBe(
+        before[combatStat] + (combatStat === stat ? SESSION_GAIN : 0),
+      );
+    }
+    expect(after.experience).toBe(SESSION_GAIN);
+    expect(after.dailyTrainings).toBe(1);
+    expect((await readLogs()).map((log) => [log.stat, log.amount])).toEqual([
+      [stat, SESSION_GAIN],
+    ]);
   });
 
   it("runs the combat and mastery slots side by side and pays each its own gain", async () => {

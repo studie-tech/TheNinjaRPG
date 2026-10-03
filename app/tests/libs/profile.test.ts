@@ -109,6 +109,21 @@ test("getAssignedCombatStatTotal rounds each combat stat before summing", () => 
   ).toBeCloseTo(60.06, 2);
 });
 
+test.each([
+  [10.005, 10.01],
+  [10.004999, 10],
+  [10.015, 10.02],
+  [100_000.005, 100_000.01],
+])(
+  "getAssignedCombatStatTotal rounds decimal boundary %s per stat",
+  (value, rounded) => {
+    expect(getAssignedCombatStatTotal(uniformCombatStats(value))).toBeCloseTo(
+      rounded * 6,
+      6,
+    );
+  },
+);
+
 test("manuallyAssignUserStats assigns the ranked combat stats and masteries", () => {
   const user = {
     offence: 10,
@@ -140,6 +155,18 @@ test.each([
   expect(fresh.offence).toBe(expected);
   expect(fresh.speed).toBe(expected);
   expect(fresh.ninjutsuMastery).toBe(10);
+});
+
+test("scaleUserStats rounds tiny positive allocated points without producing NaN", () => {
+  const user = makeScalableUser({
+    level: 10,
+    ...uniformCombatStats(10),
+    offence: 10.000000001,
+    defence: 1_000,
+  });
+  scaleUserStats(user, "ai");
+  expect(user.offence).toBe(10);
+  expect(user.defence).toBe(13_510);
 });
 
 test("scaleUserStats keeps stats finite when the combat sum is zero", () => {
