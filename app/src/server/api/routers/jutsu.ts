@@ -80,7 +80,6 @@ import {
   isJutsuTrainToLearnRestricted,
 } from "@/libs/train";
 import { fetchStudents } from "@/routers/sensei";
-import { fetchMasterySources } from "@/routers/skillTree";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -376,18 +375,17 @@ export const jutsuRouter = createTRPCRouter({
       // toggleEquip. Note this makes the mutation no longer read-only on the user
       // row: fetchUpdatedUser may persist the usual throttled regen/quest
       // maintenance (never money/XP/loadout state).
-      const [loadouts, data, userjutsus, masterySources] = await Promise.all([
+      const [loadouts, data, userjutsus] = await Promise.all([
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
       // Pass the validator here (full user relations are loaded) so a stale
       // loadout cannot re-equip hidden/ineligible jutsu or exceed equip caps.
       const id = input.id;
-      const masteries = effectiveMasteries({ ...user, ...masterySources });
+      const masteries = effectiveMasteries(user);
       return await selectJutsuLoadout(
         ctx.drizzle,
         id,
@@ -994,7 +992,7 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [data, info, userjutsus, students, masterySources] = await Promise.all([
+      const [data, info, userjutsus, students] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -1002,12 +1000,11 @@ export const jutsuRouter = createTRPCRouter({
         fetchJutsu(ctx.drizzle, input.jutsuId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchStudents(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
       // Gear and skill mastery buffs count, as they do for equipping
-      const masteries = effectiveMasteries({ ...user, ...masterySources });
+      const masteries = effectiveMasteries(user);
 
       // Derived
       const userjutsuObj = userjutsus.find((j) => j.jutsuId === input.jutsuId);
@@ -1258,14 +1255,13 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [userjutsus, data, loadouts, masterySources] = await Promise.all([
+      const [userjutsus, data, loadouts] = await Promise.all([
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
@@ -1289,7 +1285,7 @@ export const jutsuRouter = createTRPCRouter({
 
       // Check if jutsu can be equipped (bloodline item handled separately below for a
       // clearer error message, so skip it inside canUseJutsu here)
-      const masteries = effectiveMasteries({ ...user, ...masterySources });
+      const masteries = effectiveMasteries(user);
       if (!isEquipped && !canUseJutsu(userjutsuObj.jutsu, user, true, masteries)) {
         return errorResponse("You cannot equip this jutsu due to missing requirements");
       }

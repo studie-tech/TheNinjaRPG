@@ -186,10 +186,7 @@ export default function Training() {
 interface TrainingProps {
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
-  updateUser: (
-    data: Partial<UserWithRelations>,
-    adjustment?: { dailyTrainingsDelta?: number },
-  ) => Promise<void>;
+  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
   /** Whichever box comes second carries this: it spaces the boxes apart and
    *  demotes the heading, so the leading box is the one titling the page. */
   initialBreak?: boolean;
@@ -495,24 +492,10 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
     api.train.stopMasteryTraining.useMutation({
       onSuccess: async (result) => {
         showMutationToast(result);
-        await utils.misc.getCaptcha.invalidate();
-        if (result.success && result.data) {
-          await updateUser(
-            {
-              currentlyTrainingMastery: null,
-              masteryTrainingStartedAt: null,
-              [result.data.currentlyTrainingMastery]:
-                userData[result.data.currentlyTrainingMastery] + result.data.amount,
-            },
-            { dailyTrainingsDelta: result.data.amount > 0 ? 1 : 0 },
-          );
-          // Quest trackers are rebuilt server-side, so refetch them rather than guess
-          if (result.data.creditedMinutes > 0) {
-            await utils.profile.getUser.invalidate();
-          }
-        } else if (!result.success) {
-          await utils.profile.getUser.invalidate();
-        }
+        await Promise.all([
+          utils.misc.getCaptcha.invalidate(),
+          utils.profile.getUser.invalidate(),
+        ]);
       },
     });
 
@@ -534,7 +517,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
 
   // Form handlers
   const onSubmit = captchaForm.handleSubmit((data) => {
-    stopMasteryTraining({ ...data, villageId: userData.villageId });
+    stopMasteryTraining(data);
   });
 
   const isPending = isStarting || isStartingMastery || isStoppingMastery || isChanging;
@@ -550,7 +533,7 @@ const StatsTraining: React.FC<TrainingProps> = (props) => {
       return (
         <XCircle
           className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-          onClick={() => stopMasteryTraining({ villageId: userData.villageId })}
+          onClick={() => stopMasteryTraining({})}
         />
       );
     }

@@ -24,7 +24,6 @@ import type { NavBarDropdownLink } from "@/libs/menus";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { secondsFromDate } from "@/utils/time";
-import { withDailyTrainingsDelta } from "@/utils/userCache";
 import { canAccessStructure } from "@/utils/village";
 
 /**
@@ -65,10 +64,7 @@ type UserContextValue = {
   isClerkLoaded: boolean;
   /** Server-known auth state until Clerk finishes loading, then Clerk's live state. */
   isSignedIn: boolean;
-  updateUser: (
-    data: Partial<UserWithRelations>,
-    adjustment?: { dailyTrainingsDelta?: number },
-  ) => Promise<void>;
+  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
   updateNotifications: (
     notifications: NavBarDropdownLink[] | undefined,
   ) => Promise<void>;
@@ -130,25 +126,12 @@ export function UserContextProvider(props: {
 
   // Optimistic user info update function
   const updateUser = useCallback(
-    async (
-      updatedData: Partial<UserWithRelations>,
-      adjustment?: { dailyTrainingsDelta?: number },
-    ) => {
+    async (updatedData: Partial<UserWithRelations>) => {
       await utils.profile.getUser.cancel();
       utils.profile.getUser.setData(undefined, (old) => {
-        if (!old?.userData) {
-          return {
-            ...old,
-            userData: { ...old?.userData, ...updatedData },
-          } as typeof old;
-        }
         return {
           ...old,
-          userData: withDailyTrainingsDelta(
-            old.userData,
-            { ...updatedData },
-            adjustment?.dailyTrainingsDelta ?? 0,
-          ),
+          userData: { ...old?.userData, ...updatedData },
         } as typeof old;
       });
     },

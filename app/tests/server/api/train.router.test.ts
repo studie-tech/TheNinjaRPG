@@ -132,7 +132,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect((await api.startTraining({stat: "offence", energy: 10})).success).toBe(true);
     await backdate({masteryTrainingStartedAt: minutesAgo(30)});
     const before = await readUser();
-    const result = await api.stopMasteryTraining({villageId: null});
+    const result = await api.stopMasteryTraining({});
     expect(result.success).toBe(true);
     expect(result.data?.amount).toBe(100);
     expect(result.data?.creditedMinutes).toBeCloseTo(30, 0);
@@ -140,7 +140,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(after.curEnergy).toBe(before.curEnergy);
     expect(after.experience).toBe(before.experience);
     expect(after.dailyTrainings).toBe(1);
-    expect((await api.stopMasteryTraining({villageId: null})).success).toBe(false);
+    expect((await api.stopMasteryTraining({})).success).toBe(false);
   });
 
   it("Energy regenerates while mastery runs, capped at level capacity", async () => {

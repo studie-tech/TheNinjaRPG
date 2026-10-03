@@ -14,7 +14,6 @@ export const startMasteryTrainingInputSchema = z.object({
 
 export const stopTrainingInputSchema = z.object({
   guess: z.string().optional(),
-  villageId: z.string().nullable(),
 });
 
 export const updateTrainingSpeedInputSchema = z.object({
