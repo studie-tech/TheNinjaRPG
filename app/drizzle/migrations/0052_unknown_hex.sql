@@ -1,0 +1,1 @@
+ALTER TABLE `Jutsu` ADD `elementClassification` enum('Fire','Water','Wind','Earth','Lightning','Ice','Crystal','Dust','Shadow','Wood','Scorch','Storm','Magnet','Yin-Yang','Lava','Explosion','Light','Boil','Metal','Sand','None') DEFAULT 'None';

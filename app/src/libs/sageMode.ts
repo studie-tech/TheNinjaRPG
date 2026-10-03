@@ -188,6 +188,7 @@ export const SAGE_MODE_ACTIVATION_JUTSU: Jutsu = {
   image: IMG_MANUAL_SAGE_MODE,
   jutsuWeapon: "NONE",
   statClassification: "Ninjutsu",
+  elementClassification: "None",
   battleDescription: SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE,
   jutsuRank: "D",
   actionCostPerc: SAGE_MODE_DEFAULT_ACTION_COST_PERC,

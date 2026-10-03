@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   JUTSU_MAX_BARRIER_EQUIPPED,
   JUTSU_MAX_EVENT_EQUIPPED,
@@ -8,27 +8,26 @@ import {
 } from "@/drizzle/constants";
 import type { UserJutsuWithRelations } from "@/drizzle/schema";
 
-// Stub the dependency decisions so these tests target the validator's own logic
-// (ownership, hidden gate, equip caps, ordering) rather than canUseJutsu's
-// requirement rules or the federal-tier equip-limit maths. The hidden-jutsu
-// gate uses the real canChangeContent, since module mocks leak across test
-// files under bun's test runner and would corrupt the permissions tests.
-vi.mock("@/libs/train", () => ({
-  canUseJutsu: vi.fn((jutsu: { usable?: boolean }) => jutsu?.usable !== false),
-  calcJutsuEquipLimit: vi.fn(() => 100),
-}));
-
 import {
   computeJutsuLoadoutAssignments,
   computeJutsuLoadoutCapAssignments,
 } from "@/libs/jutsu";
 import type { UserWithRelations } from "@/routers/profile";
-import { calcJutsuEquipLimit } from "@/libs/train";
+import * as train from "@/libs/train";
 
-const calcJutsuEquipLimitMock = calcJutsuEquipLimit as unknown as {
+let calcJutsuEquipLimitMock: {
   mockReturnValue: (value: number) => void;
   mockReturnValueOnce: (value: number) => void;
 };
+
+// Restore dependency spies between tests: Bun shares modules with requirement suites.
+beforeEach(() => {
+  vi.spyOn(train, "canUseJutsu").mockImplementation(
+    (jutsu) => (jutsu as typeof jutsu & { usable?: boolean })?.usable !== false,
+  );
+  calcJutsuEquipLimitMock = vi.spyOn(train, "calcJutsuEquipLimit").mockReturnValue(100);
+});
+afterEach(() => vi.restoreAllMocks());
 
 // Minimal user-jutsu factory; only the fields the validator reads are set. The
 // extra `usable` flag is consumed by the canUseJutsu mock above.

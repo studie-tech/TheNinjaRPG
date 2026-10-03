@@ -8,6 +8,7 @@ import {
   AttackMethods,
   AttackTargets,
   BattleUsageTypes,
+  ElementNames,
   JutsuTypes,
   LetterRanks,
   StatTypes,
@@ -28,7 +29,11 @@ import { JutsuValidator } from "@/validators/combat";
  */
 export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   // Case type
-  const jutsu = { ...data, effects: data.effects };
+  const jutsu = {
+    ...data,
+    elementClassification: data.elementClassification || "None",
+    effects: data.effects,
+  };
 
   // Form handling
   const form = useForm<ZodJutsuInput, unknown, ZodJutsuType>({
@@ -120,6 +125,12 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { id: "description", type: "text", doubleWidth: true },
     { id: "battleDescription", type: "text", doubleWidth: true },
     { id: "statClassification", type: "str_array", values: StatTypes },
+    {
+      id: "elementClassification",
+      label: "Element Classification",
+      type: "str_array",
+      values: ElementNames,
+    },
     { id: "range", type: "number" },
     { id: "cooldown", type: "number" },
     { id: "requiredLevel", type: "number" },

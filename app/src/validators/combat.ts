@@ -1352,6 +1352,10 @@ export const JutsuValidatorRawSchema = z.object({
     .enum(StatTypes)
     .nullish()
     .transform((v) => v ?? "Highest"),
+  elementClassification: z
+    .enum(ElementNames)
+    .nullish()
+    .transform((v) => v ?? "None"),
   hidden: z.coerce.boolean().optional(),
   injectableInBattle: z.coerce.boolean().prefault(false),
   healthCost: z.coerce.number().min(0).max(10000),

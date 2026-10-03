@@ -188,6 +188,13 @@ export const checkJutsuBloodline = (jutsu: Jutsu | undefined, userdata: UserData
 };
 
 export const checkJutsuElements = (jutsu: Jutsu, userElements: Set<ElementName>) => {
+  // A classification is an additional requirement; tag elements still gate legacy jutsu.
+  if (
+    jutsu.elementClassification &&
+    jutsu.elementClassification !== "None" &&
+    !userElements.has(jutsu.elementClassification)
+  )
+    return undefined;
   const jutsuElements: ElementName[] = [];
   jutsu.effects.forEach((effect) => {
     if ("elements" in effect && effect.elements) {

@@ -7,6 +7,7 @@ import {
 import { insertAction } from "@/libs/combat/actions";
 import { getPotencyDescription, resolvePotencyTags } from "@/libs/combat/potency";
 import { applyEffects } from "@/libs/combat/process";
+import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { copy, getPower, mirror } from "@/libs/combat/tags";
 import type { CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { getBattleGrid, getEffectStackKey } from "@/libs/combat/util";
@@ -452,6 +453,7 @@ describe("potency element matching", () => {
       makeTag("increaseheal", { power: 40 }),
       makeTag("damage", { power: 40, elements: ["Fire"] }),
     ]);
+    action.data = { ...SAGE_MODE_ACTIVATION_JUTSU, elementClassification: "Fire" };
     for (const affectedTag of ["all", "none"] as const) {
       const tags = resolvePotencyTags(
         action,
