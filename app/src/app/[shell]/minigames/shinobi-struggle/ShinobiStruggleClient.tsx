@@ -18,14 +18,34 @@ export default function ShinobiStruggleClient({
 }) {
   const router = useRouter();
   const { getToken, isLoaded, sessionId } = useAuth();
+  const identity = useRef({ sessionId, isLoaded, version: 0 });
+  if (
+    identity.current.sessionId !== sessionId ||
+    identity.current.isLoaded !== isLoaded
+  )
+    identity.current = { sessionId, isLoaded, version: identity.current.version + 1 };
+  const identityVersion = identity.current.version;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const getTokenRef = useRef(getToken);
   useEffect(() => {
     getTokenRef.current = getToken;
   }, [getToken]);
   const fetchGame = useCallback(
     (input: RequestInfo | URL, init?: RequestInit) =>
-      fetchAuthenticatedGame(input, init, () => getTokenRef.current()),
-    [],
+      fetchAuthenticatedGame(
+        input,
+        init,
+        () => getTokenRef.current(),
+        fetch,
+        () => mounted.current && identity.current.version === identityVersion,
+      ),
+    [identityVersion],
   );
   const [linkedVersion, setLinkedVersion] = useState(0);
   if (!isLoaded) return <p role="status">Connecting to TheNinjaRPG…</p>;
@@ -33,8 +53,12 @@ export default function ShinobiStruggleClient({
     <>
       {process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED === "true" && (
         <IdentityLinkForm
+          key={identityVersion}
           fetchGame={fetchGame}
-          onLinked={() => setLinkedVersion((version) => version + 1)}
+          onLinked={() => {
+            if (mounted.current && identity.current.version === identityVersion)
+              setLinkedVersion((version) => version + 1);
+          }}
         />
       )}
       <NinjaMiniGame
@@ -162,13 +186,28 @@ export const fetchAuthenticatedGame = async (
   init: RequestInit | undefined,
   getToken: () => Promise<string | null>,
   transport: typeof fetch = fetch,
+  isCurrent: () => boolean = () => true,
 ) => {
   if (typeof input !== "string" || !input.startsWith("/api/minigames/blockstruggle/"))
     throw new Error("Game requests must use the same-origin bridge");
+  const assertCurrent = () => {
+    if (!isCurrent()) throw new DOMException("Game account changed", "AbortError");
+  };
+  assertCurrent();
   const token = await getToken();
+  assertCurrent();
   const headers = new Headers(init?.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return transport(input, { ...init, headers, credentials: "same-origin" });
+  const response = await transport(input, {
+    ...init,
+    headers,
+    credentials: "same-origin",
+  });
+  if (!isCurrent()) {
+    await response.body?.cancel().catch(() => {});
+    assertCurrent();
+  }
+  return response;
 };
 
 export const ninjaSignInUrl = (matchId: string | undefined, origin: string) => {
