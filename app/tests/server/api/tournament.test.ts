@@ -58,6 +58,8 @@ vi.mock("@/routers/combat", () => ({
   initiateBattle: vi.fn(),
 }));
 
+vi.mock("@/routers/quests", () => ({ updateRewards: vi.fn() }));
+
 vi.mock("@/routers/profile", () => ({
   fetchUser: (...args: unknown[]) =>
     (getTournamentTestMocks().fetchUserMock as (...a: unknown[]) => unknown)(...args),
