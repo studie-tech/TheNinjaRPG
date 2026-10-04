@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
+import { usePageActive } from "@/hooks/usePageActive";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { calcApReduction } from "@/libs/combat/util";
@@ -20,6 +21,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
 
   // Data from the DB
   const { timeDiff } = useUserData();
+  const isPageActive = usePageActive();
 
   // State
   const [state, setState] = useState<{
@@ -53,9 +55,6 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   // Active updating of this component
   useLayoutEffect(() => {
     const nextTimerState = () => {
-      if (!document.hasFocus() && process.env.NODE_ENV !== "development") {
-        return { label: "Not in Focus", canAct: false, waiting: false };
-      }
       const {
         actor,
         mseconds,
@@ -89,9 +88,10 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
     };
 
     updateState();
+    if (!isPageActive) return;
     const interval = setInterval(updateState, 100);
     return () => clearInterval(interval);
-  }, [isPending, battle, user, timeDiff, precomputedActions]);
+  }, [isPending, battle, user, timeDiff, precomputedActions, isPageActive]);
 
   return (
     <div className="grow pb-1">

@@ -19,6 +19,7 @@ import {
 import { useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { usePageActive } from "@/hooks/usePageActive";
 import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
@@ -43,7 +44,7 @@ import {
 } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
-import { appEvents, haptics, isNative } from "@/libs/native";
+import { haptics } from "@/libs/native";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import {
   drawCombatBackground,
@@ -121,7 +122,11 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // References which shouldn't update
   const [webglError, setWebglError] = useState<boolean>(false);
-  const [hasFocus, setHasFocus] = useState<boolean>(true);
+  const isPageActive = usePageActive();
+  const isPageActiveRef = useRef(isPageActive);
+  isPageActiveRef.current = isPageActive;
+  const wasPageActiveRef = useRef(true);
+  const setRenderActiveRef = useRef<((active: boolean) => void) | null>(null);
   const lastActionsRef = useRef<Date[]>([]);
   const arenaHealInFlightRef = useRef(false);
   const arenaStartInFlightRef = useRef(false);
@@ -752,18 +757,19 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
   };
 
-  // A native WebView follows the app lifecycle rather than browser-tab focus.
+  // Resume the existing scene and refresh battle data without reloading the page.
   useEffect(() => {
-    if (!isNative()) return;
-    return appEvents.onStateChange(setHasFocus);
-  }, []);
+    const wasActive = wasPageActiveRef.current;
+    wasPageActiveRef.current = isPageActive;
+    setRenderActiveRef.current?.(isPageActive);
+    if (!isPageActive || wasActive) return;
+    void utils.combat.getBattle.invalidate();
+  }, [isPageActive, utils]);
 
   // If user has no actions left / round is over, propagate battle & potentially - perform AI actions
   useEffect(() => {
+    if (!isPageActive) return;
     const interval = setInterval(() => {
-      const focusCheck = isNative() || document.hasFocus();
-      if (!focusCheck && process.env.NODE_ENV !== "development") setHasFocus(false);
-      if (!hasFocus || !focusCheck) return;
       if (suid && battleRef.current && userIdRef.current && !isPending && !result) {
         const { actor, changedActor } = calcActiveUser(
           battleRef.current,
@@ -810,7 +816,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [hasFocus, isPending, timeDiff, result, suid, controlledActorId]);
+  }, [isPageActive, isPending, timeDiff, result, suid, controlledActorId]);
 
   useEffect(() => {
     actionRef.current = props.action;
@@ -1090,12 +1096,14 @@ const Combat: React.FC<CombatProps> = (props) => {
       window.addEventListener("resize", updateCachedDimensions);
 
       // Render the image
-      let animationId = 0;
+      let animationId: number | null = null;
+      let hasRenderedFrame = false;
       const clock = new Clock();
       clock.start();
       function render() {
         // Guard against stale render callbacks after unmount
-        if (!isMountedRef.current) return;
+        animationId = null;
+        if (!isMountedRef.current || !isPageActiveRef.current) return;
 
         // Performance profiling
         profiler?.beginFrame();
@@ -1153,7 +1161,7 @@ const Combat: React.FC<CombatProps> = (props) => {
             groupEffects: group_effects,
             battle: battleRef.current,
             grid: gridRef.current,
-            animationId,
+            animationId: hasRenderedFrame ? 1 : 0,
             spriteMixer,
             gameAssets: gameAssets ?? [],
             sfxEnabled: Boolean(userData?.sfxOn ?? true),
@@ -1278,8 +1286,21 @@ const Combat: React.FC<CombatProps> = (props) => {
         endTotal();
         profiler?.log(2000);
 
+        hasRenderedFrame = true;
         animationId = performanceMonitor.requestFrame(render);
       }
+      setRenderActiveRef.current = (active) => {
+        if (!active) {
+          if (animationId !== null) performanceMonitor.cancelFrame(animationId);
+          animationId = null;
+          clock.stop();
+          return;
+        }
+        if (animationId !== null) return;
+        // Discard elapsed background time rather than jumping sprite animations.
+        clock.start();
+        render();
+      };
       render();
 
       // Remove the mouseover listener
@@ -1288,7 +1309,8 @@ const Combat: React.FC<CombatProps> = (props) => {
         isMountedRef.current = false;
 
         // Cancel animation frame before cleanup
-        performanceMonitor.cancelFrame(animationId);
+        if (animationId !== null) performanceMonitor.cancelFrame(animationId);
+        setRenderActiveRef.current = null;
 
         // Reset profiler and combat caches
         profiler?.reset();
@@ -1737,21 +1759,6 @@ const Combat: React.FC<CombatProps> = (props) => {
                 </Link>
               )}
             </div>
-          </div>
-        </div>
-      )}
-      {/* FINAL DONE SCREEN */}
-      {!hasFocus && (
-        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex items-center justify-center bg-black">
-          <div className="relative m-auto flex flex-col items-center text-center text-white">
-            <p className="p-5 pb-2 text-3xl">Not in Focus</p>
-            <p className="pb-2 italic">
-              Battle data can only be streamed to one browser tab at once
-            </p>
-            <Button size="xl" onClick={() => location.reload()}>
-              <Check className="mr-3 h-8 w-8" />
-              Activate this Tab
-            </Button>
           </div>
         </div>
       )}

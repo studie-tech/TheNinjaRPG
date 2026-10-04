@@ -17,6 +17,7 @@ vi.mock("@/utils/UserContext", () => ({
 
 const FROZEN_NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
 let nowMs = FROZEN_NOW;
+let isHidden = false;
 
 const advanceTimers = (ms: number) => {
   nowMs += ms;
@@ -77,10 +78,13 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.spyOn(Date, "now").mockImplementation(() => nowMs);
   vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  isHidden = false;
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => isHidden });
 });
 
 afterEach(() => {
   cleanup();
+  delete (document as unknown as { hidden?: boolean }).hidden;
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -106,19 +110,29 @@ describe("ActionTimer interval commits", () => {
     expect(getByText("Lobby")).toBeTruthy();
   });
 
-  it("does not re-commit while the tab is unfocused", () => {
+  it("keeps a visible battle timer running without window focus", () => {
     vi.spyOn(document, "hasFocus").mockReturnValue(false);
-    const { commits, getByText } = renderTimer(lobbyBattle());
-    flushMount();
-    expect(getByText("Not in Focus")).toBeTruthy();
-    const afterMount = commits();
+    const { getByText, queryByText } = renderTimer(countdownBattle());
+    expect(queryByText("Not in Focus")).toBeNull();
+    act(() => advanceTimers(100));
+    expect(getByText(`You: ${(COMBAT_SECONDS - 1.1).toFixed(1)}s`)).toBeTruthy();
+  });
 
+  it("pauses hidden timers and catches up when visible again", () => {
+
+    const { commits, getByText } = renderTimer(countdownBattle());
     act(() => {
-      advanceTimers(2000);
+      isHidden = true;
+      document.dispatchEvent(new window.Event("visibilitychange"));
     });
-
-    expect(commits() - afterMount).toBe(0);
-    expect(getByText("Not in Focus")).toBeTruthy();
+    const afterHide = commits();
+    act(() => advanceTimers(2000));
+    expect(commits()).toBe(afterHide);
+    act(() => {
+      isHidden = false;
+      document.dispatchEvent(new window.Event("visibilitychange"));
+    });
+    expect(getByText(`You: ${(COMBAT_SECONDS - 3).toFixed(1)}s`)).toBeTruthy();
   });
 
   it("re-commits when the displayed tenth-second label changes", () => {

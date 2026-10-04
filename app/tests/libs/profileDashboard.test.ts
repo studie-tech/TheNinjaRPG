@@ -139,7 +139,7 @@ describe("condenseDashboardMissionContent", () => {
 });
 
 describe("selectDashboardHighlights", () => {
-  it.each([undefined, [], null])(
+  it.each([[undefined], [[]], [null]])(
     "uses the default highlights for unsaved priority %j",
     (priority) => {
       const content = [
