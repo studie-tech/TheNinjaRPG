@@ -69,7 +69,7 @@ const categoryLabels = {
   raids: "Raids",
 } as const;
 
-export default function ProfileDashboard() {
+export default function ProfileDashboard({ settings }: { settings?: React.ReactNode }) {
   const { data: userData, timeDiff } = useRequiredUserData();
   const utils = api.useUtils();
   const { sectorVillage } = useSectorVillage(userData);
@@ -257,6 +257,7 @@ export default function ProfileDashboard() {
 
   const sections = {
     now: {
+      action: null,
       heading: (
         <SectionHeader eyebrow="Right now" title="In progress" id="now-heading" />
       ),
@@ -605,29 +606,28 @@ export default function ProfileDashboard() {
           eyebrow="Opportunities"
           title="Available content"
           id="catalogue-heading"
-          action={
-            catalogue.length > previewContent.length ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hover:text-foreground"
-                onClick={() => setShowAllContent(true)}
-              >
-                View all content <ArrowRight className="ml-1 h-4 w-4" />
-              </Button>
-            ) : showAllContent && catalogue.length > 0 ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hover:text-foreground"
-                onClick={() => setShowAllContent(false)}
-              >
-                Show highlights
-              </Button>
-            ) : null
-          }
         />
       ),
+      action:
+        catalogue.length > previewContent.length ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hover:text-foreground"
+            onClick={() => setShowAllContent(true)}
+          >
+            View all content <ArrowRight className="ml-1 h-4 w-4" />
+          </Button>
+        ) : showAllContent && catalogue.length > 0 ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hover:text-foreground"
+            onClick={() => setShowAllContent(false)}
+          >
+            Show highlights
+          </Button>
+        ) : null,
       content: (
         <>
           {dashboard.isLoading && catalogue.length === 0 ? (
@@ -655,6 +655,7 @@ export default function ProfileDashboard() {
     },
 
     progress: {
+      action: null,
       heading: (
         <SectionHeader
           eyebrow="Your logbook"
@@ -732,6 +733,8 @@ export default function ProfileDashboard() {
           key={id}
           id={id}
           heading={sections[id].heading}
+          action={sections[id].action}
+          settings={index === 0 ? settings : null}
           onMove={(direction) => moveSection(id, direction)}
           canMoveUp={index > 0}
           canMoveDown={index < sectionOrder.length - 1}
@@ -747,6 +750,8 @@ function DashboardSection({
   id,
   children,
   heading,
+  action,
+  settings,
   onMove,
   canMoveUp,
   canMoveDown,
@@ -754,6 +759,8 @@ function DashboardSection({
   id: DashboardSectionId;
   children: React.ReactNode;
   heading: React.ReactNode;
+  action: React.ReactNode;
+  settings?: React.ReactNode;
   onMove: (direction: -1 | 1) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -766,9 +773,10 @@ function DashboardSection({
   };
   return (
     <section aria-labelledby={`${id}-heading`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">{heading}</div>
-        <div className="flex gap-1">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">{heading}</div>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {action}
           <Button
             variant="ghost"
             size="icon"
@@ -799,6 +807,7 @@ function DashboardSection({
               className={cn("h-4 w-4 transition-transform", collapsed && "-rotate-90")}
             />
           </Button>
+          {settings}
         </div>
       </div>
       <div id={`${id}-content`} hidden={collapsed}>
@@ -812,24 +821,19 @@ function SectionHeader({
   eyebrow,
   title,
   id,
-  action,
 }: {
   eyebrow: string;
   title: string;
   id: string;
-  action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-end justify-between gap-3">
-      <div>
-        <p className="font-mono text-primary text-xs uppercase tracking-[0.18em] dark:text-muted-foreground">
-          {eyebrow}
-        </p>
-        <h2 id={id} className="font-bold text-2xl">
-          {title}
-        </h2>
-      </div>
-      {action}
+    <div>
+      <p className="font-mono text-primary text-xs uppercase tracking-[0.18em] dark:text-muted-foreground">
+        {eyebrow}
+      </p>
+      <h2 id={id} className="font-bold text-2xl">
+        {title}
+      </h2>
     </div>
   );
 }

@@ -52,6 +52,28 @@ export default function Profile() {
     tutorialActive && selectedTab === "Dashboard" ? "Character" : selectedTab;
   const visibleTabs = tutorialActive ? tutorialProfileTabs : profileTabs;
 
+  const dashboardSettings = !tutorialActive ? (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 shrink-0"
+          aria-label="Dashboard settings"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className="max-h-[80dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto"
+      >
+        <DashboardSettings userData={userData} updateUser={updateUser} />
+      </PopoverContent>
+    </Popover>
+  ) : null;
+
   return (
     <div id="tutorial-profile">
       <div className="mb-3 flex items-center justify-end gap-2">
@@ -72,33 +94,15 @@ export default function Profile() {
             className="min-h-11 px-3 sm:text-base"
           />
         </div>
-        {!tutorialActive && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                aria-label="Dashboard settings"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              sideOffset={8}
-              className="max-h-[80dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto"
-            >
-              <DashboardSettings userData={userData} updateUser={updateUser} />
-            </PopoverContent>
-          </Popover>
-        )}
+        {activeTab !== "Dashboard" && dashboardSettings}
       </div>
       {activeTab === "Character" ? (
         <CharacterProfile />
       ) : (
         <ContentBox padding={false}>
-          {activeTab === "Dashboard" && <ProfileDashboard />}
+          {activeTab === "Dashboard" && (
+            <ProfileDashboard settings={dashboardSettings} />
+          )}
           {activeTab === "Achievements" && (
             <div className="p-3">
               <LogbookAchievements />
