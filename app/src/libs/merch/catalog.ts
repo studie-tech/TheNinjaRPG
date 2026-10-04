@@ -58,5 +58,12 @@ export const selectedMerchImage = (
             ),
         )
       : undefined;
-  return variant?.image ?? colorVariant?.image ?? product.images[0];
+  return variant?.image ?? colorVariant?.image ?? preferredMerchImage(product);
 };
+
+export const preferredMerchImage = (product: MerchProduct) =>
+  (["Utility Backpack", "Black Glossy Mug", "Straw Lid Water Bottle"].includes(
+    product.kind,
+  )
+    ? product.images.find((image) => /-front-/.test(image.url))
+    : undefined) ?? product.images[0];

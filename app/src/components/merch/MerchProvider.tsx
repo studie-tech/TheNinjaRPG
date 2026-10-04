@@ -18,7 +18,7 @@ import "./merch.css";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import { formatMerchMoney } from "@/libs/merch/catalog";
+import { formatMerchMoney, preferredMerchImage } from "@/libs/merch/catalog";
 import { usePublicPathname } from "@/utils/routing";
 import {
   type MerchCartLine,
@@ -163,7 +163,7 @@ export function MerchProvider({ children }: { children: ReactNode }) {
             title: product.title,
             variantTitle: variant.title,
             quantity,
-            image: variant.image ?? product.images[0] ?? null,
+            image: variant.image ?? preferredMerchImage(product) ?? null,
             price: null,
           },
         ];
@@ -307,63 +307,67 @@ export function MerchProvider({ children }: { children: ReactNode }) {
           ) : (
             <>
               <ul className="merch-bag-lines">
-                {lines.map((line) => (
-                  <li key={line.id}>
-                    {line.image && (
-                      <Image
-                        src={line.image.url}
-                        alt={line.image.alt}
-                        width={100}
-                        height={120}
-                      />
-                    )}
-                    <div>
-                      <Link
-                        href={`/merch/${line.handle}`}
-                        onClick={() => setBagOpen(false)}
-                      >
-                        {line.title}
-                      </Link>
-                      {line.variantTitle !== "Default Title" && (
-                        <p>{line.variantTitle}</p>
+                {lines.map((line) => {
+                  const product = products.find((item) => item.handle === line.handle);
+                  const image = line.image ?? (product && preferredMerchImage(product));
+                  return (
+                    <li key={line.id}>
+                      {image && (
+                        <Image
+                          src={image.url}
+                          alt={image.alt}
+                          width={100}
+                          height={120}
+                        />
                       )}
-                      <strong>
-                        {formatMerchMoney(line.price)}
-                        {line.price && " per item"}
-                      </strong>
-                      <div className="merch-line-actions">
-                        <div className="merch-quantity">
+                      <div>
+                        <Link
+                          href={`/merch/${line.handle}`}
+                          onClick={() => setBagOpen(false)}
+                        >
+                          {line.title}
+                        </Link>
+                        {line.variantTitle !== "Default Title" && (
+                          <p>{line.variantTitle}</p>
+                        )}
+                        <strong>
+                          {formatMerchMoney(line.price)}
+                          {line.price && " per item"}
+                        </strong>
+                        <div className="merch-line-actions">
+                          <div className="merch-quantity">
+                            <button
+                              type="button"
+                              disabled={busy || line.quantity <= 1}
+                              aria-label={`Decrease quantity of ${line.title}`}
+                              onClick={() => void update(line, line.quantity - 1)}
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span>{line.quantity}</span>
+                            <button
+                              type="button"
+                              disabled={busy || line.quantity >= 10}
+                              aria-label={`Increase quantity of ${line.title}`}
+                              onClick={() => void update(line, line.quantity + 1)}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
                           <button
                             type="button"
-                            disabled={busy || line.quantity <= 1}
-                            aria-label={`Decrease quantity of ${line.title}`}
-                            onClick={() => void update(line, line.quantity - 1)}
+                            disabled={busy}
+                            className="merch-remove"
+                            aria-label={`Remove ${line.title}`}
+                            onClick={() => void update(line, 0)}
                           >
-                            <Minus size={14} />
-                          </button>
-                          <span>{line.quantity}</span>
-                          <button
-                            type="button"
-                            disabled={busy || line.quantity >= 10}
-                            aria-label={`Increase quantity of ${line.title}`}
-                            onClick={() => void update(line, line.quantity + 1)}
-                          >
-                            <Plus size={14} />
+                            <Trash2 size={17} />
                           </button>
                         </div>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          className="merch-remove"
-                          aria-label={`Remove ${line.title}`}
-                          onClick={() => void update(line, 0)}
-                        >
-                          <Trash2 size={17} />
-                        </button>
                       </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
               <div className="merch-bag-total">
                 <span>{preview ? "Pricing" : "Subtotal"}</span>

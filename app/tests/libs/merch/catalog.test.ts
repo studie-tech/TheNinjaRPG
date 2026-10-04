@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectedMerchImage, selectedMerchVariant } from "@/libs/merch/catalog";
+import { preferredMerchImage, selectedMerchImage, selectedMerchVariant } from "@/libs/merch/catalog";
 import { merchProductSchema } from "@/validators/merch";
 
 const black = { url: "https://example.com/black.jpg", alt: "Black back print" };
@@ -37,5 +37,27 @@ describe("merch colour selections", () => {
       variants: [product.variants[0]!] };
     expect(selectedMerchVariant(single, {})).toBeUndefined();
     expect(selectedMerchVariant(single, { Size: "S" })?.id).toBe("black-s");
+  });
+});
+
+describe("merch artwork-facing mockups", () => {
+  const back = { url: "https://example.com/product-black-back-123.jpg", alt: "Back" };
+  const front = { url: "https://example.com/product-black-front-123.jpg", alt: "Front" };
+
+  it.each(["Utility Backpack", "Black Glossy Mug", "Straw Lid Water Bottle"])(
+    "shows the artwork-facing image for %s even when Shopify lists the back first",
+    (kind) => {
+      const accessory = { ...product, kind, images: [back, front], variants: [] };
+      expect(preferredMerchImage(accessory)).toEqual(front);
+      expect(selectedMerchImage(accessory, {})).toEqual(front);
+    },
+  );
+
+  it("keeps the back-print view for apparel", () => {
+    expect(preferredMerchImage({ ...product, images: [back, front] })).toEqual(back);
+  });
+
+  it("retains a usable fallback when the artwork-facing mockup is missing", () => {
+    expect(preferredMerchImage({ ...product, kind: "Utility Backpack", images: [back] })).toEqual(back);
   });
 });

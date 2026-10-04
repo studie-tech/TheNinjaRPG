@@ -13,7 +13,11 @@ import { useState } from "react";
 import { IMG_MERCH_ARTWORK, IMG_WALLPAPER_HORIZON } from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import { formatMerchMoney, productFromPrice } from "@/libs/merch/catalog";
+import {
+  formatMerchMoney,
+  preferredMerchImage,
+  productFromPrice,
+} from "@/libs/merch/catalog";
 import type { MerchProduct } from "@/validators/merch";
 import { useMerch } from "./MerchProvider";
 
@@ -101,10 +105,7 @@ export function MerchCollection() {
     .filter((p): p is MerchProduct => Boolean(p))
     .map((product) => ({
       product,
-      image:
-        (product.kind === "Black Glossy Mug"
-          ? product.images.find((image) => /-front-/.test(image.url))
-          : undefined) ?? product.images[0],
+      image: preferredMerchImage(product),
     }));
 
   return (
@@ -413,7 +414,7 @@ export function MerchCollection() {
 }
 
 export function MerchProductCard({ product }: { product: MerchProduct }) {
-  const image = product.images[0];
+  const image = preferredMerchImage(product);
   return (
     <article className="merch-product-card">
       <Link href={`/merch/${product.handle}`} className="merch-product-image">
