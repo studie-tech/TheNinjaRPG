@@ -73,6 +73,7 @@ import {
 import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { sectorGridNeighbors } from "@/libs/sector-map/world-grid";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { getBackgroundColor } from "@/libs/threejs/biome";
 import { applyCanvasDayNightBrightness } from "@/libs/threejs/dayNight";
@@ -238,7 +239,7 @@ const Sector: React.FC<SectorProps> = (props) => {
     "minBracketOnScout",
     -1,
   );
-  const [storedZoom, setStoredZoom] = useLocalStorage<number>("sectorZoom", 2);
+  const [storedZoom, setStoredZoom] = useLocalStorage<number>("sectorZoom", 2.4);
   // Global travel lands a tutorial player within a few tiles of the capture
   // target, so that step opens zoomed right in: the puppy and its marker fill
   // the view rather than being a speck somewhere on a 26x26 map. Only the
@@ -1460,6 +1461,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       document.body.style.cursor = "default";
       // Stop moving if failed
       if (res.success === false) {
+        showMutationToast(res);
         pendingCrossRef.current = null;
         setTarget(null);
       }
@@ -2040,7 +2042,11 @@ const Sector: React.FC<SectorProps> = (props) => {
 
       // Map size
       const WIDTH = sceneRef.getBoundingClientRect().width;
-      const HEIGHT = WIDTH * width2height;
+      // A narrow screen still needs enough map height to see a useful local
+      // area without pinch-zooming. Desktop keeps the authored aspect ratio.
+      const displayHeight = (width: number) =>
+        Math.max(width * width2height, Math.min(window.innerHeight * 0.6, 600));
+      const HEIGHT = displayHeight(WIDTH);
 
       // Re-anchor continuity: capture the previous camera pose and world
       // offset so a background rebuild is pixel-identical (the world shifts
@@ -2067,7 +2073,7 @@ const Sector: React.FC<SectorProps> = (props) => {
         sortObjects: false,
         color: color,
         colorAlpha: 0.5,
-        width2height: width2height,
+        width2height: HEIGHT / WIDTH,
       });
 
       // If no renderer, then we have an error with the browser, let the user know
@@ -2265,7 +2271,13 @@ const Sector: React.FC<SectorProps> = (props) => {
             if (i.object.userData.type === "tile") {
               const target = i.object.userData.tile as TerrainHex;
               const clickedSector = i.object.userData.sector as number;
-              if (target.blocked) return false;
+              if (target.blocked) {
+                showMutationToast({
+                  success: false,
+                  message: "That terrain cannot be walked on",
+                });
+                return false;
+              }
               if (clickedSector === sectorRef.current) {
                 pendingCrossRef.current = null;
                 pendingWorldTargetRef.current = null;
@@ -2403,7 +2415,7 @@ const Sector: React.FC<SectorProps> = (props) => {
       // keeps all three in sync with the real width and re-centers the
       // camera on the user.
       const applySize = (width: number) => {
-        const height = width * width2height;
+        const height = displayHeight(width);
         cachedWidth = width;
         cachedHeight = height;
         renderer?.setSize(width, height);
@@ -2423,6 +2435,10 @@ const Sector: React.FC<SectorProps> = (props) => {
         }
       });
       resizeObserver.observe(sceneRef);
+      // Use the same sizing rule for viewport changes and container changes.
+      window.removeEventListener("resize", handleResize);
+      const onViewportResize = () => applySize(sceneRef.getBoundingClientRect().width);
+      window.addEventListener("resize", onViewportResize);
 
       /**
        * Per-frame animation loop: draws users/quests, updates camera follow,
@@ -2613,7 +2629,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
         // Remove event listeners safely
         try {
-          window.removeEventListener("resize", handleResize);
+          window.removeEventListener("resize", onViewportResize);
           resizeObserver.disconnect();
           document.removeEventListener("keydown", onDocumentKeyDown, false);
           sceneRef.removeEventListener("mousemove", onDocumentMouseMove);
@@ -2693,6 +2709,32 @@ const Sector: React.FC<SectorProps> = (props) => {
     <>
       <div className="relative">
         <div id="tutorial-travel-sector" ref={mountRef}></div>
+        <div
+          role="img"
+          aria-label="Map compass and neighboring sectors"
+          className="pointer-events-none absolute top-3 left-3 z-10 rounded-lg border bg-background/90 p-2 text-center text-xs shadow-md backdrop-blur-sm"
+        >
+          <div>
+            N ·{" "}
+            {sectorGridNeighbors(sector)[0] < 0
+              ? "Polar boundary"
+              : `Sector ${sectorGridNeighbors(sector)[0]}`}
+          </div>
+          <div className="my-1 flex items-center gap-2">
+            <span>W · {sectorGridNeighbors(sector)[3]}</span>
+            <span className="font-semibold">{sector}</span>
+            <span>E · {sectorGridNeighbors(sector)[1]}</span>
+          </div>
+          <div>
+            S ·{" "}
+            {sectorGridNeighbors(sector)[2] < 0
+              ? "Polar boundary"
+              : `Sector ${sectorGridNeighbors(sector)[2]}`}
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            Gold lines mark sector borders
+          </div>
+        </div>
         <div className="pointer-events-none absolute top-3 right-3 z-10">
           <DayNightIndicator className="pointer-events-auto rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm" />
         </div>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { Quest } from "@/drizzle/schema";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import Modal from "@/layout/Modal";
 import StatusBar from "@/layout/StatusBar";
 import { getObjectiveImage, isObjectiveComplete } from "@/libs/objectives";
@@ -171,7 +172,14 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                 {!("hideLocation" in parsed && parsed.hideLocation) && (
                   <>
                     <div>
-                      <b>Sector: </b> {parsed.sector}
+                      <b>Sector: </b>{" "}
+                      <Link
+                        className="text-orange-600 underline dark:text-orange-400"
+                        href={`/travel?sector=${parsed.sector}${parsed.longitude !== undefined && parsed.latitude !== undefined ? `&longitude=${parsed.longitude}&latitude=${parsed.latitude}` : ""}`}
+                        aria-label={`Auto travel to sector ${parsed.sector}, position ${parsed.longitude}, ${parsed.latitude}`}
+                      >
+                        {parsed.sector}
+                      </Link>
                     </div>
                     <div>
                       <b>Position:</b> [{parsed.longitude}, {parsed.latitude}]

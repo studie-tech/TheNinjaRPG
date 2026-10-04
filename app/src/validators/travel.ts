@@ -34,3 +34,19 @@ export const bracketSliderSchema = z.object({
   value: z.number().min(-1).max(XP_BRACKETS.length),
 });
 export type BracketSliderSchema = z.infer<typeof bracketSliderSchema>;
+
+/** Coordinates in an authored sector; map bounds and walkability are checked on arrival. */
+export const travelLocationSchema = z.object({
+  sector: sectorIdSchema,
+  longitude: z.coerce.number().int().nonnegative().optional(),
+  latitude: z.coerce.number().int().nonnegative().optional(),
+});
+export type TravelLocation = z.infer<typeof travelLocationSchema>;
+
+export const travelPinSchema = travelLocationSchema.extend({
+  longitude: z.number().int().nonnegative(),
+  latitude: z.number().int().nonnegative(),
+  label: z.string().trim().min(1).max(40),
+});
+export const travelPinsSchema = z.array(travelPinSchema).max(20);
+export type TravelPin = z.infer<typeof travelPinSchema>;

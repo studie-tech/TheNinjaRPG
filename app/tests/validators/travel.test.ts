@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
-import { sectorIdSchema, startGlobalMoveSchema } from "@/validators/travel";
+import { sectorIdSchema, startGlobalMoveSchema, travelLocationSchema, travelPinsSchema } from "@/validators/travel";
 
 test("sectorIdSchema rejects out-of-bounds sector", () => {
   const result = sectorIdSchema.safeParse(MAP_SECTOR_ID_MAX + 1);
@@ -56,4 +56,28 @@ test("startGlobalMoveSchema rejects client-supplied landing coordinates", () => 
       }),
     );
   }
+});
+
+
+test("travel locations accept sector-only raids and full quest coordinates", () => {
+  expect(travelLocationSchema.parse({ sector: "724" })).toEqual({ sector: 724 });
+  expect(travelLocationSchema.parse({ sector: "724", longitude: "0", latitude: "25" })).toEqual({ sector: 724, longitude: 0, latitude: 25 });
+});
+
+test("travel locations reject invalid coordinates and sectors", () => {
+  for (const location of [
+    { sector: -1 },
+    { sector: MAP_SECTOR_ID_MAX + 1 },
+    { sector: 1, longitude: "undefined", latitude: 0 },
+    { sector: 1, longitude: -1, latitude: 0 },
+    { sector: 1, longitude: 0.5, latitude: 0 },
+  ]) expect(travelLocationSchema.safeParse(location).success).toBe(false);
+});
+
+test("saved pins require named coordinates and enforce the storage limit", () => {
+  const pin = { label: " Faction ", sector: 724, longitude: 0, latitude: 25 };
+  expect(travelPinsSchema.parse([pin])[0]?.label).toBe("Faction");
+  expect(travelPinsSchema.safeParse([{ ...pin, label: " " }]).success).toBe(false);
+  expect(travelPinsSchema.safeParse([{ label: "Sector", sector: 724 }]).success).toBe(false);
+  expect(travelPinsSchema.safeParse(Array.from({ length: 21 }, () => pin)).success).toBe(false);
 });

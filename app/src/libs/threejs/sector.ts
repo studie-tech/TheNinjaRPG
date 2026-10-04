@@ -2,7 +2,7 @@ import { Grid, Orientation, rectangle } from "honeycomb-grid";
 import { nanoid } from "nanoid";
 import { createNoise2D } from "simplex-noise";
 import {
-  type BufferGeometry,
+  BufferGeometry,
   EdgesGeometry,
   Group,
   Line,
@@ -731,6 +731,48 @@ export const drawSector = (
   }
 
   drawSectorMapObjects(group_assets, grid, sectorMap, lightLayout, decorationAssets);
+
+  // Only exposed polygon edges form the sector perimeter. Keep this separate
+  // from the subtle tile grid so crossing a sector is visible at every zoom.
+  const perimeter = new Map<string, { count: number; points: number[] }>();
+  grid.forEach((tile) => {
+    tile.corners.forEach((a, index) => {
+      const b = tile.corners[(index + 1) % tile.corners.length];
+      if (!b) return;
+      const key = [a, b]
+        .map((p) => `${p.x.toFixed(4)},${p.y.toFixed(4)}`)
+        .sort()
+        .join(":");
+      const edge = perimeter.get(key);
+      if (edge) edge.count += 1;
+      else
+        perimeter.set(key, {
+          count: 1,
+          points: [a.x, a.y, TILES_LAYER + 0.2, b.x, b.y, TILES_LAYER + 0.2],
+        });
+    });
+  });
+  const boundaryGeometry = new BufferGeometry();
+  boundaryGeometry.setFromPoints(
+    [...perimeter.values()]
+      .filter((edge) => edge.count === 1)
+      .flatMap((edge) => [
+        new Vector3(...(edge.points.slice(0, 3) as [number, number, number])),
+        new Vector3(...(edge.points.slice(3) as [number, number, number])),
+      ]),
+  );
+  const boundary = new LineSegments(
+    boundaryGeometry,
+    new LineBasicMaterial({
+      color: 0xffc23e,
+      transparent: true,
+      opacity: 0.85,
+      depthTest: false,
+      depthWrite: false,
+    }),
+  );
+  boundary.renderOrder = 1;
+  group_edges.add(boundary);
 
   // Merge all tile edge geometries into a single mesh (performance optimization)
   if (tileEdgeGeometries.length > 0) {

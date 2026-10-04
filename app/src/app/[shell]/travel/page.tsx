@@ -19,8 +19,16 @@ import {
   ZapOff,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Fragment,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -101,6 +109,10 @@ import {
   type QuickTravelSchema,
   type QuickTravelSchemaInput,
   quickTravelSchema,
+  type TravelLocation,
+  type TravelPin,
+  travelLocationSchema,
+  travelPinsSchema,
 } from "@/validators/travel";
 
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
@@ -113,7 +125,15 @@ type StoredSectorEntry =
 type WindowLayoutEntry =
   RouterOutputs["worldMap"]["getSectorWindow"]["windowLayouts"][number]["entries"][number];
 
-export default function Travel() {
+export default function TravelPage() {
+  return (
+    <Suspense fallback={<Loader explanation="Loading travel" />}>
+      <Travel />
+    </Suspense>
+  );
+}
+
+function Travel() {
   // What is shown on this page
   const [showActive, setShowActive] = useLocalStorage<boolean>(
     "showActiveOnMap4",
@@ -153,6 +173,16 @@ export default function Travel() {
   const [activeTab, setActiveTab] = useState<string>("");
   const [focusSector, setFocusSector] = useState<number | null>(null);
 
+  const searchParams = useSearchParams();
+  const [locationRequest, setLocationRequest] = useState<TravelLocation | null>(null);
+  const [autoDestination, setAutoDestination] = useState<TravelLocation | null>(null);
+  const requestedLocationRef = useRef<string | null>(null);
+  const [pinLabel, setPinLabel] = useState("");
+  const [storedPins, setStoredPins] = useLocalStorage<Record<string, TravelPin[]>>(
+    "travelPins",
+    {},
+  );
+
   // Globe data
   const { globe, mapError } = useMap();
 
@@ -167,6 +197,11 @@ export default function Travel() {
 
   // Data from database
   const { data: userData, timeDiff, updateUser } = useRequiredUserData();
+  const pinsResult = travelPinsSchema.safeParse(storedPins?.[userData?.userId ?? ""]);
+  const pins = pinsResult.success ? pinsResult.data : [];
+  const savePins = (next: TravelPin[]) => {
+    if (userData) setStoredPins({ ...storedPins, [userData.userId]: next });
+  };
   const tutorialRunning = isTutorialActive(userData);
   const showOtherUsers = tutorialRunning ? revealOthersInTutorial : showActive;
   const { data: villageData } = api.village.getAll.useQuery(undefined, {
@@ -343,7 +378,11 @@ export default function Travel() {
   const travelDestinations = useMemo(() => {
     if (!villages) return [];
     const villagesAsDestinations = villages
-      .filter((v) => ["VILLAGE", "SAFEZONE", "OUTLAW"].includes(v.type))
+      .filter(
+        (v) =>
+          ["VILLAGE", "SAFEZONE", "OUTLAW"].includes(v.type) ||
+          (v.type === "HIDEOUT" && v.id === userData?.clan?.villageId),
+      )
       .sort((a, b) => (a.mapName || a.name).localeCompare(b.mapName || b.name))
       .map((v) => ({
         id: v.id,
@@ -361,7 +400,7 @@ export default function Travel() {
         description: "Free-for-all PvP, no sleeping",
       },
     ];
-  }, [villages]);
+  }, [villages, userData?.clan?.villageId]);
 
   // Names for the sectors the player can already see marked on the globe, so
   // the travel dialog can say where it is sending them rather than only which
@@ -511,6 +550,7 @@ export default function Travel() {
         return previous;
       },
       onError: async (_error, _variables, previous) => {
+        setAutoDestination(null);
         if (!previous) return;
         await updateUser({
           status: previous.status,
@@ -527,7 +567,7 @@ export default function Travel() {
           setTargetPosition(null);
           setTargetSector(null);
           setShowModal(false);
-          setActiveTab(globalLink);
+
           await updateUser(result.data);
           if (globe) {
             const tile = globe.tiles[result.data.sector];
@@ -536,6 +576,7 @@ export default function Travel() {
             }
           }
         } else if (previous) {
+          setAutoDestination(null);
           await updateUser({
             status: previous.status,
             travelFinishAt: previous.travelFinishAt,
@@ -637,6 +678,7 @@ export default function Travel() {
             success: false,
             message: `For now, you need to travel to sector ${currentStep?.relatedValue} first.`,
           });
+          setAutoDestination(null);
           return;
         }
       }
@@ -649,8 +691,9 @@ export default function Travel() {
 
   // Whether world-travel can be started toward a given sector
   const canTravelTo = useCallback(
-    (sector: number) => sector !== userData?.sector && !isStartingTravel,
-    [userData?.sector, isStartingTravel],
+    (sector: number) =>
+      sector !== userData?.sector && userData?.status === "AWAKE" && !isStartingTravel,
+    [userData?.sector, userData?.status, isStartingTravel],
   );
 
   // Stable identity for the globe click path: MapComponent is memoized to avoid
@@ -675,6 +718,7 @@ export default function Travel() {
       });
       return;
     }
+    setAutoDestination(null);
     setTargetSector(sector);
     setShowModal(true);
   }, []);
@@ -776,6 +820,59 @@ export default function Travel() {
     villages,
   ]);
 
+  useEffect(() => {
+    if (!searchParams.has("sector")) {
+      requestedLocationRef.current = null;
+      return;
+    }
+    if (!userData) return;
+    const key = searchParams.toString();
+    if (requestedLocationRef.current === key) return;
+    requestedLocationRef.current = key;
+    const parsed = travelLocationSchema.safeParse({
+      sector: searchParams.get("sector"),
+      longitude: searchParams.get("longitude") ?? undefined,
+      latitude: searchParams.get("latitude") ?? undefined,
+    });
+    router.replace("/travel", { scroll: false });
+    if (parsed.success) setLocationRequest(parsed.data);
+    else showMutationToast({ success: false, message: "Invalid travel location" });
+  }, [searchParams, userData, router]);
+
+  useEffect(() => {
+    if (
+      !autoDestination ||
+      !userData ||
+      userData.status !== "AWAKE" ||
+      userData.sector !== autoDestination.sector ||
+      !currentSectorMap ||
+      isStartingTravel
+    )
+      return;
+    if (
+      autoDestination.longitude === undefined ||
+      autoDestination.latitude === undefined
+    ) {
+      setActiveTab(sectorLink);
+      setAutoDestination(null);
+      return;
+    }
+    const tile = currentSectorMap.tiles.find(
+      (tile) =>
+        tile.x === autoDestination.longitude && tile.y === autoDestination.latitude,
+    );
+    if (!tile || tile.blocked || tile.walkCost <= 0) {
+      showMutationToast({
+        success: false,
+        message: "That destination cannot be walked to",
+      });
+    } else {
+      setActiveTab(sectorLink);
+      setTargetPosition({ x: tile.x, y: tile.y });
+    }
+    setAutoDestination(null);
+  }, [autoDestination, userData, currentSectorMap, isStartingTravel, sectorLink]);
+
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (isJoining) return <Loader explanation="Joining" />;
   if (isCreatingHideout) return <Loader explanation="Purchasing" />;
@@ -808,6 +905,38 @@ export default function Travel() {
   // Render
   return (
     <>
+      {locationRequest && (
+        <Modal
+          title="Auto Travel"
+          isOpen={true}
+          setIsOpen={() => setLocationRequest(null)}
+          proceed_label="Travel"
+          proceedDisabled={userData.status !== "AWAKE" || isStartingTravel}
+          onAccept={() => {
+            if (userData.status !== "AWAKE" || isStartingTravel) return;
+            setAutoDestination(locationRequest);
+            if (locationRequest.sector !== userData.sector)
+              handleGlobalMove(locationRequest.sector);
+            setLocationRequest(null);
+          }}
+        >
+          Travel to {describeSector(locationRequest.sector)}
+          {locationRequest.longitude !== undefined &&
+          locationRequest.latitude !== undefined
+            ? `, position [${locationRequest.longitude}, ${locationRequest.latitude}]`
+            : ""}
+          ?
+          <p className="py-2">
+            {locationRequest.longitude !== undefined &&
+            locationRequest.latitude !== undefined
+              ? "You will walk to the destination after arriving in its sector."
+              : "You will travel to the destination sector."}
+          </p>
+          {locationRequest.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && (
+            <p className="text-red-600">Free-for-all PvP; sleeping is disabled.</p>
+          )}
+        </Modal>
+      )}
       <ContentBox
         title="Travel"
         subtitle={subtitle}
@@ -863,173 +992,242 @@ export default function Travel() {
               </>
             )}
             {activeTab === globalLink && (
-              <>
-                <Popover>
-                  <PopoverTrigger>
-                    <Locate
-                      className={`mr-2 h-7 w-7 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
-                    />
-                  </PopoverTrigger>
-                  <PopoverContent>
-                    <p className="py-2 font-semibold">Find Sector</p>
-                    <p className="pb-2 text-muted-foreground text-sm">
-                      Enter a sector ID to locate it on the map.
-                    </p>
-                    <Form {...findSectorForm}>
-                      <form
-                        onSubmit={findSectorForm.handleSubmit((data) => {
-                          setFocusSector(data.sector);
-                        })}
-                        className="flex flex-col gap-2"
-                      >
-                        <FormField
-                          control={findSectorForm.control}
-                          name="sector"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input
-                                  className="w-full"
-                                  placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
-                                  type="number"
-                                  {...field}
-                                  value={field.value as number}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            type="submit"
-                            size="sm"
-                            className="flex-1"
-                            disabled={findSectorValue === undefined}
-                          >
-                            Find Sector {findSectorValue ?? "..."}
-                          </Button>
-                          {focusSector !== null && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setFocusSector(null)}
-                            >
-                              Clear
-                            </Button>
-                          )}
-                        </div>
-                      </form>
-                    </Form>
-                  </PopoverContent>
-                </Popover>
-                <Popover>
-                  <PopoverTrigger>
-                    <Search className={`mr-2 h-7 w-7 hover:text-orange-500`} />
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72">
-                    <p className="py-2 font-semibold">Quick Travel</p>
-                    <p className="pb-2 text-muted-foreground text-sm">
-                      Travel to a village, or enter a sector ID.
-                    </p>
-                    <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pb-3">
-                      {travelDestinations.map((destination) => {
-                        const dotColor = getReadableVillageHexColor(destination.color);
-                        const description =
-                          "description" in destination
-                            ? destination.description
-                            : undefined;
-                        const button = (
+              <Popover>
+                <PopoverTrigger>
+                  <Locate
+                    className={`mr-2 h-7 w-7 hover:text-purple-500 ${focusSector !== null ? "text-purple-500" : ""}`}
+                  />
+                </PopoverTrigger>
+                <PopoverContent>
+                  <p className="py-2 font-semibold">Find Sector</p>
+                  <p className="pb-2 text-muted-foreground text-sm">
+                    Enter a sector ID to locate it on the map.
+                  </p>
+                  <Form {...findSectorForm}>
+                    <form
+                      onSubmit={findSectorForm.handleSubmit((data) => {
+                        setFocusSector(data.sector);
+                      })}
+                      className="flex flex-col gap-2"
+                    >
+                      <FormField
+                        control={findSectorForm.control}
+                        name="sector"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input
+                                className="w-full"
+                                placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
+                                type="number"
+                                {...field}
+                                value={field.value as number}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          type="submit"
+                          size="sm"
+                          className="flex-1"
+                          disabled={findSectorValue === undefined}
+                        >
+                          Find Sector {findSectorValue ?? "..."}
+                        </Button>
+                        {focusSector !== null && (
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="h-auto justify-start py-1.5"
-                            style={{ borderColor: dotColor }}
-                            disabled={!canTravelTo(destination.sector)}
-                            onClick={() => initiateTravelToSector(destination.sector)}
+                            onClick={() => setFocusSector(null)}
                           >
-                            <span
-                              className="mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/30 dark:ring-white/30"
-                              style={{ backgroundColor: dotColor }}
-                            />
-                            <span className="flex min-w-0 flex-col items-start text-left">
-                              <span>{destination.label}</span>
-                              {description && (
-                                <span className="font-normal text-[10px] text-red-600 dark:text-red-400">
-                                  {description}
-                                </span>
-                              )}
-                            </span>
-                            <span className="ml-auto text-muted-foreground text-xs">
-                              {destination.sector}
-                            </span>
+                            Clear
                           </Button>
-                        );
-                        if (!description) {
-                          return <Fragment key={destination.id}>{button}</Fragment>;
-                        }
-                        return (
-                          <TooltipProvider key={destination.id} delayDuration={50}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>{button}</TooltipTrigger>
-                              <TooltipContent>{description}</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        );
-                      })}
-                    </div>
-                    <Form {...quickTravelForm}>
-                      <form
-                        onSubmit={quickTravelForm.handleSubmit((data) => {
-                          initiateTravelToSector(data.sector);
-                        })}
-                        className="flex flex-col gap-2 border-t pt-3"
+                        )}
+                      </div>
+                    </form>
+                  </Form>
+                </PopoverContent>
+              </Popover>
+            )}
+            <Popover>
+              <PopoverTrigger aria-label="Quick Travel">
+                <Search className={`mr-2 h-7 w-7 hover:text-orange-500`} />
+              </PopoverTrigger>
+              <PopoverContent className="w-72">
+                <p className="py-2 font-semibold">Quick Travel</p>
+                <p className="pb-2 text-muted-foreground text-sm">
+                  Travel to a village, saved pin, or sector ID.
+                </p>
+                <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pb-3">
+                  {travelDestinations.map((destination) => {
+                    const dotColor = getReadableVillageHexColor(destination.color);
+                    const description =
+                      "description" in destination
+                        ? destination.description
+                        : undefined;
+                    const button = (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-auto justify-start py-1.5"
+                        style={{ borderColor: dotColor }}
+                        disabled={!canTravelTo(destination.sector)}
+                        onClick={() => initiateTravelToSector(destination.sector)}
                       >
-                        <FormField
-                          control={quickTravelForm.control}
-                          name="sector"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input
-                                  className="w-full"
-                                  placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
-                                  type="number"
-                                  {...field}
-                                  value={field.value as number}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
+                        <span
+                          className="mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/30 dark:ring-white/30"
+                          style={{ backgroundColor: dotColor }}
                         />
-                        <Button
-                          type="submit"
-                          size="sm"
-                          disabled={
-                            quickTravelSector === undefined ||
-                            !canTravelTo(quickTravelSector)
-                          }
-                        >
-                          Travel to Sector {quickTravelSector ?? "..."}
-                        </Button>
-                      </form>
-                    </Form>
-                  </PopoverContent>
-                </Popover>
-                <TooltipProvider delayDuration={50}>
-                  <Tooltip>
-                    <TooltipTrigger onClick={() => setShowOwnership(!showOwnership)}>
-                      <MapPinned
-                        className={`mr-2 h-7 w-7 ${showOwnership ? "text-orange-500" : ""}`}
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>Show sector ownerships and factions</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </>
+                        <span className="flex min-w-0 flex-col items-start text-left">
+                          <span>{destination.label}</span>
+                          {description && (
+                            <span className="font-normal text-[10px] text-red-600 dark:text-red-400">
+                              {description}
+                            </span>
+                          )}
+                        </span>
+                        <span className="ml-auto text-muted-foreground text-xs">
+                          {destination.sector}
+                        </span>
+                      </Button>
+                    );
+                    if (!description) {
+                      return <Fragment key={destination.id}>{button}</Fragment>;
+                    }
+                    return (
+                      <TooltipProvider key={destination.id} delayDuration={50}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>{button}</TooltipTrigger>
+                          <TooltipContent>{description}</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-col gap-2 border-t py-3">
+                  <p className="font-semibold text-sm">Saved pins</p>
+                  <p className="text-muted-foreground text-xs">
+                    Saved on this device for your account.
+                  </p>
+                  {pins.map((pin, index) => (
+                    <div
+                      key={`${pin.sector}-${pin.longitude}-${pin.latitude}`}
+                      className="flex gap-1"
+                    >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-auto min-w-0 flex-1 flex-col items-start whitespace-normal text-left"
+                        disabled={isStartingTravel || userData.status !== "AWAKE"}
+                        onClick={() => setLocationRequest(pin)}
+                      >
+                        <span>{pin.label}</span>
+                        <span className="text-muted-foreground text-xs">
+                          Sector {pin.sector} [{pin.longitude}, {pin.latitude}]
+                        </span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        aria-label={`Remove pin ${pin.label}`}
+                        onClick={() => savePins(pins.filter((_, i) => i !== index))}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  ))}
+                  <Input
+                    aria-label="Pin name"
+                    placeholder="Name this location"
+                    maxLength={40}
+                    value={pinLabel}
+                    onChange={(event) => setPinLabel(event.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      !pinLabel.trim() ||
+                      pins.length >= 20 ||
+                      userData.status !== "AWAKE"
+                    }
+                    onClick={() => {
+                      const next = pins.filter(
+                        (pin) =>
+                          pin.sector !== userData.sector ||
+                          pin.longitude !== userData.longitude ||
+                          pin.latitude !== userData.latitude,
+                      );
+                      savePins([
+                        ...next,
+                        {
+                          label: pinLabel.trim(),
+                          sector: userData.sector,
+                          longitude: userData.longitude,
+                          latitude: userData.latitude,
+                        },
+                      ]);
+                      setPinLabel("");
+                    }}
+                  >
+                    Save current location
+                  </Button>
+                </div>
+                <Form {...quickTravelForm}>
+                  <form
+                    onSubmit={quickTravelForm.handleSubmit((data) => {
+                      initiateTravelToSector(data.sector);
+                    })}
+                    className="flex flex-col gap-2 border-t pt-3"
+                  >
+                    <FormField
+                      control={quickTravelForm.control}
+                      name="sector"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input
+                              className="w-full"
+                              placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
+                              type="number"
+                              {...field}
+                              value={field.value as number}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={
+                        quickTravelSector === undefined ||
+                        !canTravelTo(quickTravelSector)
+                      }
+                    >
+                      Travel to Sector {quickTravelSector ?? "..."}
+                    </Button>
+                  </form>
+                </Form>
+              </PopoverContent>
+            </Popover>
+            {activeTab === globalLink && (
+              <TooltipProvider delayDuration={50}>
+                <Tooltip>
+                  <TooltipTrigger onClick={() => setShowOwnership(!showOwnership)}>
+                    <MapPinned
+                      className={`mr-2 h-7 w-7 ${showOwnership ? "text-orange-500" : ""}`}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>Show sector ownerships and factions</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
             {joinVillageBtn && (
               <Confirm
