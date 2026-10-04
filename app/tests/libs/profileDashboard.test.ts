@@ -1,3 +1,4 @@
+import { dashboardContentGroups, dashboardContentPrioritySchema } from "@/validators/dashboard";
 import { canStartStatTraining } from "@/libs/train";
 import { isWarMissionAvailable } from "@/libs/quest";
 import { describe, expect, it } from "vitest";
@@ -15,6 +16,8 @@ import {
   describeOccupationLine,
   raidContinueHref,
   selectDashboardHighlights,
+  orderDashboardContent,
+  getDashboardContentPriority,
 } from "@/libs/profileDashboard";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import type { DashboardContentSummary } from "@/libs/profileDashboard";
@@ -551,4 +554,28 @@ describe("describeOccupationLine", () => {
       craftTimer: false,
     });
   });
+});
+
+it("honors preferred content types and fills missing categories without hiding content", () => {
+  const content = [
+    createContent("mission"), createContent("errand"), createContent("medical"), createContent("pvp"),
+    createContent("event", { category: "events" }),
+    createContent("event", { category: "events", id: "second-event" }),
+    createContent("story", { category: "story" }),
+    createContent("battlepyramid", { category: "battlePyramids" }),
+  ];
+  const priority = ["battlePyramids", "events", "story", "raids", "missions", "errands", "medical", "pvp"];
+  expect(selectDashboardHighlights(content, 4, priority).map((entry) => entry.questType))
+    .toEqual(["battlepyramid", "event", "story", "mission"]);
+  expect(orderDashboardContent(content, priority)).toHaveLength(content.length);
+  expect(selectDashboardHighlights(content.filter((entry) => entry.category === "missions"), 4, priority)
+    .map((entry) => entry.questType)).toEqual(["mission", "errand", "medical", "pvp"]);
+});
+
+it("rejects duplicate, missing and unknown content priorities", () => {
+  expect(dashboardContentPrioritySchema.safeParse([...dashboardContentGroups]).success).toBe(true);
+  for (const priority of [[], [...dashboardContentGroups.slice(1), "raids"], [...dashboardContentGroups.slice(1), "unknown"]]) {
+    expect(dashboardContentPrioritySchema.safeParse(priority).success).toBe(false);
+    expect(getDashboardContentPriority(priority)).toEqual([...dashboardContentGroups]);
+  }
 });

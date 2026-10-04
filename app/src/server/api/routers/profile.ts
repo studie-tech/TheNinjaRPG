@@ -457,6 +457,12 @@ export const profileRouter = createTRPCRouter({
       const result = await ctx.drizzle
         .update(userData)
         .set({
+          ...(input.dashboardContentPriority !== undefined
+            ? { dashboardContentPriority: input.dashboardContentPriority }
+            : {}),
+          ...(input.rememberProfileTab !== undefined
+            ? { rememberProfileTab: input.rememberProfileTab }
+            : {}),
           ...(input.tutorialOn !== undefined ? { tutorialOn: input.tutorialOn } : {}),
           ...(input.musicOn !== undefined ? { musicOn: input.musicOn } : {}),
           ...(input.sfxOn !== undefined ? { sfxOn: input.sfxOn } : {}),

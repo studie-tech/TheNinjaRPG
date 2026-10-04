@@ -17,6 +17,11 @@ import {
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { fetchQuestDiscoverySummaryCandidates } from "@/server/utils/questDiscovery";
 import { getOwnSectorVillage, type SectorVillage } from "@/utils/village";
+import {
+  type DashboardContentGroup,
+  dashboardContentGroups,
+  dashboardContentPrioritySchema,
+} from "@/validators/dashboard";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 
 type DashboardAvailability = "available" | "travel";
@@ -73,22 +78,68 @@ interface DashboardMissionDailyCounts {
   dailyPvpMissions: number;
 }
 
-/** Fill dashboard highlights with daily assignments before other content categories. */
-export const selectDashboardHighlights = <T extends { category: string }>(
+export const dashboardContentGroupLabels: Record<DashboardContentGroup, string> = {
+  missions: "Missions & crimes",
+  errands: "Errands",
+  medical: "Medical missions",
+  pvp: "PvP missions",
+  events: "Events",
+  story: "Story",
+  battlePyramids: "Battle pyramids",
+  raids: "Raids",
+};
+
+/** Older accounts use the default order until they save a complete preference. */
+export const getDashboardContentPriority = (
+  priority: unknown,
+): DashboardContentGroup[] => {
+  const parsed = dashboardContentPrioritySchema.safeParse(priority);
+  return parsed.success ? parsed.data : [...dashboardContentGroups];
+};
+
+const contentGroup = (entry: {
+  category: string;
+  questType?: string;
+}): DashboardContentGroup => {
+  if (entry.category === "missions") {
+    if (entry.questType === "errand") return "errands";
+    if (entry.questType === "medical" || entry.questType === "pvp")
+      return entry.questType;
+    return "missions";
+  }
+  return entry.category as DashboardContentGroup;
+};
+
+export const orderDashboardContent = <
+  T extends { category: string; questType?: string },
+>(
+  content: T[],
+  priority?: unknown,
+): T[] => {
+  const order = getDashboardContentPriority(priority);
+  return [...content].sort(
+    (left, right) =>
+      order.indexOf(contentGroup(left)) - order.indexOf(contentGroup(right)),
+  );
+};
+
+/** Show one representative per preferred content type, filling gaps with other types. */
+export const selectDashboardHighlights = <
+  T extends { category: string; questType?: string },
+>(
   content: T[],
   limit = 4,
+  priority?: unknown,
 ) => {
-  const dailyAssignments = content.filter((entry) => entry.category === "missions");
-  const seenCategories = new Set(["missions"]);
-  const otherHighlights = content.filter((entry) => {
-    if (entry.category === "missions" || seenCategories.has(entry.category)) {
-      return false;
-    }
-    seenCategories.add(entry.category);
-    return true;
-  });
-
-  return [...dailyAssignments, ...otherHighlights].slice(0, limit);
+  const seen = new Set<DashboardContentGroup>();
+  return orderDashboardContent(content, priority)
+    .filter((entry) => {
+      const group = contentGroup(entry);
+      if (seen.has(group)) return false;
+      seen.add(group);
+      return true;
+    })
+    .slice(0, limit);
 };
 
 const availabilityPriority: Record<DashboardAvailability, number> = {

@@ -48,6 +48,7 @@ import {
   dashboardContentActionLabel,
   dashboardContentHref,
   describeOccupationLine,
+  orderDashboardContent,
   raidContinueHref,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
@@ -180,9 +181,10 @@ export default function ProfileDashboard() {
   );
 
   const previewContent = useMemo(() => {
-    if (showAllContent) return catalogue;
-    return selectDashboardHighlights(catalogue);
-  }, [catalogue, showAllContent]);
+    if (showAllContent)
+      return orderDashboardContent(catalogue, userData?.dashboardContentPriority);
+    return selectDashboardHighlights(catalogue, 4, userData?.dashboardContentPriority);
+  }, [catalogue, showAllContent, userData?.dashboardContentPriority]);
 
   useRefreshAt(
     [

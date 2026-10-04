@@ -5,6 +5,7 @@ import { cn } from "@/libs/shadui";
 
 interface NavTabsProps {
   id?: string;
+  remember?: boolean;
   className?: string;
   current: string | null;
   options: string[] | readonly string[];
@@ -15,19 +16,20 @@ interface NavTabsProps {
 
 const NavTabs: React.FC<NavTabsProps> = (props) => {
   // Destructure
-  const { id, current, options, setValue, onChange } = props;
+  const { id, current, options, setValue, onChange, remember = true } = props;
 
   // If we do not have a current value, get from localStorage or select first one
   useEffect(() => {
-    if (!current && id) {
-      const select = safeLocalStorageGetItem(id) || options[0];
+    if (!current) {
+      const stored = id && remember ? safeLocalStorageGetItem(id) : null;
+      const select = stored && options.includes(stored) ? stored : options[0];
       if (select) {
         if (setValue) setValue(select);
         if (onChange) onChange(select);
-        safeLocalStorageSetItem(id, select);
+        if (id && remember) safeLocalStorageSetItem(id, select);
       }
     }
-  }, [id, current, options, setValue]);
+  }, [id, current, options, setValue, onChange, remember]);
 
   // Derived features
   const fontSize = props.fontSize ? props.fontSize : "text-sm";
@@ -49,7 +51,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
                 props.className,
               )}
               onClick={() => {
-                if (id) safeLocalStorageSetItem(id, option);
+                if (id && remember) safeLocalStorageSetItem(id, option);
                 // A transition lets the tab's content render after the click is
                 // painted, so heavy mounts (e.g. three.js scenes) stay out of INP
                 startTransition(() => {

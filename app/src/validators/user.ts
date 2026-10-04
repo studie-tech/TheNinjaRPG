@@ -10,6 +10,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 import type { ZodAllTags } from "@/validators/combat";
+import { dashboardContentPrioritySchema } from "@/validators/dashboard";
 import { genders, usernameSchema } from "@/validators/register";
 import {
   isReservedCustomTitle,
@@ -163,6 +164,8 @@ export const updateUserPreferencesSchema = z
     preferredStat: z.enum(StatTypes).nullable().optional(),
     preferredGeneral1: z.enum(GeneralTypes).nullable().optional(),
     preferredGeneral2: z.enum(GeneralTypes).nullable().optional(),
+    dashboardContentPriority: dashboardContentPrioritySchema.optional(),
+    rememberProfileTab: z.boolean().optional(),
     // Audio preferences
     musicOn: z.boolean().optional(),
     sfxOn: z.boolean().optional(),

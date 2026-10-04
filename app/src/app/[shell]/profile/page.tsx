@@ -55,7 +55,8 @@ export default function Profile() {
       <div className="mb-3 flex justify-end">
         <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavTabs
-            id="profileTab"
+            id={`profileTab:${userData.userId}`}
+            remember={userData.rememberProfileTab}
             current={tab === null ? null : activeTab}
             options={visibleTabs}
             onChange={(value) =>

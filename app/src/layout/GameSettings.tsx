@@ -33,6 +33,7 @@ import {
 } from "@/hooks/localstorage";
 import { useAudio } from "@/hooks/useAudio";
 import { useIframeMute } from "@/hooks/useIframeMute";
+import { DashboardSettings } from "@/layout/DashboardSettings";
 import { UncontrolledSliderField } from "@/layout/SliderField";
 import {
   type EffectiveLayout,
@@ -779,6 +780,8 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
           </div>
         )}
       </div>
+
+      {userData && <DashboardSettings userData={userData} updateUser={updateUser} />}
 
       <NativeSettingsEntry onNavigate={onNavigate} />
 

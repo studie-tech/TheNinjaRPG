@@ -26,6 +26,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { relations } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { AllTags, SuperRefineEffects } from "@/validators/combat";
+import type { DashboardContentGroup } from "@/validators/dashboard";
 import type { ZodAllTags } from "@/validators/combat";
 import type {
   ExtraState,
@@ -2496,6 +2497,8 @@ export const userData = mysqlTable(
     effects: json("effects").$type<ZodAllTags[]>().default([]).notNull(),
     aiCalls: int("openaiCalls").default(0).notNull(),
     tavernMessages: int("tavernMessages").default(0).notNull(),
+    dashboardContentPriority: json("dashboardContentPriority").$type<DashboardContentGroup[]>().default([]).notNull(),
+    rememberProfileTab: boolean("rememberProfileTab").default(false).notNull(),
     musicOn: boolean("musicOn").default(true).notNull(),
     sfxOn: boolean("sfxOn").default(true).notNull(),
     buttonSfxOn: boolean("buttonSfxOn").default(true).notNull(),
