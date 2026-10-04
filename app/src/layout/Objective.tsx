@@ -176,7 +176,12 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
                       <Link
                         className="text-orange-600 underline dark:text-orange-400"
                         href={`/travel?sector=${parsed.sector}${parsed.longitude !== undefined && parsed.latitude !== undefined ? `&longitude=${parsed.longitude}&latitude=${parsed.latitude}` : ""}`}
-                        aria-label={`Auto travel to sector ${parsed.sector}, position ${parsed.longitude}, ${parsed.latitude}`}
+                        aria-label={
+                          parsed.longitude !== undefined &&
+                          parsed.latitude !== undefined
+                            ? `Auto travel to sector ${parsed.sector}, position ${parsed.longitude}, ${parsed.latitude}`
+                            : `Auto travel to sector ${parsed.sector}`
+                        }
                       >
                         {parsed.sector}
                       </Link>

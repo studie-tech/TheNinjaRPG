@@ -2424,7 +2424,11 @@ const Sector: React.FC<SectorProps> = (props) => {
         camera.updateProjectionMatrix();
         if (originRef.current) {
           const { x, y } = originRef.current.center;
-          controls.target.set(-width / 2 - x, -height / 2 - y, 0);
+          controls.target.set(
+            -width / 2 - x + centerOffsetRef.current.x,
+            -height / 2 - y + centerOffsetRef.current.y,
+            0,
+          );
           camera.position.copy(controls.target);
         }
       };
