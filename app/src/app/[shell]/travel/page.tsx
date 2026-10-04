@@ -1278,59 +1278,63 @@ function Travel() {
           </div>
         }
       >
-        {showGlobal && MapComponent}
-        {mapError && <MapError />}
-        {showSector && SectorComponent}
-        {!villages && <Loader explanation="Loading data" />}
-        {showModal && globe && userData && targetSector !== null && (
-          <Modal
-            id="tutorial-global-travel"
-            title="World Travel"
-            isOpen={showModal}
-            setIsOpen={setShowModal}
-            proceed_label={!isStartingTravel ? "Travel" : undefined}
-            isValid={false}
-            onAccept={() => handleGlobalMove(targetSector)}
-          >
-            {isStartingTravel && <Loader explanation="Preparing to Travel" />}
-            {!isStartingTravel && (
-              <div>
-                You are about to move from {describeSector(userData.sector)} to{" "}
-                {describeSector(targetSector)}.{" "}
-                <p className="py-2">
-                  The travel time is estimated to be{" "}
-                  {calcGlobalTravelTime(userData.sector, targetSector, globe)} seconds.
-                </p>
-                {targetSector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && (
-                  <p className="mb-2 rounded-md border border-red-600/40 bg-red-600/10 p-2 text-red-700 text-sm dark:text-red-400">
-                    Warning: this is a free-for-all PvP zone. Anyone can attack you
-                    regardless of village or XP bracket, and you cannot sleep there.
+        {/* The countdown needs a viewport even while the destination scene is loading. */}
+        <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
+          {showGlobal && MapComponent}
+          {mapError && <MapError />}
+          {showSector && SectorComponent}
+          {!villages && <Loader explanation="Loading data" />}
+          {showModal && globe && userData && targetSector !== null && (
+            <Modal
+              id="tutorial-global-travel"
+              title="World Travel"
+              isOpen={showModal}
+              setIsOpen={setShowModal}
+              proceed_label={!isStartingTravel ? "Travel" : undefined}
+              isValid={false}
+              onAccept={() => handleGlobalMove(targetSector)}
+            >
+              {isStartingTravel && <Loader explanation="Preparing to Travel" />}
+              {!isStartingTravel && (
+                <div>
+                  You are about to move from {describeSector(userData.sector)} to{" "}
+                  {describeSector(targetSector)}.{" "}
+                  <p className="py-2">
+                    The travel time is estimated to be{" "}
+                    {calcGlobalTravelTime(userData.sector, targetSector, globe)}{" "}
+                    seconds.
                   </p>
-                )}
-                Do you confirm?
+                  {targetSector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && (
+                    <p className="mb-2 rounded-md border border-red-600/40 bg-red-600/10 p-2 text-red-700 text-sm dark:text-red-400">
+                      Warning: this is a free-for-all PvP zone. Anyone can attack you
+                      regardless of village or XP bracket, and you cannot sleep there.
+                    </p>
+                  )}
+                  Do you confirm?
+                </div>
+              )}
+            </Modal>
+          )}
+          {userData?.travelFinishAt && (
+            <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
+              <div className="m-auto text-center text-white">
+                <p className="p-5 text-3xl">
+                  Traveling to Sector {targetSector ?? userData?.sector}
+                </p>
+                <p className="text-5xl">
+                  Time Left:{" "}
+                  <Countdown
+                    targetDate={userData?.travelFinishAt}
+                    timeDiff={timeDiff}
+                    onFinish={() => {
+                      if (!isFinishingTravel && !isStartingTravel) finishGlobalMove();
+                    }}
+                  />
+                </p>
               </div>
-            )}
-          </Modal>
-        )}
-        {userData?.travelFinishAt && (
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
-            <div className="m-auto text-center text-white">
-              <p className="p-5 text-3xl">
-                Traveling to Sector {targetSector ?? userData?.sector}
-              </p>
-              <p className="text-5xl">
-                Time Left:{" "}
-                <Countdown
-                  targetDate={userData?.travelFinishAt}
-                  timeDiff={timeDiff}
-                  onFinish={() => {
-                    if (!isFinishingTravel && !isStartingTravel) finishGlobalMove();
-                  }}
-                />
-              </p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </ContentBox>
       <div className="flex flex-wrap items-start justify-between gap-2 p-1">
         <div className="flex min-w-0 flex-wrap items-start gap-2">
