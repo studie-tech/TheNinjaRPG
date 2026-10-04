@@ -7,7 +7,6 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ensureDom } from "../../../../../tests/setup-dom.mjs";
 import ShinobiStruggleClient, {
@@ -15,17 +14,13 @@ import ShinobiStruggleClient, {
   ninjaSignInUrl,
 } from "./ShinobiStruggleClient";
 
-const gameInstances = vi.hoisted(() => ({ count: 0 }));
 vi.mock("next/dynamic", () => ({
-  default: () => () => {
-    const [instance] = useState(() => ++gameInstances.count);
-    return <div>Shinobi game {instance}</div>;
-  },
+  default: () => () => <div>Shinobi game</div>,
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
-const authState = vi.hoisted(() => ({ sessionId: "session-1" }));
+const authState = { sessionId: "session-1" };
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({
     getToken: async () => "clerk-session-token",
@@ -151,10 +146,10 @@ it("does not submit a link code when the session changes during token acquisitio
     transport,
     () => current,
   );
-  const rejected = expect(result).rejects.toMatchObject({ name: "AbortError" });
+  const rejected = result.catch((error: unknown) => error);
   current = false;
   release("new-account-token");
-  await rejected;
+  expect(await rejected).toMatchObject({ name: "AbortError" });
   expect(transport).not.toHaveBeenCalled();
 });
 
@@ -197,12 +192,13 @@ it("clears link input and ignores a previous account's delayed success after swi
   authState.sessionId = "session-2";
   view.rerender(<ShinobiStruggleClient />);
   expect(view.queryByRole("textbox", { name: "Block Struggle link code" })).toBeNull();
-  const currentGame = view.getByText(/^Shinobi game/).textContent;
+  const currentGame = view.container.lastElementChild;
+  expect(currentGame).not.toBeNull();
   await act(async () => {
     release(Response.json({ playerId: "old-account-player" }));
   });
   expect(view.queryByText("Accounts linked. Your game is reconnecting.")).toBeNull();
-  expect(view.getByText(/^Shinobi game/).textContent).toBe(currentGame);
+  expect(view.container.lastElementChild).toBe(currentGame);
   fireEvent.click(view.getByRole("button", { name: /Link an existing/ }));
   expect(
     (
