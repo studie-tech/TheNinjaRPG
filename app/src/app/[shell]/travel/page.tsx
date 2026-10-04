@@ -725,8 +725,15 @@ function Travel() {
 
   const isGlobal = activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
+  // World travel chooses a new landing position. Remount the local scene on
+  // arrival so its movement origin cannot retain the departure coordinates.
   const showSector =
-    villages && hasCurrentSector && currentTile && currentSectorMap && !isGlobal;
+    villages &&
+    hasCurrentSector &&
+    currentTile &&
+    currentSectorMap &&
+    userData?.status !== "TRAVEL" &&
+    !isGlobal;
 
   // Attack revealed stealthed player after moving to their position
   useEffect(() => {
