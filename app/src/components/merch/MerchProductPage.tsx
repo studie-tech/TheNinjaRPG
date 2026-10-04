@@ -4,6 +4,7 @@ import { ArrowRight, Minus, Plus, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import Table from "@/layout/Table";
 import {
   formatMerchMoney,
   getMerchDesign,
@@ -208,18 +209,30 @@ export function MerchProductPage({ handle }: { handle: string }) {
             <summary>About this piece</summary>
             <p>{details?.material ?? product.description}</p>
             {details && <p>{details.features}</p>}
-            {product.tags.includes("Back print") && (
-              <p>
-                A large back graphic, fitted proportionally to preserve the complete
-                artwork.
-              </p>
-            )}
+            {product.kind !== "Wide-Leg Joggers" &&
+              product.tags.includes("Back print") && (
+                <p>
+                  A large back graphic, fitted proportionally to preserve the complete
+                  artwork.
+                </p>
+              )}
           </details>
           <details className="merch-product-disclosure">
             <summary>Sizing & care</summary>
             <p>
               {details?.sizing ?? "See this product’s available options for sizing."}
             </p>
+            {details?.sizeGuide && (
+              <Table
+                compact
+                data={details.sizeGuide}
+                columns={[
+                  { key: "size", header: "Size", type: "string" },
+                  { key: "waist", header: "Waist", type: "string" },
+                  { key: "hips", header: "Hips", type: "string" },
+                ]}
+              />
+            )}
             {details && <p>{details.care}</p>}
           </details>
           <details className="merch-product-disclosure">

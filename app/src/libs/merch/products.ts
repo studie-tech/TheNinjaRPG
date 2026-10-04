@@ -8,8 +8,31 @@ export const MERCH_PRODUCT_DETAILS: Record<
     features: string;
     sizing: string;
     care: string;
+    sizeGuide?: Array<{ size: string; waist: string; hips: string }>;
   }
 > = {
+  "Wide-Leg Joggers": {
+    material:
+      "US/Mexico fulfillment: 96% recycled polyester, 4% elastane. Latvia fulfillment: 95% recycled polyester, 5% elastane. 308 g/m².",
+    features:
+      "Relaxed wide-leg fit, side pockets and an elastic drawstring waistband. A single graphic sits on the left thigh. White base fabric may show slightly at seams and folds.",
+    sizing:
+      "Unisex sizes 2XS–6XL. Measure your waist and hips and compare with the body measurements below. Measurements are shown in centimetres / inches.",
+    care: APPAREL_CARE,
+    sizeGuide: [
+      { size: "2XS", waist: "72 / 28 ⅜", hips: "90 / 35 ⅜" },
+      { size: "XS", waist: "76 / 29 ⅞", hips: "94 / 37" },
+      { size: "S", waist: "80 / 31 ½", hips: "98 / 38 ⅝" },
+      { size: "M", waist: "84 / 33 ⅛", hips: "102 / 40 ⅛" },
+      { size: "L", waist: "92 / 36 ¼", hips: "110 / 43 ¼" },
+      { size: "XL", waist: "100 / 39 ⅜", hips: "118 / 46 ½" },
+      { size: "2XL", waist: "108 / 42 ½", hips: "126 / 49 ⅝" },
+      { size: "3XL", waist: "116 / 45 ⅝", hips: "134 / 52 ¾" },
+      { size: "4XL", waist: "124 / 48 ⅞", hips: "142 / 55 ⅞" },
+      { size: "5XL", waist: "132 / 52", hips: "150 / 59" },
+      { size: "6XL", waist: "140 / 55 ⅛", hips: "158 / 62 ¼" },
+    ],
+  },
   "Organic T-Shirt": {
     material: "100% organic ring-spun cotton, 180 g/m².",
     features: "Regular fit with a soft cotton feel and a large back graphic.",
@@ -74,6 +97,7 @@ export const MERCH_PRODUCT_DETAILS: Record<
 
 export function normalizeMerchKind(value: string) {
   const text = value.toLowerCase();
+  if (text.includes("jogger")) return "Wide-Leg Joggers";
   if (text.includes("oversized")) return "Oversized Sweatshirt";
   if (text.includes("hoodie")) return "Organic Hoodie";
   if (text.includes("crewneck") || text.includes("sweatshirt"))

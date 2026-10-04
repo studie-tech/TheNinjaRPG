@@ -376,9 +376,10 @@ export function MerchCollection() {
           <details>
             <summary>Where is the artwork printed on apparel?</summary>
             <p>
-              Our apparel uses large graphics on the back. Artwork is fitted
-              proportionally to the print area, so tall designs keep their complete
-              composition. Check each product’s preview for its placement.
+              Tops use large graphics on the back; joggers have a single graphic on the
+              left thigh. Artwork is fitted proportionally to the print area, so tall
+              designs keep their complete composition. Check each product’s preview for
+              its placement.
             </p>
           </details>
           <details>

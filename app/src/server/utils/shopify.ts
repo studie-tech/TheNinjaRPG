@@ -87,7 +87,11 @@ export async function fetchMerchCatalog(): Promise<MerchProduct[]> {
         })),
         tags: [
           ...product.tags,
-          /tee|hoodie|crewneck|sweatshirt/i.test(title) ? "Back print" : "Accessory",
+          /jogger/i.test(title)
+            ? "Thigh print"
+            : /tee|hoodie|crewneck|sweatshirt/i.test(title)
+              ? "Back print"
+              : "Accessory",
         ],
         preview: false,
       });
