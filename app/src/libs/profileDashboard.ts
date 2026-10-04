@@ -1,9 +1,12 @@
+import { getUserCaps } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
+import { craftingStartBlockMessage } from "@/libs/crafting";
 import {
   getActiveObjective,
   getObjectiveImage,
   isObjectiveComplete,
 } from "@/libs/objectives";
+import { calcLevelRequirements, levelUpBlockMessage } from "@/libs/profile";
 import {
   isAvailableUserQuests,
   isQuestRankAllowed,
@@ -14,9 +17,14 @@ import {
   questStructureRoute,
   questTypeConcurrentBlockMessage,
 } from "@/libs/quest";
+import { canStartStatTraining, statTrainingBlockMessage } from "@/libs/train";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { fetchQuestDiscoverySummaryCandidates } from "@/server/utils/questDiscovery";
-import { getOwnSectorVillage, type SectorVillage } from "@/utils/village";
+import {
+  canAccessStructure,
+  getOwnSectorVillage,
+  type SectorVillage,
+} from "@/utils/village";
 import {
   type DashboardContentGroup,
   dashboardContentGroups,
@@ -24,7 +32,55 @@ import {
 } from "@/validators/dashboard";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 
-type DashboardAvailability = "available" | "travel";
+type DashboardAvailability = "available" | "travel" | "blocked";
+
+export const dashboardLevelProgress = (
+  user: Parameters<typeof levelUpBlockMessage>[0],
+) => {
+  const reason = levelUpBlockMessage(user);
+  if (!reason) return { label: "Ready to level up", reason: null };
+  if (user.level >= getUserCaps(user.rank).lvl_cap) {
+    return { label: "Rank level cap reached", reason };
+  }
+  const remaining = Math.max(calcLevelRequirements(user.level) - user.experience, 0);
+  if (remaining > 0) {
+    return {
+      label: `${Number(remaining.toFixed(0)).toLocaleString()} XP to go`,
+      reason: null,
+    };
+  }
+  return { label: "Progression required", reason };
+};
+
+/** Match the training page's access gate before offering a link to it. */
+export const dashboardTrainingAction = (
+  user: NonNullable<UserWithRelations>,
+  hasTraining: boolean,
+  sectorVillage?: SectorVillage | null,
+) => {
+  const canView =
+    user.isOutlaw || canAccessStructure(user, "/traininggrounds", sectorVillage);
+  const needsHome =
+    !hasTraining && !user.isOutlaw && user.sector !== user.village?.sector;
+  if (!canView || needsHome) {
+    return {
+      href: "/travel",
+      action: "Go home",
+      disabled: user.status !== "AWAKE",
+      reason: `Return to ${user.village?.name ?? "your village"} to ${hasTraining ? "view your training" : "train"}.${user.status !== "AWAKE" ? " You must be awake to travel." : ""}`,
+    };
+  }
+  return {
+    href: "/traininggrounds",
+    disabled: false,
+    action: hasTraining ? "View" : canStartStatTraining(user) ? "Train" : "View",
+    reason:
+      hasTraining || canStartStatTraining(user)
+        ? null
+        : (statTrainingBlockMessage(user) ??
+          "All stats are at their rank cap. You can still browse jutsu training."),
+  };
+};
 
 export type DashboardContentSummary = {
   id: string;
@@ -37,6 +93,7 @@ export type DashboardContentSummary = {
   destination: string;
   availability: DashboardAvailability;
   availabilityReason: string | null;
+  actionDisabled?: boolean;
   endsAt: string | null;
 };
 
@@ -145,6 +202,7 @@ export const selectDashboardHighlights = <
 const availabilityPriority: Record<DashboardAvailability, number> = {
   available: 0,
   travel: 1,
+  blocked: 2,
 };
 
 /** Collapse mission-hall quest definitions into player-facing assignment groups. */
@@ -214,6 +272,7 @@ export const dashboardContentActionLabel = (entry: {
   if (entry.availability === "travel") {
     return "Open travel";
   }
+  if (entry.availability === "blocked") return "View content";
   return "Open content";
 };
 
@@ -222,6 +281,25 @@ export const raidContinueHref = (
   raidSector: number | null,
   userSector: number | null | undefined,
 ) => (raidSector === null || raidSector === userSector ? "/globalanbuhq" : "/travel");
+
+/** The HQ overview remains accessible when the player cannot join a raid. */
+export const dashboardRaidAction = (
+  raidSector: number | null,
+  user: Pick<NonNullable<UserWithRelations>, "sector" | "status" | "isBanned">,
+) => {
+  const block = user.isBanned
+    ? "You are banned"
+    : user.status !== "AWAKE"
+      ? "Must be awake to join a raid"
+      : null;
+  if (block) return { href: "/globalanbuhq", action: "View raid", reason: block };
+  const href = raidContinueHref(raidSector, user.sector);
+  return {
+    href,
+    action: href === "/travel" ? "Open travel" : "Continue raid",
+    reason: href === "/travel" ? `Travel to sector ${raidSector} to participate` : null,
+  };
+};
 
 const occupationLines = {
   GATHERING: {
@@ -272,12 +350,14 @@ export const describeOccupationLine = ({
   quests,
   trackers,
   craftingItemName,
+  craftingUser,
 }: {
   occupation: string | null | undefined;
   quests: OccupationQuestEntry[];
   trackers: QuestTrackerType[] | null | undefined;
   /** Undefined while the crafting timer is still loading. */
   craftingItemName?: string | null;
+  craftingUser?: Parameters<typeof craftingStartBlockMessage>[0];
 }): OccupationProgressLine => {
   if (!occupation) {
     return {
@@ -323,12 +403,13 @@ export const describeOccupationLine = ({
         craftTimer: true,
       };
     }
+    const craftingBlock = craftingUser ? craftingStartBlockMessage(craftingUser) : null;
     return {
       label: meta.label,
       title: meta.emptyTitle,
-      detail: null,
+      detail: craftingBlock,
       progress: null,
-      action: "Start crafting",
+      action: craftingBlock ? "View" : "Start crafting",
       craftTimer: false,
     };
   }
@@ -503,10 +584,16 @@ export const resolveDashboardContent = (
         destination,
         availability: requiresVillageTravel
           ? ("travel" as const)
-          : ("available" as const),
+          : user.isBanned
+            ? ("blocked" as const)
+            : ("available" as const),
         availabilityReason: requiresVillageTravel
-          ? `Travel to ${location} to begin`
-          : null,
+          ? `Travel to ${location} to begin${user.isBanned ? ". You are banned and cannot start quests" : ""}${user.status && user.status !== "AWAKE" ? ". You must be awake to travel" : ""}`
+          : user.isBanned
+            ? "You are banned and cannot start quests"
+            : null,
+        actionDisabled:
+          requiresVillageTravel && !!user.status && user.status !== "AWAKE",
         endsAt: candidate.endsAt,
       },
     ];
@@ -528,7 +615,8 @@ export const buildDashboardCatalogue = (
   const quests = resolveDashboardContent(candidates, user, sectorVillage);
   const raidEntries: DashboardCatalogueEntry[] = (user.activeRaids ?? []).map(
     (raid) => {
-      const destination = raidContinueHref(raid.sector, user.sector);
+      const action = dashboardRaidAction(raid.sector, user);
+      const destination = action.href;
       const travelRequired = destination === "/travel";
       return {
         id: raid.id,
@@ -539,10 +627,12 @@ export const buildDashboardCatalogue = (
         questType: "raid",
         location: raid.sector === null ? "Global ANBU HQ" : `Sector ${raid.sector}`,
         destination,
-        availability: travelRequired ? "travel" : "available",
-        availabilityReason: travelRequired
-          ? `Travel to sector ${raid.sector} to participate`
-          : null,
+        availability: travelRequired
+          ? "travel"
+          : action.reason
+            ? "blocked"
+            : "available",
+        availabilityReason: action.reason,
         endsAt: raid.raidEndsAt?.toISOString() ?? null,
       };
     },

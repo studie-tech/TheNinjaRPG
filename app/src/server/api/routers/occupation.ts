@@ -13,6 +13,7 @@ import {
 import { item, userData, userItem, userItemImbuement } from "@/drizzle/schema";
 import {
   calculateItemConsumption,
+  craftingStartBlockMessage,
   getCraftingRank,
   getEffectiveMaxImbuements,
   getTotalItemQuantity,
@@ -119,12 +120,8 @@ export const occupationRouter = createTRPCRouter({
       );
       // Guards
       if (!user) return errorResponse("User not found");
-      if (user.status !== "AWAKE") {
-        return errorResponse("User is not awake");
-      }
-      if (user.sector === MAP_WAKE_ISLAND_SECTOR) {
-        return errorResponse("Cannot craft items on Wake Island");
-      }
+      const craftingBlock = craftingStartBlockMessage(user);
+      if (craftingBlock) return errorResponse(craftingBlock);
       if (user.occupation !== "CRAFTING") {
         return errorResponse("You must have the Crafting occupation to craft items");
       }

@@ -3,8 +3,19 @@ import {
   CRAFTING_MAX_IMBUED_ITEMS,
   CRAFTING_RANKS,
   CRAFTING_REQUIRED_EXP,
+  MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
 import type { Item, UserData, UserItem } from "@/drizzle/schema";
+
+/** Shared state and location gates for starting a craft. */
+export const craftingStartBlockMessage = (
+  user: Pick<UserData, "status" | "sector">,
+) => {
+  if (user.status !== "AWAKE") return "User is not awake";
+  if (user.sector === MAP_WAKE_ISLAND_SECTOR)
+    return "Cannot craft items on Wake Island";
+  return null;
+};
 
 /**
  * Get the crafting rank based on the experience

@@ -41,19 +41,21 @@ import Loader from "@/layout/Loader";
 import { LogbookActive } from "@/layout/Logbook";
 import { bankAccessBlockMessage } from "@/libs/bank";
 import { getRewardPreview } from "@/libs/objectives";
-import { calcLevelRequirements, levelUpBlockMessage } from "@/libs/profile";
+import { calcLevelRequirements } from "@/libs/profile";
 import {
   buildDashboardCatalogue,
   type DashboardCatalogueEntry,
   dashboardContentActionLabel,
   dashboardContentHref,
+  dashboardLevelProgress,
+  dashboardRaidAction,
+  dashboardTrainingAction,
   describeOccupationLine,
   orderDashboardContent,
-  raidContinueHref,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
 import { cn } from "@/libs/shadui";
-import { canStartStatTraining, statTrainingEndsAt } from "@/libs/train";
+import { statTrainingEndsAt } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { nextUtcDayAt } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -72,7 +74,7 @@ const categoryLabels = {
 export default function ProfileDashboard() {
   const { data: userData, timeDiff } = useRequiredUserData();
   const utils = api.useUtils();
-  const { sectorVillage } = useSectorVillage(userData);
+  const { sectorVillage, isLoading: isLoadingSector } = useSectorVillage(userData);
   const [showAllContent, setShowAllContent] = useState(false);
   const [sectionOrder, setSectionOrder] = useState<DashboardSectionId[]>([
     ...dashboardSections,
@@ -122,7 +124,6 @@ export default function ProfileDashboard() {
     (interest.data?.totalPending ?? 0) > 0 &&
     !!userData &&
     !bankAccessBlockMessage(userData);
-  const canLevelUp = !!userData && !levelUpBlockMessage(userData);
   const claimableRaidRewards =
     dashboard.data?.raidRewards.reduce((sum, raid) => sum + raid.claimableCount, 0) ??
     0;
@@ -213,11 +214,21 @@ export default function ProfileDashboard() {
     const progress = dashboard.data?.raidProgress.find(
       (entry) => entry.raidId === raid.id,
     );
-    return progress ? [{ ...raid, damageDealt: progress.damageDealt }] : [];
+    return progress
+      ? [
+          {
+            ...raid,
+            damageDealt: progress.damageDealt,
+            action: dashboardRaidAction(raid.sector, userData),
+          },
+        ]
+      : [];
   });
-  const recommended = catalogue.find((entry) => entry.availability === "available");
+  const recommended =
+    catalogue.find((entry) => entry.availability === "available") ?? catalogue[0];
   const occupationLine = describeOccupationLine({
     occupation: userData.occupation,
+    craftingUser: userData,
     quests: userData.userQuests,
     trackers: userData.questData,
     craftingItemName:
@@ -231,7 +242,6 @@ export default function ProfileDashboard() {
     (timer) => !(timer.kind === "crafting" && occupationLine.craftTimer),
   );
   const levelRequirement = calcLevelRequirements(userData.level);
-  const experienceToGo = Math.max(levelRequirement - userData.experience, 0);
   const levelProgress =
     levelRequirement > 0
       ? Math.min(100, (userData.experience / levelRequirement) * 100)
@@ -248,7 +258,9 @@ export default function ProfileDashboard() {
     recurringStreak?.rewards.find((reward) => reward.dayNumber === 1)?.rewards ?? null,
   );
   const craftTimer = craftingTimers.find((timer) => timer.kind === "crafting");
-  const canStartTraining = !training && canStartStatTraining(userData);
+  const trainingAction = dashboardTrainingAction(userData, !!training, sectorVillage);
+  const bankBlockMessage = bankAccessBlockMessage(userData);
+  const levelStatus = dashboardLevelProgress(userData);
   const raidTitle =
     dashboard.data?.raidRewards.length === 1
       ? (dashboard.data.raidRewards[0]?.raidName ?? "Raid rewards")
@@ -412,9 +424,12 @@ export default function ProfileDashboard() {
                     : "Ready to collect"
                 }
                 note={
-                  claimInterest.error ? (
-                    <p className="text-destructive">{claimInterest.error.message}</p>
-                  ) : null
+                  <>
+                    {bankBlockMessage && <p>{bankBlockMessage}</p>}
+                    {claimInterest.error && (
+                      <p className="text-destructive">{claimInterest.error.message}</p>
+                    )}
+                  </>
                 }
                 action={
                   <RowAction
@@ -463,23 +478,39 @@ export default function ProfileDashboard() {
                     />
                   ) : null
                 }
+                note={isLoadingSector ? null : trainingAction.reason}
                 action={
-                  <RowAction href="/traininggrounds" icon={Eye}>
-                    View
+                  <RowAction
+                    href={trainingAction.href}
+                    icon={trainingAction.href === "/travel" ? MapPin : Eye}
+                    disabled={isLoadingSector || trainingAction.disabled}
+                  >
+                    {isLoadingSector ? "Checking location..." : trainingAction.action}
                   </RowAction>
                 }
               />
-            ) : canStartTraining ? (
+            ) : (
               <StatusRow
                 label="Training"
                 title="Training grounds"
+                detail={isLoadingSector ? null : trainingAction.reason}
                 action={
-                  <RowAction href="/traininggrounds" icon={Dumbbell}>
-                    Train
+                  <RowAction
+                    href={trainingAction.href}
+                    icon={trainingAction.href === "/travel" ? MapPin : Dumbbell}
+                    disabled={
+                      isLoadingSector ||
+                      sidebarTimers.isLoading ||
+                      trainingAction.disabled
+                    }
+                  >
+                    {isLoadingSector || sidebarTimers.isLoading
+                      ? "Checking training..."
+                      : trainingAction.action}
                   </RowAction>
                 }
               />
-            ) : null}
+            )}
             <StatusRow
               label={occupationLine.label}
               title={occupationLine.title}
@@ -564,11 +595,7 @@ export default function ProfileDashboard() {
                     <span className="font-semibold text-amber-900 uppercase tracking-wide dark:text-amber-200">
                       XP
                     </span>
-                    <span className="text-muted-foreground">
-                      {canLevelUp
-                        ? "Ready to level up"
-                        : `${Number(experienceToGo.toFixed(0)).toLocaleString()} XP to go`}
-                    </span>
+                    <span className="text-muted-foreground">{levelStatus.label}</span>
                   </div>
                   <div className="relative">
                     <Progress
@@ -587,6 +614,11 @@ export default function ProfileDashboard() {
                   </div>
                 </div>
               </div>
+              {levelStatus.reason && (
+                <p className="mt-2 text-muted-foreground text-sm">
+                  {levelStatus.reason}
+                </p>
+              )}
               <LevelUpBtn id="tutorial-level-up-dashboard" />
             </div>
             {!claimsLoading && !claimsFailed && !hasCollectible && (
@@ -674,13 +706,24 @@ export default function ProfileDashboard() {
                 <div>
                   <p className="font-semibold">Your logbook is clear.</p>
                   <p className="text-muted-foreground text-sm">
-                    A good next step is {recommended.name} in {recommended.location}.
+                    {recommended.availability !== "available"
+                      ? `${recommended.name}: ${recommended.availabilityReason}.`
+                      : `A good next step is ${recommended.name} in ${recommended.location}.`}
                   </p>
                 </div>
-                <Button asChild>
-                  <Link href={dashboardContentHref(recommended)}>
-                    View next activity
-                  </Link>
+                <Button
+                  asChild={!recommended.actionDisabled}
+                  disabled={recommended.actionDisabled}
+                >
+                  {recommended.actionDisabled ? (
+                    "Open travel"
+                  ) : (
+                    <Link href={dashboardContentHref(recommended)}>
+                      {recommended.availability !== "available"
+                        ? dashboardContentActionLabel(recommended)
+                        : "View next activity"}
+                    </Link>
+                  )}
                 </Button>
               </div>
             ) : (
@@ -701,6 +744,9 @@ export default function ProfileDashboard() {
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
                     <p>{raid.damageDealt.toLocaleString()} damage dealt</p>
+                    {raid.action.reason && (
+                      <p className="text-muted-foreground">{raid.action.reason}</p>
+                    )}
                     <p className="text-muted-foreground">
                       {raid.raidEndsAt
                         ? `Ends ${raid.raidEndsAt.toLocaleString()}`
@@ -712,9 +758,7 @@ export default function ProfileDashboard() {
                       variant="outline"
                       className="hover:text-black"
                     >
-                      <Link href={raidContinueHref(raid.sector, userData.sector)}>
-                        Continue raid
-                      </Link>
+                      <Link href={raid.action.href}>{raid.action.action}</Link>
                     </Button>
                   </CardContent>
                 </Card>
@@ -870,7 +914,7 @@ function RowAction({
       {children}
     </>
   );
-  if (href) {
+  if (href && !disabled) {
     return (
       <Button asChild size="sm" variant={variant} className={className}>
         <Link href={href}>{content}</Link>
@@ -1011,7 +1055,11 @@ function ContentCard({ entry }: { entry: DashboardCatalogueEntry }) {
               entry.availability === "travel" && "border-amber-500 text-amber-500",
             )}
           >
-            {entry.availability === "available" ? "Available here" : "Travel required"}
+            {entry.availability === "available"
+              ? "Available here"
+              : entry.availability === "travel"
+                ? "Travel required"
+                : "View only"}
           </Badge>
         </div>
         <CardTitle className="text-base">{entry.name}</CardTitle>
@@ -1032,15 +1080,20 @@ function ContentCard({ entry }: { entry: DashboardCatalogueEntry }) {
           <p className="text-muted-foreground text-xs">{entry.availabilityReason}</p>
         )}
         <Button
-          asChild
+          asChild={!entry.actionDisabled}
+          disabled={entry.actionDisabled}
           size="sm"
           variant="outline"
           className="mt-1 w-full hover:text-black"
         >
-          <Link href={destination}>
-            {actionLabel}
-            <ArrowRight className="ml-1 h-4 w-4" />
-          </Link>
+          {entry.actionDisabled ? (
+            actionLabel
+          ) : (
+            <Link href={destination}>
+              {actionLabel}
+              <ArrowRight className="ml-1 h-4 w-4" />
+            </Link>
+          )}
         </Button>
       </CardContent>
     </Card>

@@ -151,3 +151,9 @@ describe("dashboard discovery from shared profile data", () => {
     ).toEqual([]);
   });
 });
+
+
+it("marks a banned player's content as view-only and preserves location guidance away from it", () => {
+  expect(resolveDashboardContent([candidate()], user({ isBanned: true }))[0]).toMatchObject({ availability: "blocked", availabilityReason: "You are banned and cannot start quests" });
+  expect(resolveDashboardContent([candidate()], user({ isBanned: true, sector: -1 }))[0]).toMatchObject({ availability: "travel", availabilityReason: expect.stringContaining("You are banned") });
+});
