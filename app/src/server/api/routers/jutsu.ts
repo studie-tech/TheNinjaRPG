@@ -1324,7 +1324,11 @@ export const jutsuRouter = createTRPCRouter({
         let repricingRefund = 0;
         for (const entry of remainingForJutsu) {
           projected += 1;
-          const nextCost = calcJutsuTrainCost(info, projected - 1, user, students);
+          // A reservation cannot exceed the ryo paid, even if a discount has ended.
+          const nextCost = Math.min(
+            entry.reservedRyo,
+            calcJutsuTrainCost(info, projected - 1, user, students),
+          );
           const nextDuration = Math.ceil(
             calcJutsuTrainTime(info, projected - 1, user) / 1000,
           );
@@ -1414,7 +1418,11 @@ export const jutsuRouter = createTRPCRouter({
         let repricingRefund = 0;
         for (const entry of remaining.filter((job) => job.jutsuId === target.jutsuId)) {
           projected += 1;
-          const nextCost = calcJutsuTrainCost(info, projected - 1, user, students);
+          // A reservation cannot exceed the ryo paid, even if a discount has ended.
+          const nextCost = Math.min(
+            entry.reservedRyo,
+            calcJutsuTrainCost(info, projected - 1, user, students),
+          );
           const nextDuration = Math.ceil(
             calcJutsuTrainTime(info, projected - 1, user) / 1000,
           );

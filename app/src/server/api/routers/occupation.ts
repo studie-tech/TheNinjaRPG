@@ -48,6 +48,8 @@ import { canChangeContent } from "@/utils/permissions";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
 
+const craftingMaterialsChanged = new Error("Crafting materials changed");
+
 const rescheduleCraftingJobs = async (
   client: DrizzleClient,
   userId: string,
@@ -327,7 +329,7 @@ export const occupationRouter = createTRPCRouter({
         (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
       const expGain = Math.floor(baseExpGain * (1 + clanCraftingExpBoost));
       const queueId = nanoid();
-      const enqueueResult = await ctx.drizzle.transaction(async (tx) => {
+      const enqueue = ctx.drizzle.transaction(async (tx) => {
         const lock = await tx
           .update(userData)
           .set({ updatedAt: sql`${userData.updatedAt}` })
@@ -367,7 +369,7 @@ export const occupationRouter = createTRPCRouter({
         const reservations: (typeof userCraftingQueueMaterial.$inferInsert)[] = [];
         for (const consumption of allConsumptions) {
           const source = materialRows.find((row) => row.id === consumption.userItemId);
-          if (!source) return "MATERIALS" as const;
+          if (!source) throw craftingMaterialsChanged;
           const materialGuard = and(
             eq(userItem.id, source.id),
             eq(userItem.userId, ctx.userId),
@@ -385,7 +387,7 @@ export const occupationRouter = createTRPCRouter({
                   .update(userItem)
                   .set({ quantity: consumption.newQuantity })
                   .where(materialGuard);
-          if (update.rowsAffected !== 1) return "MATERIALS" as const;
+          if (update.rowsAffected !== 1) throw craftingMaterialsChanged;
           reservations.push({
             id: nanoid(),
             queueId,
@@ -416,6 +418,11 @@ export const occupationRouter = createTRPCRouter({
           await tx.insert(userCraftingQueueMaterial).values(reservations);
         }
         return "OK" as const;
+      });
+      const enqueueResult = await enqueue.catch((error: unknown) => {
+        // Reject inside the transaction so earlier material writes are rolled back.
+        if (error === craftingMaterialsChanged) return "MATERIALS" as const;
+        throw error;
       });
       if (enqueueResult === "FULL") return errorResponse("Crafting queue is full");
       if (enqueueResult === "MATERIALS") {
