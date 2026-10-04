@@ -13,6 +13,7 @@ import {
   Eye,
   Gift,
   Hammer,
+  LockKeyhole,
   MapPin,
   RotateCcw,
   ScrollText,
@@ -26,6 +27,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
@@ -424,15 +431,13 @@ export default function ProfileDashboard() {
                     : "Ready to collect"
                 }
                 note={
-                  <>
-                    {bankBlockMessage && <p>{bankBlockMessage}</p>}
-                    {claimInterest.error && (
-                      <p className="text-destructive">{claimInterest.error.message}</p>
-                    )}
-                  </>
+                  claimInterest.error && (
+                    <p className="text-destructive">{claimInterest.error.message}</p>
+                  )
                 }
                 action={
                   <RowAction
+                    restriction={bankBlockMessage}
                     icon={Coins}
                     variant="default"
                     disabled={!canClaimInterest || claimInterest.isPending}
@@ -478,9 +483,16 @@ export default function ProfileDashboard() {
                     />
                   ) : null
                 }
-                note={isLoadingSector ? null : trainingAction.reason}
                 action={
                   <RowAction
+                    restriction={isLoadingSector ? null : trainingAction.reason}
+                    restrictionLabel={
+                      trainingAction.href === "/travel"
+                        ? trainingAction.disabled
+                          ? "Must be awake"
+                          : "Return to village"
+                        : undefined
+                    }
                     href={trainingAction.href}
                     icon={trainingAction.href === "/travel" ? MapPin : Eye}
                     disabled={isLoadingSector || trainingAction.disabled}
@@ -493,9 +505,16 @@ export default function ProfileDashboard() {
               <StatusRow
                 label="Training"
                 title="Training grounds"
-                detail={isLoadingSector ? null : trainingAction.reason}
                 action={
                   <RowAction
+                    restriction={isLoadingSector ? null : trainingAction.reason}
+                    restrictionLabel={
+                      trainingAction.href === "/travel"
+                        ? trainingAction.disabled
+                          ? "Must be awake"
+                          : "Return to village"
+                        : undefined
+                    }
                     href={trainingAction.href}
                     icon={trainingAction.href === "/travel" ? MapPin : Dumbbell}
                     disabled={
@@ -521,7 +540,7 @@ export default function ProfileDashboard() {
                     timeDiff={timeDiff}
                     onEndShow="Ready"
                   />
-                ) : (
+                ) : userData.occupation === "CRAFTING" ? null : (
                   occupationLine.detail
                 )
               }
@@ -538,6 +557,9 @@ export default function ProfileDashboard() {
               }
               action={
                 <RowAction
+                  restriction={
+                    userData.occupation === "CRAFTING" ? occupationLine.detail : null
+                  }
                   href="/occupation"
                   icon={iconForRowAction(occupationLine.action)}
                 >
@@ -595,7 +617,15 @@ export default function ProfileDashboard() {
                     <span className="font-semibold text-amber-900 uppercase tracking-wide dark:text-amber-200">
                       XP
                     </span>
-                    <span className="text-muted-foreground">{levelStatus.label}</span>
+                    {levelStatus.reason ? (
+                      <RestrictionBadge
+                        message={levelStatus.reason}
+                        label={levelStatus.label}
+                        compact
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">{levelStatus.label}</span>
+                    )}
                   </div>
                   <div className="relative">
                     <Progress
@@ -614,11 +644,6 @@ export default function ProfileDashboard() {
                   </div>
                 </div>
               </div>
-              {levelStatus.reason && (
-                <p className="mt-2 text-muted-foreground text-sm">
-                  {levelStatus.reason}
-                </p>
-              )}
               <LevelUpBtn id="tutorial-level-up-dashboard" />
             </div>
             {!claimsLoading && !claimsFailed && !hasCollectible && (
@@ -706,25 +731,23 @@ export default function ProfileDashboard() {
                 <div>
                   <p className="font-semibold">Your logbook is clear.</p>
                   <p className="text-muted-foreground text-sm">
-                    {recommended.availability !== "available"
-                      ? `${recommended.name}: ${recommended.availabilityReason}.`
-                      : `A good next step is ${recommended.name} in ${recommended.location}.`}
+                    A good next step is {recommended.name} in {recommended.location}.
                   </p>
                 </div>
-                <Button
-                  asChild={!recommended.actionDisabled}
-                  disabled={recommended.actionDisabled}
+                <RowAction
+                  href={dashboardContentHref(recommended)}
+                  icon={ArrowRight}
+                  restriction={recommended.availabilityReason}
+                  restrictionLabel={
+                    recommended.availability === "travel"
+                      ? recommended.actionDisabled
+                        ? "Must be awake"
+                        : "Travel required"
+                      : "Cannot start quests"
+                  }
                 >
-                  {recommended.actionDisabled ? (
-                    "Open travel"
-                  ) : (
-                    <Link href={dashboardContentHref(recommended)}>
-                      {recommended.availability !== "available"
-                        ? dashboardContentActionLabel(recommended)
-                        : "View next activity"}
-                    </Link>
-                  )}
-                </Button>
+                  View next activity
+                </RowAction>
               </div>
             ) : (
               <div className="p-4 text-muted-foreground text-sm">
@@ -744,22 +767,18 @@ export default function ProfileDashboard() {
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
                     <p>{raid.damageDealt.toLocaleString()} damage dealt</p>
-                    {raid.action.reason && (
-                      <p className="text-muted-foreground">{raid.action.reason}</p>
-                    )}
                     <p className="text-muted-foreground">
                       {raid.raidEndsAt
                         ? `Ends ${raid.raidEndsAt.toLocaleString()}`
                         : "No published deadline"}
                     </p>
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="outline"
-                      className="hover:text-black"
+                    <RowAction
+                      href={raid.action.href}
+                      icon={Swords}
+                      restriction={raid.action.reason}
                     >
-                      <Link href={raid.action.href}>{raid.action.action}</Link>
-                    </Button>
+                      {raid.action.action}
+                    </RowAction>
                   </CardContent>
                 </Card>
               ))}
@@ -899,7 +918,11 @@ function RowAction({
   variant = "outline",
   disabled,
   onClick,
+  restriction,
+  restrictionLabel,
 }: {
+  restriction?: string | null;
+  restrictionLabel?: string;
   href?: string;
   icon: React.ComponentType<{ className?: string }>;
   children: React.ReactNode;
@@ -907,6 +930,8 @@ function RowAction({
   disabled?: boolean;
   onClick?: () => void;
 }) {
+  if (restriction)
+    return <RestrictionBadge message={restriction} label={restrictionLabel} />;
   const className = cn("w-full gap-1.5", variant === "outline" && "hover:text-black");
   const content = (
     <>
@@ -933,6 +958,51 @@ function RowAction({
     </Button>
   );
 }
+
+/** A focusable, non-interactive action replacement keeps the full reason accessible. */
+function RestrictionBadge({
+  message,
+  label,
+  compact = false,
+}: {
+  message: string;
+  label?: string;
+  compact?: boolean;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="outline"
+            aria-label={message}
+            tabIndex={0}
+            className={cn(
+              "min-w-0 gap-1.5 border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+              compact ? "text-[10px]" : "h-8 w-full justify-center px-2 text-xs",
+            )}
+          >
+            <LockKeyhole className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">
+              {label ?? compactRestrictionLabel(message)}
+            </span>
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">{message}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+const compactRestrictionLabel = (message: string) => {
+  if (message.startsWith("Training more than")) return "Daily training limit";
+  if (message.startsWith("All stats are at")) return "Stats at rank cap";
+  if (message === "Cannot craft items on Wake Island") return "Leave Wake Island";
+  if (message === "User is not awake" || message.startsWith("Must be awake"))
+    return "Must be awake";
+  if (message === "Cannot access bank while in combat") return "Combat in progress";
+  return message;
+};
 
 function StatusRow({
   label,
@@ -1076,25 +1146,20 @@ function ContentCard({ entry }: { entry: DashboardCatalogueEntry }) {
             Available until {new Date(entry.endsAt).toLocaleString()}
           </p>
         )}
-        {entry.availabilityReason && (
-          <p className="text-muted-foreground text-xs">{entry.availabilityReason}</p>
-        )}
-        <Button
-          asChild={!entry.actionDisabled}
-          disabled={entry.actionDisabled}
-          size="sm"
-          variant="outline"
-          className="mt-1 w-full hover:text-black"
+        <RowAction
+          href={destination}
+          icon={ArrowRight}
+          restriction={entry.availabilityReason}
+          restrictionLabel={
+            entry.availability === "travel"
+              ? entry.actionDisabled
+                ? "Must be awake"
+                : "Travel required"
+              : "Cannot start quests"
+          }
         >
-          {entry.actionDisabled ? (
-            actionLabel
-          ) : (
-            <Link href={destination}>
-              {actionLabel}
-              <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
-          )}
-        </Button>
+          {actionLabel}
+        </RowAction>
       </CardContent>
     </Card>
   );
