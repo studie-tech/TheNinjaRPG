@@ -9,10 +9,6 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ensureDom } from "../../../../../tests/setup-dom.mjs";
-import ShinobiStruggleClient, {
-  fetchAuthenticatedGame,
-  ninjaSignInUrl,
-} from "./ShinobiStruggleClient";
 
 vi.mock("next/dynamic", () => ({
   default: () => () => <div>Shinobi game</div>,
@@ -28,6 +24,14 @@ vi.mock("@clerk/nextjs", () => ({
     sessionId: authState.sessionId,
   }),
 }));
+
+// Bun executes module imports before test mocks; load the host only after its
+// Clerk and dynamic-component adapters have been installed.
+const {
+  default: ShinobiStruggleClient,
+  fetchAuthenticatedGame,
+  ninjaSignInUrl,
+} = await import("./ShinobiStruggleClient");
 
 const originalFlag = process.env.NEXT_PUBLIC_BLOCKSTRUGGLE_IDENTITY_LINK_ENABLED;
 const originalFetch = globalThis.fetch;
@@ -207,5 +211,11 @@ it("clears link input and ignores a previous account's delayed success after swi
       }) as HTMLInputElement
     ).value,
   ).toBe("");
-  expect(view.queryByRole("alert")).toBeNull();
+  expect(
+    within(
+      view.getByRole("region", {
+        name: "Block Struggle account linking",
+      }),
+    ).queryByRole("alert"),
+  ).toBeNull();
 });
