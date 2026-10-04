@@ -2722,7 +2722,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             N ·{" "}
             {sectorGridNeighbors(sector)[0] < 0
               ? "Polar boundary"
-              : `Sector ${sectorGridNeighbors(sector)[0]}`}
+              : sectorGridNeighbors(sector)[0]}
           </div>
           <div className="my-1 flex items-center gap-2">
             <span>W · {sectorGridNeighbors(sector)[3]}</span>
@@ -2733,7 +2733,7 @@ const Sector: React.FC<SectorProps> = (props) => {
             S ·{" "}
             {sectorGridNeighbors(sector)[2] < 0
               ? "Polar boundary"
-              : `Sector ${sectorGridNeighbors(sector)[2]}`}
+              : sectorGridNeighbors(sector)[2]}
           </div>
           <div className="mt-1 text-muted-foreground">
             Gold lines mark sector borders
