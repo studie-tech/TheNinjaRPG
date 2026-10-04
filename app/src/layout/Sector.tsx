@@ -2713,32 +2713,38 @@ const Sector: React.FC<SectorProps> = (props) => {
     <>
       <div className="relative">
         <div id="tutorial-travel-sector" ref={mountRef}></div>
-        <div
-          role="img"
+        <aside
           aria-label="Map compass and neighboring sectors"
           className="pointer-events-none absolute top-3 left-3 z-10 rounded-lg border bg-background/90 p-2 text-center text-xs shadow-md backdrop-blur-sm"
         >
-          <div>
-            N ·{" "}
-            {sectorGridNeighbors(sector)[0] < 0
-              ? "Polar boundary"
-              : sectorGridNeighbors(sector)[0]}
-          </div>
-          <div className="my-1 flex items-center gap-2">
-            <span>W · {sectorGridNeighbors(sector)[3]}</span>
-            <span className="font-semibold">{sector}</span>
-            <span>E · {sectorGridNeighbors(sector)[1]}</span>
-          </div>
-          <div>
-            S ·{" "}
-            {sectorGridNeighbors(sector)[2] < 0
-              ? "Polar boundary"
-              : sectorGridNeighbors(sector)[2]}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
+            <span className="col-span-3">
+              N ·{" "}
+              {sectorGridNeighbors(sector)[0] < 0
+                ? "Polar boundary"
+                : sectorGridNeighbors(sector)[0]}
+            </span>
+            <span className="whitespace-nowrap text-right">
+              {sectorGridNeighbors(sector)[3]} · W
+            </span>
+            <span className="min-w-8 rounded border border-foreground/20 bg-muted px-1.5 py-0.5 font-bold">
+              <span className="sr-only">Current sector </span>
+              {sector}
+            </span>
+            <span className="whitespace-nowrap text-left">
+              E · {sectorGridNeighbors(sector)[1]}
+            </span>
+            <span className="col-span-3">
+              S ·{" "}
+              {sectorGridNeighbors(sector)[2] < 0
+                ? "Polar boundary"
+                : sectorGridNeighbors(sector)[2]}
+            </span>
           </div>
           <div className="mt-1 text-muted-foreground">
             Gold lines mark sector borders
           </div>
-        </div>
+        </aside>
         <div className="pointer-events-none absolute top-3 right-3 z-10">
           <DayNightIndicator className="pointer-events-auto rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm" />
         </div>
