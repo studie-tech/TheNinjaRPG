@@ -89,7 +89,14 @@ const normalizeWheelDeltaY = (event: React.WheelEvent<HTMLElement>) => {
 export const forwardVerticalWheelToDocumentScroll: React.WheelEventHandler<
   HTMLElement
 > = (event) => {
-  if (typeof window === "undefined" || event.ctrlKey || event.shiftKey) return;
+  // Canvas controls consume wheel input for zoom before it reaches the layout.
+  if (
+    typeof window === "undefined" ||
+    event.defaultPrevented ||
+    event.ctrlKey ||
+    event.shiftKey
+  )
+    return;
   if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
 
   const target = event.target;
