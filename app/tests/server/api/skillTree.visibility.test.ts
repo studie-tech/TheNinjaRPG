@@ -2,8 +2,9 @@
 
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect, QueryBuilder } from "drizzle-orm/mysql-core";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UserRoles, type UserRole } from "@/drizzle/constants";
+import * as socials from "@/libs/socials";
 import { dataRouter } from "@/server/api/routers/data";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
@@ -37,6 +38,11 @@ const skill = (
   requiredSkillIds: [] as string[],
 });
 
+beforeEach(() => {
+  // Resolver tests must never deliver fixture updates to the configured Discord webhook.
+  vi.spyOn(socials, "callDiscordContent").mockResolvedValue(undefined);
+});
+
 afterEach(() => {
   resetServerModuleStubs();
   vi.restoreAllMocks();
@@ -61,7 +67,7 @@ const invoke = async (
 };
 
 const setup = (role: UserRole | null) => {
-  const user = role ? { role, skillPoints: 10 } : null;
+  const user = role ? { role, username: "staff-fixture", skillPoints: 10 } : null;
   stubProfile("fetchUpdatedUser", async () => ({ user }));
   const skills = [
     skill("public"),
@@ -212,6 +218,7 @@ describe("hidden skill-tree permissions", () => {
       message: "Skill not found",
     });
     expect(drizzle.update).not.toHaveBeenCalled();
+    expect(socials.callDiscordContent).not.toHaveBeenCalled();
 
     drizzle.query.skillTree.findFirst.mockResolvedValue(visible);
     drizzle.query.skillTreeFolder.findFirst.mockResolvedValue(folders[0]);
@@ -219,6 +226,12 @@ describe("hidden skill-tree permissions", () => {
       success: true,
     });
     expect(drizzle.update).toHaveBeenCalledOnce();
+    expect(socials.callDiscordContent).toHaveBeenCalledOnce();
+    expect(socials.callDiscordContent).toHaveBeenCalledWith(
+      "staff-fixture",
+      "Updated skill: public",
+      [expect.stringContaining('Updated: {"folderId":null}')],
+    );
   });
 
   it.each([null, ...excluded, "CONTENT", "OWNER"] as (UserRole | null)[])(
