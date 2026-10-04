@@ -139,24 +139,37 @@ describe("condenseDashboardMissionContent", () => {
 });
 
 describe("selectDashboardHighlights", () => {
-  it("fills the highlight row with daily assignment groups first", () => {
-    const content = [
-      createContent("mission", { availability: "available" }),
-      createContent("errand", { availability: "available" }),
-      createContent("medical", { availability: "available" }),
-      createContent("pvp", { availability: "available" }),
-      createContent("event", { category: "events", availability: "available" }),
-    ];
+  it.each([undefined, [], null])(
+    "uses the default highlights for unsaved priority %j",
+    (priority) => {
+      const content = [
+        createContent("mission", { availability: "available" }),
+        createContent("errand", { availability: "available" }),
+        createContent("medical", { availability: "available" }),
+        createContent("pvp", { availability: "available" }),
+        createContent("event", { category: "events", availability: "available" }),
+        createContent("event", {
+          category: "events",
+          id: "second-event",
+          availability: "available",
+        }),
+        createContent("story", { category: "story", availability: "available" }),
+        createContent("battlepyramid", {
+          category: "battlePyramids",
+          availability: "available",
+        }),
+      ];
 
-    expect(selectDashboardHighlights(content).map((entry) => entry.questType)).toEqual([
-      "mission",
-      "errand",
-      "medical",
-      "pvp",
-    ]);
-  });
+      expect(selectDashboardHighlights(content, 4, priority).map((entry) => entry.questType)).toEqual([
+        "mission",
+        "story",
+        "event",
+        "errand",
+      ]);
+    },
+  );
 
-  it("fills open daily slots with one highlight from each other category", () => {
+  it("fills unavailable default categories with one highlight from each remaining category", () => {
     const content = [
       createContent("mission", { availability: "available" }),
       createContent("event", { category: "events", availability: "available" }),
@@ -174,8 +187,8 @@ describe("selectDashboardHighlights", () => {
 
     expect(selectDashboardHighlights(content).map((entry) => entry.questType)).toEqual([
       "mission",
-      "event",
       "story",
+      "event",
       "battlepyramid",
     ]);
   });

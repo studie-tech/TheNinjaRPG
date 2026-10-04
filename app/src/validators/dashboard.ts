@@ -2,11 +2,11 @@ import { z } from "zod";
 
 export const dashboardContentGroups = [
   "missions",
+  "story",
+  "events",
   "errands",
   "medical",
   "pvp",
-  "events",
-  "story",
   "battlePyramids",
   "raids",
 ] as const;
