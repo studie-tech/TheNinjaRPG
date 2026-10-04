@@ -11,7 +11,7 @@ jobs:
         run: bun install
         working-directory: ./app
       - name: run tests
-        run: bun test
+        run: bun run test --run
         working-directory: ./app
       - name: run build
         run: bun run build
