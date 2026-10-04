@@ -63,6 +63,7 @@ export const sparringRouter = createTRPCRouter({
       void pusher.trigger(input.targetId, "event", {
         type: "userMessage",
         message: "You have been challenged",
+        duration: 15_000,
         route: "/battlearena#Sparring",
         routeText: "To Arena",
       });

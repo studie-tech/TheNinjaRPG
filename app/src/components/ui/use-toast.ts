@@ -17,6 +17,8 @@ export interface ToastOptions {
   variant?: ToastVariant;
   /** Optional action element or configuration passed straight to sonner */
   action?: React.ReactNode;
+  /** Display duration in milliseconds; omitted values use the toaster default. */
+  duration?: number;
   /** Allow callers to pass any extra sonner props directly */
   [key: string]: unknown;
 }

@@ -120,6 +120,8 @@ export const showMutationToast = (data: {
   title?: string;
   action?: ToastActionElement;
   variant?: "destructive" | "default";
+  /** Display duration in milliseconds; omitted values use the toaster default. */
+  duration?: number;
 }) => {
   // Only show non-trivial messages
   if (data.message && data.message !== "OK") {
@@ -131,6 +133,7 @@ export const showMutationToast = (data: {
       toast({
         title: data?.title ?? "Success",
         description: data.message,
+        duration: data.duration,
         variant: data.variant ?? "default",
         action: data.action ?? (
           <ToastAction
@@ -146,6 +149,7 @@ export const showMutationToast = (data: {
       toast({
         title: data?.title ?? "Error",
         description: data.message,
+        duration: data.duration,
         variant: data.variant ?? "default",
         action: data.action ?? (
           <ToastAction

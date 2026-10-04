@@ -15,6 +15,8 @@ import { pushToCombat, usePublicPathname } from "@/utils/routing";
 export type UserEvent = {
   type: string;
   message?: string;
+  /** Toast display duration in milliseconds. */
+  duration?: number;
   route?: string;
   routeText?: string;
   battleId?: string;
@@ -101,6 +103,7 @@ export const usePusherHandler = (
             showMutationToast({
               success: true,
               message: "You have a new message",
+              duration: data.duration,
               title: "Notification!",
               action: (
                 <ToastAction altText="To Inbox">
@@ -113,6 +116,7 @@ export const usePusherHandler = (
           showMutationToast({
             success: true,
             message: data.message ?? "You have a new message",
+            duration: data.duration,
             title: "Notification!",
             action: (
               <ToastAction altText="To Arena">
@@ -126,6 +130,7 @@ export const usePusherHandler = (
           showMutationToast({
             success: true,
             message: data.message ?? "You have been pinged",
+            duration: data.duration,
             title: "Notification!",
           });
         }
@@ -138,6 +143,7 @@ export const usePusherHandler = (
             showMutationToast({
               success: true,
               message: data.message ?? "You have a new message",
+              duration: data.duration,
               title: "Notification!",
               action: (
                 <ToastAction altText="To Arena">
@@ -158,6 +164,7 @@ export const usePusherHandler = (
             showMutationToast({
               success: true,
               message: data.message ?? "Village alert!",
+              duration: data.duration,
               title: "Village Notification!",
               action: data.route ? (
                 <ToastAction altText="Action">
