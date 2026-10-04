@@ -40,6 +40,10 @@ export function DashboardSettings({
     },
     onError: (error) => setMessage(error.message),
   });
+  const savedPriority = getDashboardContentPriority(userData.dashboardContentPriority);
+  const hasChanges =
+    remember !== userData.rememberProfileTab ||
+    priority.some((group, index) => group !== savedPriority[index]);
   const move = (index: number, direction: -1 | 1) => {
     const next = [...priority];
     const target = index + direction;
@@ -109,7 +113,7 @@ export function DashboardSettings({
         />
       </div>
       <Button
-        disabled={save.isPending}
+        disabled={save.isPending || !hasChanges}
         onClick={() => {
           setMessage(null);
           save.mutate({
