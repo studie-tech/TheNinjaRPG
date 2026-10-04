@@ -1,15 +1,17 @@
+import { ensureDom } from "../setup-dom.mjs";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { PerspectiveCamera } from "three";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { forwardVerticalWheelToDocumentScroll } from "@/components/layout/shared/layoutUtils";
 import { TrackballControls } from "@/libs/threejs/TrackBallControls";
+
+ensureDom();
 
 const originalScrollingElement = Object.getOwnPropertyDescriptor(document, "scrollingElement");
 
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
   if (originalScrollingElement) {
     Object.defineProperty(document, "scrollingElement", originalScrollingElement);
   } else {
@@ -18,10 +20,10 @@ afterEach(() => {
 });
 
 const setup = () => {
-  const page = document.documentElement;
+  const page = document.createElement("div");
   Object.defineProperty(document, "scrollingElement", { configurable: true, value: page });
-  vi.spyOn(page, "scrollHeight", "get").mockReturnValue(2000);
-  vi.spyOn(page, "clientHeight", "get").mockReturnValue(500);
+  Object.defineProperty(page, "scrollHeight", { value: 2000 });
+  Object.defineProperty(page, "clientHeight", { value: 500 });
   page.scrollTop = 500;
   return render(
     <div onWheel={forwardVerticalWheelToDocumentScroll}>
@@ -42,7 +44,7 @@ describe("layout wheel forwarding", () => {
     try {
       fireEvent.wheel(canvas, { deltaY, bubbles: true, cancelable: true });
       controls.update();
-      expect(document.documentElement.scrollTop).toBe(500);
+      expect(document.scrollingElement?.scrollTop).toBe(500);
       if (deltaY > 0) expect(camera.position.length()).toBeGreaterThan(100);
       else expect(camera.position.length()).toBeLessThan(100);
     } finally {
@@ -53,6 +55,6 @@ describe("layout wheel forwarding", () => {
   it("still forwards unhandled vertical wheel input to the document", () => {
     const view = setup();
     fireEvent.wheel(view.getByTestId("content"), { deltaY: 100 });
-    expect(document.documentElement.scrollTop).toBe(600);
+    expect(document.scrollingElement?.scrollTop).toBe(600);
   });
 });
