@@ -307,7 +307,7 @@ export function MerchCollection() {
           </span>
           {(search ||
             collection !== "All designs" ||
-            activeKind !== "Organic T-Shirt") && (
+            (activeKind !== "Organic Hoodie" && activeKind !== "All pieces")) && (
             <button type="button" onClick={clearFilters}>
               Reset filters <X size={12} />
             </button>

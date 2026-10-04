@@ -19,6 +19,7 @@ import { useMerch } from "./MerchProvider";
 export function MerchProductPage({ handle }: { handle: string }) {
   const { products, loading, error, retry, preview, busy, message, add } = useMerch();
   const [selection, setSelection] = useState<Record<string, string>>({});
+  const [selectionMessage, setSelectionMessage] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [showArt, setShowArt] = useState(false);
   const product = products.find((p) => p.handle === handle);
@@ -141,17 +142,22 @@ export function MerchProductPage({ handle }: { handle: string }) {
                       }
                       onClick={() => {
                         setShowArt(false);
-                        setSelection((current) => {
-                          const next = { ...current, [option.name]: value };
-                          const exists = product.variants.some((item) =>
+                        const next = { ...selection, [option.name]: value };
+                        const exists = product.variants.some(
+                          (item) =>
+                            item.available &&
                             item.selectedOptions.every(
                               (selected) =>
                                 !next[selected.name] ||
                                 next[selected.name] === selected.value,
                             ),
-                          );
-                          return exists ? next : { [option.name]: value };
-                        });
+                        );
+                        setSelection(exists ? next : { [option.name]: value });
+                        setSelectionMessage(
+                          exists
+                            ? ""
+                            : `${value} isn’t available with your previous options. Please choose again.`,
+                        );
                       }}
                     >
                       {value}
@@ -160,6 +166,7 @@ export function MerchProductPage({ handle }: { handle: string }) {
                 </div>
               </fieldset>
             ))}
+          {selectionMessage && <p role="status">{selectionMessage}</p>}
           <div className="merch-purchase">
             <div className="merch-quantity">
               <button

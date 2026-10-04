@@ -309,7 +309,14 @@ export function MerchProvider({ children }: { children: ReactNode }) {
               <ul className="merch-bag-lines">
                 {lines.map((line) => {
                   const product = products.find((item) => item.handle === line.handle);
-                  const image = line.image ?? (product && preferredMerchImage(product));
+                  const variantImage = preview
+                    ? product?.variants.find((variant) => variant.id === line.variantId)
+                        ?.image
+                    : undefined;
+                  const image =
+                    variantImage ??
+                    line.image ??
+                    (product && preferredMerchImage(product));
                   return (
                     <li key={line.id}>
                       {image && (
