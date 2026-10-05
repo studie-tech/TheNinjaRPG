@@ -52,6 +52,7 @@ import {
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
   VILLAGE_SYNDICATE_ID,
+  WAKE_ISLAND_PVP_PROTECTION,
 } from "@/drizzle/constants";
 import type {
   AiProfile,
@@ -2054,8 +2055,12 @@ export const initiateBattle = async (
   // Check if the villageData is in a pvp enabled zone
   const sectorData = villages.find((v) => v.sector === sector);
 
-  // Special check for Wake Island - always block if sector is 222
-  if (sector === MAP_WAKE_ISLAND_SECTOR && battleType === "COMBAT") {
+  // Wake Island blanket PvP protection, toggled by WAKE_ISLAND_PVP_PROTECTION
+  if (
+    WAKE_ISLAND_PVP_PROTECTION &&
+    sector === MAP_WAKE_ISLAND_SECTOR &&
+    battleType === "COMBAT"
+  ) {
     return { success: false, message: "Cannot attack players in Wake Island" };
   }
 

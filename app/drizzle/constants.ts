@@ -179,6 +179,9 @@ export const MAP_NAVIGABLE_LATITUDE_LIMIT = 65;
 export const MAP_TOTAL_SECTORS = MAP_WORLD_COLUMNS * MAP_WORLD_ROWS;
 export const MAP_SECTOR_ID_MAX = MAP_TOTAL_SECTORS - 1;
 export const MAP_WAKE_ISLAND_SECTOR = 222;
+// When true, PvP combat attacks are blocked for everyone in the Wake Island sector.
+// Robbery, farming and crafting restrictions on Wake Island are independent of this.
+export const WAKE_ISLAND_PVP_PROTECTION = false;
 export const MAP_WAR_TORN_BATTLEGROUND_SECTOR = 335;
 export const MAP_WAR_TORN_BATTLEGROUND_COLOR = "#dc2626";
 export const MAP_GLOBAL_TRAVEL_TIME_CAP_SECS = 10;
