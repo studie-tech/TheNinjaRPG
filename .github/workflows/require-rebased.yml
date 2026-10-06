@@ -1,0 +1,44 @@
+name: Rebased on main
+
+# Main only accepts merge commits, so every PR must arrive as a clean rebase:
+# no merge commits inside the branch, and the current base tip as an ancestor.
+# Together with "require branches to be up to date" this yields a
+# semi-linear history where each PR lands as one merge commit authored by
+# whoever clicked Merge (which also keeps Vercel production deploys working).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  rebased:
+    name: Rebased on main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check branch is rebased onto its base
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          base="origin/${BASE_REF}"
+          merges="$(git rev-list --merges "${base}..HEAD")"
+          if [ -n "${merges}" ]; then
+            echo "::error::This branch contains merge commits. Rebase it onto ${BASE_REF} instead of merging ${BASE_REF} into it (e.g. 'git rebase origin/${BASE_REF}' or 'Update branch → Update with rebase')."
+            git log --oneline --merges "${base}..HEAD"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "${base}" HEAD; then
+            echo "::error::This branch is behind ${BASE_REF}. Rebase it onto the latest ${BASE_REF} ('Update branch → Update with rebase')."
+            exit 1
+          fi
+          echo "Branch is rebased onto ${BASE_REF} with no merge commits."
