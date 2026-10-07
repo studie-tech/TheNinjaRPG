@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "9dae7e35-ba1b-497f-a9fc-0b3c86fbbf98",
+  "id": "52b521a8-147d-4ccb-a630-80fb74fb067f",
   "prevId": "9b5ee241-da8b-43aa-9a0d-ea2cac8769f4",
   "tables": {
     "AbEvent": {
@@ -3100,481 +3100,6 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "ContentProposal": {
-      "name": "ContentProposal",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "rationale": {
-          "name": "rationale",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "category": {
-          "name": "category",
-          "type": "enum('GRAMMAR','BALANCE','SOUND','ANIMATION','VISUAL','CONSISTENCY','NEW_CONTENT')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "enum('PENDING','APPLIED','REJECTED','OUTDATED','REVERTED')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'PENDING'"
-        },
-        "source": {
-          "name": "source",
-          "type": "enum('AGENT','STAFF')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "agentName": {
-          "name": "agentName",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "runUrl": {
-          "name": "runUrl",
-          "type": "varchar(512)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "focus": {
-          "name": "focus",
-          "type": "varchar(32)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "confidence": {
-          "name": "confidence",
-          "type": "tinyint",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdByUserId": {
-          "name": "createdByUserId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reviewedByUserId": {
-          "name": "reviewedByUserId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "rejectReason": {
-          "name": "rejectReason",
-          "type": "enum('NOT_AN_IMPROVEMENT','FACTUALLY_WRONG','STYLE_MISMATCH','WRONG_CHANGE','OTHER')",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reviewNote": {
-          "name": "reviewNote",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "outdatedReason": {
-          "name": "outdatedReason",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "expiresAt": {
-          "name": "expiresAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        },
-        "statusChangedAt": {
-          "name": "statusChangedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "ContentProposal_status_category_idx": {
-          "name": "ContentProposal_status_category_idx",
-          "columns": [
-            "status",
-            "category",
-            "createdAt"
-          ],
-          "isUnique": false
-        },
-        "ContentProposal_source_status_idx": {
-          "name": "ContentProposal_source_status_idx",
-          "columns": [
-            "source",
-            "status",
-            "createdAt"
-          ],
-          "isUnique": false
-        },
-        "ContentProposal_status_changed_idx": {
-          "name": "ContentProposal_status_changed_idx",
-          "columns": [
-            "status",
-            "statusChangedAt"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "ContentProposal_id": {
-          "name": "ContentProposal_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "ContentProposalBasis": {
-      "name": "ContentProposalBasis",
-      "columns": {
-        "proposalId": {
-          "name": "proposalId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "entityType": {
-          "name": "entityType",
-          "type": "enum('JUTSU','ITEM','BLOODLINE','QUEST','BADGE','GAME_ASSET','AI')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "entityId": {
-          "name": "entityId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "version": {
-          "name": "version",
-          "type": "varchar(16)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "role": {
-          "name": "role",
-          "type": "enum('TARGET','CONTEXT')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "ContentProposalBasis_entity_idx": {
-          "name": "ContentProposalBasis_entity_idx",
-          "columns": [
-            "entityType",
-            "entityId"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "ContentProposalBasis_proposalId_entityType_entityId_pk": {
-          "name": "ContentProposalBasis_proposalId_entityType_entityId_pk",
-          "columns": [
-            "proposalId",
-            "entityType",
-            "entityId"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "ContentProposalChange": {
-      "name": "ContentProposalChange",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "proposalId": {
-          "name": "proposalId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "entityType": {
-          "name": "entityType",
-          "type": "enum('JUTSU','ITEM','BLOODLINE','QUEST','BADGE','GAME_ASSET','AI')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "entityId": {
-          "name": "entityId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "operation": {
-          "name": "operation",
-          "type": "enum('UPDATE','CREATE')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'UPDATE'"
-        },
-        "before": {
-          "name": "before",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "after": {
-          "name": "after",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "applied": {
-          "name": "applied",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "tinyint",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        }
-      },
-      "indexes": {
-        "ContentProposalChange_proposalId_idx": {
-          "name": "ContentProposalChange_proposalId_idx",
-          "columns": [
-            "proposalId"
-          ],
-          "isUnique": false
-        },
-        "ContentProposalChange_entity_idx": {
-          "name": "ContentProposalChange_entity_idx",
-          "columns": [
-            "entityType",
-            "entityId"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "ContentProposalChange_id": {
-          "name": "ContentProposalChange_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "ContentProposalMedia": {
-      "name": "ContentProposalMedia",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "proposalId": {
-          "name": "proposalId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "changeId": {
-          "name": "changeId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "path": {
-          "name": "path",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "source": {
-          "name": "source",
-          "type": "enum('CATALOG','EPIDEMIC','GENERATED')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "kind": {
-          "name": "kind",
-          "type": "enum('SFX','ANIMATION','IMAGE')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "externalId": {
-          "name": "externalId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "url": {
-          "name": "url",
-          "type": "varchar(512)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "fileKey": {
-          "name": "fileKey",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lengthMs": {
-          "name": "lengthMs",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "prompt": {
-          "name": "prompt",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "chosen": {
-          "name": "chosen",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "sortOrder": {
-          "name": "sortOrder",
-          "type": "tinyint",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "ContentProposalMedia_proposalId_idx": {
-          "name": "ContentProposalMedia_proposalId_idx",
-          "columns": [
-            "proposalId"
-          ],
-          "isUnique": false
-        },
-        "ContentProposalMedia_source_chosen_idx": {
-          "name": "ContentProposalMedia_source_chosen_idx",
-          "columns": [
-            "source",
-            "chosen"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "ContentProposalMedia_id": {
-          "name": "ContentProposalMedia_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
     "ContentTag": {
       "name": "ContentTag",
       "columns": {
@@ -6228,6 +5753,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "requiredSkillId": {
+          "name": "requiredSkillId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "battleUsageType": {
           "name": "battleUsageType",
           "type": "enum('PVE','PVP','BOTH')",
@@ -6319,6 +5851,13 @@
           "name": "Item_bloodlineId_idx",
           "columns": [
             "bloodlineId"
+          ],
+          "isUnique": false
+        },
+        "Item_requiredSkillId_idx": {
+          "name": "Item_requiredSkillId_idx",
+          "columns": [
+            "requiredSkillId"
           ],
           "isUnique": false
         },
@@ -6861,6 +6400,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "requiredSkillId": {
+          "name": "requiredSkillId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -6918,6 +6464,13 @@
           "name": "Jutsu_requiredBloodlineItemId_idx",
           "columns": [
             "requiredBloodlineItemId"
+          ],
+          "isUnique": false
+        },
+        "Jutsu_requiredSkillId_idx": {
+          "name": "Jutsu_requiredSkillId_idx",
+          "columns": [
+            "requiredSkillId"
           ],
           "isUnique": false
         }
@@ -13902,6 +13455,14 @@
           "autoincrement": false,
           "default": true
         },
+        "showPvpRecord": {
+          "name": "showPvpRecord",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "pvpFights": {
           "name": "pvpFights",
           "type": "int",
@@ -13929,6 +13490,22 @@
         "pvpStreak": {
           "name": "pvpStreak",
           "type": "smallint unsigned",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pvpWins": {
+          "name": "pvpWins",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "pvpLosses": {
+          "name": "pvpLosses",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,

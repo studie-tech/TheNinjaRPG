@@ -15,6 +15,24 @@ const preCapLevelingPoints = (level: number) => pointsInRange(level, 21, 20);
 const postCapLevelingPoints = (level: number) => pointsInRange(level, 31, 10);
 
 describe("skill-point migration", () => {
+  it("keeps the item-skill migration schema-only to preserve mixed-source balances", () => {
+    const itemSkillMigration = readFileSync(
+      resolve(process.cwd(), "drizzle/migrations/0051_skill_requirements_pvp_record.sql"),
+      "utf8",
+    );
+    const statements = itemSkillMigration
+      .replace(/--[^\r\n]*/g, "")
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+
+    expect(statements).toHaveLength(7);
+    for (const statement of statements) {
+      expect(statement).toMatch(/^(ALTER TABLE|CREATE INDEX)\b/);
+      expect(statement).not.toMatch(/\bskillPoints\b/);
+    }
+  });
+
   it.each([
     { level: 20, expected: 0 },
     { level: 30, expected: -10 },
