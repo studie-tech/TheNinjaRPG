@@ -356,7 +356,7 @@ export const pvpRankRouter = createTRPCRouter({
   // Lightweight live queue size for site-wide notifications (no state cleanup)
   getRankedQueueCount: protectedProcedure
     .meta({
-      mcp: { enabled: true, description: "Get number of players in ranked PvP queue" },
+      mcp: { description: "Get number of players in ranked PvP queue" },
     })
     .query(async ({ ctx }) => {
       const result = await ctx.drizzle
