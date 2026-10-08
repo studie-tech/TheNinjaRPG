@@ -126,6 +126,7 @@ export const config = {
     // CDN-cached tRPC endpoint runs without a session by design.
     "/api/trpc/((?!cdn/).*)",
     "/api/chat/:path*",
+    "/api/minigames/blockstruggle/:path*",
     "/api/uploadthing(.*)",
     "/api/content-review/sfx-preview",
     // The MCP OAuth discovery documents; isUnshelledPath passes them through untouched.
