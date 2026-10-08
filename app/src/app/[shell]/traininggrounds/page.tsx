@@ -609,7 +609,7 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
         </PopoverTrigger>
         <PopoverContent>
           <p className="font-bold text-lg">Verify Humanity</p>
-          {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element for data URI */}
+          {/* oxlint-disable-next-line nextjs/no-img-element -- SVG captcha requires img element for data URI */}
           <img
             alt="captcha"
             className="mb-2"
@@ -724,7 +724,7 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
         >
           {showCaptcha && captcha && (
             <div className="mb-4">
-              {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element */}
+              {/* oxlint-disable-next-line nextjs/no-img-element -- SVG captcha requires img element */}
               <img
                 alt="captcha"
                 src={`data:image/svg+xml;utf8,${encodeURIComponent(captcha.svg)}`}

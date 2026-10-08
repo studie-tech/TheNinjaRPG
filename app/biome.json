@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "root": false,
   "vcs": {
     "enabled": true,
@@ -20,95 +20,12 @@
     "lineWidth": 88
   },
   "linter": {
-    "enabled": true,
-    "domains": {
-      "next": "recommended",
-      "react": "recommended",
-      "project": "recommended"
-    },
-    "rules": {
-      "recommended": true,
-      "style": {
-        "useImportType": "warn",
-        "noRestrictedImports": {
-          "level": "error",
-          "options": {
-            "patterns": [
-              {
-                "group": [
-                  "@capacitor/**"
-                ],
-                "message": "Capacitor packages are installed in mobile/, where cap sync needs them. Call the shell through @/libs/native instead."
-              },
-              {
-                "group": [
-                  "**/libs/native/bridge"
-                ],
-                "message": "The raw bridge is internal to @/libs/native. Import the feature module (haptics, push, ...) instead."
-              },
-              {
-                "group": [
-                  "next/link"
-                ],
-                "message": "Import Link from @/layout/Link, which turns prefetching off: a prefetched shell buys a navigation nothing, since the data it waits on arrives through tRPC, and the game frame keeps twenty or more links in view."
-              }
-            ],
-            "paths": {
-              "next/navigation": {
-                "importNames": [
-                  "usePathname"
-                ],
-                "message": "Read the path through usePublicPathname from @/utils/routing: a prerendered page renders under its shell variant's internal path, and usePathname would give the server and the client different values."
-              }
-            }
-          }
-        }
-      },
-      "correctness": {
-        "noUnusedVariables": "warn",
-        "noUnusedImports": "warn",
-        "useExhaustiveDependencies": "off"
-      },
-      "suspicious": {
-        "noExplicitAny": "off",
-        "noArrayIndexKey": "off"
-      },
-      "nursery": {
-        "useSortedClasses": {
-          "level": "warn",
-          "options": {
-            "functions": [
-              "clsx",
-              "cn",
-              "cva"
-            ]
-          }
-        },
-        "noFloatingPromises": "error",
-        "noMisusedPromises": "error"
-      }
-    }
+    "enabled": false
   },
   "javascript": {
     "formatter": {
       "quoteStyle": "double",
       "trailingCommas": "all"
     }
-  },
-  "overrides": [
-    {
-      "includes": [
-        "src/libs/native/**",
-        "src/layout/Link.tsx",
-        "src/utils/routing.ts"
-      ],
-      "linter": {
-        "rules": {
-          "style": {
-            "noRestrictedImports": "off"
-          }
-        }
-      }
-    }
-  ]
+  }
 }

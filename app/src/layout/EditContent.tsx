@@ -425,7 +425,7 @@ export const EditContent = <
                             )}
                           >
                             <Label>{a.name}</Label>
-                            {/* biome-ignore lint/a11y/useMediaCaption: Audio asset preview - no captions for music/sfx */}
+                            {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- Audio asset preview - no captions for music/sfx */}
                             <audio
                               src={a.url ?? undefined}
                               controls
@@ -1046,7 +1046,7 @@ export const EditContent = <
                                         (a) => a.id === (field.value as string),
                                       );
                                       return sfx?.url ? (
-                                        // biome-ignore lint/a11y/useMediaCaption: SFX assets don't have caption content
+                                        // oxlint-disable-next-line jsx-a11y/media-has-caption -- SFX assets don't have caption content
                                         <audio
                                           src={sfx.url}
                                           controls
@@ -1145,7 +1145,7 @@ export const EditContent = <
                             </FormLabel>
                             <div className="items-left flex w-full flex-col gap-2">
                               {audioUrl ? (
-                                // biome-ignore lint/a11y/useMediaCaption: SFX/audio assets don't have caption content
+                                // oxlint-disable-next-line jsx-a11y/media-has-caption -- SFX/audio assets don't have caption content
                                 <audio className="w-full" src={audioUrl} controls />
                               ) : (
                                 <div className="text-muted-foreground text-sm">

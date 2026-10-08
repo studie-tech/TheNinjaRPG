@@ -92,7 +92,7 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
   const secureAttribute = secure ? "; secure" : "";
   // Write document.cookie synchronously so a following reload sees the preference.
   // Chrome's Cookie Store API is asynchronous and can lose the race with reload().
-  // biome-ignore lint/suspicious/noDocumentCookie: synchronous persistence is needed before layout reload.
+  // oxlint-disable-next-line unicorn/no-document-cookie -- synchronous persistence is needed before layout reload.
   document.cookie = `${LAYOUT_PREFERENCE_COOKIE}=${layout}; path=/; max-age=31536000; samesite=lax${secureAttribute}`;
 
   const cookieStore = (window as Window & { cookieStore?: BrowserCookieStore })
@@ -124,7 +124,7 @@ export const persistLayoutPreferenceCookie = (layout: EffectiveLayout) => {
 export const persistFontScaleCookie = (scale: FontScaleValue) => {
   if (typeof window === "undefined") return;
   const secureAttribute = window.location.protocol === "https:" ? "; secure" : "";
-  // biome-ignore lint/suspicious/noDocumentCookie: mirrors persistLayoutPreferenceCookie above.
+  // oxlint-disable-next-line unicorn/no-document-cookie -- mirrors persistLayoutPreferenceCookie above.
   document.cookie = `${FONT_SCALE_COOKIE}=${scale}; path=/; max-age=31536000; samesite=lax${secureAttribute}`;
 };
 

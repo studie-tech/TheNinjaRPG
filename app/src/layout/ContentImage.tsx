@@ -82,8 +82,7 @@ const ContentImage: React.FC<ContentImageProps> = (props) => {
   if (props.image) {
     if (props.speed && props.frames) {
       img = (
-        /* biome-ignore lint/a11y/useKeyWithClickEvents: Animation container - keyboard handled by parent component */
-        /* biome-ignore lint/a11y/noStaticElementInteractions: Click handler for animation selection */
+        /* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- Animation container - keyboard handled by parent component Click handler for animation selection */
         <div
           className="flex h-full flex-row items-center justify-center"
           onClick={props.onClick}

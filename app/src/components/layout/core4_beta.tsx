@@ -397,8 +397,7 @@ const BetaGameLayout: React.FC<GameLayoutRenderProps> = ({
               </VisuallyHidden.Root>
               <Suspense fallback={<Loader explanation="Loading..." />}>
                 <SheetHeader>
-                  {/* biome-ignore lint/a11y/useKeyWithClickEvents: Sheet panel - clicking outside content closes it, keyboard handled by Sheet component */}
-                  {/* biome-ignore lint/a11y/noStaticElementInteractions: Sheet panel uses click to close when clicking non-interactive areas */}
+                  {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- Sheet panel - clicking outside content closes it, keyboard handled by Sheet component Sheet panel uses click to close when clicking non-interactive areas */}
                   <div ref={rightSideBarRef} onClick={handleRightSidebarClick}>
                     {rightSideBar}
                   </div>

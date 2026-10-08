@@ -220,7 +220,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
           <Clock className="h-4 w-4 text-gray-700" />
           <span className="font-semibold text-gray-800 text-sm">Action Timeline</span>
         </div>
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: Mouse enter/leave for tooltip expansion is supplementary to button click */}
+        {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- Mouse enter/leave for tooltip expansion is supplementary to button click */}
         <div
           ref={filterRef}
           className="relative flex rounded-md border bg-slate-200 p-0.5"

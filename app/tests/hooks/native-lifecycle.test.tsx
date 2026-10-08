@@ -198,9 +198,9 @@ describe("native push ownership", () => {
     await waitFor(() => expect(finishAttach).toHaveLength(2));
     expect(mocks.pushRegister).not.toHaveBeenCalled();
 
-    act(() => finishAttach[0]?.());
+    await act(() => finishAttach[0]?.());
     expect(mocks.pushRegister).not.toHaveBeenCalled();
-    act(() => finishAttach[1]?.());
+    await act(() => finishAttach[1]?.());
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(1));
     current.unmount();
   });
@@ -227,7 +227,7 @@ describe("native push ownership", () => {
       { initialProps: { accountId: "account-a" } },
     );
     await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
-    act(() => {
+    await act(() => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() => expect(result.current.widgetToken).toBe("widget-token"));
@@ -242,7 +242,7 @@ describe("native push ownership", () => {
       { initialProps: { accountId: "account-a", enabled: true } },
     );
     await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
-    act(() => {
+    await act(() => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
@@ -287,7 +287,7 @@ describe("native push ownership", () => {
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
 
-    act(() => {
+    await act(() => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
@@ -296,7 +296,7 @@ describe("native push ownership", () => {
     );
 
     let unregister: Promise<void> | undefined;
-    act(() => {
+    await act(() => {
       unregister = result.current.unregister();
     });
     await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(1));
@@ -307,7 +307,7 @@ describe("native push ownership", () => {
 
     rerender({ accountId: "account-b" });
     await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
-    act(() => {
+    await act(() => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     expect(mocks.sendToken).toHaveBeenCalledTimes(1);
@@ -326,7 +326,7 @@ describe("native push ownership", () => {
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
 
-    act(() => {
+    await act(() => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
@@ -335,7 +335,7 @@ describe("native push ownership", () => {
       await Promise.resolve();
     });
 
-    act(() => {
+    await act(() => {
       for (const listener of mocks.stateListeners) listener({ isActive: true });
     });
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(2));
@@ -350,7 +350,7 @@ describe("native push ownership", () => {
     renderHook(() => useNativePush({ enabled: true, accountId: "account-a" }));
     await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
 
-    act(() => mocks.registrationListeners[0]?.({ value: TOKEN }));
+    await act(() => mocks.registrationListeners[0]?.({ value: TOKEN }));
     await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
     await act(async () => {
       await Promise.resolve();
@@ -358,7 +358,7 @@ describe("native push ownership", () => {
     });
     expect(localStorage.getItem("native-push-token")).toBeNull();
 
-    act(() => {
+    await act(() => {
       for (const listener of mocks.stateListeners) listener({ isActive: true });
     });
     await waitFor(() => expect(mocks.pushRegister).toHaveBeenCalledTimes(2));
@@ -372,14 +372,14 @@ describe("native push ownership", () => {
     renderHook(() => useNativePush({ enabled: true, accountId: "account-a" }));
     await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
 
-    act(() => {
+    await act(() => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
       mocks.registrationListeners[0]?.({ value: "b".repeat(64) });
     });
     await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
     rejectFirst?.(new Error("offline"));
     await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(2));
-    act(() => mocks.registrationListeners[0]?.({ value: "b".repeat(64) }));
+    await act(() => mocks.registrationListeners[0]?.({ value: "b".repeat(64) }));
     expect(mocks.sendToken).toHaveBeenCalledTimes(2);
   });
 
@@ -392,7 +392,7 @@ describe("native push ownership", () => {
       { initialProps: { enabled: true, accountId: "account-a" as string | null } },
     );
     await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
-    act(() => {
+    await act(() => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() =>
@@ -409,7 +409,7 @@ describe("native push ownership", () => {
       .toEqual({ token: TOKEN, widgetToken: "widget-token" });
 
     rerender({ enabled: false, accountId: null });
-    act(() => {
+    await act(() => {
       for (const listener of [...mocks.stateListeners]) listener({ isActive: true });
     });
     await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(2));
@@ -437,7 +437,7 @@ describe("native push ownership", () => {
 
     renderHook(() => useNativePush({ enabled: false, accountId: null }));
     await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(1));
-    act(() => window.dispatchEvent(new window.Event("online")));
+    await act(() => window.dispatchEvent(new window.Event("online")));
     await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(localStorage.getItem("native-push-pending-detach")).toBeNull(),
@@ -462,7 +462,7 @@ describe("native push ownership", () => {
     renderHook(() => useNativePush({ enabled: true, accountId: "account-b" }));
     await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.registrationListeners).toHaveLength(1));
-    act(() => {
+    await act(() => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() =>
@@ -471,7 +471,7 @@ describe("native push ownership", () => {
       ),
     );
 
-    act(() => {
+    await act(() => {
       for (const listener of mocks.stateListeners) listener({ isActive: true });
     });
     await waitFor(() => expect(mocks.detachToken).toHaveBeenCalledTimes(2));
@@ -492,7 +492,7 @@ describe("native Live Activity lifecycle", () => {
     await waitFor(() => expect(mocks.liveStart).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.liveTokenListeners).toHaveLength(1));
 
-    act(() => {
+    await act(() => {
       mocks.liveTokenListeners[0]?.({
         activityId: "activity-1",
         pushToken: TOKEN,
@@ -504,7 +504,7 @@ describe("native Live Activity lifecycle", () => {
       await Promise.resolve();
     });
 
-    act(() => {
+    await act(() => {
       mocks.stateListeners[0]?.({ isActive: true });
     });
     await waitFor(() => expect(mocks.registerActivity).toHaveBeenCalledTimes(2));

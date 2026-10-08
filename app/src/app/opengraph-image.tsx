@@ -42,7 +42,7 @@ export default async function Image() {
       }}
     >
       {logo && (
-        // biome-ignore lint/performance/noImgElement: ImageResponse only supports img
+        // oxlint-disable-next-line nextjs/no-img-element -- ImageResponse only supports img
         <img src={logo} alt="" width={340} height={340} />
       )}
       <div

@@ -1818,7 +1818,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
               {v.description && (
                 <div
                   className="mt-0.5 text-center text-muted-foreground text-xs"
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: content is sanitized server-side before storage
+                  // oxlint-disable-next-line react/no-danger -- content is sanitized server-side before storage
                   dangerouslySetInnerHTML={{ __html: v.description }}
                 />
               )}

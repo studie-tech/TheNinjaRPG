@@ -30,9 +30,9 @@ describe("cookie declaration loading", () => {
     expect(screen.getByRole("button", { name: "Reload page" })).toBeTruthy();
   });
 
-  it("stops waiting when the declaration never finishes", () => {
+  it("stops waiting when the declaration never finishes", async () => {
     render(<CookieConsent />);
-    act(() => vi.advanceTimersByTime(30_000));
+    await act(() => vi.advanceTimersByTime(30_000));
     expect(within(document.body).getByRole("alert").textContent).toContain(
       "Cookie settings unavailable",
     );
@@ -50,7 +50,7 @@ describe("cookie declaration loading", () => {
       panel.id = "CookieDeclarationUserStatusPanel";
       container.appendChild(panel);
     });
-    act(() => vi.advanceTimersByTime(30_000));
+    await act(() => vi.advanceTimersByTime(30_000));
     expect(within(document.body).queryByRole("alert")).toBeNull();
     expect(within(document.body).queryByText("Loading consent data")).toBeNull();
     expect(

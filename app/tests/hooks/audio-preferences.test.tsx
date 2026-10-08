@@ -36,7 +36,7 @@ const soundtrack = "https://example.com/soundtrack.mp3";
 describe("soundtrack preference and transport lifecycle", () => {
   it("makes explicit Off inaudible and restores audible playback when enabled again", async () => {
     const { result } = renderHook(() => useAudio({ src: soundtrack }));
-    act(() => audio.dispatchEvent(new window.Event("canplay")));
+    await act(() => audio.dispatchEvent(new window.Event("canplay")));
 
     await act(() => result.current.setEnabled(false, true));
     expect(result.current.enabled).toBe(false);
@@ -51,7 +51,7 @@ describe("soundtrack preference and transport lifecycle", () => {
 
   it("retains an audible source for remote Pause and resumes from it", async () => {
     const { result } = renderHook(() => useAudio({ src: soundtrack }));
-    act(() => audio.dispatchEvent(new window.Event("canplay")));
+    await act(() => audio.dispatchEvent(new window.Event("canplay")));
 
     await act(() => result.current.setEnabled(false));
     expect(result.current.isPlaying).toBe(false);

@@ -179,7 +179,7 @@ const LoadoutSelector = <T extends LoadoutData>(
             return (
               <input
                 key={loadout.id}
-                // biome-ignore lint/a11y/noAutofocus: Inline rename input must focus immediately on edit activation for usability
+                // oxlint-disable-next-line jsx-a11y/no-autofocus -- Inline rename input must focus immediately on edit activation for usability
                 autoFocus
                 aria-label={`Rename ${displayName}`}
                 defaultValue={loadout.name ?? ""}

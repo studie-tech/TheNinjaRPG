@@ -16,6 +16,7 @@ import { useActiveLayout } from "@/utils/LayoutContext";
 import { getSearchValidator } from "@/validators/register";
 
 // Register edgehandles extension once globally
+// oxlint-disable-next-line react/rules-of-hooks -- Cytoscape.use registers a graph extension, not a React hook.
 Cytoscape.use(edgehandles);
 
 interface GraphUsersGenericProps {

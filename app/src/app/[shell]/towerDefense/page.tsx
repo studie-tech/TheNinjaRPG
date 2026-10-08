@@ -168,7 +168,7 @@ const TowerDefensePage: React.FC = () => {
   // PERFORMANCE: Stable callback for tile clicks (never changes reference)
   const handleTileClick = useCallback(
     (position: { col: number; row: number }) => {
-      throwShuriken(position);
+      void throwShuriken(position);
     },
     [throwShuriken],
   );

@@ -54,7 +54,7 @@ it("resumes only when both the native app and document are active", () => {
 
 it("reads initial visibility and removes lifecycle listeners on unmount", () => {
   isHidden = true;
-  const removeListener = vi.spyOn(document, "removeEventListener");
+  const removeListener = vi.spyOn(window.EventTarget.prototype, "removeEventListener");
   const { result, unmount } = renderHook(usePageActive);
   expect(result.current).toBe(false);
   unmount();

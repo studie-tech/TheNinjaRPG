@@ -30,4 +30,4 @@
 
 - We use [gitmoji](https://github.com/carloscuesta/gitmoji) for commits, to make things a bit more 🔥
 
-- It is expected that code complies with the biome linting and formatting settings in this repo.
+- Code follows the Oxlint linting and Biome formatting settings in this repo. Run `make lint` for fast syntax checks and `make check` for type-aware promise checks and TypeScript diagnostics. `make typecheck` runs the standalone native TypeScript compiler. PR CI runs `make check` through the application script so type-aware linting and type checking share one type graph.

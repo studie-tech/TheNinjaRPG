@@ -91,9 +91,9 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the script is a module-level constant assembled from three other constants, with no input from anywhere. */}
+        {/* oxlint-disable-next-line react/no-danger -- the script is a module-level constant assembled from three other constants, with no input from anywhere. */}
         <script dangerouslySetInnerHTML={{ __html: FONT_SCALE_SCRIPT }} />
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the script is a module-level constant assembled from two other constants, with no input from anywhere. */}
+        {/* oxlint-disable-next-line react/no-danger -- the script is a module-level constant assembled from two other constants, with no input from anywhere. */}
         <script dangerouslySetInnerHTML={{ __html: LIGHT_LAYOUT_SCRIPT }} />
       </head>
       <body className="h-full">

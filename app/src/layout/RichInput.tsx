@@ -20,9 +20,7 @@ interface RichInputProps {
   placeholder?: string;
   error?: string;
   disabled?: boolean;
-  // biome-ignore lint/suspicious/noExplicitAny: generic form control accepting any form shape
   control: any;
-  // biome-ignore lint/suspicious/noExplicitAny: generic form control accepting any form shape
   onSubmit?: (e: any) => void;
   isDirty?: boolean;
   enableMentions?: boolean;

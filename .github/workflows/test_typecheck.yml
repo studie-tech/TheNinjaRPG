@@ -22,12 +22,18 @@ jobs:
         with:
           # No step here runs git, so the job never needs the token on disk.
           persist-credentials: false
-      - uses: oven-sh/setup-bun@v2
-      - name: install dependencies
-        run: bun install
-        working-directory: ./app
+          # Sparse checkout also fetches blobs on demand; root media assets are not CI inputs.
+          sparse-checkout: |
+            app
+            mobile
+            scripts
+            spacetimedb-towerdefense
+            .github
+            .agents
+            .vscode
+      - uses: ./.github/actions/setup-app
       - name: run typecheck
-        run: bun run typecheck
+        run: bun run check
         working-directory: ./app
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"

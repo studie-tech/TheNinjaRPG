@@ -607,6 +607,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
     if (userData.level > 1) return;
     if (userData?.tutorialOn === false) return;
     // Start replay if we're on step 0 (first step)
+    // oxlint-disable-next-line import/namespace -- Sentry re-exports the browser replay API through conditional exports.
     const replay = Sentry.getReplay();
     if (replay && currentStepNumber === 0) {
       replay.start();
@@ -1179,7 +1180,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
             errorMessage={disableTutorialError}
             onOpenDisableModal={() => {
               if (currentStepNumber >= TUTORIAL_STEPS_COUNT) {
-                handleDisableTutorial();
+                void handleDisableTutorial();
               } else {
                 setShowCancelConfirmDialog(true);
               }
@@ -1343,7 +1344,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
             errorMessage={disableTutorialError}
             onOpenDisableModal={() => {
               if (currentStepNumber >= TUTORIAL_STEPS_COUNT) {
-                handleDisableTutorial();
+                void handleDisableTutorial();
               } else {
                 setShowCancelConfirmDialog(true);
               }

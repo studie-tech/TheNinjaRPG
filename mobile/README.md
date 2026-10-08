@@ -42,7 +42,7 @@ authenticated cold restart after session expiry, and browser OAuth return on bot
 The web bundle does not depend on `@capacitor/*`. Plugins are installed here, where
 `cap sync` needs them to build the native projects; the site calls them through the
 `window.Capacitor` bridge the shell injects, behind `app/src/libs/native/`. That is the only
-place in `app/src` allowed to touch the bridge, enforced by a biome rule.
+place in `app/src` allowed to touch the bridge, enforced by an Oxlint rule.
 
 Adding a plugin means two steps: install it here, and add a wrapper in
 `app/src/libs/native/` so call sites stay platform-agnostic.
