@@ -353,7 +353,7 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
                 className={variantClasses.mainMenuButton}
               >
                 <div className="grow">{system.name}</div>
-                <div>{system.icon}</div>
+                <div>{system.icon && system.icon}</div>
               </Button>
             </Link>
           );
@@ -411,7 +411,7 @@ export const RightSideBar: React.FC<RightSideBarProps> = ({
                 count={system.notificationCount}
               >
                 <div className="grow">{system.name}</div>
-                <div>{system.icon}</div>
+                <div>{system.icon && system.icon}</div>
               </Button>
             </Link>
           );

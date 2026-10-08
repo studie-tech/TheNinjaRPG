@@ -2945,7 +2945,7 @@ const Sector: React.FC<SectorProps> = (props) => {
           title={arrivalNpc.username}
         >
           <div className="flex flex-col items-center gap-4 p-2">
-            {/* oxlint-disable-next-line nextjs/no-img-element -- dynamic CDN avatar, variable intrinsic size */}
+            {/* biome-ignore lint/performance/noImgElement: dynamic CDN avatar, variable intrinsic size */}
             <img
               src={pickSpriteAvatar(arrivalNpc)}
               alt={arrivalNpc.username}

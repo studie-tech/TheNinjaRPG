@@ -84,7 +84,7 @@ export const EpidemicSfxSearch: React.FC<EpidemicSfxSearchProps> = ({ onImported
           <div key={sfx.id} className="space-y-2 rounded border p-2">
             <p className="truncate font-medium text-sm">{sfx.title}</p>
             <p className="text-xs opacity-70">{formatSoundLength(sfx.lengthMs)}</p>
-            {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- sound effects have no speech to caption */}
+            {/* biome-ignore lint/a11y/useMediaCaption: sound effects have no speech to caption */}
             <audio
               controls
               preload="none"

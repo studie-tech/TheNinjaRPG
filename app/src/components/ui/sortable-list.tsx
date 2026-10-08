@@ -100,7 +100,7 @@ export const SortableList: React.FC<SortableListProps> = ({
         const isDragOver = dragOverIndex === index;
 
         return (
-          // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- Drag and drop uses native HTML5 drag events which don't require keyboard handlers
+          // biome-ignore lint/a11y/noStaticElementInteractions: Drag and drop uses native HTML5 drag events which don't require keyboard handlers
           <div
             key={item.id}
             draggable

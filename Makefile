@@ -176,7 +176,7 @@ format: # Run biome formatter on the project
 	cd app && ./node_modules/@biomejs/biome/bin/biome format --write src/
 
 .PHONY: check
-check: # Run type-aware Oxlint and TypeScript checks
+check: # Run Biome and TypeScript checks
 	cd app && bun run check
 
 .PHONY: typecheck

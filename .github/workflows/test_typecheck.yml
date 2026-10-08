@@ -33,7 +33,7 @@ jobs:
             .vscode
       - uses: ./.github/actions/setup-app
       - name: run typecheck
-        run: bun run check
+        run: bun run typecheck
         working-directory: ./app
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"

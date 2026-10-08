@@ -26,9 +26,9 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 | Command | Purpose |
 | --- | --- |
 | `make test` | Bun (Vitest-compatible test API); real-SQL suites skip without explicit throwaway DB configuration |
-| `make lint` | Oxlint |
+| `make lint` | Biome |
 | `make typecheck` | Native TypeScript |
-| `make check` | Type-aware Oxlint and TypeScript diagnostics |
+| `make check` | Biome linting, formatting and TypeScript diagnostics |
 | `make makemigrations` | Generate schema migrations |
 | `make bun add [package]` | Add dependency |
 | `make install` | Install with Bun |
@@ -82,7 +82,7 @@ Combat logic lives in `app/src/libs/combat/`: `actions.ts` (actions), `process.t
 
 Capacitor shells and dependencies live in `mobile/`, with their own `package.json`; see `mobile/README.md` for setup.
 
-- `app/src/libs/native/` is the **only shell bridge**. Do not import `@capacitor/*` or raw `bridge` elsewhere under `src/` (Oxlint enforces this). Install plugins in `mobile/`, not `app/`, and add a wrapper in `libs/native/`.
+- `app/src/libs/native/` is the **only shell bridge**. Do not import `@capacitor/*` or raw `bridge` elsewhere under `src/` (Biome enforces this). Install plugins in `mobile/`, not `app/`, and add a wrapper in `libs/native/`.
 - Fire-and-forget exports (`haptics`, `widgets`, `audioSession`, `liveActivity`) no-op off device; no platform check needed. Result-bearing calls (`appleAuth.authorize`, `oauthBrowser.open`, `purchases.purchase`, `push.register`) reject off device; call only after establishing shell context.
 - Ordinary push must use `sendPushToUsers` from `@/server/utils/push`, never router-to-transport calls. It handles opt-outs, device fan-out and dead-token pruning, and never throws. Live Activities use `pushActivityUpdate` instead (ActivityKit tokens); defer with `after()` as in `hospital.ts` to keep Apple latency off the response.
 - `Notification` is a global announcement feed: `userId` is the author; `unreadNotifications` increments determine recipients. It is separate from per-user push delivery.
@@ -94,7 +94,7 @@ Capacitor shells and dependencies live in `mobile/`, with their own `package.jso
 - File order: exported component → subcomponents → helpers → types.
 - Comments explain purpose, not review history; remove markers such as "Issue X:" or "TODO from review:".
 - The `QueryClient` and tRPC client are built once, during hydration, and are no longer rebuilt when clerk-js loads (`app/src/layout/ActiveSessionBoundary.tsx` rebuilds only on an account switch or a sign-out). Nothing wired into them may capture auth state at construction: read it when it is needed, as `useGlobalOnMutateProtect` reads `useClerk().isSignedIn`. A captured `isSignedIn` is `undefined` during hydration and silently rejects every mutation for the life of the page.
-- Read the path with `usePublicPathname` from `@/utils/routing`, never `usePathname`: a prerendered page renders under its shell variant's internal path, and branching on `usePathname` gives the server and the client different values. Import `Link` from `@/layout/Link`, never `next/link`. Oxlint enforces both.
+- Read the path with `usePublicPathname` from `@/utils/routing`, never `usePathname`: a prerendered page renders under its shell variant's internal path, and branching on `usePathname` gives the server and the client different values. Import `Link` from `@/layout/Link`, never `next/link`. Biome enforces both.
 - Display game values using `@/drizzle/constants.ts`; never hardcode costs, thresholds or damage values.
 - Prefer reusable `app/src/layout/` components and Shadcn/Radix; use mobile-first Tailwind and optimize Web Vitals.
 - Sentry filtering lives in `app/instrumentation-client.ts`; inspect `app/src/app/_trpc/Provider.tsx` for existing toast handling and `isReplicateApiError` for a documented UX example. Third-party, network, extension or hydration errors are not automatically safe to ignore; apply the required UX checks above.

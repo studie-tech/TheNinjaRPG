@@ -173,7 +173,6 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
               </svg>
               Try Again
             </button>
-            {/* oxlint-disable-next-line nextjs/no-html-link-for-pages -- Recovery reloads the document outside the application router. */}
             <a
               href="/"
               style={{

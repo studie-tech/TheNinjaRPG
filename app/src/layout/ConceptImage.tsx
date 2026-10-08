@@ -352,7 +352,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
         <div className="absolute top-2 right-2">
           {(image.userId === user?.userId ||
             (user && canDeleteConceptArt(user.role))) && (
-            /* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- gallery cards wrap this control in a link, where a nested button would be invalid interactive markup */
+            /* biome-ignore lint/a11y/useSemanticElements: gallery cards wrap this control in a link, where a nested button would be invalid interactive markup */
             <span
               role="button"
               tabIndex={isDeleting || isEmotionPending ? -1 : 0}

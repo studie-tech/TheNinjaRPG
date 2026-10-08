@@ -9,7 +9,7 @@ vi.mock("@/utils/UserContext", () => ({
 }));
 vi.mock("@/layout/Image", () => ({
   default: (props: { src: string; alt: string }) => (
-    // oxlint-disable-next-line nextjs/no-img-element -- isolated component test stub
+    // biome-ignore lint/performance/noImgElement: isolated component test stub
     <img src={props.src} alt={props.alt} />
   ),
 }));

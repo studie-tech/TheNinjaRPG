@@ -85,7 +85,7 @@ export const GuideStructuredData: React.FC<GuideStructuredDataProps> = ({
   return (
     <script
       type="application/ld+json"
-      // oxlint-disable-next-line react/no-danger -- JSON-LD is escaped so `<` cannot close the script tag.
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD is escaped so `<` cannot close the script tag.
       dangerouslySetInnerHTML={{
         __html: jsonLd,
       }}

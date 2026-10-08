@@ -7,7 +7,7 @@ import {
 describe("persistLayoutPreferenceCookie", () => {
   afterEach(() => {
     Reflect.deleteProperty(window, "cookieStore");
-    // oxlint-disable-next-line unicorn/no-document-cookie -- clears the cookie this test writes.
+    // biome-ignore lint/suspicious/noDocumentCookie: clears the cookie this test writes.
     document.cookie = `${LAYOUT_PREFERENCE_COOKIE}=; path=/; max-age=0`;
   });
 

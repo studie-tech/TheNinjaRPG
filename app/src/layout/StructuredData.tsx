@@ -68,7 +68,7 @@ export const StructuredData: React.FC = () => {
   return (
     <script
       type="application/ld+json"
-      // oxlint-disable-next-line react/no-danger -- JSON-LD has to be injected as raw script content, and GRAPH is a module-level constant with no user input.
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD has to be injected as raw script content, and GRAPH is a module-level constant with no user input.
       dangerouslySetInnerHTML={{ __html: JSON.stringify(GRAPH) }}
     />
   );

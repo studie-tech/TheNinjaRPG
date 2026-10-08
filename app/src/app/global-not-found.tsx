@@ -18,7 +18,6 @@ export default function GlobalNotFound() {
             The page you are trying to access does not exist or may have moved.
           </p>
           {/* Reload the root layout and providers that this standalone page bypasses. */}
-          {/* oxlint-disable-next-line nextjs/no-html-link-for-pages -- Recovery reloads the document outside the application router. */}
           <a
             href="/"
             className="inline-flex rounded-md bg-amber-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-amber-400"

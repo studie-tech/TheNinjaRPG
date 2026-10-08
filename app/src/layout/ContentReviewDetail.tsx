@@ -842,7 +842,7 @@ const MediaPreview: React.FC<{
   if (kind === "SFX") {
     const src = url ?? asset?.url;
     return src ? (
-      // oxlint-disable-next-line jsx-a11y/media-has-caption -- sound effects have no speech to caption
+      // biome-ignore lint/a11y/useMediaCaption: sound effects have no speech to caption
       <audio controls preload="none" className="w-full" src={src} />
     ) : (
       <p className="text-xs opacity-70">No sound</p>

@@ -654,7 +654,7 @@ export const battleJutsuExp = (
       baseExp = experienceGain * 0.5;
       break;
     case "VILLAGE_PROTECTOR":
-      baseExp = 0;
+      baseExp = experienceGain * 0.0;
       break;
     case "TRAINING":
       baseExp = 10;

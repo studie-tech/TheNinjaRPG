@@ -1,6 +1,5 @@
 {
   "recommendations": [
-    "oxc.oxc-vscode",
     "biomejs.biome",
     "typescriptteam.native-preview"
   ]

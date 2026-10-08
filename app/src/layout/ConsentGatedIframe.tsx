@@ -24,10 +24,9 @@ export const ConsentGatedIframe = (props: IframeProps) => {
   const hasMarketingConsent = useCookieConsent("marketing");
   const [isLoadRequested, setIsLoadRequested] = useState(false);
 
+  if (hasMarketingConsent || isLoadRequested) return <iframe {...props} />;
+
   const provider = getIframeProviderName(props.src);
-  if (hasMarketingConsent || isLoadRequested) {
-    return <iframe title={`${provider} content`} {...props} />;
-  }
   return (
     <div
       className="flex flex-col items-center justify-center gap-2 rounded-md border border-border bg-muted p-4 text-center text-muted-foreground text-sm"

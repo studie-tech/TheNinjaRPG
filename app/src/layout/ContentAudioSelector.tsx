@@ -185,7 +185,7 @@ const ContentAudioSelector: React.FC<ContentAudioSelectorProps> = (props) => {
                         selected ? "border-green-500 bg-green-50" : "",
                       )}
                     >
-                      {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- Audio selector for content - no captions needed for music/sfx */}
+                      {/* biome-ignore lint/a11y/useMediaCaption: Audio selector for content - no captions needed for music/sfx */}
                       <audio src={s.url ?? undefined} controls className="w-full" />
                       {s.prompt ? (
                         <div className="break-words text-muted-foreground text-xs">

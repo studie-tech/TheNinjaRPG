@@ -38,7 +38,7 @@ export const Confirm: React.FC<ConfirmProps> = (props) => {
       : props.footerExtra;
   return (
     <>
-      {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- wrapper for button children - using button would create invalid nested buttons */}
+      {/* biome-ignore lint/a11y/useSemanticElements: wrapper for button children - using button would create invalid nested buttons */}
       <div
         role="button"
         tabIndex={props.disabled ? -1 : 0}

@@ -296,10 +296,11 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
     >
       <div className="relative w-full">
         {item.assetType === "SFX" && item.url ? (
-          // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- Container click is supplementary - audio controls are the primary interaction Click handler supplements audio controls
+          // biome-ignore lint/a11y/useKeyWithClickEvents: Container click is supplementary - audio controls are the primary interaction
+          // biome-ignore lint/a11y/noStaticElementInteractions: Click handler supplements audio controls
           <div className={cn(settings.aspectRatioClass)} onClick={handleClick}>
             <div className="relative flex aspect-square w-full items-center justify-center rounded-xl border-2 bg-slate-100">
-              {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- Audio assets are sound effects without caption content */}
+              {/* biome-ignore lint/a11y/useMediaCaption: Audio assets are sound effects without caption content */}
               <audio
                 src={item.url}
                 controls

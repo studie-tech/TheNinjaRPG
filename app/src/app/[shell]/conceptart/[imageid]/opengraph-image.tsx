@@ -58,7 +58,7 @@ export default async function Image({
     >
       {url ? (
         <>
-          {/* oxlint-disable-next-line nextjs/no-img-element -- img is required for OpenGraph image generation */}
+          {/* biome-ignore lint/performance/noImgElement: img is required for OpenGraph image generation */}
           <img
             width={ARTWORK.width}
             height={ARTWORK.height}
@@ -85,7 +85,7 @@ export default async function Image({
           </div>
         </>
       ) : (
-        // oxlint-disable-next-line nextjs/no-img-element -- img is required for OpenGraph image generation
+        // biome-ignore lint/performance/noImgElement: img is required for OpenGraph image generation
         <img width={512} height={130} src={FALLBACK_LOGO} alt="" />
       )}
     </div>,
