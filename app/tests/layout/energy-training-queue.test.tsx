@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getUserCaps } from "@/drizzle/constants";
 import { EnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
 import type { UserWithRelations } from "@/routers/profile";
 import { ensureDom } from "../setup-dom.mjs";
@@ -55,6 +56,13 @@ beforeEach(() => {
 afterEach(cleanup);
 
 const user = {
+  rank: "GENIN",
+  offence: 10,
+  defence: 10,
+  strength: 10,
+  intelligence: 10,
+  speed: 10,
+  willpower: 10,
   maxEnergy: 100,
   status: "AWAKE",
   isOutlaw: true,
@@ -145,5 +153,26 @@ describe("Energy queue captcha recovery", () => {
     });
     expect(refreshCaptcha).not.toHaveBeenCalled();
     expect(mocks.invalidate).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe("Energy queue capped stats", () => {
+  it("falls back when the selected stat caps after an account refresh", () => {
+    const props = { availableEnergy: 100, getGuess: () => "answer", refreshCaptcha: async () => {} };
+    const view = render(<EnergyTrainingQueue {...props} user={user} />);
+    view.rerender(<EnergyTrainingQueue {...props} user={{ ...user, offence: getUserCaps(user.rank).stats_cap }} />);
+    fireEvent.click(view.getByRole("button", { name: "Add to queue" }));
+    expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ entries: [{ stat: "defence", energy: 100 }] }));
+  });
+
+  it("disables adding when all stats cap while keeping queue removal available", () => {
+    const { stats_cap, gens_cap } = getUserCaps(user.rank);
+    const view = render(<EnergyTrainingQueue user={{ ...user, offence: stats_cap, defence: stats_cap, strength: gens_cap, intelligence: gens_cap, speed: gens_cap, willpower: gens_cap, energyTrainingQueue: [{ stat: "offence", energy: 100 }] }} availableEnergy={0} getGuess={() => "answer"} refreshCaptcha={async () => {}} />);
+    expect((view.getByRole("combobox") as HTMLButtonElement).disabled).toBe(true);
+    expect((view.getByRole("button", { name: "Add to queue" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(view.getByText("All combat stats are capped for your rank.")).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "Clear queue" }));
+    expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ entries: [] }));
   });
 });
