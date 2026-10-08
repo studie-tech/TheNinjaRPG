@@ -18,7 +18,7 @@ import {
 import { type CombatStatName, CombatStatNames } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { showMutationToast } from "@/libs/toast";
-import { statTrainingBlockMessage } from "@/libs/train";
+import { isStatTrainingCapped, statTrainingBlockMessage } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { getQueueTotalCapacity } from "@/utils/paypal";
 
@@ -37,6 +37,10 @@ export const EnergyTrainingQueue = ({
   const [stat, setStat] = useState<CombatStatName>("offence");
   const [energy, setEnergy] = useState(user.maxEnergy);
   const [error, setError] = useState<string | null>(null);
+  const availableStats = CombatStatNames.filter(
+    (value) => !isStatTrainingCapped(user, value),
+  );
+  const selectedStat = availableStats.includes(stat) ? stat : availableStats[0];
   const entries = user.energyTrainingQueue ?? [];
   const capacity = getQueueTotalCapacity(user);
   const block = statTrainingBlockMessage({
@@ -151,19 +155,19 @@ export const EnergyTrainingQueue = ({
               Stat
             </Label>
             <Select
-              value={stat}
+              value={selectedStat ?? ""}
               onValueChange={(value) => setStat(value as CombatStatName)}
-              disabled={isPending}
+              disabled={isPending || !selectedStat}
             >
               <SelectTrigger
                 id="queue-stat"
                 aria-label="Queued stat"
                 className="capitalize"
               >
-                <SelectValue />
+                <SelectValue placeholder="All stats capped" />
               </SelectTrigger>
               <SelectContent>
-                {CombatStatNames.map((value) => (
+                {availableStats.map((value) => (
                   <SelectItem key={value} value={value} className="capitalize">
                     {value}
                   </SelectItem>
@@ -206,15 +210,17 @@ export const EnergyTrainingQueue = ({
             disabled={
               isPending ||
               !!block ||
+              !selectedStat ||
               entries.length >= capacity ||
               !Number.isFinite(energy) ||
               energy <= 0 ||
               energy > user.maxEnergy
             }
             onClick={() =>
+              selectedStat &&
               saveQueue({
                 expectedEntries: entries,
-                entries: [...entries, { stat, energy }],
+                entries: [...entries, { stat: selectedStat, energy }],
                 guess: getGuess(),
               })
             }
@@ -240,6 +246,11 @@ export const EnergyTrainingQueue = ({
             </Button>
           )}
         </div>
+        {!selectedStat && (
+          <p className="text-muted-foreground text-xs">
+            All combat stats are capped for your rank.
+          </p>
+        )}
         {block && (
           <p className="text-muted-foreground text-xs">Queue paused: {block}</p>
         )}
