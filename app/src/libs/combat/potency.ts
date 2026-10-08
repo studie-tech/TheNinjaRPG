@@ -22,6 +22,13 @@ export const POTENCY_TAG_LABELS: Record<PotencyTag["affectedTag"], string> = {
   reflect: "Reflect",
   increaseheal: "Increase Heal",
   heal: "Heal",
+  vamp: "Vamp",
+  absorb: "Absorb",
+  consume: "Consume",
+  shield: "Shield",
+  pierce: "Pierce",
+  drain: "Drain",
+  poison: "Poison",
 };
 
 export const getPotencyDescription = (

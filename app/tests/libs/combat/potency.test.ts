@@ -130,7 +130,7 @@ describe("potency configuration", () => {
   it("rejects unsupported selections, modes, negative amounts, and empty durations", () => {
     for (const schema of [IncreasePotencyTag, DecreasePotencyTag]) {
       for (const fields of [
-        { affectedTag: "pierce" },
+        { affectedTag: "decreaseheal" },
         { affectedTag: "increasepotency" },
         { affectedElements: ["Unknown"] },
         { calculation: "formula" },
@@ -237,7 +237,7 @@ describe("potency arithmetic", () => {
       [makePotency({ affectedTag: "all", power: 20 })],
       "attacker",
     );
-    expect(all.map((e) => e.power)).toEqual([60, 30, 60, 40, 40, 40]);
+    expect(all.map((e) => e.power)).toEqual([60, 30, 60, 60, 40, 40]);
   });
 
   it("adds static modifiers before additive percentages, independent of order", () => {
@@ -376,7 +376,7 @@ describe("potency element matching", () => {
       });
       expect(
         resolvePotencyTags(action, [potency], "attacker").map((tag) => tag.power),
-      ).toEqual([expected, expected, 40, 40, 40]);
+      ).toEqual([expected, expected, 40, expected, 40]);
       const noSelection = makePotency({
         type,
         calculation,
@@ -433,7 +433,7 @@ describe("potency element matching", () => {
     ]);
     for (const [affectedTag, expected] of [
       ["damage", [60, 60, 40, 40, 40]],
-      ["all", [60, 60, 60, 40, 40]],
+      ["all", [60, 60, 60, 60, 40]],
     ] as const) {
       const tags = resolvePotencyTags(
         action,

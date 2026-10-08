@@ -27,7 +27,7 @@ const fixture = (elementClassification: ElementName | null = "Fire") => {
     effects: [
       makeTag("damage", { elements: ["Water"], power: 40, powerPerLevel: 1 }),
       makeTag("heal", { power: 40, powerPerLevel: 1 }),
-      makeTag("pierce", { power: 40 }),
+      makeTag("decreaseheal", { power: 40 }),
     ],
     actionCostPerc: 40,
   };

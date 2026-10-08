@@ -76,6 +76,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { isTransientDatabaseError } from "@/server/dbRetry";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
   fetchPublishedSectorMap,
   fetchPublishedSectorMaps,
@@ -1069,26 +1070,28 @@ const resolveAdjacentCrossing = (
 /** Complete travel and consume its recovery ticks without training queued stats. */
 const completeGlobalTravel = (client: DrizzleClient, user: UserData) => {
   const recoveryTicks = sql`FLOOR(GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, NOW(3))) / ${REGEN_SECONDS * 1_000_000})`;
-  return claimUserSnapshot({
-    client,
-    userId: user.userId,
-    updatedAt: user.updatedAt,
-    where: [eq(userData.status, "TRAVEL")],
-    set: {
-      status: "AWAKE",
-      travelFinishAt: null,
-      ...(user.energyTrainingQueue?.length
-        ? {
-            // Travel recovers Energy, but its elapsed ticks cannot train village-only queues.
-            curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${user.regeneration} * ${recoveryTicks})`,
-            curHealth: sql`LEAST(${user.maxHealth}, ${userData.curHealth} + ${user.regeneration} * ${recoveryTicks})`,
-            curChakra: sql`LEAST(${user.maxChakra}, ${userData.curChakra} + ${user.regeneration} * ${recoveryTicks})`,
-            curStamina: sql`LEAST(${user.maxStamina}, ${userData.curStamina} + ${user.regeneration} * ${recoveryTicks})`,
-            regenAt: sql`TIMESTAMPADD(SECOND, ${recoveryTicks} * ${REGEN_SECONDS}, ${userData.regenAt})`,
-          }
-        : {}),
-    },
-  });
+  return retryOnDeadlock(() =>
+    claimUserSnapshot({
+      client,
+      userId: user.userId,
+      updatedAt: user.updatedAt,
+      where: [eq(userData.status, "TRAVEL")],
+      set: {
+        status: "AWAKE",
+        travelFinishAt: null,
+        ...(user.energyTrainingQueue?.length
+          ? {
+              // Travel recovers Energy, but its elapsed ticks cannot train village-only queues.
+              curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${user.regeneration} * ${recoveryTicks})`,
+              curHealth: sql`LEAST(${user.maxHealth}, ${userData.curHealth} + ${user.regeneration} * ${recoveryTicks})`,
+              curChakra: sql`LEAST(${user.maxChakra}, ${userData.curChakra} + ${user.regeneration} * ${recoveryTicks})`,
+              curStamina: sql`LEAST(${user.maxStamina}, ${userData.curStamina} + ${user.regeneration} * ${recoveryTicks})`,
+              regenAt: sql`TIMESTAMPADD(SECOND, ${recoveryTicks} * ${REGEN_SECONDS}, ${userData.regenAt})`,
+            }
+          : {}),
+      },
+    }),
+  );
 };
 
 /** The hourly cleaner shares the endpoint's recovery and snapshot guards. */
@@ -1124,10 +1127,12 @@ export const completeExpiredGlobalTravel = async (client: DrizzleClient) => {
       }),
     ),
     // Empty queues keep the existing lazy passive recovery behavior.
-    client
-      .update(userData)
-      .set({ status: "AWAKE", travelFinishAt: null })
-      .where(and(expiredTravel, sql`NOT (${hasQueue})`)),
+    retryOnDeadlock(() =>
+      client
+        .update(userData)
+        .set({ status: "AWAKE", travelFinishAt: null })
+        .where(and(expiredTravel, sql`NOT (${hasQueue})`)),
+    ),
   ]);
 };
 

@@ -169,6 +169,13 @@ export const PotencyTagTypes = [
   "reflect",
   "increaseheal",
   "heal",
+  "vamp",
+  "absorb",
+  "consume",
+  "shield",
+  "pierce",
+  "drain",
+  "poison",
 ] as const;
 export type PotencyTagType = (typeof PotencyTagTypes)[number];
 
