@@ -161,9 +161,9 @@ emptymigration: ensure-env # Create database migration file
 	
 ----------------Tests-------------------: # -------------------------------------------------------
 .PHONY: test
-test: # Run unit tests with vitest
+test: # Run unit tests with Bun's Vitest-compatible API
 	@echo "${YELLOW}Running unit tests ${RESET}"
-	cd app && bun test
+	cd app && bun run test
 
 .PHONY: lint
 lint: # Run linting of the project
@@ -175,10 +175,14 @@ format: # Run biome formatter on the project
 	@echo "${YELLOW}Running biome formatter${RESET}"
 	cd app && ./node_modules/@biomejs/biome/bin/biome format --write src/
 
+.PHONY: check
+check: # Run Biome and TypeScript checks
+	cd app && bun run check
+
 .PHONY: typecheck
 typecheck: # Run TypeScript type checking
 	@echo "${YELLOW}Running TypeScript type checking${RESET}"
-	cd app && bun tsc --noEmit
+	cd app && bun run typecheck
 
 -------------DEPENDENCIES---------------: # -------------------------------------------------------
 .PHONY: deps-upgrade

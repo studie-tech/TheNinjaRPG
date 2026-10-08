@@ -1,0 +1,23 @@
+name: Set up application tooling
+description: Install the pinned runtime and locked dependencies with a shared download cache
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version-file: app/package.json
+    - uses: actions/cache@v6
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-${{ runner.arch }}-bun-${{ hashFiles('app/package.json', 'app/bun.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-bun-
+    - name: Install locked dependencies
+      shell: bash
+      working-directory: app
+      run: bun install --frozen-lockfile
+      env:
+        HUSKY: '0'

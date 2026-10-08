@@ -14,16 +14,17 @@
     "lint:fix": "biome lint --write .",
     "preview": "next build && next start",
     "start": "next start",
-    "test": "vitest",
+    "test": "bun test",
     "seed": "bun run drizzle/seed.ts",
     "dbpush": "drizzle-kit push",
     "makemigrations": "drizzle-kit generate",
     "emptymigration": "drizzle-kit generate --custom",
     "migrate": "drizzle-kit migrate",
     "typecheck": "tsc --noEmit",
-    "typecheck:native": "tsgo --noEmit",
     "postinstall": "bun run scripts/ensure-map-data.ts",
-    "prepare": "cd .. && husky"
+    "prepare": "cd .. && husky",
+    "bundle:report": "node node_modules/nextjs-bundle-analysis/report.js",
+    "bundle:compare": "node node_modules/nextjs-bundle-analysis/compare.js"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
@@ -150,12 +151,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.10",
+    "@biomejs/biome": "^2.5.15",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/react-query-devtools": "5.101.4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
-    "@types/bun": "^1.4.0",
+    "@types/bun": "1.4.2",
     "@types/cytoscape": "^3.31.0",
     "@types/cytoscape-edgehandles": "^4.0.5",
     "@types/cytoscape-popper": "^4.0.0",
@@ -169,20 +170,17 @@
     "@types/text-to-svg": "^3.1.4",
     "@types/three": "^0.185.4",
     "@types/tweenjs": "^1.0.8",
-    "@typescript/native-preview": "^7.0.0-dev.20260707.2",
-    "@vitejs/plugin-react": "^6.1.0",
     "autoprefixer": "^10.5.4",
     "drizzle-kit": "0.31.10",
-    "globals": "^17.11.0",
     "husky": "^9.1.7",
-    "jsdom": "^30.0.1",
-    "lint-staged": "^17.3.0",
+    "jsdom": "30.1.2",
+    "lint-staged": "17.6.0",
+    "nextjs-bundle-analysis": "0.5.0",
     "postcss": "8.5.26",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.12",
     "typescript": "7.0.2",
-    "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.3"
   },
   "ct3aMetadata": {
     "initVersion": "7.3.2"
@@ -193,7 +191,7 @@
     "minimumChangeThreshold": 0,
     "showDetails": true
   },
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.2",
   "overrides": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "@types/cytoscape-edgehandles": {

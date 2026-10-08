@@ -26,6 +26,8 @@ const withBundleAnalyzer = bundleAnalyzer({
 const config = {
   reactCompiler: true, // Fix user search, money sending, combat, search jutsu name
   experimental: {
+    // TypeScript 7 ships a native CLI rather than the JavaScript compiler API.
+    useTypeScriptCli: true,
     globalNotFound: true,
     nextScriptWorkers: true,
     optimizePackageImports: ["three"],
