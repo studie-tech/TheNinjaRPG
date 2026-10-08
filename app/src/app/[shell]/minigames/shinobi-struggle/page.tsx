@@ -7,8 +7,12 @@ export const metadata: Metadata = noindexMetadata("Shinobi Struggle");
 export default async function ShinobiStrugglePage({
   searchParams,
 }: {
-  searchParams: Promise<{ match?: string }>;
+  searchParams: Promise<{ match?: string | string[] }>;
 }) {
   const { match } = await searchParams;
-  return <ShinobiStruggleClient initialMatchId={match} />;
+  return (
+    <ShinobiStruggleClient
+      initialMatchId={typeof match === "string" ? match : undefined}
+    />
+  );
 }
