@@ -7,6 +7,7 @@ import {
   IMG_RAMEN_SMALL,
   IMG_RAMEN_WELCOME,
 } from "@/drizzle/constants";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
@@ -26,18 +27,23 @@ interface RamenShopProps {
 }
 
 const RamenShop: React.FC<RamenShopProps> = (props) => {
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData } = useRequiredUserData();
+  const { onMutate, updateUserDelta } = useUserDelta();
 
   const { mutate, isPending } = api.village.buyFood.useMutation({
-    onSuccess: async (data) => {
+    onMutate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && userData) {
-        await updateUser({
-          money: userData.money - (data?.cost || 0),
-          curHealth: data?.newHealth || userData.curHealth,
-          curStamina: data?.newStamina || userData.curStamina,
-          curChakra: data?.newChakra || userData.curChakra,
-        });
+        await updateUserDelta(
+          Number.isInteger(data.cost ?? 0) ? { money: -(data.cost ?? 0) } : undefined,
+          revision,
+          (current) => ({
+            curHealth: data.newHealth ?? current.curHealth,
+            curStamina: data.newStamina ?? current.curStamina,
+            curChakra: data.newChakra ?? current.curChakra,
+          }),
+        );
       }
     },
   });

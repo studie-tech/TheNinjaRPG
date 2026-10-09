@@ -1,10 +1,12 @@
 "use client";
+
 import { Clock, FastForward, Hand, ScanHeart } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { IMG_BUILDING_HOSPITAL, MEDNIN_MIN_RANK } from "@/drizzle/constants";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
@@ -31,20 +33,22 @@ import { getStrucBoost } from "@/utils/village";
 
 export default function Hospital() {
   // Settings
-  const { userData, notifications, access, timeDiff, updateUser, updateNotifications } =
+  const { userData, access, timeDiff, updateNotifications } =
     useRequireInVillage("/hospital");
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
   // Current interest
+  const { onMutate, updateUserDelta } = useUserDelta();
+  const utils = api.useUtils();
   const boost = getStrucBoost("hospitalSpeedupPerLvl", userData?.village?.structures);
 
   // Mutations
   const { mutate: heal, isPending } = api.hospital.npcHeal.useMutation({
-    onSuccess: async (result) => {
+    onMutate,
+    onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
       if (result.success && result.data) {
-        await updateNotifications(notifications?.filter((n) => n.href !== "/hospital"));
-        await updateUser({
+        await updateUserDelta({}, revision, {
           curHealth: result.data.curHealth,
           curEnergy: result.data.curEnergy,
           maxEnergy: result.data.maxEnergy,
@@ -52,6 +56,11 @@ export default function Hospital() {
           regenAt: result.data.regenAt,
           status: "AWAKE",
         });
+        await updateNotifications(
+          utils.profile.getUser
+            .getData()
+            ?.notifications?.filter((n) => n.href !== "/hospital"),
+        );
       }
     },
   });
@@ -141,11 +150,7 @@ export default function Hospital() {
         <p className="p-3">You are not hospitalized.</p>
       )}
       {!isPending && !isHospitalized && canHealOthers && (
-        <HealOthersComponent
-          userData={userData}
-          timeDiff={timeDiff}
-          updateUser={updateUser}
-        />
+        <HealOthersComponent userData={userData} timeDiff={timeDiff} />
       )}
       {isPending && <Loader explanation="Healing User" />}
     </ContentBox>
@@ -161,12 +166,12 @@ export default function Hospital() {
 interface HealOthersComponentProps {
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
-  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
 }
 
 const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   // Settings
-  const { userData, timeDiff, updateUser } = props;
+  const { userData, timeDiff } = props;
+  const { onMutate, updateUserDelta } = useUserDelta();
 
   const pools = calcMedninHealablePool(userData);
   const medninRank = calcMedninRank(userData);
@@ -176,11 +181,12 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
 
   // Mutations
   const { mutate: userHeal, isPending } = api.hospital.userHeal.useMutation({
-    onSuccess: async (data) => {
+    onMutate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       void utils.hospital.getHospitalizedUsers.invalidate();
       if (data.success && data.healer) {
-        await updateUser(data.healer);
+        await updateUserDelta({}, revision, data.healer);
       }
     },
   });

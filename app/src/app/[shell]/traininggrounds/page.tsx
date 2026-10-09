@@ -69,6 +69,7 @@ import {
 import type { Jutsu } from "@/drizzle/schema";
 import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -906,7 +907,8 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
  */
 const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Settings
-  const { userData, updateUser, timeDiff } = props;
+  const { userData, timeDiff } = props;
+  const { onMutate, updateUserDelta } = useUserDelta();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
@@ -998,11 +1000,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
     api.jutsu.startTraining.useMutation({
-      onSuccess: async (result, variables) => {
+      onMutate,
+      onSuccess: async (result, variables, revision) => {
         showMutationToast(result);
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
-          await updateUser(result.data);
+          await updateUserDelta({}, revision, result.data);
           if (isJutsuPickStep && variables.jutsuId === TUTORIAL_JUTSU_ID) {
             handleNextStep();
           }

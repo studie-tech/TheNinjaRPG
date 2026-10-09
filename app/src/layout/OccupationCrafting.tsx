@@ -13,6 +13,7 @@ import {
   CRAFTING_TIMES_MINS,
 } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -39,7 +40,8 @@ export default function OccupationCrafting() {
   const utils = api.useUtils();
 
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData } = useRequiredUserData();
+  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
 
   // API calls
   const { data: userItems } = api.item.getUserItems.useQuery();
@@ -89,28 +91,34 @@ export default function OccupationCrafting() {
   const removeImbuementMutation = api.occupation.removeImbuement.useMutation();
 
   const repairItemMutation = api.item.repair.useMutation({
-    onSuccess: async (data) => {
+    onMutate: captureUserDelta,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          "data" in data && data.data
-            ? updateUser(data.data)
-            : utils.profile.getUser.invalidate(),
+          updateUserDelta(
+            "data" in data && data.data ? {} : undefined,
+            revision,
+            "data" in data ? data.data : undefined,
+          ),
         ]);
       }
     },
   });
 
   const repairAllMutation = api.item.repairAll.useMutation({
-    onSuccess: async (data) => {
+    onMutate: captureUserDelta,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          "data" in data && data.data
-            ? updateUser(data.data)
-            : utils.profile.getUser.invalidate(),
+          updateUserDelta(
+            "data" in data && data.data ? {} : undefined,
+            revision,
+            "data" in data ? data.data : undefined,
+          ),
         ]);
       }
     },

@@ -56,7 +56,6 @@ import { showMutationToast } from "@/libs/toast";
 import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake, usePublicPathname } from "@/utils/routing";
-import { useRequiredUserData } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
 
 /** First-page catalog size; further rows load through the existing infinite-query cursor. */
@@ -258,7 +257,6 @@ const Shop: React.FC<ShopProps> = (props) => {
     props;
 
   const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
-  const { updateUser } = useRequiredUserData();
   const silverCopy = SILVER_COPY[catalog?.silverLabel ?? "seichi"];
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -375,7 +373,7 @@ const Shop: React.FC<ShopProps> = (props) => {
         setItemConfirmOpen(false);
         void utils.item.getUserItemCounts.invalidate();
         void ("data" in data && data.data
-          ? updateUser(data.data)
+          ? updateUserDelta({}, revision, data.data)
           : updateUserDelta(
               "userDelta" in data ? data.userDelta : undefined,
               revision,

@@ -43,6 +43,7 @@ import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
@@ -406,6 +407,7 @@ const Sector: React.FC<SectorProps> = (props) => {
 
   // Data from db
   const { data: userData, pusher, timeDiff, updateUser } = useRequiredUserData();
+  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
   timeDiffRef.current = timeDiff;
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
@@ -1546,10 +1548,11 @@ const Sector: React.FC<SectorProps> = (props) => {
   };
 
   const { mutate: rob, isPending: isRobbing } = api.travel.robPlayer.useMutation({
-    onSuccess: async (result) => {
-      if (result?.battleId || result?.money) {
-        await updateUser({
-          ...(result.money ? { money: result.money } : {}),
+    onMutate: captureUserDelta,
+    onSuccess: async (result, _variables, revision) => {
+      if (result?.battleId || typeof result?.money === "number") {
+        await updateUserDelta({}, revision, {
+          ...(typeof result.money === "number" ? { money: result.money } : {}),
           ...(result.battleId
             ? { battleId: result.battleId, updatedAt: new Date() }
             : {}),
@@ -2855,7 +2858,6 @@ const Sector: React.FC<SectorProps> = (props) => {
           users={sorrounding}
           userData={userData}
           timeDiff={timeDiff}
-          updateUser={updateUser}
           hex={originRef.current}
           allyAttack={allyAttack}
           setAllyAttack={setAllyAttack}
@@ -2925,7 +2927,6 @@ const Sector: React.FC<SectorProps> = (props) => {
             targetUser={healTargetUser}
             userData={userData}
             timeDiff={timeDiff}
-            updateUser={updateUser}
             side="top"
             open={!!healTargetUser}
             onOpenChange={(open) => {
@@ -3067,7 +3068,6 @@ interface SorroundingUsersProps {
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
-  updateUser: (data: Partial<NonNullable<UserWithRelations>>) => Promise<void>;
   hex: TerrainHex;
   users: SectorUser[];
   allyAttack: boolean;
@@ -3081,7 +3081,7 @@ interface SorroundingUsersProps {
 
 const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   // Destructure props
-  const { userData, timeDiff, updateUser, storedBracket, setStoredBracket } = props;
+  const { userData, timeDiff, storedBracket, setStoredBracket } = props;
 
   // Query
   const { data } = api.village.getAll.useQuery(undefined);
@@ -3190,7 +3190,6 @@ const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
                         targetUser={user}
                         userData={userData}
                         timeDiff={timeDiff}
-                        updateUser={updateUser}
                         side="top"
                       />
                     )}

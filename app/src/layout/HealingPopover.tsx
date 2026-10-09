@@ -5,6 +5,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IMG_ICON_HEAL } from "@/drizzle/constants";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import AvatarImage from "@/layout/Avatar";
 import Image from "@/layout/Image";
 import { calcCurrent } from "@/layout/StatusBar";
@@ -23,7 +24,6 @@ import type { UserWithRelations } from "@/routers/profile";
  *   targetUser={user}
  *   userData={userData}
  *   timeDiff={timeDiff}
- *   updateUser={updateUser}
  *   open={isOpen}
  *   onOpenChange={setIsOpen}
  *   side="top"
@@ -35,7 +35,6 @@ import type { UserWithRelations } from "@/routers/profile";
  *   targetUser={user}
  *   userData={userData}
  *   timeDiff={timeDiff}
- *   updateUser={updateUser}
  *   side="top"
  *   onHealComplete={() => console.log('Healing completed!')}
  * />
@@ -48,8 +47,6 @@ interface HealingPopoverProps {
   userData: NonNullable<UserWithRelations>;
   /** Time difference for regeneration calculations */
   timeDiff: number;
-  /** Patches the cached user with the healer's post-heal row */
-  updateUser: (data: Partial<NonNullable<UserWithRelations>>) => Promise<void>;
   /** Custom trigger element. If not provided, uses default heal icon */
   trigger?: React.ReactNode;
   /** Side where the popover should appear relative to the trigger */
@@ -68,7 +65,6 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
   targetUser,
   userData,
   timeDiff,
-  updateUser,
   trigger,
   side = "top",
   className = "",
@@ -77,14 +73,16 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
   onOpenChange,
 }) => {
   const utils = api.useUtils();
+  const { onMutate, updateUserDelta } = useUserDelta();
 
   // Mutations
   const { mutate: userHeal, isPending: isHealing } = api.hospital.userHeal.useMutation({
-    onSuccess: async (data) => {
+    onMutate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          data.healer ? updateUser(data.healer) : null,
+          updateUserDelta(data.healer ? {} : undefined, revision, data.healer),
           utils.village.getAll.invalidate(),
         ]);
         onHealComplete?.();

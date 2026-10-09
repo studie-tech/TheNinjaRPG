@@ -33,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { BANK_INTEREST_CLAIM_DAYS, IMG_BUILDING_BANK } from "@/drizzle/constants";
 import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
 import GraphBankLedger from "@/layout/GraphBankLedger";
@@ -57,7 +58,8 @@ export default function Bank() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // User data
-  const { userData, updateUser, access, timeDiff } = useRequireInVillage("/bank");
+  const { userData, access, timeDiff } = useRequireInVillage("/bank");
+  const { onMutate, updateUserDelta } = useUserDelta();
   const money = userData?.money ?? 0;
   const bank = userData?.bank ?? 0;
 
@@ -88,10 +90,11 @@ export default function Bank() {
 
   // Mutations
   const { mutate: toBank, isPending: l1 } = api.bank.toBank.useMutation({
-    onSuccess: async (data) => {
+    onMutate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && data.data) {
-        await updateUser({
+        await updateUserDelta({}, revision, {
           bank: data.data.bank,
           money: data.data.money,
         });
@@ -101,10 +104,11 @@ export default function Bank() {
   });
 
   const { mutate: toPocket, isPending: l2 } = api.bank.toPocket.useMutation({
-    onSuccess: async (data) => {
+    onMutate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && data.data) {
-        await updateUser({
+        await updateUserDelta({}, revision, {
           bank: data.data.bank,
           money: data.data.money,
         });
@@ -114,10 +118,11 @@ export default function Bank() {
   });
 
   const { mutate: transfer, isPending: l3 } = api.bank.transfer.useMutation({
-    onSuccess: async (data) => {
+    onMutate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && data.data) {
-        await updateUser({
+        await updateUserDelta({}, revision, {
           bank: data.data.bank,
         });
         toUserForm.reset();

@@ -95,6 +95,18 @@ describe("confirmed user deltas", () => {
     test.close();
   });
 
+  it("does not let a delayed absolute response overwrite a newer debit", async () => {
+    const test = setup();
+    const absoluteRevision = prepareUserDelta(test.client, key);
+    const deltaRevision = prepareUserDelta(test.client, key);
+    test.setDatabase(85);
+    await applyUserDelta(test.client, key, { money: -10 }, deltaRevision);
+    await applyUserDelta(test.client, key, {}, absoluteRevision, { money: 95 });
+    expect(test.value()?.userData.money).toBe(85);
+    expect(test.reads()).toBe(1);
+    test.close();
+  });
+
   it("refreshes the second overlapping delta instead of using an ambiguous snapshot", async () => {
     const test = setup();
     const first = await prepareUserDelta(test.client, key);

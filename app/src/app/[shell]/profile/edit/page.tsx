@@ -83,6 +83,7 @@ import type { Bloodline, Village } from "@/drizzle/schema";
 import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import Accordion from "@/layout/Accordion";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
@@ -1003,18 +1004,20 @@ const Marriage: React.FC = () => {
  */
 const NewAiAvatar: React.FC = () => {
   // Queries & mutations
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData } = useRequiredUserData();
+  const { onMutate, updateUserDelta } = useUserDelta();
 
   // tRPC utility
   const utils = api.useUtils();
 
   // Create new avatar mutation
   const createAvatar = api.avatar.createAvatar.useMutation({
-    onSuccess: async (data) => {
+    onMutate,
+    onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
       await Promise.all([
-        data.success && data.data
-          ? updateUser(data.data)
+        data.success
+          ? updateUserDelta(data.data ? {} : undefined, revision, data.data)
           : utils.profile.getUser.invalidate(),
         utils.avatar.getHistoricalAvatars.invalidate(),
       ]);
@@ -2018,8 +2021,8 @@ const RerollElement: React.FC = () => {
  */
 const NameChange: React.FC = () => {
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData } = useRequiredUserData();
+  const { onMutate, updateUserDelta } = useUserDelta();
   const [showNameChangeConfirm, setShowNameChangeConfirm] = useState(false);
   const [isChangingUsername, setIsChangingUsername] = useState(false);
   const [usernameDraft, setUsernameDraft] = useState("");
@@ -2035,7 +2038,17 @@ const NameChange: React.FC = () => {
   );
 
   // Mutations
-  const { mutateAsync: updateUsername } = api.profile.updateUsername.useMutation();
+  const { mutateAsync: updateUsername } = api.profile.updateUsername.useMutation({
+    onMutate,
+    onSuccess: async (data, _input, revision) => {
+      if (data.success) {
+        // Cache reconciliation must not make a committed purchase retryable.
+        await updateUserDelta(data.data ? {} : undefined, revision, data.data).catch(
+          () => undefined,
+        );
+      }
+    },
+  });
 
   const handleUsernameChange = async () => {
     if (usernameRequestRef.current) return;
@@ -2049,10 +2062,6 @@ const NameChange: React.FC = () => {
       if (data.success) {
         // The paid mutation has already committed. A failed cache refresh must
         // not leave the confirmation retryable and charge the user twice.
-        await (data.data
-          ? updateUser(data.data)
-          : utils.profile.getUser.invalidate()
-        ).catch(() => undefined);
         setShowNameChangeConfirm(false);
       } else {
         setUsernameDraft(submittedUsername);
@@ -2165,15 +2174,25 @@ const NameChange: React.FC = () => {
  */
 const CustomTitle: React.FC = () => {
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData } = useRequiredUserData();
+  const { onMutate, updateUserDelta } = useUserDelta();
   const [showCustomTitleConfirm, setShowCustomTitleConfirm] = useState(false);
   const [isUpdatingCustomTitle, setIsUpdatingCustomTitle] = useState(false);
   const customTitleRequestRef = useRef(false);
 
   // Mutations
   const { mutateAsync: updateCustomTitle } =
-    api.blackmarket.updateCustomTitle.useMutation();
+    api.blackmarket.updateCustomTitle.useMutation({
+      onMutate,
+      onSuccess: async (data, _input, revision) => {
+        if (data.success) {
+          // Cache reconciliation must not make a committed purchase retryable.
+          await updateUserDelta(data.data ? {} : undefined, revision, data.data).catch(
+            () => undefined,
+          );
+        }
+      },
+    });
 
   // Title form
   const form = useForm<TitleChangeSchema>({
@@ -2200,10 +2219,6 @@ const CustomTitle: React.FC = () => {
       if (data.success) {
         // The purchase already succeeded at this point; a cache refresh failure
         // must not leave a retryable dialog that could charge the user again.
-        await (data.data
-          ? updateUser(data.data)
-          : utils.profile.getUser.invalidate()
-        ).catch(() => undefined);
         setShowCustomTitleConfirm(false);
       } else {
         form.setValue("title", submittedTitle, {
@@ -2291,8 +2306,8 @@ const CustomTitle: React.FC = () => {
 
 /** Preset-only tavern styling controls. Username and title are separate purchases. */
 const TavernColors: React.FC = () => {
-  const { data: userData, updateUser } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData } = useRequiredUserData();
+  const { onMutate, updateUserDelta } = useUserDelta();
   const [usernameColor, setUsernameColor] = useState<TavernColorPreset>(
     userData?.tavernUsernameColor ?? "DEFAULT",
   );
@@ -2308,11 +2323,11 @@ const TavernColors: React.FC = () => {
   }, [userData?.tavernUsernameColor, userData?.tavernTitleColor]);
 
   const updateColor = api.profile.updateTavernColor.useMutation({
-    onSuccess: async (data) => {
+    onMutate,
+    onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
       if (data.success) {
-        if (data.data) await updateUser(data.data);
-        else await utils.profile.getUser.invalidate();
+        await updateUserDelta(data.data ? {} : undefined, revision, data.data);
       }
     },
   });
@@ -2458,14 +2473,24 @@ const TavernColors: React.FC = () => {
  */
 const ChangeGender: React.FC = () => {
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData } = useRequiredUserData();
+  const { onMutate, updateUserDelta } = useUserDelta();
   const [showGenderConfirmation, setShowGenderConfirmation] = useState(false);
   const [isChangingGender, setIsChangingGender] = useState(false);
   const genderChangeRequestRef = useRef(false);
 
   // Mutations
-  const { mutateAsync: changeGender } = api.blackmarket.changeUserGender.useMutation();
+  const { mutateAsync: changeGender } = api.blackmarket.changeUserGender.useMutation({
+    onMutate,
+    onSuccess: async (data, _input, revision) => {
+      if (data.success) {
+        // Cache reconciliation must not make a committed purchase retryable.
+        await updateUserDelta(data.data ? {} : undefined, revision, data.data).catch(
+          () => undefined,
+        );
+      }
+    },
+  });
 
   // Gender form
   const form = useForm<GenderChangeSchema>({
@@ -2499,10 +2524,6 @@ const ChangeGender: React.FC = () => {
       if (data.success) {
         // The purchase has committed. Close even if cache reconciliation fails
         // so retrying the dialog cannot charge again.
-        await (data.data
-          ? updateUser(data.data)
-          : utils.profile.getUser.invalidate()
-        ).catch(() => undefined);
         setShowGenderConfirmation(false);
       } else {
         form.setValue("gender", submittedGender, {

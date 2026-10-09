@@ -1116,17 +1116,21 @@ export const clanRouter = createTRPCRouter({
       if (user.isBanned) return errorResponse("You are banned");
       if (!user.clanId) return errorResponse("Not in a clan");
       if (fetchedClan?.id !== user.clanId) return errorResponse("Not in the clan");
+      const needsUserRefresh = !!user.energyTrainingQueue?.length;
       if (input.amount === 0) {
         return {
           success: true,
           message: "Successfully deposited 0 ryo",
-          userDelta: user.energyTrainingQueue?.length ? undefined : {},
+          userDelta: needsUserRefresh ? undefined : {},
           clanUpdate: { id: fetchedClan.id },
         };
       }
+      // The nonnegative BIGINT result rounds halves up, so subtracting amount charges
+      // ceil(amount - 0.5). Reuse that integer for compensation to refund exactly the debit.
+      const debitAmount = Math.ceil(input.amount - 0.5);
       const result = await ctx.drizzle
         .update(userData)
-        .set({ money: sql`${userData.money} - ${input.amount}` })
+        .set({ money: sql`${userData.money} - ${debitAmount}` })
         .where(and(eq(userData.userId, ctx.userId), gte(userData.money, input.amount)));
       if (result.rowsAffected === 0) {
         return { success: false, message: "Not enough money in pocket" };
@@ -1138,17 +1142,17 @@ export const clanRouter = createTRPCRouter({
       if (creditResult.rowsAffected === 0) {
         await ctx.drizzle
           .update(userData)
-          .set({ money: sql`${userData.money} + ${input.amount}` })
+          .set({ money: sql`${userData.money} + ${debitAmount}` })
           .where(eq(userData.userId, ctx.userId));
         return errorResponse("Clan bank no longer exists; your deposit was refunded");
       }
       return {
         success: true,
         message: `Successfully deposited ${input.amount} ryo`,
-        userDelta: user.energyTrainingQueue?.length
+        userDelta: needsUserRefresh
           ? undefined
-          : { money: -input.amount },
-        clanUpdate: user.energyTrainingQueue?.length
+          : { money: debitAmount ? -debitAmount : 0 },
+        clanUpdate: needsUserRefresh
           ? undefined
           : await ctx.drizzle.query.clan
               .findFirst({
