@@ -67,6 +67,7 @@ import {
   TUTORIAL_JUTSU_ID,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
+import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -131,7 +132,8 @@ export default function Training() {
   const { currentStep } = useTutorialStep();
   // The tutorial selects the panel containing its highlighted training action.
   const focusJutsuTraining = isTutorialJutsuPickStep(currentStep);
-  const [section, setSection] = useState("Stats");
+  // Null until NavTabs restores the last visited section (or falls back to the first).
+  const [section, setSection] = useState<string | null>(null);
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -148,11 +150,16 @@ export default function Training() {
         ? "Stats"
         : section;
 
+  // Every user-driven section change is remembered, including Radix keyboard navigation and
+  // the shortcut links below, which bypass the NavTabs click handler.
+  const sectionStorageKey = `trainingTab:${userData.userId}`;
+  const selectSection = (value: string) => {
+    safeLocalStorageSetItem(sectionStorageKey, value);
+    startTransition(() => setSection(value));
+  };
+
   return (
-    <Tabs
-      value={activeSection}
-      onValueChange={(value) => startTransition(() => setSection(value))}
-    >
+    <Tabs value={activeSection ?? ""} onValueChange={selectSection}>
       <ContentBox
         title="Training Grounds"
         subtitle="Choose a training activity"
@@ -161,9 +168,11 @@ export default function Training() {
         <div className="overflow-x-auto overflow-y-hidden">
           <div className="mx-auto w-max min-w-full">
             <NavTabs
+              id={sectionStorageKey}
               accessibleTabs
               label="Training activities"
               current={activeSection}
+              onChange={setSection}
               options={[
                 "Stats",
                 "Masteries",
@@ -189,7 +198,7 @@ export default function Training() {
               <button
                 type="button"
                 className="hover:underline"
-                onClick={() => setSection("Masteries")}
+                onClick={() => selectSection("Masteries")}
               >
                 Training {getTrainingLabel(userData.currentlyTrainingMastery)}
               </button>
@@ -198,7 +207,7 @@ export default function Training() {
               <button
                 type="button"
                 className="hover:underline"
-                onClick={() => setSection("Stats")}
+                onClick={() => selectSection("Stats")}
               >
                 {userData.energyTrainingQueue.length} queued
               </button>
@@ -206,7 +215,7 @@ export default function Training() {
           </div>
         )}
       </ContentBox>
-      <TabsContent value={activeSection} className="mt-0">
+      <TabsContent value={activeSection ?? ""} className="mt-0">
         {(activeSection === "Stats" || activeSection === "Masteries") && (
           <StatsTraining
             userData={userData}

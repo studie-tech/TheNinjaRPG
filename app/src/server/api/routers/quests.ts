@@ -17,8 +17,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { QuestType, UserRole } from "@/drizzle/constants";
 import {
-  ENERGY_EVENT_REWARD,
-  ENERGY_PVE_REWARD,
+  ENERGY_QUEST_REWARDS,
   FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,
   IMG_AVATAR_DEFAULT,
   LetterRanks,
@@ -3016,15 +3015,7 @@ export const commitQuestObjectiveRewards = async (info: {
         }
       : undefined;
   const energyReward =
-    resolved && userQuest
-      ? userQuest.quest.questType === "event"
-        ? ENERGY_EVENT_REWARD
-        : ["mission", "battlepyramid", "story", "starter"].includes(
-              userQuest.quest.questType,
-            )
-          ? ENERGY_PVE_REWARD
-          : 0
-      : 0;
+    resolved && userQuest ? (ENERGY_QUEST_REWARDS[userQuest.quest.questType] ?? 0) : 0;
   const energyPatch =
     energyReward > 0
       ? {
