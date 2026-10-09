@@ -599,6 +599,7 @@ function Travel() {
         }
         if (result.success) {
           await updateUser(optimisticGlobalTravelFinish());
+          await utils.profile.getUser.invalidate();
           setActiveTab(sectorLink);
         }
       },

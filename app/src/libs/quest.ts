@@ -1794,6 +1794,21 @@ export const questHasOverworldObjectives = (quest: Quest) =>
       objective.task === "dialog",
   );
 
+/** Projects private quest state for client responses without changing server-owned trackers. */
+export const getPublicQuestUser = <T extends NonNullable<UserWithRelations>>(
+  user: T,
+): T => {
+  const responseUser = {
+    ...user,
+    userQuests: structuredClone(user.userQuests),
+    questData: structuredClone(user.questData),
+  };
+  responseUser.userQuests.forEach((entry) => {
+    controlShownQuestLocationInformation(entry.quest, responseUser);
+  });
+  return responseUser;
+};
+
 /**
  * Hides the location information of quest objectives if certain conditions are met.
  *

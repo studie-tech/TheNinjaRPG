@@ -85,6 +85,7 @@ import {
   getExperienceTrackerTasks,
   getMissionHallSettings,
   getNewTrackers,
+  getPublicQuestUser,
   getReward,
   getUserQuests,
   isAvailableUserQuests,
@@ -1378,12 +1379,13 @@ export const questsRouter = createTRPCRouter({
       );
 
       user.questData = fullTrackers;
+      const responseUser = getPublicQuestUser(user);
 
       // Return information
       return {
         success: true,
         notifications: finalNotification,
-        questData: user.questData,
+        questData: responseUser.questData ?? [],
         questIdsUpdated,
         updateAt: new Date(),
       };

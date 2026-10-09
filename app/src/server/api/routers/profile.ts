@@ -131,9 +131,9 @@ import {
 } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
 import {
-  controlShownQuestLocationInformation,
   filterQuestTrackersForDbPersist,
   getNewTrackers,
+  getPublicQuestUser,
   getUncheckedQuestTargetSectors,
   getUserQuests,
   isAvailableUserQuests,
@@ -679,6 +679,7 @@ export const profileRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
           userIp: ctx.userIp,
+          hideInformation: true,
           // forceRegen: true, // This should be disabled in prod to save on DB calls
         }),
         ctx.drizzle
@@ -2854,10 +2855,11 @@ export const fetchUpdatedUser = async (props: {
   userId: string;
   userIp?: string;
   forceRegen?: boolean;
+  /** Client responses opt in; server callers need canonical locations for tracker persistence. */
   hideInformation?: boolean;
 }) => {
   // Destructure
-  const { client, userId, userIp, hideInformation = true } = props;
+  const { client, userId, userIp, hideInformation = false } = props;
   let { forceRegen } = props;
   const now = new Date();
   // Shrine battle lobbies past this age are effectively dead — attackers
@@ -3291,14 +3293,10 @@ export const fetchUpdatedUser = async (props: {
 
     user.questData = fullTrackers;
 
-    // Hide information relating to quests
-    if (hideInformation) {
-      user?.userQuests.forEach((q) => {
-        controlShownQuestLocationInformation(q.quest, user);
-      });
-    }
+    // Mask response copies only: trackerResults is reused by server-side quest updates.
+    const responseUser = hideInformation ? getPublicQuestUser(user) : user;
     return {
-      user: { ...user, effectiveMasteries: effectiveMasteries(user) },
+      user: { ...responseUser, effectiveMasteries: effectiveMasteries(user) },
       settings,
       toastMessages,
       hasUnvotedPolls,
