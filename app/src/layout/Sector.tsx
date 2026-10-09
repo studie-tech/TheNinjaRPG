@@ -674,6 +674,8 @@ const Sector: React.FC<SectorProps> = (props) => {
         if (
           (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
           (isOnLocation ||
+            // A masked target cannot be matched locally; the server owns its coordinates.
+            ("hideLocation" in objective && objective.hideLocation) ||
             ("attackers" in objective &&
               objective.attackers &&
               objective.attackers.length > 0))

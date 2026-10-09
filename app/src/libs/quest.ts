@@ -169,6 +169,25 @@ export const filterQuestTrackersForDbPersist = (
   return trackers.filter((t) => !inMemoryOnlyAchievementQuestIds.has(t.id));
 };
 
+/** Hidden active targets need server projection after changing sectors, even if currently revealed. */
+export const hasActiveHiddenQuestObjectives = (
+  user: NonNullable<UserWithRelations>,
+) => {
+  if (canChangeContent(user.role)) return false;
+  return user.userQuests.some((entry) => {
+    if (entry.completed || entry.endAt) return false;
+    const tracker = user.questData?.find((q) => q.id === entry.questId);
+    return entry.quest.content.objectives.some((objective, index) => {
+      if (!("hideLocation" in objective) || !objective.hideLocation) return false;
+      const goal = tracker?.goals.find((g) => g.id === objective.id);
+      return (
+        !goal?.done &&
+        (!tracker || isQuestObjectiveAvailable(entry.quest, tracker, index))
+      );
+    });
+  });
+};
+
 /**
  * Get active objectives for a user
  */
@@ -1009,6 +1028,35 @@ export const getNewTrackers = (
             status.done = false;
           }
 
+          // Older masked snapshots could persist the public placeholder as a real target.
+          // Recover only those fields; valid rolls and completion/progress stay authoritative.
+          const hasMaskedLocation =
+            status.sector === 1337 ||
+            status.longitude === 1337 ||
+            status.latitude === 1337;
+          if (hasMaskedLocation) {
+            if (status.sector === 1337) {
+              delete status.sector;
+              if (!("sectorType" in objective) && "sector" in objective) {
+                status.sector = objective.sector;
+              }
+            }
+            if (status.longitude === 1337) {
+              delete status.longitude;
+              if (!("locationType" in objective) && "longitude" in objective) {
+                status.longitude = objective.longitude;
+              }
+            }
+            if (status.latitude === 1337) {
+              delete status.latitude;
+              if (!("locationType" in objective) && "latitude" in objective) {
+                status.latitude = objective.latitude;
+              }
+            }
+            delete status.locationChecked;
+            consequences.push({ type: "update_user", ids: ["location_update"] });
+          }
+
           if ("sectorType" in objective && status.sector === undefined) {
             if (objective.sectorType === "specific") {
               status.sector = objective.sector;
@@ -1793,6 +1841,21 @@ export const questHasOverworldObjectives = (quest: Quest) =>
       ("opponentAIs" in objective && (objective.opponentAIs?.length ?? 0) > 0) ||
       objective.task === "dialog",
   );
+
+/** Projects private quest state for client responses without changing server-owned trackers. */
+export const getPublicQuestUser = <T extends NonNullable<UserWithRelations>>(
+  user: T,
+): T => {
+  const responseUser = {
+    ...user,
+    userQuests: structuredClone(user.userQuests),
+    questData: structuredClone(user.questData),
+  };
+  responseUser.userQuests.forEach((entry) => {
+    controlShownQuestLocationInformation(entry.quest, responseUser);
+  });
+  return responseUser;
+};
 
 /**
  * Hides the location information of quest objectives if certain conditions are met.

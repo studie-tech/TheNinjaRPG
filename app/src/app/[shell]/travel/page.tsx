@@ -88,6 +88,7 @@ import MapError from "@/layout/MapError";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import { nonCombatConsume } from "@/libs/item";
+import { hasActiveHiddenQuestObjectives } from "@/libs/quest";
 import {
   findNearestWalkableCoordinate,
   isReachableCoordinate,
@@ -599,6 +600,10 @@ function Travel() {
         }
         if (result.success) {
           await updateUser(optimisticGlobalTravelFinish());
+          // Hidden targets may reveal here or need masking after leaving their old sector.
+          if (userData && hasActiveHiddenQuestObjectives(userData)) {
+            await utils.profile.getUser.invalidate();
+          }
           setActiveTab(sectorLink);
         }
       },

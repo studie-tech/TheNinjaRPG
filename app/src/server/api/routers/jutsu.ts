@@ -70,7 +70,11 @@ import {
 } from "@/libs/loadout";
 import { effectiveMasteries } from "@/libs/mastery";
 import { validateUserUpdateReason } from "@/libs/moderator";
-import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import {
+  filterQuestTrackersForDbPersist,
+  getNewTrackers,
+  getPublicQuestUser,
+} from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
 import {
   calcJutsuEquipLimit,
@@ -1194,7 +1198,11 @@ export const jutsuRouter = createTRPCRouter({
       return {
         success: true,
         message: `You started training: ${info.name}`,
-        data: { money: user.money - trainCost, questData: questDataFull },
+        data: {
+          money: user.money - trainCost,
+          questData: getPublicQuestUser({ ...user, questData: questDataFull })
+            .questData,
+        },
       };
     }),
 
