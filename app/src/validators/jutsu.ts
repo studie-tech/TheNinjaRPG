@@ -111,4 +111,9 @@ export const jutsuReskinUpdateSchema = baseReskinSchema.extend({
   reason: z.string().min(10),
 });
 
+export const getJutsuReskinSchema = z.object({ reskinId: z.string() });
+export const updateJutsuReskinSchema = getJutsuReskinSchema.extend({
+  data: jutsuReskinUpdateSchema,
+});
+
 export type JutsuReskinUpdateSchema = z.infer<typeof jutsuReskinUpdateSchema>;

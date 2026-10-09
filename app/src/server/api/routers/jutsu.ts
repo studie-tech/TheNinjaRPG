@@ -118,9 +118,10 @@ import type { JutsuFilteringSchema } from "@/validators/jutsu";
 import {
   evolveJutsuSchema,
   getEvolutionsSchema,
+  getJutsuReskinSchema,
   jutsuFilteringSchema,
   jutsuReskinCreateSchema,
-  jutsuReskinUpdateSchema,
+  updateJutsuReskinSchema,
 } from "@/validators/jutsu";
 import { renameLoadoutSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
@@ -1651,12 +1652,12 @@ export const jutsuRouter = createTRPCRouter({
     }),
 
   updateReskin: protectedProcedure
-    .input(z.object({ reskinId: z.string(), data: jutsuReskinUpdateSchema }))
+    .input(updateJutsuReskinSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const { reason, username, jutsuId, attached, ...cosmetics } = input.data;
       // The assignment target is resolved by username inside each query, so every
-      // lookup runs in a single round-trip.
+      // lookup runs in parallel.
       const targetUserId = ctx.drizzle
         .select({ userId: userData.userId })
         .from(userData)
@@ -1758,10 +1759,10 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse(aiCheck.comment);
       }
 
-      // Update database and log. The owner/jutsu move and the user jutsu attachment
-      // span several rows, so they commit or roll back together.
-      await ctx.drizzle.transaction(async (tx) => {
-        await tx
+      // Staff-only cosmetic repairs are reversible. Keep the writes parallel;
+      // concurrent staff edits may need another repair, but grant no player value.
+      await Promise.all([
+        ctx.drizzle
           .update(jutsuReskin)
           .set({
             userId: targetUser.userId,
@@ -1772,22 +1773,29 @@ export const jutsuRouter = createTRPCRouter({
             image: cosmetics.image ?? reskin.image,
             updatedAt: new Date(),
           })
-          .where(eq(jutsuReskin.id, reskin.id));
-        if (detachIds.length > 0) {
-          await tx
-            .update(userJutsu)
-            .set({ reskinId: null, updatedAt: new Date() })
-            .where(
-              and(inArray(userJutsu.id, detachIds), eq(userJutsu.reskinId, reskin.id)),
-            );
-        }
-        if (shouldAttach) {
-          await tx
-            .update(userJutsu)
-            .set({ reskinId: reskin.id, updatedAt: new Date() })
-            .where(eq(userJutsu.id, targetUserJutsu.id));
-        }
-        await tx.insert(actionLog).values({
+          .where(eq(jutsuReskin.id, reskin.id)),
+        ...(detachIds.length > 0
+          ? [
+              ctx.drizzle
+                .update(userJutsu)
+                .set({ reskinId: null, updatedAt: new Date() })
+                .where(
+                  and(
+                    inArray(userJutsu.id, detachIds),
+                    eq(userJutsu.reskinId, reskin.id),
+                  ),
+                ),
+            ]
+          : []),
+        ...(shouldAttach
+          ? [
+              ctx.drizzle
+                .update(userJutsu)
+                .set({ reskinId: reskin.id, updatedAt: new Date() })
+                .where(eq(userJutsu.id, targetUserJutsu.id)),
+            ]
+          : []),
+        ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "jutsu",
@@ -1795,8 +1803,8 @@ export const jutsuRouter = createTRPCRouter({
           relatedId: targetJutsu.id,
           relatedMsg: `Reskin updated: ${targetJutsu.name}`,
           relatedImage: cosmetics.image ?? reskin.image,
-        });
-      });
+        }),
+      ]);
 
       return { success: true, message: "Jutsu reskin updated successfully" };
     }),
@@ -1882,7 +1890,7 @@ export const jutsuRouter = createTRPCRouter({
 
   getReskin: protectedProcedure
     .meta({ mcp: { description: "Get a specific jutsu reskin" } })
-    .input(z.object({ reskinId: z.string() }))
+    .input(getJutsuReskinSchema)
     .query(async ({ ctx, input }) => {
       // Query
       const [user, reskin, usages] = await Promise.all([

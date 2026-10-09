@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import React, { use } from "react";
+import React, { use, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import ContentBox from "@/layout/ContentBox";
@@ -21,6 +21,7 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
   const params = use(props.params);
   const router = useRouter();
   const reskinId = params.reskinId;
+  const [saveError, setSaveError] = useState<string | null>(null);
   const { data: userData } = useRequiredUserData();
 
   // tRPC utils
@@ -68,6 +69,7 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
     api.jutsu.updateReskin.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
+        setSaveError(data.success ? null : data.message);
         if (data.success) {
           await Promise.all([
             utils.jutsu.getReskin.invalidate({ reskinId }),
@@ -87,6 +89,14 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
   // Prevent unauthorized access
   if (isPending || !userData || !canModerateReskin(userData.role) || !reskin) {
     return <Loader explanation="Loading data" />;
+  }
+
+  if ("success" in reskin) {
+    return (
+      <ContentBox title="Edit Jutsu Reskin" defaultBackHref="/manual/jutsu/reskins">
+        <p role="alert">{reskin.message}</p>
+      </ContentBox>
+    );
   }
 
   // Build EditContent config
@@ -131,6 +141,7 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
   ];
 
   const onAccept = async () => {
+    setSaveError(null);
     const data = form.getValues();
     updateReskin({ reskinId, data });
   };
@@ -142,6 +153,11 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
       defaultBackHref="/manual/jutsu/reskins"
     >
       <div className="space-y-4">
+        {saveError && (
+          <p role="alert" className="text-destructive">
+            {saveError}
+          </p>
+        )}
         <EditContent
           schema={jutsuReskinUpdateSchema}
           form={form}
