@@ -267,7 +267,7 @@ export const txt2imgGPT = async (config: Txt2ImgConfig) => {
   // Common config
   const commonConfig = {
     background: config.removeBg ? "transparent" : "auto",
-    model: "gpt-image-1",
+    model: "gpt-image-2.5-sunburst",
     size:
       config.size === "square"
         ? "1024x1024"
