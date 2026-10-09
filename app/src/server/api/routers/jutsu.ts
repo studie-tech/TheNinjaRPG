@@ -1654,27 +1654,93 @@ export const jutsuRouter = createTRPCRouter({
     .input(z.object({ reskinId: z.string(), data: jutsuReskinUpdateSchema }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch current user and reskin
-      const [user, reskin] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUserReskin(ctx.drizzle, ctx.userId, input.reskinId),
-      ]);
+      const { reason, username, jutsuId, attached, ...cosmetics } = input.data;
+      // The assignment target is resolved by username inside each query, so every
+      // lookup runs in a single round-trip.
+      const targetUserId = ctx.drizzle
+        .select({ userId: userData.userId })
+        .from(userData)
+        .where(eq(userData.username, username));
+      // Query
+      const [user, reskin, targetUser, targetJutsu, conflict, targetUserJutsu, usages] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          fetchReskin(ctx.drizzle, input.reskinId),
+          ctx.drizzle.query.userData.findFirst({
+            columns: { userId: true, username: true },
+            where: eq(userData.username, username),
+          }),
+          ctx.drizzle.query.jutsu.findFirst({
+            columns: { id: true, name: true },
+            where: eq(jutsu.id, jutsuId),
+          }),
+          ctx.drizzle.query.jutsuReskin.findFirst({
+            columns: { id: true },
+            where: and(
+              eq(jutsuReskin.userId, targetUserId),
+              eq(jutsuReskin.jutsuId, jutsuId),
+              ne(jutsuReskin.id, input.reskinId),
+            ),
+          }),
+          ctx.drizzle.query.userJutsu.findFirst({
+            columns: { id: true, reskinId: true },
+            where: and(
+              eq(userJutsu.userId, targetUserId),
+              eq(userJutsu.jutsuId, jutsuId),
+            ),
+          }),
+          ctx.drizzle.query.userJutsu.findMany({
+            columns: { id: true, userId: true, jutsuId: true },
+            where: eq(userJutsu.reskinId, input.reskinId),
+          }),
+        ]);
       // Guards
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
+      if (!canModerateReskin(user.role)) return errorResponse("Unauthorized");
       if (!reskin) return errorResponse("Reskin not found");
-      if (!canModerateReskin(user.role)) {
-        return errorResponse("Unauthorized");
+      if (!targetUser) return errorResponse(`User ${username} not found`);
+      if (!targetJutsu) return errorResponse("Jutsu not found");
+      if (conflict) {
+        return errorResponse(
+          `${targetUser.username} already has a reskin for ${targetJutsu.name}`,
+        );
       }
-      // Prepare old/new objects for diff (exclude reason from new)
+      if (attached && !targetUserJutsu) {
+        return errorResponse(
+          `${targetUser.username} does not know ${targetJutsu.name}, so the reskin cannot be attached`,
+        );
+      }
+      // Jutsu that stop using this reskin: any copy of a different base jutsu, the
+      // previous owner's copy when ownership moves, and the owner's copy when detached
+      const ownerChanged = reskin.userId !== targetUser.userId;
+      const detachIds = usages
+        .filter(
+          (usage) =>
+            usage.jutsuId !== targetJutsu.id ||
+            (ownerChanged && usage.userId === reskin.userId) ||
+            (!attached && usage.userId === targetUser.userId),
+        )
+        .map((usage) => usage.id);
+      const shouldAttach =
+        attached && targetUserJutsu && targetUserJutsu.reskinId !== reskin.id;
+      // Prepare old/new objects for diff
+      const wasAttached = isAttachedToOwner(reskin, usages);
       const oldData = {
         name: reskin.name,
         description: reskin.description,
         battleDescription: reskin.battleDescription,
         image: reskin.image,
+        owner: reskin.user?.username,
+        jutsu: reskin.jutsu?.name,
+        attached: wasAttached,
       };
-      const { reason, ...rest } = input.data;
-      const newData = { ...rest };
+      const newData = {
+        ...cosmetics,
+        owner: targetUser.username,
+        jutsu: targetJutsu.name,
+        attached,
+      };
       const diff = calculateContentDiff(oldData, newData);
 
       // AI moderation of reason
@@ -1697,21 +1763,44 @@ export const jutsuRouter = createTRPCRouter({
         ctx.drizzle
           .update(jutsuReskin)
           .set({
-            name: newData.name,
-            description: newData.description,
-            battleDescription: newData.battleDescription,
-            image: newData.image ?? reskin.image,
+            userId: targetUser.userId,
+            jutsuId: targetJutsu.id,
+            name: cosmetics.name,
+            description: cosmetics.description,
+            battleDescription: cosmetics.battleDescription,
+            image: cosmetics.image ?? reskin.image,
             updatedAt: new Date(),
           })
           .where(eq(jutsuReskin.id, reskin.id)),
+        ...(detachIds.length > 0
+          ? [
+              ctx.drizzle
+                .update(userJutsu)
+                .set({ reskinId: null, updatedAt: new Date() })
+                .where(
+                  and(
+                    inArray(userJutsu.id, detachIds),
+                    eq(userJutsu.reskinId, reskin.id),
+                  ),
+                ),
+            ]
+          : []),
+        ...(shouldAttach
+          ? [
+              ctx.drizzle
+                .update(userJutsu)
+                .set({ reskinId: reskin.id, updatedAt: new Date() })
+                .where(eq(userJutsu.id, targetUserJutsu.id)),
+            ]
+          : []),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "jutsu",
           changes: diff,
-          relatedId: reskin.jutsuId,
-          relatedMsg: `Reskin updated: ${reskin.jutsu?.name || reskin.name}`,
-          relatedImage: newData.image ?? reskin.image,
+          relatedId: targetJutsu.id,
+          relatedMsg: `Reskin updated: ${targetJutsu.name}`,
+          relatedImage: cosmetics.image ?? reskin.image,
         }),
       ]);
 
@@ -1802,14 +1891,20 @@ export const jutsuRouter = createTRPCRouter({
     .input(z.object({ reskinId: z.string() }))
     .query(async ({ ctx, input }) => {
       // Query
-      const reskin = await fetchUserReskin(ctx.drizzle, ctx.userId, input.reskinId);
-
-      // Return
-      if (!reskin) {
+      const [user, reskin, usages] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchReskin(ctx.drizzle, input.reskinId),
+        ctx.drizzle.query.userJutsu.findMany({
+          columns: { userId: true, jutsuId: true },
+          where: eq(userJutsu.reskinId, input.reskinId),
+        }),
+      ]);
+      // Guard - players only see their own reskins, staff can see any
+      if (!reskin || (reskin.userId !== ctx.userId && !canModerateReskin(user.role))) {
         return errorResponse("Reskin not found");
       }
       // Return
-      return reskin;
+      return { ...reskin, attached: isAttachedToOwner(reskin, usages) };
     }),
   removeReskin: protectedProcedure
     .meta({ mcp: { description: "Remove reskin from a jutsu" } })
@@ -1954,19 +2049,14 @@ export const fetchJutsu = async (client: DrizzleClient, id: string) => {
 };
 
 /**
- * Fetch a reskin for a user
+ * Fetch a reskin by ID, regardless of owner. Callers decide who may access it.
  * @param client - The database client
- * @param userId - The ID of the user to fetch the reskin for
  * @param reskinId - The ID of the reskin to fetch
  * @returns A promise that resolves to the result of the select
  */
-export const fetchUserReskin = async (
-  client: DrizzleClient,
-  userId: string,
-  reskinId: string,
-) => {
+export const fetchReskin = async (client: DrizzleClient, reskinId: string) => {
   return await client.query.jutsuReskin.findFirst({
-    where: and(eq(jutsuReskin.userId, userId), eq(jutsuReskin.id, reskinId)),
+    where: eq(jutsuReskin.id, reskinId),
     with: {
       jutsu: {
         with: {
@@ -1984,6 +2074,20 @@ export const fetchUserReskin = async (
       },
     },
   });
+};
+
+/**
+ * Whether the reskin's owner has it active on their copy of the reskinned jutsu
+ * @param reskin - The reskin, with its owner and base jutsu
+ * @param usages - The user jutsu rows that reference the reskin
+ */
+const isAttachedToOwner = (
+  reskin: { userId: string; jutsuId: string },
+  usages: { userId: string; jutsuId: string }[],
+) => {
+  return usages.some(
+    (usage) => usage.userId === reskin.userId && usage.jutsuId === reskin.jutsuId,
+  );
 };
 
 /**

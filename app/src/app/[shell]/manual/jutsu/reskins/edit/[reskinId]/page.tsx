@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import React, { use } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
@@ -33,6 +31,7 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
     { reskinId },
     { enabled: !!reskinId },
   );
+  const { data: jutsuNames } = api.jutsu.getAllNames.useQuery();
 
   // Form handling
   const form = useForm<JutsuReskinUpdateSchema>({
@@ -44,6 +43,9 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
       description: "",
       battleDescription: "",
       image: undefined,
+      username: "",
+      jutsuId: "",
+      attached: false,
       reason: "",
     },
     values:
@@ -53,6 +55,9 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
             description: reskin.description,
             battleDescription: reskin.battleDescription,
             image: reskin.image,
+            username: reskin.user?.username ?? "",
+            jutsuId: reskin.jutsuId,
+            attached: reskin.attached,
             reason: "",
           }
         : undefined,
@@ -64,7 +69,10 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.jutsu.getReskin.invalidate({ reskinId });
+          await Promise.all([
+            utils.jutsu.getReskin.invalidate({ reskinId }),
+            utils.jutsu.getAllReskins.invalidate(),
+          ]);
         }
       },
     });
@@ -91,6 +99,19 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
       href: reskinData?.image || undefined,
     },
     { id: "name", type: "text", label: "Reskin Name" },
+    { id: "username", type: "text", label: "Owner (username)" },
+    {
+      id: "jutsuId",
+      type: "db_values",
+      label: "Base Jutsu",
+      values: jutsuNames,
+      searchable: true,
+    },
+    {
+      id: "attached",
+      type: "boolean",
+      label: "Active on the owner's jutsu",
+    },
     {
       id: "description",
       type: "richinput",
@@ -110,7 +131,6 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
   ];
 
   const onAccept = async () => {
-    console.log("onAccept");
     const data = form.getValues();
     updateReskin({ reskinId, data });
   };
@@ -122,16 +142,6 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
       defaultBackHref="/manual/jutsu/reskins"
     >
       <div className="space-y-4">
-        <div>
-          <Label htmlFor="original-jutsu">Original Jutsu</Label>
-          <Input
-            id="original-jutsu"
-            value={reskin && !("success" in reskin) ? reskin.jutsu.name : ""}
-            disabled
-            className="mt-1"
-          />
-        </div>
-
         <EditContent
           schema={jutsuReskinUpdateSchema}
           form={form}
