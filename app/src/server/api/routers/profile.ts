@@ -1424,9 +1424,10 @@ export const profileRouter = createTRPCRouter({
 
       // Prepare jutsu & item id arrays for permission checks and later DB update
       const oldJutsuIds = target.jutsus.map((j) => j.jutsuId);
-      const newJutsuIds = input.data.jutsus ?? [];
+      // Omitted ownership lists leave inventory untouched; an explicit [] clears it.
+      const newJutsuIds = input.data.jutsus ?? oldJutsuIds;
       const oldItemIds = target.items.map((i) => i.itemId);
-      const newItemIds = input.data.items ?? [];
+      const newItemIds = input.data.items ?? oldItemIds;
 
       // Guard attribute-by-attribute permissions
       const usernameChanged = input.data.username !== target.username;
