@@ -760,6 +760,16 @@ export const showsItemLevelBadge = (item: {
   item.itemType !== "CRYSTAL" &&
   item.slot !== "THROWN";
 
+/** Consumables consolidate across ownership levels; gear keeps its progression. */
+export const getItemStackMergeBucketKey = (
+  item: Pick<Item, "itemType">,
+  row: Pick<
+    UserItemWithRelations,
+    "storedAtHome" | "equipped" | "activeVariantId" | "level"
+  >,
+) =>
+  `${row.storedAtHome ? "home" : "carry"}:${row.equipped}:${row.activeVariantId ?? "none"}:${item.itemType === "CONSUMABLE" ? "consumable" : row.level}`;
+
 /**
  * ActionSelector badge lists for user items: amber stack quantity (bottom-right)
  * for every stack, red ownership level (bottom-left) for leveling gear.
