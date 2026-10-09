@@ -48,35 +48,40 @@ export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> 
     return <Loader explanation="Loading data" />;
   }
 
-  // A stale or mistyped link resolves to null rather than an endless loader
-  if (!isPending && !data) {
-    return (
-      <ContentBox
-        title="Content Panel"
-        subtitle="Jutsu Management"
-        defaultBackHref="/manual/jutsu"
-      >
-        <p role="alert">
-          {isError
-            ? "This jutsu could not be loaded. Please try again."
-            : "This jutsu could not be found."}
-        </p>
-        {isError && (
-          <Button disabled={isFetching} onClick={() => void refetch()}>
-            {isFetching ? "Retrying..." : "Retry"}
-          </Button>
-        )}
-      </ContentBox>
-    );
-  }
+  const queryFeedback = (
+    <ContentBox
+      title="Content Panel"
+      subtitle="Jutsu Management"
+      defaultBackHref="/manual/jutsu"
+    >
+      <p role="alert">
+        {isError
+          ? data
+            ? "Latest jutsu details could not be loaded. The editor is showing previously loaded data."
+            : "This jutsu could not be loaded. Please try again."
+          : "This jutsu could not be found."}
+      </p>
+      {isError && (
+        <Button disabled={isFetching} onClick={() => void refetch()}>
+          {isFetching ? "Retrying..." : "Retry"}
+        </Button>
+      )}
+    </ContentBox>
+  );
+
+  // Missing records settle the loading state; failed refreshes keep the cached editor visible.
+  if (!isPending && !data) return queryFeedback;
   if (!data) return <Loader explanation="Loading data" />;
 
   return (
-    <SingleEditJutsu
-      jutsu={data}
-      refetch={refetch}
-      canSave={canChangeContent(userData.role)}
-    />
+    <>
+      {isError && queryFeedback}
+      <SingleEditJutsu
+        jutsu={data}
+        refetch={refetch}
+        canSave={canChangeContent(userData.role)}
+      />
+    </>
   );
 }
 
