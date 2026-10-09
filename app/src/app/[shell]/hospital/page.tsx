@@ -33,8 +33,7 @@ import { getStrucBoost } from "@/utils/village";
 
 export default function Hospital() {
   // Settings
-  const { userData, access, timeDiff, updateNotifications } =
-    useRequireInVillage("/hospital");
+  const { userData, access, timeDiff } = useRequireInVillage("/hospital");
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
   // Current interest
@@ -56,10 +55,16 @@ export default function Hospital() {
           regenAt: result.data.regenAt,
           status: "AWAKE",
         });
-        await updateNotifications(
-          utils.profile.getUser
-            .getData()
-            ?.notifications?.filter((n) => n.href !== "/hospital"),
+        // A newer hospitalization must retain its notification after reconciliation.
+        utils.profile.getUser.setData(undefined, (current) =>
+          current?.userData?.status === "AWAKE"
+            ? {
+                ...current,
+                notifications: current.notifications?.filter(
+                  (n) => n.href !== "/hospital",
+                ),
+              }
+            : undefined,
         );
       }
     },

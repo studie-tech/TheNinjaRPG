@@ -73,6 +73,34 @@ describe("confirmed user deltas", () => {
     test.close();
   });
 
+  it("replaces an initial pending snapshot after a mutation succeeds", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let resolveInitial!: (value: ReturnType<typeof profile>) => void;
+    let reads = 0;
+    const observer = new QueryObserver(client, {
+      queryKey: key,
+      queryFn: async () => {
+        reads++;
+        return reads === 1
+          ? new Promise<ReturnType<typeof profile>>((resolve) => { resolveInitial = resolve; })
+          : profile(90);
+      },
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    const revision = prepareUserDelta(client, key);
+    expect(revision).toBeUndefined();
+    expect(client.getQueryState(key)?.fetchStatus).toBe("fetching");
+
+    await applyUserDelta(client, key, { money: -10 }, revision);
+    resolveInitial(profile(100));
+    await Promise.resolve();
+    expect(reads).toBe(2);
+    expect(client.getQueryData(key)).toEqual(profile(90));
+    expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+    unsubscribe();
+    client.clear();
+  });
+
   it("does not debit twice when a refetch already contains the mutation", async () => {
     const test = setup();
     const revision = await prepareUserDelta(test.client, key);

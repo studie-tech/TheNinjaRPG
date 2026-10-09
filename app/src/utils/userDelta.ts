@@ -31,6 +31,9 @@ export const applyUserDelta = async (
   patch?: UserDeltaPatch,
 ) => {
   if (delta === undefined || revision === undefined) {
+    // Invalidation reuses an initial fetch without cached data. Cancel it first so
+    // a snapshot taken before the mutation cannot satisfy this reconciliation.
+    await client.cancelQueries({ queryKey: key, exact: true });
     await client.invalidateQueries({ queryKey: key, exact: true });
     return;
   }
