@@ -58,6 +58,20 @@ describe("clan committed cache responses", () => {
     expect(database.query.clan.findFirst).toHaveBeenCalledTimes(2);
   });
 
+  for (const amount of [0.5, 1.5, 1.6]) {
+    it(`rejects a fractional deposit of ${amount} before reading or writing balances`, async () => {
+      const database = databaseFor({}, {});
+      const caller = callerForDatabase(clanRouter, "clan-cache-user", database as never);
+      await expect(
+        caller.toBank({ clanId: "clan-cache-clan", amount }),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      expect(database.query.userData.findFirst).not.toHaveBeenCalled();
+      expect(database.query.clan.findFirst).not.toHaveBeenCalled();
+      expect(database.update).not.toHaveBeenCalled();
+      expect(database.insert).not.toHaveBeenCalled();
+    });
+  }
+
   it("returns the capped confirmed donation without reading the actor balance", async () => {
     const database = databaseFor(
       { reputationPoints: 85 },
@@ -223,46 +237,7 @@ describeWithDatabase("clan mutation cache balances", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  for (const [amount, debit, credit] of [
-    [0.5, 0, 1],
-    [1.5, 1, 2],
-    [1.6, 2, 2],
-  ] as const) {
-    it(`preserves SQL rounding and returns the exact debit for ${amount} ryo`, async () => {
-      const db = await getTestDatabase();
-      await insertUsers([
-        {
-          userId: "native-rounding-reference",
-          username: "NativeRoundReference",
-          money: 1000,
-        },
-      ]);
-      // Compare the endpoint's explicit debit with the previous native BIGINT assignment.
-      await db
-        .update(userData)
-        .set({ money: sql`${userData.money} - ${amount}` })
-        .where(eq(userData.userId, "native-rounding-reference"));
-      const reads = vi.spyOn(db.query.clan, "findFirst");
-      const caller = await callerFor(clanRouter, "clan-cache-user");
-      const result = await caller.toBank({ clanId: "clan-cache-clan", amount });
-      expect(result.success).toBe(true);
-      expect(result.userDelta).toEqual({ money: debit ? -debit : 0 });
-      expect(result.clanUpdate).toEqual({ id: "clan-cache-clan", bank: 500 + credit });
-      expect(reads).toHaveBeenCalledTimes(2);
-      const [storedUser, storedClan, reference] = await Promise.all([
-        db.query.userData.findFirst({ where: eq(userData.userId, "clan-cache-user") }),
-        db.query.clan.findFirst({ where: eq(clan.id, "clan-cache-clan") }),
-        db.query.userData.findFirst({
-          where: eq(userData.userId, "native-rounding-reference"),
-        }),
-      ]);
-      expect(storedUser?.money).toBe(1000 - debit);
-      expect(storedUser?.money).toBe(reference?.money);
-      expect(storedClan?.bank).toBe(500 + credit);
-    });
-  }
-
-  it("refunds the actual fractional debit without erasing an independent currency grant", async () => {
+  it("refunds the deposit without erasing an independent currency grant", async () => {
     const db = await getTestDatabase();
     const actualRead = db.query.clan.findFirst.bind(db.query.clan);
     const reads = vi.spyOn(db.query.clan, "findFirst").mockImplementation((async (
@@ -277,7 +252,7 @@ describeWithDatabase("clan mutation cache balances", () => {
       return snapshot;
     }) as never);
     const caller = await callerFor(clanRouter, "clan-cache-user");
-    const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 1.5 });
+    const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 25 });
     expect(result.success).toBe(false);
     expect(result.message).toContain("refunded");
     expect(result.userDelta).toBeUndefined();

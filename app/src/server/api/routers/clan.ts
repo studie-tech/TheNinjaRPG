@@ -83,6 +83,7 @@ import { getEffectiveStructureLevel } from "@/utils/village";
 import {
   checkAssassin,
   checkCoLeader,
+  clanBankDepositSchema,
   clanBoostTypeSchema,
   clanCreateSchema,
   clanGetRequestSchema,
@@ -1098,7 +1099,7 @@ export const clanRouter = createTRPCRouter({
     }),
   toBank: protectedProcedure
     .meta({ mcp: { description: "Deposit ryo to clan bank" } })
-    .input(z.object({ amount: z.number().min(0), clanId: z.string() }))
+    .input(clanBankDepositSchema)
     .output(
       baseServerResponse.extend({
         userDelta: userDeltaSchema.optional(),
@@ -1125,12 +1126,9 @@ export const clanRouter = createTRPCRouter({
           clanUpdate: { id: fetchedClan.id },
         };
       }
-      // The nonnegative BIGINT result rounds halves up, so subtracting amount charges
-      // ceil(amount - 0.5). Reuse that integer for compensation to refund exactly the debit.
-      const debitAmount = Math.ceil(input.amount - 0.5);
       const result = await ctx.drizzle
         .update(userData)
-        .set({ money: sql`${userData.money} - ${debitAmount}` })
+        .set({ money: sql`${userData.money} - ${input.amount}` })
         .where(and(eq(userData.userId, ctx.userId), gte(userData.money, input.amount)));
       if (result.rowsAffected === 0) {
         return { success: false, message: "Not enough money in pocket" };
@@ -1142,16 +1140,14 @@ export const clanRouter = createTRPCRouter({
       if (creditResult.rowsAffected === 0) {
         await ctx.drizzle
           .update(userData)
-          .set({ money: sql`${userData.money} + ${debitAmount}` })
+          .set({ money: sql`${userData.money} + ${input.amount}` })
           .where(eq(userData.userId, ctx.userId));
         return errorResponse("Clan bank no longer exists; your deposit was refunded");
       }
       return {
         success: true,
         message: `Successfully deposited ${input.amount} ryo`,
-        userDelta: needsUserRefresh
-          ? undefined
-          : { money: debitAmount ? -debitAmount : 0 },
+        userDelta: needsUserRefresh ? undefined : { money: -input.amount },
         clanUpdate: needsUserRefresh
           ? undefined
           : await ctx.drizzle.query.clan

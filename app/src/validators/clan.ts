@@ -9,6 +9,11 @@ import {
 
 export const clanBoostTypeSchema = z.enum(ClanBoostTypes);
 
+export const clanBankDepositSchema = z.object({
+  amount: z.number().int().min(0),
+  clanId: z.string(),
+});
+
 export const strictClanNameField = createReservedNameField({
   reserved: RESERVED_FACTION_NAMES,
   errorMessage: "This clan name is not allowed.",
