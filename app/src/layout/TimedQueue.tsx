@@ -23,7 +23,10 @@ interface TimedQueueProps {
   capacity: number;
   help: string;
   active?:
-    | (Omit<TimedQueueJob, "id"> & { onStop?: () => void; stopLabel?: string })
+    | (Omit<TimedQueueJob, "id" | "startsAt"> & {
+        onStop?: () => void;
+        stopLabel?: string;
+      })
     | null;
   waiting: TimedQueueJob[];
   onCancel?: (id: string) => void;

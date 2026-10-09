@@ -109,7 +109,6 @@ import {
   checkJutsuVillage,
   findJutsuInTraining,
   getTrainingSections,
-  inferJutsuTrainingStartedAt,
   isJutsuInTraining,
   isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,
@@ -1152,7 +1151,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const queuedJobs = trainingQueue?.waiting ?? [];
   const isQueueing = !!finishTrainingAt?.finishTraining || queuedJobs.length > 0;
   const isQueueFull =
-    isQueueing && 1 + queuedJobs.length >= (trainingQueue?.capacity ?? 1);
+    isQueueing &&
+    (finishTrainingAt?.finishTraining ? 1 : 0) + queuedJobs.length >=
+      (trainingQueue?.capacity ?? 1);
   const level = isQueueing
     ? (userJutsus?.find((uj) => uj.jutsuId === jutsu?.id)?.level ?? 0) +
       queuedJobs.filter((job) => job.jutsuId === jutsu?.id).length
@@ -1195,12 +1196,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     ? {
         title: finishTrainingAt.jutsu?.name ?? "Jutsu",
         detail: `level ${finishTrainingAt.level}`,
-        startsAt: inferJutsuTrainingStartedAt(
-          finishTrainingAt.finishTraining,
-          finishTrainingAt.jutsu,
-          finishTrainingAt.level,
-          userData,
-        ),
         finishesAt: finishTrainingAt.finishTraining,
         stopLabel: "Stop training (no refund)",
         onStop: isRefetchingUserJutsu ? undefined : () => cancel(),

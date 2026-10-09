@@ -69,11 +69,10 @@ export const MasteryTrainingQueue = ({
       capacity={getQueueTotalCapacity(user)}
       help="When the active session reaches its full interval, its gains are collected and the next queued mastery starts at that moment, also while you are offline or asleep. The last session waits for you to collect it. Capped masteries are skipped, and the queue pauses at the daily session limit."
       active={
-        user.currentlyTrainingMastery && activeEndsAt && user.masteryTrainingStartedAt
+        user.currentlyTrainingMastery && activeEndsAt
           ? {
               title: getLabel(user.currentlyTrainingMastery),
               detail: user.trainingSpeed,
-              startsAt: user.masteryTrainingStartedAt,
               finishesAt: activeEndsAt,
             }
           : null

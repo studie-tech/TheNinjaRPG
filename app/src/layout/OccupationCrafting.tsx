@@ -448,7 +448,8 @@ export default function OccupationCrafting() {
               isQueueFull={
                 (!!craftingStatus?.isCurrentlyCrafting ||
                   !!craftingQueue?.waiting.length) &&
-                1 + (craftingQueue?.waiting.length ?? 0) >=
+                (craftingStatus?.isCurrentlyCrafting ? 1 : 0) +
+                  (craftingQueue?.waiting.length ?? 0) >=
                   (craftingQueue?.capacity ?? 1)
               }
             />
@@ -467,7 +468,6 @@ export default function OccupationCrafting() {
             craftingStatus.currentCraftingItem
               ? {
                   title: craftingStatus.currentCraftingItem.name,
-                  startsAt: new Date(craftingStatus.craftingFinishedAt),
                   finishesAt: new Date(craftingStatus.craftingFinishedAt),
                 }
               : null
