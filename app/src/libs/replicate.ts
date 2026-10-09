@@ -249,7 +249,7 @@ type Txt2ImgConfig = {
 /**
  * Create an image from text using OpenAI
  * @param config The configuration for the image generation
- * @returns The URL of the image
+ * @returns The URLs of the uploaded images
  */
 export const txt2imgGPT = async (config: Txt2ImgConfig) => {
   const client = new OpenAI();
@@ -267,7 +267,8 @@ export const txt2imgGPT = async (config: Txt2ImgConfig) => {
   // Common config
   const commonConfig = {
     background: config.removeBg ? "transparent" : "auto",
-    model: "gpt-image-1",
+    model: "gpt-image-2.5-flare",
+    output_format: "png",
     size:
       config.size === "square"
         ? "1024x1024"

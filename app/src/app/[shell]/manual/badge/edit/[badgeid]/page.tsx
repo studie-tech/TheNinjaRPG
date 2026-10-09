@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import type { Badge } from "@/drizzle/schema";
-import ChatInputField from "@/layout/ChatInputField";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
@@ -12,7 +11,6 @@ import { SuggestChange } from "@/layout/SuggestChange";
 import { useBadgeEditForm } from "@/libs/badge";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
-import type { ZodBadgeType } from "@/validators/badge";
 import { BadgeValidator } from "@/validators/badge";
 
 export default function BadgeEdit(props: { params: Promise<{ badgeid: string }> }) {
@@ -70,32 +68,6 @@ const SingleEditBadge: React.FC<SingleEditBadgeProps> = (props) => {
       defaultBackHref="/manual/badge"
       backDisabled={isUpdating}
       noRightAlign={true}
-      topRightContent={
-        formData.find((e) => e.id === "description") ? (
-          <ChatInputField
-            inputProps={{
-              id: "chatInput",
-              placeholder: "Instruct ChatGPT to edit",
-            }}
-            aiProps={{
-              apiEndpoint: "/api/chat/badge",
-              systemMessage: `
-                Current badge data: ${JSON.stringify(form.getValues())}. 
-              `,
-            }}
-            disabled={isUpdating}
-            onToolCall={(toolCall) => {
-              if (isUpdating) return;
-              const data = toolCall.args as ZodBadgeType;
-              let key: keyof typeof data;
-              for (key in data) {
-                if (key !== "image") form.setValue(key, data[key]);
-              }
-              void form.trigger();
-            }}
-          />
-        ) : undefined
-      }
     >
       {!badge && <p>Could not find this badge</p>}
       {badge && (

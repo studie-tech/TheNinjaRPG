@@ -7,7 +7,6 @@ import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { Jutsu } from "@/drizzle/schema";
 import { useJutsuEditForm } from "@/hooks/jutsu";
-import ChatInputField from "@/layout/ChatInputField";
 import ContentBox from "@/layout/ContentBox";
 import { JutsuHelper } from "@/layout/ContentHelp";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
@@ -17,12 +16,7 @@ import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { ZodAllTags, ZodJutsuType } from "@/validators/combat";
-import {
-  DamageTag,
-  getTagSchema,
-  JutsuValidatorRawSchema,
-  tagTypes,
-} from "@/validators/combat";
+import { DamageTag, JutsuValidatorRawSchema, tagTypes } from "@/validators/combat";
 
 export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> }) {
   const params = use(props.params);
@@ -103,48 +97,7 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
         subtitle="Jutsu Management"
         defaultBackHref="/manual/jutsu"
         topRightContent={
-          <div className="flex flex-row gap-2">
-            {formData.find((e) => e.id === "description") ? (
-              <ChatInputField
-                inputProps={{
-                  id: "chatInput",
-                  placeholder: "Instruct ChatGPT to edit",
-                }}
-                aiProps={{
-                  apiEndpoint: "/api/chat/jutsu",
-                  systemMessage: `
-                  Current jutsu data: ${JSON.stringify(form.getValues())}. 
-                  Current effects: ${JSON.stringify(effects)}
-                `,
-                }}
-                onToolCall={(toolCall) => {
-                  const data = toolCall.args as ZodJutsuType;
-                  let key: keyof typeof data;
-                  for (key in data) {
-                    if (["villageId", "image"].includes(key)) {
-                    } else if (key === "effects") {
-                      const newEffects = data.effects
-                        .map((effect) => {
-                          const schema = getTagSchema(effect.type);
-                          const parsed = schema.safeParse(effect);
-                          if (parsed.success) {
-                            return parsed.data;
-                          } else {
-                            return undefined;
-                          }
-                        })
-                        .filter((e): e is NonNullable<typeof e> => e !== undefined);
-                      setEffects(newEffects);
-                    } else {
-                      form.setValue(key, data[key]);
-                    }
-                  }
-                  void form.trigger();
-                }}
-              />
-            ) : undefined}
-            <JutsuHelper jutsu={form.getValues() as unknown as ZodJutsuType} />
-          </div>
+          <JutsuHelper jutsu={form.getValues() as unknown as ZodJutsuType} />
         }
       >
         {!jutsu && <p>Could not find this jutsu</p>}

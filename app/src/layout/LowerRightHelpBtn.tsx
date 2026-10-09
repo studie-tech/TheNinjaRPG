@@ -79,20 +79,6 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
     return getValidTicketType(showActive);
   }, [showActive, getValidTicketType]);
 
-  // Handle tool calls from AI
-  const handleToolCall = useCallback((toolCall: any) => {
-    try {
-      // Implement specific tool call handling if needed
-      // Ensure we don't accidentally render the toolCall object
-      if (toolCall && typeof toolCall === "object") {
-        // Process the tool call but don't render it directly
-        return undefined;
-      }
-    } catch (error) {
-      console.error("Error in handleToolCall:", error);
-    }
-  }, []);
-
   // Safe setter for showActive that validates the value
   const setShowActiveSafe = useCallback(
     (value: any) => {
@@ -208,12 +194,6 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
               <p className="mb-2 font-bold text-lg">Get AI Help</p>
               <div className="h-[400px]">
                 <ChatBox
-                  aiProps={{
-                    apiEndpoint: "/api/chat/support",
-                    systemMessage:
-                      "You are Seichi AI, a helpful assistant for TheNinja-RPG players.",
-                  }}
-                  onToolCall={handleToolCall}
                   position="relative"
                   showCloseButton={false}
                   showHeader={false}

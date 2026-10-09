@@ -20,7 +20,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { MAX_ITEM_VARIANTS, VARIANT_COST_TYPES } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
-import ChatInputField from "@/layout/ChatInputField";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ItemHelper } from "@/layout/ContentHelp";
@@ -34,12 +33,7 @@ import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { ZodAllTags, ZodItemType } from "@/validators/combat";
-import {
-  DamageTag,
-  getTagSchema,
-  ItemValidatorRawSchema,
-  tagTypes,
-} from "@/validators/combat";
+import { DamageTag, ItemValidatorRawSchema, tagTypes } from "@/validators/combat";
 import type { ZodItemVariantType } from "@/validators/item";
 import { displayCostType, ItemVariantValidator } from "@/validators/item";
 
@@ -123,50 +117,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         subtitle="Item Management"
         defaultBackHref="/manual/item"
         topRightContent={
-          formData.find((e) => e.id === "description") ? (
-            <div className="flex items-center gap-2">
-              <ChatInputField
-                disabled={isUpdating}
-                inputProps={{
-                  id: "chatInput",
-                  placeholder: "Instruct ChatGPT to edit",
-                }}
-                aiProps={{
-                  apiEndpoint: "/api/chat/item",
-                  systemMessage: `
-                    Current item data: ${JSON.stringify(form.getValues())}. 
-                    Current effects: ${JSON.stringify(effects)}
-                  `,
-                }}
-                onToolCall={(toolCall) => {
-                  if (isUpdating) return;
-                  const data = toolCall.args as ZodItemType;
-                  let key: keyof typeof data;
-                  for (key in data) {
-                    if (["villageId", "image"].includes(key)) {
-                    } else if (key === "effects") {
-                      const newEffects = data.effects
-                        .map((effect) => {
-                          const schema = getTagSchema(effect.type);
-                          const parsed = schema.safeParse(effect);
-                          if (parsed.success) {
-                            return parsed.data;
-                          } else {
-                            return undefined;
-                          }
-                        })
-                        .filter((e): e is NonNullable<typeof e> => e !== undefined);
-                      setEffects(newEffects);
-                    } else {
-                      form.setValue(key, data[key]);
-                    }
-                  }
-                  void form.trigger();
-                }}
-              />
-              <ItemHelper item={form.getValues() as unknown as ZodItemType} />
-            </div>
-          ) : undefined
+          <ItemHelper item={form.getValues() as unknown as ZodItemType} />
         }
       >
         {!item && <p>Could not find this item</p>}

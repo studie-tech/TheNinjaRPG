@@ -1,13 +1,16 @@
 import { openai } from "@ai-sdk/openai";
 import { auth } from "@clerk/nextjs/server";
 import type { UIMessage } from "ai";
-import { stepCountIs, streamText } from "ai";
+import {
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  streamText,
+  toUIMessageStream,
+} from "ai";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { MAX_DAILY_AI_CALLS, OPENAI_CHAT_MODEL } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
-import { prepareChatPrompt } from "@/libs/llm";
 import { drizzleDB } from "@/server/db";
-import { BadgeValidator } from "@/validators/badge";
 
 export async function POST(req: Request) {
   // Auth guard
@@ -32,9 +35,7 @@ export async function POST(req: Request) {
 
   // Call LLM
   const { messages: uiMessages } = (await req.json()) as { messages: UIMessage[] };
-  const { system, messages } = await prepareChatPrompt(
-    uiMessages,
-    `
+  const instructions = `
 As an AI assistant, your role is to promptly assist the clients of TheNinja-RPG, adopting the persona of Seichi AI.
 
 This document outlines various screens, menus, and gameplay systems available in the game. Each section details a specific aspect of your in-game experience—from managing your character profile to engaging in combat and customizing advanced features.
@@ -459,20 +460,17 @@ This document outlines various screens, menus, and gameplay systems available in
   - Confer unique bonuses, modify elemental proficiencies, and alter damage outputs; effect power scales with character level.
 - **Bloodline Class:**  
   - Determines whether the jutsu class is "Highest" or class-locked.
-`,
+`;
+  const messages = await convertToModelMessages(
+    uiMessages.filter((message) => message.role !== "system"),
   );
   const result = streamText({
     model: openai(OPENAI_CHAT_MODEL),
-    system,
+    instructions,
     messages,
-    tools: {
-      updateBadge: {
-        description: "Update badge shown to the user",
-        inputSchema: BadgeValidator,
-      },
-    },
-    stopWhen: stepCountIs(2),
   });
 
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
