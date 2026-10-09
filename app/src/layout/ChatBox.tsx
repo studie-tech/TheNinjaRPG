@@ -2,13 +2,7 @@
 
 import { type UIMessage, useChat } from "@ai-sdk/react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  convertToModelMessages,
-  DefaultChatTransport,
-  getToolName,
-  isTextUIPart,
-  isToolUIPart,
-} from "ai";
+import { convertToModelMessages, DefaultChatTransport, isTextUIPart } from "ai";
 import { BrainCircuit, Meh, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -28,12 +22,6 @@ import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 import { type ChatMessageSchema, chatMessageSchema } from "@/validators/chat";
 
-interface ToolCall<NAME extends string, ARGS> {
-  toolCallId: string;
-  toolName: NAME;
-  args: ARGS;
-}
-
 export interface ChatBoxProps {
   className?: string;
   position?: "fixed" | "relative";
@@ -42,26 +30,13 @@ export interface ChatBoxProps {
   showHeader?: boolean;
   showFeedback?: boolean;
   autoFocus?: boolean;
-  aiProps: {
-    apiEndpoint: string;
-    systemMessage?: string;
-  };
-  onToolCall: (toolCall: ToolCall<string, unknown>) => void;
 }
 
-const getMessageText = (message: UIMessage): string => {
-  const textParts = message.parts.filter(isTextUIPart);
-  if (textParts.length > 0) {
-    return textParts.map((p) => p.text).join("");
-  }
-
-  const toolParts = message.parts.filter(isToolUIPart);
-  if (toolParts.length > 0) {
-    return toolParts.map((tool) => `Calling ${getToolName(tool)}`).join(", ");
-  }
-
-  return "";
-};
+const getMessageText = (message: UIMessage): string =>
+  message.parts
+    .filter(isTextUIPart)
+    .map((part) => part.text)
+    .join("");
 
 const ChatBox: React.FC<ChatBoxProps> = ({
   className,
@@ -71,8 +46,6 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   showHeader = true,
   showFeedback = true,
   autoFocus = true,
-  aiProps,
-  onToolCall,
 }) => {
   // State
   const { data: userData } = useUserData();
@@ -80,15 +53,6 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   const initialMessages: UIMessage[] = [
-    ...(aiProps.systemMessage
-      ? [
-          {
-            id: "system",
-            role: "system" as const,
-            parts: [{ type: "text" as const, text: aiProps.systemMessage }],
-          },
-        ]
-      : []),
     {
       id: "initial",
       role: "assistant" as const,
@@ -96,34 +60,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     },
   ];
 
-  const { messages, sendMessage, addToolOutput, status } = useChat({
-    transport: new DefaultChatTransport({ api: aiProps.apiEndpoint }),
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({ api: "/api/chat/support" }),
     messages: initialMessages,
-    onToolCall: ({ toolCall }) => {
-      try {
-        onToolCall({
-          toolCallId: toolCall.toolCallId,
-          toolName: toolCall.toolName,
-          args: toolCall.input,
-        });
-        // These tools update the editor draft; saving remains an explicit user action.
-        void addToolOutput({
-          tool: toolCall.toolName,
-          toolCallId: toolCall.toolCallId,
-          output: "Updated the editor draft. The user must save to persist changes.",
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Could not update draft";
-        void addToolOutput({
-          tool: toolCall.toolName,
-          toolCallId: toolCall.toolCallId,
-          state: "output-error",
-          errorText: message,
-        });
-        showMutationToast({ success: false, message });
-      }
-    },
     onError: (error) => {
       const message = error?.message || "Error sending message. Not allowed?";
       showMutationToast({ success: false, message: message });
@@ -150,7 +89,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
       const chatHistory = await convertToModelMessages(messages, {
         ignoreIncompleteToolCalls: true,
       });
-      submitFeedback({ apiRoute: aiProps.apiEndpoint, chatHistory, sentiment });
+      submitFeedback({ apiRoute: "/api/chat/support", chatHistory, sentiment });
     } catch (error) {
       showMutationToast({
         success: false,

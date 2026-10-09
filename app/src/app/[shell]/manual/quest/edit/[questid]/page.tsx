@@ -11,7 +11,6 @@ import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { Quest } from "@/drizzle/schema";
 import { useQuestEditForm } from "@/hooks/quest";
-import ChatInputField from "@/layout/ChatInputField";
 import ContentBox from "@/layout/ContentBox";
 import { QuestHelper } from "@/layout/ContentHelp";
 import { EditContent, ObjectiveFormWrapper } from "@/layout/EditContent";
@@ -22,14 +21,9 @@ import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
 import { verifyQuestObjectiveFlow } from "@/libs/quest";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
-import type {
-  AllObjectivesType,
-  ZodQuestFormType,
-  ZodQuestType,
-} from "@/validators/objectives";
+import type { AllObjectivesType, ZodQuestFormType } from "@/validators/objectives";
 import {
   allObjectiveTasks,
-  getObjectiveSchema,
   QuestFormRawSchema,
   SimpleObjective,
 } from "@/validators/objectives";
@@ -221,60 +215,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         subtitle="Quest Management"
         defaultBackHref="/manual/quest"
         noRightAlign={true}
-        topRightContent={
-          <div className="flex flex-row gap-2">
-            {!isUpdating && formData.find((e) => e.id === "description") ? (
-              <ChatInputField
-                inputProps={{
-                  id: "chatInput",
-                  placeholder: "Instruct ChatGPT to edit",
-                }}
-                aiProps={{
-                  apiEndpoint: "/api/chat/quest",
-                  systemMessage: `\n                  Current quest data: ${JSON.stringify(form.getValues())}. \n                  Current objectives: ${JSON.stringify(objectives)}\n                `,
-                }}
-                onToolCall={(toolCall) => {
-                  const data = toolCall.args as ZodQuestType;
-                  let key: keyof typeof data;
-                  for (key in data) {
-                    if (
-                      [
-                        "requiredVillage",
-                        "reward_items",
-                        "reward_jutsus",
-                        "reward_badges",
-                        "reward_bloodlines",
-                        "reward_sage_modes",
-                        "reward_rank",
-                        "reward_village_membership",
-                        "attackers",
-                        "image",
-                      ].includes(key)
-                    ) {
-                    } else if (key === "content") {
-                      const newObjectives: AllObjectivesType[] | undefined =
-                        data.content?.objectives?.map((objective) => {
-                          const schema = getObjectiveSchema(objective.task);
-                          const parsed = schema.safeParse({
-                            ...objective,
-                            id: nanoid(5),
-                          });
-                          return parsed.success ? parsed.data : objective;
-                        });
-                      if (newObjectives) {
-                        setObjectives(newObjectives);
-                      }
-                    } else {
-                      form.setValue(key, data[key], { shouldDirty: true });
-                    }
-                  }
-                  void form.trigger();
-                }}
-              />
-            ) : undefined}
-            {currentValues && <QuestHelper quest={currentValues} />}
-          </div>
-        }
+        topRightContent={currentValues && <QuestHelper quest={currentValues} />}
       >
         {!props.quest && <p>Could not find this item</p>}
         {props.quest && (

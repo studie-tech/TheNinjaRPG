@@ -1256,7 +1256,6 @@ export const USER_CAPS: Record<
 
 // OpenAI models
 export const OPENAI_REVIEW_MODEL = "gpt-6-luna";
-export const OPENAI_CONTENT_MODEL = "gpt-6-luna";
 export const OPENAI_MODERATION_MODEL = "gpt-4o-mini";
 export const OPENAI_CHAT_MODEL = "gpt-4o-mini";
 
