@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -10,7 +10,13 @@ import {
   OCCUPATION_CHANGE_COOLDOWN_DAYS,
   OCCUPATIONS,
 } from "@/drizzle/constants";
-import { item, userData, userItem, userItemImbuement } from "@/drizzle/schema";
+import {
+  item,
+  userCraftingQueue,
+  userData,
+  userItem,
+  userItemImbuement,
+} from "@/drizzle/schema";
 import {
   calculateItemConsumption,
   craftingStartBlockMessage,
@@ -24,6 +30,7 @@ import {
   getInventoryBucketFullMessage,
 } from "@/libs/item";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getNextQueueSchedule } from "@/libs/queue";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import {
   fetchItemWithCraftingRequirements,
@@ -40,9 +47,20 @@ import {
   getNextUserSnapshotAt,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
+import {
+  cancelQueuedCraft,
+  fetchCraftingQueue,
+  hasQueueRoom,
+  settleCraftingQueue,
+} from "@/server/utils/timedQueue";
+import { getQueueTotalCapacity } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
+import {
+  cancelQueuedJobInputSchema,
+  craftingQueueOutputSchema,
+} from "@/validators/train";
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure
@@ -106,13 +124,16 @@ export const occupationRouter = createTRPCRouter({
       // Read userData before inventory. Every capacity mutation commits both rows
       // atomically and bumps updatedAt, so this ordering gives the later CAS a
       // consistent boundary even when another request commits between the reads.
+      // Start any queued craft whose turn has come, so the decision below sees it.
+      await settleCraftingQueue(ctx.drizzle, ctx.userId);
       const { user } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
-      const [itemWithRequirements, useritems] = await Promise.all([
+      const [itemWithRequirements, useritems, waiting] = await Promise.all([
         fetchItemWithCraftingRequirements(ctx.drizzle, input.itemId),
         fetchUserItems(ctx.drizzle, ctx.userId),
+        fetchCraftingQueue(ctx.drizzle, ctx.userId),
       ]);
       // Derived
       const currentlyCrafting = useritems.find(
@@ -128,10 +149,10 @@ export const occupationRouter = createTRPCRouter({
       if (!itemWithRequirements) {
         return errorResponse("Item not found");
       }
-      if (currentlyCrafting) {
-        return errorResponse(
-          "You are already crafting an item. Please wait for it to finish.",
-        );
+      // Behind a running craft, this one waits in the queue with its materials taken.
+      const isQueued = !!currentlyCrafting || waiting.length > 0;
+      if (isQueued && !hasQueueRoom(user, waiting.length)) {
+        return errorResponse("Your crafting queue is full");
       }
       if (itemWithRequirements.hidden) {
         return errorResponse("This item is hidden and cannot be crafted");
@@ -222,6 +243,10 @@ export const occupationRouter = createTRPCRouter({
 
       // Calculate crafting finish time
       const finishTime = new Date(Date.now() + craftSeconds * 1000);
+      const queueSchedule = getNextQueueSchedule(
+        craftSeconds,
+        waiting.at(-1)?.finishesAt ?? currentlyCrafting?.craftingFinishedAt,
+      );
 
       // Execute crafting: consume materials and create crafting item
       // Calculate consumption for each requirement
@@ -304,8 +329,13 @@ export const occupationRouter = createTRPCRouter({
             .update(userData)
             .set({
               updatedAt: getNextUserSnapshotAt(user.updatedAt),
-              craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
-              questData: questDataForDb,
+              // A queued craft earns its experience and quest progress when it starts.
+              ...(isQueued
+                ? {}
+                : {
+                    craftingExperience: sql`${userData.craftingExperience} + ${expGain}`,
+                    questData: questDataForDb,
+                  }),
             })
             .where(
               and(
@@ -338,7 +368,31 @@ export const occupationRouter = createTRPCRouter({
             if (materialResult.rowsAffected !== 1) throw materialConflict;
           }
 
-          await tx.insert(userItem).values(craftingItemValues);
+          if (isQueued) {
+            await tx.insert(userCraftingQueue).values({
+              id: nanoid(),
+              userId: ctx.userId,
+              itemId: input.itemId,
+              quantity: input.quantity,
+              materials: allConsumptions.flatMap((consumption) => {
+                const source = useritems.find((ui) => ui.id === consumption.userItemId);
+                return source
+                  ? [
+                      {
+                        userItemId: source.id,
+                        itemId: source.itemId,
+                        quantity: consumption.consumeQuantity,
+                        storedAtHome: source.storedAtHome,
+                      },
+                    ]
+                  : [];
+              }),
+              durationSeconds: craftSeconds,
+              ...queueSchedule,
+            });
+          } else {
+            await tx.insert(userItem).values(craftingItemValues);
+          }
           return true;
         });
         if (!craftCommitted) {
@@ -355,11 +409,76 @@ export const occupationRouter = createTRPCRouter({
         throw error;
       }
 
+      if (isQueued) {
+        return {
+          success: true,
+          message: `Queued ${input.quantity}x ${itemWithRequirements.name}. Starts in ${formatSecondsToTimeDisplay(Math.max(0, Math.round((queueSchedule.startsAt.getTime() - Date.now()) / 1000)))}.`,
+          finishTime: queueSchedule.finishesAt.toISOString(),
+        };
+      }
       return {
         success: true,
         message: `Started crafting ${input.quantity}x ${itemWithRequirements.name}. ${expGain > 0 ? `+${expGain} EXP.` : ""} Ready in ${formatSecondsToTimeDisplay(craftSeconds)}.`,
         finishTime: finishTime.toISOString(),
       };
+    }),
+
+  getCraftingQueue: protectedProcedure
+    .meta({ mcp: { description: "Get crafts queued behind the active craft" } })
+    .output(craftingQueueOutputSchema)
+    .query(async ({ ctx }) => {
+      // Reading the queue starts crafts whose turn has come.
+      await settleCraftingQueue(ctx.drizzle, ctx.userId);
+      const [user, waiting] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchCraftingQueue(ctx.drizzle, ctx.userId),
+      ]);
+      const materialIds = [
+        ...new Set(waiting.flatMap((entry) => entry.materials.map((m) => m.itemId))),
+      ];
+      const materialItems = materialIds.length
+        ? await ctx.drizzle
+            .select({ id: item.id, name: item.name })
+            .from(item)
+            .where(inArray(item.id, materialIds))
+        : [];
+      const materialNames = new Map(materialItems.map((row) => [row.id, row.name]));
+      return {
+        capacity: getQueueTotalCapacity(user),
+        waiting: waiting.map((entry) => ({
+          id: entry.id,
+          itemId: entry.itemId,
+          name: entry.item?.name ?? "Removed item",
+          image: entry.item?.image ?? null,
+          quantity: entry.quantity,
+          durationSeconds: entry.durationSeconds,
+          startsAt: entry.startsAt,
+          finishesAt: entry.finishesAt,
+          materials: Object.values(
+            entry.materials.reduce<Record<string, { name: string; quantity: number }>>(
+              (sum, material) => {
+                const name = materialNames.get(material.itemId) ?? "Unknown item";
+                sum[material.itemId] = {
+                  name,
+                  quantity: (sum[material.itemId]?.quantity ?? 0) + material.quantity,
+                };
+                return sum;
+              },
+              {},
+            ),
+          ),
+        })),
+      };
+    }),
+
+  cancelQueuedCraft: protectedProcedure
+    .meta({ mcp: { description: "Cancel a queued craft and return its materials" } })
+    .input(cancelQueuedJobInputSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const cancelled = await cancelQueuedCraft(ctx.drizzle, ctx.userId, input.queueId);
+      if (!cancelled) return errorResponse("That queued craft already started");
+      return { success: true, message: "Queued craft cancelled, materials returned" };
     }),
 
   imbueItem: protectedProcedure

@@ -68,6 +68,7 @@ import {
 } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { fetchQueuedJutsuIds } from "@/server/utils/timedQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUnique } from "@/utils/grouping";
@@ -1136,6 +1137,16 @@ export const updateBloodline = async (
         })
       ).map((j) => j.id)
     : [];
+  // Queued levels were bought for the current bloodline; the player cancels them for a
+  // refund first. A level queued after this check is refunded when its turn comes.
+  if (bloodlineJutsus.length > 0) {
+    const queued = await fetchQueuedJutsuIds(client, user.userId);
+    if (bloodlineJutsus.some((id) => queued.has(id))) {
+      throw new BloodlineGrantRejectedError(
+        "Cancel queued training of your bloodline jutsu before changing bloodline",
+      );
+    }
+  }
   // Update user first, with a CAS on both reputation (atomic decrement, floor guard) and the
   // caller's pre-state bloodlineId (prevents a raced/duplicate grant from re-spending reputation
   // or clobbering a bloodline someone else already changed).

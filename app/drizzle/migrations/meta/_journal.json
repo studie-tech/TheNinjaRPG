@@ -421,6 +421,13 @@
       "when": 1791462881245,
       "tag": "0059_lumpy_vin_gonzales",
       "breakpoints": false
+    },
+    {
+      "idx": 60,
+      "version": "5",
+      "when": 1791539168156,
+      "tag": "0060_red_pride",
+      "breakpoints": false
     }
   ]
 }

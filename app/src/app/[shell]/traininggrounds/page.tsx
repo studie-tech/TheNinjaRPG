@@ -84,10 +84,12 @@ import JutsuFiltering, {
 } from "@/layout/JutsuFiltering";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { MasteryTrainingQueue } from "@/layout/MasteryTrainingQueue";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
 import { calcCurrent } from "@/layout/StatusBar";
+import { TimedQueue } from "@/layout/TimedQueue";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showTrainingCapcha } from "@/libs/captcha";
@@ -107,6 +109,7 @@ import {
   checkJutsuVillage,
   findJutsuInTraining,
   getTrainingSections,
+  inferJutsuTrainingStartedAt,
   isJutsuInTraining,
   isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,
@@ -899,6 +902,13 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
           {pendingOverlay}
         </ContentBox>
       )}
+      {props.section === "Masteries" && (
+        <MasteryTrainingQueue
+          user={userData}
+          timeDiff={timeDiff}
+          getLabel={getTrainingLabel}
+        />
+      )}
     </>
   );
 };
@@ -1013,6 +1023,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         }
         await Promise.all([
           utils.jutsu.getUserJutsus.invalidate(),
+          utils.jutsu.getTrainingQueue.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
         ]);
       },
@@ -1029,6 +1040,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         showMutationToast(data);
         await Promise.all([
           utils.jutsu.getUserJutsus.invalidate(),
+          utils.jutsu.getTrainingQueue.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
         ]);
       },
@@ -1039,8 +1051,24 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
+  // Levels waiting behind the active training
+  const { data: trainingQueue } = api.jutsu.getTrainingQueue.useQuery(undefined, {
+    enabled: !!userData,
+  });
+  const { mutate: cancelQueued, isPending: isCancellingQueued } =
+    api.jutsu.cancelQueuedTraining.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await Promise.all([
+          utils.jutsu.getTrainingQueue.invalidate(),
+          utils.jutsu.getUserJutsus.invalidate(),
+          utils.profile.getUser.invalidate(),
+        ]);
+      },
+    });
+
   // Mutation loading
-  const isPending = isStartingTrain || isStoppingTrain;
+  const isPending = isStartingTrain || isStoppingTrain || isCancellingQueued;
 
   // Selecting a jutsu restyles every tile of the grid and mounts or unmounts the confirm
   // modal; as a transition that render no longer blocks the tap's next paint.
@@ -1119,8 +1147,16 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Training time
   const finishTrainingAt = findJutsuInTraining(userJutsus, serverNow);
 
-  // Derived calculations
-  const level = userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
+  // Derived calculations. Behind an active training the level is queued: it builds on
+  // the stored level plus the levels of this jutsu already waiting.
+  const queuedJobs = trainingQueue?.waiting ?? [];
+  const isQueueing = !!finishTrainingAt?.finishTraining || queuedJobs.length > 0;
+  const isQueueFull =
+    isQueueing && 1 + queuedJobs.length >= (trainingQueue?.capacity ?? 1);
+  const level = isQueueing
+    ? (userJutsus?.find((uj) => uj.jutsuId === jutsu?.id)?.level ?? 0) +
+      queuedJobs.filter((job) => job.jutsuId === jutsu?.id).length
+    : userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
   const trainSeconds =
     jutsu &&
     getTimeLeftStr(
@@ -1132,7 +1168,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const okBloodline = checkJutsuBloodline(jutsu, userData);
   const canAfford = userData && cost && userData.money >= cost;
   const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
-  const canTrain = okRank && okVillage && okBloodline && !isCapped && canAfford;
+  const canTrain =
+    okRank && okVillage && okBloodline && !isCapped && canAfford && !isQueueFull;
 
   // Label for proceed button
   let proceed_label: string | undefined;
@@ -1147,127 +1184,144 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       proceed_label = `Wrong village`;
     } else if (!okBloodline) {
       proceed_label = `Wrong bloodline`;
+    } else if (isQueueFull) {
+      proceed_label = `Training queue full`;
     } else if (trainSeconds && cost) {
-      proceed_label = `Train [${trainSeconds}, ${cost} ryo]`;
+      proceed_label = `${isQueueing ? "Queue" : "Train"} [${trainSeconds}, ${cost} ryo]`;
     }
   }
 
-  return (
-    <ContentBox
-      title="Techniques"
-      subtitle="Jutsu Techniques"
-      defaultBackHref={props.initialBreak ? undefined : "/village"}
-      initialBreak={props.initialBreak}
-      topRightContent={
-        <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
+  const activeTraining = finishTrainingAt?.finishTraining
+    ? {
+        title: finishTrainingAt.jutsu?.name ?? "Jutsu",
+        detail: `level ${finishTrainingAt.level}`,
+        startsAt: inferJutsuTrainingStartedAt(
+          finishTrainingAt.finishTraining,
+          finishTrainingAt.jutsu,
+          finishTrainingAt.level,
+          userData,
+        ),
+        finishesAt: finishTrainingAt.finishTraining,
+        stopLabel: "Stop training (no refund)",
+        onStop: isRefetchingUserJutsu ? undefined : () => cancel(),
       }
-    >
-      <JutsuStatQuickFilters state={state} />
-      {userData && (
-        // The grid grows with the page; a minimum height through the first load keeps
-        // the box from collapsing and jumping when the jutsu arrive.
-        <div className={cn("pt-3", !jutsus && "min-h-[320px]")}>
-          <ActionSelector
-            gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))]"
-            items={alljutsus}
-            counts={userJutsuCounts}
-            selectedId={jutsu?.id}
-            labelSingles={true}
-            emptyText="No jutsu available for your rank"
-            onClick={(id) => {
-              if (id === jutsu?.id) {
-                setJutsuConfirmOpen(false);
-              } else {
-                const selected = alljutsus?.find((jutsu) => jutsu.id === id);
-                startTransition(() => {
-                  setJutsu(selected);
-                  setIsOpen(true);
-                });
-              }
-            }}
-            showBgColor={false}
-            showLabels={true}
-            lastElement={lastElement}
-            setLastElement={setLastElement}
-          />
-          {isOpen && jutsu && (
-            <Modal
-              id="tutorial-traininggrounds-trainJutsu"
-              title="Confirm Purchase"
-              proceed_label={proceed_label}
-              isOpen={isOpen}
-              setIsOpen={setJutsuConfirmOpen}
-              isValid={false}
-              onClose={() => startTransition(() => setJutsu(undefined))}
-              onAccept={() => {
-                if (canTrain && !isPending) {
-                  train({ jutsuId: jutsu.id });
-                } else {
+    : null;
+
+  return (
+    <>
+      <ContentBox
+        title="Techniques"
+        subtitle="Jutsu Techniques"
+        defaultBackHref={props.initialBreak ? undefined : "/village"}
+        initialBreak={props.initialBreak}
+        topRightContent={
+          <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
+        }
+      >
+        <JutsuStatQuickFilters state={state} />
+        {userData && (
+          // The grid grows with the page; a minimum height through the first load keeps
+          // the box from collapsing and jumping when the jutsu arrive.
+          <div className={cn("pt-3", !jutsus && "min-h-[320px]")}>
+            <ActionSelector
+              gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))]"
+              items={alljutsus}
+              counts={userJutsuCounts}
+              selectedId={jutsu?.id}
+              labelSingles={true}
+              emptyText="No jutsu available for your rank"
+              onClick={(id) => {
+                if (id === jutsu?.id) {
                   setJutsuConfirmOpen(false);
+                } else {
+                  const selected = alljutsus?.find((jutsu) => jutsu.id === id);
+                  startTransition(() => {
+                    setJutsu(selected);
+                    setIsOpen(true);
+                  });
                 }
               }}
-              confirmClassName={
-                canTrain
-                  ? "bg-blue-600 text-white hover:bg-blue-700"
-                  : "bg-red-600 text-white hover:bg-red-700"
-              }
-            >
-              <div className="relative">
-                <p className="pb-3">
-                  You have {userData.money.toLocaleString()} ryo in your pocket
-                </p>
-                {!isPending && (
-                  <ItemWithEffects
-                    item={jutsu}
-                    key={jutsu.id}
-                    showStatistic="jutsu"
-                    showEvolutions
-                  />
-                )}
-                {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
-              </div>
-            </Modal>
-          )}
-        </div>
-      )}
-      {/* Below the in-progress training overlay (z-20), so its countdown and cancel stay usable */}
-      {/* The list can be taller than the screen, so overlay content sticks in view */}
-      {isFetching && (
-        <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
-          <div className="sticky top-24 flex justify-center py-16">
-            <Loader explanation="Loading jutsu" />
+              showBgColor={false}
+              showLabels={true}
+              lastElement={lastElement}
+              setLastElement={setLastElement}
+            />
+            {isOpen && jutsu && (
+              <Modal
+                id="tutorial-traininggrounds-trainJutsu"
+                title="Confirm Purchase"
+                proceed_label={proceed_label}
+                isOpen={isOpen}
+                setIsOpen={setJutsuConfirmOpen}
+                isValid={false}
+                onClose={() => startTransition(() => setJutsu(undefined))}
+                onAccept={() => {
+                  if (canTrain && !isPending) {
+                    train({ jutsuId: jutsu.id });
+                  } else {
+                    setJutsuConfirmOpen(false);
+                  }
+                }}
+                confirmClassName={
+                  canTrain
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                }
+              >
+                <div className="relative">
+                  <p className="pb-3">
+                    You have {userData.money.toLocaleString()} ryo in your pocket
+                  </p>
+                  {!isPending && (
+                    <ItemWithEffects
+                      item={jutsu}
+                      key={jutsu.id}
+                      showStatistic="jutsu"
+                      showEvolutions
+                    />
+                  )}
+                  {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
+                </div>
+              </Modal>
+            )}
           </div>
-        </div>
-      )}
-      {finishTrainingAt?.finishTraining && (
-        <div className="min-h-36">
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 bg-black opacity-90">
-            <div className="sticky top-24 py-10 text-center text-white">
-              <p className="p-5 text-3xl">Training</p>
-              <p className="text-2xl">
-                Time Left:{" "}
-                <Countdown
-                  targetDate={finishTrainingAt.finishTraining}
-                  timeDiff={timeDiff}
-                  onFinish={async () => {
-                    setTrainingFinishedAt(Date.now());
-                    await utils.jutsu.getUserJutsus.invalidate();
-                  }}
-                />
-              </p>
-              {!isRefetchingUserJutsu && (
-                <XCircle
-                  className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-                  onClick={() => {
-                    cancel();
-                  }}
-                />
-              )}
+        )}
+        {/* The list can be taller than the screen, so the loader sticks in view */}
+        {isFetching && (
+          <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
+            <div className="sticky top-24 flex justify-center py-16">
+              <Loader explanation="Loading jutsu" />
             </div>
           </div>
-        </div>
-      )}
-    </ContentBox>
+        )}
+      </ContentBox>
+      <TimedQueue
+        title="Jutsu training queue"
+        subtitle="Levels that start when the active training ends"
+        capacity={trainingQueue?.capacity ?? 1}
+        help="Select a jutsu while another is training to queue its next level. Its ryo is paid when queued and refunded if you cancel it before it starts. Queued levels start one after another, also while you are offline; a level that became cheaper by then refunds the difference."
+        active={activeTraining}
+        waiting={queuedJobs.map((job) => ({
+          id: job.id,
+          title: job.name,
+          detail: `${job.reservedRyo.toLocaleString()} ryo`,
+          startsAt: job.startsAt,
+          finishesAt: job.finishesAt,
+        }))}
+        cancelLabel="Cancel and refund"
+        onCancel={(queueId) => cancelQueued({ queueId })}
+        isPending={isPending}
+        timeDiff={timeDiff}
+        emptyText="Nothing in training. Select a jutsu above to start."
+        onActiveFinish={async () => {
+          setTrainingFinishedAt(Date.now());
+          await Promise.all([
+            utils.jutsu.getUserJutsus.invalidate(),
+            utils.jutsu.getTrainingQueue.invalidate(),
+          ]);
+        }}
+      />
+    </>
   );
 };
 

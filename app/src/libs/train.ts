@@ -3,6 +3,7 @@ import type {
   CombatStatName,
   ElementName,
   LetterRank,
+  MasteryName,
   TrainingSpeed,
 } from "@/drizzle/constants";
 import {
@@ -46,6 +47,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { secondsFromDate, secondsPassed } from "@/utils/time";
 import { getShrineBoost, getStrucBoost } from "@/utils/village";
+import type { MasteryTrainingQueueEntry } from "@/validators/train";
 import { getUserElements } from "@/validators/user";
 
 type UserStatData = Pick<
@@ -834,6 +836,118 @@ export const trainingBoost = (
       (100 + (warSetting?.value ?? 0))) /
     100
   );
+};
+
+/** Mastery gained by a timed session of `elapsedSeconds`, before the rank cap. */
+export const calcMasteryTrainingAmount = (
+  user: NonNullable<UserWithRelations>,
+  settings: GameSetting[],
+  elapsedSeconds: number,
+) =>
+  trainingBoost(user, settings) *
+  Math.min(Math.floor(energyPerSecond(user.trainingSpeed) * elapsedSeconds), 100) *
+  trainEfficiency(user) *
+  trainingMultiplier(user);
+
+/** When each queued mastery session runs, chained from the end of the active one. */
+export const getMasteryQueueSchedule = (
+  user: Pick<
+    UserData,
+    | "masteryTrainingStartedAt"
+    | "currentlyTrainingMastery"
+    | "trainingSpeed"
+    | "masteryTrainingQueue"
+  >,
+  now = new Date(),
+) => {
+  let cursor = masteryTrainingEndsAt(user) ?? now;
+  return (user.masteryTrainingQueue ?? []).map((entry) => {
+    const startsAt = cursor;
+    cursor = secondsFromDate(trainingSpeedSeconds(entry.speed), startsAt);
+    return { ...entry, startsAt, finishesAt: cursor };
+  });
+};
+
+/** Why a queued mastery session cannot start in place of the finished one, or null. */
+export const queuedMasteryStartBlockMessage = (
+  user: Pick<UserData, "isBanned" | "dailyTrainings">,
+  entry: MasteryTrainingQueueEntry,
+) => {
+  if (user.isBanned && entry.speed !== "8hrs")
+    return "Only 8hrs training interval allowed when banned";
+  if (user.dailyTrainings >= MAX_DAILY_TRAININGS)
+    return `Training more than ${MAX_DAILY_TRAININGS} times within 24 hours not allowed`;
+  return null;
+};
+
+/**
+ * Advance the mastery queue past every session that ran its full interval. Each finished
+ * session is collected as if stopped at its end, and the next entry starts at that moment,
+ * so the result does not depend on when the account is next refreshed. A session with
+ * nothing queued behind it stays active for the player to collect. Capped entries are
+ * dropped; a blocked start (daily limit, banned interval) pauses the queue.
+ */
+export const settleMasteryTrainingQueue = (
+  user: NonNullable<UserWithRelations>,
+  settings: GameSetting[],
+  now = new Date(),
+) => {
+  const queue = [...(user.masteryTrainingQueue ?? [])];
+  const { mastery_cap } = getUserCaps(user.rank);
+  const gains: Partial<Record<MasteryName, number>> = {};
+  const completed: {
+    stat: MasteryName;
+    amount: number;
+    minutes: number;
+    speed: TrainingSpeed;
+    finishedAt: Date;
+  }[] = [];
+  let current = user.currentlyTrainingMastery;
+  let startedAt = user.masteryTrainingStartedAt;
+  let speed = user.trainingSpeed;
+  let dailyTrainings = user.dailyTrainings;
+  const room = (stat: MasteryName) =>
+    Math.max(0, mastery_cap - user[stat] - (gains[stat] ?? 0));
+  while (current && startedAt) {
+    while (queue[0] && room(queue[0].stat) === 0) queue.shift();
+    const next = queue[0];
+    if (!next) break;
+    const seconds = trainingSpeedSeconds(speed);
+    const finishedAt = secondsFromDate(seconds, startedAt);
+    if (finishedAt > now) break;
+    const amount = Math.min(
+      room(current),
+      calcMasteryTrainingAmount({ ...user, trainingSpeed: speed }, settings, seconds),
+    );
+    const nextDaily = dailyTrainings + (amount > 0 ? 1 : 0);
+    if (queuedMasteryStartBlockMessage({ ...user, dailyTrainings: nextDaily }, next))
+      break;
+    if (amount > 0) {
+      gains[current] = (gains[current] ?? 0) + amount;
+      completed.push({
+        stat: current,
+        amount,
+        minutes: seconds / 60,
+        speed,
+        finishedAt,
+      });
+    }
+    dailyTrainings = nextDaily;
+    queue.shift();
+    current = next.stat;
+    startedAt = finishedAt;
+    speed = next.speed;
+  }
+  return {
+    advanced: queue.length !== (user.masteryTrainingQueue ?? []).length,
+    masteryTrainingQueue: queue,
+    currentlyTrainingMastery: current,
+    masteryTrainingStartedAt: startedAt,
+    trainingSpeed: speed,
+    dailyTrainings,
+    gains,
+    completed,
+  };
 };
 
 /** Settle one-time entries chronologically, so offline spending frees capacity for later ticks. */

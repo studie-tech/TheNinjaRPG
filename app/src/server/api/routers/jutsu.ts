@@ -44,6 +44,7 @@ import {
   skillTree,
   userData,
   userJutsu,
+  userJutsuTrainingQueue,
 } from "@/drizzle/schema";
 import {
   deletedReason,
@@ -71,6 +72,7 @@ import {
 import { effectiveMasteries } from "@/libs/mastery";
 import { validateUserUpdateReason } from "@/libs/moderator";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getNextQueueSchedule } from "@/libs/queue";
 import { callDiscordContent } from "@/libs/socials";
 import {
   calcJutsuEquipLimit,
@@ -100,8 +102,15 @@ import {
   backfillLoadouts,
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
+import {
+  cancelQueuedJutsuTraining,
+  fetchJutsuTrainingQueue,
+  fetchQueuedJutsuIds,
+  hasQueueRoom,
+  settleJutsuTrainingQueue,
+} from "@/server/utils/timedQueue";
 import { calculateContentDiff } from "@/utils/diff";
-import { fedJutsuLoadouts } from "@/utils/paypal";
+import { fedJutsuLoadouts, getQueueTotalCapacity } from "@/utils/paypal";
 import {
   canChangeContent,
   canEditJutsus,
@@ -125,6 +134,10 @@ import {
 import { renameLoadoutSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import { QuestTracker } from "@/validators/objectives";
+import {
+  cancelQueuedJobInputSchema,
+  jutsuTrainingQueueOutputSchema,
+} from "@/validators/train";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 
 export const jutsuRouter = createTRPCRouter({
@@ -157,9 +170,10 @@ export const jutsuRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const transfer = input.transferLevels;
-      const [user, userJutsus, recentTransfers] = await Promise.all([
+      const [user, userJutsus, queuedJutsuIds, recentTransfers] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
+        fetchQueuedJutsuIds(ctx.drizzle, ctx.userId),
         ctx.drizzle.query.actionLog.findMany({
           where: and(
             eq(actionLog.userId, ctx.userId),
@@ -179,6 +193,10 @@ export const jutsuRouter = createTRPCRouter({
         (t.changes as string[]).some((c) => c.includes("Used free transfer.")),
       );
       // Guard
+      if (queuedJutsuIds.has(input.fromJutsuId) || queuedJutsuIds.has(input.toJutsuId))
+        return errorResponse(
+          "Cancel queued training of these jutsu before transferring",
+        );
       if (!fromJutsu) return errorResponse("Source jutsu not found");
       if (!toJutsu) return errorResponse("Target jutsu not found");
       if (fromJutsu.parentJutsuId)
@@ -503,8 +521,16 @@ export const jutsuRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const userjutsus = await fetchUserJutsus(ctx.drizzle, ctx.userId);
+      const [userjutsus, queuedJutsuIds] = await Promise.all([
+        fetchUserJutsus(ctx.drizzle, ctx.userId),
+        fetchQueuedJutsuIds(ctx.drizzle, ctx.userId),
+      ]);
       const userjutsuObj = userjutsus.find((j) => j.id === input.id);
+      if (userjutsuObj && queuedJutsuIds.has(userjutsuObj.jutsuId)) {
+        return errorResponse(
+          "Cancel queued training of this jutsu before forgetting it",
+        );
+      }
       if (userjutsuObj) {
         const res1 = await ctx.drizzle
           .delete(userJutsu)
@@ -546,20 +572,27 @@ export const jutsuRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, userJutsus, evolutionJutsu, allLoadouts, conflictingReskin] =
-        await Promise.all([
-          fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
-          fetchUserJutsus(ctx.drizzle, ctx.userId),
-          fetchJutsu(ctx.drizzle, input.evolutionJutsuId),
-          fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
-          ctx.drizzle.query.jutsuReskin.findFirst({
-            where: and(
-              eq(jutsuReskin.userId, ctx.userId),
-              eq(jutsuReskin.jutsuId, input.evolutionJutsuId),
-            ),
-            columns: { id: true },
-          }),
-        ]);
+      const [
+        { user },
+        userJutsus,
+        evolutionJutsu,
+        allLoadouts,
+        conflictingReskin,
+        queuedJutsuIds,
+      ] = await Promise.all([
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchUserJutsus(ctx.drizzle, ctx.userId),
+        fetchJutsu(ctx.drizzle, input.evolutionJutsuId),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.jutsuReskin.findFirst({
+          where: and(
+            eq(jutsuReskin.userId, ctx.userId),
+            eq(jutsuReskin.jutsuId, input.evolutionJutsuId),
+          ),
+          columns: { id: true },
+        }),
+        fetchQueuedJutsuIds(ctx.drizzle, ctx.userId),
+      ]);
       // Guards
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
@@ -571,6 +604,8 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("This evolution is not yet available");
       const userJutsuObj = userJutsus.find((j) => j.id === input.userJutsuId);
       if (!userJutsuObj) return errorResponse("You don't own this jutsu");
+      if (queuedJutsuIds.has(userJutsuObj.jutsuId))
+        return errorResponse("Cancel queued training of this jutsu before evolving it");
       if (isJutsuInTraining(userJutsuObj, Date.now()))
         return errorResponse(
           "This jutsu is currently being trained. Wait for training to complete before evolving.",
@@ -1004,7 +1039,9 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [data, info, userjutsus, students] = await Promise.all([
+      // Start any queued level whose turn has come, so the decision below sees it.
+      await settleJutsuTrainingQueue(ctx.drizzle, ctx.userId);
+      const [data, info, userjutsus, students, waiting] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -1012,6 +1049,7 @@ export const jutsuRouter = createTRPCRouter({
         fetchJutsu(ctx.drizzle, input.jutsuId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
         fetchStudents(ctx.drizzle, ctx.userId),
+        fetchJutsuTrainingQueue(ctx.drizzle, ctx.userId),
       ]);
       const { user } = data;
       if (!user) return errorResponse("User not found");
@@ -1051,15 +1089,57 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("You have already evolved this jutsu");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
 
-      const level = userjutsuObj ? userjutsuObj.level : 0;
+      // Levels already queued for this jutsu count toward the one being bought.
+      const level =
+        (userjutsuObj ? userjutsuObj.level : 0) +
+        waiting.filter((entry) => entry.jutsuId === input.jutsuId).length;
       if (level >= JUTSU_LEVEL_CAP) {
         return errorResponse("Jutsu is already at max level");
       }
       if (info.hidden && !canChangeContent(user.role)) {
         return errorResponse("Jutsu is hidden, cannot be trained");
       }
-      if (findJutsuInTraining(userjutsus, Date.now())) {
-        return errorResponse("You are already training a jutsu");
+      const active = findJutsuInTraining(userjutsus, Date.now());
+      if (active || waiting.length > 0) {
+        if (!hasQueueRoom(user, waiting.length)) {
+          return errorResponse("Your jutsu training queue is full");
+        }
+        // Check-then-insert: concurrent enqueues of one account can overfill the queue
+        // by a slot; each paid for its own level, which settlement still trains.
+        const queuedCost = calcJutsuTrainCost(info, level, user, students);
+        const durationSeconds = Math.ceil(calcJutsuTrainTime(info, level, user) / 1000);
+        const schedule = getNextQueueSchedule(
+          durationSeconds,
+          waiting.at(-1)?.finishesAt ?? active?.finishTraining,
+        );
+        const reserved = await ctx.drizzle
+          .update(userData)
+          .set({ money: sql`${userData.money} - ${queuedCost}` })
+          .where(and(eq(userData.userId, ctx.userId), gte(userData.money, queuedCost)));
+        if (reserved.rowsAffected !== 1) {
+          return errorResponse("You don't have enough money");
+        }
+        try {
+          await ctx.drizzle.insert(userJutsuTrainingQueue).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            jutsuId: input.jutsuId,
+            reservedRyo: queuedCost,
+            durationSeconds,
+            ...schedule,
+          });
+        } catch (error) {
+          await ctx.drizzle
+            .update(userData)
+            .set({ money: sql`${userData.money} + ${queuedCost}` })
+            .where(eq(userData.userId, ctx.userId));
+          throw error;
+        }
+        return {
+          success: true,
+          message: `Queued ${info.name} level ${level + 1}`,
+          data: { money: user.money - queuedCost, questData: user.questData ?? null },
+        };
       }
 
       // Time & cost
@@ -1217,10 +1297,57 @@ export const jutsuRouter = createTRPCRouter({
         .where(
           and(eq(userJutsu.id, userjutsuObj.id), eq(userJutsu.userId, ctx.userId)),
         );
+      // The next queued level starts now instead of in the stopped training's slot.
+      await settleJutsuTrainingQueue(ctx.drizzle, ctx.userId);
 
       return {
         success: true,
         message: `You stopped training: ${userjutsuObj.jutsu?.name}`,
+      };
+    }),
+
+  getTrainingQueue: protectedProcedure
+    .meta({
+      mcp: { description: "Get jutsu levels queued behind the active training" },
+    })
+    .output(jutsuTrainingQueueOutputSchema)
+    .query(async ({ ctx }) => {
+      // Reading the queue starts levels whose turn has come.
+      await settleJutsuTrainingQueue(ctx.drizzle, ctx.userId);
+      const [user, waiting] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchJutsuTrainingQueue(ctx.drizzle, ctx.userId),
+      ]);
+      return {
+        capacity: getQueueTotalCapacity(user),
+        waiting: waiting.map((entry) => ({
+          id: entry.id,
+          jutsuId: entry.jutsuId,
+          name: entry.jutsu?.name ?? "Removed jutsu",
+          image: entry.jutsu?.image ?? null,
+          reservedRyo: entry.reservedRyo,
+          durationSeconds: entry.durationSeconds,
+          startsAt: entry.startsAt,
+          finishesAt: entry.finishesAt,
+        })),
+      };
+    }),
+
+  cancelQueuedTraining: protectedProcedure
+    .meta({ mcp: { description: "Cancel a queued jutsu level and refund its ryo" } })
+    .input(cancelQueuedJobInputSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const refunded = await cancelQueuedJutsuTraining(
+        ctx.drizzle,
+        ctx.userId,
+        input.queueId,
+      );
+      if (refunded === null)
+        return errorResponse("That queued training already started");
+      return {
+        success: true,
+        message: `Queued training cancelled, ${refunded.toLocaleString()} ryo refunded`,
       };
     }),
 

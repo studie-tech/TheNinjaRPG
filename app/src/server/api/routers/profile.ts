@@ -21,7 +21,7 @@ import {
 import { alias } from "drizzle-orm/mysql-core";
 import { customAlphabet, nanoid } from "nanoid";
 import { z } from "zod";
-import type { CombatStatName } from "@/drizzle/constants";
+import type { CombatStatName, MasteryName } from "@/drizzle/constants";
 import {
   ACTION_LOG_RELATED_MSG_MAX_LENGTH,
   ACTIVE_VOTING_SITES,
@@ -152,6 +152,7 @@ import {
   getReducedGainsDays,
   inferJutsuTrainingStartedAt,
   settleEnergyTrainingQueue,
+  settleMasteryTrainingQueue,
 } from "@/libs/train";
 import { fetchSquad, removeFromSquad } from "@/routers/anbu";
 import { fetchClan, removeFromClan } from "@/routers/clan";
@@ -3159,17 +3160,28 @@ export const fetchUpdatedUser = async (props: {
       queuedTraining &&
       (ticks > 0 ||
         queuedTraining.energyTrainingQueue.length !== user.energyTrainingQueue?.length);
+    // Mastery sessions queued behind a finished one start at its end, whenever this runs.
+    const queuedMastery =
+      user.masteryTrainingQueue?.length && user.currentlyTrainingMastery
+        ? settleMasteryTrainingQueue(user, settings, now)
+        : null;
+    const masteryTrainingSession = {
+      currentlyTrainingMastery: user.currentlyTrainingMastery,
+      masteryTrainingStartedAt: user.masteryTrainingStartedAt,
+    };
     if (
       newDay ||
       hasQueueProgress ||
+      queuedMastery?.advanced ||
       sinceUpdate > 300 || // Update user in database every 5 minutes only so as to reduce server load
       forceRegen || // Hard overwrite for e.g. debugging or simply ensuring updated user
       (user.villagePrestige < 0 && !user.isOutlaw) // To trigger getting kicked out of village
     ) {
       const originalUpdatedAt = user.updatedAt;
-      const queuedTrainingSnapshot = user.energyTrainingQueue?.length
-        ? { ...user, questData: structuredClone(user.questData) }
-        : null;
+      const queuedTrainingSnapshot =
+        user.energyTrainingQueue?.length || queuedMastery?.advanced
+          ? { ...user, questData: structuredClone(user.questData) }
+          : null;
       const regen = user.regeneration * ticks;
       user.curHealth = Math.min(user.curHealth + regen, user.maxHealth);
       user.curStamina = Math.min(user.curStamina + regen, user.maxStamina);
@@ -3189,6 +3201,23 @@ export const fetchUpdatedUser = async (props: {
         if (trained > 0)
           user.questData = filterQuestTrackersForDbPersist(
             getNewTrackers(user, [{ task: "stats_trained", increment: trained }])
+              .trackers,
+            user,
+          );
+      }
+      if (queuedMastery?.advanced) {
+        for (const [stat, amount] of Object.entries(queuedMastery.gains)) {
+          user[stat as MasteryName] += amount;
+        }
+        user.masteryTrainingQueue = queuedMastery.masteryTrainingQueue;
+        user.currentlyTrainingMastery = queuedMastery.currentlyTrainingMastery;
+        user.masteryTrainingStartedAt = queuedMastery.masteryTrainingStartedAt;
+        user.trainingSpeed = queuedMastery.trainingSpeed;
+        user.dailyTrainings = queuedMastery.dailyTrainings;
+        const minutes = queuedMastery.completed.reduce((sum, e) => sum + e.minutes, 0);
+        if (minutes > 0)
+          user.questData = filterQuestTrackersForDbPersist(
+            getNewTrackers(user, [{ task: "minutes_training", increment: minutes }])
               .trackers,
             user,
           );
@@ -3215,6 +3244,9 @@ export const fetchUpdatedUser = async (props: {
           forceRegen: forceRegen ?? false,
           originalUpdatedAt,
           queuedTraining,
+          queuedMastery: queuedMastery?.advanced
+            ? { ...queuedMastery, original: masteryTrainingSession }
+            : null,
         });
         if (!persisted) {
           // Another mutation won the snapshot. Use its current pools and version rather than
@@ -3324,6 +3356,7 @@ const persistPassiveRegenToDb = async ({
   forceRegen,
   originalUpdatedAt,
   queuedTraining,
+  queuedMastery,
 }: {
   client: DrizzleClient;
   userId: string;
@@ -3332,6 +3365,14 @@ const persistPassiveRegenToDb = async ({
   forceRegen: boolean;
   originalUpdatedAt: Date;
   queuedTraining?: ReturnType<typeof settleEnergyTrainingQueue> | null;
+  queuedMastery?:
+    | (ReturnType<typeof settleMasteryTrainingQueue> & {
+        original: Pick<
+          UserData,
+          "currentlyTrainingMastery" | "masteryTrainingStartedAt"
+        >;
+      })
+    | null;
 }) => {
   const includeVillageState = forceRegen || (user.villagePrestige < 0 && user.isOutlaw);
 
@@ -3386,6 +3427,17 @@ const persistPassiveRegenToDb = async ({
     derivedUserUpdate.experience = user.experience;
   }
 
+  if (queuedMastery) {
+    derivedUserUpdate.masteryTrainingQueue = queuedMastery.masteryTrainingQueue;
+    derivedUserUpdate.currentlyTrainingMastery = queuedMastery.currentlyTrainingMastery;
+    derivedUserUpdate.masteryTrainingStartedAt = queuedMastery.masteryTrainingStartedAt;
+    derivedUserUpdate.trainingSpeed = queuedMastery.trainingSpeed;
+    derivedUserUpdate.dailyTrainings = queuedMastery.dailyTrainings;
+    for (const stat of Object.keys(queuedMastery.gains)) {
+      derivedUserUpdate[stat] = user[stat as MasteryName];
+    }
+  }
+
   // A delayed regeneration must not restore pools from before a heal or another user claim.
   // claimUserSnapshot advances updatedAt and writes the regeneration fields together.
   delete derivedUserUpdate.updatedAt;
@@ -3409,6 +3461,23 @@ const persistPassiveRegenToDb = async ({
             eq(userData.rank, user.rank),
           ]
         : []),
+      // The settled session must still be the one that was read.
+      ...(queuedMastery
+        ? [
+            queuedMastery.original.currentlyTrainingMastery
+              ? eq(
+                  userData.currentlyTrainingMastery,
+                  queuedMastery.original.currentlyTrainingMastery,
+                )
+              : isNull(userData.currentlyTrainingMastery),
+            queuedMastery.original.masteryTrainingStartedAt
+              ? eq(
+                  userData.masteryTrainingStartedAt,
+                  queuedMastery.original.masteryTrainingStartedAt,
+                )
+              : isNull(userData.masteryTrainingStartedAt),
+          ]
+        : []),
     ],
     set: derivedUserUpdate,
   });
@@ -3427,6 +3496,21 @@ const persistPassiveRegenToDb = async ({
         );
       } catch (error) {
         Sentry.captureException(error, { tags: { source: "energyTrainingQueueLog" } });
+      }
+    }
+    if (queuedMastery?.completed.length) {
+      try {
+        await client.insert(trainingLog).values(
+          queuedMastery.completed.map((entry) => ({
+            userId,
+            stat: entry.stat,
+            amount: entry.amount,
+            speed: entry.speed,
+            trainingFinishedAt: entry.finishedAt,
+          })),
+        );
+      } catch (error) {
+        Sentry.captureException(error, { tags: { source: "masteryTrainingQueueLog" } });
       }
     }
   }

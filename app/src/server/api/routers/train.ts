@@ -8,14 +8,13 @@ import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
-  energyPerSecond,
+  calcMasteryTrainingAmount,
   getTrainingMultiplierBoost,
   masteryTrainingBlockMessage,
+  queuedMasteryStartBlockMessage,
   statTrainingBlockMessage,
-  trainEfficiency,
   trainingBoost,
   trainingEnergyMessage,
-  trainingMultiplier,
 } from "@/libs/train";
 import { validateCaptcha } from "@/routers/misc";
 import type { UserWithRelations } from "@/routers/profile";
@@ -28,7 +27,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { getQueueTotalCapacity } from "@/utils/paypal";
+import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
 import {
   startMasteryTrainingInputSchema,
@@ -39,6 +38,7 @@ import {
   stopTrainingInputSchema,
   trainingLogInputSchema,
   updateEnergyTrainingQueueInputSchema,
+  updateMasteryTrainingQueueInputSchema,
   updateTrainingSpeedInputSchema,
 } from "@/validators/train";
 
@@ -90,6 +90,52 @@ export const trainRouter = createTRPCRouter({
         message: input.entries.length
           ? "Training queue saved"
           : "Training queue cleared",
+      };
+    }),
+
+  updateMasteryTrainingQueue: protectedProcedure
+    .meta({
+      mcp: { description: "Replace the masteries queued behind mastery training" },
+    })
+    .input(updateMasteryTrainingQueueInputSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+      });
+      if (!user) return errorResponse("User not found");
+      const expected = user.masteryTrainingQueue ?? [];
+      if (JSON.stringify(expected) !== JSON.stringify(input.expectedEntries))
+        return errorResponse(
+          "Your mastery queue changed. Please refresh and try again",
+        );
+      // Removing entries is always allowed; adding requires an active session to queue behind.
+      if (input.entries.length > expected.length) {
+        if (!user.currentlyTrainingMastery)
+          return errorResponse("Start a mastery training before queueing more");
+        if (input.entries.length > getQueueWaitingSlots(user))
+          return errorResponse("Mastery queue is full");
+        const { mastery_cap } = getUserCaps(user.rank);
+        if (input.entries.some((entry) => user[entry.stat] >= mastery_cap))
+          return errorResponse("A queued mastery is already capped");
+        const block = input.entries
+          .map((entry) => queuedMasteryStartBlockMessage(user, entry))
+          .find(Boolean);
+        if (block) return errorResponse(block);
+      }
+      const claim = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: { masteryTrainingQueue: input.entries },
+      });
+      if (!claim.success)
+        return errorResponse("Your mastery queue changed. Please try again");
+      return {
+        success: true,
+        message: input.entries.length ? "Mastery queue saved" : "Mastery queue cleared",
       };
     }),
 
@@ -243,14 +289,30 @@ export const trainRouter = createTRPCRouter({
               user,
             )
           : undefined;
+      // The next queued mastery starts as this session is collected.
+      const queue = (user.masteryTrainingQueue ?? []).filter((entry) =>
+        entry.stat === trained
+          ? user[trained] + gained < mastery_cap
+          : user[entry.stat] < mastery_cap,
+      );
+      const next = queue[0];
+      const startsNext =
+        !!next &&
+        !queuedMasteryStartBlockMessage(
+          { ...user, dailyTrainings: user.dailyTrainings + (gained > 0 ? 1 : 0) },
+          next,
+        );
+      const startedNextAt = new Date();
       // Claim exactly the session read above so concurrent collections cannot reuse it.
       const result = await claimUserSnapshot({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
         set: {
-          masteryTrainingStartedAt: null,
-          currentlyTrainingMastery: null,
+          masteryTrainingStartedAt: startsNext ? startedNextAt : null,
+          currentlyTrainingMastery: startsNext ? next.stat : null,
+          masteryTrainingQueue: startsNext ? queue.slice(1) : queue,
+          ...(startsNext ? { trainingSpeed: next.speed } : {}),
           ...(gained > 0
             ? {
                 dailyTrainings: sql`dailyTrainings + 1`,
@@ -282,9 +344,10 @@ export const trainRouter = createTRPCRouter({
       }
       const capNote =
         gained < trainingAmount ? ` (capped at ${mastery_cap.toLocaleString()})` : "";
+      const nextNote = startsNext ? `. Started queued ${next.stat} training` : "";
       return {
         success: true,
-        message: `You gained ${gained.toFixed(2)} ${trained}${capNote}`,
+        message: `You gained ${gained.toFixed(2)} ${trained}${capNote}${nextNote}`,
         data: {
           amount: gained,
           currentlyTrainingMastery: trained,
@@ -337,17 +400,11 @@ export const calcTrainingAmount = (
   settings: Awaited<ReturnType<typeof fetchUpdatedUser>>["settings"],
   startedAt: Date,
 ) => ({
-  trainingAmount:
-    trainingBoost(user, settings) *
-    Math.min(
-      Math.floor(
-        energyPerSecond(user.trainingSpeed) *
-          secondsPassed(startedAt, undefined, false),
-      ),
-      100,
-    ) *
-    trainEfficiency(user) *
-    trainingMultiplier(user),
+  trainingAmount: calcMasteryTrainingAmount(
+    user,
+    settings,
+    secondsPassed(startedAt, undefined, false),
+  ),
 });
 
 const explainRejectedStart = async (ctx: {

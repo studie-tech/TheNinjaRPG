@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { EnergyTrainingQueueEntry } from "@/validators/train";
+import type {
+  CraftingQueueMaterial,
+  EnergyTrainingQueueEntry,
+  MasteryTrainingQueueEntry,
+} from "@/validators/train";
 import {
   mysqlTable,
   boolean,
@@ -2529,6 +2533,9 @@ export const userData = mysqlTable(
       .default("15min")
       .notNull(),
     energyTrainingQueue: json("energyTrainingQueue").$type<EnergyTrainingQueueEntry[]>(),
+    masteryTrainingQueue: json("masteryTrainingQueue").$type<
+      MasteryTrainingQueueEntry[]
+    >(),
     masteryTrainingStartedAt: datetime("masteryTrainingStartedAt", {
       mode: "date",
       fsp: 3,
@@ -3170,6 +3177,82 @@ export type UserJutsuWithRelations = UserJutsu & {
   jutsu: Jutsu;
   activeReskin: JutsuReskin | null;
 };
+
+/**
+ * Jutsu levels waiting behind the jutsu in training. Ryo is reserved on enqueue; a row
+ * becomes ordinary `UserJutsu` training when it starts and is deleted at that moment.
+ */
+export const userJutsuTrainingQueue = mysqlTable(
+  "UserJutsuTrainingQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    jutsuId: varchar("jutsuId", { length: 191 }).notNull(),
+    reservedRyo: int("reservedRyo", { unsigned: true }).notNull(),
+    durationSeconds: int("durationSeconds", { unsigned: true }).notNull(),
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
+    finishesAt: datetime("finishesAt", { mode: "date", fsp: 3 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userStartsIdx: index("UserJutsuTrainingQueue_userId_startsAt_idx").on(
+      table.userId,
+      table.startsAt,
+    ),
+    startsIdx: index("UserJutsuTrainingQueue_startsAt_idx").on(table.startsAt),
+    jutsuIdx: index("UserJutsuTrainingQueue_jutsuId_idx").on(table.jutsuId),
+  }),
+);
+export type UserJutsuTrainingQueue = InferSelectModel<typeof userJutsuTrainingQueue>;
+
+export const userJutsuTrainingQueueRelations = relations(
+  userJutsuTrainingQueue,
+  ({ one }) => ({
+    jutsu: one(jutsu, {
+      fields: [userJutsuTrainingQueue.jutsuId],
+      references: [jutsu.id],
+    }),
+  }),
+);
+
+/**
+ * Crafts waiting behind the item being crafted. Materials are taken on enqueue and kept
+ * on the row so a cancellation can return them; output, crafting experience and quest
+ * progress are granted when the craft starts, as for a direct craft.
+ */
+export const userCraftingQueue = mysqlTable(
+  "UserCraftingQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+    quantity: int("quantity", { unsigned: true }).notNull(),
+    materials: json("materials").$type<CraftingQueueMaterial[]>().notNull(),
+    durationSeconds: int("durationSeconds", { unsigned: true }).notNull(),
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
+    finishesAt: datetime("finishesAt", { mode: "date", fsp: 3 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userStartsIdx: index("UserCraftingQueue_userId_startsAt_idx").on(
+      table.userId,
+      table.startsAt,
+    ),
+    startsIdx: index("UserCraftingQueue_startsAt_idx").on(table.startsAt),
+  }),
+);
+export type UserCraftingQueue = InferSelectModel<typeof userCraftingQueue>;
+
+export const userCraftingQueueRelations = relations(userCraftingQueue, ({ one }) => ({
+  item: one(item, {
+    fields: [userCraftingQueue.itemId],
+    references: [item.id],
+  }),
+}));
 
 export const userJutsuRelations = relations(userJutsu, ({ one }) => ({
   jutsu: one(jutsu, {
