@@ -129,7 +129,6 @@ describe("Diffuse damage resolution", () => {
       {
         power: 20,
         calculation: "static",
-        statTypes: ["Ninjutsu"],
         rounds: 3,
       },
       runtime(),
@@ -215,7 +214,6 @@ describe("Diffuse damage resolution", () => {
         power: 50,
         rounds: 3,
         calculation: "percentage",
-        statTypes: ["Ninjutsu"],
       },
       runtime(),
     );
@@ -275,7 +273,6 @@ describe("Diffuse damage resolution", () => {
       {
         power: 20,
         calculation: "static",
-        statTypes: ["Ninjutsu"],
         rounds: 3,
       },
       runtime("attacker"),
@@ -374,7 +371,6 @@ describe("Diffuse damage resolution", () => {
         power: 50,
         rounds: 3,
         calculation: "percentage",
-        statTypes: ["Ninjutsu"],
       },
       runtime(),
     );
