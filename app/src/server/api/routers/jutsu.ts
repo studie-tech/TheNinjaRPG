@@ -1758,9 +1758,10 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse(aiCheck.comment);
       }
 
-      // Update database and log
-      await Promise.all([
-        ctx.drizzle
+      // Update database and log. The owner/jutsu move and the user jutsu attachment
+      // span several rows, so they commit or roll back together.
+      await ctx.drizzle.transaction(async (tx) => {
+        await tx
           .update(jutsuReskin)
           .set({
             userId: targetUser.userId,
@@ -1771,29 +1772,22 @@ export const jutsuRouter = createTRPCRouter({
             image: cosmetics.image ?? reskin.image,
             updatedAt: new Date(),
           })
-          .where(eq(jutsuReskin.id, reskin.id)),
-        ...(detachIds.length > 0
-          ? [
-              ctx.drizzle
-                .update(userJutsu)
-                .set({ reskinId: null, updatedAt: new Date() })
-                .where(
-                  and(
-                    inArray(userJutsu.id, detachIds),
-                    eq(userJutsu.reskinId, reskin.id),
-                  ),
-                ),
-            ]
-          : []),
-        ...(shouldAttach
-          ? [
-              ctx.drizzle
-                .update(userJutsu)
-                .set({ reskinId: reskin.id, updatedAt: new Date() })
-                .where(eq(userJutsu.id, targetUserJutsu.id)),
-            ]
-          : []),
-        ctx.drizzle.insert(actionLog).values({
+          .where(eq(jutsuReskin.id, reskin.id));
+        if (detachIds.length > 0) {
+          await tx
+            .update(userJutsu)
+            .set({ reskinId: null, updatedAt: new Date() })
+            .where(
+              and(inArray(userJutsu.id, detachIds), eq(userJutsu.reskinId, reskin.id)),
+            );
+        }
+        if (shouldAttach) {
+          await tx
+            .update(userJutsu)
+            .set({ reskinId: reskin.id, updatedAt: new Date() })
+            .where(eq(userJutsu.id, targetUserJutsu.id));
+        }
+        await tx.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
           tableName: "jutsu",
@@ -1801,8 +1795,8 @@ export const jutsuRouter = createTRPCRouter({
           relatedId: targetJutsu.id,
           relatedMsg: `Reskin updated: ${targetJutsu.name}`,
           relatedImage: cosmetics.image ?? reskin.image,
-        }),
-      ]);
+        });
+      });
 
       return { success: true, message: "Jutsu reskin updated successfully" };
     }),
