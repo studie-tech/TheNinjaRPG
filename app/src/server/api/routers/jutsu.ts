@@ -268,7 +268,12 @@ export const jutsuRouter = createTRPCRouter({
 
       return {
         success: true,
-        data: await fetchUserBalances(ctx.drizzle, ctx.userId),
+        data:
+          !needsReputation || transferCost === 0
+            ? user.energyTrainingQueue?.length
+              ? undefined
+              : {}
+            : await fetchUserBalances(ctx.drizzle, ctx.userId, ["reputationPoints"]),
         message: needsReputation
           ? `Level transferred for ${transferCost} reputation points`
           : "Level transferred for free",

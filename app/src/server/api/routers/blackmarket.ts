@@ -197,7 +197,7 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: "Offer created",
-        data: await fetchUserBalances(ctx.drizzle, ctx.userId),
+        data: await fetchUserBalances(ctx.drizzle, ctx.userId, ["reputationPoints"]),
       };
     }),
   delistOffer: protectedProcedure
@@ -235,7 +235,12 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: "Offer delisted",
-        data: await fetchUserBalances(ctx.drizzle, ctx.userId),
+        data:
+          creatorId === ctx.userId
+            ? await fetchUserBalances(ctx.drizzle, ctx.userId, ["reputationPoints"])
+            : user.energyTrainingQueue?.length
+              ? undefined
+              : {},
       };
     }),
   takeOffer: protectedProcedure
@@ -385,7 +390,10 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: `Bought ${offer.repsForSale} reputation points for ${offer.requestedRyo} ryo.`,
-        data: await fetchUserBalances(ctx.drizzle, ctx.userId),
+        data: await fetchUserBalances(ctx.drizzle, ctx.userId, [
+          "money",
+          "reputationPoints",
+        ]),
       };
     }),
   // Update custom title
@@ -426,32 +434,30 @@ export const blackMarketRouter = createTRPCRouter({
           and(
             eq(userData.userId, ctx.userId),
             eq(userData.customTitle, user.customTitle),
+            eq(userData.reputationPoints, user.reputationPoints),
             gte(userData.reputationPoints, COST_CUSTOM_TITLE),
           ),
         );
       if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
+        return errorResponse("Your profile or reputation changed. Please try again");
       } else {
-        const [data] = await Promise.all([
-          ctx.drizzle.query.userData
-            .findFirst({
-              columns: { customTitle: true, reputationPoints: true },
-              where: eq(userData.userId, ctx.userId),
-            })
-            .catch(handleUserCacheReadError),
-          ctx.drizzle.insert(actionLog).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            tableName: "user",
-            changes: [
-              `Custom title changed from ${user.customTitle} to ${input.title}`,
-            ],
-            relatedId: ctx.userId,
-            relatedMsg: `Update: ${user.customTitle} -> ${input.title}`,
-            relatedImage: user.avatarLight,
-          }),
-        ]);
-        return { success: true, message: "Custom title updated", data };
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "user",
+          changes: [`Custom title changed from ${user.customTitle} to ${input.title}`],
+          relatedId: ctx.userId,
+          relatedMsg: `Update: ${user.customTitle} -> ${input.title}`,
+          relatedImage: user.avatarLight,
+        });
+        return {
+          success: true,
+          message: "Custom title updated",
+          data: {
+            customTitle: input.title,
+            reputationPoints: user.reputationPoints - COST_CUSTOM_TITLE,
+          },
+        };
       }
     }),
   changeUserGender: protectedProcedure
@@ -476,19 +482,18 @@ export const blackMarketRouter = createTRPCRouter({
           and(
             eq(userData.userId, ctx.userId),
             eq(userData.gender, user.gender),
+            eq(userData.reputationPoints, user.reputationPoints),
             gte(userData.reputationPoints, COST_CHANGE_GENDER),
           ),
         );
       // Return message
       if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
+        return errorResponse("Your profile or reputation changed. Please try again");
       } else {
-        const data = await ctx.drizzle.query.userData
-          .findFirst({
-            columns: { gender: true, reputationPoints: true },
-            where: eq(userData.userId, ctx.userId),
-          })
-          .catch(handleUserCacheReadError);
+        const data = {
+          gender: input.gender,
+          reputationPoints: user.reputationPoints - COST_CHANGE_GENDER,
+        };
         return { success: true, message: `Change gender in ${input.gender}`, data };
       }
     }),

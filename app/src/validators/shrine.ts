@@ -17,15 +17,17 @@ export const shrineVillageUpdateOutputSchema = baseServerResponse.extend({
   villageUpdate: z
     .object({
       id: z.string(),
-      tokens: z.number(),
-      shrineSettings: z.object({
-        unlockedAiIds: z.array(z.string()),
-        activeBoosts: z.record(z.string(), z.string()),
-        activeAiIds: z.array(z.string()),
-        boostTemplate: z.array(boostTemplateEntrySchema).optional(),
-        boostTemplateUpdatedBy: z.string().optional(),
-        boostTemplateUpdatedAt: z.string().optional(),
-      }),
+      tokens: z.number().optional(),
+      shrineSettings: z
+        .object({
+          unlockedAiIds: z.array(z.string()).optional(),
+          activeBoosts: z.record(z.string(), z.string()).optional(),
+          activeAiIds: z.array(z.string()).optional(),
+          boostTemplate: z.array(boostTemplateEntrySchema).optional(),
+          boostTemplateUpdatedBy: z.string().optional(),
+          boostTemplateUpdatedAt: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
 });

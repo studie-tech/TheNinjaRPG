@@ -10,6 +10,10 @@ export const getItemPurchasePeriodStart = (
   return periodStart(period.toLowerCase() as Lowercase<typeof period>, now);
 };
 
+/** Match MySQL NOW() precision when a timestamp must be returned with its write. */
+export const getSecondPrecisionDate = (date = new Date()) =>
+  new Date(Math.floor(date.getTime() / 1000) * 1000);
+
 /**
  * Get game time which is the UTC HH:MM:SS timestring
  *

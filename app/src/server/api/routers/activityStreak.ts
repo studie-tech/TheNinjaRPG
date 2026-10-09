@@ -265,9 +265,9 @@ export const activityStreakRouter = createTRPCRouter({
       baseServerResponse.extend({
         userUpdate: z
           .object({
-            money: z.number(),
-            reputationPoints: z.number(),
-            seichiSilver: z.number(),
+            money: z.number().optional(),
+            reputationPoints: z.number().optional(),
+            seichiSilver: z.number().optional(),
           })
           .optional(),
       }),
@@ -397,12 +397,19 @@ export const activityStreakRouter = createTRPCRouter({
         costs.push(`${config.seichiSilverCost} seichi silver`);
 
       const costText = costs.length > 0 ? costs.join(", ") : "free";
-      const userUpdate = await ctx.drizzle.query.userData
-        .findFirst({
-          where: eq(userData.userId, ctx.userId),
-          columns: { money: true, reputationPoints: true, seichiSilver: true },
-        })
-        .catch(handleUserCacheReadError);
+      // Zero-cost purchases leave balances untouched; paid atomic debits need actual values.
+      const userUpdate = costs.length
+        ? await ctx.drizzle.query.userData
+            .findFirst({
+              where: eq(userData.userId, ctx.userId),
+              columns: {
+                money: config.ryoCost > 0,
+                reputationPoints: config.repsCost > 0,
+                seichiSilver: config.seichiSilverCost > 0,
+              },
+            })
+            .catch(handleUserCacheReadError)
+        : {};
       return {
         success: true,
         message: `Purchased "${config.name}" for ${costText}!`,

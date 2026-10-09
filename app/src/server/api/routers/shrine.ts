@@ -175,7 +175,9 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Successfully upgraded shrine to level ${targetSector.shrineLevel + 1}!`,
-        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        villageUpdate: requiresUserRefresh
+          ? undefined
+          : await fetchVillageShrineTokens(ctx.drizzle, user.villageId),
         requiresUserRefresh,
       };
     }),
@@ -251,7 +253,20 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `${input.boostType} boost activated for ${SHRINE_BOOST_DURATION_HOURS} hours!`,
-        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        villageUpdate: requiresUserRefresh
+          ? undefined
+          : await fetchVillageShrineSettings(ctx.drizzle, user.villageId).then(
+              (state) => {
+                const boostEnd = state?.shrineSettings.activeBoosts[input.boostType];
+                return state && boostEnd !== undefined
+                  ? {
+                      id: state.id,
+                      tokens: state.tokens,
+                      shrineSettings: { activeBoosts: { [input.boostType]: boostEnd } },
+                    }
+                  : undefined;
+              },
+            ),
         requiresUserRefresh,
       };
     }),
@@ -313,7 +328,16 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `AI defender unlocked! Cost: ${SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens`,
-        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        villageUpdate: requiresUserRefresh
+          ? undefined
+          : await fetchVillageShrineSettings(ctx.drizzle, user.villageId).then(
+              (state) =>
+                state && {
+                  id: state.id,
+                  tokens: state.tokens,
+                  shrineSettings: { unlockedAiIds: state.shrineSettings.unlockedAiIds },
+                },
+            ),
         requiresUserRefresh,
       };
     }),
@@ -374,7 +398,10 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message,
-        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        villageUpdate: {
+          id: user.villageId,
+          shrineSettings: { activeAiIds: newAssigns },
+        },
         requiresUserRefresh,
       };
     }),
@@ -467,7 +494,9 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Weekly maintenance paid for sector ${targetSector.sector}: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
-        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        villageUpdate: requiresUserRefresh
+          ? undefined
+          : await fetchVillageShrineTokens(ctx.drizzle, user.villageId),
         requiresUserRefresh,
       };
     }),
@@ -539,6 +568,7 @@ export const shrineRouter = createTRPCRouter({
         );
       }
 
+      const templateUpdatedAt = new Date().toISOString();
       await ctx.drizzle
         .update(village)
         .set({
@@ -546,7 +576,7 @@ export const shrineRouter = createTRPCRouter({
             COALESCE(${village.shrineSettings}, JSON_OBJECT()),
             '$.boostTemplate', CAST(${JSON.stringify(input.template)} AS JSON),
             '$.boostTemplateUpdatedBy', ${user.username},
-            '$.boostTemplateUpdatedAt', ${new Date().toISOString()}
+            '$.boostTemplateUpdatedAt', ${templateUpdatedAt}
           )`,
         })
         .where(eq(village.id, input.villageId));
@@ -554,7 +584,14 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: "Boost template saved",
-        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        villageUpdate: {
+          id: user.villageId,
+          shrineSettings: {
+            boostTemplate: input.template,
+            boostTemplateUpdatedBy: user.username,
+            boostTemplateUpdatedAt: templateUpdatedAt,
+          },
+        },
         requiresUserRefresh,
       };
     }),
@@ -1261,7 +1298,17 @@ export const shrineRouter = createTRPCRouter({
     }),
 });
 
-const fetchVillageShrineState = (client: DrizzleClient, villageId: string) =>
+// Atomic token debits allow unrelated balance changes, so only tokens need an authoritative read.
+const fetchVillageShrineTokens = (client: DrizzleClient, villageId: string) =>
+  client.query.village
+    .findFirst({
+      where: eq(village.id, villageId),
+      columns: { id: true, tokens: true },
+    })
+    .catch(handleUserCacheReadError);
+
+// A token read is already required; include settings changed during that await to avoid stale patches.
+const fetchVillageShrineSettings = (client: DrizzleClient, villageId: string) =>
   client.query.village
     .findFirst({
       where: eq(village.id, villageId),

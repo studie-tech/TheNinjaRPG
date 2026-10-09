@@ -45,10 +45,7 @@ describe("clan committed cache responses", () => {
   });
 
   it("returns newly read balances even when another write changed them after the debit", async () => {
-    const database = databaseFor(
-      { money: 700 },
-      { id: "clan-cache-clan", bank: 800 },
-    );
+    const database = databaseFor({ money: 700 }, { id: "clan-cache-clan", bank: 800 });
     const caller = callerForDatabase(clanRouter, "clan-cache-user", database as never);
     const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 250 });
     expect(result).toMatchObject({
@@ -74,6 +71,49 @@ describe("clan committed cache responses", () => {
       clanUpdate: { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE },
     });
   });
+});
+
+describe("clan zero-cost cache responses", () => {
+  for (const [endpoint, requested, treasury] of [
+    ["clanDonate", 0, 0],
+    ["clanDonate", 50, HIDEOUT_TOWN_UPGRADE],
+    ["toBank", 0, 0],
+  ] as const) {
+    it(`${endpoint} skips reads and writes for ${requested} requested with treasury ${treasury}`, async () => {
+      const userRead = vi.fn().mockResolvedValue({
+        userId: "clan-zero-user",
+        clanId: "clan-zero-clan",
+        money: 100,
+        reputationPoints: 100,
+        isOutlaw: true,
+        isBanned: false,
+      });
+      const clanRead = vi.fn().mockResolvedValue({
+        id: "clan-zero-clan",
+        repTreasury: treasury,
+      });
+      const database = {
+        query: { userData: { findFirst: userRead }, clan: { findFirst: clanRead } },
+        update: vi.fn(() => ({
+          set: () => ({ where: async () => ({ rowsAffected: 1 }) }),
+        })),
+        insert: vi.fn(() => ({ values: async () => ({ rowsAffected: 1 }) })),
+      };
+      const caller = callerForDatabase(clanRouter, "clan-zero-user", database as never);
+      const result = await (endpoint === "clanDonate"
+        ? caller.clanDonate({ clanId: "clan-zero-clan", reputationPoints: requested })
+        : caller.toBank({ clanId: "clan-zero-clan", amount: 0 }));
+      expect(result).toMatchObject({
+        success: true,
+        userUpdate: {},
+        clanUpdate: { id: "clan-zero-clan" },
+      });
+      expect(userRead).toHaveBeenCalledTimes(1);
+      expect(clanRead).toHaveBeenCalledTimes(1);
+      expect(database.update).not.toHaveBeenCalled();
+      expect(database.insert).not.toHaveBeenCalled();
+    });
+  }
 });
 
 describeWithDatabase("clan mutation cache balances", () => {

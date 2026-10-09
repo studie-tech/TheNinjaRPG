@@ -149,23 +149,22 @@ export const avatarRouter = createTRPCRouter({
           .set({ avatarLight: thumbnailUrl })
           .where(eq(historicalAvatar.id, input.avatar));
       }
-      // Mutation
-      switch (input.type) {
-        case "user":
-          await ctx.drizzle
-            .update(userData)
-            .set({ avatar: avatar.avatar, avatarLight: thumbnailUrl })
-            .where(eq(userData.userId, ctx.userId));
-      }
       const data =
         input.type === "user"
-          ? await ctx.drizzle.query.userData
-              .findFirst({
-                columns: { avatar: true, avatarLight: true },
-                where: eq(userData.userId, ctx.userId),
-              })
-              .catch(handleUserCacheReadError)
+          ? { avatar: avatar.avatar, avatarLight: thumbnailUrl }
           : undefined;
+      if (
+        data &&
+        (user.avatar !== data.avatar || user.avatarLight !== data.avatarLight)
+      ) {
+        const result = await ctx.drizzle
+          .update(userData)
+          .set(data)
+          .where(eq(userData.userId, ctx.userId));
+        if (result.rowsAffected === 0) {
+          return errorResponse("Could not update avatar. Please try again");
+        }
+      }
       return { success: true, message: "Avatar updated", url: avatar.avatar, data };
     }),
   deleteAvatar: protectedProcedure

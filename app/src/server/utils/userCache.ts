@@ -1,19 +1,31 @@
 import * as Sentry from "@sentry/nextjs";
 import { and, eq, gt, ne } from "drizzle-orm";
+import type { UserData } from "@/drizzle/schema";
 import { userData, userItem, userSkill } from "@/drizzle/schema";
 import { effectiveMasteries } from "@/libs/mastery";
 import { calcMaxEnergy } from "@/libs/profile";
 import type { DrizzleClient } from "@/server/db";
 
-/** Read committed currency values without loading the full profile and its relations. */
-export const fetchUserBalances = async (client: DrizzleClient, userId: string) => {
+type UserBalanceField = "money" | "bank" | "reputationPoints" | "seichiSilver";
+
+/** Read only balances changed by the mutation, without loading profile relations. */
+export const fetchUserBalances = async (
+  client: DrizzleClient,
+  userId: string,
+  fields: readonly UserBalanceField[] = [
+    "money",
+    "bank",
+    "reputationPoints",
+    "seichiSilver",
+  ],
+): Promise<Partial<Pick<UserData, UserBalanceField>> | undefined> => {
   const user = await client.query.userData
     .findFirst({
       columns: {
-        money: true,
-        bank: true,
-        reputationPoints: true,
-        seichiSilver: true,
+        money: fields.includes("money"),
+        bank: fields.includes("bank"),
+        reputationPoints: fields.includes("reputationPoints"),
+        seichiSilver: fields.includes("seichiSilver"),
         energyTrainingQueue: true,
       },
       where: eq(userData.userId, userId),

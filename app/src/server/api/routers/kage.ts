@@ -50,7 +50,6 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { calculateDailyLockedTime } from "@/server/utils/kage";
-import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChallengeKage } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
@@ -680,36 +679,38 @@ export const kageRouter = createTRPCRouter({
         }
       }
 
-      // Update village and log the toggle
-      await Promise.all([
-        ctx.drizzle
-          .update(village)
-          .set({
-            openForChallenges: !userVillage.openForChallenges,
-            openForChallengesAt: new Date(),
-          })
-          .where(eq(village.id, input.villageId)),
-        ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "kageChallengeToggle",
-          changes: [
-            `Challenges ${!userVillage.openForChallenges ? "opened" : "closed"}`,
-          ],
-          relatedId: input.villageId,
-          relatedMsg: `Toggle: ${userVillage.openForChallenges ? "CLOSE" : "OPEN"}`,
-        }),
-      ]);
-
-      const availability = await ctx.drizzle.query.village
-        .findFirst({
-          columns: { id: true, openForChallenges: true, openForChallengesAt: true },
-          where: eq(village.id, input.villageId),
+      const availability = {
+        id: input.villageId,
+        openForChallenges: !userVillage.openForChallenges,
+        openForChallengesAt: new Date(),
+      };
+      const result = await ctx.drizzle
+        .update(village)
+        .set({
+          openForChallenges: availability.openForChallenges,
+          openForChallengesAt: availability.openForChallengesAt,
         })
-        .catch(handleUserCacheReadError);
+        .where(
+          and(
+            eq(village.id, input.villageId),
+            eq(village.kageId, user.userId),
+            eq(village.openForChallenges, userVillage.openForChallenges),
+          ),
+        );
+      if (result.rowsAffected === 0) {
+        return errorResponse("Challenge availability changed. Please try again");
+      }
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "kageChallengeToggle",
+        changes: [`Challenges ${availability.openForChallenges ? "opened" : "closed"}`],
+        relatedId: input.villageId,
+        relatedMsg: `Toggle: ${availability.openForChallenges ? "OPEN" : "CLOSE"}`,
+      });
       return {
         success: true,
-        message: `Village is now ${!userVillage.openForChallenges ? "open" : "closed"} for challenges`,
+        message: `Village is now ${availability.openForChallenges ? "open" : "closed"} for challenges`,
         data: availability,
       };
     }),

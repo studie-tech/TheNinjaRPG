@@ -272,8 +272,10 @@ export const clanRouter = createTRPCRouter({
     )
     .output(
       baseServerResponse.extend({
-        userUpdate: z.object({ reputationPoints: z.number() }).optional(),
-        clanUpdate: z.object({ id: z.string(), repTreasury: z.number() }).optional(),
+        userUpdate: z.object({ reputationPoints: z.number().optional() }).optional(),
+        clanUpdate: z
+          .object({ id: z.string(), repTreasury: z.number().optional() })
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -299,6 +301,14 @@ export const clanRouter = createTRPCRouter({
         input.reputationPoints,
         HIDEOUT_TOWN_UPGRADE - fetchedClan.repTreasury,
       );
+      if (repsCost === 0) {
+        return {
+          success: true,
+          message: `${user.username} donated 0 reputation points to faction`,
+          userUpdate: {},
+          clanUpdate: { id: fetchedClan.id },
+        };
+      }
       // Mutate step 1 - update user
       const result = await ctx.drizzle
         .update(userData)
@@ -1088,8 +1098,10 @@ export const clanRouter = createTRPCRouter({
     .input(z.object({ amount: z.number().min(0), clanId: z.string() }))
     .output(
       baseServerResponse.extend({
-        userUpdate: z.object({ money: z.number() }).optional(),
-        clanUpdate: z.object({ id: z.string(), bank: z.number() }).optional(),
+        userUpdate: z.object({ money: z.number().optional() }).optional(),
+        clanUpdate: z
+          .object({ id: z.string(), bank: z.number().optional() })
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1101,6 +1113,14 @@ export const clanRouter = createTRPCRouter({
       if (user.isBanned) return errorResponse("You are banned");
       if (!user.clanId) return errorResponse("Not in a clan");
       if (fetchedClan?.id !== user.clanId) return errorResponse("Not in the clan");
+      if (input.amount === 0) {
+        return {
+          success: true,
+          message: "Successfully deposited 0 ryo",
+          userUpdate: {},
+          clanUpdate: { id: fetchedClan.id },
+        };
+      }
       const result = await ctx.drizzle
         .update(userData)
         .set({ money: sql`${userData.money} - ${input.amount}` })

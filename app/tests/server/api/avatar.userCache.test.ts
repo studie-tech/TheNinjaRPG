@@ -6,10 +6,13 @@ import { avatarRouter } from "@/server/api/routers/avatar";
 import { insertUsers } from "../../setup/factories";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+
+import { countUserReads } from "../../setup/userReads";
 
 const userId = "avatar-cache-user";
 const avatar = "https://example.com/cache-avatar.png";
@@ -31,8 +34,10 @@ describeWithDatabase("Avatar cache reconciliation", () => {
       done: true,
       status: "success",
     });
-    const caller = await callerFor(avatarRouter, userId);
+    const counted = countUserReads(database);
+    const caller = callerForDatabase(avatarRouter, userId, counted.client);
     const result = await caller.updateAvatar({ avatar: 11, type: "user" });
+    expect(counted.getReads()).toBe(1);
     expect(result.success).toBe(true);
     expect(result.data).toEqual({ avatar, avatarLight });
     const saved = await database.query.userData.findFirst({
@@ -40,6 +45,13 @@ describeWithDatabase("Avatar cache reconciliation", () => {
       where: eq(userData.userId, userId),
     });
     expect(result.data).toEqual(saved);
+    expect(counted.getUserWrites()).toBe(1);
+    // Selecting the active pair succeeds without relying on driver no-op row counts.
+    const repeated = await caller.updateAvatar({ avatar: 11, type: "user" });
+    expect(repeated.success).toBe(true);
+    expect(repeated.data).toEqual({ avatar, avatarLight });
+    expect(counted.getReads()).toBe(2);
+    expect(counted.getUserWrites()).toBe(1);
   });
 
   it("does not supply a user patch when history is missing", async () => {

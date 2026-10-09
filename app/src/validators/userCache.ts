@@ -9,6 +9,7 @@ export const userBalanceResponseSchema = baseServerResponse.extend({
       reputationPoints: z.number(),
       seichiSilver: z.number(),
     })
+    .partial()
     .optional(),
 });
 

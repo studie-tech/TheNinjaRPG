@@ -1351,7 +1351,20 @@ const useUpdateShrineVillage = () => {
     const villageUpdate = result.villageUpdate;
     return updateUser((current) =>
       current.village?.id === villageUpdate.id
-        ? { village: { ...current.village, ...villageUpdate } }
+        ? {
+            village: {
+              ...current.village,
+              ...villageUpdate,
+              shrineSettings: {
+                ...current.village.shrineSettings,
+                ...villageUpdate.shrineSettings,
+                activeBoosts: {
+                  ...current.village.shrineSettings.activeBoosts,
+                  ...villageUpdate.shrineSettings?.activeBoosts,
+                },
+              },
+            },
+          }
         : {},
     );
   };

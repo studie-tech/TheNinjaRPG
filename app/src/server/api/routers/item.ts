@@ -1263,9 +1263,19 @@ export const itemRouter = createTRPCRouter({
         success: true,
         message: `Variant "${variant.name}" unlocked!`,
         data:
-          variant.costType === "VILLAGE_PRESTIGE"
-            ? undefined
-            : await fetchUserBalances(ctx.drizzle, ctx.userId),
+          variant.cost === 0
+            ? user.energyTrainingQueue?.length
+              ? undefined
+              : {}
+            : variant.costType === "VILLAGE_PRESTIGE"
+              ? undefined
+              : await fetchUserBalances(ctx.drizzle, ctx.userId, [
+                  variant.costType === "MONEY"
+                    ? "money"
+                    : variant.costType === "REPUTATION"
+                      ? "reputationPoints"
+                      : "seichiSilver",
+                ]),
       };
     }),
   // Set the active variant on a user item (null to clear)
@@ -1768,13 +1778,13 @@ export const itemRouter = createTRPCRouter({
           return {
             success: true,
             message: "Cleared active loadout",
-            data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+            data: user.energyTrainingQueue?.length ? undefined : {},
           };
         }
         return {
           success: true,
           message: "Nothing equipped",
-          data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+          data: user.energyTrainingQueue?.length ? undefined : {},
         };
       }
 
@@ -2834,7 +2844,20 @@ export const itemRouter = createTRPCRouter({
         // Quest purchases keep the full refresh so achievement and masked objective state agree.
         data: advancesBuyItemObjective
           ? undefined
-          : await fetchUserEquipment(ctx.drizzle, ctx.userId),
+          : equipped === "NONE" &&
+              ryoCost === 0 &&
+              repsCost === 0 &&
+              seichiSilverCost === 0
+            ? user.energyTrainingQueue?.length
+              ? undefined
+              : {}
+            : equipped === "NONE"
+              ? await fetchUserBalances(ctx.drizzle, ctx.userId, [
+                  ...(ryoCost > 0 ? ["money" as const] : []),
+                  ...(repsCost > 0 ? ["reputationPoints" as const] : []),
+                  ...(seichiSilverCost > 0 ? ["seichiSilver" as const] : []),
+                ])
+              : await fetchUserEquipment(ctx.drizzle, ctx.userId),
       };
     }),
   // Auto-equip optimal items based on cost

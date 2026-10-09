@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { COST_EXTRA_ITEM_SLOT, COST_EXTRA_JUTSU_SLOT } from "@/drizzle/constants";
 import {
   bloodline,
@@ -68,7 +68,10 @@ describeWithDatabase("committed profile cache patches", () => {
     );
   });
 
-  afterEach(resetServerModuleStubs);
+  afterEach(() => {
+    resetServerModuleStubs();
+    vi.restoreAllMocks();
+  });
 
   it("reports a committed purchase as successful when the optional cache read fails", async () => {
     const db = await getTestDatabase();
@@ -122,10 +125,20 @@ describeWithDatabase("committed profile cache patches", () => {
     const caller = await callerFor(itemRouter, userId);
     const result = await caller.unequipAllItems();
     expect(result.success).toBe(true);
-    if (!("data" in result) || !result.data) throw new Error("Missing unequip patch");
+    if (!("data" in result) || !result.data || !("items" in result.data)) throw new Error("Missing unequip patch");
     expect(result.data.items).toEqual([]);
     expect(result.data.maxEnergy).toBe(calcEnergy(10));
     expect(result.data.effectiveMasteries.ninjutsuMastery).toBe(100);
+  });
+
+  it("does not read the profile again when nothing is equipped", async () => {
+    const db = await getTestDatabase();
+    await db.update(userItem).set({ equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
+    const reads = vi.spyOn(db.query.userData, "findFirst");
+    const caller = await callerFor(itemRouter, userId);
+    const result = await caller.unequipAllItems();
+    expect(result).toMatchObject({ success: true, data: {} });
+    expect(reads).toHaveBeenCalledTimes(1);
   });
 
   it("returns actual currency and slot counts after a purchase", async () => {
@@ -136,6 +149,7 @@ describeWithDatabase("committed profile cache patches", () => {
     expect(result.success).toBe(true);
     expect(result.data).toEqual({ reputationPoints: 107 - COST_EXTRA_ITEM_SLOT, extraItemSlots: 3 });
     expect(await fetchUserBalances(db, userId)).toEqual({ money: 10000, bank: 200, reputationPoints: 107 - COST_EXTRA_ITEM_SLOT, seichiSilver: 300 });
+    expect(await fetchUserBalances(db, userId, ["reputationPoints"])).toEqual({ reputationPoints: 107 - COST_EXTRA_ITEM_SLOT });
   });
 
   it("keeps full refreshes for pending energy queue settlement", async () => {

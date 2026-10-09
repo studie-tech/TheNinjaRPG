@@ -184,7 +184,6 @@ import {
   fetchRecruitMilestoneSummary,
 } from "@/server/utils/recruitment";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
-import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -1802,30 +1801,30 @@ export const profileRouter = createTRPCRouter({
           and(
             eq(userData.userId, ctx.userId),
             eq(userData.username, user.username),
+            eq(userData.reputationPoints, user.reputationPoints),
             gte(userData.reputationPoints, COST_CHANGE_USERNAME),
           ),
         );
       if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
+        return errorResponse("Your profile or reputation changed. Please try again");
       } else {
-        const [data] = await Promise.all([
-          ctx.drizzle.query.userData
-            .findFirst({
-              columns: { username: true, reputationPoints: true },
-              where: eq(userData.userId, ctx.userId),
-            })
-            .catch(handleUserCacheReadError),
-          ctx.drizzle.insert(actionLog).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            tableName: "user",
-            changes: [`Username changed from ${user.username} to ${input.username}`],
-            relatedId: ctx.userId,
-            relatedMsg: `Update: ${user.username} -> ${input.username}`,
-            relatedImage: user.avatarLight,
-          }),
-        ]);
-        return { success: true, message: "Username updated", data };
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "user",
+          changes: [`Username changed from ${user.username} to ${input.username}`],
+          relatedId: ctx.userId,
+          relatedMsg: `Update: ${user.username} -> ${input.username}`,
+          relatedImage: user.avatarLight,
+        });
+        return {
+          success: true,
+          message: "Username updated",
+          data: {
+            username: input.username,
+            reputationPoints: user.reputationPoints - COST_CHANGE_USERNAME,
+          },
+        };
       }
     }),
   updateTavernColor: protectedProcedure
@@ -1845,7 +1844,7 @@ export const profileRouter = createTRPCRouter({
       if (user.isBanned) return errorResponse("You are banned");
       if (storedColor !== input.currentColor) {
         return errorResponse(
-          "Could not update tavern color; your selection or reputation changed",
+          "Could not update tavern color; your selection or reputation changed. Please try again",
         );
       }
       if (input.currentColor === input.color) {
@@ -1875,42 +1874,34 @@ export const profileRouter = createTRPCRouter({
                 : userData.tavernTitleColor,
               input.currentColor,
             ),
+            eq(userData.reputationPoints, user.reputationPoints),
             gte(userData.reputationPoints, cost),
           ),
         );
 
       if (result.rowsAffected === 0) {
         return errorResponse(
-          "Could not update tavern color; your selection or reputation changed",
+          "Could not update tavern color; your selection or reputation changed. Please try again",
         );
       }
 
-      const [data] = await Promise.all([
-        ctx.drizzle.query.userData
-          .findFirst({
-            columns: {
-              tavernUsernameColor: true,
-              tavernTitleColor: true,
-              reputationPoints: true,
-            },
-            where: eq(userData.userId, ctx.userId),
-          })
-          .catch(handleUserCacheReadError),
-        ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "user",
-          changes: [
-            `Tavern ${input.target} color changed from ${input.currentColor} to ${input.color} (-${cost} reputation)`,
-          ],
-          relatedId: ctx.userId,
-          relatedMsg: `${user.username} changed their tavern ${input.target} color`,
-          relatedImage: user.avatarLight,
-        }),
-      ]);
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "user",
+        changes: [
+          `Tavern ${input.target} color changed from ${input.currentColor} to ${input.color} (-${cost} reputation)`,
+        ],
+        relatedId: ctx.userId,
+        relatedMsg: `${user.username} changed their tavern ${input.target} color`,
+        relatedImage: user.avatarLight,
+      });
       return {
         success: true,
-        data,
+        data: {
+          ...colorUpdate,
+          reputationPoints: user.reputationPoints - cost,
+        },
         message: `Tavern ${input.target} color updated for ${cost} reputation points`,
       };
     }),
