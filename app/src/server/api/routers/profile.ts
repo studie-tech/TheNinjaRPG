@@ -124,6 +124,7 @@ import {
   calcHP,
   calcMaxEnergy,
   calcSP,
+  canAssignExperience,
   getAssignedCombatStatTotal,
   levelUpBlockMessage,
   scaleUserStats,
@@ -1145,25 +1146,14 @@ export const profileRouter = createTRPCRouter({
             color: "red",
           });
         }
-        // Unused experience points - only show if not all stats are capped
-        if (user.earnedExperience > 0) {
-          const { stats_cap, gens_cap } = getUserCaps(user.rank);
-          const allStatsCapped =
-            user.offence >= stats_cap &&
-            user.defence >= stats_cap &&
-            user.strength >= gens_cap &&
-            user.speed >= gens_cap &&
-            user.intelligence >= gens_cap &&
-            user.willpower >= gens_cap;
-
-          if (!allStatsCapped) {
-            notifications.push({
-              id: "tutorial-unassigned-stats",
-              href: "/profile/experience",
-              name: "Assign XP",
-              color: "blue",
-            });
-          }
+        // Unused experience points - only show if some stat or mastery can still take them
+        if (user.earnedExperience > 0 && canAssignExperience(user)) {
+          notifications.push({
+            id: "tutorial-unassigned-stats",
+            href: "/profile/experience",
+            name: "Assign XP",
+            color: "blue",
+          });
         }
         // Check if reduced gains
         const reducedDays = getReducedGainsDays(user);
