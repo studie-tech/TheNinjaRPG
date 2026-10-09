@@ -39,6 +39,7 @@ import type {
   UserItemWithRelations,
   UserItemWithVariants,
 } from "@/drizzle/schema";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -77,6 +78,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import { displayCostType } from "@/validators/item";
 
 export default function MyItems() {
+  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
   // State
   const availableTabs = ["normal", "event", "materials", "cooking"];
   const { data: userData, updateUser } = useRequiredUserData();
@@ -99,12 +101,11 @@ export default function MyItems() {
   // Mutations
   const { mutate: buyItemSlot, isPending: isBuyingItemSlot } =
     api.blackmarket.buyItemSlot.useMutation({
-      onSuccess: async (data) => {
+      onMutate: captureUserDelta,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await (data.data
-            ? updateUser(data.data)
-            : utils.profile.getUser.invalidate());
+          await updateUserDelta(data.userDelta, revision);
           setIsBuyItemSlotOpen(false);
         }
       },
@@ -1721,7 +1722,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   onClose,
 }) => {
   const utils = api.useUtils();
-  const { updateUser } = useRequiredUserData();
+  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
   const [isOpen, setIsOpen] = useState(true);
   const variants = userItem.item.variants ?? [];
 
@@ -1742,12 +1743,13 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
     ) ?? [];
 
   const purchase = api.item.purchaseVariant.useMutation({
-    onSuccess: async (result) => {
+    onMutate: captureUserDelta,
+    onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
       if (result.success) {
         await Promise.all([
           utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
-          result.data ? updateUser(result.data) : utils.profile.getUser.invalidate(),
+          updateUserDelta(result.userDelta, revision),
         ]);
       }
     },

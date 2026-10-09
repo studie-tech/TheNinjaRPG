@@ -26,7 +26,6 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChangeContent } from "@/utils/permissions";
 import { isToday, isWithinDateRange } from "@/utils/time";
 import {
@@ -37,6 +36,7 @@ import {
 } from "@/validators/activityStreak";
 import { idSchema } from "@/validators/misc";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const getDefaultRewards = (): ObjectiveRewardType => {
   return ObjectiveReward.parse({});
@@ -261,17 +261,7 @@ export const activityStreakRouter = createTRPCRouter({
   purchaseEventPass: protectedProcedure
     .meta({ mcp: { description: "Purchase an event pass" } })
     .input(purchaseEventPassSchema)
-    .output(
-      baseServerResponse.extend({
-        userUpdate: z
-          .object({
-            money: z.number().optional(),
-            reputationPoints: z.number().optional(),
-            seichiSilver: z.number().optional(),
-          })
-          .optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch purchase requirements and both current and historical ownership in parallel.
       const [user, config, existingProgress, completionLogs] = await Promise.all([
@@ -397,23 +387,18 @@ export const activityStreakRouter = createTRPCRouter({
         costs.push(`${config.seichiSilverCost} seichi silver`);
 
       const costText = costs.length > 0 ? costs.join(", ") : "free";
-      // Zero-cost purchases leave balances untouched; paid atomic debits need actual values.
-      const userUpdate = costs.length
-        ? await ctx.drizzle.query.userData
-            .findFirst({
-              where: eq(userData.userId, ctx.userId),
-              columns: {
-                money: config.ryoCost > 0,
-                reputationPoints: config.repsCost > 0,
-                seichiSilver: config.seichiSilverCost > 0,
-              },
-            })
-            .catch(handleUserCacheReadError)
-        : {};
       return {
         success: true,
         message: `Purchased "${config.name}" for ${costText}!`,
-        userUpdate,
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : {
+              ...(config.ryoCost > 0 ? { money: -config.ryoCost } : {}),
+              ...(config.repsCost > 0 ? { reputationPoints: -config.repsCost } : {}),
+              ...(config.seichiSilverCost > 0
+                ? { seichiSilver: -config.seichiSilverCost }
+                : {}),
+            },
       };
     }),
 

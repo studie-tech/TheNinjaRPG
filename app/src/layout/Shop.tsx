@@ -36,6 +36,7 @@ import {
 } from "@/drizzle/constants";
 import type { Item, ItemType } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
@@ -256,6 +257,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost, catalog } =
     props;
 
+  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
   const { updateUser } = useRequiredUserData();
   const silverCopy = SILVER_COPY[catalog?.silverLabel ?? "seichi"];
 
@@ -366,14 +368,18 @@ const Shop: React.FC<ShopProps> = (props) => {
   }
 
   const { mutate: purchase, isPending: isPurchasing } = api.item.buy.useMutation({
-    onSuccess: (data, variables) => {
+    onMutate: captureUserDelta,
+    onSuccess: (data, variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         setItemConfirmOpen(false);
         void utils.item.getUserItemCounts.invalidate();
         void ("data" in data && data.data
           ? updateUser(data.data)
-          : utils.profile.getUser.invalidate());
+          : updateUserDelta(
+              "userDelta" in data ? data.userDelta : undefined,
+              revision,
+            ));
         void utils.item.getUserItems.invalidate();
         void utils.item.getPurchaseAllowance.invalidate();
         if (isItemBuyStep && variables.itemId === TUTORIAL_ITEM_ID) {

@@ -33,6 +33,7 @@ import {
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import AvatarImage from "@/layout/Avatar";
 import { CurrentBloodline, PurchaseBloodline } from "@/layout/Bloodline";
 import Confirm from "@/layout/Confirm";
@@ -297,7 +298,7 @@ const Bloodline: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   userData,
 }) => {
-  const { updateUser } = useRequiredUserData();
+  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
 
   // State
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
@@ -310,11 +311,12 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   // Mutations
   const { mutate: create, isPending: isCreating } =
     api.blackmarket.createOffer.useMutation({
-      onSuccess: async (data) => {
+      onMutate: captureUserDelta,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
+            updateUserDelta(data.userDelta, revision),
             utils.blackmarket.getRyoOffers.invalidate(),
           ]);
         }
@@ -323,11 +325,12 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 
   const { mutate: delist, isPending: isDelisting } =
     api.blackmarket.delistOffer.useMutation({
-      onSuccess: async (data) => {
+      onMutate: captureUserDelta,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
+            updateUserDelta(data.userDelta, revision),
             utils.blackmarket.getRyoOffers.invalidate(),
           ]);
         }
@@ -336,11 +339,12 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 
   const { mutate: accept, isPending: isAccepting } =
     api.blackmarket.takeOffer.useMutation({
-      onSuccess: async (data) => {
+      onMutate: captureUserDelta,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
+            updateUserDelta(data.userDelta, revision),
             utils.blackmarket.getRyoOffers.invalidate(),
           ]);
         }

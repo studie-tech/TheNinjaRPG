@@ -90,6 +90,7 @@ import {
   strictClanNameField,
 } from "@/validators/clan";
 import { idSchema } from "@/validators/misc";
+import { userDeltaSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
 
@@ -272,7 +273,7 @@ export const clanRouter = createTRPCRouter({
     )
     .output(
       baseServerResponse.extend({
-        userUpdate: z.object({ reputationPoints: z.number().optional() }).optional(),
+        userDelta: userDeltaSchema.optional(),
         clanUpdate: z
           .object({ id: z.string(), repTreasury: z.number().optional() })
           .optional(),
@@ -305,7 +306,7 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message: `${user.username} donated 0 reputation points to faction`,
-          userUpdate: {},
+          userDelta: user.energyTrainingQueue?.length ? undefined : {},
           clanUpdate: { id: fetchedClan.id },
         };
       }
@@ -342,20 +343,15 @@ export const clanRouter = createTRPCRouter({
       } else {
         // Create donation message
         const message = `${user.username} donated ${repsCost} reputation points to faction`;
-        // Log action into database
-        const [userUpdate, clanUpdate] = await Promise.all([
-          ctx.drizzle.query.userData
-            .findFirst({
-              where: eq(userData.userId, ctx.userId),
-              columns: { reputationPoints: true },
-            })
-            .catch(handleUserCacheReadError),
-          ctx.drizzle.query.clan
-            .findFirst({
-              where: eq(clan.id, fetchedClan.id),
-              columns: { id: true, repTreasury: true },
-            })
-            .catch(handleUserCacheReadError),
+        const [clanUpdate] = await Promise.all([
+          user.energyTrainingQueue?.length
+            ? undefined
+            : ctx.drizzle.query.clan
+                .findFirst({
+                  where: eq(clan.id, fetchedClan.id),
+                  columns: { id: true, repTreasury: true },
+                })
+                .catch(handleUserCacheReadError),
           ctx.drizzle.insert(actionLog).values({
             id: nanoid(),
             userId: ctx.userId,
@@ -366,7 +362,14 @@ export const clanRouter = createTRPCRouter({
             relatedImage: fetchedClan.image,
           }),
         ]);
-        return { success: true, message, userUpdate, clanUpdate };
+        return {
+          success: true,
+          message,
+          userDelta: user.energyTrainingQueue?.length
+            ? undefined
+            : { reputationPoints: -repsCost },
+          clanUpdate,
+        };
       }
     }),
   get: protectedProcedure
@@ -1098,7 +1101,7 @@ export const clanRouter = createTRPCRouter({
     .input(z.object({ amount: z.number().min(0), clanId: z.string() }))
     .output(
       baseServerResponse.extend({
-        userUpdate: z.object({ money: z.number().optional() }).optional(),
+        userDelta: userDeltaSchema.optional(),
         clanUpdate: z
           .object({ id: z.string(), bank: z.number().optional() })
           .optional(),
@@ -1117,7 +1120,7 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message: "Successfully deposited 0 ryo",
-          userUpdate: {},
+          userDelta: user.energyTrainingQueue?.length ? undefined : {},
           clanUpdate: { id: fetchedClan.id },
         };
       }
@@ -1128,29 +1131,31 @@ export const clanRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return { success: false, message: "Not enough money in pocket" };
       }
-      await ctx.drizzle
+      const creditResult = await ctx.drizzle
         .update(clan)
         .set({ bank: sql`${clan.bank} + ${input.amount}` })
         .where(eq(clan.id, input.clanId));
-      const [userUpdate, clanUpdate] = await Promise.all([
-        ctx.drizzle.query.userData
-          .findFirst({
-            where: eq(userData.userId, ctx.userId),
-            columns: { money: true },
-          })
-          .catch(handleUserCacheReadError),
-        ctx.drizzle.query.clan
-          .findFirst({
-            where: eq(clan.id, input.clanId),
-            columns: { id: true, bank: true },
-          })
-          .catch(handleUserCacheReadError),
-      ]);
+      if (creditResult.rowsAffected === 0) {
+        await ctx.drizzle
+          .update(userData)
+          .set({ money: sql`${userData.money} + ${input.amount}` })
+          .where(eq(userData.userId, ctx.userId));
+        return errorResponse("Clan bank no longer exists; your deposit was refunded");
+      }
       return {
         success: true,
         message: `Successfully deposited ${input.amount} ryo`,
-        userUpdate,
-        clanUpdate,
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : { money: -input.amount },
+        clanUpdate: user.energyTrainingQueue?.length
+          ? undefined
+          : await ctx.drizzle.query.clan
+              .findFirst({
+                where: eq(clan.id, fetchedClan.id),
+                columns: { id: true, bank: true },
+              })
+              .catch(handleUserCacheReadError),
       };
     }),
   purchaseBoost: protectedProcedure

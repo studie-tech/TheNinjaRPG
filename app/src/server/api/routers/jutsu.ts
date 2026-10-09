@@ -104,7 +104,6 @@ import {
   backfillLoadouts,
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
-import { fetchUserBalances } from "@/server/utils/userCache";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedJutsuLoadouts } from "@/utils/paypal";
 import {
@@ -130,7 +129,7 @@ import {
 import { renameLoadoutSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import { QuestTracker } from "@/validators/objectives";
-import { userBalanceResponseSchema } from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 
 export const jutsuRouter = createTRPCRouter({
@@ -159,7 +158,7 @@ export const jutsuRouter = createTRPCRouter({
         transferLevels: z.number().min(1, "Must transfer at least 1 level"),
       }),
     )
-    .output(userBalanceResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const transfer = input.transferLevels;
@@ -268,12 +267,9 @@ export const jutsuRouter = createTRPCRouter({
 
       return {
         success: true,
-        data:
-          !needsReputation || transferCost === 0
-            ? user.energyTrainingQueue?.length
-              ? undefined
-              : {}
-            : await fetchUserBalances(ctx.drizzle, ctx.userId, ["reputationPoints"]),
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : { reputationPoints: needsReputation ? -transferCost : 0 },
         message: needsReputation
           ? `Level transferred for ${transferCost} reputation points`
           : "Level transferred for free",

@@ -15,8 +15,11 @@ import {
 import { calcEnergy } from "@/libs/profile";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";
 import { bloodrightRouter } from "@/server/api/routers/bloodright";
+import type { DrizzleClient } from "@/server/db";
 import { itemRouter } from "@/server/api/routers/item";
-import { fetchUserBalances, fetchUserEquipment } from "@/server/utils/userCache";
+import { fetchUserEquipment } from "@/server/utils/userCache";
+import { countUserReads } from "../../setup/userReads";
+import { beforeStatements } from "../../setup/statements";
 import { makeEffect } from "../../libs/combat/helpers/battleScenario";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
@@ -73,7 +76,7 @@ describeWithDatabase("committed profile cache patches", () => {
     vi.restoreAllMocks();
   });
 
-  it("reports a committed purchase as successful when the optional cache read fails", async () => {
+  it("returns confirmed slot deltas without needing an optional cache read", async () => {
     const db = await getTestDatabase();
     const failingCacheRead = new Proxy(db, {
       get(target, key, receiver) {
@@ -91,7 +94,7 @@ describeWithDatabase("committed profile cache patches", () => {
     const caller = callerForDatabase(blackMarketRouter, userId, failingCacheRead);
     const result = await caller.buyItemSlot();
     expect(result.success).toBe(true);
-    expect(result.data).toBeUndefined();
+    expect(result.userDelta).toEqual({ reputationPoints: -COST_EXTRA_ITEM_SLOT, extraItemSlots: 1 });
     const stored = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
     expect(stored?.extraItemSlots).toBe(1);
     expect(stored?.reputationPoints).toBe(100 - COST_EXTRA_ITEM_SLOT);
@@ -141,22 +144,25 @@ describeWithDatabase("committed profile cache patches", () => {
     expect(reads).toHaveBeenCalledTimes(1);
   });
 
-  it("returns actual currency and slot counts after a purchase", async () => {
+  it("returns confirmed slot deltas without a postwrite user read", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ reputationPoints: sql`${userData.reputationPoints} + 7`, extraItemSlots: 2 }).where(eq(userData.userId, userId));
+    const reads = vi.spyOn(db.query.userData, "findFirst");
     const caller = await callerFor(blackMarketRouter, userId);
     const result = await caller.buyItemSlot();
     expect(result.success).toBe(true);
-    expect(result.data).toEqual({ reputationPoints: 107 - COST_EXTRA_ITEM_SLOT, extraItemSlots: 3 });
-    expect(await fetchUserBalances(db, userId)).toEqual({ money: 10000, bank: 200, reputationPoints: 107 - COST_EXTRA_ITEM_SLOT, seichiSilver: 300 });
-    expect(await fetchUserBalances(db, userId, ["reputationPoints"])).toEqual({ reputationPoints: 107 - COST_EXTRA_ITEM_SLOT });
+    expect(result.userDelta).toEqual({ reputationPoints: -COST_EXTRA_ITEM_SLOT, extraItemSlots: 1 });
+    expect(reads).toHaveBeenCalledTimes(1);
+    const stored = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+    expect(stored).toMatchObject({ reputationPoints: 107 - COST_EXTRA_ITEM_SLOT, extraItemSlots: 3 });
   });
 
   it("keeps full refreshes for pending energy queue settlement", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] }).where(eq(userData.userId, userId));
     expect(await fetchUserEquipment(db, userId)).toBeUndefined();
-    expect(await fetchUserBalances(db, userId)).toBeUndefined();
+    const caller = await callerFor(blackMarketRouter, userId);
+    expect((await caller.buyItemSlot()).userDelta).toBeUndefined();
   });
 
   it("prevents slot purchases from spending the same reputation snapshot twice", async () => {
@@ -177,22 +183,70 @@ describeWithDatabase("committed profile cache patches", () => {
     }
   });
 
-  it("returns committed Bloodright purchases and the shared monthly reset allowance", async () => {
+  it("allows concurrent funded slot purchases and reports each confirmed increment", async () => {
+    const db = await getTestDatabase();
+    const caller = await callerFor(blackMarketRouter, userId);
+    for (const [endpoint, cost, field] of [
+      ["buyItemSlot", COST_EXTRA_ITEM_SLOT, "extraItemSlots"],
+      ["buyJutsuSlot", COST_EXTRA_JUTSU_SLOT, "extraJutsuSlots"],
+    ] as const) {
+      await db.update(userData).set({ reputationPoints: cost * 2, [field]: 0 }).where(eq(userData.userId, userId));
+      const snapshot = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+      stubProfile("fetchUser", async () => snapshot);
+      const results = await Promise.all([caller[endpoint](), caller[endpoint]()]);
+      expect(results.every((result) => result.success)).toBe(true);
+      for (const result of results) expect(result.userDelta).toEqual({ reputationPoints: -cost, [field]: 1 });
+      const stored = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+      expect(stored?.reputationPoints).toBe(0);
+      expect(stored?.[field]).toBe(2);
+    }
+  });
+
+  it("returns confirmed Bloodright deltas and guarded arrays without another user read", async () => {
     const db = await getTestDatabase();
     await db.insert(bloodline).values({ id: "cache-line", name: "Cache Line", rank: "D", image: "", description: "Fixture", effects: [] });
     await db.update(userData).set({ bloodlineId: "cache-line" }).where(eq(userData.userId, userId));
     await db.insert(skillTree).values({ id: "cache-tier", name: "Cache Tier", image: "", description: "Fixture", effects: [], tier: 1, pathType: "BLOODRIGHT", bloodlineId: "cache-line", seichiSilverCost: 100 });
     let requiresUserRefresh = false;
-    stubProfile("fetchUpdatedUser", async () => ({ user: await db.query.userData.findFirst({ where: eq(userData.userId, userId) }), requiresUserRefresh }));
-    const caller = await callerFor(bloodrightRouter, userId);
+    stubProfile("fetchUpdatedUser", async ({ client }: { client: DrizzleClient }) => ({ user: await client.query.userData.findFirst({ where: eq(userData.userId, userId) }), requiresUserRefresh }));
+    const counted = countUserReads(db);
+    const caller = callerForDatabase(bloodrightRouter, userId, counted.client);
     const purchased = await caller.purchase({ skillId: "cache-tier" });
-    expect(purchased.data).toMatchObject({ bloodright: [{ skillId: "cache-tier", cost: 100 }], bloodrightSpent: 100, seichiSilver: 200 });
+    expect(purchased.data).toEqual({ bloodright: [{ skillId: "cache-tier", cost: 100 }] });
+    expect(purchased.userDelta).toEqual({ bloodrightSpent: 100, seichiSilver: -100 });
+    expect(counted.getReads()).toBe(1);
+    const refunded = await caller.refund({ skillId: "cache-tier" });
+    expect(refunded.data).toEqual({ bloodright: [] });
+    expect(refunded.userDelta).toEqual({ bloodrightSpent: -100, seichiSilver: 100 });
+    expect(counted.getReads()).toBe(2);
+    await caller.purchase({ skillId: "cache-tier" });
     const reset = await caller.reset();
     const stored = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
-    expect(reset.data).toMatchObject({ bloodright: [], bloodrightSpent: 0, seichiSilver: 300, monthlySkillResets: stored?.monthlySkillResets });
-    expect(reset.data?.monthlySkillResets.count).toBe(1);
+    expect(reset.data).toEqual({ bloodright: [], bloodrightSpent: 0, monthlySkillResets: stored?.monthlySkillResets });
+    expect(reset.userDelta).toEqual({ seichiSilver: 100 });
+    expect(reset.data?.monthlySkillResets?.count).toBe(1);
+    expect(counted.getReads()).toBe(4);
+    expect(stored?.seichiSilver).toBe(300);
     requiresUserRefresh = true;
-    expect((await caller.purchase({ skillId: "cache-tier" })).data).toBeUndefined();
-    expect((await caller.reset()).data).toBeUndefined();
+    expect((await caller.purchase({ skillId: "cache-tier" })).userDelta).toBeUndefined();
+    expect((await caller.refund({ skillId: "cache-tier" })).userDelta).toBeUndefined();
+    await caller.purchase({ skillId: "cache-tier" });
+    expect((await caller.reset()).userDelta).toBeUndefined();
+  });
+
+  it("rejects a changed invested amount before confirming a Bloodright reset refund", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ bloodright: [{ skillId: "cache-tier", cost: 100 }], bloodrightSpent: 100 }).where(eq(userData.userId, userId));
+    stubProfile("fetchUpdatedUser", async () => ({ user: await db.query.userData.findFirst({ where: eq(userData.userId, userId) }), requiresUserRefresh: false }));
+    const client = beforeStatements(db, userData, [async () => {
+      await db.update(userData).set({ bloodrightSpent: 101 }).where(eq(userData.userId, userId));
+    }]);
+    const result = await callerForDatabase(bloodrightRouter, userId, client).reset();
+    expect(result.success).toBe(false);
+    expect(result.userDelta).toBeUndefined();
+    const stored = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+    expect(stored?.seichiSilver).toBe(300);
+    expect(stored?.bloodrightSpent).toBe(101);
+    expect(stored?.bloodright).toEqual([{ skillId: "cache-tier", cost: 100 }]);
   });
 });

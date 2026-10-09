@@ -12,7 +12,6 @@ import {
 } from "@/routers/skillTree";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
-import { fetchUserBloodright } from "@/server/utils/userCache";
 import { canAccessHiddenSkillTree, isStaffMember } from "@/utils/permissions";
 import { bloodrightTierSchema } from "@/validators/skillTree";
 import { bloodrightResponseSchema } from "@/validators/userCache";
@@ -73,13 +72,17 @@ export const bloodrightRouter = createTRPCRouter({
         )
       )
         return errorResponse("Prerequisites not met");
+      const bloodright = [
+        ...purchased,
+        { skillId: tier.id, cost: tier.seichiSilverCost },
+      ];
       const result = await ctx.drizzle
         .update(userData)
         .set({
           updatedAt: getNextUserSnapshotAt(user.updatedAt),
           seichiSilver: sql`${userData.seichiSilver} - ${tier.seichiSilverCost}`,
           bloodrightSpent: sql`${userData.bloodrightSpent} + ${tier.seichiSilverCost}`,
-          bloodright: [...purchased, { skillId: tier.id, cost: tier.seichiSilverCost }],
+          bloodright,
         })
         .where(
           and(
@@ -99,9 +102,13 @@ export const bloodrightRouter = createTRPCRouter({
       return {
         success: true,
         message: `Activated ${tier.name}`,
-        data: updatedUser.requiresUserRefresh
+        userDelta: updatedUser.requiresUserRefresh
           ? undefined
-          : await fetchUserBloodright(ctx.drizzle, ctx.userId),
+          : {
+              seichiSilver: -tier.seichiSilverCost,
+              bloodrightSpent: tier.seichiSilverCost,
+            },
+        data: { bloodright },
       };
     }),
   refund: protectedProcedure
@@ -128,15 +135,16 @@ export const bloodrightRouter = createTRPCRouter({
       const refund = user.bloodright
         .filter((entry) => removed.includes(entry.skillId))
         .reduce((sum, entry) => sum + entry.cost, 0);
+      const bloodright = user.bloodright.filter(
+        (entry) => !removed.includes(entry.skillId),
+      );
       const result = await ctx.drizzle
         .update(userData)
         .set({
           updatedAt: getNextUserSnapshotAt(user.updatedAt),
           seichiSilver: sql`${userData.seichiSilver} + ${refund}`,
           bloodrightSpent: sql`${userData.bloodrightSpent} - ${refund}`,
-          bloodright: user.bloodright.filter(
-            (entry) => !removed.includes(entry.skillId),
-          ),
+          bloodright,
         })
         .where(
           and(
@@ -149,9 +157,10 @@ export const bloodrightRouter = createTRPCRouter({
         return errorResponse("Your Bloodright changed. Refresh and try again");
       return {
         success: true,
-        data: updatedUser.requiresUserRefresh
+        userDelta: updatedUser.requiresUserRefresh
           ? undefined
-          : await fetchUserBloodright(ctx.drizzle, ctx.userId),
+          : { seichiSilver: refund, bloodrightSpent: -refund },
+        data: { bloodright },
         message: `Refunded ${refund} Seichi Silver and removed ${removed.length} tier(s)`,
       };
     }),
@@ -171,6 +180,10 @@ export const bloodrightRouter = createTRPCRouter({
       const isStaff = isStaffMember(user);
       const isFree = isStaff || allowance.count < getFreeResetAmount(user);
       const cost = isFree ? 0 : COST_SKILL_RESET;
+      const monthlySkillResets = {
+        ...allowance,
+        count: allowance.count + (isStaff ? 0 : 1),
+      };
       const result = await ctx.drizzle
         .update(userData)
         .set({
@@ -179,10 +192,7 @@ export const bloodrightRouter = createTRPCRouter({
           bloodrightSpent: 0,
           bloodright: [],
           reputationPoints: sql`${userData.reputationPoints} - ${cost}`,
-          monthlySkillResets: {
-            ...allowance,
-            count: allowance.count + (isStaff ? 0 : 1),
-          },
+          monthlySkillResets,
         })
         .where(
           and(
@@ -190,6 +200,8 @@ export const bloodrightRouter = createTRPCRouter({
             sql`${userData.status} <> 'BATTLE'`,
             sql`${userData.bloodright} = CAST(${JSON.stringify(user.bloodright)} AS JSON)`,
             sql`${userData.monthlySkillResets} = CAST(${JSON.stringify(user.monthlySkillResets)} AS JSON)`,
+            // The confirmed refund delta must equal the SQL expression's committed amount.
+            eq(userData.bloodrightSpent, user.bloodrightSpent),
             gte(userData.reputationPoints, cost),
           ),
         );
@@ -208,9 +220,13 @@ export const bloodrightRouter = createTRPCRouter({
       });
       return {
         success: true,
-        data: updatedUser.requiresUserRefresh
+        userDelta: updatedUser.requiresUserRefresh
           ? undefined
-          : await fetchUserBloodright(ctx.drizzle, ctx.userId),
+          : {
+              seichiSilver: user.bloodrightSpent,
+              ...(cost > 0 ? { reputationPoints: -cost } : {}),
+            },
+        data: { bloodright: [], bloodrightSpent: 0, monthlySkillResets },
         message: `Bloodright reset; refunded ${user.bloodrightSpent} Seichi Silver${cost ? ` (-${cost} Reps)` : " (free)"}`,
       };
     }),

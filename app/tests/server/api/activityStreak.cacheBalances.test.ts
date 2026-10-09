@@ -52,19 +52,30 @@ describeWithDatabase("event pass cache balances", () => {
     vi.restoreAllMocks();
   });
 
-  for (const cost of [0, 10]) {
-    it(`reads only charged balances for a ${cost}-ryo pass`, async () => {
+  for (const [cost, queued] of [
+    [0, false],
+    [10, false],
+    [10, true],
+  ] as const) {
+    it(`returns confirmed costs without balance reads for ${cost} ryo, pending queue ${queued}`, async () => {
       const db = await getTestDatabase();
       await db
         .update(activityStreakConfig)
         .set({ ryoCost: cost })
         .where(eq(activityStreakConfig.id, configId));
+      if (queued)
+        await db
+          .update(userData)
+          .set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] })
+          .where(eq(userData.userId, userId));
       const reads = vi.spyOn(db.query.userData, "findFirst");
       const caller = await callerFor(activityStreakRouter, userId);
       const result = await caller.purchaseEventPass({ configId });
       expect(result.success).toBe(true);
-      expect(reads).toHaveBeenCalledTimes(cost ? 2 : 1);
-      expect(result.userUpdate).toEqual(cost ? { money: 107 - cost } : {});
+      expect(reads).toHaveBeenCalledTimes(1);
+      expect(result.userDelta).toEqual(
+        queued ? undefined : cost ? { money: -cost } : {},
+      );
       const stored = await db.query.userData.findFirst({
         where: eq(userData.userId, userId),
       });

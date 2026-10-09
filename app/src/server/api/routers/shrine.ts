@@ -1298,7 +1298,7 @@ export const shrineRouter = createTRPCRouter({
     }),
 });
 
-// Atomic token debits allow unrelated balance changes, so only tokens need an authoritative read.
+// Shared village balances can change through other members and cron without a local cache update.
 const fetchVillageShrineTokens = (client: DrizzleClient, villageId: string) =>
   client.query.village
     .findFirst({
@@ -1307,7 +1307,6 @@ const fetchVillageShrineTokens = (client: DrizzleClient, villageId: string) =>
     })
     .catch(handleUserCacheReadError);
 
-// A token read is already required; include settings changed during that await to avoid stale patches.
 const fetchVillageShrineSettings = (client: DrizzleClient, villageId: string) =>
   client.query.village
     .findFirst({

@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HIDEOUT_TOWN_UPGRADE } from "@/drizzle/constants";
 import { actionLog, clan, userData } from "@/drizzle/schema";
@@ -14,7 +15,7 @@ import {
 } from "../../setup/testDatabase";
 
 describe("clan committed cache responses", () => {
-  const databaseFor = (userUpdate: object, clanUpdate: object) => ({
+  const databaseFor = (userDelta: object, clanUpdate: object) => ({
     query: {
       userData: {
         findFirst: vi
@@ -26,7 +27,7 @@ describe("clan committed cache responses", () => {
             reputationPoints: 100,
             isOutlaw: true,
           })
-          .mockResolvedValueOnce(userUpdate),
+          .mockResolvedValueOnce(userDelta),
       },
       clan: {
         findFirst: vi
@@ -44,18 +45,20 @@ describe("clan committed cache responses", () => {
     insert: vi.fn(() => ({ values: async () => ({ rowsAffected: 1 }) })),
   });
 
-  it("returns newly read balances even when another write changed them after the debit", async () => {
+  it("returns the confirmed transfer without reading the actor balance", async () => {
     const database = databaseFor({ money: 700 }, { id: "clan-cache-clan", bank: 800 });
     const caller = callerForDatabase(clanRouter, "clan-cache-user", database as never);
     const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 250 });
     expect(result).toMatchObject({
       success: true,
-      userUpdate: { money: 700 },
+      userDelta: { money: -250 },
       clanUpdate: { id: "clan-cache-clan", bank: 800 },
     });
+    expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
+    expect(database.query.clan.findFirst).toHaveBeenCalledTimes(2);
   });
 
-  it("returns the post-donation reputation and treasury instead of client arithmetic", async () => {
+  it("returns the capped confirmed donation without reading the actor balance", async () => {
     const database = databaseFor(
       { reputationPoints: 85 },
       { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE },
@@ -67,9 +70,44 @@ describe("clan committed cache responses", () => {
     });
     expect(result).toMatchObject({
       success: true,
-      userUpdate: { reputationPoints: 85 },
+      userDelta: { reputationPoints: -10 },
       clanUpdate: { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE },
     });
+    expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
+    expect(database.query.clan.findFirst).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("clan missing bank rejection", () => {
+  it("refunds a debit when the clan credit did not commit", async () => {
+    const database = {
+      query: {
+        userData: {
+          findFirst: vi.fn().mockResolvedValue({
+            userId: "gone-bank-user",
+            clanId: "gone-bank",
+            money: 100,
+            isBanned: false,
+          }),
+        },
+        clan: { findFirst: vi.fn().mockResolvedValue({ id: "gone-bank" }) },
+      },
+      update: vi.fn((table: unknown) => ({
+        set: () => ({ where: async () => ({ rowsAffected: table === clan ? 0 : 1 }) }),
+      })),
+    };
+    const caller = callerForDatabase(clanRouter, "gone-bank-user", database as never);
+    const result = await caller.toBank({ clanId: "gone-bank", amount: 25 });
+    expect(result.success).toBe(false);
+    expect(result.userDelta).toBeUndefined();
+    expect(result.clanUpdate).toBeUndefined();
+    expect(database.update.mock.calls.map(([table]) => table)).toEqual([
+      userData,
+      clan,
+      userData,
+    ]);
+    expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
+    expect(database.query.clan.findFirst).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -105,7 +143,7 @@ describe("clan zero-cost cache responses", () => {
         : caller.toBank({ clanId: "clan-zero-clan", amount: 0 }));
       expect(result).toMatchObject({
         success: true,
-        userUpdate: {},
+        userDelta: {},
         clanUpdate: { id: "clan-zero-clan" },
       });
       expect(userRead).toHaveBeenCalledTimes(1);
@@ -148,7 +186,7 @@ describeWithDatabase("clan mutation cache balances", () => {
     const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 250 });
     expect(result).toMatchObject({
       success: true,
-      userUpdate: { money: 750 },
+      userDelta: { money: -250 },
       clanUpdate: { id: "clan-cache-clan", bank: 750 },
     });
   });
@@ -161,16 +199,33 @@ describeWithDatabase("clan mutation cache balances", () => {
     });
     expect(result).toMatchObject({
       success: true,
-      userUpdate: { reputationPoints: 90 },
+      userDelta: { reputationPoints: -10 },
       clanUpdate: { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE },
     });
   });
+
+  for (const endpoint of ["toBank", "clanDonate"] as const) {
+    it(`${endpoint} keeps profile refreshes for a pending energy queue`, async () => {
+      const db = await getTestDatabase();
+      await db
+        .update(userData)
+        .set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] })
+        .where(eq(userData.userId, "clan-cache-user"));
+      const caller = await callerFor(clanRouter, "clan-cache-user");
+      const result = await (endpoint === "toBank"
+        ? caller.toBank({ clanId: "clan-cache-clan", amount: 250 })
+        : caller.clanDonate({ clanId: "clan-cache-clan", reputationPoints: 50 }));
+      expect(result.success).toBe(true);
+      expect(result.userDelta).toBeUndefined();
+      expect(result.clanUpdate).toBeUndefined();
+    });
+  }
 
   it("does not return a successful cache patch after rejecting insufficient funds", async () => {
     const caller = await callerFor(clanRouter, "clan-cache-user");
     const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 1001 });
     expect(result.success).toBe(false);
-    expect(result.userUpdate).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
     expect(result.clanUpdate).toBeUndefined();
   });
 });

@@ -33,6 +33,7 @@ import {
   RESKIN_LIMIT,
 } from "@/drizzle/constants";
 import type { UserItemWithItem, UserJutsuWithRelations } from "@/drizzle/schema";
+import { useUserDelta } from "@/hooks/useUserDelta";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -68,6 +69,7 @@ import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
 
 export default function MyJutsu() {
+  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
   // tRPC utility
   const utils = api.useUtils();
 
@@ -276,25 +278,25 @@ export default function MyJutsu() {
 
   const { mutate: buyJutsuSlot, isPending: isUpgrading } =
     api.blackmarket.buyJutsuSlot.useMutation({
-      onSuccess: async (data) => {
+      onMutate: captureUserDelta,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await (data.data
-            ? updateUser(data.data)
-            : utils.profile.getUser.invalidate());
+          await updateUserDelta(data.userDelta, revision);
         }
       },
     });
 
   const { mutate: transferLevel, isPending: isTransferring } =
     api.jutsu.transferLevel.useMutation({
-      onSuccess: async (data) => {
+      onMutate: captureUserDelta,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success && userData) {
           await Promise.all([
             utils.jutsu.getUserJutsus.invalidate(), // Refresh Jutsu list
             utils.jutsu.getRecentTransfers.invalidate(), // 🔹 Refresh free transfers
-            data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
+            updateUserDelta(data.userDelta, revision),
           ]);
         }
       },

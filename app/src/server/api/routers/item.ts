@@ -141,7 +141,7 @@ import {
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { fetchUserBalances, fetchUserEquipment } from "@/server/utils/userCache";
+import { fetchUserEquipment } from "@/server/utils/userCache";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedItemLoadouts } from "@/utils/paypal";
@@ -173,7 +173,7 @@ import { renameLoadoutSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import type { PostProcessedRewards } from "@/validators/rewards";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
-import { userBalanceResponseSchema } from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { updateRewards } from "./quests";
 
 const MIN_ITEM_SHOP_DISCOUNT_FACTOR = 0.05;
@@ -1183,7 +1183,7 @@ export const itemRouter = createTRPCRouter({
   // Purchase a variant with in-game currency
   purchaseVariant: protectedProcedure
     .input(z.object({ variantId: z.string() }))
-    .output(userBalanceResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query — ownership check runs in parallel (variantId known upfront)
       const [user, variant, ownershipRows, existingUnlock] = await Promise.all([
@@ -1262,20 +1262,19 @@ export const itemRouter = createTRPCRouter({
       return {
         success: true,
         message: `Variant "${variant.name}" unlocked!`,
-        data:
-          variant.cost === 0
-            ? user.energyTrainingQueue?.length
-              ? undefined
-              : {}
-            : variant.costType === "VILLAGE_PRESTIGE"
-              ? undefined
-              : await fetchUserBalances(ctx.drizzle, ctx.userId, [
-                  variant.costType === "MONEY"
+        userDelta:
+          user.energyTrainingQueue?.length ||
+          (variant.cost > 0 && variant.costType === "VILLAGE_PRESTIGE")
+            ? undefined
+            : variant.cost === 0
+              ? {}
+              : {
+                  [variant.costType === "MONEY"
                     ? "money"
                     : variant.costType === "REPUTATION"
                       ? "reputationPoints"
-                      : "seichiSilver",
-                ]),
+                      : "seichiSilver"]: -variant.cost,
+                },
       };
     }),
   // Set the active variant on a user item (null to clear)
@@ -2842,22 +2841,20 @@ export const itemRouter = createTRPCRouter({
         success: true,
         message: `You bought ${info.name}`,
         // Quest purchases keep the full refresh so achievement and masked objective state agree.
-        data: advancesBuyItemObjective
-          ? undefined
-          : equipped === "NONE" &&
-              ryoCost === 0 &&
-              repsCost === 0 &&
-              seichiSilverCost === 0
-            ? user.energyTrainingQueue?.length
-              ? undefined
-              : {}
-            : equipped === "NONE"
-              ? await fetchUserBalances(ctx.drizzle, ctx.userId, [
-                  ...(ryoCost > 0 ? ["money" as const] : []),
-                  ...(repsCost > 0 ? ["reputationPoints" as const] : []),
-                  ...(seichiSilverCost > 0 ? ["seichiSilver" as const] : []),
-                ])
-              : await fetchUserEquipment(ctx.drizzle, ctx.userId),
+        userDelta:
+          advancesBuyItemObjective ||
+          user.energyTrainingQueue?.length ||
+          equipped !== "NONE"
+            ? undefined
+            : {
+                money: -ryoCost,
+                reputationPoints: -repsCost,
+                seichiSilver: -seichiSilverCost,
+              },
+        data:
+          !advancesBuyItemObjective && equipped !== "NONE"
+            ? await fetchUserEquipment(ctx.drizzle, ctx.userId)
+            : undefined,
       };
     }),
   // Auto-equip optimal items based on cost
