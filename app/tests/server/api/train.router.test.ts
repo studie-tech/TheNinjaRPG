@@ -338,6 +338,22 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect((await readUser()).curEnergy).toBe(5);
   });
 
+  it.each([
+    { curEnergy: 0, energy: 0, message: "No Energy available. Wait for Energy to recover before training." },
+    { curEnergy: 0, energy: 5, message: "No Energy available. Wait for Energy to recover before training." },
+    { curEnergy: 50, energy: 0, message: "Enter an Energy amount greater than zero to train." },
+    { curEnergy: 50, energy: -3, message: "Enter an Energy amount greater than zero to train." },
+  ])("answers $energy Energy with $curEnergy available by a message, not a validation error", async ({curEnergy, energy, message}) => {
+    await trainee({curEnergy, regeneration: 0});
+    const before = await readUser();
+    const result = await (await caller()).startTraining({stat: "offence", energy});
+    expect(result).toMatchObject({success: false, message});
+    const after = await readUser();
+    expect(after.curEnergy).toBe(before.curEnergy);
+    expect(after.offence).toBe(before.offence);
+    expect(await readLogs()).toHaveLength(0);
+  });
+
   it("rejects a spend too small to reduce the stored Energy balance", async () => {
     await trainee({curEnergy: 100, regeneration: 0});
     const before = await readUser();

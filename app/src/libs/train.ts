@@ -723,6 +723,22 @@ export const statTrainingBlockMessage = (user: StatTrainingUser): string | null 
   trainingStartBlockMessage(user) ??
   (user.isBanned ? "Cannot spend Energy while banned" : null);
 
+/**
+ * Why an amount of Energy cannot be spent on instant training, or null when it can.
+ * Shared by the training page and `train.startTraining`, so a client that skips the
+ * check still gets this message instead of a validation error.
+ */
+export const trainingEnergyMessage = (
+  requested: number,
+  available: number,
+): string | null => {
+  if (available <= 0)
+    return "No Energy available. Wait for Energy to recover before training.";
+  if (!Number.isFinite(requested) || requested <= 0)
+    return "Enter an Energy amount greater than zero to train.";
+  return null;
+};
+
 export const masteryTrainingBlockMessage = (user: StatTrainingUser): string | null =>
   trainingStartBlockMessage(user) ??
   (user.trainingSpeed !== "8hrs" && user.isBanned

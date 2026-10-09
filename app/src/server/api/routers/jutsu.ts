@@ -93,7 +93,6 @@ import {
   errorResponse,
   protectedProcedure,
   publicProcedure,
-  serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -279,13 +278,17 @@ export const jutsuRouter = createTRPCRouter({
     }),
 
   get: publicProcedure
-    .meta({ mcp: { description: "Get a specific jutsu by ID" } })
+    .meta({
+      mcp: {
+        description: "Get a specific jutsu by ID, or null if no such jutsu exists",
+      },
+    })
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const result = await fetchJutsu(ctx.drizzle, input.id);
-      if (!result) {
-        throw serverError("NOT_FOUND", "Jutsu not found");
-      }
+      // React Query rejects undefined query data, so a missing jutsu resolves to null
+      // and each page shows its own not-found state.
+      if (!result) return null;
       return result as Omit<typeof result, "effects"> & { effects: ZodAllTags[] };
     }),
 

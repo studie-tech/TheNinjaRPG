@@ -37,8 +37,11 @@ export default function ManualJutsuBalance() {
   const { data: gameAssets } = api.misc.getAllGameAssetNames.useQuery(undefined);
 
   // Jutsu details query for modal
-  const { data: jutsuDetails, isPending: isJutsuDetailsPending } =
-    api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
+  const {
+    data: jutsuDetails,
+    isPending: isJutsuDetailsPending,
+    isError: isJutsuDetailsError,
+  } = api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
 
   // Check if user can edit jutsu
   const canEdit = canChangeContent(userData?.role ?? "USER");
@@ -252,6 +255,12 @@ export default function ManualJutsuBalance() {
           <Loader explanation="Loading jutsu details" />
         ) : (
           jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
+        )}
+        {isJutsuDetailsError && (
+          <p role="alert">Jutsu details could not be loaded. Please try again.</p>
+        )}
+        {!isJutsuDetailsPending && !isJutsuDetailsError && !jutsuDetails && (
+          <p role="alert">This jutsu could not be found.</p>
         )}
       </Modal>
     </>

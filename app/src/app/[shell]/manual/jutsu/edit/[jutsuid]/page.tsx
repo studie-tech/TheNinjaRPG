@@ -27,7 +27,7 @@ export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> 
   const { data: userData } = useRequiredUserData();
 
   // Queries
-  const { data, isPending, refetch } = api.jutsu.get.useQuery(
+  const { data, isPending, isError, refetch } = api.jutsu.get.useQuery(
     { id: jutsuId },
     { retry: false, enabled: !!jutsuId },
   );
@@ -43,9 +43,27 @@ export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> 
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
+  if (!userData || !isStaffRole(userData.role)) {
     return <Loader explanation="Loading data" />;
   }
+
+  // A stale or mistyped link resolves to null rather than an endless loader
+  if (!isPending && !data) {
+    return (
+      <ContentBox
+        title="Content Panel"
+        subtitle="Jutsu Management"
+        defaultBackHref="/manual/jutsu"
+      >
+        <p role="alert">
+          {isError
+            ? "This jutsu could not be loaded. Please try again."
+            : "This jutsu could not be found."}
+        </p>
+      </ContentBox>
+    );
+  }
+  if (!data) return <Loader explanation="Loading data" />;
 
   return (
     <SingleEditJutsu

@@ -108,6 +108,7 @@ import {
   masteryTrainingBlockMessage,
   statTrainingBlockMessage,
   trainEfficiency,
+  trainingEnergyMessage,
   trainingSpeedSeconds,
 } from "@/libs/train";
 import { isTutorialJutsuPickStep } from "@/libs/tutorial";
@@ -761,24 +762,11 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
                     key={`${stat}-${i}`}
                     onClick={() => {
-                      const block = statTrainingBlockMessage(userData);
+                      const block =
+                        statTrainingBlockMessage(userData) ??
+                        (overCap ? "Already capped" : null) ??
+                        trainingEnergyMessage(trainingEnergy, availableEnergy);
                       if (block) showMutationToast({ success: false, message: block });
-                      else if (overCap)
-                        showMutationToast({
-                          success: false,
-                          message: "Already capped",
-                        });
-                      else if (availableEnergy <= 0)
-                        showMutationToast({
-                          success: false,
-                          message:
-                            "No Energy available. Wait for Energy to recover before training.",
-                        });
-                      else if (!Number.isFinite(trainingEnergy) || trainingEnergy <= 0)
-                        showMutationToast({
-                          success: false,
-                          message: "Enter an Energy amount greater than zero to train.",
-                        });
                       else
                         startTraining({
                           stat,

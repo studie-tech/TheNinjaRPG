@@ -24,7 +24,9 @@ export const updateEnergyTrainingQueueInputSchema = z.object({
 // Input schemas
 export const startTrainingInputSchema = z.object({
   stat: z.enum(CombatStatNames),
-  energy: z.number().finite().positive(),
+  // Amounts of zero or less are rejected by the procedure with a user-facing message
+  // (trainingEnergyMessage), which a page from before that check still displays.
+  energy: z.number().finite(),
   guess: z.string().optional(),
 });
 
