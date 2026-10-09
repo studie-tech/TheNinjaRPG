@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { RANKED_PVP_STATS } from "@/drizzle/constants";
+import { userJutsuToAction } from "@/libs/combat/actions";
 import { refreshMasteries } from "@/libs/combat/util";
 import { effectiveMasteries } from "@/libs/mastery";
 import { jutsuRequirementWarning } from "@/libs/train";
@@ -14,6 +15,7 @@ import {
   itemLoadout,
   jutsu,
   jutsuLoadout,
+  jutsuReskin,
   userData,
   userItem,
   userJutsu,
@@ -172,6 +174,7 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
       battle,
       aiProfile,
       userJutsu,
+      jutsuReskin,
       jutsuLoadout,
       jutsu,
       userItem,
@@ -181,6 +184,60 @@ describeWithDatabase("combat lobby mastery loadouts", () => {
     );
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each([[true, false], [false, false], [true, true], [false, true]])("keeps cosmetics with their owner (owner switches first: %s, opponent reskinned: %s)", async (ownerFirst, opponentReskinned) => {
+    const { raw, essentials } = await seedLobby();
+    const db = await getTestDatabase();
+    const opponentId = "reskin-opponent";
+    await insertUsers([{ userId: opponentId, username: opponentId, rank: "GENIN", level: 20 }]);
+    await db.insert(jutsuReskin).values({
+      id: "owner-reskin", userId: USER, jutsuId: "usable",
+      name: "Owner Phoenix", description: "Owner description",
+      battleDescription: "Owner casts Phoenix", image: "/phoenix.png",
+    });
+    await db.update(userJutsu).set({ reskinId: "owner-reskin" }).where(eq(userJutsu.id, "owned-usable"));
+    await db.insert(userJutsu).values({ id: "opponent-usable", userId: opponentId, jutsuId: "usable", equipped: true });
+    if (opponentReskinned) {
+      await db.insert(jutsuReskin).values({
+        id: "opponent-reskin", userId: opponentId, jutsuId: "usable",
+        name: "Opponent Dragon", description: "Opponent description",
+        battleDescription: "Opponent casts Dragon", image: "/dragon.png",
+      });
+      await db.update(userJutsu).set({ reskinId: "opponent-reskin" }).where(eq(userJutsu.id, "opponent-usable"));
+    }
+    await db.insert(jutsuLoadout).values({ id: "opponent-loadout", userId: opponentId, jutsuIds: ["usable"] });
+    const ownerJutsus = await fetchUserJutsus(db, USER, undefined, { applyReskins: false });
+    // Normal jutsu-page consumers still receive personalized data.
+    expect((await fetchUserJutsus(db, USER)).find((uj) => uj.jutsuId === "usable")?.jutsu.name).toBe("Owner Phoenix");
+    const opponentJutsus = await fetchUserJutsus(db, opponentId, undefined, { applyReskins: false });
+    const processed = await processUsersForBattle(db, {
+      users: [
+        { ...raw, jutsus: ownerJutsus.filter((uj) => uj.equipped) },
+        { ...raw, userId: opponentId, username: opponentId, jutsus: opponentJutsus },
+      ] as CombatQueryUser[],
+      ...essentials, wars: essentials.activeWars, battleType: "COMBAT",
+      hide: false, isSummon: false, width: 13, height: 9,
+    });
+    await db.update(battle).set({ usersState: processed.usersState, extraState: processed.extraState }).where(eq(battle.id, BATTLE));
+    const switches = [{ userId: USER, loadout: "new-jutsus" }, { userId: opponentId, loadout: "opponent-loadout" }];
+    if (!ownerFirst) switches.reverse();
+    for (const change of switches) {
+      const result = await (await callerFor(combatRouter, change.userId)).updateCombatLoadout({ battleId: BATTLE, jutsuLoadoutId: change.loadout });
+      expect(result.success).toBe(true);
+      const stored = await db.query.battle.findFirst({ where: eq(battle.id, BATTLE) });
+      if (!stored) throw new Error("Missing battle");
+      expect(stored.extraState.jutsus.usable?.name).toBe("Usable");
+      for (const actor of stored.usersState) {
+        const ref = actor.jutsus.find((uj) => uj.jutsuId === "usable");
+        if (!ref) throw new Error("Missing shared jutsu");
+        const action = userJutsuToAction(ref, stored);
+        const isOwner = actor.userId === USER;
+        expect(action.name).toBe(isOwner ? "Owner Phoenix" : opponentReskinned ? "Opponent Dragon" : "Usable");
+        expect(action.image).toBe(isOwner ? "/phoenix.png" : opponentReskinned ? "/dragon.png" : "");
+        expect(action.battleDescription).toBe(isOwner ? "Owner casts Phoenix" : opponentReskinned ? "Opponent casts Dragon" : "Usable");
+      }
+    }
+  });
 
   it.each(["RANKED_PVP", "RANKED_SPARRING"] as const)(
     "%s keeps mastery-gated worn gear despite another item's mastery penalty, but disables broken gear",

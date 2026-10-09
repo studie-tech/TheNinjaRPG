@@ -1049,7 +1049,7 @@ export const combatRouter = createTRPCRouter({
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
         fetchUserItemsWithVariants(ctx.drizzle, ctx.userId),
-        fetchUserJutsus(ctx.drizzle, ctx.userId),
+        fetchUserJutsus(ctx.drizzle, ctx.userId, undefined, { applyReskins: false }),
         fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
 
