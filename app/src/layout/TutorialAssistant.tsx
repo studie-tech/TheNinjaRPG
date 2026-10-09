@@ -417,10 +417,7 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       }
 
       await utils.profile.getUser.cancel();
-      if (
-        tutorialIdentityRef.current.userId !== request.userId ||
-        tutorialIdentityRef.current.tutorialStep !== request.tutorialStep
-      ) {
+      if (tutorialIdentityRef.current.userId !== request.userId) {
         return;
       }
       utils.profile.getUser.setData(undefined, (current) => {
