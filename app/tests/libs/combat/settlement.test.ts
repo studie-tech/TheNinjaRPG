@@ -251,13 +251,13 @@ describeWithDatabase("CAS combat settlement", () => {
     }).where(eq(userData.userId, "winner"));
     const snapshot = scenario(true);
     snapshot.extraState.energyRegeneration = { winner: 6 };
-    snapshot.extraState.energyCapacity = { winner: 100 };
+    snapshot.extraState.energyCapacity = { winner: 1000 };
     snapshot.extraState.energyRewardEligible = true;
     await db.insert(battle).values(snapshot);
     const result = (await settle(snapshot))!;
     const after = (await db.query.userData.findFirst({ where: eq(userData.userId, "winner") }))!;
-    expect(after.curEnergy).toBeGreaterThanOrEqual(27);
-    expect(after.curEnergy).toBeLessThan(27.1);
+    expect(after.curEnergy).toBeGreaterThanOrEqual(272);
+    expect(after.curEnergy).toBeLessThan(272.1);
     expect(after.energyTrainingQueue).toEqual(queue);
     expect(after.offence).toBe(10 + result.offence);
     expect(after.curHealth).toBe(result.curHealth);
@@ -333,10 +333,10 @@ describeWithDatabase("CAS combat settlement", () => {
   });
 
   it.each([
-    { type: "COMBAT", outcome: "Won", eligible: true, reward: 5 },
-    { type: "COMBAT", outcome: "Lost", eligible: true, reward: 3 },
-    { type: "RANKED_PVP", outcome: "Won", eligible: true, reward: 5 },
-    { type: "RANKED_PVP", outcome: "Lost", eligible: true, reward: 3 },
+    { type: "COMBAT", outcome: "Won", eligible: true, reward: 250 },
+    { type: "COMBAT", outcome: "Lost", eligible: true, reward: 200 },
+    { type: "RANKED_PVP", outcome: "Won", eligible: true, reward: 250 },
+    { type: "RANKED_PVP", outcome: "Lost", eligible: true, reward: 200 },
     { type: "COMBAT", outcome: "Won", eligible: false, reward: 0 },
     { type: "SPARRING", outcome: "Won", eligible: true, reward: 0 },
     { type: "RANKED_SPARRING", outcome: "Won", eligible: true, reward: 0 },
@@ -349,7 +349,7 @@ describeWithDatabase("CAS combat settlement", () => {
       const snapshot = scenario(false);
       snapshot.battleType = type;
       snapshot.extraState.energyRewardEligible = eligible;
-      snapshot.extraState.energyCapacity = { winner: 100, loser: 100 };
+      snapshot.extraState.energyCapacity = { winner: 1000, loser: 1000 };
       if (type === "ARENA" || type === "KAGE_AI") snapshot.usersState[1]!.isAi = true;
       if (outcome === "Draw") snapshot.usersState[0]!.curHealth = 0;
       const userId = outcome === "Lost" ? "loser" : "winner";
@@ -392,7 +392,7 @@ describeWithDatabase("CAS combat settlement", () => {
     snapshot.extraState.energyCapacity = { winner: 10, loser: 10 };
     const database = await getTestDatabase();
     await database.insert(battle).values(snapshot);
-    expect((await settle(snapshot))?.energyReward).toBe(5);
+    expect((await settle(snapshot))?.energyReward).toBe(250);
     const user = await database.query.userData.findFirst({
       where: eq(userData.userId, "winner"),
     });
@@ -685,7 +685,7 @@ describeWithDatabase("CAS combat settlement", () => {
     it(`credits concurrent ${final ? "final" : "non-final"} results once`, async () => {
       const snapshot = scenario(final);
       snapshot.extraState.energyRewardEligible = true;
-      snapshot.extraState.energyCapacity = {winner: 100, loser: 100};
+      snapshot.extraState.energyCapacity = {winner: 1000, loser: 1000};
       snapshot.extraState.energyRegeneration = {winner: 3, loser: 0};
       await (await getTestDatabase()).update(userData).set({ regenAt: new Date(Date.now() - 120_000) }).where(eq(userData.userId, "winner"));
       await (await getTestDatabase()).insert(battle).values(snapshot);
@@ -698,8 +698,8 @@ describeWithDatabase("CAS combat settlement", () => {
       );
       expect(await balance()).toBe(109600);
       const winner = await (await getTestDatabase()).query.userData.findFirst({where: eq(userData.userId, "winner")});
-      expect(winner!.curEnergy).toBeGreaterThanOrEqual(21);
-      expect(winner!.curEnergy).toBeLessThan(21.1);
+      expect(winner!.curEnergy).toBeGreaterThanOrEqual(266);
+      expect(winner!.curEnergy).toBeLessThan(266.1);
       const saved = await persisted();
       if (final) {
         expect(saved).toBeUndefined();

@@ -1028,10 +1028,16 @@ export const CP_PER_LVL = 50;
 export const ENERGY_PER_LVL = 50;
 export const STATS_PER_ENERGY = 1.3;
 export const QUEUE_WAITING_SLOTS = { NONE: 1, NORMAL: 2, SILVER: 3, GOLD: 4 } as const;
-export const ENERGY_PVE_REWARD = 1;
-export const ENERGY_EVENT_REWARD = 10;
-export const ENERGY_PVP_WIN_REWARD = 5;
-export const ENERGY_PVP_LOSS_REWARD = 3;
+// Energy restored (up to capacity) when a quest of one of these types is completed.
+export const ENERGY_QUEST_REWARDS: Partial<Record<QuestType, number>> = {
+  mission: 20,
+  battlepyramid: 100,
+  story: 20,
+  starter: 20,
+  event: 100,
+};
+export const ENERGY_PVP_WIN_REWARD = 250;
+export const ENERGY_PVP_LOSS_REWARD = 200;
 export const MAX_ATTRIBUTES = 5;
 export const BANK_INTEREST_CLAIM_DAYS = 8;
 export const RYO_CAP = 3000000000;

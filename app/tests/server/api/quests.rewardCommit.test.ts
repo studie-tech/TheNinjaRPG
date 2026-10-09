@@ -171,11 +171,11 @@ const makeGatheringClient = () => {
 
 describe("commitQuestObjectiveRewards compatibility", () => {
   it.each([
-    ["mission", true, 1],
-    ["battlepyramid", true, 1],
-    ["story", true, 1],
-    ["starter", true, 1],
-    ["event", true, 10],
+    ["mission", true, 20],
+    ["battlepyramid", true, 100],
+    ["story", true, 20],
+    ["starter", true, 20],
+    ["event", true, 100],
     ["daily", true, 0],
     ["overworld", true, 0],
     ["mission", false, 0],
@@ -248,7 +248,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
       updatedAt: expect.any(Date),
     });
     expect(result).toMatchObject({
-      postNotifications: ["Energy reward: 1 (restored up to capacity).", "Active crop growth times reduced by 1 minute."],
+      postNotifications: ["Energy reward: 20 (restored up to capacity).", "Active crop growth times reduced by 1 minute."],
     });
   });
 
@@ -669,7 +669,7 @@ describeWithDatabase("quest Energy reward snapshots", () => {
     }))!;
     const history = user.userQuests[0]!;
     // The hydrated capacity may be newer than its throttled persisted value.
-    user.maxEnergy = 150;
+    user.maxEnergy = 250;
     let stale: typeof userData.$inferSelect | undefined;
     const client = new Proxy(database, {
       get(target, key, receiver) {
@@ -710,7 +710,7 @@ describeWithDatabase("quest Energy reward snapshots", () => {
     });
     expect(claim.outcome).toBe("claimed");
     if (claim.outcome === "claimed") {
-      expect(claim.postNotifications).toContain("Energy reward: 10 (restored up to capacity).");
+      expect(claim.postNotifications).toContain("Energy reward: 100 (restored up to capacity).");
     }
     expect(stale?.curEnergy).toBe(95);
     expect(
@@ -727,7 +727,7 @@ describeWithDatabase("quest Energy reward snapshots", () => {
       await database.query.userData.findFirst({
         where: eq(userData.userId, user.userId),
       }),
-    ).toMatchObject({ curEnergy: 105, maxEnergy: 150 });
+    ).toMatchObject({ curEnergy: 195, maxEnergy: 250 });
     expect(
       (
         await commitQuestObjectiveRewards({
@@ -750,6 +750,6 @@ describeWithDatabase("quest Energy reward snapshots", () => {
           where: eq(userData.userId, user.userId),
         })
       )?.curEnergy,
-    ).toBe(105);
+    ).toBe(195);
   });
 });

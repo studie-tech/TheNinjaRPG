@@ -105,25 +105,73 @@ describe("optional tab remembering", () => {
   });
 });
 
+const trainingTabKey = "trainingTab:user";
+
+/** Mirrors the training grounds wiring: a remembered section that tutorial steps may override. */
 const AccessibleTrainingTabs = ({ forcedSection }: { forcedSection?: string }) => {
-  const [section, setSection] = useState("Stats");
+  const [section, setSection] = useState<string | null>(null);
   const activeSection = forcedSection ?? section;
+  const selectSection = (value: string) => {
+    storage.safeLocalStorageSetItem(trainingTabKey, value);
+    setSection(value);
+  };
   return (
-    <Tabs value={activeSection} onValueChange={setSection}>
+    <Tabs value={activeSection ?? ""} onValueChange={selectSection}>
       <NavTabs
+        id={trainingTabKey}
         accessibleTabs
         label="Training activities"
         current={activeSection}
+        onChange={setSection}
         options={["Stats", "Masteries", "Jutsu"]}
         icons={{ Stats: <span aria-hidden="true">★</span> }}
         className="whitespace-nowrap"
       />
-      <TabsContent value={activeSection}>{activeSection} training</TabsContent>
+      <TabsContent value={activeSection ?? ""}>{activeSection} training</TabsContent>
     </Tabs>
   );
 };
 
 describe("accessible training tabs", () => {
+  let read: ReturnType<typeof vi.spyOn>;
+  let write: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    read = vi.spyOn(storage, "safeLocalStorageGetItem").mockReturnValue(null);
+    write = vi.spyOn(storage, "safeLocalStorageSetItem").mockReturnValue(true);
+  });
+
+  it("reopens the last visited section", async () => {
+    read.mockReturnValue("Masteries");
+    const view = render(<AccessibleTrainingTabs />);
+    await waitFor(() =>
+      expect(
+        view.getByRole("tab", { name: "Masteries" }).getAttribute("aria-selected"),
+      ).toBe("true"),
+    );
+    expect(view.getByRole("tabpanel", { name: "Masteries" }).textContent).toBe(
+      "Masteries training",
+    );
+    expect(read).toHaveBeenCalledWith(trainingTabKey);
+  });
+
+  it("remembers sections chosen by pointer or keyboard", async () => {
+    const view = render(<AccessibleTrainingTabs />);
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Jutsu" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(write).toHaveBeenLastCalledWith(trainingTabKey, "Jutsu");
+    const jutsu = view.getByRole("tab", { name: "Jutsu" });
+    jutsu.focus();
+    fireEvent.keyDown(jutsu, { key: "Home" });
+    await waitFor(() => expect(write).toHaveBeenLastCalledWith(trainingTabKey, "Stats"));
+  });
+
+  it("does not overwrite the remembered section while a tutorial forces one", () => {
+    render(<AccessibleTrainingTabs forcedSection="Jutsu" />);
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it("announces selection and associates the panel with its tab", () => {
     const view = render(<AccessibleTrainingTabs />);
     const tab = view.getByRole("tab", { name: "Stats" });
