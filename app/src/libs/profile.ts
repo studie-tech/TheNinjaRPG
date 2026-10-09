@@ -36,6 +36,7 @@ import { getReducedGainsDays } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { getStrucBoost } from "@/utils/village";
 import type { AssignableUserStats } from "@/validators/combat";
+import { assignableMasteryNames } from "@/validators/user";
 
 /**
  * Calculate the experience requirements for a given level
@@ -262,6 +263,25 @@ export const getRedistributableStatTotal = (
 ) => {
   const { stats_cap, gens_cap } = getUserCaps(user.rank);
   return Math.min(getAssignedCombatStatTotal(user), 2 * stats_cap + 4 * gens_cap);
+};
+
+/**
+ * Whether unused experience can still go anywhere on /profile/experience: one of the six
+ * combat stats or one of the assignable masteries is still below its rank cap.
+ */
+export const canAssignExperience = (
+  user: Pick<
+    UserData,
+    "rank" | (typeof CombatStatNames)[number] | (typeof assignableMasteryNames)[number]
+  >,
+) => {
+  const { stats_cap, gens_cap, mastery_cap } = getUserCaps(user.rank);
+  return (
+    CombatStatNames.some(
+      (stat) =>
+        user[stat] < (stat === "offence" || stat === "defence" ? stats_cap : gens_cap),
+    ) || assignableMasteryNames.some((name) => user[name] < mastery_cap)
+  );
 };
 
 /** Assign stats of user, meant for the training dummy and ranked equalization */
