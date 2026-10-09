@@ -151,6 +151,7 @@ import {
   isEffectActive,
   maskBattle,
   maskBattleDynamic,
+  reconcileLobbyPools,
   refreshMasteries,
   resetMasteriesToBase,
   rollInitiative,
@@ -1189,10 +1190,15 @@ export const combatRouter = createTRPCRouter({
         (e) => e.creatorId !== ctx.userId,
       );
 
-      // Preserve original initiative and direction to avoid changing them when updating loadouts
-      // Direction is important for RAID battles where friendly fire is determined by direction
+      // Reprocessing equipment must not regenerate pools or change turn order.
+      // Direction determines friendly fire in RAID battles.
       const originalInitiative = user.initiative;
       const originalDirection = user.direction;
+      const originalPools = {
+        curHealth: user.curHealth,
+        curChakra: user.curChakra,
+        curStamina: user.curStamina,
+      };
 
       // Hydrate jutsus and items from extraState if not using new loadouts
       // We reconstruct CombatQueryUser format from BattleUserState refs + extraState
@@ -1292,19 +1298,22 @@ export const combatRouter = createTRPCRouter({
         },
       );
 
-      // Restore original initiative and direction
+      const completeUserEffects = [
+        ...otherUserEffects,
+        ...preservedSageEffects,
+        ...userEffects,
+      ];
+
+      // Restore pools against the full effect list, including retained incoming effects.
       if (usersState[0]) {
+        reconcileLobbyPools(usersState[0], originalPools, completeUserEffects);
         usersState[0].initiative = originalInitiative;
         usersState[0].direction = originalDirection;
       }
 
       // Merge the user's state with the other user's state
       userBattle.usersState = [...otherUserState, ...usersState];
-      userBattle.usersEffects = [
-        ...otherUserEffects,
-        ...preservedSageEffects,
-        ...userEffects,
-      ];
+      userBattle.usersEffects = completeUserEffects;
       refreshMasteries(userBattle.usersState, userBattle.usersEffects);
 
       // Merge extraState: add new jutsus/items from the updated loadout to existing extraState
