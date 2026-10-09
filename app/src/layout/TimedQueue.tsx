@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
-import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
+import { getDaysHoursMinutesSeconds } from "@/utils/time";
 
 export interface TimedQueueJob {
   id: string;
@@ -147,5 +147,14 @@ export const TimedQueue: React.FC<TimedQueueProps> = (props) => {
   );
 };
 
-const formatDuration = (ms: number) =>
-  getTimeLeftStr(...getDaysHoursMinutesSeconds(Math.max(0, ms)));
+/** A job length such as "1h 30m", "15m" or "45s". */
+const formatDuration = (ms: number) => {
+  const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(Math.max(0, ms));
+  const parts = [
+    days ? `${days}d` : "",
+    hours ? `${hours}h` : "",
+    minutes ? `${minutes}m` : "",
+    !days && !hours && seconds ? `${seconds}s` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" ") : "0s";
+};

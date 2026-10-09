@@ -1169,7 +1169,9 @@ export default function OccupationCrafting() {
                 <h4 className="mb-2 font-medium">How Crafting Works</h4>
                 <ul className="space-y-1 text-muted-foreground text-sm">
                   <li>• Items need crafting requirements set by administrators</li>
-                  <li>• You can only craft one item at a time</li>
+                  <li>
+                    • One item crafts at a time; more can wait in your crafting queue
+                  </li>
                   <li>• Required materials are consumed when crafting starts</li>
                   <li>• Experience is gained when starting and completing crafts</li>
                   <li>• Higher ranks unlock new rarities and faster crafting times</li>
