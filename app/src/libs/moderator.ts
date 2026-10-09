@@ -19,6 +19,7 @@ import {
 } from "@/drizzle/schema";
 import { insertAutomatedModeration, insertUserReport } from "@/routers/reports";
 import type { DrizzleClient } from "@/server/db";
+import { evaluateImageModeration } from "@/utils/imageModeration";
 import type { AdditionalContext } from "@/validators/reports";
 
 // OpenAI client
@@ -486,20 +487,10 @@ export const classifyNsfwImage = async (
     model: "omni-moderation-latest",
     input: [{ type: "image_url", image_url: { url: imageUrl } }],
   });
-  const result = moderation.results?.[0];
-  const flaggedCategories = result
-    ? Object.entries(result.categories)
-        .filter(([, flagged]) => flagged)
-        .map(([category]) => category)
-    : [];
-
-  return {
-    isNsfw: Boolean(result?.flagged),
-    reason:
-      flaggedCategories.length > 0
-        ? `Image flagged for: ${flaggedCategories.join(", ")}`
-        : "Image passed moderation",
-  };
+  // Do not use `result.flagged` directly: it trips on generic `violence` for
+  // ordinary ninja art (swords, red themes). See utils/imageModeration.ts.
+  const { isNsfw, reason } = evaluateImageModeration(moderation.results?.[0]);
+  return { isNsfw, reason };
 };
 
 /**
