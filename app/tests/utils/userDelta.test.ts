@@ -33,6 +33,21 @@ const setup = () => {
 };
 
 describe("confirmed user deltas", () => {
+  it("leaves a pending reconciliation running when preparing a mutation", async () => {
+    const test = setup();
+    let resolve!: (value: ReturnType<typeof profile>) => void;
+    const pending = test.client.fetchQuery({
+      queryKey: key,
+      queryFn: () => new Promise<ReturnType<typeof profile>>((done) => { resolve = done; }),
+    });
+    expect(prepareUserDelta(test.client, key)).toBeUndefined();
+    expect(test.client.getQueryState(key)?.fetchStatus).toBe("fetching");
+    resolve(profile(120));
+    await pending;
+    expect(test.value()?.userData.money).toBe(120);
+    test.close();
+  });
+
   it("leaves initial profile loading running when there is no cached user", async () => {
     const client = new QueryClient();
     let resolve!: (value: ReturnType<typeof profile>) => void;
@@ -104,7 +119,7 @@ describe("confirmed user deltas", () => {
     test.close();
   });
 
-  it("cancels an unfinished stale query before applying the debit", async () => {
+  it("restarts an unfinished query instead of discarding its reconciliation", async () => {
     const test = setup();
     const revision = await prepareUserDelta(test.client, key);
     let resolve!: (value: ReturnType<typeof profile>) => void;
@@ -112,10 +127,22 @@ describe("confirmed user deltas", () => {
       queryKey: key,
       queryFn: () => new Promise<ReturnType<typeof profile>>((done) => { resolve = done; }),
     }).catch(() => undefined);
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => profile(110) });
     await applyUserDelta(test.client, key, { money: -10 }, revision);
     resolve(profile(100));
     await pending;
-    expect(test.value()?.userData.money).toBe(90);
+    expect(test.value()?.userData.money).toBe(110);
+    test.close();
+  });
+
+  it("honors an invalidation even when its query has not completed", async () => {
+    const test = setup();
+    const revision = await prepareUserDelta(test.client, key);
+    test.client.getQueryCache().find({ queryKey: key })!.invalidate();
+    test.setDatabase(110);
+    await applyUserDelta(test.client, key, { money: -10 }, revision);
+    expect(test.value()?.userData.money).toBe(110);
+    expect(test.reads()).toBe(1);
     test.close();
   });
 
