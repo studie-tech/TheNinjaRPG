@@ -72,6 +72,8 @@ const JutsuEffectsBalance: React.FC<JutsuEffectsBalanceProps> = (props) => {
     data: jutsuDetails,
     isPending: isJutsuDetailsPending,
     isError: isJutsuDetailsError,
+    isFetching: isJutsuDetailsFetching,
+    refetch: refetchJutsuDetails,
   } = api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
 
   // Set default effect to be damage
@@ -168,7 +170,15 @@ const JutsuEffectsBalance: React.FC<JutsuEffectsBalanceProps> = (props) => {
           jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
         )}
         {isJutsuDetailsError && (
-          <p role="alert">Jutsu details could not be loaded. Please try again.</p>
+          <div className="space-y-2">
+            <p role="alert">Jutsu details could not be loaded. Please try again.</p>
+            <Button
+              disabled={isJutsuDetailsFetching}
+              onClick={() => void refetchJutsuDetails()}
+            >
+              {isJutsuDetailsFetching ? "Retrying..." : "Retry"}
+            </Button>
+          </div>
         )}
         {!isJutsuDetailsPending && !isJutsuDetailsError && !jutsuDetails && (
           <p role="alert">This jutsu could not be found.</p>
@@ -203,6 +213,8 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
     data: jutsuDetails,
     isPending: isJutsuDetailsPending,
     isError: isJutsuDetailsError,
+    isFetching: isJutsuDetailsFetching,
+    refetch: refetchJutsuDetails,
   } = api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
 
   // Mutations
@@ -361,7 +373,15 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
           jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
         )}
         {isJutsuDetailsError && (
-          <p role="alert">Jutsu details could not be loaded. Please try again.</p>
+          <div className="space-y-2">
+            <p role="alert">Jutsu details could not be loaded. Please try again.</p>
+            <Button
+              disabled={isJutsuDetailsFetching}
+              onClick={() => void refetchJutsuDetails()}
+            >
+              {isJutsuDetailsFetching ? "Retrying..." : "Retry"}
+            </Button>
+          </div>
         )}
         {!isJutsuDetailsPending && !isJutsuDetailsError && !jutsuDetails && (
           <p role="alert">This jutsu could not be found.</p>
