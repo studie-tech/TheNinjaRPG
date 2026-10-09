@@ -101,9 +101,19 @@ export type JutsuReskinCreateSchema = z.infer<typeof jutsuReskinCreateSchema>;
 /**
  * Schema for editing an existing jutsu reskin by staff/content.
  * Mirrors create fields, but includes a mandatory reason field for audit/AI validation.
+ * - username / jutsuId: the owner and base jutsu the reskin is assigned to.
+ * - attached: whether the owner's copy of that jutsu uses the reskin.
  */
 export const jutsuReskinUpdateSchema = baseReskinSchema.extend({
+  username: z.string().trim().min(1).max(191),
+  jutsuId: z.string().min(1),
+  attached: z.boolean(),
   reason: z.string().min(10),
+});
+
+export const getJutsuReskinSchema = z.object({ reskinId: z.string() });
+export const updateJutsuReskinSchema = getJutsuReskinSchema.extend({
+  data: jutsuReskinUpdateSchema,
 });
 
 export type JutsuReskinUpdateSchema = z.infer<typeof jutsuReskinUpdateSchema>;
