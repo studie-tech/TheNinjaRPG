@@ -35,7 +35,7 @@ export function DashboardSettings({
         return;
       }
       if (updateUser) await updateUser(input);
-      await utils.profile.getUser.invalidate();
+      else await utils.profile.getUser.invalidate();
       setMessage("Dashboard preferences saved.");
     },
     onError: (error) => setMessage(error.message),

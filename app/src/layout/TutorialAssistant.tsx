@@ -416,6 +416,13 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
         return;
       }
 
+      await utils.profile.getUser.cancel();
+      if (
+        tutorialIdentityRef.current.userId !== request.userId ||
+        tutorialIdentityRef.current.tutorialStep !== request.tutorialStep
+      ) {
+        return;
+      }
       utils.profile.getUser.setData(undefined, (current) => {
         if (!current?.userData || current.userData.userId !== request.userId) {
           return current;
@@ -427,7 +434,6 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
       });
       disableTutorialRequestRef.current = undefined;
       setShowCancelConfirmDialog(false);
-      await utils.profile.getUser.invalidate();
     } catch {
       const identity = tutorialIdentityRef.current;
       if (

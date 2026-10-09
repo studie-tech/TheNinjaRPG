@@ -536,8 +536,8 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
     mutateAsync: updateBattleDescription,
     isPending: isUpdatingBattleDescription,
   } = api.profile.updateBattleDescription.useMutation({
-    onSuccess: async () => {
-      await utils.profile.getUser.invalidate();
+    onSuccess: async (result, input) => {
+      if (result.success) await updateUser(input);
     },
   });
 
