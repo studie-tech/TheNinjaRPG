@@ -2118,6 +2118,7 @@ export const fetchUserJutsus = async (
   client: DrizzleClient,
   userId: string,
   input?: JutsuFilteringSchema,
+  options: { applyReskins?: boolean } = {},
 ) => {
   // Self-join alias to get the parent jutsu's parentJutsuId (grandparent)
   const parentJutsuAlias = alias(jutsu, "parentJutsu");
@@ -2152,8 +2153,10 @@ export const fetchUserJutsus = async (
       result.parentJutsu?.parentJutsuId ?? null,
     ].filter((id): id is string => !!id),
   }));
-  // Then map to reskinned format
-  return unskinnedUserJutsus.map((userjutsu) => getReskinnedUserJutsu(userjutsu));
+  // Combat stores shared base jutsu data and applies cosmetics through each owner's reference.
+  return options.applyReskins === false
+    ? unskinnedUserJutsus
+    : unskinnedUserJutsus.map((userjutsu) => getReskinnedUserJutsu(userjutsu));
 };
 
 /**
