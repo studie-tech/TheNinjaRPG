@@ -18,15 +18,16 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChangeContent } from "@/utils/permissions";
-import {
-  createAvatarOutputSchema,
-  updateAvatarOutputSchema,
-} from "@/validators/avatar";
+import { avatarUserDataSchema } from "@/validators/avatar";
 
 export const avatarRouter = createTRPCRouter({
   createAvatar: protectedProcedure
     .meta({ mcp: { description: "Generate a new AI avatar" } })
-    .output(createAvatarOutputSchema)
+    .output(
+      baseServerResponse.extend({
+        data: avatarUserDataSchema.extend({ reputationPoints: z.number() }).optional(),
+      }),
+    )
     .mutation(async ({ ctx }) => {
       // Fetch user directly with a query that returns null if not found
       // This handles the case where the user was just created and the record
@@ -118,7 +119,12 @@ export const avatarRouter = createTRPCRouter({
   updateAvatar: protectedProcedure
     .meta({ mcp: { description: "Set active avatar from history" } })
     .input(z.object({ avatar: z.number(), type: z.enum(ContentTypes) }))
-    .output(updateAvatarOutputSchema)
+    .output(
+      baseServerResponse.extend({
+        url: z.string().nullish(),
+        data: avatarUserDataSchema.optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, avatar] = await Promise.all([

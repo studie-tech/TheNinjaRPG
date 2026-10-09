@@ -33,7 +33,6 @@ import {
   activityStreakConfigSchema,
   activityStreakConfigUpdateSchema,
   claimStreakDaySchema,
-  purchaseEventPassOutputSchema,
   purchaseEventPassSchema,
 } from "@/validators/activityStreak";
 import { idSchema } from "@/validators/misc";
@@ -262,7 +261,17 @@ export const activityStreakRouter = createTRPCRouter({
   purchaseEventPass: protectedProcedure
     .meta({ mcp: { description: "Purchase an event pass" } })
     .input(purchaseEventPassSchema)
-    .output(purchaseEventPassOutputSchema)
+    .output(
+      baseServerResponse.extend({
+        userUpdate: z
+          .object({
+            money: z.number(),
+            reputationPoints: z.number(),
+            seichiSilver: z.number(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Fetch purchase requirements and both current and historical ownership in parallel.
       const [user, config, existingProgress, completionLogs] = await Promise.all([

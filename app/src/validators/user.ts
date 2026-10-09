@@ -3,7 +3,6 @@ import type { ElementName, LetterRank, QuestType } from "@/drizzle/constants";
 import {
   GeneralTypes,
   getUserCaps,
-  OCCUPATIONS,
   SEICHI_SILVER_ADJUST_LIMIT,
   TavernColorPresets,
   UserRanks,
@@ -76,15 +75,6 @@ export const cosmeticUserUpdateOutputSchema = baseServerResponse.extend({
       gender: z.string().optional(),
       tavernUsernameColor: z.enum(TavernColorPresets).optional(),
       tavernTitleColor: z.enum(TavernColorPresets).optional(),
-    })
-    .optional(),
-});
-
-export const occupationSelectionOutputSchema = baseServerResponse.extend({
-  data: z
-    .object({
-      occupation: z.enum(OCCUPATIONS),
-      occupationSignupAt: z.date(),
     })
     .optional(),
 });

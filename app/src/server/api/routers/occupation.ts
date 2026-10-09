@@ -44,7 +44,6 @@ import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChangeContent } from "@/utils/permissions";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
-import { occupationSelectionOutputSchema } from "@/validators/user";
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure
@@ -65,7 +64,16 @@ export const occupationRouter = createTRPCRouter({
   selectOccupation: protectedProcedure
     .meta({ mcp: { description: "Select a crafting occupation" } })
     .input(z.object({ occupation: z.enum(OCCUPATIONS) }))
-    .output(occupationSelectionOutputSchema)
+    .output(
+      baseServerResponse.extend({
+        data: z
+          .object({
+            occupation: z.enum(OCCUPATIONS),
+            occupationSignupAt: z.date(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);

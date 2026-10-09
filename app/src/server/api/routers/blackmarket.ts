@@ -54,11 +54,7 @@ import {
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
 import { cosmeticUserUpdateOutputSchema, titleChangeSchema } from "@/validators/user";
-import {
-  extraItemSlotResponseSchema,
-  extraJutsuSlotResponseSchema,
-  userBalanceResponseSchema,
-} from "@/validators/userCache";
+import { userBalanceResponseSchema } from "@/validators/userCache";
 import { fetchUser } from "./profile";
 
 export const blackMarketRouter = createTRPCRouter({
@@ -498,7 +494,13 @@ export const blackMarketRouter = createTRPCRouter({
     }),
   buyItemSlot: protectedProcedure
     .meta({ mcp: { description: "Purchase an extra item slot" } })
-    .output(extraItemSlotResponseSchema)
+    .output(
+      baseServerResponse.extend({
+        data: z
+          .object({ reputationPoints: z.number(), extraItemSlots: z.number() })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -548,7 +550,13 @@ export const blackMarketRouter = createTRPCRouter({
     }),
   buyJutsuSlot: protectedProcedure
     .meta({ mcp: { description: "Purchase an extra jutsu slot" } })
-    .output(extraJutsuSlotResponseSchema)
+    .output(
+      baseServerResponse.extend({
+        data: z
+          .object({ reputationPoints: z.number(), extraJutsuSlots: z.number() })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);

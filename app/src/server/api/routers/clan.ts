@@ -83,10 +83,8 @@ import { getEffectiveStructureLevel } from "@/utils/village";
 import {
   checkAssassin,
   checkCoLeader,
-  clanBankOutputSchema,
   clanBoostTypeSchema,
   clanCreateSchema,
-  clanDonateOutputSchema,
   clanGetRequestSchema,
   factionEditSchema,
   strictClanNameField,
@@ -272,7 +270,12 @@ export const clanRouter = createTRPCRouter({
         clanId: z.string(),
       }),
     )
-    .output(clanDonateOutputSchema)
+    .output(
+      baseServerResponse.extend({
+        userUpdate: z.object({ reputationPoints: z.number() }).optional(),
+        clanUpdate: z.object({ id: z.string(), repTreasury: z.number() }).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -1083,7 +1086,12 @@ export const clanRouter = createTRPCRouter({
   toBank: protectedProcedure
     .meta({ mcp: { description: "Deposit ryo to clan bank" } })
     .input(z.object({ amount: z.number().min(0), clanId: z.string() }))
-    .output(clanBankOutputSchema)
+    .output(
+      baseServerResponse.extend({
+        userUpdate: z.object({ money: z.number() }).optional(),
+        clanUpdate: z.object({ id: z.string(), bank: z.number() }).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [user, fetchedClan] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),

@@ -55,7 +55,7 @@ import { canChallengeKage } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";
-import { challengeAvailabilityOutputSchema } from "@/validators/kage";
+
 import { idSchema } from "@/validators/misc";
 
 const pusher = getServerPusher();
@@ -610,7 +610,17 @@ export const kageRouter = createTRPCRouter({
       mcp: { description: "Toggle kage challenge availability" },
     })
     .input(z.object({ villageId: z.string() }))
-    .output(challengeAvailabilityOutputSchema)
+    .output(
+      baseServerResponse.extend({
+        data: z
+          .object({
+            id: z.string(),
+            openForChallenges: z.boolean(),
+            openForChallengesAt: z.date(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Fetch all data in parallel
       const [user, requests, userVillage, lastToggle, dailyLockedTimeSeconds] =

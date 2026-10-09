@@ -130,11 +130,7 @@ import {
 import { renameLoadoutSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import { QuestTracker } from "@/validators/objectives";
-import {
-  jutsuLoadoutResponseSchema,
-  jutsuOrderResponseSchema,
-  userBalanceResponseSchema,
-} from "@/validators/userCache";
+import { userBalanceResponseSchema } from "@/validators/userCache";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 
 export const jutsuRouter = createTRPCRouter({
@@ -390,7 +386,16 @@ export const jutsuRouter = createTRPCRouter({
   selectJutsuLoadout: protectedProcedure
     .meta({ mcp: { description: "Select a jutsu loadout" } })
     .input(idSchema)
-    .output(jutsuLoadoutResponseSchema)
+    .output(
+      baseServerResponse.extend({
+        data: z
+          .object({
+            jutsuLoadout: z.string(),
+            loadout: z.object({ jutsuIds: z.array(z.string()) }),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // fetchUpdatedUser (not fetchUser) so the full relations canUseJutsu reads
       // (bloodline/village/elements) are present for validation, mirroring
@@ -1509,7 +1514,11 @@ export const jutsuRouter = createTRPCRouter({
         moveForward: z.boolean(),
       }),
     )
-    .output(jutsuOrderResponseSchema)
+    .output(
+      baseServerResponse.extend({
+        data: z.object({ jutsuIds: z.array(z.string()) }).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const loadouts = await fetchJutsuLoadouts(ctx.drizzle, ctx.userId);
       const loadout = loadouts.find((l) => l.id === input.loadoutId);
