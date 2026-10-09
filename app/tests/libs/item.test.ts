@@ -21,6 +21,7 @@ import {
   type EquipConstraintInfo,
   type EquippedAssignment,
   type EquippedConstraintState,
+  getItemStackMergeBucketKey,
   getHomeStorageBucket,
   getHomeStorageBucketFullMessage,
   getInventoryBucket,
@@ -1001,5 +1002,37 @@ describe("cooking capacity", () => {
     expect(getInventoryBucketFullMessage(getInventoryBucket(cooking))).not.toBe(
       "Materials inventory is full",
     );
+  });
+});
+
+
+describe("getItemStackMergeBucketKey", () => {
+  const row = { storedAtHome: false, equipped: "NONE" as const, activeVariantId: null, level: 1 };
+
+  it("groups consumables across ownership levels", () => {
+    const item = { itemType: "CONSUMABLE" as const };
+    expect(getItemStackMergeBucketKey(item, row)).toBe(
+      getItemStackMergeBucketKey(item, { ...row, level: 15 }),
+    );
+  });
+
+  it("keeps equipment ownership levels separate", () => {
+    const item = { itemType: "WEAPON" as const };
+    expect(getItemStackMergeBucketKey(item, row)).not.toBe(
+      getItemStackMergeBucketKey(item, { ...row, level: 15 }),
+    );
+  });
+
+  it("keeps storage, equipment slots and cosmetic selections separate", () => {
+    const item = { itemType: "CONSUMABLE" as const };
+    for (const other of [
+      { ...row, storedAtHome: true },
+      { ...row, equipped: "HAND_1" as const },
+      { ...row, activeVariantId: "variant-id" },
+    ]) {
+      expect(getItemStackMergeBucketKey(item, row)).not.toBe(
+        getItemStackMergeBucketKey(item, other),
+      );
+    }
   });
 });

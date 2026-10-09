@@ -82,6 +82,7 @@ import {
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
+  getItemStackMergeBucketKey,
   nonCombatConsume,
   partitionImbuementsForItemTransfer,
   readItemListFilterSlot,
@@ -3882,20 +3883,6 @@ type UserItemMergeBucketRow = Pick<
   | "dropChancePerc"
 >;
 
-// activeVariantId is part of the bucket key so two stacks of the same item with
-// different selected cosmetics never merge into one (which would silently drop
-// one variant). Same-variant stacks share a bucket, so the merged row keeps the
-// correct variant and the per-bucket UPDATE/DELETE need not guard on it.
-// level is part of the key for the same reason: merging a leveled stack into a
-// lower-level one would silently drop its ownership progression.
-// Note: a selectVariant call racing between bucket construction and the writes
-// could move a row to a different variant after bucketing — an accepted,
-// pre-existing PlanetScale limitation (no transactions), not a regression here.
-const mergeStacksBucketKey = (
-  row: Pick<UserItem, "storedAtHome" | "equipped" | "activeVariantId" | "level">,
-) =>
-  `${row.storedAtHome ? "home" : "carry"}:${row.equipped}:${row.activeVariantId ?? "none"}:${row.level}`;
-
 const mergeStackRowGuard = (
   userId: string,
   item: Pick<UserItemMergeBucketRow, "id" | "equipped" | "storedAtHome">,
@@ -4153,7 +4140,7 @@ async function executeMergeStacksForItem(
 
   const buckets = new Map<string, UserItemMergeBucketRow[]>();
   for (const row of filteredUserItems) {
-    const key = mergeStacksBucketKey(row);
+    const key = getItemStackMergeBucketKey(info, row);
     const list = buckets.get(key);
     if (list) {
       list.push(row);
