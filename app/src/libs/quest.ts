@@ -169,6 +169,25 @@ export const filterQuestTrackersForDbPersist = (
   return trackers.filter((t) => !inMemoryOnlyAchievementQuestIds.has(t.id));
 };
 
+/** Hidden active targets need server projection after changing sectors, even if currently revealed. */
+export const hasActiveHiddenQuestObjectives = (
+  user: NonNullable<UserWithRelations>,
+) => {
+  if (canChangeContent(user.role)) return false;
+  return user.userQuests.some((entry) => {
+    if (entry.completed || entry.endAt) return false;
+    const tracker = user.questData?.find((q) => q.id === entry.questId);
+    return entry.quest.content.objectives.some((objective, index) => {
+      if (!("hideLocation" in objective) || !objective.hideLocation) return false;
+      const goal = tracker?.goals.find((g) => g.id === objective.id);
+      return (
+        !goal?.done &&
+        (!tracker || isQuestObjectiveAvailable(entry.quest, tracker, index))
+      );
+    });
+  });
+};
+
 /**
  * Get active objectives for a user
  */

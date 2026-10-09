@@ -1,6 +1,10 @@
 import { SECTOR_WIDTH, SECTOR_HEIGHT } from "@/drizzle/constants";
 import { describe, expect, it } from "vitest";
-import { getNewTrackers, getPublicQuestUser } from "@/libs/quest";
+import {
+  getNewTrackers,
+  getPublicQuestUser,
+  hasActiveHiddenQuestObjectives,
+} from "@/libs/quest";
 import type { UserWithRelations } from "@/routers/profile";
 
 const makeUser = (sector = 1, role = "USER") =>
@@ -208,5 +212,59 @@ describe("persisted masked target recovery", () => {
     expect(getNewTrackers(user, [{ task: "any" }]).trackers[0]!.goals[0]).toMatchObject(
       { sector: 2, longitude: 0, latitude: 0, done: true, value: 7 },
     );
+  });
+});
+
+describe("global arrival quest refresh policy", () => {
+  it("skips profile refresh without quests or for visible objectives", () => {
+    const empty = makeUser();
+    empty.userQuests = [];
+    expect(hasActiveHiddenQuestObjectives(empty)).toBe(false);
+    const visible = makeUser();
+    Object.assign(objective(visible), { hideLocation: false });
+    expect(hasActiveHiddenQuestObjectives(visible)).toBe(false);
+  });
+
+  it("skips completed objectives and ended or completed quest entries", () => {
+    const done = makeUser();
+    done.questData![0]!.goals[0]!.done = true;
+    expect(hasActiveHiddenQuestObjectives(done)).toBe(false);
+    const completed = makeUser();
+    completed.userQuests[0]!.completed = 1;
+    expect(hasActiveHiddenQuestObjectives(completed)).toBe(false);
+    const ended = makeUser();
+    ended.userQuests[0]!.endAt = new Date();
+    expect(hasActiveHiddenQuestObjectives(ended)).toBe(false);
+  });
+
+  it("refreshes active hidden targets whether masked or already revealed, without mutating either", () => {
+    for (const sector of [1, 8]) {
+      const user = getPublicQuestUser(makeUser(sector));
+      const original = structuredClone(user);
+      expect(hasActiveHiddenQuestObjectives(user)).toBe(true);
+      expect(user).toEqual(original);
+    }
+  });
+
+  it("skips projection for staff whose hidden locations are already public", () => {
+    expect(hasActiveHiddenQuestObjectives(makeUser(1, "CONTENT"))).toBe(false);
+  });
+
+  it("uses consecutive objective availability and skips a hidden target on an unopened branch", () => {
+    const user = makeUser();
+    const quest = user.userQuests[0]!.quest;
+    quest.consecutiveObjectives = true;
+    quest.content.objectives.unshift({
+      id: "first",
+      task: "win_quest",
+      nextObjectiveId: "o",
+    } as (typeof quest.content.objectives)[number]);
+    user.questData![0]!.goals.unshift({ id: "first", done: false } as NonNullable<
+      typeof user.questData
+    >[number]["goals"][number]);
+    expect(hasActiveHiddenQuestObjectives(user)).toBe(false);
+    user.questData![0]!.goals[0]!.selectedNextObjectiveId = "o";
+    user.questData![0]!.goals[0]!.done = true;
+    expect(hasActiveHiddenQuestObjectives(user)).toBe(true);
   });
 });
