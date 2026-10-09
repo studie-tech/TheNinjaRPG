@@ -14,6 +14,7 @@ import {
   statTrainingBlockMessage,
   trainEfficiency,
   trainingBoost,
+  trainingEnergyMessage,
   trainingMultiplier,
 } from "@/libs/train";
 import { validateCaptcha } from "@/routers/misc";
@@ -104,7 +105,9 @@ export const trainRouter = createTRPCRouter({
         forceRegen: true,
       });
       if (!user) return errorResponse("User not found");
-      const block = statTrainingBlockMessage(user);
+      const block =
+        statTrainingBlockMessage(user) ??
+        trainingEnergyMessage(input.energy, user.curEnergy);
       if (block) return errorResponse(block);
       if (showTrainingCapcha(user)) {
         if (!input.guess) return errorResponse("Captcha required");

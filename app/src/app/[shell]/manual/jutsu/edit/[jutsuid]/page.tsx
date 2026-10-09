@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { use, useEffect } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import type { Jutsu } from "@/drizzle/schema";
 import { useJutsuEditForm } from "@/hooks/jutsu";
 import ContentBox from "@/layout/ContentBox";
@@ -27,7 +28,7 @@ export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> 
   const { data: userData } = useRequiredUserData();
 
   // Queries
-  const { data, isPending, refetch } = api.jutsu.get.useQuery(
+  const { data, isPending, isError, isFetching, refetch } = api.jutsu.get.useQuery(
     { id: jutsuId },
     { retry: false, enabled: !!jutsuId },
   );
@@ -43,16 +44,44 @@ export default function JutsuEdit(props: { params: Promise<{ jutsuid: string }> 
   }, [userData]);
 
   // Prevent unauthorized access
-  if (isPending || !userData || !isStaffRole(userData.role) || !data) {
+  if (!userData || !isStaffRole(userData.role)) {
     return <Loader explanation="Loading data" />;
   }
 
+  const queryFeedback = (
+    <ContentBox
+      title="Content Panel"
+      subtitle="Jutsu Management"
+      defaultBackHref="/manual/jutsu"
+    >
+      <p role="alert">
+        {isError
+          ? data
+            ? "Latest jutsu details could not be loaded. The editor is showing previously loaded data."
+            : "This jutsu could not be loaded. Please try again."
+          : "This jutsu could not be found."}
+      </p>
+      {isError && (
+        <Button disabled={isFetching} onClick={() => void refetch()}>
+          {isFetching ? "Retrying..." : "Retry"}
+        </Button>
+      )}
+    </ContentBox>
+  );
+
+  // Missing records settle the loading state; failed refreshes keep the cached editor visible.
+  if (!isPending && !data) return queryFeedback;
+  if (!data) return <Loader explanation="Loading data" />;
+
   return (
-    <SingleEditJutsu
-      jutsu={data}
-      refetch={refetch}
-      canSave={canChangeContent(userData.role)}
-    />
+    <>
+      {isError && queryFeedback}
+      <SingleEditJutsu
+        jutsu={data}
+        refetch={refetch}
+        canSave={canChangeContent(userData.role)}
+      />
+    </>
   );
 }
 

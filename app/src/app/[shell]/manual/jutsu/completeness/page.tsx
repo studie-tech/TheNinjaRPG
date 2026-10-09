@@ -5,6 +5,7 @@ import { BarChart3, CircleCheckBig, CircleMinus, InfoIcon, Pencil } from "lucide
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -37,8 +38,13 @@ export default function ManualJutsuBalance() {
   const { data: gameAssets } = api.misc.getAllGameAssetNames.useQuery(undefined);
 
   // Jutsu details query for modal
-  const { data: jutsuDetails, isPending: isJutsuDetailsPending } =
-    api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
+  const {
+    data: jutsuDetails,
+    isPending: isJutsuDetailsPending,
+    isError: isJutsuDetailsError,
+    isFetching: isJutsuDetailsFetching,
+    refetch: refetchJutsuDetails,
+  } = api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
 
   // Check if user can edit jutsu
   const canEdit = canChangeContent(userData?.role ?? "USER");
@@ -252,6 +258,20 @@ export default function ManualJutsuBalance() {
           <Loader explanation="Loading jutsu details" />
         ) : (
           jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
+        )}
+        {isJutsuDetailsError && (
+          <div className="space-y-2">
+            <p role="alert">Jutsu details could not be loaded. Please try again.</p>
+            <Button
+              disabled={isJutsuDetailsFetching}
+              onClick={() => void refetchJutsuDetails()}
+            >
+              {isJutsuDetailsFetching ? "Retrying..." : "Retry"}
+            </Button>
+          </div>
+        )}
+        {!isJutsuDetailsPending && !isJutsuDetailsError && !jutsuDetails && (
+          <p role="alert">This jutsu could not be found.</p>
         )}
       </Modal>
     </>

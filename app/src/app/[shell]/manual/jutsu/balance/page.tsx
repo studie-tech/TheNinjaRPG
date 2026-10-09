@@ -2,7 +2,7 @@
 
 import { BarChart3, InfoIcon, Pencil, Trash2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/localstorage";
@@ -68,8 +68,13 @@ const JutsuEffectsBalance: React.FC<JutsuEffectsBalanceProps> = (props) => {
   );
 
   // Jutsu details query for modal
-  const { data: jutsuDetails, isPending: isJutsuDetailsPending } =
-    api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
+  const {
+    data: jutsuDetails,
+    isPending: isJutsuDetailsPending,
+    isError: isJutsuDetailsError,
+    isFetching: isJutsuDetailsFetching,
+    refetch: refetchJutsuDetails,
+  } = api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
 
   // Set default effect to be damage
   useEffect(() => {
@@ -164,6 +169,20 @@ const JutsuEffectsBalance: React.FC<JutsuEffectsBalanceProps> = (props) => {
         ) : (
           jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
         )}
+        {isJutsuDetailsError && (
+          <div className="space-y-2">
+            <p role="alert">Jutsu details could not be loaded. Please try again.</p>
+            <Button
+              disabled={isJutsuDetailsFetching}
+              onClick={() => void refetchJutsuDetails()}
+            >
+              {isJutsuDetailsFetching ? "Retrying..." : "Retry"}
+            </Button>
+          </div>
+        )}
+        {!isJutsuDetailsPending && !isJutsuDetailsError && !jutsuDetails && (
+          <p role="alert">This jutsu could not be found.</p>
+        )}
       </Modal>
     </ContentBox>
   );
@@ -190,9 +209,13 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
 
   // Queries
   const { data, isPending } = api.data.getJutsuBalanceStatistics.useQuery(filter);
-  const { data: jutsuNames } = api.jutsu.getAllNames.useQuery();
-  const { data: jutsuDetails, isPending: isJutsuDetailsPending } =
-    api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
+  const {
+    data: jutsuDetails,
+    isPending: isJutsuDetailsPending,
+    isError: isJutsuDetailsError,
+    isFetching: isJutsuDetailsFetching,
+    refetch: refetchJutsuDetails,
+  } = api.jutsu.get.useQuery({ id: selectedJutsuId }, { enabled: !!selectedJutsuId });
 
   // Mutations
   const { mutate: deleteAllData, isPending: isDeleting } =
@@ -212,19 +235,15 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
   const canDelete = canChangeContent(userData?.role ?? "USER");
   const canEdit = canChangeContent(userData?.role ?? "USER");
 
-  // Create mapping from jutsu names to IDs
-  const jutsuNameToId = useMemo(() => {
-    if (!jutsuNames) return new Map<string, string>();
-    return new Map(jutsuNames.map((jutsu) => [jutsu.name, jutsu.id]));
-  }, [jutsuNames]);
-
   // Process data for table
   // Group and process data for table, no useMemo
   const tableData =
     data &&
     (() => {
-      const groups = groupBy(data, "name");
-      const rows = Array.from(groups.entries()).map(([name, entries]) => {
+      // Group by id: names are not unique, and each row links to its own jutsu
+      const groups = groupBy(data, "jutsuId");
+      const rows = Array.from(groups.entries()).map(([jutsuId, entries]) => {
+        const name = entries[0]?.name ?? jutsuId;
         const wins = entries
           .filter((entry) => entry.battleWon === 1)
           .reduce((acc, curr) => acc + (curr.count || 0), 0);
@@ -243,8 +262,6 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
         // Get equipped count from the first entry (all entries for a jutsu will have the same equipped count)
         const equippedCount = entries[0]?.equippedCount || 0;
 
-        const jutsuId = jutsuNameToId.get(name);
-
         return {
           name,
           links: (
@@ -260,7 +277,7 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
               <InfoIcon
                 className="h-4 w-4 text-muted-foreground hover:text-primary"
                 onClick={() => {
-                  setSelectedJutsuId(jutsuId ?? "");
+                  setSelectedJutsuId(jutsuId);
                   setIsModalOpen(true);
                 }}
               />
@@ -354,6 +371,20 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
           <Loader explanation="Loading jutsu details" />
         ) : (
           jutsuDetails && <ItemWithEffects item={jutsuDetails} showStatistic="jutsu" />
+        )}
+        {isJutsuDetailsError && (
+          <div className="space-y-2">
+            <p role="alert">Jutsu details could not be loaded. Please try again.</p>
+            <Button
+              disabled={isJutsuDetailsFetching}
+              onClick={() => void refetchJutsuDetails()}
+            >
+              {isJutsuDetailsFetching ? "Retrying..." : "Retry"}
+            </Button>
+          </div>
+        )}
+        {!isJutsuDetailsPending && !isJutsuDetailsError && !jutsuDetails && (
+          <p role="alert">This jutsu could not be found.</p>
         )}
       </Modal>
     </ContentBox>

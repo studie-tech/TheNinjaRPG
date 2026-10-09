@@ -6,6 +6,7 @@ import {
   jutsuRequirementWarning,
   masteryTrainingBlockMessage,
   statTrainingBlockMessage,
+  trainingEnergyMessage,
   trainingMultiplier,
 } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -130,5 +131,30 @@ describe("player training modifiers", () => {
     expect(getTrainingMultiplierBoost(joined)).toBe(0.5);
     expect(trainingMultiplier(joined)).toBe(0.005);
     expect(getTrainingMultiplierBoost({ ...joined, joinedVillageAt: trainee.joinedVillageAt })).toBe(1);
+  });
+});
+
+describe("trainingEnergyMessage", () => {
+  it("explains empty Energy before the requested amount", () => {
+    expect(trainingEnergyMessage(0, 0)).toBe(
+      "No Energy available. Wait for Energy to recover before training.",
+    );
+    expect(trainingEnergyMessage(10, 0)).toBe(
+      "No Energy available. Wait for Energy to recover before training.",
+    );
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects a requested amount of %p",
+    (requested) => {
+      expect(trainingEnergyMessage(requested, 50)).toBe(
+        "Enter an Energy amount greater than zero to train.",
+      );
+    },
+  );
+
+  it("allows a positive amount while Energy is available", () => {
+    expect(trainingEnergyMessage(0.5, 50)).toBeNull();
+    expect(trainingEnergyMessage(50, 50)).toBeNull();
   });
 });
