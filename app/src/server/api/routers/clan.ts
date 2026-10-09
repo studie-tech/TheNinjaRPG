@@ -75,6 +75,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canEditClans } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromDate } from "@/utils/time";
@@ -82,8 +83,10 @@ import { getEffectiveStructureLevel } from "@/utils/village";
 import {
   checkAssassin,
   checkCoLeader,
+  clanBankOutputSchema,
   clanBoostTypeSchema,
   clanCreateSchema,
+  clanDonateOutputSchema,
   clanGetRequestSchema,
   factionEditSchema,
   strictClanNameField,
@@ -269,6 +272,7 @@ export const clanRouter = createTRPCRouter({
         clanId: z.string(),
       }),
     )
+    .output(clanDonateOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -326,16 +330,30 @@ export const clanRouter = createTRPCRouter({
         // Create donation message
         const message = `${user.username} donated ${repsCost} reputation points to faction`;
         // Log action into database
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "clan",
-          changes: [message],
-          relatedId: fetchedClan.id,
-          relatedMsg: message,
-          relatedImage: fetchedClan.image,
-        });
-        return { success: true, message };
+        const [userUpdate, clanUpdate] = await Promise.all([
+          ctx.drizzle.query.userData
+            .findFirst({
+              where: eq(userData.userId, ctx.userId),
+              columns: { reputationPoints: true },
+            })
+            .catch(handleUserCacheReadError),
+          ctx.drizzle.query.clan
+            .findFirst({
+              where: eq(clan.id, fetchedClan.id),
+              columns: { id: true, repTreasury: true },
+            })
+            .catch(handleUserCacheReadError),
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "clan",
+            changes: [message],
+            relatedId: fetchedClan.id,
+            relatedMsg: message,
+            relatedImage: fetchedClan.image,
+          }),
+        ]);
+        return { success: true, message, userUpdate, clanUpdate };
       }
     }),
   get: protectedProcedure
@@ -1065,7 +1083,7 @@ export const clanRouter = createTRPCRouter({
   toBank: protectedProcedure
     .meta({ mcp: { description: "Deposit ryo to clan bank" } })
     .input(z.object({ amount: z.number().min(0), clanId: z.string() }))
-    .output(baseServerResponse)
+    .output(clanBankOutputSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, fetchedClan] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -1086,7 +1104,26 @@ export const clanRouter = createTRPCRouter({
         .update(clan)
         .set({ bank: sql`${clan.bank} + ${input.amount}` })
         .where(eq(clan.id, input.clanId));
-      return { success: true, message: `Successfully deposited ${input.amount} ryo` };
+      const [userUpdate, clanUpdate] = await Promise.all([
+        ctx.drizzle.query.userData
+          .findFirst({
+            where: eq(userData.userId, ctx.userId),
+            columns: { money: true },
+          })
+          .catch(handleUserCacheReadError),
+        ctx.drizzle.query.clan
+          .findFirst({
+            where: eq(clan.id, input.clanId),
+            columns: { id: true, bank: true },
+          })
+          .catch(handleUserCacheReadError),
+      ]);
+      return {
+        success: true,
+        message: `Successfully deposited ${input.amount} ryo`,
+        userUpdate,
+        clanUpdate,
+      };
     }),
   purchaseBoost: protectedProcedure
     .meta({ mcp: { description: "Purchase clan stat boost" } })

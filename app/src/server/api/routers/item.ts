@@ -141,6 +141,7 @@ import {
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { fetchUserBalances, fetchUserEquipment } from "@/server/utils/userCache";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedItemLoadouts } from "@/utils/paypal";
@@ -172,6 +173,7 @@ import { renameLoadoutSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import type { PostProcessedRewards } from "@/validators/rewards";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
+import { userBalanceResponseSchema } from "@/validators/userCache";
 import { updateRewards } from "./quests";
 
 const MIN_ITEM_SHOP_DISCOUNT_FACTOR = 0.05;
@@ -1181,7 +1183,7 @@ export const itemRouter = createTRPCRouter({
   // Purchase a variant with in-game currency
   purchaseVariant: protectedProcedure
     .input(z.object({ variantId: z.string() }))
-    .output(baseServerResponse)
+    .output(userBalanceResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query — ownership check runs in parallel (variantId known upfront)
       const [user, variant, ownershipRows, existingUnlock] = await Promise.all([
@@ -1257,7 +1259,14 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("Failed to unlock variant — please try again");
       }
 
-      return { success: true, message: `Variant "${variant.name}" unlocked!` };
+      return {
+        success: true,
+        message: `Variant "${variant.name}" unlocked!`,
+        data:
+          variant.costType === "VILLAGE_PRESTIGE"
+            ? undefined
+            : await fetchUserBalances(ctx.drizzle, ctx.userId),
+      };
     }),
   // Set the active variant on a user item (null to clear)
   selectVariant: protectedProcedure
@@ -1724,7 +1733,6 @@ export const itemRouter = createTRPCRouter({
           "Unequip all items on the character and clear the active item loadout",
       },
     })
-    .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Equipped rows only (not fetchUserItems — it omits hidden items). `ctx.userId` is the session user; no extra userId guard.
       const [user, loadouts, equippedItems] = await Promise.all([
@@ -1757,9 +1765,17 @@ export const itemRouter = createTRPCRouter({
                 eq(itemLoadout.userId, ctx.userId),
               ),
             );
-          return { success: true, message: "Cleared active loadout" };
+          return {
+            success: true,
+            message: "Cleared active loadout",
+            data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+          };
         }
-        return { success: true, message: "Nothing equipped" };
+        return {
+          success: true,
+          message: "Nothing equipped",
+          data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+        };
       }
 
       const itemUnequipPromises: Promise<{ rowsAffected: number }>[] =
@@ -1800,6 +1816,7 @@ export const itemRouter = createTRPCRouter({
 
       return {
         success: true,
+        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Unequipped ${equippedItems.length} item${equippedItems.length === 1 ? "" : "s"}${loadoutClearPromise ? " and cleared active loadout" : ""}`,
       };
     }),
@@ -2158,7 +2175,6 @@ export const itemRouter = createTRPCRouter({
   repair: protectedProcedure
     .meta({ mcp: { description: "Repair an item with ryo" } })
     .input(z.object({ userItemId: z.string() }))
-    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, useritem] = await Promise.all([
@@ -2212,13 +2228,13 @@ export const itemRouter = createTRPCRouter({
       }
       return {
         success: true,
+        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Repaired ${useritem.item.name} for ${repairCost} ryo`,
       };
     }),
   // Repair all user items
   repairAll: protectedProcedure
     .meta({ mcp: { description: "Repair all items with ryo" } })
-    .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Query
       const [user, useritems] = await Promise.all([
@@ -2286,11 +2302,13 @@ export const itemRouter = createTRPCRouter({
       if (failed.length > 0) {
         return {
           success: true,
+          data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
           message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo (${failed.length} skipped — stored, auctioned, or changed)`,
         };
       }
       return {
         success: true,
+        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo`,
       };
     }),
@@ -2298,7 +2316,6 @@ export const itemRouter = createTRPCRouter({
   useRepairItem: protectedProcedure
     .meta({ mcp: { description: "Use repair kit on an item" } })
     .input(z.object({ repairItemId: z.string(), targetItemId: z.string() }))
-    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, repairUserItem, targetUserItem] = await Promise.all([
@@ -2399,25 +2416,13 @@ export const itemRouter = createTRPCRouter({
       }
       return {
         success: true,
+        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Repaired ${targetUserItem.item.name} by ${actualRepair} durability using ${repairUserItem.item.name}`,
       };
     }),
   // Use repair items to repair all items
   useRepairAll: protectedProcedure
     .meta({ mcp: { description: "Use repair kits to fix all items" } })
-    .output(
-      baseServerResponse.extend({
-        kitsUsed: z
-          .array(
-            z.object({
-              repairItemId: z.string(),
-              repairItemName: z.string(),
-              quantityUsed: z.number(),
-            }),
-          )
-          .optional(),
-      }),
-    )
     .mutation(async ({ ctx }) => {
       // Query
       const [user, useritems] = await Promise.all([
@@ -2547,6 +2552,7 @@ export const itemRouter = createTRPCRouter({
 
       return {
         success: true,
+        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} using ${kitsUsedSummary}`,
         kitsUsed: kitsToUse,
       };
@@ -2566,7 +2572,6 @@ export const itemRouter = createTRPCRouter({
   buy: protectedProcedure
     .meta({ mcp: { description: "Buy an item from shop" } })
     .input(itemBuySchema)
-    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const iid = input.itemId;
@@ -2823,7 +2828,14 @@ export const itemRouter = createTRPCRouter({
           message: "Inventory or funds changed, please refresh and try again",
         };
       }
-      return { success: true, message: `You bought ${info.name}` };
+      return {
+        success: true,
+        message: `You bought ${info.name}`,
+        // Quest purchases keep the full refresh so achievement and masked objective state agree.
+        data: advancesBuyItemObjective
+          ? undefined
+          : await fetchUserEquipment(ctx.drizzle, ctx.userId),
+      };
     }),
   // Auto-equip optimal items based on cost
   autoEquipOptimal: protectedProcedure
@@ -2937,7 +2949,6 @@ export const itemRouter = createTRPCRouter({
   selectItemLoadout: protectedProcedure
     .meta({ mcp: { description: "Select an item loadout" } })
     .input(idSchema)
-    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [loadouts, user, useritems, masterySources] = await Promise.all([
@@ -2948,10 +2959,13 @@ export const itemRouter = createTRPCRouter({
       ]);
       // Mutate & return result
       const id = input.id;
-      return await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, {
+      const result = await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, {
         ...user,
         ...masterySources,
       });
+      return result.success
+        ? { ...result, data: await fetchUserEquipment(ctx.drizzle, ctx.userId) }
+        : result;
     }),
 
   renameLoadout: protectedProcedure

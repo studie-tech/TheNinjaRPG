@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,17 +17,18 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
+import type { bloodrightResponseSchema } from "@/validators/userCache";
 
 export const Bloodright = () => {
   const utils = api.useUtils();
-  const { data: user } = useRequiredUserData();
+  const { data: user, updateUser } = useRequiredUserData();
   const { data, isPending, isError, refetch } = api.bloodright.get.useQuery();
-  const onSuccess = async (result: { success: boolean; message: string }) => {
+  const onSuccess = async (result: z.infer<typeof bloodrightResponseSchema>) => {
     showMutationToast(result);
     if (result.success)
       await Promise.all([
         utils.bloodright.get.invalidate(),
-        utils.profile.getUser.invalidate(),
+        result.data ? updateUser(result.data) : utils.profile.getUser.invalidate(),
       ]);
   };
   const purchase = api.bloodright.purchase.useMutation({ onSuccess });
@@ -176,6 +178,7 @@ export const Bloodright = () => {
 
 export const ResetBloodright = () => {
   const utils = api.useUtils();
+  const { updateUser } = useRequiredUserData();
   const { data: info, isError, refetch } = api.skillTree.getResetInfo.useQuery();
   const reset = api.bloodright.reset.useMutation({
     onSuccess: async (result) => {
@@ -183,7 +186,7 @@ export const ResetBloodright = () => {
       if (result.success)
         await Promise.all([
           utils.bloodright.get.invalidate(),
-          utils.profile.getUser.invalidate(),
+          result.data ? updateUser(result.data) : utils.profile.getUser.invalidate(),
           utils.skillTree.getResetInfo.invalidate(),
         ]);
     },

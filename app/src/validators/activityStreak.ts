@@ -1,6 +1,17 @@
 import { z } from "zod";
 import { ActivityStreakTypes } from "@/drizzle/constants";
+import { baseServerResponse } from "./base";
 import { rewardFields } from "./rewards";
+
+export const purchaseEventPassOutputSchema = baseServerResponse.extend({
+  userUpdate: z
+    .object({
+      money: z.number(),
+      reputationPoints: z.number(),
+      seichiSilver: z.number(),
+    })
+    .optional(),
+});
 
 // Reward schema - reuse from objectives
 export const streakRewardSchema = z.object(rewardFields);

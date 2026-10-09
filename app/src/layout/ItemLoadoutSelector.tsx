@@ -17,7 +17,7 @@ interface ItemLoadoutSelectorProps {
 
 const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
 
   // tRPC utility
   const utils = api.useUtils();
@@ -36,7 +36,9 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          "data" in data && data.data
+            ? updateUser(data.data)
+            : utils.profile.getUser.invalidate(),
           utils.item.getUserItems.invalidate(),
           utils.item.getUserItemsWithVariants.invalidate(),
         ]);

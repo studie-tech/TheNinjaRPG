@@ -26,12 +26,14 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChangeContent } from "@/utils/permissions";
 import { isToday, isWithinDateRange } from "@/utils/time";
 import {
   activityStreakConfigSchema,
   activityStreakConfigUpdateSchema,
   claimStreakDaySchema,
+  purchaseEventPassOutputSchema,
   purchaseEventPassSchema,
 } from "@/validators/activityStreak";
 import { idSchema } from "@/validators/misc";
@@ -260,7 +262,7 @@ export const activityStreakRouter = createTRPCRouter({
   purchaseEventPass: protectedProcedure
     .meta({ mcp: { description: "Purchase an event pass" } })
     .input(purchaseEventPassSchema)
-    .output(baseServerResponse)
+    .output(purchaseEventPassOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch purchase requirements and both current and historical ownership in parallel.
       const [user, config, existingProgress, completionLogs] = await Promise.all([
@@ -386,9 +388,16 @@ export const activityStreakRouter = createTRPCRouter({
         costs.push(`${config.seichiSilverCost} seichi silver`);
 
       const costText = costs.length > 0 ? costs.join(", ") : "free";
+      const userUpdate = await ctx.drizzle.query.userData
+        .findFirst({
+          where: eq(userData.userId, ctx.userId),
+          columns: { money: true, reputationPoints: true, seichiSilver: true },
+        })
+        .catch(handleUserCacheReadError);
       return {
         success: true,
         message: `Purchased "${config.name}" for ${costText}!`,
+        userUpdate,
       };
     }),
 

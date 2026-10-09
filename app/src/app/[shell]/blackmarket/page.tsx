@@ -297,6 +297,8 @@ const Bloodline: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   userData,
 }) => {
+  const { updateUser } = useRequiredUserData();
+
   // State
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<"Active" | "Ledger">("Active");
@@ -312,7 +314,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
             utils.blackmarket.getRyoOffers.invalidate(),
           ]);
         }
@@ -325,7 +327,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
             utils.blackmarket.getRyoOffers.invalidate(),
           ]);
         }
@@ -338,7 +340,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
             utils.blackmarket.getRyoOffers.invalidate(),
           ]);
         }

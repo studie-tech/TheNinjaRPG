@@ -16,12 +16,17 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChangeContent } from "@/utils/permissions";
+import {
+  createAvatarOutputSchema,
+  updateAvatarOutputSchema,
+} from "@/validators/avatar";
 
 export const avatarRouter = createTRPCRouter({
   createAvatar: protectedProcedure
     .meta({ mcp: { description: "Generate a new AI avatar" } })
-    .output(baseServerResponse)
+    .output(createAvatarOutputSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user directly with a query that returns null if not found
       // This handles the case where the user was just created and the record
@@ -66,7 +71,13 @@ export const avatarRouter = createTRPCRouter({
         }),
       ]);
       if (result.rowsAffected === 1) {
-        return { success: true, message: "Avatar created" };
+        const data = await ctx.drizzle.query.userData
+          .findFirst({
+            columns: { avatar: true, avatarLight: true, reputationPoints: true },
+            where: eq(userData.userId, ctx.userId),
+          })
+          .catch(handleUserCacheReadError);
+        return { success: true, message: "Avatar created", data };
       } else {
         return errorResponse("Failed to upload avatar");
       }
@@ -107,7 +118,7 @@ export const avatarRouter = createTRPCRouter({
   updateAvatar: protectedProcedure
     .meta({ mcp: { description: "Set active avatar from history" } })
     .input(z.object({ avatar: z.number(), type: z.enum(ContentTypes) }))
-    .output(baseServerResponse.extend({ url: z.string().nullish() }))
+    .output(updateAvatarOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, avatar] = await Promise.all([
@@ -140,7 +151,16 @@ export const avatarRouter = createTRPCRouter({
             .set({ avatar: avatar.avatar, avatarLight: thumbnailUrl })
             .where(eq(userData.userId, ctx.userId));
       }
-      return { success: true, message: "Avatar updated", url: avatar.avatar };
+      const data =
+        input.type === "user"
+          ? await ctx.drizzle.query.userData
+              .findFirst({
+                columns: { avatar: true, avatarLight: true },
+                where: eq(userData.userId, ctx.userId),
+              })
+              .catch(handleUserCacheReadError)
+          : undefined;
+      return { success: true, message: "Avatar updated", url: avatar.avatar, data };
     }),
   deleteAvatar: protectedProcedure
     .meta({ mcp: { description: "Delete an avatar from history" } })

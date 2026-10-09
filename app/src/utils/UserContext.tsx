@@ -64,7 +64,11 @@ type UserContextValue = {
   isClerkLoaded: boolean;
   /** Server-known auth state until Clerk finishes loading, then Clerk's live state. */
   isSignedIn: boolean;
-  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
+  updateUser: (
+    data:
+      | Partial<UserWithRelations>
+      | ((current: NonNullable<UserWithRelations>) => Partial<UserWithRelations>),
+  ) => Promise<void>;
   updateNotifications: (
     notifications: NavBarDropdownLink[] | undefined,
   ) => Promise<void>;
@@ -126,12 +130,19 @@ export function UserContextProvider(props: {
 
   // Optimistic user info update function
   const updateUser = useCallback(
-    async (updatedData: Partial<UserWithRelations>) => {
+    async (
+      updatedData:
+        | Partial<UserWithRelations>
+        | ((current: NonNullable<UserWithRelations>) => Partial<UserWithRelations>),
+    ) => {
       await utils.profile.getUser.cancel();
       utils.profile.getUser.setData(undefined, (old) => {
+        if (!old?.userData) return old;
+        const patch =
+          typeof updatedData === "function" ? updatedData(old.userData) : updatedData;
         return {
           ...old,
-          userData: { ...old?.userData, ...updatedData },
+          userData: { ...old.userData, ...patch },
         } as typeof old;
       });
     },

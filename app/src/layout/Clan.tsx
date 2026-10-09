@@ -1279,12 +1279,19 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       if (!data.success) return;
 
       // The debit and treasury credit have committed. Close the stale repeat path
-      // immediately and refresh both authoritative balances independently; a cache
-      // failure must never recreate a costly action or require stale arithmetic.
+      // immediately and apply the committed balances; a cache failure must never
+      // recreate a costly action or require stale arithmetic.
       setDonateReps("");
       setIsDonateModalOpen(false);
       void Promise.allSettled([
-        utils.profile.getUser.invalidate(),
+        data.userUpdate && data.clanUpdate
+          ? updateUser((current) => ({
+              ...data.userUpdate,
+              ...(current.clan && current.clan.id === data.clanUpdate?.id
+                ? { clan: { ...current.clan, ...data.clanUpdate } }
+                : {}),
+            }))
+          : utils.profile.getUser.invalidate(),
         utils.clan.get.invalidate(),
       ]);
     } catch {
@@ -1346,7 +1353,14 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          data.userUpdate && data.clanUpdate
+            ? updateUser((current) => ({
+                ...data.userUpdate,
+                ...(current.clan && current.clan.id === data.clanUpdate?.id
+                  ? { clan: { ...current.clan, ...data.clanUpdate } }
+                  : {}),
+              }))
+            : utils.profile.getUser.invalidate(),
           utils.clan.get.invalidate(),
         ]);
         toBankForm.reset();

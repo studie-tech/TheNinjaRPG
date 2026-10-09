@@ -12,6 +12,7 @@ import { createThumbnail } from "@/libs/replicate";
 import { extensionCustomId, servedUfsUrl } from "@/libs/uploadthing";
 import { insertHistoricalSoundEffect } from "@/server/api/routers/audio";
 import { drizzleDB } from "@/server/db";
+import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
 
@@ -163,7 +164,13 @@ export const ourFileRouter = {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, metadata.userId, true);
-      return moderation;
+      const avatarData = await drizzleDB.query.userData
+        .findFirst({
+          columns: { avatar: true, avatarLight: true },
+          where: eq(userData.userId, metadata.userId),
+        })
+        .catch(handleUserCacheReadError);
+      return { ...moderation, avatarData };
     }),
   avatarSilverUploader: f({ image: { maxFileSize: "1MB" } })
     .middleware(async ({ files }) => ({
@@ -174,7 +181,13 @@ export const ourFileRouter = {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, metadata.userId, true);
-      return moderation;
+      const avatarData = await drizzleDB.query.userData
+        .findFirst({
+          columns: { avatar: true, avatarLight: true },
+          where: eq(userData.userId, metadata.userId),
+        })
+        .catch(handleUserCacheReadError);
+      return { ...moderation, avatarData };
     }),
   avatarGoldUploader: f({ image: { maxFileSize: "2MB" } })
     .middleware(async ({ files }) => ({
@@ -185,7 +198,13 @@ export const ourFileRouter = {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, metadata.userId, true);
-      return moderation;
+      const avatarData = await drizzleDB.query.userData
+        .findFirst({
+          columns: { avatar: true, avatarLight: true },
+          where: eq(userData.userId, metadata.userId),
+        })
+        .catch(handleUserCacheReadError);
+      return { ...moderation, avatarData };
     }),
   backgroundImageUploader: f({ image: { maxFileSize: "8MB" } })
     .middleware(async ({ files }) => ({

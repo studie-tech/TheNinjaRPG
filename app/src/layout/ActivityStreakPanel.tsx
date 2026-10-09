@@ -37,7 +37,7 @@ import { useUserData } from "@/utils/UserContext";
 
 export function ActivityStreakPanel() {
   const utils = api.useUtils();
-  const { timeDiff } = useUserData();
+  const { timeDiff, updateUser } = useUserData();
 
   const { data: userStreaks, isLoading: streaksLoading } = useActivityStreaks(
     true,
@@ -56,7 +56,9 @@ export function ActivityStreakPanel() {
         void Promise.allSettled([
           utils.activityStreak.getUserStreaks.invalidate(),
           utils.activityStreak.getAvailablePasses.invalidate(),
-          utils.profile.getUser.invalidate(),
+          data.userUpdate
+            ? updateUser(data.userUpdate)
+            : utils.profile.getUser.invalidate(),
         ]);
       }
     },

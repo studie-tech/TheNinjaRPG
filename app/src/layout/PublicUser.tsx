@@ -703,7 +703,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       experienceForm.reset({ amount: 100 });
       void Promise.allSettled([
         utils.profile.getPublicUser.invalidate({ userId: target.userId }),
-        utils.profile.getUser.invalidate(),
+        ...(target.userId === userData?.userId
+          ? [utils.profile.getUser.invalidate()]
+          : []),
       ]);
     } catch {
       // The global mutation handler emits the transport toast once. Preserve the immutable
@@ -793,7 +795,9 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       setAwardNeedsRetry(false);
       void Promise.allSettled([
         utils.profile.getPublicUser.invalidate(),
-        utils.profile.getUser.invalidate(),
+        ...(target.users.some((user) => user.userId === userData?.userId)
+          ? [utils.profile.getUser.invalidate()]
+          : []),
         utils.misc.getAllAwards.invalidate(),
       ]);
     } catch {

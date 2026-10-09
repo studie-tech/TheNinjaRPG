@@ -50,10 +50,12 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { calculateDailyLockedTime } from "@/server/utils/kage";
+import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChallengeKage } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";
+import { challengeAvailabilityOutputSchema } from "@/validators/kage";
 import { idSchema } from "@/validators/misc";
 
 const pusher = getServerPusher();
@@ -608,7 +610,7 @@ export const kageRouter = createTRPCRouter({
       mcp: { description: "Toggle kage challenge availability" },
     })
     .input(z.object({ villageId: z.string() }))
-    .output(baseServerResponse)
+    .output(challengeAvailabilityOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch all data in parallel
       const [user, requests, userVillage, lastToggle, dailyLockedTimeSeconds] =
@@ -689,9 +691,16 @@ export const kageRouter = createTRPCRouter({
         }),
       ]);
 
+      const availability = await ctx.drizzle.query.village
+        .findFirst({
+          columns: { id: true, openForChallenges: true, openForChallengesAt: true },
+          where: eq(village.id, input.villageId),
+        })
+        .catch(handleUserCacheReadError);
       return {
         success: true,
         message: `Village is now ${!userVillage.openForChallenges ? "open" : "closed"} for challenges`,
+        data: availability,
       };
     }),
 

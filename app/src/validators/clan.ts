@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ClanBoostTypes } from "@/drizzle/constants";
 import type { Clan } from "@/drizzle/schema";
+import { baseServerResponse } from "@/validators/base";
 import {
   createReservedNameField,
   looseFactionNameField,
@@ -8,6 +9,16 @@ import {
 } from "@/validators/reservedName";
 
 export const clanBoostTypeSchema = z.enum(ClanBoostTypes);
+
+export const clanDonateOutputSchema = baseServerResponse.extend({
+  userUpdate: z.object({ reputationPoints: z.number() }).optional(),
+  clanUpdate: z.object({ id: z.string(), repTreasury: z.number() }).optional(),
+});
+
+export const clanBankOutputSchema = baseServerResponse.extend({
+  userUpdate: z.object({ money: z.number() }).optional(),
+  clanUpdate: z.object({ id: z.string(), bank: z.number() }).optional(),
+});
 
 export const strictClanNameField = createReservedNameField({
   reserved: RESERVED_FACTION_NAMES,

@@ -184,6 +184,7 @@ import {
   fetchRecruitMilestoneSummary,
 } from "@/server/utils/recruitment";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
+import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -230,6 +231,7 @@ import {
   adjustSeichiSilverSchema,
   assignableMasteryNames,
   assignedExperienceOutputSchema,
+  cosmeticUserUpdateOutputSchema,
   createAssignedExperienceSchema,
   getPublicUsersSchema,
   tavernColorChangeSchema,
@@ -1768,7 +1770,7 @@ export const profileRouter = createTRPCRouter({
       mcp: { description: "Change user's username for reputation cost" },
     })
     .input(z.object({ username: usernameSchema }))
-    .output(baseServerResponse)
+    .output(cosmeticUserUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, target, moderationResult] = await Promise.all([
@@ -1796,20 +1798,34 @@ export const profileRouter = createTRPCRouter({
           username: input.username,
           reputationPoints: sql`reputationPoints - ${COST_CHANGE_USERNAME}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.username, user.username),
+            gte(userData.reputationPoints, COST_CHANGE_USERNAME),
+          ),
+        );
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could not update user" };
       } else {
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "user",
-          changes: [`Username changed from ${user.username} to ${input.username}`],
-          relatedId: ctx.userId,
-          relatedMsg: `Update: ${user.username} -> ${input.username}`,
-          relatedImage: user.avatarLight,
-        });
-        return { success: true, message: "Username updated" };
+        const [data] = await Promise.all([
+          ctx.drizzle.query.userData
+            .findFirst({
+              columns: { username: true, reputationPoints: true },
+              where: eq(userData.userId, ctx.userId),
+            })
+            .catch(handleUserCacheReadError),
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "user",
+            changes: [`Username changed from ${user.username} to ${input.username}`],
+            relatedId: ctx.userId,
+            relatedMsg: `Update: ${user.username} -> ${input.username}`,
+            relatedImage: user.avatarLight,
+          }),
+        ]);
+        return { success: true, message: "Username updated", data };
       }
     }),
   updateTavernColor: protectedProcedure
@@ -1819,7 +1835,7 @@ export const profileRouter = createTRPCRouter({
       },
     })
     .input(tavernColorChangeSchema)
-    .output(baseServerResponse)
+    .output(cosmeticUserUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const storedColor =
@@ -1869,20 +1885,32 @@ export const profileRouter = createTRPCRouter({
         );
       }
 
-      await ctx.drizzle.insert(actionLog).values({
-        id: nanoid(),
-        userId: ctx.userId,
-        tableName: "user",
-        changes: [
-          `Tavern ${input.target} color changed from ${input.currentColor} to ${input.color} (-${cost} reputation)`,
-        ],
-        relatedId: ctx.userId,
-        relatedMsg: `${user.username} changed their tavern ${input.target} color`,
-        relatedImage: user.avatarLight,
-      });
-
+      const [data] = await Promise.all([
+        ctx.drizzle.query.userData
+          .findFirst({
+            columns: {
+              tavernUsernameColor: true,
+              tavernTitleColor: true,
+              reputationPoints: true,
+            },
+            where: eq(userData.userId, ctx.userId),
+          })
+          .catch(handleUserCacheReadError),
+        ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "user",
+          changes: [
+            `Tavern ${input.target} color changed from ${input.currentColor} to ${input.color} (-${cost} reputation)`,
+          ],
+          relatedId: ctx.userId,
+          relatedMsg: `${user.username} changed their tavern ${input.target} color`,
+          relatedImage: user.avatarLight,
+        }),
+      ]);
       return {
         success: true,
+        data,
         message: `Tavern ${input.target} color updated for ${cost} reputation points`,
       };
     }),
@@ -2862,6 +2890,8 @@ export const fetchUpdatedUser = async (props: {
   // Destructure
   const { client, userId, userIp, hideInformation = false } = props;
   let { forceRegen } = props;
+  // Partial mutation responses must reconcile automatic progression beyond passive pools.
+  let requiresUserRefresh = Boolean(forceRegen);
   const now = new Date();
   // Shrine battle lobbies past this age are effectively dead — attackers
   // had LOBBY_SECONDS to gather, then STALE_LOBBY_SECONDS to initiate; beyond
@@ -3069,6 +3099,7 @@ export const fetchUpdatedUser = async (props: {
         user.villageId = syndicate.id;
         user.isOutlaw = true;
         forceRegen = true;
+        requiresUserRefresh = true;
         // Trigger message to user
         void pusher.trigger(user.userId, "event", {
           type: "userMessage",
@@ -3122,6 +3153,7 @@ export const fetchUpdatedUser = async (props: {
       try {
         if (await insertNextQuest(client, user, questType)) {
           forceRegen = true;
+          requiresUserRefresh = true;
         }
       } catch (e) {
         Sentry.captureException(e, {
@@ -3147,6 +3179,7 @@ export const fetchUpdatedUser = async (props: {
       user.status = "AWAKE";
       user.travelFinishAt = null;
       forceRegen = true;
+      requiresUserRefresh = true;
       toastMessages.push("You have arrived at your destination!");
     }
 
@@ -3162,6 +3195,7 @@ export const fetchUpdatedUser = async (props: {
       queuedTraining &&
       (ticks > 0 ||
         queuedTraining.energyTrainingQueue.length !== user.energyTrainingQueue?.length);
+    if (hasQueueProgress) requiresUserRefresh = true;
     if (
       newDay ||
       hasQueueProgress ||
@@ -3169,6 +3203,7 @@ export const fetchUpdatedUser = async (props: {
       forceRegen || // Hard overwrite for e.g. debugging or simply ensuring updated user
       (user.villagePrestige < 0 && !user.isOutlaw) // To trigger getting kicked out of village
     ) {
+      requiresUserRefresh = true;
       const originalUpdatedAt = user.updatedAt;
       const queuedTrainingSnapshot = user.energyTrainingQueue?.length
         ? { ...user, questData: structuredClone(user.questData) }
@@ -3203,10 +3238,12 @@ export const fetchUpdatedUser = async (props: {
       const rankId = UserRanks.indexOf(user.rank);
       if (rankId >= 1 && !user.primaryElement) {
         user.primaryElement = getRandomElement(BasicElementName) ?? null;
+        requiresUserRefresh = true;
       }
       if (rankId >= 2 && !user.secondaryElement) {
         const available = BasicElementName.filter((e) => e !== user.primaryElement);
         user.secondaryElement = getRandomElement(available) ?? null;
+        requiresUserRefresh = true;
       }
       // Update database (pools, questData, etc.; village columns only when includeVillageState)
       try {
@@ -3220,6 +3257,7 @@ export const fetchUpdatedUser = async (props: {
           queuedTraining,
         });
         if (!persisted) {
+          requiresUserRefresh = true;
           // Another mutation won the snapshot. Use its current pools and version rather than
           // returning the regeneration values calculated from our stale read.
           const freshUser = await client.query.userData.findFirst({
@@ -3280,6 +3318,7 @@ export const fetchUpdatedUser = async (props: {
       }
     }
 
+    if (consequences.length > 0) requiresUserRefresh = true;
     const fullTrackers = trackers;
     user.questData = filterQuestTrackersForDbPersist(trackers, user);
 
@@ -3302,6 +3341,7 @@ export const fetchUpdatedUser = async (props: {
       toastMessages,
       hasUnvotedPolls,
       trackerResults,
+      requiresUserRefresh: requiresUserRefresh || toastMessages.length > 0,
     };
   } else {
     return {
@@ -3310,6 +3350,7 @@ export const fetchUpdatedUser = async (props: {
       toastMessages,
       hasUnvotedPolls,
       trackerResults: null,
+      requiresUserRefresh: requiresUserRefresh || toastMessages.length > 0,
     };
   }
 };

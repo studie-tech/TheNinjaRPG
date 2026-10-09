@@ -43,10 +43,15 @@ import {
   setActiveBoostExpression,
   setShrineSettingsKeyExpression,
 } from "@/server/utils/shrine";
+import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
-import { getBoostTemplateSchema, setBoostTemplateSchema } from "@/validators/shrine";
+import {
+  getBoostTemplateSchema,
+  setBoostTemplateSchema,
+  shrineVillageUpdateOutputSchema,
+} from "@/validators/shrine";
 import { fetchActiveUserMpvpBattles } from "./clan";
 import { fetchAlliances } from "./village";
 import { fetchActiveWars } from "./war";
@@ -101,9 +106,9 @@ export const shrineRouter = createTRPCRouter({
   upgradeShrine: protectedProcedure
     .meta({ mcp: { description: "Upgrade a shrine level (Kage only)" } })
     .input(z.object({ sectorNumber: z.number() }))
-    .output(baseServerResponse)
+    .output(shrineVillageUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, targetSector] = await Promise.all([
+      const [{ user, requiresUserRefresh }, targetSector] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -170,6 +175,8 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Successfully upgraded shrine to level ${targetSector.shrineLevel + 1}!`,
+        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        requiresUserRefresh,
       };
     }),
 
@@ -177,10 +184,10 @@ export const shrineRouter = createTRPCRouter({
   activateBoost: protectedProcedure
     .meta({ mcp: { description: "Activate village-wide shrine boost" } })
     .input(z.object({ boostType: z.enum(SHRINE_BOOST_TYPES), villageId: z.string() }))
-    .output(baseServerResponse)
+    .output(shrineVillageUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [{ user }, hasShrine] = await Promise.all([
+      const [{ user, requiresUserRefresh }, hasShrine] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -244,6 +251,8 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `${input.boostType} boost activated for ${SHRINE_BOOST_DURATION_HOURS} hours!`,
+        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        requiresUserRefresh,
       };
     }),
 
@@ -251,9 +260,9 @@ export const shrineRouter = createTRPCRouter({
   unlockAiDefender: protectedProcedure
     .meta({ mcp: { description: "Unlock an AI defender for village" } })
     .input(z.object({ aiId: z.string() }))
-    .output(baseServerResponse)
+    .output(shrineVillageUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, ai] = await Promise.all([
+      const [{ user, requiresUserRefresh }, ai] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -304,6 +313,8 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `AI defender unlocked! Cost: ${SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens`,
+        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        requiresUserRefresh,
       };
     }),
 
@@ -311,10 +322,10 @@ export const shrineRouter = createTRPCRouter({
   toggleVillageAiDefender: protectedProcedure
     .meta({ mcp: { description: "Toggle AI defender active status" } })
     .input(z.object({ aiId: z.string() }))
-    .output(baseServerResponse)
+    .output(shrineVillageUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [{ user }, ai] = await Promise.all([
+      const [{ user, requiresUserRefresh }, ai] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -360,16 +371,21 @@ export const shrineRouter = createTRPCRouter({
         })
         .where(eq(village.id, user.villageId));
 
-      return { success: true, message };
+      return {
+        success: true,
+        message,
+        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        requiresUserRefresh,
+      };
     }),
 
   // Weekly maintenance payment per sector
   payWeeklyMaintenance: protectedProcedure
     .meta({ mcp: { description: "Pay weekly shrine maintenance" } })
     .input(z.object({ sectorId: z.number() }))
-    .output(baseServerResponse)
+    .output(shrineVillageUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, targetSector] = await Promise.all([
+      const [{ user, requiresUserRefresh }, targetSector] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -451,6 +467,8 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Weekly maintenance paid for sector ${targetSector.sector}: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
+        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        requiresUserRefresh,
       };
     }),
 
@@ -499,9 +517,9 @@ export const shrineRouter = createTRPCRouter({
       },
     })
     .input(setBoostTemplateSchema)
-    .output(baseServerResponse)
+    .output(shrineVillageUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, hasShrine] = await Promise.all([
+      const [{ user, requiresUserRefresh }, hasShrine] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         hasLevel3Shrine(ctx.drizzle, input.villageId),
       ]);
@@ -533,7 +551,12 @@ export const shrineRouter = createTRPCRouter({
         })
         .where(eq(village.id, input.villageId));
 
-      return { success: true, message: "Boost template saved" };
+      return {
+        success: true,
+        message: "Boost template saved",
+        villageUpdate: await fetchVillageShrineState(ctx.drizzle, user.villageId),
+        requiresUserRefresh,
+      };
     }),
 
   // ============================================
@@ -1237,6 +1260,14 @@ export const shrineRouter = createTRPCRouter({
       return errorResponse(`Failed to initiate shrine battle: ${result.message}`);
     }),
 });
+
+const fetchVillageShrineState = (client: DrizzleClient, villageId: string) =>
+  client.query.village
+    .findFirst({
+      where: eq(village.id, villageId),
+      columns: { id: true, tokens: true, shrineSettings: true },
+    })
+    .catch(handleUserCacheReadError);
 
 /**
  * Returns whether the village controls at least one Level 3 shrine.

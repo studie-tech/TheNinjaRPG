@@ -104,6 +104,7 @@ import {
   backfillLoadouts,
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
+import { fetchUserBalances } from "@/server/utils/userCache";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedJutsuLoadouts } from "@/utils/paypal";
 import {
@@ -129,6 +130,11 @@ import {
 import { renameLoadoutSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import { QuestTracker } from "@/validators/objectives";
+import {
+  jutsuLoadoutResponseSchema,
+  jutsuOrderResponseSchema,
+  userBalanceResponseSchema,
+} from "@/validators/userCache";
 import { fetchUpdatedUser, fetchUser } from "./profile";
 
 export const jutsuRouter = createTRPCRouter({
@@ -157,7 +163,7 @@ export const jutsuRouter = createTRPCRouter({
         transferLevels: z.number().min(1, "Must transfer at least 1 level"),
       }),
     )
-    .output(baseServerResponse)
+    .output(userBalanceResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const transfer = input.transferLevels;
@@ -266,6 +272,7 @@ export const jutsuRouter = createTRPCRouter({
 
       return {
         success: true,
+        data: await fetchUserBalances(ctx.drizzle, ctx.userId),
         message: needsReputation
           ? `Level transferred for ${transferCost} reputation points`
           : "Level transferred for free",
@@ -383,7 +390,7 @@ export const jutsuRouter = createTRPCRouter({
   selectJutsuLoadout: protectedProcedure
     .meta({ mcp: { description: "Select a jutsu loadout" } })
     .input(idSchema)
-    .output(baseServerResponse)
+    .output(jutsuLoadoutResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // fetchUpdatedUser (not fetchUser) so the full relations canUseJutsu reads
       // (bloodline/village/elements) are present for validation, mirroring
@@ -401,7 +408,7 @@ export const jutsuRouter = createTRPCRouter({
       // loadout cannot re-equip hidden/ineligible jutsu or exceed equip caps.
       const id = input.id;
       const masteries = effectiveMasteries(user);
-      return await selectJutsuLoadout(
+      const result = await selectJutsuLoadout(
         ctx.drizzle,
         id,
         loadouts,
@@ -410,6 +417,13 @@ export const jutsuRouter = createTRPCRouter({
         (jutsuIds) =>
           computeJutsuLoadoutAssignments({ jutsuIds, userjutsus, user, masteries }),
       );
+      const loadout = loadouts.find((loadout) => loadout.id === id);
+      return result.success && loadout && !data.requiresUserRefresh
+        ? {
+            ...result,
+            data: { jutsuLoadout: id, loadout: { jutsuIds: loadout.jutsuIds } },
+          }
+        : result;
     }),
 
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
@@ -1495,7 +1509,7 @@ export const jutsuRouter = createTRPCRouter({
         moveForward: z.boolean(),
       }),
     )
-    .output(baseServerResponse)
+    .output(jutsuOrderResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const loadouts = await fetchJutsuLoadouts(ctx.drizzle, ctx.userId);
       const loadout = loadouts.find((l) => l.id === input.loadoutId);
@@ -1521,7 +1535,7 @@ export const jutsuRouter = createTRPCRouter({
         .set({ jutsuIds: newOrder })
         .where(eq(jutsuLoadout.id, loadout.id));
 
-      return { success: true, message: `Order updated` };
+      return { success: true, message: `Order updated`, data: { jutsuIds: newOrder } };
     }),
 
   renameLoadout: protectedProcedure

@@ -39,7 +39,7 @@ export default function OccupationCrafting() {
   const utils = api.useUtils();
 
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
 
   // API calls
   const { data: userItems } = api.item.getUserItems.useQuery();
@@ -94,7 +94,9 @@ export default function OccupationCrafting() {
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          utils.profile.getUser.invalidate(),
+          "data" in data && data.data
+            ? updateUser(data.data)
+            : utils.profile.getUser.invalidate(),
         ]);
       }
     },
@@ -106,7 +108,9 @@ export default function OccupationCrafting() {
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          utils.profile.getUser.invalidate(),
+          "data" in data && data.data
+            ? updateUser(data.data)
+            : utils.profile.getUser.invalidate(),
         ]);
       }
     },

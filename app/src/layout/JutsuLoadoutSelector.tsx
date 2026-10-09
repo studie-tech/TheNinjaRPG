@@ -17,7 +17,7 @@ interface JutsuLoadoutSelectorProps {
 
 const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
 
   // tRPC utility
   const utils = api.useUtils();
@@ -36,7 +36,7 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
           utils.item.getUserItems.invalidate(),
           utils.jutsu.getUserJutsus.invalidate(),
         ]);

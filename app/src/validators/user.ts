@@ -3,6 +3,7 @@ import type { ElementName, LetterRank, QuestType } from "@/drizzle/constants";
 import {
   GeneralTypes,
   getUserCaps,
+  OCCUPATIONS,
   SEICHI_SILVER_ADJUST_LIMIT,
   TavernColorPresets,
   UserRanks,
@@ -64,6 +65,28 @@ export const assignedExperienceDataSchema = z.object({
   willpower: z.number(),
   experience: z.number(),
   earnedExperience: z.number(),
+});
+
+export const cosmeticUserUpdateOutputSchema = baseServerResponse.extend({
+  data: z
+    .object({
+      reputationPoints: z.number(),
+      username: z.string().optional(),
+      customTitle: z.string().optional(),
+      gender: z.string().optional(),
+      tavernUsernameColor: z.enum(TavernColorPresets).optional(),
+      tavernTitleColor: z.enum(TavernColorPresets).optional(),
+    })
+    .optional(),
+});
+
+export const occupationSelectionOutputSchema = baseServerResponse.extend({
+  data: z
+    .object({
+      occupation: z.enum(OCCUPATIONS),
+      occupationSignupAt: z.date(),
+    })
+    .optional(),
 });
 
 export const assignedExperienceOutputSchema = baseServerResponse.extend({

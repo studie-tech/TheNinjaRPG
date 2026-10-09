@@ -79,7 +79,7 @@ import { displayCostType } from "@/validators/item";
 export default function MyItems() {
   // State
   const availableTabs = ["normal", "event", "materials", "cooking"];
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const [activeTab, setActiveTab] = useState<(typeof availableTabs)[number]>("normal");
   const [isBuyItemSlotOpen, setIsBuyItemSlotOpen] = useState(false);
   const buyItemSlotInFlight = useRef(false);
@@ -102,7 +102,9 @@ export default function MyItems() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await (data.data
+            ? updateUser(data.data)
+            : utils.profile.getUser.invalidate());
           setIsBuyItemSlotOpen(false);
         }
       },
@@ -135,7 +137,9 @@ export default function MyItems() {
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            "data" in data && data.data
+              ? updateUser(data.data)
+              : utils.profile.getUser.invalidate(),
           ]);
         }
       },
@@ -148,7 +152,9 @@ export default function MyItems() {
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            "data" in data && data.data
+              ? updateUser(data.data)
+              : utils.profile.getUser.invalidate(),
           ]);
         }
       },
@@ -160,7 +166,9 @@ export default function MyItems() {
         showMutationToast(data);
         await Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),
-          utils.profile.getUser.invalidate(),
+          "data" in data && data.data
+            ? updateUser(data.data)
+            : utils.profile.getUser.invalidate(),
           utils.item.getItemLoadouts.invalidate(),
         ]);
       },
@@ -771,6 +779,7 @@ interface BackpackProps {
 const Backpack: React.FC<BackpackProps> = (props) => {
   // Destructure
   const { useritems, allUserItems, userData } = props;
+  const { updateUser } = useRequiredUserData();
 
   // State
   const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
@@ -870,7 +879,9 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            "data" in data && data.data
+              ? updateUser(data.data)
+              : utils.profile.getUser.invalidate(),
           ]);
         }
       },
@@ -884,7 +895,9 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           onSettled();
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            "data" in data && data.data
+              ? updateUser(data.data)
+              : utils.profile.getUser.invalidate(),
           ]);
         }
       },
@@ -1343,6 +1356,7 @@ interface CharacterProps {
 const Character: React.FC<CharacterProps> = (props) => {
   // Set state
   const { useritems, userData } = props;
+  const { updateUser } = useRequiredUserData();
   const [slot, setSlot] = useState<ItemSlot | undefined>(undefined);
   const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
     undefined,
@@ -1433,7 +1447,9 @@ const Character: React.FC<CharacterProps> = (props) => {
           setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            "data" in data && data.data
+              ? updateUser(data.data)
+              : utils.profile.getUser.invalidate(),
           ]);
         }
       },
@@ -1448,7 +1464,9 @@ const Character: React.FC<CharacterProps> = (props) => {
           setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            "data" in data && data.data
+              ? updateUser(data.data)
+              : utils.profile.getUser.invalidate(),
           ]);
         }
       },
@@ -1703,6 +1721,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   onClose,
 }) => {
   const utils = api.useUtils();
+  const { updateUser } = useRequiredUserData();
   const [isOpen, setIsOpen] = useState(true);
   const variants = userItem.item.variants ?? [];
 
@@ -1728,7 +1747,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
       if (result.success) {
         await Promise.all([
           utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
-          utils.profile.getUser.invalidate(),
+          result.data ? updateUser(result.data) : utils.profile.getUser.invalidate(),
         ]);
       }
     },

@@ -1003,7 +1003,7 @@ const Marriage: React.FC = () => {
  */
 const NewAiAvatar: React.FC = () => {
   // Queries & mutations
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
 
   // tRPC utility
   const utils = api.useUtils();
@@ -1013,7 +1013,9 @@ const NewAiAvatar: React.FC = () => {
     onSuccess: async (data) => {
       showMutationToast(data);
       await Promise.all([
-        utils.profile.getUser.invalidate(),
+        data.success && data.data
+          ? updateUser(data.data)
+          : utils.profile.getUser.invalidate(),
         utils.avatar.getHistoricalAvatars.invalidate(),
       ]);
     },
@@ -1096,7 +1098,7 @@ interface HistoricalAiAvatarProps {
 export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => {
   // Queries & mutations
   const [lastElement, setLastElement] = useState<HTMLButtonElement | null>(null);
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const { size = "square" } = props;
   const disabledRef = useRef(Boolean(props.disabled));
   const operationGenerationRef = useRef(props.operationGeneration ?? 0);
@@ -1140,7 +1142,8 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
         !disabledRef.current &&
         updateGenerationRef.current === operationGenerationRef.current
       ) {
-        await utils.profile.getUser.invalidate();
+        if (data.data) await updateUser(data.data);
+        else await utils.profile.getUser.invalidate();
         if (
           props.onUpdate &&
           !disabledRef.current &&
@@ -1551,7 +1554,7 @@ const ResetStats: React.FC = () => {
  */
 const AvatarChange: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
 
   // Only show if we have userData
@@ -1586,7 +1589,9 @@ const AvatarChange: React.FC = () => {
               return;
             }
             if (serverData?.fileUrl) {
-              setTimeout(() => void utils.profile.getUser.invalidate(), 1000);
+              if ("avatarData" in serverData && serverData.avatarData)
+                void updateUser(serverData.avatarData);
+              else void utils.profile.getUser.invalidate();
             }
           }}
           onUploadError={(error: Error) => {
@@ -2013,7 +2018,7 @@ const RerollElement: React.FC = () => {
  */
 const NameChange: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const [showNameChangeConfirm, setShowNameChangeConfirm] = useState(false);
   const [isChangingUsername, setIsChangingUsername] = useState(false);
@@ -2044,7 +2049,10 @@ const NameChange: React.FC = () => {
       if (data.success) {
         // The paid mutation has already committed. A failed cache refresh must
         // not leave the confirmation retryable and charge the user twice.
-        await utils.profile.getUser.invalidate().catch(() => undefined);
+        await (data.data
+          ? updateUser(data.data)
+          : utils.profile.getUser.invalidate()
+        ).catch(() => undefined);
         setShowNameChangeConfirm(false);
       } else {
         setUsernameDraft(submittedUsername);
@@ -2157,7 +2165,7 @@ const NameChange: React.FC = () => {
  */
 const CustomTitle: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const [showCustomTitleConfirm, setShowCustomTitleConfirm] = useState(false);
   const [isUpdatingCustomTitle, setIsUpdatingCustomTitle] = useState(false);
@@ -2192,7 +2200,10 @@ const CustomTitle: React.FC = () => {
       if (data.success) {
         // The purchase already succeeded at this point; a cache refresh failure
         // must not leave a retryable dialog that could charge the user again.
-        await utils.profile.getUser.invalidate().catch(() => undefined);
+        await (data.data
+          ? updateUser(data.data)
+          : utils.profile.getUser.invalidate()
+        ).catch(() => undefined);
         setShowCustomTitleConfirm(false);
       } else {
         form.setValue("title", submittedTitle, {
@@ -2280,7 +2291,7 @@ const CustomTitle: React.FC = () => {
 
 /** Preset-only tavern styling controls. Username and title are separate purchases. */
 const TavernColors: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const [usernameColor, setUsernameColor] = useState<TavernColorPreset>(
     userData?.tavernUsernameColor ?? "DEFAULT",
@@ -2299,7 +2310,10 @@ const TavernColors: React.FC = () => {
   const updateColor = api.profile.updateTavernColor.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      if (data.success) await utils.profile.getUser.invalidate();
+      if (data.success) {
+        if (data.data) await updateUser(data.data);
+        else await utils.profile.getUser.invalidate();
+      }
     },
   });
 
@@ -2444,7 +2458,7 @@ const TavernColors: React.FC = () => {
  */
 const ChangeGender: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const [showGenderConfirmation, setShowGenderConfirmation] = useState(false);
   const [isChangingGender, setIsChangingGender] = useState(false);
@@ -2483,10 +2497,12 @@ const ChangeGender: React.FC = () => {
       const data = await changeGender({ gender: submittedGender });
       showMutationToast(data);
       if (data.success) {
-        // The purchase already succeeded at this point. Refresh gender and balance
-        // from the server once, then close even if the refresh fails, so stale cached
-        // reputation cannot overwrite a concurrent mutation or enable a repeat charge.
-        await utils.profile.getUser.invalidate().catch(() => undefined);
+        // The purchase has committed. Close even if cache reconciliation fails
+        // so retrying the dialog cannot charge again.
+        await (data.data
+          ? updateUser(data.data)
+          : utils.profile.getUser.invalidate()
+        ).catch(() => undefined);
         setShowGenderConfirmation(false);
       } else {
         form.setValue("gender", submittedGender, {

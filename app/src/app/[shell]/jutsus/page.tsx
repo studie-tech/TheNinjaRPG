@@ -242,10 +242,18 @@ export default function MyJutsu() {
 
   const { mutate: updateOrder, isPending: isReordering } =
     api.jutsu.updateUserJutsuOrder.useMutation({
-      onSuccess: async (data) => {
+      onSuccess: async (data, variables) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          if (data.data) {
+            await updateUser((current) =>
+              current?.jutsuLoadout === variables.loadoutId
+                ? { loadout: data.data }
+                : {},
+            );
+          } else {
+            await utils.profile.getUser.invalidate();
+          }
         }
       },
       onSettled: () => {
@@ -271,7 +279,9 @@ export default function MyJutsu() {
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await (data.data
+            ? updateUser(data.data)
+            : utils.profile.getUser.invalidate());
         }
       },
     });
@@ -284,13 +294,8 @@ export default function MyJutsu() {
           await Promise.all([
             utils.jutsu.getUserJutsus.invalidate(), // Refresh Jutsu list
             utils.jutsu.getRecentTransfers.invalidate(), // 🔹 Refresh free transfers
-            utils.profile.getUser.invalidate(), // Refresh user profile to update free transfer count
+            data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
           ]);
-          if (usedTransfers >= freeTransfers && transferCost > 0) {
-            await updateUser({
-              reputationPoints: userData.reputationPoints - transferCost,
-            });
-          }
         }
       },
       onSettled,

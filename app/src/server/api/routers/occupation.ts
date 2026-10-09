@@ -40,9 +40,11 @@ import {
   getNextUserSnapshotAt,
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
+import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChangeContent } from "@/utils/permissions";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
+import { occupationSelectionOutputSchema } from "@/validators/user";
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure
@@ -63,7 +65,7 @@ export const occupationRouter = createTRPCRouter({
   selectOccupation: protectedProcedure
     .meta({ mcp: { description: "Select a crafting occupation" } })
     .input(z.object({ occupation: z.enum(OCCUPATIONS) }))
-    .output(baseServerResponse)
+    .output(occupationSelectionOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -91,7 +93,23 @@ export const occupationRouter = createTRPCRouter({
         .set({ occupation: input.occupation, occupationSignupAt: sql`NOW()` })
         .where(eq(userData.userId, ctx.userId));
 
-      return { success: true, message: "Occupation selected successfully!" };
+      const data = await ctx.drizzle.query.userData
+        .findFirst({
+          columns: { occupation: true, occupationSignupAt: true },
+          where: eq(userData.userId, ctx.userId),
+        })
+        .catch(handleUserCacheReadError);
+      return {
+        success: true,
+        message: "Occupation selected successfully!",
+        data:
+          data?.occupation && data.occupationSignupAt
+            ? {
+                occupation: data.occupation,
+                occupationSignupAt: data.occupationSignupAt,
+              }
+            : undefined,
+      };
     }),
 
   craftItem: protectedProcedure

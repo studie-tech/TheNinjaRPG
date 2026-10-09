@@ -55,6 +55,7 @@ import { showMutationToast } from "@/libs/toast";
 import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake, usePublicPathname } from "@/utils/routing";
+import { useRequiredUserData } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
 
 /** First-page catalog size; further rows load through the existing infinite-query cursor. */
@@ -254,6 +255,8 @@ function ShopCatalogCard({
 const Shop: React.FC<ShopProps> = (props) => {
   const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost, catalog } =
     props;
+
+  const { updateUser } = useRequiredUserData();
   const silverCopy = SILVER_COPY[catalog?.silverLabel ?? "seichi"];
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -368,7 +371,9 @@ const Shop: React.FC<ShopProps> = (props) => {
       if (data.success) {
         setItemConfirmOpen(false);
         void utils.item.getUserItemCounts.invalidate();
-        void utils.profile.getUser.invalidate();
+        void ("data" in data && data.data
+          ? updateUser(data.data)
+          : utils.profile.getUser.invalidate());
         void utils.item.getUserItems.invalidate();
         void utils.item.getPurchaseAllowance.invalidate();
         if (isItemBuyStep && variables.itemId === TUTORIAL_ITEM_ID) {

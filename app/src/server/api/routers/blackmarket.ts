@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -37,6 +37,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { fetchUserBalances, handleUserCacheReadError } from "@/server/utils/userCache";
 import { getRandomElement } from "@/utils/array";
 import { round } from "@/utils/math";
 import {
@@ -52,7 +53,12 @@ import {
   isReservedCustomTitle,
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
-import { titleChangeSchema } from "@/validators/user";
+import { cosmeticUserUpdateOutputSchema, titleChangeSchema } from "@/validators/user";
+import {
+  extraItemSlotResponseSchema,
+  extraJutsuSlotResponseSchema,
+  userBalanceResponseSchema,
+} from "@/validators/userCache";
 import { fetchUser } from "./profile";
 
 export const blackMarketRouter = createTRPCRouter({
@@ -142,6 +148,7 @@ export const blackMarketRouter = createTRPCRouter({
         allowedUser: z.string().nullish(),
       }),
     )
+    .output(userBalanceResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, offers] = await Promise.all([
@@ -191,11 +198,16 @@ export const blackMarketRouter = createTRPCRouter({
         allowedPurchaserId: input.allowedUser,
       });
       // Response
-      return { success: true, message: "Offer created" };
+      return {
+        success: true,
+        message: "Offer created",
+        data: await fetchUserBalances(ctx.drizzle, ctx.userId),
+      };
     }),
   delistOffer: protectedProcedure
     .meta({ mcp: { description: "Remove a ryo trade offer" } })
     .input(z.object({ offerId: z.string() }))
+    .output(userBalanceResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, offer] = await Promise.all([
@@ -224,11 +236,16 @@ export const blackMarketRouter = createTRPCRouter({
           .where(eq(userData.userId, creatorId)),
       ]);
       // Response
-      return { success: true, message: "Offer delisted" };
+      return {
+        success: true,
+        message: "Offer delisted",
+        data: await fetchUserBalances(ctx.drizzle, ctx.userId),
+      };
     }),
   takeOffer: protectedProcedure
     .meta({ mcp: { description: "Purchase a ryo trade offer" } })
     .input(z.object({ offerId: z.string() }))
+    .output(userBalanceResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch the offer, user, and seller data simultaneously
       const [offer, user] = await Promise.all([
@@ -372,13 +389,14 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: `Bought ${offer.repsForSale} reputation points for ${offer.requestedRyo} ryo.`,
+        data: await fetchUserBalances(ctx.drizzle, ctx.userId),
       };
     }),
   // Update custom title
   updateCustomTitle: protectedProcedure
     .meta({ mcp: { description: "Update user's custom title" } })
     .input(titleChangeSchema)
-    .output(baseServerResponse)
+    .output(cosmeticUserUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, villages] = await Promise.all([
@@ -408,26 +426,42 @@ export const blackMarketRouter = createTRPCRouter({
           customTitle: input.title,
           reputationPoints: sql`reputationPoints - ${COST_CUSTOM_TITLE}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.customTitle, user.customTitle),
+            gte(userData.reputationPoints, COST_CUSTOM_TITLE),
+          ),
+        );
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could not update user" };
       } else {
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "user",
-          changes: [`Custom title changed from ${user.customTitle} to ${input.title}`],
-          relatedId: ctx.userId,
-          relatedMsg: `Update: ${user.customTitle} -> ${input.title}`,
-          relatedImage: user.avatarLight,
-        });
-        return { success: true, message: "Custom title updated" };
+        const [data] = await Promise.all([
+          ctx.drizzle.query.userData
+            .findFirst({
+              columns: { customTitle: true, reputationPoints: true },
+              where: eq(userData.userId, ctx.userId),
+            })
+            .catch(handleUserCacheReadError),
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "user",
+            changes: [
+              `Custom title changed from ${user.customTitle} to ${input.title}`,
+            ],
+            relatedId: ctx.userId,
+            relatedMsg: `Update: ${user.customTitle} -> ${input.title}`,
+            relatedImage: user.avatarLight,
+          }),
+        ]);
+        return { success: true, message: "Custom title updated", data };
       }
     }),
   changeUserGender: protectedProcedure
     .meta({ mcp: { description: "Change user's gender" } })
     .input(z.object({ gender: z.enum(genders) }))
-    .output(baseServerResponse)
+    .output(cosmeticUserUpdateOutputSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -442,17 +476,29 @@ export const blackMarketRouter = createTRPCRouter({
           gender: input.gender,
           reputationPoints: sql`reputationPoints - ${COST_CHANGE_GENDER}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.gender, user.gender),
+            gte(userData.reputationPoints, COST_CHANGE_GENDER),
+          ),
+        );
       // Return message
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could not update user" };
       } else {
-        return { success: true, message: `Change gender in ${input.gender}` };
+        const data = await ctx.drizzle.query.userData
+          .findFirst({
+            columns: { gender: true, reputationPoints: true },
+            where: eq(userData.userId, ctx.userId),
+          })
+          .catch(handleUserCacheReadError);
+        return { success: true, message: `Change gender in ${input.gender}`, data };
       }
     }),
   buyItemSlot: protectedProcedure
     .meta({ mcp: { description: "Purchase an extra item slot" } })
-    .output(baseServerResponse)
+    .output(extraItemSlotResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -467,25 +513,42 @@ export const blackMarketRouter = createTRPCRouter({
           extraItemSlots: sql`extraItemSlots + 1`,
           reputationPoints: sql`reputationPoints - ${COST_EXTRA_ITEM_SLOT}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.reputationPoints, COST_EXTRA_ITEM_SLOT),
+          ),
+        );
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could not update user" };
       } else {
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "user",
-          changes: ["Item slot purchased"],
-          relatedId: ctx.userId,
-          relatedMsg: "Update: Item slot purchased",
-          relatedImage: user.avatarLight,
-        });
-        return { success: true, message: "Item slot purchased" };
+        const [data] = await Promise.all([
+          ctx.drizzle.query.userData
+            .findFirst({
+              columns: { reputationPoints: true, extraItemSlots: true },
+              where: eq(userData.userId, ctx.userId),
+            })
+            .catch(handleUserCacheReadError),
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "user",
+            changes: ["Item slot purchased"],
+            relatedId: ctx.userId,
+            relatedMsg: "Update: Item slot purchased",
+            relatedImage: user.avatarLight,
+          }),
+        ]);
+        return {
+          success: true,
+          message: "Item slot purchased",
+          data,
+        };
       }
     }),
   buyJutsuSlot: protectedProcedure
     .meta({ mcp: { description: "Purchase an extra jutsu slot" } })
-    .output(baseServerResponse)
+    .output(extraJutsuSlotResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -503,20 +566,38 @@ export const blackMarketRouter = createTRPCRouter({
           extraJutsuSlots: sql`extraJutsuSlots + 1`,
           reputationPoints: sql`reputationPoints - ${COST_EXTRA_JUTSU_SLOT}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.reputationPoints, COST_EXTRA_JUTSU_SLOT),
+            lt(userData.extraJutsuSlots, MAX_EXTRA_JUTSU_SLOTS),
+          ),
+        );
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could not update user" };
       } else {
-        await ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "user",
-          changes: ["Jutsu slot purchased"],
-          relatedId: ctx.userId,
-          relatedMsg: "Update: Jutsu slot purchased",
-          relatedImage: user.avatarLight,
-        });
-        return { success: true, message: "Jutsu slot purchased" };
+        const [data] = await Promise.all([
+          ctx.drizzle.query.userData
+            .findFirst({
+              columns: { reputationPoints: true, extraJutsuSlots: true },
+              where: eq(userData.userId, ctx.userId),
+            })
+            .catch(handleUserCacheReadError),
+          ctx.drizzle.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "user",
+            changes: ["Jutsu slot purchased"],
+            relatedId: ctx.userId,
+            relatedMsg: "Update: Jutsu slot purchased",
+            relatedImage: user.avatarLight,
+          }),
+        ]);
+        return {
+          success: true,
+          message: "Jutsu slot purchased",
+          data,
+        };
       }
     }),
   rerollElement: protectedProcedure

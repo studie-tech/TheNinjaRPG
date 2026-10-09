@@ -54,7 +54,11 @@ import {
   getTimeLeftStr,
   isNewSlotDue,
 } from "@/utils/time";
-import type { BoostTemplateEntry } from "@/validators/shrine";
+import { useRequiredUserData } from "@/utils/UserContext";
+import type {
+  BoostTemplateEntry,
+  ShrineVillageUpdateResponse,
+} from "@/validators/shrine";
 
 /**
  * ShrineHall
@@ -132,6 +136,7 @@ interface TabProps {
 
 const OverviewTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
+  const updateShrineVillage = useUpdateShrineVillage();
 
   const { data: shrineData } = api.travel.getSectorData.useQuery(
     { sector: user.sector ?? 0 },
@@ -152,7 +157,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
         showMutationToast(res);
         void utils.travel.getSectorData.invalidate();
         void utils.shrine.getCapturedSectors.invalidate();
-        void utils.profile.getUser.invalidate();
+        void updateShrineVillage(res);
       },
     });
 
@@ -299,6 +304,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 
 const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
+  const updateShrineVillage = useUpdateShrineVillage();
   const now = useUtcNow(isActive, 60_000);
   const nowMs = now.getTime();
   const currentDayOfWeek = now.getUTCDay();
@@ -319,7 +325,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
       onSuccess: (res) => {
         showMutationToast(res);
         if (res.success) {
-          void utils.profile.getUser.invalidate();
+          void updateShrineVillage(res);
         }
       },
     });
@@ -500,7 +506,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
 const DefendersTab = ({ user, isActive }: TabProps) => {
   const [selectedAiId, setSelectedAiId] = useState<string>("");
 
-  const utils = api.useUtils();
+  const updateShrineVillage = useUpdateShrineVillage();
 
   const { data: aiData } = api.shrine.getShrineAis.useQuery(undefined, {
     enabled: isActive,
@@ -515,7 +521,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
     api.shrine.unlockAiDefender.useMutation({
       onSuccess: (res) => {
         showMutationToast(res);
-        void utils.profile.getUser.invalidate();
+        void updateShrineVillage(res);
       },
     });
 
@@ -523,7 +529,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
     api.shrine.toggleVillageAiDefender.useMutation({
       onSuccess: (res) => {
         showMutationToast(res);
-        void utils.profile.getUser.invalidate();
+        void updateShrineVillage(res);
       },
     });
 
@@ -703,6 +709,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
 
 const MaintenanceTab = ({ user }: TabProps) => {
   const utils = api.useUtils();
+  const updateShrineVillage = useUpdateShrineVillage();
 
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId ?? "" },
@@ -714,7 +721,7 @@ const MaintenanceTab = ({ user }: TabProps) => {
       onSuccess: (res) => {
         showMutationToast(res);
         if (res.success) {
-          void utils.profile.getUser.invalidate();
+          void updateShrineVillage(res);
           void utils.shrine.getCapturedSectors.invalidate();
         }
       },
@@ -941,6 +948,7 @@ const BoostTemplateGrid = ({
   currentSlotIndex,
 }: BoostTemplateGridProps) => {
   const utils = api.useUtils();
+  const updateShrineVillage = useUpdateShrineVillage();
 
   const { data: templateData, isLoading } = api.shrine.getBoostTemplate.useQuery(
     { villageId },
@@ -1004,7 +1012,7 @@ const BoostTemplateGrid = ({
         if (res.success) {
           await Promise.all([
             utils.shrine.getBoostTemplate.invalidate({ villageId }),
-            utils.profile.getUser.invalidate(),
+            updateShrineVillage(res),
           ]);
           setIsDirty(false);
         }
@@ -1332,3 +1340,19 @@ const BoostTypeChecklist = ({
     })}
   </div>
 );
+
+const useUpdateShrineVillage = () => {
+  const { updateUser } = useRequiredUserData();
+  const utils = api.useUtils();
+  return (result: ShrineVillageUpdateResponse) => {
+    if (!result.success || result.requiresUserRefresh || !result.villageUpdate) {
+      return utils.profile.getUser.invalidate();
+    }
+    const villageUpdate = result.villageUpdate;
+    return updateUser((current) =>
+      current.village?.id === villageUpdate.id
+        ? { village: { ...current.village, ...villageUpdate } }
+        : {},
+    );
+  };
+};
