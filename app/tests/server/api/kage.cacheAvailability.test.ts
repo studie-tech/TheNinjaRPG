@@ -6,10 +6,14 @@ import { kageRouter } from "@/server/api/routers/kage";
 import { insertUsers } from "../../setup/factories";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+
+import { beforeStatements } from "../../setup/statements";
+import { countUserReads } from "../../setup/userReads";
 
 describeWithDatabase("kage challenge availability cache response", () => {
   beforeEach(async () => {
@@ -30,9 +34,11 @@ describeWithDatabase("kage challenge availability cache response", () => {
   });
 
   it("returns the committed availability and timestamp, with no patch on a rejected retry", async () => {
-    const caller = await callerFor(kageRouter, "cache-kage");
-    const result = await caller.toggleOpenForChallenges({ villageId: "cache-village" });
     const db = await getTestDatabase();
+    const counted = countUserReads(db);
+    const caller = callerForDatabase(kageRouter, "cache-kage", counted.client);
+    const result = await caller.toggleOpenForChallenges({ villageId: "cache-village" });
+    expect(counted.getVillageReads()).toBe(1);
     const stored = await db.query.village.findFirst({
       where: eq(village.id, "cache-village"),
     });
@@ -45,6 +51,19 @@ describeWithDatabase("kage challenge availability cache response", () => {
     const retry = await caller.toggleOpenForChallenges({ villageId: "cache-village" });
     expect(retry.success).toBe(false);
     expect(retry.data).toBeUndefined();
+  });
+
+  it("rejects an intervening availability change without a success log or patch", async () => {
+    const db = await getTestDatabase();
+    const client = beforeStatements(db, village, [async () => {
+      await db.update(village).set({ openForChallenges: true })
+        .where(eq(village.id, "cache-village"));
+    }]);
+    const result = await callerForDatabase(kageRouter, "cache-kage", client)
+      .toggleOpenForChallenges({ villageId: "cache-village" });
+    expect(result.success).toBe(false);
+    expect(result.data).toBeUndefined();
+    expect(await db.query.actionLog.findMany()).toHaveLength(0);
   });
 
   it("does not expose a patch or change availability for a non-kage", async () => {
