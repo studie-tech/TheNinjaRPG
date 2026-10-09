@@ -172,14 +172,8 @@ export const availableUserActions = (
             if (!isQuestBattle && jutsu.battleUsageType === "PVE") {
               return false;
             }
-            // Filter out jutsus with damage tag when stealthed
-            if (isStealth) {
-              const offensiveTags = new Set(["damage", "pierce", "drain"]);
-              const hasOffensiveTag = jutsu.effects.some((e: { type: string }) =>
-                offensiveTags.has(e.type),
-              );
-              if (hasOffensiveTag) return false;
-            }
+            // Stealth prevents all jutsu, including defensive and support actions.
+            if (isStealth) return false;
             // Filter out summon jutsu when summonPrevent is active
             if (isSummonPrevented) {
               const hasSummonTag = jutsu.effects.some(
@@ -203,23 +197,18 @@ export const availableUserActions = (
               );
               if (hasMoveTag) return false;
             }
-            // Filter out jutsus removed by elemental seal
-            if (!elementalSeal?.elements?.length) return true;
-            const jutsuElements = new Set<string>();
-            if (jutsu.elementClassification && jutsu.elementClassification !== "None") {
-              jutsuElements.add(jutsu.elementClassification);
-            }
-            for (const effect of jutsu.effects) {
-              if ("elements" in effect && Array.isArray(effect.elements)) {
-                for (const el of effect.elements) {
-                  jutsuElements.add(el);
-                }
-              }
-            }
-            return (
-              jutsuElements.size === 0 ||
-              !elementalSeal.elements.some((e: ElementName) => jutsuElements.has(e))
-            );
+            // Elemental Seal affects exactly 60 AP elemental jutsu, regardless
+            // of the element lists retained in older content/battle payloads.
+            if (!elementalSeal || jutsu.actionCostPerc !== 60) return true;
+            const isElemental =
+              (jutsu.elementClassification != null &&
+                jutsu.elementClassification !== "None") ||
+              jutsu.effects.some(
+                (effect) =>
+                  "elements" in effect &&
+                  effect.elements?.some((element) => element !== "None"),
+              );
+            return !isElemental;
           })
           .map((uj) => {
             const action = userJutsuToAction(uj, battle);
@@ -236,7 +225,7 @@ export const availableUserActions = (
             return action;
           })
       : []),
-    ...(user?.items && !isStealth && battle
+    ...(user?.items && battle
       ? user.items
           .filter((ui) => {
             if (ui.quantity <= 0) return false;

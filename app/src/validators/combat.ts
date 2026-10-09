@@ -806,7 +806,9 @@ export const StealthTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
   type: z.literal("stealth").prefault("stealth"),
-  description: msg("Stealth the target, only allowing non-damaging jutsu and actions"),
+  description: msg(
+    "Stealth the target, blocking all jutsu while allowing weapons and items",
+  ),
 });
 
 export type StealthTagType = z.infer<typeof StealthTag>;
@@ -815,8 +817,7 @@ export const ElementalSealTag = z.object({
   ...BaseAttributes,
   ...PowerAttributes,
   type: z.literal("elementalseal").prefault("elementalseal"),
-  description: msg("Seals the target's ability to use jutsu of specified elements"),
-  elements: z.array(z.enum(ElementNames)).min(1).prefault(["Fire"]),
+  description: msg("Seals the target's ability to use all elemental 60 AP jutsu"),
 });
 
 export type ElementalSealTagType = z.infer<typeof ElementalSealTag>;
