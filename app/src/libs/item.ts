@@ -760,7 +760,7 @@ export const showsItemLevelBadge = (item: {
   item.itemType !== "CRYSTAL" &&
   item.slot !== "THROWN";
 
-/** Consumables consolidate across incidental ownership levels; gear keeps its progression. */
+/** Consumables consolidate across ownership levels; gear keeps its progression. */
 export const getItemStackMergeBucketKey = (
   item: Pick<Item, "itemType">,
   row: Pick<

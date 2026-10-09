@@ -3924,7 +3924,11 @@ async function executeMergeStacksForItemBucket(
   const remainder = totalQuantity % stackSize;
   const targetStacks = numFullStacks + (remainder > 0 ? 1 : 0);
 
-  const sortedItems = [...bucketItems].sort((a, b) => a.id.localeCompare(b.id));
+  // Keep the strongest ownership progression when consolidating consumables. Gear
+  // buckets already share a level, so their deterministic ID ordering stays intact.
+  const sortedItems = [...bucketItems].sort(
+    (a, b) => b.level - a.level || a.id.localeCompare(b.id),
+  );
   const itemsToKeep = sortedItems.slice(0, targetStacks);
   const itemsToDelete = sortedItems.slice(targetStacks);
 
