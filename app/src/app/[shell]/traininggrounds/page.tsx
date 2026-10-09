@@ -77,7 +77,11 @@ import Countdown from "@/layout/Countdown";
 import { EnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
+import JutsuFiltering, {
+  getFilter,
+  JutsuStatQuickFilters,
+  useFiltering,
+} from "@/layout/JutsuFiltering";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -102,6 +106,7 @@ import {
   checkJutsuRank,
   checkJutsuVillage,
   findJutsuInTraining,
+  getTrainingSections,
   isJutsuInTraining,
   isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,
@@ -142,6 +147,7 @@ export default function Training() {
 
   // Show sensei component
   const showSenseiSystem = [...SENSEI_RANKS, "GENIN"].includes(userData.rank);
+  const trainingSections = getTrainingSections(showSenseiSystem);
 
   // Tutorial steps select the panel containing their highlighted action.
   const activeSection =
@@ -174,19 +180,15 @@ export default function Training() {
               label="Training activities"
               current={activeSection}
               onChange={setSection}
-              options={[
-                "Stats",
-                "Masteries",
-                "Jutsu",
-                "Covert",
-                ...(showSenseiSystem ? ["Sensei"] : []),
-              ]}
+              options={trainingSections.options}
+              aliases={trainingSections.aliases}
               icons={{
                 Stats: <Swords aria-hidden="true" className="h-4 w-4" />,
                 Masteries: <Medal aria-hidden="true" className="h-4 w-4" />,
                 Jutsu: <Zap aria-hidden="true" className="h-4 w-4" />,
-                Covert: <Eye aria-hidden="true" className="h-4 w-4" />,
-                Sensei: <Handshake aria-hidden="true" className="h-4 w-4" />,
+                [trainingSections.covertSection]: (
+                  <Eye aria-hidden="true" className="h-4 w-4" />
+                ),
               }}
               className="min-h-11 whitespace-nowrap px-3 py-2.5 text-sm sm:text-base"
             />
@@ -234,19 +236,21 @@ export default function Training() {
             initialBreak
           />
         )}
-        {activeSection === "Covert" && (
-          <CovertTraining
-            userData={userData}
-            timeDiff={timeDiff}
-            updateUser={updateUser}
-          />
-        )}
-        {activeSection === "Sensei" && showSenseiSystem && (
-          <SenseiSystem
-            userData={userData}
-            timeDiff={timeDiff}
-            updateUser={updateUser}
-          />
+        {activeSection === trainingSections.covertSection && (
+          <>
+            <CovertTraining
+              userData={userData}
+              timeDiff={timeDiff}
+              updateUser={updateUser}
+            />
+            {showSenseiSystem && (
+              <SenseiSystem
+                userData={userData}
+                timeDiff={timeDiff}
+                updateUser={updateUser}
+              />
+            )}
+          </>
         )}
       </TabsContent>
     </Tabs>
@@ -1158,11 +1162,13 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
       }
     >
+      <JutsuStatQuickFilters state={state} />
       {userData && (
-        // The list fills its 320px cap once loaded; holding that height through the
-        // first load keeps the boxes below from being pushed down when it arrives.
-        <div className={cn("max-h-[320px] overflow-y-scroll", !jutsus && "h-[320px]")}>
+        // The grid grows with the page; a minimum height through the first load keeps
+        // the box from collapsing and jumping when the jutsu arrive.
+        <div className={cn("pt-3", !jutsus && "min-h-[320px]")}>
           <ActionSelector
+            gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))]"
             items={alljutsus}
             counts={userJutsuCounts}
             selectedId={jutsu?.id}
@@ -1225,15 +1231,18 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         </div>
       )}
       {/* Below the in-progress training overlay (z-20), so its countdown and cancel stay usable */}
+      {/* The list can be taller than the screen, so overlay content sticks in view */}
       {isFetching && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
-          <Loader explanation="Loading jutsu" />
+        <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
+          <div className="sticky top-24 flex justify-center py-16">
+            <Loader explanation="Loading jutsu" />
+          </div>
         </div>
       )}
       {finishTrainingAt?.finishTraining && (
         <div className="min-h-36">
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
-            <div className="m-auto text-center text-white">
+          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 bg-black opacity-90">
+            <div className="sticky top-24 py-10 text-center text-white">
               <p className="p-5 text-3xl">Training</p>
               <p className="text-2xl">
                 Time Left:{" "}

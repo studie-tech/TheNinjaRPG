@@ -39,7 +39,11 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import ItemWithEffects from "@/layout/ItemWithEffects";
-import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
+import JutsuFiltering, {
+  getFilter,
+  JutsuStatQuickFilters,
+  useFiltering,
+} from "@/layout/JutsuFiltering";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -446,6 +450,7 @@ export default function MyJutsu() {
           )
         }
       >
+        <JutsuStatQuickFilters state={state} />
         {isFetching && <Loader explanation="Loading Jutsu" />}
 
         {/* Equipped Section - Always Visible */}
