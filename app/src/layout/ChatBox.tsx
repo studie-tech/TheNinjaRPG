@@ -2,7 +2,13 @@
 
 import { type UIMessage, useChat } from "@ai-sdk/react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { DefaultChatTransport, getToolName, isTextUIPart, isToolUIPart } from "ai";
+import {
+  convertToModelMessages,
+  DefaultChatTransport,
+  getToolName,
+  isTextUIPart,
+  isToolUIPart,
+} from "ai";
 import { BrainCircuit, Meh, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -90,15 +96,33 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     },
   ];
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, addToolOutput, status } = useChat({
     transport: new DefaultChatTransport({ api: aiProps.apiEndpoint }),
     messages: initialMessages,
     onToolCall: ({ toolCall }) => {
-      onToolCall({
-        toolCallId: toolCall.toolCallId,
-        toolName: toolCall.toolName,
-        args: toolCall.input,
-      });
+      try {
+        onToolCall({
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+          args: toolCall.input,
+        });
+        // These tools update the editor draft; saving remains an explicit user action.
+        void addToolOutput({
+          tool: toolCall.toolName,
+          toolCallId: toolCall.toolCallId,
+          output: "Updated the editor draft. The user must save to persist changes.",
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Could not update draft";
+        void addToolOutput({
+          tool: toolCall.toolName,
+          toolCallId: toolCall.toolCallId,
+          state: "output-error",
+          errorText: message,
+        });
+        showMutationToast({ success: false, message });
+      }
     },
     onError: (error) => {
       const message = error?.message || "Error sending message. Not allowed?";
@@ -118,14 +142,21 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     });
 
   // Handle feedback submission
-  const handleFeedback = (sentiment: "POSITIVE" | "NEGATIVE" | "NEUTRAL") => {
+  const handleFeedback = async (sentiment: "POSITIVE" | "NEGATIVE" | "NEUTRAL") => {
     if (feedbackSubmitted) return;
 
-    submitFeedback({
-      apiRoute: aiProps.apiEndpoint,
-      chatHistory: messages,
-      sentiment,
-    });
+    try {
+      // Feedback stores model messages, while useChat keeps UI messages with parts.
+      const chatHistory = await convertToModelMessages(messages, {
+        ignoreIncompleteToolCalls: true,
+      });
+      submitFeedback({ apiRoute: aiProps.apiEndpoint, chatHistory, sentiment });
+    } catch (error) {
+      showMutationToast({
+        success: false,
+        message: error instanceof Error ? error.message : "Could not submit feedback",
+      });
+    }
   };
 
   // Scroll to bottom of messages

@@ -1,7 +1,12 @@
 import { openai } from "@ai-sdk/openai";
 import { auth } from "@clerk/nextjs/server";
 import type { UIMessage } from "ai";
-import { stepCountIs, streamText } from "ai";
+import {
+  createUIMessageStreamResponse,
+  isStepCount,
+  streamText,
+  toUIMessageStream,
+} from "ai";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { MAX_DAILY_AI_CALLS, OPENAI_CHAT_MODEL } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
@@ -32,7 +37,7 @@ export async function POST(req: Request) {
 
   // Call LLM
   const { messages: uiMessages } = (await req.json()) as { messages: UIMessage[] };
-  const { system, messages } = await prepareChatPrompt(
+  const { instructions, messages } = await prepareChatPrompt(
     uiMessages,
     `
 As an AI assistant, your role is to promptly assist the clients of TheNinja-RPG, adopting the persona of Seichi AI.
@@ -463,7 +468,7 @@ This document outlines various screens, menus, and gameplay systems available in
   );
   const result = streamText({
     model: openai(OPENAI_CHAT_MODEL),
-    system,
+    instructions,
     messages,
     tools: {
       updateBadge: {
@@ -471,8 +476,10 @@ This document outlines various screens, menus, and gameplay systems available in
         inputSchema: BadgeValidator,
       },
     },
-    stopWhen: stepCountIs(2),
+    stopWhen: isStepCount(2),
   });
 
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }

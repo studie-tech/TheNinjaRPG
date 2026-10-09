@@ -1,11 +1,10 @@
 import { openai as openaiSdk } from "@ai-sdk/openai";
-import { generateObject, generateText } from "ai";
+import { generateText, Output } from "ai";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import OpenAI from "openai";
-import { z } from "zod";
 import type { AutomoderationCategory } from "@/drizzle/constants";
 import {
-  BanStates,
+  type BanStates,
   OPENAI_MODERATION_MODEL,
   REPORT_CONTEXT_WINDOW,
   TERR_BOT_ID,
@@ -20,6 +19,11 @@ import {
 import { insertAutomatedModeration, insertUserReport } from "@/routers/reports";
 import type { DrizzleClient } from "@/server/db";
 import { evaluateImageModeration } from "@/utils/imageModeration";
+import {
+  moderationDecisionSchema,
+  nsfwClassificationSchema,
+  updateReasonValidationSchema,
+} from "@/validators/moderation";
 import type { AdditionalContext } from "@/validators/reports";
 
 // OpenAI client
@@ -403,16 +407,12 @@ export const generateModerationDecision = async (
   // Step 2: Fetch related userReport using full text search
   const prevReports = await getRelatedReports(client, aiInterpretation);
   // Step 3: Create decision with AI based on summary and related reports
-  const decisionSchema = z.object({
-    createReport: z.enum(BanStates),
-    reasoning: z.string(),
-  });
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
-    schema: decisionSchema,
+    output: Output.object({ schema: moderationDecisionSchema }),
     prompt: getSystemPrompt(content, aiInterpretation, prevReports),
   });
-  return { decision: object as z.infer<typeof decisionSchema>, aiInterpretation };
+  return { decision: output, aiInterpretation };
 };
 
 /**
@@ -456,23 +456,16 @@ const updateReportedStatus = async (
 export const classifyNsfwPrompt = async (
   prompt: string,
 ): Promise<{ isNsfw: boolean; reason: string }> => {
-  const classificationSchema = z.object({
-    isNsfw: z.boolean(),
-    reason: z.string(),
-  });
-
-  // AI SDK 7 rejects system-role entries inside `messages`; system prompts
-  // must be passed via the top-level `system` option.
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
-    schema: classificationSchema,
-    system: `You are a content classifier for an anime-style RPG game's AI art generator.
+    output: Output.object({ schema: nsfwClassificationSchema }),
+    instructions: `You are a content classifier for an anime-style RPG game's AI art generator.
 Analyze the user-provided prompt and determine if it is attempting to generate NSFW content.
 NSFW includes: sexual content, nudity, explicit violence/gore, content sexualizing minors, explicit drug use, hate symbols.
 Allowed: action/combat scenes, anime-style characters in appropriate clothing, fantasy violence (ninja RPG), dramatic scenes.`,
     prompt,
   });
-  return object as z.infer<typeof classificationSchema>;
+  return output;
 };
 
 /**
@@ -503,11 +496,10 @@ export const validateUserUpdateReason = async (
   update: string,
   reason: string,
 ): Promise<{ allowUpdate: boolean; comment: string }> => {
-  const validationSchema = z.object({ allowUpdate: z.boolean(), comment: z.string() });
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model: openaiSdk(OPENAI_MODERATION_MODEL),
-    schema: validationSchema,
-    system: `You validate reasons supplied by content members for game content updates.
+    output: Output.object({ schema: updateReasonValidationSchema }),
+    instructions: `You validate reasons supplied by content members for game content updates.
 Determine if the reason is descriptive and if the update should be allowed.
 Content members are tasked with testing things, helping users, etc, and thus the reason serves mostly as transparency for end users.
 You are not to judge the validity of the update, only verify that the reason is clear.
@@ -518,5 +510,5 @@ You are not to judge the validity of the update, only verify that the reason is 
 - The reason does not have to include details about the update, the previous state, or new state.`,
     prompt: `Reason: ${reason}\n\nUpdate: ${update}`,
   });
-  return object as z.infer<typeof validationSchema>;
+  return output;
 };

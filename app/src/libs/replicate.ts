@@ -249,9 +249,9 @@ type Txt2ImgConfig = {
 /**
  * Create an image from text using OpenAI
  * @param config The configuration for the image generation
- * @returns The URL of the image
+ * @returns Base64 image data before resizing and upload
  */
-export const txt2imgGPT = async (config: Txt2ImgConfig) => {
+export const generateImageWithOpenAI = async (config: Txt2ImgConfig) => {
   const client = new OpenAI();
 
   // Prepare the input image
@@ -268,6 +268,7 @@ export const txt2imgGPT = async (config: Txt2ImgConfig) => {
   const commonConfig = {
     background: config.removeBg ? "transparent" : "auto",
     model: "gpt-image-2.5-flare",
+    output_format: "png",
     size:
       config.size === "square"
         ? "1024x1024"
@@ -290,9 +291,14 @@ export const txt2imgGPT = async (config: Txt2ImgConfig) => {
   } as const;
 
   // Create/Edit the image
-  const image = inputImage
+  return inputImage
     ? await client.images.edit({ image: inputImage, ...commonConfig })
     : await client.images.generate(commonConfig);
+};
+
+/** Generate or edit an image and upload it at the requested display dimensions. */
+export const txt2imgGPT = async (config: Txt2ImgConfig) => {
+  const image = await generateImageWithOpenAI(config);
 
   // Upload the image to UploadThing
   const uploadedFiles = await uploadImageFromOpenAI({

@@ -30,16 +30,14 @@ export const checkContentAiAuth = async (): Promise<Response | null> => {
 /**
  * Turn the UIMessages a useChat client posts into streamText inputs.
  *
- * AI SDK 7 no longer converts UIMessages implicitly and rejects system-role
- * entries inside `messages`, so the page context ChatBox sends as a hidden
- * system message is folded into the system prompt here instead. Incomplete
- * tool calls are dropped — the editor chats run their tools client-side and
- * never report results back.
+ * Page context sent as a hidden system message is folded into the top-level
+ * instructions. Incomplete tool calls are dropped so an interrupted editor
+ * update does not leave an unmatched tool call in the next request.
  */
 export const prepareChatPrompt = async (
   uiMessages: UIMessage[],
-  baseSystem: string,
-): Promise<{ system: string; messages: ModelMessage[] }> => {
+  baseInstructions: string,
+): Promise<{ instructions: string; messages: ModelMessage[] }> => {
   const pageContext = (uiMessages ?? [])
     .filter((message) => message.role === "system")
     .flatMap((message) => message.parts)
@@ -51,7 +49,9 @@ export const prepareChatPrompt = async (
     { ignoreIncompleteToolCalls: true },
   );
   return {
-    system: pageContext ? `${baseSystem}\n\n${pageContext}` : baseSystem,
+    instructions: pageContext
+      ? `${baseInstructions}\n\n${pageContext}`
+      : baseInstructions,
     messages,
   };
 };

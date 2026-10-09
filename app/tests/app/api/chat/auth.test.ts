@@ -44,9 +44,15 @@ beforeEach(() => {
   vi.spyOn(ai, "streamText").mockImplementation(mocks.streamText);
   stubProfile("fetchUser", mocks.fetchUser);
   stubDatabase({});
-  mocks.streamText.mockReturnValue({
-    toUIMessageStreamResponse: () => new Response("streamed"),
-  });
+  mocks.streamText.mockImplementation(() => ({
+    stream: new ReadableStream({
+      start(controller) {
+        controller.enqueue({ type: "start", warnings: [] });
+        controller.enqueue({ type: "finish", finishReason: "stop", totalUsage: {} });
+        controller.close();
+      },
+    }),
+  }));
 });
 
 describe("chat routes", () => {
@@ -74,7 +80,12 @@ describe("content chat routes", () => {
     mocks.auth.mockResolvedValue({ userId: "user_staff" });
     mocks.fetchUser.mockResolvedValue({ role: "CONTENT" });
 
-    expect((await post(name)).status).toBe(200);
+    const response = await post(name);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(await response.text()).toContain('"type":"finish"');
     expect(mocks.streamText).toHaveBeenCalledOnce();
+    expect(mocks.streamText.mock.calls[0]?.[0]).toHaveProperty("instructions");
+    expect(mocks.streamText.mock.calls[0]?.[0]).not.toHaveProperty("system");
   });
 });

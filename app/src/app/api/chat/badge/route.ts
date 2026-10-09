@@ -1,6 +1,11 @@
 import { openai } from "@ai-sdk/openai";
 import type { UIMessage } from "ai";
-import { stepCountIs, streamText } from "ai";
+import {
+  createUIMessageStreamResponse,
+  isStepCount,
+  streamText,
+  toUIMessageStream,
+} from "ai";
 import { OPENAI_CONTENT_MODEL } from "@/drizzle/constants";
 import { checkContentAiAuth, prepareChatPrompt } from "@/libs/llm";
 import { convertToOpenaiCompatibleSchema } from "@/libs/zod_utils";
@@ -14,7 +19,7 @@ export async function POST(req: Request) {
   // Call LLM
   const { messages: uiMessages } = (await req.json()) as { messages: UIMessage[] };
   const schema = convertToOpenaiCompatibleSchema(BadgeValidator.omit({ image: true }));
-  const { system, messages } = await prepareChatPrompt(
+  const { instructions, messages } = await prepareChatPrompt(
     uiMessages,
     `You are a helpful assistant tasked with creating new badges set in the ninja world of Seichi.
     Your primary task is to call the function 'updateBadge' with appropriate parameters to update the badge shown to the user.
@@ -25,7 +30,7 @@ export async function POST(req: Request) {
   );
   const result = streamText({
     model: openai(OPENAI_CONTENT_MODEL),
-    system,
+    instructions,
     messages,
     tools: {
       updateBadge: {
@@ -33,8 +38,10 @@ export async function POST(req: Request) {
         inputSchema: schema,
       },
     },
-    stopWhen: stepCountIs(2),
+    stopWhen: isStepCount(2),
   });
 
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
