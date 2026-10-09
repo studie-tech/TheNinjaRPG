@@ -1009,6 +1009,35 @@ export const getNewTrackers = (
             status.done = false;
           }
 
+          // Older masked snapshots could persist the public placeholder as a real target.
+          // Recover only those fields; valid rolls and completion/progress stay authoritative.
+          const hasMaskedLocation =
+            status.sector === 1337 ||
+            status.longitude === 1337 ||
+            status.latitude === 1337;
+          if (hasMaskedLocation) {
+            if (status.sector === 1337) {
+              delete status.sector;
+              if (!("sectorType" in objective) && "sector" in objective) {
+                status.sector = objective.sector;
+              }
+            }
+            if (status.longitude === 1337) {
+              delete status.longitude;
+              if (!("locationType" in objective) && "longitude" in objective) {
+                status.longitude = objective.longitude;
+              }
+            }
+            if (status.latitude === 1337) {
+              delete status.latitude;
+              if (!("locationType" in objective) && "latitude" in objective) {
+                status.latitude = objective.latitude;
+              }
+            }
+            delete status.locationChecked;
+            consequences.push({ type: "update_user", ids: ["location_update"] });
+          }
+
           if ("sectorType" in objective && status.sector === undefined) {
             if (objective.sectorType === "specific") {
               status.sector = objective.sector;
