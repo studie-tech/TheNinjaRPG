@@ -126,6 +126,7 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
       id: "description",
       type: "richinput",
       label: "Custom Description",
+      doubleWidth: true,
     },
     {
       id: "battleDescription",
