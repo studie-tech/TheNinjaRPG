@@ -13,7 +13,14 @@ import {
   defineFilteringSchema,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { rarities, statFilters } from "@/libs/train";
+import NavTabs from "@/layout/NavTabs";
+import {
+  getJutsuStatQuickFilter,
+  jutsuStatQuickFilterSelection,
+  jutsuStatQuickFilters,
+  rarities,
+  statFilters,
+} from "@/libs/train";
 import { canChangeContent } from "@/utils/permissions";
 import { formatBattleUsageType } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
@@ -226,6 +233,32 @@ const JutsuFiltering: React.FC<JutsuFilteringProps> = (props) => {
 };
 
 export default JutsuFiltering;
+
+/**
+ * One-tap stat filters above a jutsu list. They drive the same "Stat" field as the full
+ * filter, so both stay in sync; a custom stat selection leaves no quick filter active.
+ */
+export const JutsuStatQuickFilters: React.FC<{ state: JutsuFilteringState }> = ({
+  state,
+}) => {
+  const current = getJutsuStatQuickFilter(state.stat);
+  return (
+    <div className="overflow-x-auto overflow-y-hidden">
+      <div className="mx-auto w-max min-w-full">
+        <NavTabs
+          remember={false}
+          current={current ?? "Custom"}
+          options={jutsuStatQuickFilters}
+          onChange={(value) => {
+            const option = jutsuStatQuickFilters.find((o) => o === value);
+            if (option) state.setStat(jutsuStatQuickFilterSelection(option));
+          }}
+          className="min-h-10 whitespace-nowrap px-2 py-2"
+        />
+      </div>
+    </div>
+  );
+};
 
 export const getFilter = (state: JutsuFilteringState) =>
   buildFilter(state.cf, makeJutsuFilteringSchema());

@@ -103,6 +103,22 @@ describe("optional tab remembering", () => {
     );
     expect(onChange).toHaveBeenCalledWith("Character");
   });
+  it("reopens the tab a saved tab was merged into", () => {
+    vi.spyOn(storage, "safeLocalStorageGetItem").mockReturnValue("Sensei");
+    const write = vi.spyOn(storage, "safeLocalStorageSetItem").mockReturnValue(true);
+    const onChange = vi.fn();
+    render(
+      <NavTabs
+        id="trainingTab:user"
+        current={null}
+        options={["Stats", "Covert & Sensei"]}
+        aliases={{ Covert: "Covert & Sensei", Sensei: "Covert & Sensei" }}
+        onChange={onChange}
+      />,
+    );
+    expect(onChange).toHaveBeenCalledWith("Covert & Sensei");
+    expect(write).toHaveBeenCalledWith("trainingTab:user", "Covert & Sensei");
+  });
 });
 
 const trainingTabKey = "trainingTab:user";

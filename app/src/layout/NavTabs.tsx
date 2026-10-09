@@ -14,6 +14,8 @@ interface NavTabsProps {
   /** Render Radix tabs inside a controlled Tabs root with matching TabsContent. */
   accessibleTabs?: boolean;
   label?: string;
+  /** Maps saved values from renamed or merged tabs onto a current option. */
+  aliases?: Partial<Record<string, string>>;
   fontSize?: "text-xs" | "text-sm" | "text-base";
   setValue?: React.Dispatch<React.SetStateAction<any>>;
   onChange?: (value: string) => void;
@@ -21,20 +23,20 @@ interface NavTabsProps {
 
 const NavTabs: React.FC<NavTabsProps> = (props) => {
   // Destructure
-  const { id, current, options, setValue, onChange, remember = true } = props;
+  const { id, current, options, aliases, setValue, onChange, remember = true } = props;
 
   // If we do not have a current value, get from localStorage or select first one
   useEffect(() => {
     if (!current) {
       const stored = id && remember ? safeLocalStorageGetItem(id) : null;
-      const select = stored && options.includes(stored) ? stored : options[0];
+      const select = resolveRememberedTab(stored, options, aliases);
       if (select) {
         if (setValue) setValue(select);
         if (onChange) onChange(select);
         if (id && remember) safeLocalStorageSetItem(id, select);
       }
     }
-  }, [id, current, options, setValue, onChange, remember]);
+  }, [id, current, options, aliases, setValue, onChange, remember]);
 
   // Derived features
   const fontSize = props.fontSize ? props.fontSize : "text-sm";
@@ -115,3 +117,18 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
 };
 
 export default NavTabs;
+
+/**
+ * Picks the tab to open from a saved value: the saved tab when it is still offered, the
+ * tab it was renamed or merged into, or else the first option.
+ */
+export const resolveRememberedTab = (
+  stored: string | null,
+  options: string[] | readonly string[],
+  aliases?: Partial<Record<string, string>>,
+): string | undefined => {
+  if (stored && options.includes(stored)) return stored;
+  const alias = stored ? aliases?.[stored] : undefined;
+  if (alias && options.includes(alias)) return alias;
+  return options[0];
+};
