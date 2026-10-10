@@ -7,6 +7,10 @@ export const AvailableTargets = [
   "BARRIER_BLOCKING_CLOSEST_OPPONENT",
   "CLOSEST_ALLY",
   "CLOSEST_OPPONENT",
+  "HIGHEST_MAX_HEALTH_ALLY",
+  "HIGHEST_MAX_HEALTH_OPPONENT",
+  "LOWEST_HEALTH_OPPONENT",
+  "LOWEST_MAX_HEALTH_ALLY",
   "EMPTY_GROUND_CLOSEST_TO_OPPONENT",
   "EMPTY_GROUND_CLOSEST_TO_SELF",
   "RANDOM_ALLY",
@@ -62,6 +66,23 @@ export const ConditionDoesNotHaveSummon = z.object({
   description: z.string().prefault("Does not have a summon active"),
 });
 
+const rangeSettings = {
+  minRange: z.coerce.number().int().min(0).prefault(0),
+  maxRange: z.coerce.number().int().min(0).prefault(3),
+};
+
+export const ConditionPlayerWithinRange = z.object({
+  type: z.literal("player_within_range").prefault("player_within_range"),
+  description: z.string().prefault("An enemy player is within the inclusive hex range"),
+  ...rangeSettings,
+});
+
+export const ConditionSummonWithinRange = z.object({
+  type: z.literal("summon_within_range").prefault("summon_within_range"),
+  description: z.string().prefault("An enemy summon is within the inclusive hex range"),
+  ...rangeSettings,
+});
+
 // Import effect types from the combat system
 export const AvailableEffectTypes = (tagTypes.length > 0 ? tagTypes : ["damage"]) as [
   string,
@@ -94,6 +115,8 @@ export const ZodAllAiConditions = z.union([
   ConditionDoesNotHaveSummon,
   ConditionHasEffect,
   ConditionTargetHasEffect,
+  ConditionPlayerWithinRange,
+  ConditionSummonWithinRange,
 ]);
 
 export const AiConditionTypes = ZodAllAiConditions.options.map((o) => {
@@ -220,9 +243,39 @@ export const getActionSchema = (type: ZodAllAiAction["type"]) => {
 /*********************************/
 /*            Rules              */
 /*********************************/
-export const AiRule = z.object({
-  conditions: z.array(ZodAllAiConditions),
-  action: ZodAllAiActions,
+export const AiRule = z
+  .object({
+    id: z.string().optional(),
+    group: z
+      .object({
+        id: z.string().min(1),
+        name: z.string().trim().min(1).max(100),
+        note: z.string().max(1000).prefault(""),
+      })
+      .optional(),
+    conditions: z.array(ZodAllAiConditions),
+    action: ZodAllAiActions,
+  })
+  .superRefine((rule, ctx) => {
+    rule.conditions.forEach((condition, index) => {
+      if ("minRange" in condition && condition.minRange > condition.maxRange) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Minimum range must not exceed maximum range",
+          path: ["conditions", index, "minRange"],
+        });
+      }
+    });
+  });
+
+export const createAiProfileSchema = z.object({
+  userId: z.string(),
+  rules: z.array(AiRule),
+});
+export const updateAiProfileSchema = z.object({
+  id: z.string(),
+  rules: z.array(AiRule),
+  includeDefaultRules: z.boolean(),
 });
 
 export type AiRuleType = z.infer<typeof AiRule>;
@@ -275,7 +328,15 @@ export const getBackupRules = () => {
  * @param rules - The array of AI rules to be validated and potentially updated.
  */
 export const enforceExtraRules = (rules: AiRuleType[], enforced: AiRuleType[]) => {
-  const diff = detailedDiff(enforced, rules.slice(-enforced.length));
+  // Labels and editor identities do not change the behavior of a fallback rule.
+  const behavior = (rule: AiRuleType) => ({
+    conditions: rule.conditions,
+    action: rule.action,
+  });
+  const diff = detailedDiff(
+    enforced.map(behavior),
+    rules.slice(-enforced.length).map(behavior),
+  );
   const hasEnforcedRules =
     Object.keys(diff.added).length === 0 &&
     Object.keys(diff.deleted).length === 0 &&

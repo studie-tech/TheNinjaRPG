@@ -131,6 +131,25 @@ export const performAIaction = (
           prev.distance < current.distance ? prev : current,
         )
       : undefined;
+    const healthTarget = (
+      candidates: typeof allies,
+      pool: "current" | "max",
+      highest: boolean,
+    ) =>
+      candidates.reduce<(typeof allies)[number] | undefined>((best, candidate) => {
+        const health = (target: (typeof allies)[number]) =>
+          pool === "max"
+            ? getEffectiveMaxPool(target, nextBattle.usersEffects, "Health")
+            : getEffectiveCurPool(target, nextBattle.usersEffects, "Health");
+        if (!best) return candidate;
+        return (
+          highest
+            ? health(candidate) > health(best)
+            : health(candidate) < health(best)
+        )
+          ? candidate
+          : best;
+      }, undefined);
     // Get barriers between user and closest enemy
     astar = new PathCalculator(resetGridFromObstacles(grid));
     const tHex = closestEnemy ? findHex(grid, closestEnemy) : undefined;
@@ -181,10 +200,15 @@ export const performAIaction = (
     };
 
     // Convenience for getting targetable tiles
-    const getTargetableTiles = (origin?: TerrainHex, action?: CombatAction) => {
+    const getTargetableTiles = (
+      origin?: TerrainHex,
+      action?: CombatAction,
+      nearestSelf = false,
+    ) => {
       if (!origin) return undefined;
       if (!action) return undefined;
-      if (!closestEnemy) return undefined;
+      const targetHex = nearestSelf ? origin : closestEnemy?.hex;
+      if (!targetHex) return undefined;
       const f = spiral<TerrainHex>({
         start: [origin.q, origin.r],
         radius: action.range,
@@ -198,11 +222,10 @@ export const performAIaction = (
             !findBarrier(nextBattle.groundEffects, hex.col, hex.row),
         )
         .map((hex) => {
-          const path = getPath(origin, closestEnemy);
-          const distance = path?.length ? path.length : 0;
+          const distance = grid.distance(hex, targetHex);
           return { hex, distance };
         })
-        .sort((a, b) => b.distance - a.distance);
+        .sort((a, b) => a.distance - b.distance);
       return tiles;
     };
 
@@ -221,6 +244,14 @@ export const performAIaction = (
           return randomAlly;
         case "CLOSEST_ALLY":
           return closestAlly;
+        case "HIGHEST_MAX_HEALTH_ALLY":
+          return healthTarget(allies, "max", true);
+        case "HIGHEST_MAX_HEALTH_OPPONENT":
+          return healthTarget(enemies, "max", true);
+        case "LOWEST_HEALTH_OPPONENT":
+          return healthTarget(enemies, "current", false);
+        case "LOWEST_MAX_HEALTH_ALLY":
+          return healthTarget(allies, "max", false);
         case "BARRIER_BLOCKING_CLOSEST_OPPONENT":
           return barriers[0];
         case "SELF":
@@ -239,8 +270,8 @@ export const performAIaction = (
           break;
         }
         case "EMPTY_GROUND_CLOSEST_TO_SELF": {
-          const furthestTiles = getTargetableTiles(origin, action);
-          const furthestTarget = furthestTiles?.at(-1);
+          const furthestTiles = getTargetableTiles(origin, action, true);
+          const furthestTarget = furthestTiles?.[0];
           if (furthestTarget) {
             return {
               hex: furthestTarget.hex,
@@ -273,6 +304,20 @@ export const performAIaction = (
             return target ? target.distance >= condition.value : false;
           case "distance_lower_than":
             return target ? target.distance <= condition.value : false;
+          case "player_within_range":
+          case "summon_within_range":
+            return (
+              !!origin &&
+              enemies.some((enemy) => {
+                const matches =
+                  condition.type === "summon_within_range"
+                    ? enemy.isSummon
+                    : !enemy.isAi && !enemy.isSummon;
+                if (!matches || !enemy.hex) return false;
+                const distance = grid.distance(origin, enemy.hex);
+                return distance >= condition.minRange && distance <= condition.maxRange;
+              })
+            );
           case "specific_round":
             return nextBattle.round === condition.value;
           case "round_greater_than":

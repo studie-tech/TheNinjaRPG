@@ -14,7 +14,7 @@ import { execFileSync } from "node:child_process";
 import { getTableName, type Table } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
-import { describe } from "vitest";
+import { describe } from "bun:test";
 import type { DrizzleClient } from "@/server/db";
 import * as schema from "@/drizzle/schema";
 

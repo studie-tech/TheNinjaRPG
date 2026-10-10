@@ -6,7 +6,7 @@
  * and truncates every table, so a leftover database makes the next run cheaper without letting
  * its rows leak into it.
  */
-import { afterAll, beforeAll } from "vitest";
+import { afterAll, beforeAll } from "bun:test";
 import { closeTestDatabase, hasTestDatabase, prepareTestDatabase } from "./testDatabase";
 
 if (hasTestDatabase) {
