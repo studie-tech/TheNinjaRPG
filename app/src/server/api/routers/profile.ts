@@ -3132,11 +3132,13 @@ export const fetchUpdatedUser = async (props: {
   let progressionQuestCandidates: NonNullable<typeof user>["userQuests"] = [];
   // Add in achievements (in-memory placeholders: `id === questId` until `QuestHistory` exists).
   if (user) {
+    // Deleted quests can leave history behind; progression candidates need live definitions.
+    user.userQuests = user.userQuests.filter((entry) => entry.quest);
     user.userQuests.push(...mockAchievementHistoryEntries(achievements, user));
     progressionQuestCandidates = [...user.userQuests];
-    user.userQuests = user.userQuests
-      .filter((q) => q.quest)
-      .filter((q) => isAvailableUserQuests({ ...q.quest, ...q }, user, true).check);
+    user.userQuests = user.userQuests.filter(
+      (q) => isAvailableUserQuests({ ...q.quest, ...q }, user, true).check,
+    );
   }
 
   // Filter and attach active wars for enemy_village sector type resolution
