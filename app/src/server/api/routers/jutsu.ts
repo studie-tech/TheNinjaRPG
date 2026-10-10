@@ -3217,9 +3217,12 @@ const saveJutsuFamily = async (
     client.transaction(async (tx) => {
       const lockIds = [
         ...new Set(
-          [entry.id, entry.reskinParentJutsuId, data.reskinParentJutsuId].filter(
-            (id): id is string => !!id,
-          ),
+          [
+            entry.id,
+            entry.reskinParentJutsuId,
+            data.reskinParentJutsuId,
+            data.parentJutsuId,
+          ].filter((id): id is string => !!id),
         ),
       ].sort();
       const locked = await tx
@@ -3234,10 +3237,31 @@ const saveJutsuFamily = async (
           success: false as const,
           message: "Jutsu changed; refresh before saving",
         };
-      const children = await tx
+      // Evolution edits and reskin linking share the candidate parent's lock.
+      const evolutionParent = locked.find((row) => row.id === data.parentJutsuId);
+      if (evolutionParent?.reskinParentJutsuId)
+        return {
+          success: false as const,
+          message: "Reskins cannot be evolution parents",
+        };
+      const related = await tx
         .select()
         .from(jutsu)
-        .where(eq(jutsu.reskinParentJutsuId, entry.id));
+        .where(
+          or(
+            eq(jutsu.reskinParentJutsuId, entry.id),
+            data.reskinParentJutsuId ? eq(jutsu.parentJutsuId, entry.id) : undefined,
+          ),
+        );
+      const children = related.filter((row) => row.reskinParentJutsuId === entry.id);
+      if (
+        data.reskinParentJutsuId &&
+        related.some((row) => row.parentJutsuId === entry.id)
+      )
+        return {
+          success: false as const,
+          message: "Reskins cannot have evolution links or reskin children",
+        };
       if (data.reskinParentJutsuId && children.length)
         return {
           success: false as const,

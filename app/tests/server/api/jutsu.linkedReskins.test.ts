@@ -4,9 +4,10 @@ import { actionLog, bloodlineReskin, contentProposal, contentProposalBasis, juts
 import { loadEntities, entityKey } from "@/libs/contentReview/entities";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
+import type { DrizzleClient } from "@/server/db";
 import { DamageTag, JutsuValidator } from "@/validators/combat";
 import { insertUsers } from "../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const staff = () => callerFor(jutsuRouter, "staff");
 const read = async (id: string) => {
@@ -21,6 +22,25 @@ const createChild = async () => {
   const result = await (await staff()).createLinkedReskin({ parentId: "parent", bloodlineReskinId: "group" });
   expect(result.success).toBe(true);
   return result.message;
+};
+
+// Pause after upfront guards; the transaction still executes against real MySQL.
+const pauseBeforeTransaction = (database: DrizzleClient) => {
+  let signalReached!: () => void;
+  let release!: () => void;
+  const reached = new Promise<void>((resolve) => { signalReached = resolve; });
+  const resumed = new Promise<void>((resolve) => { release = resolve; });
+  const client = new Proxy(database, {
+    get(target, property, receiver) {
+      if (property !== "transaction") return Reflect.get(target, property, receiver);
+      return async (callback: Parameters<typeof target.transaction>[0]) => {
+        signalReached();
+        await resumed;
+        return target.transaction(callback);
+      };
+    },
+  });
+  return { client, reached, release };
 };
 
 describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
@@ -94,6 +114,42 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
     expect((await read(id)).description).toBe("Updated cosmetics");
     expect((await save("evolution", { parentJutsuId: "parent" })).success).toBe(true);
     expect((await read("evolution")).parentJutsuId).toBe("parent");
+  });
+
+  it.each(["reskin", "evolution"] as const)("rejects a stale overlapping save when the %s link commits first", async (firstLink) => {
+    const db = await getTestDatabase();
+    await db.insert(jutsu).values([
+      { ...await read("parent"), id: "candidate", name: "Candidate" },
+      { ...await read("parent"), id: "evolution", name: "Evolution" },
+    ]);
+    const paused = pauseBeforeTransaction(db);
+    const caller = callerForDatabase(jutsuRouter, "staff", paused.client);
+    const pausedId = firstLink === "reskin" ? "evolution" : "candidate";
+    const pausedPatch = firstLink === "reskin"
+      ? { parentJutsuId: "candidate" }
+      : { reskinParentJutsuId: "parent" };
+    const pending = caller.update({ id: pausedId, data: JutsuValidator.parse({ ...await read(pausedId), ...pausedPatch }) });
+    await paused.reached;
+    try {
+      const winner = firstLink === "reskin"
+        ? await save("candidate", { reskinParentJutsuId: "parent" })
+        : await save("evolution", { parentJutsuId: "candidate" });
+      expect(winner.success).toBe(true);
+    } finally {
+      paused.release();
+    }
+    expect(await pending).toMatchObject({
+      success: false,
+      message: firstLink === "reskin"
+        ? "Reskins cannot be evolution parents"
+        : "Reskins cannot have evolution links or reskin children",
+    });
+    expect((await read("candidate")).reskinParentJutsuId).toBe(firstLink === "reskin" ? "parent" : null);
+    expect((await read("evolution")).parentJutsuId).toBe(firstLink === "evolution" ? "candidate" : null);
+    expect((await db.select().from(actionLog).where(eq(actionLog.relatedId, pausedId))).length).toBe(0);
+    expect((await save("candidate", { description: "Updated cosmetics" })).success).toBe(true);
+    expect((await read("candidate")).description).toBe("Updated cosmetics");
+    expect((await save("evolution", { parentJutsuId: "parent" })).success).toBe(true);
   });
 
   it("blocks parent and group deletion until the child is unlinked", async () => {
