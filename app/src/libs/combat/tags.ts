@@ -142,19 +142,22 @@ export const absorb = (
   // Apply the absorb effect the round after the effect is applied
   if (!effect.isNew && !effect.castThisRound) {
     consequences.forEach((consequence, effectId) => {
+      const incomingDamage = consequence.diffuseImmediateDamage ?? consequence.damage;
       if (
         consequence.targetId === effect.targetId &&
-        consequence.damage &&
-        consequence.damage > 0
+        incomingDamage &&
+        incomingDamage > 0
       ) {
-        const damageEffect = usersEffects.find((e) => e.id === effectId);
+        const damageEffect = usersEffects.find(
+          (e) => e.id === (consequence.diffuseSourceEffectId ?? effectId),
+        );
         if (damageEffect) {
           const ratio = getEfficiencyRatio(damageEffect, effect);
           // Calculate absorption amount for this effect
           const absorbAmount =
             effect.calculation === "percentage"
-              ? consequence.damage * (power / 100)
-              : Math.min(power, consequence.damage);
+              ? incomingDamage * (power / 100)
+              : Math.min(power, incomingDamage);
           const convert = Math.ceil(absorbAmount * ratio);
 
           // Apply absorption to each pool
@@ -242,11 +245,13 @@ export const buffPrevent = (
 
 /** Type-axis predicate for the effects the `copy` tag may transfer and produce. */
 const isCopyableEffect = (e: UserEffect): boolean =>
-  isPositiveUserEffect(e) && COPYABLE_EFFECT_TYPES.has(e.type);
+  e.type !== "diffuse" && isPositiveUserEffect(e) && COPYABLE_EFFECT_TYPES.has(e.type);
 
 /** Type-axis predicate for the effects the `mirror` tag may transfer and produce. */
 const isMirrorableEffect = (e: UserEffect): boolean =>
-  isNegativeUserEffect(e) && !MIRROR_EXCLUDED_EFFECT_TYPES.has(e.type);
+  e.type !== "diffuse" &&
+  isNegativeUserEffect(e) &&
+  !MIRROR_EXCLUDED_EFFECT_TYPES.has(e.type);
 
 /**
  * Shared candidate gate for a transfer source effect: not from a passive/gear
@@ -1186,6 +1191,7 @@ const removeEffects = (
     // Remove user effects
     usersEffects
       .filter((e) => e.targetId === effect.targetId)
+      .filter((e) => e.type !== "diffuse")
       .filter((e) => !persistentEffectSourceTypes.has(e.fromType))
       .filter(type === "positive" ? isPositiveUserEffect : isNegativeUserEffect)
       .forEach((e) => {
@@ -1199,6 +1205,7 @@ const removeEffects = (
     // Remove ground effects at the same location as the target
     usersEffects
       .filter(isGroundEffect)
+      .filter((e) => e.type !== "diffuse")
       .filter((e) => e.longitude === target.longitude && e.latitude === target.latitude)
       .filter(type === "positive" ? isPositiveUserEffect : isNegativeUserEffect)
       .forEach((e) => {
@@ -1277,6 +1284,8 @@ export const clone = (
   if (effect.isNew) {
     const newAi = structuredClone(user);
     delete newAi.baseStatsForModifiers;
+    // A clone did not receive the original's hits and must not inherit its deferred damage.
+    delete newAi.diffuseDamage;
     // Place on battlefield
     newAi.userId = nanoid();
     effect.creatorId = newAi.userId;
@@ -2246,6 +2255,32 @@ export const immunity = (effect: UserEffect, target: BattleUserState) => {
     return getInfo(target, effect, `has immunity to ${preventType} prevention`);
   }
   return undefined;
+};
+
+/** Apply Final Stand's health floor consistently to immediate and deferred damage. */
+export const applyFinalStandDamage = (
+  effects: UserEffect[],
+  target: BattleUserState,
+  damage: number,
+  messages: ActionEffect[],
+): number => {
+  const finalStandEffect = effects.find((effect) => {
+    if (effect.type !== "finalstand" || effect.targetId !== target.userId) return false;
+    if (effect.fromType === "bloodline") {
+      // Permanent bloodline effects omit rounds; zero marks a failed activation.
+      return isEffectActive(effect);
+    }
+    return (effect.rounds ?? 0) > 0;
+  });
+  if (finalStandEffect && target.curHealth - damage < 1) {
+    const remainingDamage = target.curHealth - 1;
+    messages.push({
+      txt: `${target.username}'s final stand prevents ${(damage - remainingDamage).toFixed(2)} damage`,
+      color: "orange",
+    });
+    return remainingDamage;
+  }
+  return damage;
 };
 
 /** Prevents the user from being reduced below 1 HP */

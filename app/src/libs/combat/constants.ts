@@ -67,6 +67,7 @@ export const publicState = [
   "curHealth",
   "curStamina",
   "direction",
+  "diffuseDamage",
   "fledBattle",
   "gender",
   "iAmHere",

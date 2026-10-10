@@ -152,6 +152,14 @@ export type ProcessedItem = CombatQueryUserItem & {
  * Shared between ProcessingBattleUser and BattleUserState.
  */
 export type CombatUserFields = {
+  /** Damage already deferred by Diffuse; survives the granting effect's expiry. */
+  diffuseDamage?: {
+    attackerId: string;
+    remainingDamage: number;
+    remainingTurns: number;
+    lastAppliedRound: number;
+    creditDamage: boolean;
+  }[];
   controllerId: string;
   direction: "left" | "right";
   isAggressor: boolean;
@@ -561,6 +569,11 @@ export type Consequence = {
   reflect?: number;
   recoil?: number;
   afterburn?: number;
+  /** Immediate damage eligible for defenses after a Diffuse split, before shields. */
+  diffuseImmediateDamage?: number;
+  diffuseSourceEffectId?: string;
+  /** Returned damage normalized onto its recipient after Diffuse; excluded from quest credit. */
+  damageSource?: "reflect" | "recoil";
   lifesteal_hp?: number;
   vampRatio?: number;
   vampHeal?: number;
