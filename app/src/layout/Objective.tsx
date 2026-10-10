@@ -45,12 +45,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
 
   // Check if this is a start_battle objective with recentlyDied flag
   const status = tracker?.goals.find((g) => g.id === objective.id);
-  const goalTarget =
-    parsed.task === "bloodline_collection"
-      ? (status?.target ?? 0)
-      : "value" in parsed
-        ? parsed.value
-        : undefined;
+  const goalTarget = status?.target ?? ("value" in parsed ? parsed.value : undefined);
   const isStartBattleWithRecentlyDied =
     objective.task === "start_battle" && status?.recentlyDied;
 
@@ -159,19 +154,11 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
           {goalTarget !== undefined && (
             <div className="flex flex-row items-center pr-3">
               <div className="grow">
-                {parsed.task === "bloodline_collection" && goalTarget === 0 ? (
-                  <p className="text-muted-foreground text-sm">
-                    No eligible bloodlines in this collection.
-                  </p>
-                ) : (
+                {goalTarget > 0 && (
                   <StatusBar
                     key={`${tracker.id}-${objective.id}-${value}-${goalTarget}`}
                     title="Goal"
-                    tooltip={
-                      parsed.task === "bloodline_collection"
-                        ? "Distinct non-hidden bloodlines owned"
-                        : "Status points"
-                    }
+                    tooltip="Status points"
                     color={getStatusColor(tier, done)}
                     showText={true}
                     current={Math.min(value, goalTarget)}

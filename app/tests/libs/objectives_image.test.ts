@@ -18,22 +18,10 @@ describe("objectiveImageMap / getObjectiveImage", () => {
     }
   });
 
-  it("returns the metadata entry for tasks without scope-specific labels", () => {
+  it("getObjectiveImage returns the co-located record entry for every task", () => {
     for (const task of allObjectiveTasks) {
-      if (task === "bloodline_collection") continue;
       const objective = { task } as unknown as AllObjectivesType;
       expect(getObjectiveImage(objective)).toEqual(objectiveImageMap[task]);
-    }
-  });
-
-  it("labels collection objectives by their configured rank scope", () => {
-    for (const [bloodlineRank, title] of [
-      ["ALL", "Collect All Bloodlines"],
-      ["S", "Collect All S-Rank Bloodlines"],
-    ]) {
-      expect(
-        getObjectiveImage({ task: "bloodline_collection", bloodlineRank } as AllObjectivesType),
-      ).toEqual({ ...objectiveImageMap.bloodline_collection, title });
     }
   });
 
