@@ -372,12 +372,7 @@ const Shop: React.FC<ShopProps> = (props) => {
       if (data.success) {
         setItemConfirmOpen(false);
         void utils.item.getUserItemCounts.invalidate();
-        void (data.userPatch
-          ? updateUser(data.userPatch, { revision })
-          : updateUser(undefined, {
-              revision,
-              delta: "userDelta" in data ? data.userDelta : undefined,
-            }));
+        void updateUser(data.userPatch, { revision, delta: data.userDelta });
         void utils.item.getUserItems.invalidate();
         void utils.item.getPurchaseAllowance.invalidate();
         if (isItemBuyStep && variables.itemId === TUTORIAL_ITEM_ID) {

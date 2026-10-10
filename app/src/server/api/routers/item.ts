@@ -24,6 +24,7 @@ import { z } from "zod";
 import type { ItemSlot } from "@/drizzle/constants";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
+  DURABILITY_MAX_DEFAULT,
   EVOLUTION_MAX_CHILDREN,
   IMG_AVATAR_DEFAULT,
   ITEM_LEVEL_CAP,
@@ -142,7 +143,6 @@ import {
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedItemLoadouts } from "@/utils/paypal";
@@ -2657,22 +2657,16 @@ export const itemRouter = createTRPCRouter({
       const purchaseTime = new Date();
       // Read userData before inventory so the transactional updatedAt CAS below
       // detects any capacity mutation that commits between these snapshots.
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const [
-        info,
-        useritems,
-        structures,
-        questState,
-        masterySources,
-        purchaseCounters,
-      ] = await Promise.all([
-        fetchItem(ctx.drizzle, iid),
-        fetchUserItems(ctx.drizzle, uid),
-        fetchStructures(ctx.drizzle, input.villageId),
-        fetchUserQuestState(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, uid),
-        fetchPurchaseCounters(ctx.drizzle, uid, iid, purchaseTime),
-      ]);
+      const user = await fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId);
+      if (!user) return errorResponse("User not found");
+      const [info, useritems, structures, questState, purchaseCounters] =
+        await Promise.all([
+          fetchItem(ctx.drizzle, iid),
+          fetchUserItems(ctx.drizzle, uid),
+          fetchStructures(ctx.drizzle, input.villageId),
+          fetchUserQuestState(ctx.drizzle, ctx.userId),
+          fetchPurchaseCounters(ctx.drizzle, uid, iid, purchaseTime),
+        ]);
       // Derived — capacity counts carried stacks by dedicated inventory bucket
       const carriedItems = useritems?.filter((ui) => !ui.storedAtHome) ?? [];
       const bucketCounts = {
@@ -2739,10 +2733,7 @@ export const itemRouter = createTRPCRouter({
         instancesEquipped < info.maxEquips &&
         user.level >= info.requiredLevel &&
         (!info.bloodlineId || info.bloodlineId === user.bloodlineId) &&
-        !missingMasteryRequirement(
-          effectiveMasteries({ ...user, ...masterySources }),
-          info,
-        ) &&
+        !missingMasteryRequirement(effectiveMasteries(user), info) &&
         canEquipAdditional(
           info,
           useritems
@@ -2816,6 +2807,25 @@ export const itemRouter = createTRPCRouter({
       // Commit the user-snapshot claim, fund deduction, quest update, and item insert
       // together. The updatedAt CAS serializes the earlier capacity read with other
       // inventory mutations, while the transaction prevents charging without delivery.
+      // Persist the same complete row returned to the cache, including timestamps,
+      // so an equipped purchase needs no readback of database-generated defaults.
+      const purchasedItem: UserItem = {
+        id: nanoid(),
+        userId: uid,
+        itemId: iid,
+        createdAt: purchaseTime,
+        updatedAt: purchaseTime,
+        quantity: input.stack,
+        equipped,
+        level: 1,
+        experience: 0,
+        durability: DURABILITY_MAX_DEFAULT,
+        storedAtHome: false,
+        isInAuction: false,
+        craftingFinishedAt: null,
+        activeVariantId: null,
+        dropChancePerc: 0,
+      };
       const quotaConflict = new Error("Purchase quota changed");
       const purchaseCommitted = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
@@ -2872,13 +2882,7 @@ export const itemRouter = createTRPCRouter({
             if (claimed.rowsAffected !== 1) throw quotaConflict;
           }
 
-          await tx.insert(userItem).values({
-            id: nanoid(),
-            userId: uid,
-            itemId: iid,
-            quantity: input.stack,
-            equipped: equipped,
-          });
+          await tx.insert(userItem).values(purchasedItem);
           return true;
         }),
       ).catch((error: unknown) => {
@@ -2911,9 +2915,7 @@ export const itemRouter = createTRPCRouter({
         message: `You bought ${info.name}`,
         // Quest purchases keep the full refresh so achievement and masked objective state agree.
         userDelta:
-          advancesBuyItemObjective ||
-          user.energyTrainingQueue?.length ||
-          equipped !== "NONE"
+          advancesBuyItemObjective || user.energyTrainingQueue?.length
             ? undefined
             : {
                 money: -ryoCost,
@@ -2922,7 +2924,13 @@ export const itemRouter = createTRPCRouter({
               },
         userPatch:
           !advancesBuyItemObjective && equipped !== "NONE"
-            ? await fetchUserEquipment(ctx.drizzle, ctx.userId)
+            ? getUserEquipmentPatch({
+                ...user,
+                items: [
+                  ...user.items,
+                  { ...purchasedItem, item: info, imbuements: [] },
+                ],
+              })
             : undefined,
       };
     }),
@@ -4437,64 +4445,5 @@ const getRepairedEquipmentUpdate = (
   return {
     userPatch,
     userDelta: userPatch ? { money: cost > 0 ? -cost : 0 } : undefined,
-  };
-};
-
-/** Refresh worn gear and the values derived from it without quest or notification work. */
-export const fetchUserEquipment = async (client: DrizzleClient, userId: string) => {
-  const user = await client.query.userData
-    .findFirst({
-      columns: {
-        money: true,
-        bank: true,
-        reputationPoints: true,
-        seichiSilver: true,
-        curEnergy: true,
-        curHealth: true,
-        curChakra: true,
-        curStamina: true,
-        regenAt: true,
-        energyTrainingQueue: true,
-        itemLoadout: true,
-        level: true,
-        rank: true,
-        isAi: true,
-        bloodlineId: true,
-        ninjutsuMastery: true,
-        genjutsuMastery: true,
-        taijutsuMastery: true,
-        bukijutsuMastery: true,
-        bloodlineMastery: true,
-        sageMastery: true,
-      },
-      where: eq(userData.userId, userId),
-      with: {
-        bloodline: { columns: { effects: true } },
-        userSkills: {
-          where: eq(userSkill.activated, true),
-          with: { skill: { columns: { target: true, effects: true } } },
-        },
-        items: {
-          where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
-          with: { item: true, imbuements: { with: { item: true } } },
-        },
-      },
-    })
-    .catch(handleUserCacheReadError);
-  if (!user || user.energyTrainingQueue?.length) return;
-  return {
-    money: user.money,
-    bank: user.bank,
-    reputationPoints: user.reputationPoints,
-    seichiSilver: user.seichiSilver,
-    curEnergy: user.curEnergy,
-    curHealth: user.curHealth,
-    curChakra: user.curChakra,
-    curStamina: user.curStamina,
-    regenAt: user.regenAt,
-    itemLoadout: user.itemLoadout,
-    items: user.items,
-    maxEnergy: calcMaxEnergy(user),
-    effectiveMasteries: effectiveMasteries(user),
   };
 };

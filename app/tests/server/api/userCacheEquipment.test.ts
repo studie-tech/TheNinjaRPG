@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { COST_EXTRA_ITEM_SLOT, COST_EXTRA_JUTSU_SLOT } from "@/drizzle/constants";
+import { COST_EXTRA_ITEM_SLOT, COST_EXTRA_JUTSU_SLOT, DURABILITY_MAX_DEFAULT } from "@/drizzle/constants";
 import {
   bloodline,
   item,
@@ -16,7 +16,7 @@ import { calcEnergy } from "@/libs/profile";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";
 import { bloodrightRouter } from "@/server/api/routers/bloodright";
 import type { DrizzleClient } from "@/server/db";
-import { fetchUserEquipment, itemRouter } from "@/server/api/routers/item";
+import { itemRouter } from "@/server/api/routers/item";
 import { countUserReads } from "../../setup/userReads";
 import { beforeStatements } from "../../setup/statements";
 import { makeEffect } from "../../libs/combat/helpers/battleScenario";
@@ -101,10 +101,6 @@ describeWithDatabase("committed profile cache patches", () => {
 
   it("returns repaired worn gear together with restored mastery and energy capacity", async () => {
     const db = await getTestDatabase();
-    const before = await fetchUserEquipment(db, userId);
-    expect(before?.maxEnergy).toBe(calcEnergy(10));
-    expect(before?.effectiveMasteries.ninjutsuMastery).toBe(100);
-
     const counted = countUserReads(db);
     const caller = callerForDatabase(itemRouter, userId, counted.client);
     const result = await caller.repair({ userItemId: "worn-armor" });
@@ -256,6 +252,46 @@ describeWithDatabase("committed profile cache patches", () => {
     expect(reads).toHaveBeenCalledTimes(1);
   });
 
+  it("projects the exact purchased row and preserves hidden worn gear without a readback", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ villageId: "cache-home" }).where(eq(userData.userId, userId));
+    await db.update(item).set({ hidden: true }).where(eq(item.id, "cache-armor"));
+    await db.update(userItem).set({ durability: 100 }).where(eq(userItem.id, "worn-armor"));
+    await insertItems([{
+      id: "cache-purchased", name: "Cache purchased armor", itemType: "ARMOR", slot: "HEAD", inShop: true,
+      cost: 40, repsCost: 2, seichiSilverCost: 3, maxDurability: 500,
+      effects: [makeEffect("increasemastery", { masteryTypes: ["Ninjutsu"], power: 25 }),
+        makeEffect("increasemaxpools", { poolsAffected: ["Energy"], power: 100, powerPerLevel: 1 })],
+    }]);
+    const counted = countUserReads(db);
+    const result = await callerForDatabase(itemRouter, userId, counted.client).buy({ itemId: "cache-purchased", villageId: "cache-home", stack: 1 });
+    expect(result.success).toBe(true);
+    // Only the initial equipment snapshot and independent quest snapshot read userData.
+    expect(counted.getReads()).toBe(2);
+    expect(result.userDelta).toEqual({ money: -40, reputationPoints: -2, seichiSilver: -3 });
+    const purchased = result.userPatch?.items?.find(row => row.itemId === "cache-purchased");
+    expect(purchased?.equipped).toBe("HEAD");
+    expect(purchased?.durability).toBe(DURABILITY_MAX_DEFAULT);
+    expect(purchased?.level).toBe(1);
+    expect(result.userPatch?.items?.some(row => row.id === "worn-armor")).toBe(true);
+    expect(result.userPatch?.maxEnergy).toBe(calcEnergy(10) + 301);
+    expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(175);
+    const stored = await db.query.userItem.findFirst({
+      where: eq(userItem.itemId, "cache-purchased"), with: { item: true, imbuements: { with: { item: true } } },
+    });
+    expect(purchased).toEqual(stored);
+  });
+
+  it("keeps purchase refreshes when queued training makes equipment projection unsafe", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ villageId: "cache-home", energyTrainingQueue: [{ stat: "offence", energy: 10 }] }).where(eq(userData.userId, userId));
+    await insertItems([{ id: "cache-purchased", name: "Cache purchased armor", itemType: "ARMOR", slot: "HEAD", inShop: true, cost: 40 }]);
+    const result = await (await callerFor(itemRouter, userId)).buy({ itemId: "cache-purchased", villageId: "cache-home", stack: 1 });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+  });
+
   it("returns confirmed slot deltas without a postwrite user read", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ reputationPoints: sql`${userData.reputationPoints} + 7`, extraItemSlots: 2 }).where(eq(userData.userId, userId));
@@ -272,9 +308,12 @@ describeWithDatabase("committed profile cache patches", () => {
   it("keeps full refreshes for pending energy queue settlement", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] }).where(eq(userData.userId, userId));
-    expect(await fetchUserEquipment(db, userId)).toBeUndefined();
     const caller = await callerFor(blackMarketRouter, userId);
     expect((await caller.buyItemSlot()).userDelta).toBeUndefined();
+    const repaired = await (await callerFor(itemRouter, userId)).repair({ userItemId: "worn-armor" });
+    expect(repaired.success).toBe(true);
+    expect(repaired.userPatch).toBeUndefined();
+    expect(repaired.userDelta).toBeUndefined();
   });
 
   it("prevents slot purchases from spending the same reputation snapshot twice", async () => {
