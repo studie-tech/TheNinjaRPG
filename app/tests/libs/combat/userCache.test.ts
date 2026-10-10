@@ -21,7 +21,7 @@ const fixture = () => {
   const raw = { userId: "viewer", level: 10, rank: "JONIN" as const,
     ...Object.fromEntries([...CombatStatNames, ...MasteryNames].map((field) => [field, 100])),
     curEnergy: 10, money: 100, experience: 200, seichiSilver: 0, pveFights: 10, regenAt: new Date("2026-01-01T00:00:00Z"), earnedExperience: 100,
-    bloodlineId: null, items: [gear], energyTrainingQueue: [] } as unknown as Parameters<typeof captureCombatCacheSnapshot>[0];
+    bloodlineId: null, items: [gear], energyQueueHead: 0, energyQueueTail: 0, masteryQueueHead: 0, queue: [] } as unknown as Parameters<typeof captureCombatCacheSnapshot>[0];
   const snapshot = captureCombatCacheSnapshot(raw);
   const { masterySources: _private, ...baseline } = snapshot;
   const items = [{ ...baseline.items[0]!, durability: 0 }];
@@ -82,7 +82,7 @@ describe("confirmed combat profile reconciliation", () => {
       { userId: "someone-else" }, { battleId: "new-fight" }, { ninjutsuMastery: 101 },
       { money: 101 }, { experience: 201 }, { seichiSilver: 1 },
       { pveFights: 11 }, { pveFights: 12 },
-      { energyTrainingQueue: [{ stat: "offence", energy: 1 }] },
+      { energyQueueTail: 1 },
       { items: current.items.map((item) => ({ ...item, durability: 99 })) },
       { regenAt: new Date(current.regenAt.getTime() + 1) },
     ]) expect(combatProfilePatch({ ...current, ...changed } as typeof current, update)).toBeUndefined();

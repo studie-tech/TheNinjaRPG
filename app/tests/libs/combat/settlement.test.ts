@@ -13,6 +13,7 @@ import {
   userData,
   userItem,
   userItemImbuement,
+  userQueue,
 } from "@/drizzle/schema";
 import { captureCombatCacheSnapshot, combatProfilePatch } from "@/libs/combat/userCache";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
@@ -28,6 +29,7 @@ import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { getTagSchema } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
+import { queueEnergy, readEnergyQueue } from "../../setup/queues";
 import {
   callerFor,
   callerForDatabase,
@@ -134,6 +136,7 @@ describeWithDatabase("CAS combat settlement", () => {
       userItemImbuement,
       userItem,
       item,
+      userQueue,
       userData,
     );
     trigger.mockClear();
@@ -415,9 +418,9 @@ describeWithDatabase("CAS combat settlement", () => {
     const db = await getTestDatabase();
     const queue = [{ stat: "offence" as const, energy: 20 }];
     await db.update(userData).set({
-      regenAt: new Date(Date.now() - 120_000), regeneration: 3,
-      energyTrainingQueue: queue, offence: 10,
+      regenAt: new Date(Date.now() - 120_000), regeneration: 3, offence: 10,
     }).where(eq(userData.userId, "winner"));
+    await queueEnergy("winner", queue);
     const snapshot = scenario(true);
     snapshot.extraState.energyRegeneration = { winner: 6 };
     snapshot.extraState.energyCapacity = { winner: 1000 };
@@ -427,7 +430,7 @@ describeWithDatabase("CAS combat settlement", () => {
     const after = (await db.query.userData.findFirst({ where: eq(userData.userId, "winner") }))!;
     expect(after.curEnergy).toBeGreaterThanOrEqual(272);
     expect(after.curEnergy).toBeLessThan(272.1);
-    expect(after.energyTrainingQueue).toEqual(queue);
+    expect(await readEnergyQueue("winner")).toEqual(queue);
     expect(after.offence).toBe(10 + result.offence);
     expect(after.curHealth).toBe(result.curHealth);
     expect(after.curChakra).toBe(result.curChakra);
@@ -491,14 +494,15 @@ describeWithDatabase("CAS combat settlement", () => {
   it("orphan recovery credits base Energy without advancing queued stats or other pools", async () => {
     const db = await getTestDatabase();
     const queue = [{ stat: "offence" as const, energy: 20 }];
-    await db.update(userData).set({ regeneration: 3, regenAt: new Date(Date.now() - 120_000), curHealth: 5, curChakra: 6, curStamina: 7, energyTrainingQueue: queue }).where(eq(userData.userId, "winner"));
+    await db.update(userData).set({ regeneration: 3, regenAt: new Date(Date.now() - 120_000), curHealth: 5, curChakra: 6, curStamina: 7 }).where(eq(userData.userId, "winner"));
+    await queueEnergy("winner", queue);
     // The cleaner uses this same guarded release when battle metadata is absent.
     await db.update(userData).set({ curEnergy: combatEnergyRecoverySql(), regenAt: sql`NOW(3)`, battleId: null, status: "AWAKE" }).where(eq(userData.userId, "winner"));
     const after = (await db.query.userData.findFirst({ where: eq(userData.userId, "winner") }))!;
     expect(after.curEnergy).toBeGreaterThanOrEqual(16);
     expect(after.curEnergy).toBeLessThan(16.1);
     expect([after.curHealth, after.curChakra, after.curStamina]).toEqual([5, 6, 7]);
-    expect(after.energyTrainingQueue).toEqual(queue);
+    expect(await readEnergyQueue("winner")).toEqual(queue);
   });
 
   it.each([

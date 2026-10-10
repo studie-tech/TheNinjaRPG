@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { type CombatStatName, CombatStatNames } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import { getEnergyQueue } from "@/libs/queue";
 import { showMutationToast } from "@/libs/toast";
 import { isStatTrainingCapped, statTrainingBlockMessage } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -43,7 +44,7 @@ export const EnergyTrainingQueue = ({
     (value) => !isStatTrainingCapped(user, value),
   );
   const selectedStat = availableStats.includes(stat) ? stat : availableStats[0];
-  const entries = user.energyTrainingQueue ?? [];
+  const entries = getEnergyQueue(user);
   const capacity = getQueueTotalCapacity(user);
   const block = statTrainingBlockMessage({
     ...user,

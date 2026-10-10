@@ -6,6 +6,7 @@ import {
   activityStreakConfig,
   userData,
   userStreakProgress,
+  userQueue,
 } from "@/drizzle/schema";
 import { activityStreakRouter } from "@/server/api/routers/activityStreak";
 import { insertUsers } from "../../setup/factories";
@@ -16,13 +17,14 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { queueEnergy } from "../../setup/queues";
 
 const userId = "event-pass-cache-player";
 const configId = "event-pass-cache-config";
 
 describeWithDatabase("event pass cache balances", () => {
   beforeEach(async () => {
-    await resetTables(userStreakProgress, activityStreakConfig, actionLog, userData);
+    await resetTables(userQueue, userStreakProgress, activityStreakConfig, actionLog, userData);
     await insertUsers([{ userId, money: 100, reputationPoints: 50, seichiSilver: 25 }]);
     const db = await getTestDatabase();
     await db.insert(activityStreakConfig).values({
@@ -63,11 +65,7 @@ describeWithDatabase("event pass cache balances", () => {
         .update(activityStreakConfig)
         .set({ ryoCost: cost })
         .where(eq(activityStreakConfig.id, configId));
-      if (queued)
-        await db
-          .update(userData)
-          .set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] })
-          .where(eq(userData.userId, userId));
+      if (queued) await queueEnergy(userId, [{ stat: "offence", energy: 10 }]);
       const reads = vi.spyOn(db.query.userData, "findFirst");
       const caller = await callerFor(activityStreakRouter, userId);
       const result = await caller.purchaseEventPass({ configId });

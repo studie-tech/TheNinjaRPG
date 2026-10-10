@@ -19,6 +19,7 @@ import {
 } from "@/drizzle/schema";
 import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
+import { hasEnergyQueue } from "@/libs/queue";
 import { randomString } from "@/libs/random";
 import { fetchUser } from "@/routers/profile";
 import {
@@ -322,7 +323,7 @@ export const miscRouter = createTRPCRouter({
         userDelta:
           !input.reputationAmount &&
           input.userIds.includes(ctx.userId) &&
-          !admin.energyTrainingQueue?.length &&
+          !hasEnergyQueue(admin) &&
           credited.rowsAffected === users.length &&
           Number.isInteger(input.moneyAmount ?? 0)
             ? { money: input.moneyAmount ?? 0 }

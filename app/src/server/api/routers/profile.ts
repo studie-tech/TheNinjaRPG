@@ -21,7 +21,7 @@ import {
 import { alias } from "drizzle-orm/mysql-core";
 import { customAlphabet, nanoid } from "nanoid";
 import { z } from "zod";
-import type { CombatStatName } from "@/drizzle/constants";
+import type { CombatStatName, MasteryName } from "@/drizzle/constants";
 import {
   ACTION_LOG_RELATED_MSG_MAX_LENGTH,
   ACTIVE_VOTING_SITES,
@@ -60,6 +60,7 @@ import type {
   UserItem,
   UserJutsu,
   UserQuest,
+  UserQueue,
   UserVote,
   Village,
   VillageAlliance,
@@ -97,6 +98,7 @@ import {
   userJutsu,
   userNindo,
   userPollVote,
+  userQueue,
   userReport,
   userSkill,
   userVote,
@@ -141,6 +143,7 @@ import {
   questHasOverworldObjectives,
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
+import { hasEnergyQueue } from "@/libs/queue";
 import {
   getRaidObjectiveData,
   isRaidListedForVillage,
@@ -151,7 +154,7 @@ import { callDiscordContent } from "@/libs/socials";
 import {
   getReducedGainsDays,
   inferJutsuTrainingStartedAt,
-  settleEnergyTrainingQueue,
+  settleQueuedTraining,
 } from "@/libs/train";
 import { fetchSquad, removeFromSquad } from "@/routers/anbu";
 import { fetchClan, removeFromClan } from "@/routers/clan";
@@ -184,6 +187,12 @@ import {
   fetchRecruitMilestoneSummary,
 } from "@/server/utils/recruitment";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
+import {
+  fetchJutsuQueueSummary,
+  hasDueTimedJob,
+  settleDueTimedQueues,
+  settleJutsuTrainingQueue,
+} from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import {
@@ -312,56 +321,83 @@ export const profileRouter = createTRPCRouter({
     const now = sql`NOW()`;
     const imbuedItem = alias(item, "imbuedItem");
 
-    const [jutsuTrainingRows, craftingRows, imbuementRows] = await Promise.all([
-      ctx.drizzle
-        .select({
-          name: sql<string>`COALESCE(${jutsuReskin.name}, ${jutsu.name})`,
-          level: userJutsu.level,
-          jutsuRank: jutsu.jutsuRank,
-          finishTraining: userJutsu.finishTraining,
-          senseiId: userData.senseiId,
-          rank: userData.rank,
-        })
-        .from(userJutsu)
-        .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
-        .innerJoin(userData, eq(userJutsu.userId, userData.userId))
-        .leftJoin(jutsuReskin, eq(userJutsu.reskinId, jutsuReskin.id))
-        .where(and(eq(userJutsu.userId, ctx.userId), gt(userJutsu.finishTraining, now)))
-        .orderBy(asc(userJutsu.finishTraining))
-        .limit(1),
-      ctx.drizzle
-        .select({
-          itemName: item.name,
-          craftingStartedAt: userItem.createdAt,
-          craftingFinishedAt: userItem.craftingFinishedAt,
-        })
-        .from(userItem)
-        .innerJoin(item, eq(userItem.itemId, item.id))
-        .where(
-          and(eq(userItem.userId, ctx.userId), gt(userItem.craftingFinishedAt, now)),
-        )
-        .orderBy(asc(userItem.craftingFinishedAt))
-        .limit(1),
-      ctx.drizzle
-        .select({
-          imbuedName: imbuedItem.name,
-          targetName: item.name,
-          craftingStartedAt: userItemImbuement.createdAt,
-          craftingFinishedAt: userItemImbuement.craftingFinishedAt,
-        })
-        .from(userItemImbuement)
-        .innerJoin(userItem, eq(userItemImbuement.userItemId, userItem.id))
-        .innerJoin(item, eq(userItem.itemId, item.id))
-        .innerJoin(imbuedItem, eq(userItemImbuement.imbuementItemId, imbuedItem.id))
-        .where(
-          and(
-            eq(userItem.userId, ctx.userId),
-            gt(userItemImbuement.craftingFinishedAt, now),
-          ),
-        )
-        .orderBy(asc(userItemImbuement.craftingFinishedAt))
-        .limit(1),
-    ]);
+    // The running training and the levels waiting behind it, each in one query.
+    const fetchJutsuTimers = () =>
+      Promise.all([
+        ctx.drizzle
+          .select({
+            name: sql<string>`COALESCE(${jutsuReskin.name}, ${jutsu.name})`,
+            level: userJutsu.level,
+            jutsuRank: jutsu.jutsuRank,
+            finishTraining: userJutsu.finishTraining,
+            senseiId: userData.senseiId,
+            rank: userData.rank,
+          })
+          .from(userJutsu)
+          .innerJoin(jutsu, eq(userJutsu.jutsuId, jutsu.id))
+          .innerJoin(userData, eq(userJutsu.userId, userData.userId))
+          .leftJoin(jutsuReskin, eq(userJutsu.reskinId, jutsuReskin.id))
+          .where(
+            and(eq(userJutsu.userId, ctx.userId), gt(userJutsu.finishTraining, now)),
+          )
+          .orderBy(asc(userJutsu.finishTraining))
+          .limit(1),
+        fetchJutsuQueueSummary(ctx.drizzle, ctx.userId),
+      ]);
+    let [[jutsuTrainingRows, waitingJutsu], craftingRows, imbuementRows] =
+      await Promise.all([
+        fetchJutsuTimers(),
+        ctx.drizzle
+          .select({
+            itemName: item.name,
+            craftingStartedAt: userItem.createdAt,
+            craftingFinishedAt: userItem.craftingFinishedAt,
+          })
+          .from(userItem)
+          .innerJoin(item, eq(userItem.itemId, item.id))
+          .where(
+            and(eq(userItem.userId, ctx.userId), gt(userItem.craftingFinishedAt, now)),
+          )
+          .orderBy(asc(userItem.craftingFinishedAt))
+          .limit(1),
+        ctx.drizzle
+          .select({
+            imbuedName: imbuedItem.name,
+            targetName: item.name,
+            craftingStartedAt: userItemImbuement.createdAt,
+            craftingFinishedAt: userItemImbuement.craftingFinishedAt,
+          })
+          .from(userItemImbuement)
+          .innerJoin(userItem, eq(userItemImbuement.userItemId, userItem.id))
+          .innerJoin(item, eq(userItem.itemId, item.id))
+          .innerJoin(imbuedItem, eq(userItemImbuement.imbuementItemId, imbuedItem.id))
+          .where(
+            and(
+              eq(userItem.userId, ctx.userId),
+              gt(userItemImbuement.craftingFinishedAt, now),
+            ),
+          )
+          .orderBy(asc(userItemImbuement.craftingFinishedAt))
+          .limit(1),
+      ]);
+    // A queued jutsu level whose turn has come only becomes `UserJutsu` training once
+    // settled. The timers are polled on their own, so settle here too: the dashboard and
+    // sidebar never show an idle gap between a finished level and the next queued one.
+    // Only a due row costs more queries; then only the jutsu timers are read again.
+    if (hasDueTimedJob(waitingJutsu)) {
+      try {
+        // Started levels and rescheduled ones both change what is shown.
+        await settleJutsuTrainingQueue(ctx.drizzle, ctx.userId);
+        [jutsuTrainingRows, waitingJutsu] = await fetchJutsuTimers();
+      } catch (error) {
+        // Show the queue as it is; the next poll or refresh settles it.
+        Sentry.captureException(error, {
+          level: "warning",
+          tags: { source: "sidebarJutsuQueue" },
+        });
+      }
+    }
+    const nextQueuedJutsu = waitingJutsu[0];
 
     const jutsuTrainingRow = jutsuTrainingRows[0];
     const crafting = craftingRows[0];
@@ -381,6 +417,18 @@ export const profileRouter = createTRPCRouter({
 
     return {
       jutsuTraining,
+      // Levels waiting behind the active jutsu training
+      jutsuQueue: {
+        count: waitingJutsu.length,
+        next: nextQueuedJutsu
+          ? {
+              name: nextQueuedJutsu.name ?? "Removed jutsu",
+              // The first waiting entry trains one level past what is owned now.
+              level: (nextQueuedJutsu.ownedLevel ?? 0) + 1,
+              startsAt: nextQueuedJutsu.startsAt,
+            }
+          : null,
+      },
       crafting: crafting?.craftingFinishedAt
         ? { ...crafting, craftingFinishedAt: crafting.craftingFinishedAt }
         : null,
@@ -2044,7 +2092,7 @@ export const profileRouter = createTRPCRouter({
           success: true,
           message: "User stats updated",
           // A pending queue is settled by the profile refresh, including quest progress.
-          ...(user.energyTrainingQueue?.length
+          ...(hasEnergyQueue(user)
             ? {}
             : {
                 userPatch: {
@@ -2669,7 +2717,7 @@ export const profileRouter = createTRPCRouter({
         userDelta:
           input.targetUserId === ctx.userId &&
           target.earnedExperience > 0 &&
-          !target.energyTrainingQueue?.length &&
+          !hasEnergyQueue(target) &&
           Number.isInteger(input.amount)
             ? { earnedExperience: input.amount }
             : undefined,
@@ -2719,7 +2767,7 @@ export const profileRouter = createTRPCRouter({
         success: true,
         message: `Awarded ${input.amount} experience points to all users`,
         userDelta:
-          awarder.energyTrainingQueue?.length ||
+          hasEnergyQueue(awarder) ||
           awarder.earnedExperience <= 0 ||
           !Number.isInteger(input.amount)
             ? undefined
@@ -2967,19 +3015,7 @@ export const fetchUpdatedUser = async (props: {
   // when the cron tick actually runs.
   const shrineLobbyStaleBefore = shrineLobbyFreshAfter(now);
 
-  // Ensure we can fetch the user
-  const [
-    achievements,
-    settings,
-    user,
-    hasUnvotedPolls,
-    allActiveWars,
-    activeShrineBattles,
-    activeRaids,
-    questBootstrap,
-  ] = await Promise.all([
-    fetchAchievementCatalogue(client),
-    fetchAllGameSettings(client),
+  const queryUpdatedUser = () =>
     client.query.userData.findFirst({
       where: eq(userData.userId, userId),
       with: {
@@ -3027,14 +3063,54 @@ export const fetchUpdatedUser = async (props: {
         },
         votes: true,
         userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
+        // Every queue entry, in the same query: users without queues pay nothing extra.
+        queue: { orderBy: asc(userQueue.position) },
       },
-    }),
+    });
+
+  // Ensure we can fetch the user
+  const [
+    achievements,
+    settings,
+    fetchedUser,
+    hasUnvotedPolls,
+    allActiveWars,
+    activeShrineBattles,
+    activeRaids,
+    questBootstrap,
+  ] = await Promise.all([
+    fetchAchievementCatalogue(client),
+    fetchAllGameSettings(client),
+    queryUpdatedUser(),
     fetchHasUnvotedPolls(client, userId, now),
     fetchAllActiveWars(client),
     fetchActiveShrineLobbies(client, shrineLobbyStaleBefore),
     fetchActiveRaids(client, now),
     fetchQuestBootstrap(client, userId),
   ]);
+  let user = fetchedUser;
+
+  // Start timed jobs (jutsu levels, crafts) whose turn has come, backdated to when it
+  // came. The in-memory check keeps every other request free of extra queries. When a
+  // job started, the user is read again.
+  let startedQueuedJobs = 0;
+  if (user && hasDueTimedJob(user.queue, now)) {
+    try {
+      startedQueuedJobs = await settleDueTimedQueues(client, [user], now);
+      if (startedQueuedJobs > 0) {
+        user = await queryUpdatedUser();
+        // Started jobs change money, items, jutsus and quest progress at once.
+        requiresUserRefresh = true;
+        requiresProgressionRefresh = true;
+      }
+    } catch (error) {
+      // The queues stay as they are and are settled on the next request.
+      Sentry.captureException(error, {
+        level: "warning",
+        tags: { source: "settleUserQueues" },
+      });
+    }
+  }
 
   // Reskin bloodline if needed
   if (user?.bloodline && user?.activeReskin) {
@@ -3261,28 +3337,33 @@ export const fetchUpdatedUser = async (props: {
     // Figure out if we're running update
     const sinceUpdate = secondsPassed(user.updatedAt);
     const ticks = Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS));
-    const queuedTraining = user.energyTrainingQueue?.length
-      ? settleEnergyTrainingQueue(user, settings, ticks)
-      : null;
+    // Queued Energy and mastery training, settled in memory from the loaded rows.
+    const queued = settleQueuedTraining(user, user.queue, settings, ticks, now);
+    const queuedTraining = queued.energy;
+    const queuedMastery = queued.mastery;
     // A queue only bypasses the overview throttle when recovery or an entry can
     // advance, avoiding snapshot conflicts on repeated reads within one tick.
     const hasQueueProgress =
-      queuedTraining &&
-      (ticks > 0 ||
-        queuedTraining.energyTrainingQueue.length !== user.energyTrainingQueue?.length);
-    if (hasQueueProgress) requiresUserRefresh = true;
+      queuedTraining && (ticks > 0 || queuedTraining.consumed > 0);
+    if (hasQueueProgress || queuedMastery) requiresUserRefresh = true;
+    const masteryTrainingSession = {
+      currentlyTrainingMastery: user.currentlyTrainingMastery,
+      masteryTrainingStartedAt: user.masteryTrainingStartedAt,
+    };
     if (
       newDay ||
       hasQueueProgress ||
+      queuedMastery ||
       sinceUpdate > 300 || // Update user in database every 5 minutes only so as to reduce server load
       forceRegen || // Hard overwrite for e.g. debugging or simply ensuring updated user
       (user.villagePrestige < 0 && !user.isOutlaw) // To trigger getting kicked out of village
     ) {
       requiresUserRefresh = true;
       const originalUpdatedAt = user.updatedAt;
-      const queuedTrainingSnapshot = user.energyTrainingQueue?.length
-        ? { ...user, questData: structuredClone(user.questData) }
-        : null;
+      const queuedTrainingSnapshot =
+        queuedTraining || queuedMastery
+          ? { ...user, questData: structuredClone(user.questData) }
+          : null;
       const regen = user.regeneration * ticks;
       // These pools are integer columns; expose the same rounding MySQL persists.
       user.curHealth = Math.round(Math.min(user.curHealth + regen, user.maxHealth));
@@ -3291,7 +3372,7 @@ export const fetchUpdatedUser = async (props: {
       user.curEnergy =
         queuedTraining?.curEnergy ?? Math.min(user.curEnergy + regen, user.maxEnergy);
       if (queuedTraining) {
-        user.energyTrainingQueue = queuedTraining.energyTrainingQueue;
+        user.energyQueueHead = queuedTraining.head;
         const trained = queuedTraining.completed.reduce(
           (sum, entry) => sum + entry.amount,
           0,
@@ -3303,6 +3384,23 @@ export const fetchUpdatedUser = async (props: {
         if (trained > 0)
           user.questData = filterQuestTrackersForDbPersist(
             getNewTrackers(user, [{ task: "stats_trained", increment: trained }])
+              .trackers,
+            user,
+          );
+      }
+      if (queuedMastery) {
+        for (const [stat, amount] of Object.entries(queuedMastery.gains)) {
+          user[stat as MasteryName] += amount;
+        }
+        user.masteryQueueHead = queuedMastery.head;
+        user.currentlyTrainingMastery = queuedMastery.currentlyTrainingMastery;
+        user.masteryTrainingStartedAt = queuedMastery.masteryTrainingStartedAt;
+        user.trainingSpeed = queuedMastery.trainingSpeed;
+        user.dailyTrainings = queuedMastery.dailyTrainings;
+        const minutes = queuedMastery.completed.reduce((sum, e) => sum + e.minutes, 0);
+        if (minutes > 0)
+          user.questData = filterQuestTrackersForDbPersist(
+            getNewTrackers(user, [{ task: "minutes_training", increment: minutes }])
               .trackers,
             user,
           );
@@ -3336,6 +3434,9 @@ export const fetchUpdatedUser = async (props: {
           onVillageStateChanged: () => {
             requiresProgressionRefresh = true;
           },
+          queuedMastery: queuedMastery
+            ? { ...queuedMastery, original: masteryTrainingSession }
+            : null,
         });
         if (!persisted) {
           requiresUserRefresh = true;
@@ -3435,6 +3536,8 @@ export const fetchUpdatedUser = async (props: {
       hasUnvotedPolls,
       trackerResults,
       requiresUserRefresh: requiresUserRefresh || toastMessages.length > 0,
+      /** Queued jutsu levels or crafts started by this refresh */
+      startedQueuedJobs,
     };
   } else {
     return {
@@ -3449,6 +3552,7 @@ export const fetchUpdatedUser = async (props: {
       hasUnvotedPolls,
       trackerResults: null,
       requiresUserRefresh: requiresUserRefresh || toastMessages.length > 0,
+      startedQueuedJobs,
     };
   }
 };
@@ -3463,6 +3567,7 @@ const persistPassiveRegenToDb = async ({
   originalUpdatedAt,
   queuedTraining,
   onVillageStateChanged,
+  queuedMastery,
 }: {
   client: DrizzleClient;
   userId: string;
@@ -3470,8 +3575,16 @@ const persistPassiveRegenToDb = async ({
   userIp?: string;
   forceRegen: boolean;
   originalUpdatedAt: Date;
-  queuedTraining?: ReturnType<typeof settleEnergyTrainingQueue> | null;
+  queuedTraining?: ReturnType<typeof settleQueuedTraining>["energy"];
   onVillageStateChanged?: () => void;
+  queuedMastery?:
+    | (NonNullable<ReturnType<typeof settleQueuedTraining>["mastery"]> & {
+        original: Pick<
+          UserData,
+          "currentlyTrainingMastery" | "masteryTrainingStartedAt"
+        >;
+      })
+    | null;
 }) => {
   const includeVillageState = forceRegen || (user.villagePrestige < 0 && user.isOutlaw);
 
@@ -3525,11 +3638,22 @@ const persistPassiveRegenToDb = async ({
   );
 
   if (queuedTraining) {
-    derivedUserUpdate.energyTrainingQueue = queuedTraining.energyTrainingQueue;
+    derivedUserUpdate.energyQueueHead = queuedTraining.head;
     for (const stat of Object.keys(queuedTraining.gains)) {
       derivedUserUpdate[stat] = user[stat as CombatStatName];
     }
     derivedUserUpdate.experience = user.experience;
+  }
+
+  if (queuedMastery) {
+    derivedUserUpdate.masteryQueueHead = queuedMastery.head;
+    derivedUserUpdate.currentlyTrainingMastery = queuedMastery.currentlyTrainingMastery;
+    derivedUserUpdate.masteryTrainingStartedAt = queuedMastery.masteryTrainingStartedAt;
+    derivedUserUpdate.trainingSpeed = queuedMastery.trainingSpeed;
+    derivedUserUpdate.dailyTrainings = queuedMastery.dailyTrainings;
+    for (const stat of Object.keys(queuedMastery.gains)) {
+      derivedUserUpdate[stat] = user[stat as MasteryName];
+    }
   }
 
   // A delayed regeneration must not restore pools from before a heal or another user claim.
@@ -3555,6 +3679,23 @@ const persistPassiveRegenToDb = async ({
             eq(userData.rank, user.rank),
           ]
         : []),
+      // The settled session must still be the one that was read.
+      ...(queuedMastery
+        ? [
+            queuedMastery.original.currentlyTrainingMastery
+              ? eq(
+                  userData.currentlyTrainingMastery,
+                  queuedMastery.original.currentlyTrainingMastery,
+                )
+              : isNull(userData.currentlyTrainingMastery),
+            queuedMastery.original.masteryTrainingStartedAt
+              ? eq(
+                  userData.masteryTrainingStartedAt,
+                  queuedMastery.original.masteryTrainingStartedAt,
+                )
+              : isNull(userData.masteryTrainingStartedAt),
+          ]
+        : []),
     ],
     set: derivedUserUpdate,
   });
@@ -3573,6 +3714,21 @@ const persistPassiveRegenToDb = async ({
         );
       } catch (error) {
         Sentry.captureException(error, { tags: { source: "energyTrainingQueueLog" } });
+      }
+    }
+    if (queuedMastery?.completed.length) {
+      try {
+        await client.insert(trainingLog).values(
+          queuedMastery.completed.map((entry) => ({
+            userId,
+            stat: entry.stat,
+            amount: entry.amount,
+            speed: entry.speed,
+            trainingFinishedAt: entry.finishedAt,
+          })),
+        );
+      } catch (error) {
+        Sentry.captureException(error, { tags: { source: "masteryTrainingQueueLog" } });
       }
     }
   }
@@ -3978,6 +4134,8 @@ export const scaleEditedAi = (stored: UserData, edited: UserData) => {
 export type UserWithRelations =
   | (UserData & {
       effectiveMasteries?: MasteryStatSource;
+      /** Every queue entry of the user, in queue order per kind */
+      queue?: UserQueue[];
       bloodline?: Bloodline | null;
       sageMode?: SageMode | null;
       activeReskin?: BloodlineReskin | null;
@@ -4067,7 +4225,11 @@ export const getUserProgressionUpdate = (
       regeneration: publicUser.regeneration,
       primaryElement: publicUser.primaryElement,
       secondaryElement: publicUser.secondaryElement,
-      energyTrainingQueue: publicUser.energyTrainingQueue,
+      ...(publicUser.queue ? { queue: publicUser.queue } : {}),
+      energyQueueHead: publicUser.energyQueueHead,
+      energyQueueTail: publicUser.energyQueueTail,
+      masteryQueueHead: publicUser.masteryQueueHead,
+      trainingSpeed: publicUser.trainingSpeed,
       currentlyTrainingMastery: publicUser.currentlyTrainingMastery,
       masteryTrainingStartedAt: publicUser.masteryTrainingStartedAt,
       dailyTrainings: publicUser.dailyTrainings,

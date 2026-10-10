@@ -9,6 +9,7 @@ import {
 } from "@/drizzle/constants";
 import { conceptImage, userData, userLikes } from "@/drizzle/schema";
 import { classifyNsfwPrompt } from "@/libs/moderator";
+import { hasEnergyQueue } from "@/libs/queue";
 import {
   fastTxt2imgReplicate,
   getVideoGenerationStatus,
@@ -160,7 +161,7 @@ export const conceptartRouter = createTRPCRouter({
         success: true,
         message: "Image created",
         imageId,
-        userDelta: user.energyTrainingQueue?.length
+        userDelta: hasEnergyQueue(user)
           ? undefined
           : { reputationPoints: -COST_CONCEPT_IMAGE },
       };
@@ -253,7 +254,7 @@ export const conceptartRouter = createTRPCRouter({
           success: true,
           message: "Video generation started",
           videoId,
-          userDelta: user.energyTrainingQueue?.length
+          userDelta: hasEnergyQueue(user)
             ? undefined
             : { reputationPoints: -COST_CONCEPT_VIDEO },
         };

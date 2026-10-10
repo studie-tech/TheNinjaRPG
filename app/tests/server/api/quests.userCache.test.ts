@@ -2,13 +2,15 @@
 import { eq } from "drizzle-orm";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { quest, questHistory, userData, userVote } from "@/drizzle/schema";
+import { quest, questHistory, userData, userQueue, userVote } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
 import { profileRouter } from "@/server/api/routers/profile";
+import { getEnergyQueue } from "@/libs/queue";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { CollectItem, InstantNewQuestObjective, InstantStartBattleObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
+import { queueEnergy } from "../../setup/queues";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const playerId = "quest-cache-player";
@@ -39,7 +41,7 @@ const countProfileReads = async () => {
 
 describeWithDatabase("confirmed quest cache responses", () => {
   beforeEach(async () => {
-    await resetTables(questHistory, quest, userVote, userData);
+    await resetTables(userQueue, questHistory, quest, userVote, userData);
     await insertUsers([{ userId: playerId, username: "questcache", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", isOutlaw: true, status: "AWAKE",
       sector: 0, money: 1000, earnedExperience: 0, curEnergy: 30, regeneration: 0,
@@ -108,9 +110,9 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const api = await callerFor(questsRouter, playerId);
     expect((await api.startQuest({ questId: missionId, userSector: 0 })).success).toBe(true);
     const database = await getTestDatabase();
+    await queueEnergy(playerId, [{ stat: "offence", energy: 40 }]);
     await database.update(userData).set({
       curEnergy: 100,
-      energyTrainingQueue: [{ stat: "offence", energy: 40 }],
       questData: [{ id: missionId, startAt: new Date().toISOString(), goals: [{ id: "train", value: 10, done: true, collected: false, recentlyDied: false }] }],
     }).where(eq(userData.userId, playerId));
     const before = await readPlayer();
@@ -125,8 +127,9 @@ describeWithDatabase("confirmed quest cache responses", () => {
       experience: saved?.experience,
       earnedExperience: saved?.earnedExperience,
       curEnergy: saved?.curEnergy,
-      energyTrainingQueue: [],
+      energyQueueHead: 1,
     });
+    expect(getEnergyQueue(result.userPatch as never)).toEqual([]);
     expect(result.userDelta?.money).toBe((saved?.money ?? 0) - (before?.money ?? 0));
     expect(reads()).toBe(1);
   });

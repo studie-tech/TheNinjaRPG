@@ -2,13 +2,16 @@
 import {eq} from "drizzle-orm";
 import {afterEach, beforeEach, expect, it, vi} from "vitest";
 import {CombatStatNames, getUserCaps} from "@/drizzle/constants";
-import {bloodline, gameSetting, item, userItem, quest, questHistory, trainingLog, userData, userVote} from "@/drizzle/schema";
+import {bloodline, gameSetting, item, userItem, quest, questHistory, trainingLog, userData, userQueue, userVote} from "@/drizzle/schema";
+import {getEnergyQueue} from "@/libs/queue";
 import {fetchUpdatedUser} from "@/server/api/routers/profile";
 import {trainRouter} from "@/server/api/routers/train";
 import {InstantNewQuestObjective, SimpleObjective} from "@/validators/objectives";
 import {ObjectiveReward} from "@/validators/rewards";
 import {insertItems, insertUserItems, insertUsers, insertQuests, insertQuestHistory} from "../../setup/factories";
+import {queueEnergy, readEnergyQueue} from "../../setup/queues";
 import {callerFor, describeWithDatabase, getTestDatabase, resetTables} from "../../setup/testDatabase";
+import type {EnergyTrainingQueueEntry} from "@/validators/train";
 const USER_ID = "trainee";
 const SESSION_GAIN = 100;
 const MINUTE = 60 * 1000;
@@ -18,7 +21,10 @@ const caller = () => callerFor(trainRouter, USER_ID);
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * MINUTE);
 
-const trainee = async (patch: Record<string, unknown> = {}) => {
+const trainee = async ({
+  energyQueue,
+  ...patch
+}: Record<string, unknown> & { energyQueue?: EnergyTrainingQueueEntry[] } = {}) => {
   await insertUsers([
     {
       userId: USER_ID,
@@ -32,6 +38,7 @@ const trainee = async (patch: Record<string, unknown> = {}) => {
       ...patch,
     } as never,
   ]);
+  if (energyQueue) await queueEnergy(USER_ID, energyQueue);
   // fetchUpdatedUser creates a missing vote row, and parallel requests would race on it
   const database = await getTestDatabase();
   await database
@@ -65,7 +72,7 @@ const backdate = async (patch: Partial<typeof userData.$inferInsert>) => {
 };
 
 describeWithDatabase("Energy and mastery training against a real MySQL", () => {
-  beforeEach(async () => { await resetTables(trainingLog, questHistory, quest, userVote, userItem, item, userData, bloodline, gameSetting); });
+  beforeEach(async () => { await resetTables(userQueue, trainingLog, questHistory, quest, userVote, userItem, item, userData, bloodline, gameSetting); });
   afterEach(() => vi.restoreAllMocks());
 
   it.each(["AWAKE", "ASLEEP"] as const)(
@@ -76,7 +83,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
         level: 1,
         curEnergy: 0,
         regeneration: 100,
-        energyTrainingQueue: [
+        energyQueue: [
           { stat: "offence", energy: 100 },
           { stat: "defence", energy: 100 },
         ],
@@ -92,7 +99,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
       expect(after.offence - before.offence).toBeCloseTo(130);
       expect(after.defence - before.defence).toBeCloseTo(130);
       expect(after.curEnergy).toBe(100);
-      expect(after.energyTrainingQueue).toEqual([]);
+      expect(await readEnergyQueue(USER_ID)).toEqual([]);
       expect(after.experience - before.experience).toBeCloseTo(260);
       await fetchUpdatedUser({
         client: await getTestDatabase(),
@@ -111,7 +118,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
       regeneration: 0,
       offence: cap,
       defence: cap - 1.3,
-      energyTrainingQueue: [
+      energyQueue: [
         { stat: "offence", energy: 50 },
         { stat: "defence", energy: 50 },
       ],
@@ -125,25 +132,26 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(after.offence).toBe(cap);
     expect(after.defence).toBeCloseTo(cap);
     expect(after.curEnergy).toBeCloseTo(99);
-    expect(after.energyTrainingQueue).toEqual([]);
+    expect(await readEnergyQueue(USER_ID)).toEqual([]);
     expect(await readLogs()).toHaveLength(1);
   });
 
   it("does not write an unaffordable queue again before a recovery tick", async () => {
     await trainee({
       curEnergy: 0,
-      energyTrainingQueue: [{ stat: "offence", energy: 100 }],
+      energyQueue: [{ stat: "offence", energy: 100 }],
       regenAt: new Date(),
     });
     const database = await getTestDatabase();
     await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
     const before = await readUser();
+    const queued = await readEnergyQueue(USER_ID);
     await fetchUpdatedUser({ client: database, userId: USER_ID });
     await fetchUpdatedUser({ client: database, userId: USER_ID });
     const after = await readUser();
     expect(after.updatedAt.getTime()).toBe(before.updatedAt.getTime());
     expect(after.regenAt.getTime()).toBe(before.regenAt.getTime());
-    expect(after.energyTrainingQueue).toEqual(before.energyTrainingQueue);
+    expect(await readEnergyQueue(USER_ID)).toEqual(queued);
     expect(after.curEnergy).toBe(before.curEnergy);
     expect(await readLogs()).toHaveLength(0);
   });
@@ -152,7 +160,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     await trainee({
       curEnergy: 100,
       regeneration: 0,
-      energyTrainingQueue: [{ stat: "offence", energy: 40 }],
+      energyQueue: [{ stat: "offence", energy: 40 }],
     });
     const before = await readUser();
     const database = await getTestDatabase();
@@ -176,7 +184,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     await insertQuestHistory([{userId: USER_ID, questId: "queued-stat-quest", questType: "daily"}]);
     await trainee({
       curEnergy: 100, regeneration: 0,
-      energyTrainingQueue: [{stat: "offence", energy: 40}],
+      energyQueue: [{stat: "offence", energy: 40}],
       questData: [{ id: "queued-stat-quest", goals: [{ id: "queued-stat-goal", value: 0, done: false }] }],
     });
     const database = await getTestDatabase();
@@ -188,7 +196,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
           const builder = database.update(table);
           return {
             set(values: Parameters<typeof builder.set>[0]) {
-              if (table === userData && "energyTrainingQueue" in values)
+              if (table === userData && "energyQueueHead" in values)
                 throw new Error("Simulated queued training write failure");
               return builder.set(values);
             },
@@ -204,7 +212,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
   });
 
   it("rejects queued settlement when movement changes its eligible location", async () => {
-    await trainee({curEnergy: 100, regeneration: 0, energyTrainingQueue: [{stat: "offence", energy: 40}]});
+    await trainee({curEnergy: 100, regeneration: 0, energyQueue: [{stat: "offence", energy: 40}]});
     const database = await getTestDatabase();
     const before = await readUser();
     let moved = false;
@@ -218,7 +226,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
               const update = builder.set(values);
               return {
                 async where(condition: Parameters<typeof update.where>[0]) {
-                  if (table === userData && "energyTrainingQueue" in values && !moved) {
+                  if (table === userData && "energyQueueHead" in values && !moved) {
                     moved = true;
                     await backdate({longitude: before.longitude + 1});
                   }
@@ -234,7 +242,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(moved).toBe(true);
     expect(refreshed.user?.offence).toBe(before.offence);
     expect((await readUser()).curEnergy).toBe(100);
-    expect((await readUser()).energyTrainingQueue).toEqual(before.energyTrainingQueue);
+    expect(await readEnergyQueue(USER_ID)).toEqual([{stat: "offence", energy: 40}]);
     expect(await readLogs()).toHaveLength(0);
   });
 
@@ -250,7 +258,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
       userId: USER_ID,
       forceRegen: true,
     });
-    expect((await readUser()).energyTrainingQueue).toEqual(entries);
+    expect(await readEnergyQueue(USER_ID)).toEqual(entries);
     expect(await readLogs()).toHaveLength(0);
     expect(
       (
@@ -272,18 +280,85 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
       (await api.updateEnergyTrainingQueue({ entries: [], expectedEntries: entries }))
         .success,
     ).toBe(true);
-    expect((await readUser()).energyTrainingQueue).toEqual([]);
+    expect(await readEnergyQueue(USER_ID)).toEqual([]);
+  });
+
+  it("allows removing queued entries while adding is blocked", async () => {
+    const entries = [
+      { stat: "offence" as const, energy: 40 },
+      { stat: "defence" as const, energy: 40 },
+    ];
+    await trainee({ curEnergy: 0, regeneration: 0, isBanned: true, energyQueue: entries });
+    const api = await caller();
+    expect(
+      await api.updateEnergyTrainingQueue({
+        entries: [...entries, { stat: "strength", energy: 10 }],
+        expectedEntries: entries,
+      }),
+    ).toMatchObject({ success: false, message: "Cannot spend Energy while banned" });
+    // A pure removal skips the checks for adding, including the captcha.
+    expect(
+      await api.updateEnergyTrainingQueue({ entries: [entries[1]!], expectedEntries: entries }),
+    ).toMatchObject({ success: true, message: "Training queue saved" });
+    expect(await readEnergyQueue(USER_ID)).toEqual([entries[1]]);
+    // Reordering is not a removal.
+    expect(
+      (
+        await api.updateEnergyTrainingQueue({
+          entries: [entries[1]!, entries[0]!],
+          expectedEntries: [entries[1]!],
+        })
+      ).success,
+    ).toBe(false);
+  });
+
+  it("consumes settled rows through the queue head, and the next edit removes them", async () => {
+    await trainee({
+      curEnergy: 100,
+      regeneration: 0,
+      energyQueue: [
+        { stat: "offence", energy: 40 },
+        { stat: "defence", energy: 100 },
+      ],
+    });
+    const database = await getTestDatabase();
+    await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
+    const after = await readUser();
+    expect(after.energyQueueHead).toBe(1);
+    expect(after.energyQueueTail).toBe(2);
+    expect(await readEnergyQueue(USER_ID)).toEqual([{ stat: "defence", energy: 100 }]);
+    // The consumed row stays until the next edit; settling writes nothing else.
+    const rows = await database.select().from(userQueue).where(eq(userQueue.userId, USER_ID));
+    expect(rows.map((row) => row.position).sort()).toEqual([1, 2]);
+    // An edit retires every existing row by moving the head past them, without a
+    // transaction, then writes the new queue after it; retired rows are deleted.
+    const api = await caller();
+    expect(
+      (
+        await api.updateEnergyTrainingQueue({
+          entries: [{ stat: "defence", energy: 100 }, { stat: "speed", energy: 10 }],
+          expectedEntries: [{ stat: "defence", energy: 100 }],
+        })
+      ).success,
+    ).toBe(true);
+    const edited = await database.select().from(userQueue).where(eq(userQueue.userId, USER_ID));
+    expect(edited.map((row) => row.position).sort()).toEqual([3, 4]);
+    expect(await readUser()).toMatchObject({ energyQueueHead: 2, energyQueueTail: 4 });
+    expect(await readEnergyQueue(USER_ID)).toEqual([
+      { stat: "defence", energy: 100 },
+      { stat: "speed", energy: 10 },
+    ]);
   });
 
   it("rejects a stale edit that would re-add a completed queue entry", async () => {
     const entries = [{ stat: "offence" as const, energy: 40 }];
-    await trainee({ curEnergy: 100, regeneration: 0, energyTrainingQueue: entries });
+    await trainee({ curEnergy: 100, regeneration: 0, energyQueue: entries });
     const result = await (await caller()).updateEnergyTrainingQueue({
       entries: [...entries, { stat: "defence", energy: 40 }],
       expectedEntries: entries,
     });
     expect(result.success).toBe(false);
-    expect((await readUser()).energyTrainingQueue).toEqual([]);
+    expect(await readEnergyQueue(USER_ID)).toEqual([]);
     expect((await readUser()).curEnergy).toBe(60);
     expect(await readLogs()).toHaveLength(1);
   });
@@ -315,17 +390,19 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     const result = await (await caller()).updateEnergyTrainingQueue({ entries, expectedEntries: [] });
     expect(result.success).toBe(true);
     const saved = await readUser();
-    expect(result.userPatch).toMatchObject({ energyTrainingQueue: entries, curEnergy: saved.curEnergy, curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina, regenAt: saved.regenAt, updatedAt: saved.updatedAt });
+    expect(getEnergyQueue(result.userPatch as never)).toEqual(entries);
+    expect(result.userPatch).toMatchObject({ curEnergy: saved.curEnergy, curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina, regenAt: saved.regenAt, updatedAt: saved.updatedAt });
     expect(profileReads).toBe(1);
   });
 
   it("returns both queued gains and the subsequent instant spend in one patch", async () => {
-    await trainee({ curEnergy: 100, regeneration: 0, energyTrainingQueue: [{ stat: "defence", energy: 40 }] });
+    await trainee({ curEnergy: 100, regeneration: 0, energyQueue: [{ stat: "defence", energy: 40 }] });
     const before = await readUser();
     const result = await (await caller()).startTraining({ stat: "offence", energy: 10 });
     expect(result.success).toBe(true);
     const saved = await readUser();
-    expect(result.userPatch).toMatchObject({ curEnergy: 50, energyTrainingQueue: [], offence: saved.offence, defence: saved.defence, experience: saved.experience, updatedAt: saved.updatedAt });
+    expect(getEnergyQueue(result.userPatch as never)).toEqual([]);
+    expect(result.userPatch).toMatchObject({ curEnergy: 50, energyQueueHead: 1, offence: saved.offence, defence: saved.defence, experience: saved.experience, updatedAt: saved.updatedAt });
     expect(result.userPatch?.defence).toBeCloseTo(before.defence + 52);
     expect(result.userPatch?.experience).toBeCloseTo(before.experience + 65);
     expect(await readLogs()).toHaveLength(2);
@@ -334,7 +411,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
   it.each(["queue", "instant"] as const)("matches persisted integer XP while keeping fractional %s stat gains", async (action) => {
     const cap = getUserCaps("GENIN").stats_cap;
     await trainee({ curEnergy: 100, regeneration: 0, offence: cap - 1.64, experience: 56,
-      energyTrainingQueue: action === "queue" ? [{ stat: "offence", energy: 40 }] : [] });
+      energyQueue: action === "queue" ? [{ stat: "offence", energy: 40 }] : [] });
     const result = action === "queue"
       ? await (await caller()).updateEnergyTrainingQueue({ entries: [], expectedEntries: [] })
       : await (await caller()).startTraining({ stat: "offence", energy: 40 });

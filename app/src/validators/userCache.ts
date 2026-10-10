@@ -1,14 +1,14 @@
 import { z } from "zod";
 import {
-  CombatStatNames,
   ElementNames,
   MasteryNames,
   OCCUPATIONS,
   TavernColorPresets,
+  TrainingSpeeds,
   UserRanks,
   UserStatuses,
 } from "@/drizzle/constants";
-import type { UserItemWithRelations } from "@/drizzle/schema";
+import type { UserItemWithRelations, UserQueue } from "@/drizzle/schema";
 import type {
   AchievementProgress,
   UserWithRelations,
@@ -131,10 +131,12 @@ export const userPatchSchema = z.object({
   questFinishAt: z.date().optional(),
   masteryTrainingStartedAt: z.date().nullable().optional(),
   currentlyTrainingMastery: z.enum(MasteryNames).nullable().optional(),
-  energyTrainingQueue: z
-    .array(z.object({ stat: z.enum(CombatStatNames), energy: z.number() }))
-    .nullable()
-    .optional(),
+  /** Every queue entry; the client derives each queue with the heads below */
+  queue: z.custom<UserQueue[]>(Array.isArray).optional(),
+  energyQueueHead: z.number().optional(),
+  energyQueueTail: z.number().optional(),
+  masteryQueueHead: z.number().optional(),
+  trainingSpeed: z.enum(TrainingSpeeds).optional(),
   questData: z.array(QuestTracker).nullable().optional(),
   userQuests: z
     .custom<NonNullable<UserWithRelations>["userQuests"]>(Array.isArray)

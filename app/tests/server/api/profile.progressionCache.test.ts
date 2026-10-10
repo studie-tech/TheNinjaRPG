@@ -2,12 +2,14 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { getUserCaps, MAX_SKILL_POINTS, SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";
-import { bloodline, item, quest, questHistory, userData, userItem, userVote } from "@/drizzle/schema";
+import { bloodline, item, quest, questHistory, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
 import { calcCP, calcEnergy, calcHP, calcLevelRequirements, calcSP } from "@/libs/profile";
+import { getEnergyQueue } from "@/libs/queue";
 import { fetchUpdatedUser, getUserProgressionUpdate, profileRouter } from "@/server/api/routers/profile";
 import { MoveToObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuests, insertUsers, insertUserItems } from "../../setup/factories";
+import { queueEnergy, readEnergyQueue } from "../../setup/queues";
 import { beforeStatements } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
@@ -24,7 +26,7 @@ const read = async () => {
 const assign = (ninjutsuMastery = 0, offence = 0) => ({ offence, defence: 0, strength: 0, speed: 0, intelligence: 0, willpower: 0, ninjutsuMastery, genjutsuMastery: 0, taijutsuMastery: 0, bukijutsuMastery: 0 });
 
 describeWithDatabase("confirmed progression cache responses against MySQL", () => {
-  beforeEach(async () => resetTables(questHistory, quest, userVote, userItem, item, userData, bloodline));
+  beforeEach(async () => resetTables(userQueue, questHistory, quest, userVote, userItem, item, userData, bloodline));
   afterEach(() => vi.restoreAllMocks());
 
   it.each([0, MAX_SKILL_POINTS])("returns level pools and capped skill points when starting with %s points", async (skillPoints) => {
@@ -124,7 +126,8 @@ describeWithDatabase("confirmed progression cache responses against MySQL", () =
   });
 
   it("defers XP allocation reconciliation when a pending Energy queue can also grant stats", async () => {
-    await seed({ earnedExperience: 100, curEnergy: 100, energyTrainingQueue: [{ stat: "defence", energy: 40 }] });
+    await seed({ earnedExperience: 100, curEnergy: 100 });
+    await queueEnergy(USER_ID, [{ stat: "defence", energy: 40 }]);
     const result = await (await callerFor(profileRouter, USER_ID)).useUnusedExperiencePoints(assign(0, 10));
     expect(result.success).toBe(true);
     expect(result.userPatch).toBeUndefined();
@@ -132,9 +135,9 @@ describeWithDatabase("confirmed progression cache responses against MySQL", () =
     expect(saved.offence).toBe(20);
     expect(saved.defence).toBe(10);
     expect(saved.curEnergy).toBe(100);
-    expect(saved.energyTrainingQueue).toHaveLength(1);
+    expect(await readEnergyQueue(USER_ID)).toHaveLength(1);
     const settled = await fetchUpdatedUser({ client: await getTestDatabase(), userId: USER_ID });
     expect(settled.user?.defence).toBeGreaterThan(saved.defence);
-    expect(settled.user?.energyTrainingQueue).toEqual([]);
+    expect(getEnergyQueue(settled.user!)).toEqual([]);
   });
 });

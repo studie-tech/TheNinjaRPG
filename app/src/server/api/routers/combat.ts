@@ -44,6 +44,7 @@ import {
   MAP_RESERVED_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MasteryNames,
   NonActionItemTypes,
   PoolTypes,
   PvpBattleTypes,
@@ -194,7 +195,7 @@ import {
   canUseJutsu,
   checkJutsuBloodlineItem,
   checkJutsuItems,
-  settleEnergyTrainingQueue,
+  settleQueuedTraining,
 } from "@/libs/train";
 import { calcIsInVillage, getBiomeFromGlobalTile } from "@/libs/travel";
 import { findWarsWithUser } from "@/libs/war";
@@ -223,6 +224,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
+import { hasDueTimedJob, settleDueTimedQueues } from "@/server/utils/userQueue";
 import { extendWarParticipantSql, liftBracketImmunitySql } from "@/server/utils/war";
 import { findRelationship } from "@/utils/alliance";
 import { getRandomElement } from "@/utils/array";
@@ -1805,34 +1807,7 @@ export const initiateBattle = async (
     ]),
   ];
 
-  // Use Promise.all to fetch all independent data in parallel
-  const [
-    { defaultProfile, activeWars, settings, villages, relations, dmgConfig },
-    assets,
-    achievements,
-    fetchedUsers,
-    previousBattleResults,
-    loadoutJutsus,
-    loadoutItems,
-    forceLoadoutItemProgression,
-    injectableJutsus,
-    raidQuest,
-    sectorExclusiveRaids,
-    raidParticipations,
-    rankedTopPlayersLP,
-  ] = await Promise.all([
-    // Essentials
-    fetchBattleEssentials(client),
-    // Fetch game assets (only battlefield ones to avoid row limit)
-    client.query.gameAsset.findMany({
-      where: and(eq(gameAsset.hidden, false), eq(gameAsset.onInitialBattleField, true)),
-    }),
-    // Fetch achievements
-    client
-      .select()
-      .from(quest)
-      .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
-    // Fetch user data
+  const queryBattleUsers = () =>
     client.query.userData.findMany({
       with: {
         bloodline: { with: { bloodrightTiers: true } },
@@ -1892,9 +1867,41 @@ export const initiateBattle = async (
         bountySignups: {
           columns: { id: true, bountyId: true },
         },
+        // Queue entries come with the user, so participants without queues cost nothing.
+        queue: { orderBy: (table, { asc }) => [asc(table.position)] },
       },
       where: or(inArray(userData.userId, userIds), inArray(userData.userId, targetIds)),
+    });
+
+  // Use Promise.all to fetch all independent data in parallel
+  const [
+    { defaultProfile, activeWars, settings, villages, relations, dmgConfig },
+    assets,
+    achievements,
+    preloadedUsers,
+    previousBattleResults,
+    loadoutJutsus,
+    loadoutItems,
+    forceLoadoutItemProgression,
+    injectableJutsus,
+    raidQuest,
+    sectorExclusiveRaids,
+    raidParticipations,
+    rankedTopPlayersLP,
+  ] = await Promise.all([
+    // Essentials
+    fetchBattleEssentials(client),
+    // Fetch game assets (only battlefield ones to avoid row limit)
+    client.query.gameAsset.findMany({
+      where: and(eq(gameAsset.hidden, false), eq(gameAsset.onInitialBattleField, true)),
     }),
+    // Fetch achievements
+    client
+      .select()
+      .from(quest)
+      .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
+    // Fetch user data
+    queryBattleUsers(),
     PvpBattleTypes.includes(battleType)
       ? client
           .select({ count: sql`count(*)`.mapWith(Number) })
@@ -1979,6 +1986,26 @@ export const initiateBattle = async (
       : [],
   ]);
 
+  // Start due jutsu levels and crafts before the participants are read for the fight,
+  // e.g. an offline opponent's queued jutsu level. Rare, so the participants are read
+  // again when a job started.
+  let fetchedUsers = preloadedUsers;
+  const queueOwners = fetchedUsers.filter(
+    (user) => !user.isAi && hasDueTimedJob(user.queue),
+  );
+  if (queueOwners.length > 0) {
+    try {
+      const started = await settleDueTimedQueues(client, queueOwners);
+      if (started > 0) fetchedUsers = await queryBattleUsers();
+    } catch (error) {
+      // The fight goes ahead; the queues settle on the next refresh.
+      Sentry.captureException(error, {
+        level: "warning",
+        tags: { source: "battleQueueSettlement" },
+      });
+    }
+  }
+
   const profileCacheSnapshots = Object.fromEntries(
     fetchedUsers
       .filter((user) => !user.isAi && !user.isSummon)
@@ -1999,42 +2026,66 @@ export const initiateBattle = async (
 
   // Settle authorized pre-combat training from the already loaded participant snapshots.
   // Battle claims commit these gains with status; failed partial claims retain earned training.
-  const queuedTraining = fetchedUsers
-    .filter((user) => !user.isAi && user.energyTrainingQueue?.length)
-    .map((user) => {
-      const original = { ...user };
-      const ticks = Math.max(
-        0,
-        Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS),
-      );
-      const trainingUser = {
-        ...user,
-        regeneration: calcActiveUserRegen(user, settings),
-        maxEnergy: calcMaxEnergy(user),
-      } as unknown as NonNullable<UserWithRelations>;
-      const settlement = settleEnergyTrainingQueue(trainingUser, settings, ticks);
-      const amount = settlement.completed.reduce((sum, entry) => sum + entry.amount, 0);
-      for (const stat of CombatStatNames) user[stat] += settlement.gains[stat] ?? 0;
+  // The same settlement as an account refresh (`settleQueuedTraining`), written back in
+  // bulk with the battle claim below.
+  const queuedTraining = fetchedUsers.flatMap((user) => {
+    if (user.isAi || user.queue.length === 0) return [];
+    const original = { ...user };
+    const ticks = Math.max(0, Math.floor(secondsPassed(user.regenAt) / REGEN_SECONDS));
+    const trainingUser = {
+      ...user,
+      regeneration: calcActiveUserRegen(user, settings),
+      maxEnergy: calcMaxEnergy(user),
+    } as unknown as NonNullable<UserWithRelations>;
+    const { energy, mastery } = settleQueuedTraining(
+      trainingUser,
+      user.queue,
+      settings,
+      ticks,
+    );
+    if (!energy && !mastery) return [];
+    const amount = energy?.completed.reduce((sum, entry) => sum + entry.amount, 0) ?? 0;
+    const minutes =
+      mastery?.completed.reduce((sum, entry) => sum + entry.minutes, 0) ?? 0;
+    if (energy) {
+      for (const stat of CombatStatNames) user[stat] += energy.gains[stat] ?? 0;
       user.experience += amount;
-      user.curEnergy = settlement.curEnergy;
-      user.energyTrainingQueue = settlement.energyTrainingQueue;
-      if (amount > 0) {
-        user.questData = filterQuestTrackersForDbPersist(
-          getNewTrackers(user as unknown as NonNullable<UserWithRelations>, [
-            { task: "stats_trained", increment: amount },
-          ]).trackers,
-          user,
-        );
-      }
-      return {
+      user.curEnergy = energy.curEnergy;
+      user.energyQueueHead = energy.head;
+    }
+    if (mastery) {
+      for (const stat of MasteryNames) user[stat] += mastery.gains[stat] ?? 0;
+      user.masteryQueueHead = mastery.head;
+      user.currentlyTrainingMastery = mastery.currentlyTrainingMastery;
+      user.masteryTrainingStartedAt = mastery.masteryTrainingStartedAt;
+      user.trainingSpeed = mastery.trainingSpeed;
+      user.dailyTrainings = mastery.dailyTrainings;
+    }
+    const tasks = [
+      ...(amount > 0 ? [{ task: "stats_trained" as const, increment: amount }] : []),
+      ...(minutes > 0
+        ? [{ task: "minutes_training" as const, increment: minutes }]
+        : []),
+    ];
+    if (tasks.length > 0) {
+      user.questData = filterQuestTrackersForDbPersist(
+        getNewTrackers(user as unknown as NonNullable<UserWithRelations>, tasks)
+          .trackers,
+        user,
+      );
+    }
+    return [
+      {
         original,
         user,
-        settlement,
+        energy,
+        mastery,
         amount,
         regen: ticks * trainingUser.regeneration,
         regenAt: secondsFromDate(ticks * REGEN_SECONDS, original.regenAt),
-      };
-    });
+      },
+    ];
+  });
 
   // If we have forced loadouts, overwrite user items and jutsus appropriately
   if (info.forceLoadouts && info.forceLoadouts.length > 0) {
@@ -2672,46 +2723,87 @@ export const initiateBattle = async (
   if (queuedParticipants.length) {
     const queueCase = (
       column: keyof typeof userData.$inferSelect,
+      entries: typeof queuedParticipants,
       value: (entry: (typeof queuedParticipants)[number]) => unknown,
     ) =>
       sql`CASE ${sql.join(
-        queuedParticipants.map(
+        entries.map(
           (entry) =>
             sql`WHEN ${userData.userId} = ${entry.user.userId} THEN ${value(entry)}`,
         ),
         sql` `,
       )} ELSE ${userData[column]} END`;
-    queueUpdate.energyTrainingQueue = queueCase("energyTrainingQueue", (entry) =>
-      JSON.stringify(entry.settlement.energyTrainingQueue),
-    );
-    queueUpdate.curEnergy = queueCase(
-      "curEnergy",
-      (entry) => entry.settlement.curEnergy,
-    );
-    for (const pool of PoolTypes) {
-      const { cur, max } = getPoolKeys(pool);
-      queueUpdate[cur] = queueCase(cur, (entry) =>
-        Math.min(entry.original[cur] + entry.regen, entry.original[max]),
-      );
-    }
-    queueUpdate.regenAt = queueCase("regenAt", (entry) => entry.regenAt);
-    queueUpdate.questData = queueCase("questData", (entry) =>
+    queueUpdate.questData = queueCase("questData", queuedParticipants, (entry) =>
       JSON.stringify(entry.user.questData),
     );
-    queueUpdate.experience = queueCase(
-      "experience",
-      (entry) => sql`${userData.experience} + ${entry.amount}`,
-    );
-    for (const stat of CombatStatNames) {
-      queueUpdate[stat] = queueCase(
-        stat,
-        (entry) => sql`${userData[stat]} + ${entry.settlement.gains[stat] ?? 0}`,
-      );
-    }
     queueUpdate.updatedAt = sql`CASE WHEN ${inArray(
       userData.userId,
       queuedParticipants.map((entry) => entry.user.userId),
     )} THEN GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt})) ELSE ${userData.updatedAt} END`;
+    const energyParticipants = queuedParticipants.filter((entry) => entry.energy);
+    if (energyParticipants.length) {
+      // Advancing the head consumes the settled rows in this same statement.
+      queueUpdate.energyQueueHead = queueCase(
+        "energyQueueHead",
+        energyParticipants,
+        (entry) => entry.energy?.head,
+      );
+      queueUpdate.curEnergy = queueCase(
+        "curEnergy",
+        energyParticipants,
+        (entry) => entry.energy?.curEnergy,
+      );
+      for (const pool of PoolTypes) {
+        const { cur, max } = getPoolKeys(pool);
+        queueUpdate[cur] = queueCase(cur, energyParticipants, (entry) =>
+          Math.min(entry.original[cur] + entry.regen, entry.original[max]),
+        );
+      }
+      queueUpdate.regenAt = queueCase(
+        "regenAt",
+        energyParticipants,
+        (entry) => entry.regenAt,
+      );
+      queueUpdate.experience = queueCase(
+        "experience",
+        energyParticipants,
+        (entry) => sql`${userData.experience} + ${entry.amount}`,
+      );
+      for (const stat of CombatStatNames) {
+        queueUpdate[stat] = queueCase(
+          stat,
+          energyParticipants,
+          (entry) => sql`${userData[stat]} + ${entry.energy?.gains[stat] ?? 0}`,
+        );
+      }
+    }
+    const masteryParticipants = queuedParticipants.filter((entry) => entry.mastery);
+    if (masteryParticipants.length) {
+      queueUpdate.masteryQueueHead = queueCase(
+        "masteryQueueHead",
+        masteryParticipants,
+        (entry) => entry.mastery?.head,
+      );
+      for (const column of [
+        "currentlyTrainingMastery",
+        "masteryTrainingStartedAt",
+        "trainingSpeed",
+        "dailyTrainings",
+      ] as const) {
+        queueUpdate[column] = queueCase(
+          column,
+          masteryParticipants,
+          (entry) => entry.mastery?.[column] ?? null,
+        );
+      }
+      for (const stat of MasteryNames) {
+        queueUpdate[stat] = queueCase(
+          stat,
+          masteryParticipants,
+          (entry) => sql`${userData[stat]} + ${entry.mastery?.gains[stat] ?? 0}`,
+        );
+      }
+    }
   }
 
   // Run battle creation and user status updates in parallel for performance
@@ -2902,7 +2994,11 @@ export const initiateBattle = async (
       : []),
   ]);
 
-  if (queuedParticipants.some((entry) => entry.settlement.completed.length)) {
+  if (
+    queuedParticipants.some(
+      (entry) => entry.energy?.completed.length || entry.mastery?.completed.length,
+    )
+  ) {
     // A partial multi-participant claim still legitimately settles the rows it claimed.
     const claimedIds =
       userResult.rowsAffected === expectedRows
@@ -2913,17 +3009,25 @@ export const initiateBattle = async (
               where: eq(userData.battleId, battleId),
             })
           ).map((row) => row.userId);
-    const logs = queuedParticipants
-      .filter((entry) => claimedIds.includes(entry.user.userId))
-      .flatMap((entry) =>
-        entry.settlement.completed.map((completed) => ({
-          userId: entry.user.userId,
-          stat: completed.stat,
-          amount: completed.amount,
-          speed: entry.user.trainingSpeed,
-          trainingFinishedAt: new Date(),
-        })),
-      );
+    const claimed = queuedParticipants.filter((entry) =>
+      claimedIds.includes(entry.user.userId),
+    );
+    const logs = claimed.flatMap((entry) => [
+      ...(entry.energy?.completed ?? []).map((completed) => ({
+        userId: entry.user.userId,
+        stat: completed.stat,
+        amount: completed.amount,
+        speed: entry.original.trainingSpeed,
+        trainingFinishedAt: new Date(),
+      })),
+      ...(entry.mastery?.completed ?? []).map((completed) => ({
+        userId: entry.user.userId,
+        stat: completed.stat,
+        amount: completed.amount,
+        speed: completed.speed,
+        trainingFinishedAt: completed.finishedAt,
+      })),
+    ]);
     if (logs.length) {
       try {
         await client.insert(trainingLog).values(logs);

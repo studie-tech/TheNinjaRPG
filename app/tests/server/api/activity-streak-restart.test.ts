@@ -9,6 +9,7 @@ import {
   activityStreakReward,
   userData,
   userStreakProgress,
+  userQueue,
 } from "@/drizzle/schema";
 import { activityStreakRouter } from "@/server/api/routers/activityStreak";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -21,11 +22,13 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { queueEnergy } from "../../setup/queues";
 
 describeWithDatabase("recurring streak cycle timing", () => {
   beforeEach(async () => {
     setSystemTime(new Date("2026-10-01T12:00:00Z"));
     await resetTables(
+      userQueue,
       actionLog,
       userStreakProgress,
       activityStreakReward,
@@ -138,10 +141,7 @@ describeWithDatabase("recurring streak cycle timing", () => {
 
   it("keeps reconciliation for a claim that can advance queued training", async () => {
     const database = await getTestDatabase();
-    await database
-      .update(userData)
-      .set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] })
-      .where(eq(userData.userId, "streak-user"));
+    await queueEnergy("streak-user", [{ stat: "offence", energy: 10 }]);
     const result = await (
       await callerFor(activityStreakRouter, "streak-user")
     ).claimStreakDay({ configId: "recurring" });

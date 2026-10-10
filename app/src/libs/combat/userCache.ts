@@ -8,6 +8,7 @@ import {
   type MasterySources,
 } from "@/libs/mastery";
 import { calcMaxEnergy } from "@/libs/profile";
+import { getMasteryQueue, hasEnergyQueue } from "@/libs/queue";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { UserDelta } from "@/validators/userCache";
 import type { BattleUserItem, CombatResult, CompleteBattle } from "./types";
@@ -96,7 +97,8 @@ export const captureCombatCacheSnapshot = (
     })),
   }),
   regenAt: user.regenAt.toISOString(),
-  hadTrainingQueue: !!user.energyTrainingQueue?.length,
+  // Queued Energy or mastery training may settle with the battle claim.
+  hadTrainingQueue: hasEnergyQueue(user) || getMasteryQueue(user).length > 0,
   items: user.items.map(
     ({ id, quantity, durability, level, experience, equipped }) => ({
       id,
@@ -125,7 +127,12 @@ export const combatProfilePatch = (
     current.regenAt.getTime() !== new Date(update.baseline.regenAt).getTime()
   )
     return;
-  if (current.energyTrainingQueue?.length || update.baseline.hadTrainingQueue) return;
+  if (
+    hasEnergyQueue(current) ||
+    getMasteryQueue(current).length > 0 ||
+    update.baseline.hadTrainingQueue
+  )
+    return;
   if (current.items.length !== update.baseline.items.length) return;
   const itemFields = [
     "quantity",

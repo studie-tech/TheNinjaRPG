@@ -127,6 +127,9 @@ const truncateEveryTable = async () => {
 export const getTestDatabase = async (): Promise<DrizzleClient> => {
   if (!client) {
     pool = mysql.createPool({ uri: url, multipleStatements: true, connectionLimit: 10 });
+    pool.pool.on("connection", (connection) =>
+      instrumentConnection(connection as unknown as Parameters<typeof instrumentConnection>[0]),
+    );
     const database = drizzle(pool, { schema, mode: "default" });
     client = new Proxy(database, {
       get(target, property, receiver) {
@@ -207,6 +210,60 @@ export const indexColumns = async (table: string, keyName: string) => {
     [table, keyName],
   )) as [{ col: string; nonUnique: number }[], unknown];
   return { columns: rows.map((row) => row.col), unique: rows.every((row) => !row.nonUnique) };
+};
+
+type QueryRecorder = { statements: string[]; roundTrips: number; inFlight: number };
+let recorder: QueryRecorder | undefined;
+
+/**
+ * Report every statement of a pooled connection to the active recorder, including the
+ * ones inside transactions. Installed once per connection; idle when nothing records.
+ */
+const instrumentConnection = (connection: {
+  query: (...args: unknown[]) => unknown;
+  execute: (...args: unknown[]) => unknown;
+}) => {
+  for (const method of ["query", "execute"] as const) {
+    const original = connection[method].bind(connection);
+    connection[method] = (...args: unknown[]) => {
+      const active = recorder;
+      const command = original(...args) as { once?: (event: string, cb: () => void) => void };
+      if (!active) return command;
+      const [first] = args;
+      active.statements.push(
+        typeof first === "string" ? first : String((first as { sql?: string })?.sql),
+      );
+      // A statement sent while none is in flight starts a new sequential round trip.
+      if (active.inFlight === 0) active.roundTrips += 1;
+      active.inFlight += 1;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        active.inFlight -= 1;
+      };
+      command?.once?.("end", finish);
+      command?.once?.("error", finish);
+      return command;
+    };
+  }
+};
+
+/**
+ * Run `work` and return the statements it sent and the number of sequential database
+ * round trips (statements sent while no other was in flight), e.g. to pin what a hot
+ * path costs. Transactions count statement by statement, as they do on PlanetScale.
+ */
+export const recordQueries = async <T>(work: () => Promise<T>) => {
+  await getTestDatabase();
+  const active: QueryRecorder = { statements: [], roundTrips: 0, inFlight: 0 };
+  recorder = active;
+  try {
+    const result = await work();
+    return { result, statements: active.statements, roundTrips: active.roundTrips };
+  } finally {
+    recorder = undefined;
+  }
 };
 
 /** Release the shared pool. Registered once by the test preload. */

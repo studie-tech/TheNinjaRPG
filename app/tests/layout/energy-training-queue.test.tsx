@@ -81,12 +81,19 @@ const user = {
   isOutlaw: true,
   federalStatus: "GOLD",
   staffAccount: false,
-  energyTrainingQueue: [],
+  energyQueueHead: 0,
+  masteryQueueHead: 0,
+  queue: [],
 } as unknown as NonNullable<UserWithRelations>;
+
+/** One queued offence entry, stored as a row the way the account refresh returns it. */
+const queuedOffence = [
+  { kind: "ENERGY", position: 1, stat: "offence", energy: 100 },
+] as unknown as NonNullable<UserWithRelations>["queue"];
 
 describe("Energy queue captcha recovery", () => {
   it.each([
-    { success: true, message: "Training queue saved", userPatch: { energyTrainingQueue: [{ stat: "offence" as const, energy: 100 }], curEnergy: 50 } },
+    { success: true, message: "Training queue saved", userPatch: { energyQueueTail: 1, queue: queuedOffence, curEnergy: 50 } },
     { success: false, message: "Invalid captcha" },
   ])(
     "refreshes a consumed captcha after $message so another edit can proceed",
@@ -151,7 +158,7 @@ describe("Energy queue captcha recovery", () => {
     const refreshCaptcha = vi.fn(async () => undefined);
     const view = render(
       <EnergyTrainingQueue
-        user={{ ...user, energyTrainingQueue: [{ stat: "offence", energy: 100 }] }}
+        user={{ ...user, queue: queuedOffence }}
         availableEnergy={0}
         getGuess={() => "answer"}
         refreshCaptcha={refreshCaptcha}
@@ -160,14 +167,14 @@ describe("Energy queue captcha recovery", () => {
     fireEvent.click(view.getByRole("button", { name: "Clear queue" }));
     await act(async () => {
       await mocks.callbacks?.onSettled(
-        { success: true, message: "Training queue cleared", userPatch: { energyTrainingQueue: [] } },
+        { success: true, message: "Training queue cleared", userPatch: { energyQueueHead: 1, energyQueueTail: 1, queue: [] } },
         null,
         mocks.mutate.mock.lastCall?.[0],
         mocks.callbacks?.onMutate(),
       );
     });
     expect(refreshCaptcha).not.toHaveBeenCalled();
-    expect(mocks.updateUser).toHaveBeenCalledWith({ energyTrainingQueue: [] }, expect.objectContaining({ revision: 7 }));
+    expect(mocks.updateUser).toHaveBeenCalledWith({ energyQueueHead: 1, energyQueueTail: 1, queue: [] }, expect.objectContaining({ revision: 7 }));
     expect(mocks.invalidate).not.toHaveBeenCalled();
   });
   it("refreshes when a successful save requires broader automatic reconciliation", async () => {
@@ -193,7 +200,7 @@ describe("Energy queue capped stats", () => {
 
   it("disables adding when all stats cap while keeping queue removal available", () => {
     const { stats_cap, gens_cap } = getUserCaps(user.rank);
-    const view = render(<EnergyTrainingQueue user={{ ...user, offence: stats_cap, defence: stats_cap, strength: gens_cap, intelligence: gens_cap, speed: gens_cap, willpower: gens_cap, energyTrainingQueue: [{ stat: "offence", energy: 100 }] }} availableEnergy={0} getGuess={() => "answer"} refreshCaptcha={async () => {}} />);
+    const view = render(<EnergyTrainingQueue user={{ ...user, offence: stats_cap, defence: stats_cap, strength: gens_cap, intelligence: gens_cap, speed: gens_cap, willpower: gens_cap, queue: queuedOffence }} availableEnergy={0} getGuess={() => "answer"} refreshCaptcha={async () => {}} />);
     expect((view.getByRole("combobox") as HTMLButtonElement).disabled).toBe(true);
     expect((view.getByRole("button", { name: "Add to queue" }) as HTMLButtonElement).disabled).toBe(true);
     expect(view.getByText("All combat stats are capped for your rank.")).toBeTruthy();

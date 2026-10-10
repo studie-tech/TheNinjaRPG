@@ -17,6 +17,7 @@ import {
 } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest";
+import { hasEnergyQueue } from "@/libs/queue";
 import { fetchUser } from "@/routers/profile";
 import { getRewardUserDelta, updateRewards } from "@/server/api/routers/quests";
 import {
@@ -387,7 +388,7 @@ export const activityStreakRouter = createTRPCRouter({
       return {
         success: true,
         message: `Purchased "${config.name}" for ${costText}!`,
-        userDelta: user.energyTrainingQueue?.length
+        userDelta: hasEnergyQueue(user)
           ? undefined
           : {
               ...(config.ryoCost > 0 ? { money: -config.ryoCost } : {}),
@@ -699,7 +700,7 @@ export const activityStreakRouter = createTRPCRouter({
       return {
         success: true,
         message: `Day ${newCurrentDay} claimed! ${resetMsg}${catchUpMsg}${rewardText}${completeMsg}`,
-        userDelta: user.energyTrainingQueue?.length
+        userDelta: hasEnergyQueue(user)
           ? undefined
           : getRewardUserDelta(
               processedRewards,

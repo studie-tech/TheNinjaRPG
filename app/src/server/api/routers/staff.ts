@@ -69,6 +69,7 @@ import {
   userPollVote,
   userPushPreference,
   userQuestAttempt,
+  userQueue,
   userRaidBuff,
   userReport,
   userReportComment,
@@ -572,6 +573,7 @@ export const staffRouter = createTRPCRouter({
       await Promise.all([
         ctx.drizzle.delete(userJutsu).where(eq(userJutsu.userId, user.userId)),
         ctx.drizzle.delete(userItem).where(eq(userItem.userId, user.userId)),
+        ctx.drizzle.delete(userQueue).where(eq(userQueue.userId, user.userId)),
         ctx.drizzle.delete(questHistory).where(eq(questHistory.userId, user.userId)),
         ctx.drizzle.delete(userAttribute).where(eq(userAttribute.userId, user.userId)),
         ctx.drizzle
@@ -1139,6 +1141,10 @@ export const staffRouter = createTRPCRouter({
           .set({ originalUserId: input.newUserId })
           .where(eq(storePurchase.originalUserId, input.userId)),
         ctx.drizzle
+          .update(userQueue)
+          .set({ userId: input.newUserId })
+          .where(eq(userQueue.userId, input.userId)),
+        ctx.drizzle
           .update(userData)
           .set({ userId: input.newUserId })
           .where(eq(userData.userId, input.userId)),
@@ -1309,6 +1315,7 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     client.delete(farmExtraction).where(eq(farmExtraction.userId, userId)),
     client.delete(farmCollectionLog).where(eq(farmCollectionLog.userId, userId)),
     client.delete(userJutsu).where(eq(userJutsu.userId, userId)),
+    client.delete(userQueue).where(eq(userQueue.userId, userId)),
     client.delete(userSkill).where(eq(userSkill.userId, userId)),
     client.delete(userAttribute).where(eq(userAttribute.userId, userId)),
     client.delete(jutsuLoadout).where(eq(jutsuLoadout.userId, userId)),

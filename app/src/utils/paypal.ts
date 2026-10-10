@@ -28,9 +28,15 @@ export const getUserFederalStatus = (
 };
 
 /** One active entry plus the federal waiting-slot allowance. */
+/** Jobs that may wait behind the active one in each timed queue. */
+export const getQueueWaitingSlots = (
+  user: Pick<UserData, "staffAccount" | "federalStatus">,
+) => QUEUE_WAITING_SLOTS[getUserFederalStatus(user)];
+
+/** One active job plus the federal waiting-slot allowance. */
 export const getQueueTotalCapacity = (
   user: Pick<UserData, "staffAccount" | "federalStatus">,
-) => 1 + QUEUE_WAITING_SLOTS[getUserFederalStatus(user)];
+) => 1 + getQueueWaitingSlots(user);
 
 export const fedJutsuLoadouts = (
   user?: Pick<UserData, "staffAccount" | "federalStatus">,

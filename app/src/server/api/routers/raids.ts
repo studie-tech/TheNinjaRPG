@@ -37,6 +37,7 @@ import {
 } from "@/drizzle/schema";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest";
+import { hasEnergyQueue } from "@/libs/queue";
 import {
   getRaidChatConversationId,
   getRaidObjectiveData,
@@ -1090,7 +1091,7 @@ export const raidsRouter = createTRPCRouter({
         success: true,
         message: "Joined raid queue",
         teamId,
-        userDelta: user.energyTrainingQueue?.length ? undefined : {},
+        userDelta: hasEnergyQueue(user) ? undefined : {},
       };
     }),
 

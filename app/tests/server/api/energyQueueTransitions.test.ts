@@ -9,14 +9,18 @@ import {
   quest,
   questHistory,
   item,
+  jutsu,
+  userJutsu,
   userItem,
   sectorMap,
   trainingLog,
   userData,
+  userQueue,
   userVote,
   village,
 } from "@/drizzle/schema";
 import { getServerPusher } from "@/libs/pusher";
+import { getEnergyQueue } from "@/libs/queue";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { completeExpiredGlobalTravel, travelRouter } from "@/server/api/routers/travel";
@@ -25,6 +29,12 @@ import {
   getSectorNeighborIds,
 } from "@/server/utils/sectorMap";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
+import {
+  queueEnergy,
+  queueMasteries,
+  readEnergyQueue,
+  readMasteryQueue,
+} from "../../setup/queues";
 import {
   callerFor,
   describeWithDatabase,
@@ -89,12 +99,12 @@ const prepare = async (queue = entries) => {
       isOutlaw: false,
       curEnergy: 0,
       regeneration: 100,
-      energyTrainingQueue: queue,
       stealthActive: true,
       stealthActivatedAt: new Date(),
       regenAt: new Date(),
     },
   ]);
+  await queueEnergy(USER, queue);
   await db
     .insert(userVote)
     .values({
@@ -146,6 +156,9 @@ describeWithDatabase("Energy queue state transitions", () => {
       questHistory,
       quest,
       trainingLog,
+      userQueue,
+      userJutsu,
+      jutsu,
       sectorMap,
       userVote,
       userData,
@@ -180,7 +193,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     const result = await fetchUpdatedUser({ client, userId: USER });
     expect(result.requiresUserRefresh).toBe(true);
     expect(result.user?.offence).toBeGreaterThan(10);
-    expect(result.user?.energyTrainingQueue).toEqual([entries[1]]);
+    expect(getEnergyQueue(result.user!)).toEqual([entries[1]]);
   });
   it("does not credit away-sector ticks after walking home", async () => {
     await prepare();
@@ -196,7 +209,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     expect(user.offence).toBe(140);
     expect(user.defence).toBe(10);
     expect(user.curEnergy).toBe(0);
-    expect(user.energyTrainingQueue).toEqual([entries[1]]);
+    expect(await readEnergyQueue(USER)).toEqual([entries[1]]);
   });
   it("preserves all travel pools and unfinished ticks without training during travel", async () => {
     await prepare();
@@ -221,7 +234,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     expect(arrived.curChakra).toBe(300);
     expect(arrived.curStamina).toBe(300);
     expect(arrived.regenAt.getTime()).toBe(regenAt.getTime() + 180_000);
-    expect(arrived.energyTrainingQueue).toEqual(entries);
+    expect(await readEnergyQueue(USER)).toEqual(entries);
     await fetchUpdatedUser({
       client: await getTestDatabase(),
       userId: USER,
@@ -245,7 +258,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     expect(arrived.regenAt.getTime()).toBe(regenAt.getTime() + (queued ? 180_000 : 0));
     expect(arrived.offence).toBe(10);
     expect(arrived.defence).toBe(10);
-    expect(arrived.energyTrainingQueue).toEqual(queued ? entries : []);
+    expect(await readEnergyQueue(USER)).toEqual(queued ? entries : []);
     await completeExpiredGlobalTravel(db);
     expect(await read()).toEqual(arrived);
     if (queued) {
@@ -253,7 +266,7 @@ describeWithDatabase("Energy queue state transitions", () => {
       // The stored arrival Energy can train one entry, but travel ticks cannot replay.
       expect((await read())!.offence).toBe(140);
       expect((await read())!.defence).toBe(10);
-      expect((await read())!.energyTrainingQueue).toEqual([entries[1]]);
+      expect(await readEnergyQueue(USER)).toEqual([entries[1]]);
     }
   });
 
@@ -284,7 +297,8 @@ describeWithDatabase("Energy queue state transitions", () => {
     await completeExpiredGlobalTravel(racingDb);
     expect(attempts).toBe(2);
     const arrived = (await read())!;
-    expect(arrived).toMatchObject({ status: "AWAKE", curEnergy: mode === "queued" ? 100 : 0, offence: 10, defence: 10, energyTrainingQueue: mode === "queued" ? entries : [] });
+    expect(arrived).toMatchObject({ status: "AWAKE", curEnergy: mode === "queued" ? 100 : 0, offence: 10, defence: 10 });
+    expect(await readEnergyQueue(USER)).toEqual(mode === "queued" ? entries : []);
     expect(arrived.regenAt.getTime()).toBe(regenAt.getTime() + (mode === "queued" ? 180_000 : 0));
     await completeExpiredGlobalTravel(db);
     expect(await read()).toEqual(arrived);
@@ -325,7 +339,8 @@ describeWithDatabase("Energy queue state transitions", () => {
     });
     await completeExpiredGlobalTravel(racingDb);
     expect(raced).toBe(true);
-    expect(await read()).toMatchObject({ status: "TRAVEL", regenAt, updatedAt: changedAt, curEnergy: 1, offence: 10, defence: 10, energyTrainingQueue: entries });
+    expect(await read()).toMatchObject({ status: "TRAVEL", regenAt, updatedAt: changedAt, curEnergy: 1, offence: 10, defence: 10 });
+    expect(await readEnergyQueue(USER)).toEqual(entries);
   });
 
   it("does not regenerate an empty queue when walking", async () => {
@@ -392,8 +407,8 @@ describeWithDatabase("Energy queue state transitions", () => {
       curEnergy: before.curEnergy,
       curHealth: 42,
       updatedAt: changedAt,
-      energyTrainingQueue: entries,
     });
+    expect(await readEnergyQueue(USER)).toEqual(entries);
   });
   it("preloads real Energy capacity and boosted recovery before forced combat loadouts", async () => {
     await prepare([]);
@@ -417,6 +432,58 @@ describeWithDatabase("Energy queue state transitions", () => {
       expect(state.extraState.energyRegeneration?.[USER]).toBe(200);
       expect(state.usersState.find(user => user.userId === USER)?.items).toEqual([]);
       expect((await read())!.curEnergy).toBe(250);
+    } finally {
+      trigger.mockRestore();
+    }
+  });
+
+  it("settles an offline opponent's due jutsu level and mastery queue before the fight", async () => {
+    await prepare([]);
+    const db = await getTestDatabase();
+    const finished = new Date(Date.now() - 30 * 60_000);
+    await patch({
+      isOutlaw: true,
+      stealthActive: false,
+      trainingSpeed: "15min",
+      currentlyTrainingMastery: "ninjutsuMastery",
+      masteryTrainingStartedAt: new Date(Date.now() - 20 * 60_000),
+    });
+    await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
+    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await db.insert(jutsu).values({
+      id: "queued-jutsu", name: "Queued", description: "q", battleDescription: "q", effects: [],
+      target: "SELF", range: 0, requiredRank: "STUDENT", jutsuRank: "D", jutsuType: "NORMAL", image: "/q.png",
+    });
+    await db.insert(userJutsu).values({ id: "uj-queued", userId: USER, jutsuId: "queued-jutsu", level: 2, equipped: true, finishTraining: finished });
+    await db.insert(userQueue).values({
+      id: "q-jutsu", userId: USER, kind: "JUTSU", position: 1, jutsuId: "queued-jutsu", reservedRyo: 0,
+      durationSeconds: 60, startsAt: finished, finishesAt: new Date(finished.getTime() + 60_000),
+    });
+    await queueMasteries(USER, [{ stat: "genjutsuMastery", speed: "1hr" }]);
+    const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
+    try {
+      const result = await initiateBattle({
+        client: db, userIds: ["attacker"], targetIds: [USER], sector: HOME,
+        longitude: 25, latitude: 10, biome: "default",
+      }, "SPARRING");
+      expect(result.success).toBe(true);
+      // The queued level started when the previous one finished, before the fighters were read.
+      const owned = (await db.query.userJutsu.findFirst({ where: eq(userJutsu.id, "uj-queued") }))!;
+      expect(owned.level).toBe(3);
+      expect(owned.finishTraining!.getTime()).toBeGreaterThan(finished.getTime());
+      const state = (await db.query.battle.findFirst({ where: eq(battle.id, result.battleId!) }))!;
+      const fighter = state.usersState.find((user) => user.userId === USER)!;
+      expect(fighter.jutsus.find((j) => j.jutsuId === "queued-jutsu")?.level).toBe(3);
+      // The finished mastery session was collected and the queued one started at its end.
+      const user = (await read())!;
+      expect(user.currentlyTrainingMastery).toBe("genjutsuMastery");
+      expect(user.trainingSpeed).toBe("1hr");
+      expect(user.ninjutsuMastery).toBeGreaterThan(0);
+      expect(user.masteryQueueHead).toBe(1);
+      expect(await readMasteryQueue(USER)).toEqual([]);
+      // The started jutsu row is gone; the consumed mastery row waits for the next edit.
+      expect((await db.select().from(userQueue)).map((row) => row.kind)).toEqual(["MASTERY"]);
+      expect((await db.select().from(trainingLog)).map((log) => log.stat)).toEqual(["ninjutsuMastery"]);
     } finally {
       trigger.mockRestore();
     }
@@ -514,7 +581,7 @@ describeWithDatabase("Energy queue state transitions", () => {
         );
         const result = results.find((result) => result.success);
         const user = (await read())!;
-        expect(user.energyTrainingQueue).toEqual([]);
+        expect(await readEnergyQueue(USER)).toEqual([]);
         expect(user.curEnergy).toBe(100);
         expect(user.offence).toBe(270);
         expect(user.defence).toBe(270);

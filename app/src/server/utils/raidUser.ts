@@ -33,7 +33,8 @@ export const fetchRaidJoinUser = async (client: DrizzleClient, userId: string) =
       sector: true,
       status: true,
       isBanned: true,
-      energyTrainingQueue: true,
+      energyQueueHead: true,
+      energyQueueTail: true,
     },
   });
 };

@@ -2,20 +2,27 @@ import { and, eq, gt, gte, isNull, sql } from "drizzle-orm";
 import {
   getUserCaps,
   MAX_DAILY_TRAININGS,
+  type MasteryName,
   STATS_PER_ENERGY,
 } from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
-  energyPerSecond,
+  getEnergyQueue,
+  getMasteryQueue,
+  liveQueueRows,
+  queueHeadAfter,
+  toMasteryEntries,
+} from "@/libs/queue";
+import {
+  calcMasteryTrainingAmount,
   getTrainingMultiplierBoost,
   masteryTrainingBlockMessage,
+  queuedMasteryStartBlockMessage,
   statTrainingBlockMessage,
-  trainEfficiency,
   trainingBoost,
   trainingEnergyMessage,
-  trainingMultiplier,
 } from "@/libs/train";
 import { validateCaptcha } from "@/routers/misc";
 import type { UserWithRelations } from "@/routers/profile";
@@ -27,7 +34,8 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { getQueueTotalCapacity } from "@/utils/paypal";
+import { editTrainingQueue } from "@/server/utils/userQueue";
+import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
 import {
   startMasteryTrainingInputSchema,
@@ -35,6 +43,7 @@ import {
   stopTrainingInputSchema,
   trainingLogInputSchema,
   updateEnergyTrainingQueueInputSchema,
+  updateMasteryTrainingQueueInputSchema,
   updateTrainingSpeedInputSchema,
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -51,54 +60,95 @@ export const trainRouter = createTRPCRouter({
           forceRegen: true,
         });
       if (!user) return errorResponse("User not found");
-      if (
-        JSON.stringify(user.energyTrainingQueue ?? []) !==
-        JSON.stringify(input.expectedEntries)
-      )
-        return errorResponse(
-          "Your training queue changed. Please refresh and try again",
-        );
-      if (input.entries.length > 0) {
-        const block = statTrainingBlockMessage({
-          ...user,
-          status: user.status === "ASLEEP" ? "AWAKE" : user.status,
-        });
-        if (block) return errorResponse(block);
-        if (input.entries.length > getQueueTotalCapacity(user))
-          return errorResponse("Training queue is full");
-        if (input.entries.some((entry) => entry.energy > user.maxEnergy))
-          return errorResponse("Queued Energy cannot exceed your capacity");
-        if (showTrainingCapcha(user)) {
-          if (!input.guess) return errorResponse("Captcha required");
-          if (!(await validateCaptcha(ctx.drizzle, ctx.userId, input.guess)))
-            return errorResponse("Invalid captcha");
-        }
-      }
-      const claim = await claimUserSnapshot({
+      const result = await editTrainingQueue({
         client: ctx.drizzle,
-        userId: ctx.userId,
-        updatedAt: user.updatedAt,
+        user,
+        kind: "ENERGY",
+        current: getEnergyQueue(user),
+        expected: input.expectedEntries,
+        entries: input.entries,
+        validate: async () => {
+          const block = statTrainingBlockMessage({
+            ...user,
+            status: user.status === "ASLEEP" ? "AWAKE" : user.status,
+          });
+          if (block) return block;
+          if (input.entries.length > getQueueTotalCapacity(user))
+            return "Training queue is full";
+          if (input.entries.some((entry) => entry.energy > user.maxEnergy))
+            return "Queued Energy cannot exceed your capacity";
+          if (showTrainingCapcha(user)) {
+            if (!input.guess) return "Captcha required";
+            if (!(await validateCaptcha(ctx.drizzle, ctx.userId, input.guess)))
+              return "Invalid captcha";
+          }
+          return null;
+        },
         where: [eq(userData.status, user.status)],
-        set: { energyTrainingQueue: input.entries },
+        messages: {
+          stale: "Your training queue changed. Please refresh and try again",
+          conflict: "Your training queue changed. Please try again",
+          saved: "Training queue saved",
+          cleared: "Training queue cleared",
+        },
       });
-      if (!claim.success)
-        return errorResponse("Your training queue changed. Please try again");
-      return {
-        success: true,
-        message: input.entries.length
-          ? "Training queue saved"
-          : "Training queue cleared",
-        ...(!requiresProgressionRefresh
-          ? getUserProgressionUpdate(
-              {
-                ...user,
-                energyTrainingQueue: input.entries,
-                updatedAt: claim.claimedAt,
-              },
-              publishedAchievementIds,
-            )
-          : {}),
-      };
+      return withSavedQueue(
+        result,
+        user,
+        requiresProgressionRefresh,
+        publishedAchievementIds,
+      );
+    }),
+
+  updateMasteryTrainingQueue: protectedProcedure
+    .meta({
+      mcp: { description: "Replace the masteries queued behind mastery training" },
+    })
+    .input(updateMasteryTrainingQueueInputSchema)
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { user, requiresProgressionRefresh, publishedAchievementIds } =
+        await fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          forceRegen: true,
+        });
+      if (!user) return errorResponse("User not found");
+      const result = await editTrainingQueue({
+        client: ctx.drizzle,
+        user,
+        kind: "MASTERY",
+        current: getMasteryQueue(user),
+        expected: input.expectedEntries,
+        entries: input.entries,
+        // Adding or changing an entry needs an active session to queue behind.
+        validate: () => {
+          if (!user.currentlyTrainingMastery)
+            return "Start a mastery training before queueing more";
+          if (input.entries.length > getQueueWaitingSlots(user))
+            return "Mastery queue is full";
+          const { mastery_cap } = getUserCaps(user.rank);
+          if (input.entries.some((entry) => user[entry.stat] >= mastery_cap))
+            return "A queued mastery is already capped";
+          return (
+            input.entries
+              .map((entry) => queuedMasteryStartBlockMessage(user, entry))
+              .find(Boolean) ?? null
+          );
+        },
+        messages: {
+          stale: "Your mastery queue changed. Please refresh and try again",
+          conflict: "Your mastery queue changed. Please try again",
+          saved: "Mastery queue saved",
+          cleared: "Mastery queue cleared",
+        },
+      });
+      return withSavedQueue(
+        result,
+        user,
+        requiresProgressionRefresh,
+        publishedAchievementIds,
+      );
     }),
 
   startTraining: protectedProcedure
@@ -271,14 +321,38 @@ export const trainRouter = createTRPCRouter({
         creditedMinutes > 0
           ? filterQuestTrackersForDbPersist(trackers, user)
           : undefined;
+      // The next queued mastery starts as this session is collected. Capped entries at
+      // the front are dropped; one further back is dropped when it reaches the front.
+      const queue = liveQueueRows(user.queue ?? [], "MASTERY", user.masteryQueueHead);
+      const isCapped = (stat: MasteryName) =>
+        (stat === trained ? user[trained] + gained : user[stat]) >= mastery_cap;
+      let skipped = 0;
+      while (queue[skipped] && isCapped(queue[skipped]?.stat as MasteryName)) skipped++;
+      const nextRow = queue[skipped];
+      const next = nextRow ? toMasteryEntries([nextRow])[0] : undefined;
+      const startsNext =
+        !!next &&
+        !queuedMasteryStartBlockMessage(
+          { ...user, dailyTrainings: user.dailyTrainings + (gained > 0 ? 1 : 0) },
+          next,
+        );
+      const startedNextAt = new Date();
+      const masteryQueueHead = queueHeadAfter(
+        queue,
+        skipped + (startsNext ? 1 : 0),
+        user.masteryQueueHead,
+      );
       // Claim exactly the session read above so concurrent collections cannot reuse it.
       const result = await claimUserSnapshot({
         client: ctx.drizzle,
         userId: ctx.userId,
         updatedAt: user.updatedAt,
         set: {
-          masteryTrainingStartedAt: null,
-          currentlyTrainingMastery: null,
+          masteryTrainingStartedAt: startsNext ? startedNextAt : null,
+          currentlyTrainingMastery: startsNext ? next.stat : null,
+          // Consumes the dropped entries and the one started, in this same write.
+          masteryQueueHead,
+          ...(startsNext ? { trainingSpeed: next.speed } : {}),
           ...(gained > 0
             ? {
                 dailyTrainings: sql`dailyTrainings + 1`,
@@ -310,9 +384,10 @@ export const trainRouter = createTRPCRouter({
       }
       const capNote =
         gained < trainingAmount ? ` (capped at ${mastery_cap.toLocaleString()})` : "";
+      const nextNote = startsNext ? `. Started queued ${next.stat} training` : "";
       return {
         success: true,
-        message: `You gained ${gained.toFixed(2)} ${trained}${capNote}`,
+        message: `You gained ${gained.toFixed(2)} ${trained}${capNote}${nextNote}`,
         ...(!requiresProgressionRefresh &&
         !trackerResult?.consequences.length &&
         !trackerResult?.notifications.length
@@ -321,8 +396,10 @@ export const trainRouter = createTRPCRouter({
                 ...user,
                 [trained]: user[trained] + gained,
                 dailyTrainings: user.dailyTrainings + (gained > 0 ? 1 : 0),
-                masteryTrainingStartedAt: null,
-                currentlyTrainingMastery: null,
+                masteryTrainingStartedAt: startsNext ? startedNextAt : null,
+                currentlyTrainingMastery: startsNext ? next.stat : null,
+                trainingSpeed: startsNext ? next.speed : user.trainingSpeed,
+                masteryQueueHead,
                 questData: trackers,
                 updatedAt: result.claimedAt,
               },
@@ -376,15 +453,26 @@ export const calcTrainingAmount = (
   settings: Awaited<ReturnType<typeof fetchUpdatedUser>>["settings"],
   startedAt: Date,
 ) => ({
-  trainingAmount:
-    trainingBoost(user, settings) *
-    Math.min(
-      Math.floor(
-        energyPerSecond(user.trainingSpeed) *
-          secondsPassed(startedAt, undefined, false),
-      ),
-      100,
-    ) *
-    trainEfficiency(user) *
-    trainingMultiplier(user),
+  trainingAmount: calcMasteryTrainingAmount(
+    user,
+    settings,
+    secondsPassed(startedAt, undefined, false),
+  ),
 });
+
+/** A queue edit's response, with the saved queue as a cache patch when it can be trusted. */
+const withSavedQueue = (
+  result: Awaited<ReturnType<typeof editTrainingQueue>>,
+  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
+  requiresProgressionRefresh: boolean,
+  publishedAchievementIds: readonly string[],
+) => {
+  if (!result.success) return errorResponse(result.message);
+  return {
+    success: true,
+    message: result.message,
+    ...(!requiresProgressionRefresh
+      ? getUserProgressionUpdate({ ...user, ...result.saved }, publishedAchievementIds)
+      : {}),
+  };
+};

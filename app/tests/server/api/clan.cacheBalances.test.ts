@@ -3,7 +3,7 @@
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HIDEOUT_TOWN_UPGRADE } from "@/drizzle/constants";
-import { actionLog, clan, userData } from "@/drizzle/schema";
+import { actionLog, clan, userData, userQueue } from "@/drizzle/schema";
 import { clanRouter } from "@/server/api/routers/clan";
 import { insertUsers } from "../../setup/factories";
 import {
@@ -13,6 +13,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { queueEnergy } from "../../setup/queues";
 
 describe("clan committed cache responses", () => {
   const databaseFor = (userDelta: object, clanUpdate: object) => ({
@@ -168,7 +169,7 @@ describe("clan zero-cost cache responses", () => {
 
 describeWithDatabase("clan mutation cache balances", () => {
   beforeEach(async () => {
-    await resetTables(actionLog, clan, userData);
+    await resetTables(userQueue, actionLog, clan, userData);
     await insertUsers([
       {
         userId: "clan-cache-user",
@@ -217,10 +218,7 @@ describeWithDatabase("clan mutation cache balances", () => {
   for (const endpoint of ["toBank", "clanDonate"] as const) {
     it(`${endpoint} keeps profile refreshes for a pending energy queue`, async () => {
       const db = await getTestDatabase();
-      await db
-        .update(userData)
-        .set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] })
-        .where(eq(userData.userId, "clan-cache-user"));
+      await queueEnergy("clan-cache-user", [{ stat: "offence", energy: 10 }]);
       const caller = await callerFor(clanRouter, "clan-cache-user");
       const result = await (endpoint === "toBank"
         ? caller.toBank({ clanId: "clan-cache-clan", amount: 250 })

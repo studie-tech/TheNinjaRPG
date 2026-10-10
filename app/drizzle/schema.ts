@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { EnergyTrainingQueueEntry } from "@/validators/train";
+import type { CraftingQueueMaterial } from "@/validators/train";
 import {
   mysqlTable,
   boolean,
@@ -2528,7 +2528,12 @@ export const userData = mysqlTable(
     trainingSpeed: mysqlEnum("trainingSpeed", consts.TrainingSpeeds)
       .default("15min")
       .notNull(),
-    energyTrainingQueue: json("energyTrainingQueue").$type<EnergyTrainingQueueEntry[]>(),
+    /** Last consumed ENERGY `UserQueue.position`; rows at or below it are dead. */
+    energyQueueHead: int("energyQueueHead", { unsigned: true }).default(0).notNull(),
+    /** Last enqueued ENERGY position: live ENERGY rows exist while tail > head. */
+    energyQueueTail: int("energyQueueTail", { unsigned: true }).default(0).notNull(),
+    /** Last consumed MASTERY `UserQueue.position`; rows at or below it are dead. */
+    masteryQueueHead: int("masteryQueueHead", { unsigned: true }).default(0).notNull(),
     masteryTrainingStartedAt: datetime("masteryTrainingStartedAt", {
       mode: "date",
       fsp: 3,
@@ -2751,6 +2756,7 @@ export type UserStatus = UserData["status"];
 export type FederalStatus = UserData["federalStatus"];
 
 export const userDataRelations = relations(userData, ({ one, many }) => ({
+  queue: many(userQueue),
   ips: many(historicalIp),
   bloodline: one(bloodline, {
     fields: [userData.bloodlineId],
@@ -3170,6 +3176,80 @@ export type UserJutsuWithRelations = UserJutsu & {
   jutsu: Jutsu;
   activeReskin: JutsuReskin | null;
 };
+
+/**
+ * Every queue a player can fill, one row per waiting entry. `position` orders the entries
+ * of one kind (FIFO) and is unique per user and kind.
+ * - JUTSU: `jutsuId`, `reservedRyo` paid on enqueue. Becomes `UserJutsu` training when it
+ *   starts; the row is deleted at that moment.
+ * - CRAFT: `itemId`, `quantity` and the `materials` taken on enqueue (kept so a
+ *   cancellation can return them). Output, experience and quest progress are granted when
+ *   it starts; the row is deleted at that moment.
+ * - MASTERY: `stat` (mastery) and `speed`, started when the session ahead of it ends. Its
+ *   timing is derived from the active session, so `startsAt`/`finishesAt` stay null.
+ * - ENERGY: `stat` (combat stat) and `energy`, spent as soon as enough Energy recovers.
+ *   Energy-triggered, so `startsAt`/`finishesAt` stay null.
+ * MASTERY and ENERGY rows are settled in memory from the loaded user. They are consumed
+ * by advancing `UserData.masteryQueueHead` / `energyQueueHead` in the same write as the
+ * gains, so a settlement can never apply twice. Rows at or below the head are dead; the
+ * next edit of that queue replaces all its rows and removes them.
+ */
+export const userQueue = mysqlTable(
+  "UserQueue",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    kind: mysqlEnum("kind", consts.QueueKinds).notNull(),
+    position: int("position", { unsigned: true }).notNull(),
+    /** JUTSU */
+    jutsuId: varchar("jutsuId", { length: 191 }),
+    /** CRAFT */
+    itemId: varchar("itemId", { length: 191 }),
+    /** MASTERY: a mastery name; ENERGY: a combat stat name */
+    stat: varchar("stat", { length: 64 }),
+    /** MASTERY: session interval */
+    speed: mysqlEnum("speed", consts.TrainingSpeeds),
+    /** ENERGY: Energy to spend */
+    energy: double("energy"),
+    /** JUTSU: ryo paid on enqueue */
+    reservedRyo: int("reservedRyo", { unsigned: true }),
+    /** CRAFT: items produced */
+    quantity: int("quantity", { unsigned: true }),
+    /** CRAFT: material stacks taken on enqueue */
+    materials: json("materials").$type<CraftingQueueMaterial[]>(),
+    /** JUTSU, CRAFT: job length snapshotted on enqueue */
+    durationSeconds: int("durationSeconds", { unsigned: true }),
+    /** JUTSU, CRAFT: scheduled start, backdated to the predecessor's finish */
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }),
+    finishesAt: datetime("finishesAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    userKindPositionKey: uniqueIndex("UserQueue_userId_kind_position_key").on(
+      table.userId,
+      table.kind,
+      table.position,
+    ),
+  }),
+);
+export type UserQueue = InferSelectModel<typeof userQueue>;
+
+export const userQueueRelations = relations(userQueue, ({ one }) => ({
+  user: one(userData, {
+    fields: [userQueue.userId],
+    references: [userData.userId],
+  }),
+  jutsu: one(jutsu, {
+    fields: [userQueue.jutsuId],
+    references: [jutsu.id],
+  }),
+  item: one(item, {
+    fields: [userQueue.itemId],
+    references: [item.id],
+  }),
+}));
 
 export const userJutsuRelations = relations(userJutsu, ({ one }) => ({
   jutsu: one(jutsu, {
