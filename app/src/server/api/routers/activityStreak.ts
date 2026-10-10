@@ -26,6 +26,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { canChangeContent } from "@/utils/permissions";
 import { isToday, isWithinDateRange } from "@/utils/time";
 import {
@@ -458,28 +459,29 @@ export const activityStreakRouter = createTRPCRouter({
         : undefined;
       const normalizedCompletion = !!existingProgress && progress !== existingProgress;
 
-      // For RECURRING: auto-create progress if doesn't exist. Concurrent first
-      // claims can both reach this branch, so tolerate the row already existing and
-      // read back whichever insert won; the lastClaimDate guard below then rejects
-      // the loser with a normal error response.
+      // Successful creation already supplies the progress snapshot. Only a duplicate
+      // first claim needs the winning row; lastClaimDate still guards the payout.
       if (!progress && config.streakType === "RECURRING") {
-        await ctx.drizzle
-          .insert(userStreakProgress)
-          .values({
-            id: nanoid(),
-            userId: ctx.userId,
-            configId: config.id,
-            currentDay: 0,
-            lastClaimDate: null,
-            startedAt: new Date(),
-          })
-          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-        progress = await ctx.drizzle.query.userStreakProgress.findFirst({
-          where: and(
-            eq(userStreakProgress.userId, ctx.userId),
-            eq(userStreakProgress.configId, config.id),
-          ),
-        });
+        const createdProgress = {
+          id: nanoid(),
+          userId: ctx.userId,
+          configId: config.id,
+          currentDay: 0,
+          lastClaimDate: null,
+          startedAt: now,
+        };
+        try {
+          await ctx.drizzle.insert(userStreakProgress).values(createdProgress);
+          progress = createdProgress;
+        } catch (error) {
+          if (!isMysqlDuplicateKeyError(error)) throw error;
+          progress = await ctx.drizzle.query.userStreakProgress.findFirst({
+            where: and(
+              eq(userStreakProgress.userId, ctx.userId),
+              eq(userStreakProgress.configId, config.id),
+            ),
+          });
+        }
       }
 
       // Guard: must have progress (for EVENT_PASS, means must be purchased)

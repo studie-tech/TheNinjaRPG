@@ -352,7 +352,8 @@ export const clanRouter = createTRPCRouter({
             ? undefined
             : {
                 reputationPoints: -repsCost,
-                clan: { id: fetchedClan.id, repTreasury: repsCost },
+                // The INT treasury rounds fractional donations; personal reputation is FLOAT.
+                clan: { id: fetchedClan.id, repTreasury: Math.round(repsCost) },
               },
         };
       }

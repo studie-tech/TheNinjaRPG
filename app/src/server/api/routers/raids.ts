@@ -21,11 +21,7 @@ import {
   RAID_MAX_CONCURRENT_TEAMS,
 } from "@/drizzle/constants";
 import {
-  badge,
-  bloodline,
   conversation,
-  item,
-  jutsu,
   mpvpBattleQueue,
   mpvpBattleUser,
   quest,
@@ -1458,7 +1454,7 @@ export const raidsRouter = createTRPCRouter({
       // Note: We intentionally do NOT roll back the claim on failure because updateRewards is not atomic.
       // If we rolled back, a retry could double-grant rewards that succeeded before the failure.
       // Keeping the claim marked prevents double-grants; partial failures can be investigated manually.
-      await updateRewards({
+      const { items, jutsus, bloodlines, badges } = await updateRewards({
         client: ctx.drizzle,
         user,
         rewards: processedRewards,
@@ -1480,35 +1476,7 @@ export const raidsRouter = createTRPCRouter({
         });
       }
 
-      // Fetch names for reward display
-      const [items, jutsus, bloodlines, badges] = await Promise.all([
-        processedRewards.reward_items.length > 0
-          ? ctx.drizzle.query.item.findMany({
-              columns: { id: true, name: true },
-              where: inArray(item.id, processedRewards.reward_items),
-            })
-          : Promise.resolve([]),
-        processedRewards.reward_jutsus.length > 0
-          ? ctx.drizzle.query.jutsu.findMany({
-              columns: { id: true, name: true },
-              where: inArray(jutsu.id, processedRewards.reward_jutsus),
-            })
-          : Promise.resolve([]),
-        processedRewards.reward_bloodlines.length > 0
-          ? ctx.drizzle.query.bloodline.findMany({
-              columns: { id: true, name: true },
-              where: inArray(bloodline.id, processedRewards.reward_bloodlines),
-            })
-          : Promise.resolve([]),
-        processedRewards.reward_badges.length > 0
-          ? ctx.drizzle.query.badge.findMany({
-              columns: { id: true, name: true },
-              where: inArray(badge.id, processedRewards.reward_badges),
-            })
-          : Promise.resolve([]),
-      ]);
-
-      // Map IDs to names for display
+      // Payout already resolved these names; preserve configured item order and quantities.
       const displayRewards = {
         ...processedRewards,
         reward_items: processedRewards.reward_items.map(

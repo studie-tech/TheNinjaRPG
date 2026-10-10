@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { setSystemTime } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import {
   actionLog,
@@ -13,8 +13,10 @@ import {
 import { activityStreakRouter } from "@/server/api/routers/activityStreak";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertUsers } from "../../setup/factories";
+import { beforeStatements } from "../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -56,12 +58,79 @@ describeWithDatabase("recurring streak cycle timing", () => {
     });
   });
 
-  afterEach(() => setSystemTime());
+  afterEach(() => {
+    setSystemTime();
+    vi.restoreAllMocks();
+  });
+
+  it("uses newly inserted first-claim progress without reading it back", async () => {
+    const database = await getTestDatabase();
+    await database
+      .delete(userStreakProgress)
+      .where(eq(userStreakProgress.id, "progress"));
+    const reads = vi.spyOn(database.query.userStreakProgress, "findFirst");
+    const result = await (
+      await callerFor(activityStreakRouter, "streak-user")
+    ).claimStreakDay({ configId: "recurring" });
+    expect(result).toMatchObject({ success: true, userDelta: { money: 100 } });
+    expect(reads).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "streak-user"),
+        })
+      )?.money,
+    ).toBe(1100);
+  });
+
+  it("loads a competing first-claim row after duplicate creation without paying again", async () => {
+    const database = await getTestDatabase();
+    await database
+      .delete(userStreakProgress)
+      .where(eq(userStreakProgress.id, "progress"));
+    const raced = beforeStatements(database, userStreakProgress, [
+      async () =>
+        database
+          .insert(userStreakProgress)
+          .values({
+            id: "winning-first-claim",
+            userId: "streak-user",
+            configId: "recurring",
+            currentDay: 1,
+            lastClaimDate: new Date(),
+            startedAt: new Date(),
+          }),
+    ]);
+    const result = await callerForDatabase(
+      activityStreakRouter,
+      "streak-user",
+      raced,
+    ).claimStreakDay({ configId: "recurring" });
+    expect(result.success).toBe(false);
+    expect(result.userDelta).toBeUndefined();
+    expect(
+      (
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "streak-user"),
+        })
+      )?.money,
+    ).toBe(1000);
+    expect(
+      (
+        await database.query.userStreakProgress.findFirst({
+          where: eq(userStreakProgress.userId, "streak-user"),
+        })
+      )?.currentDay,
+    ).toBe(1);
+  });
 
   it("returns the accepted daily payout as a delta and does not repeat it after a rejected claim", async () => {
     const caller = await callerFor(activityStreakRouter, "streak-user");
     const first = await caller.claimStreakDay({ configId: "recurring" });
-    expect(first).toMatchObject({ success: true, userDelta: { money: 200, reputationPoints: 0 } });
+    expect(first).toMatchObject({
+      success: true,
+      userDelta: { money: 200, reputationPoints: 0 },
+    });
     const second = await caller.claimStreakDay({ configId: "recurring" });
     expect(second.success).toBe(false);
     expect(second.userDelta).toBeUndefined();
@@ -69,20 +138,32 @@ describeWithDatabase("recurring streak cycle timing", () => {
 
   it("keeps reconciliation for a claim that can advance queued training", async () => {
     const database = await getTestDatabase();
-    await database.update(userData).set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] }).where(eq(userData.userId, "streak-user"));
-    const result = await (await callerFor(activityStreakRouter, "streak-user")).claimStreakDay({ configId: "recurring" });
+    await database
+      .update(userData)
+      .set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] })
+      .where(eq(userData.userId, "streak-user"));
+    const result = await (
+      await callerFor(activityStreakRouter, "streak-user")
+    ).claimStreakDay({ configId: "recurring" });
     expect(result.success).toBe(true);
     expect(result.userDelta).toBeUndefined();
   });
 
   it("applies current defaults to legacy stored rewards before returning a payout delta", async () => {
     const database = await getTestDatabase();
-    await database.update(activityStreakReward).set({
-      rewards: sql`JSON_REMOVE(${activityStreakReward.rewards}, '$.reward_sage_modes', '$.reward_sage_mastery_experience')`,
-    }).where(eq(activityStreakReward.id, "reward-2"));
-    const result = await (await callerFor(activityStreakRouter, "streak-user")).claimStreakDay({ configId: "recurring" });
+    await database
+      .update(activityStreakReward)
+      .set({
+        rewards: sql`JSON_REMOVE(${activityStreakReward.rewards}, '$.reward_sage_modes', '$.reward_sage_mastery_experience')`,
+      })
+      .where(eq(activityStreakReward.id, "reward-2"));
+    const result = await (
+      await callerFor(activityStreakRouter, "streak-user")
+    ).claimStreakDay({ configId: "recurring" });
     expect(result).toMatchObject({ success: true, userDelta: { money: 200 } });
-    const user = await database.query.userData.findFirst({ where: eq(userData.userId, "streak-user") });
+    const user = await database.query.userData.findFirst({
+      where: eq(userData.userId, "streak-user"),
+    });
     expect(user?.money).toBe(1200);
   });
 
