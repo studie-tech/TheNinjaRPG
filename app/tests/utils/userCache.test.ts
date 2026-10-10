@@ -80,7 +80,7 @@ describe("user cache updates", () => {
     const village = { id: "village", tokens: 1000 } as Village;
     test.client.setQueryData(key, { userData: { ...profile(100).userData, village } });
     const revision = prepareUserUpdate(test.client, key);
-    const latest = { userData: { ...profile(100).userData, village: { ...village, tokens: 800 } } };
+    const latest = { ...profile(100), userData: { ...profile(100).userData, village: { ...village, tokens: 800 } } };
     test.client.setQueryData(key, latest);
     test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => latest });
     await updateUserCache(test.client, key, (current) => ({
