@@ -358,6 +358,80 @@ describe("user cache updates", () => {
 
 
 describe("shared mutation user response", () => {
+  it("merges partial objects generically while replacing arrays, dates and nulls", async () => {
+    const test = setup();
+    const before = new Date("2026-01-01T00:00:00Z");
+    const after = new Date("2026-01-02T00:00:00Z");
+    const cached = { ...profile(100), userData: { ...profile(100).userData,
+      questFinishAt: before, masteryTrainingStartedAt: before,
+      clan: { id: "clan", bank: 100 },
+      loadout: { id: "loadout", name: "Default", jutsuIds: ["old", "removed"] },
+    } };
+    test.client.setQueryData(key, cached);
+    await updateUserCache(test.client, key, {
+      questFinishAt: after, masteryTrainingStartedAt: null, clan: null,
+      loadout: { jutsuIds: ["new"] },
+    });
+    expect(test.value()?.userData).toEqual({ ...cached.userData,
+      questFinishAt: after, masteryTrainingStartedAt: null, clan: null,
+      loadout: { ...cached.userData.loadout, jutsuIds: ["new"] },
+    });
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("adds root and nested deltas to original values instead of accompanying absolute patches", async () => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
+      clan: { id: "current", bank: 1000, name: "Allies" },
+    } });
+    await updateUserCache(test.client, key, { money: 999, clan: { id: "current", bank: 999 } }, {
+      revision: prepareUserUpdate(test.client, key),
+      delta: { money: -10, clan: { id: "current", bank: 10 } },
+    });
+    expect(test.value()?.userData).toMatchObject({ money: 90,
+      clan: { id: "current", bank: 1010, name: "Allies" },
+    });
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("rejects a mismatched patch identity even when its delta identity matches", async () => {
+    const test = setup();
+    const cached = { ...profile(100), userData: { ...profile(100).userData,
+      clan: { id: "current", bank: 1000 },
+    } };
+    test.client.setQueryData(key, cached);
+    const latest = { ...cached, userData: { ...cached.userData, money: 90 } as NonNullable<UserWithRelations> };
+    let reads = 0;
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
+    await updateUserCache(test.client, key, { clan: { id: "other", bank: 999 } }, {
+      revision: prepareUserUpdate(test.client, key),
+      delta: { money: -10, clan: { id: "current", bank: 10 } },
+    });
+    expect(test.value()?.userData).toEqual(latest.userData);
+    expect(reads).toBe(1);
+    test.close();
+  });
+
+  it("refreshes the whole update when a nested numeric baseline is missing", async () => {
+    const test = setup();
+    const cached = { ...profile(100), userData: { ...profile(100).userData,
+      village: { id: "current" },
+    } };
+    test.client.setQueryData(key, cached);
+    const latest = { ...cached, userData: { ...cached.userData, money: 90, village: { id: "current", tokens: 90 } } as NonNullable<UserWithRelations> };
+    let reads = 0;
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
+    await updateUserCache(test.client, key, undefined, {
+      revision: prepareUserUpdate(test.client, key),
+      delta: { money: -10, village: { id: "current", tokens: -10 } },
+    });
+    expect(test.value()?.userData).toEqual(latest.userData);
+    expect(reads).toBe(1);
+    test.close();
+  });
+
   it("applies a village debit while preserving unrelated boosts and the settings just saved", async () => {
     const test = setup();
     type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;

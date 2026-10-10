@@ -12,6 +12,7 @@ import type {
   AchievementProgress,
   UserWithRelations,
 } from "@/server/api/routers/profile";
+import { isPlainObject } from "@/utils/typeutils";
 import { getShrineBoost } from "@/utils/village";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
@@ -29,12 +30,8 @@ export type UserPatch =
 export const prepareUserUpdate = (client: QueryClient, key: QueryKey) => {
   // An action can render before the initial profile; leave that loading query running.
   // Pending or invalidated reads may reconcile another action, so keep those too.
-  const state = client.getQueryState(key);
-  if (
-    !client.getQueryData<UserCache>(key)?.userData ||
-    state?.isInvalidated ||
-    state?.fetchStatus !== "idle"
-  ) {
+  const state = client.getQueryState<UserCache>(key);
+  if (!state?.data?.userData || state?.isInvalidated || state?.fetchStatus !== "idle") {
     return undefined;
   }
   return state.dataUpdateCount;
@@ -64,12 +61,12 @@ export const updateUserCache = async (
       needsRefresh ||= !!state?.isInvalidated || state?.fetchStatus !== "idle";
       if (!old?.userData) return undefined;
       const known = typeof patch === "function" ? patch(old.userData) : patch;
-      const changes = known && mergeUserRelations(old.userData, known);
-      if (!changes) {
+      const user = known && mergeUserChanges(old.userData, known);
+      if (!user) {
         needsRefresh = true;
         return undefined;
       }
-      return mergeUserCache(old, { ...old.userData, ...changes });
+      return mergeUserCache(old, user);
     });
     // A local patch must preserve reconciliation of unrelated fields.
     if (needsRefresh) await client.invalidateQueries({ queryKey: key, exact: true });
@@ -108,87 +105,59 @@ export const updateUserCache = async (
     }
     const known = typeof patch === "function" ? patch(old.userData) : patch;
     if (patch && known === undefined) return undefined;
-    const changes = known ? mergeUserRelations(old.userData, known) : {};
-    if (!changes) return undefined;
-    const { clan, village, ...fields } = delta;
-    // Shared balances use the same captured revision as personal counters, and must
-    // still belong to the cached relation before any part of the mutation is applied.
-    if (clan) {
-      if (old.userData.clan?.id !== clan.id) return undefined;
-      changes.clan = {
-        ...(changes.clan ?? old.userData.clan),
-        ...(clan.bank === undefined
-          ? {}
-          : { bank: old.userData.clan.bank + clan.bank }),
-        ...(clan.repTreasury === undefined
-          ? {}
-          : {
-              repTreasury: old.userData.clan.repTreasury + clan.repTreasury,
-            }),
-      };
-    }
-    if (village) {
-      if (old.userData.village?.id !== village.id) return undefined;
-      changes.village = {
-        ...(changes.village ?? old.userData.village),
-        ...(village.tokens === undefined
-          ? {}
-          : {
-              tokens: old.userData.village.tokens + village.tokens,
-            }),
-      };
-    }
-    for (const field of Object.keys(fields) as (keyof typeof fields)[]) {
-      const amount = fields[field];
-      if (amount !== undefined) {
-        const cap =
-          field === "skillPoints"
-            ? MAX_SKILL_POINTS
-            : field === "medicalExperience"
-              ? MEDNIN_EXP_CAP
-              : field === "sageMasteryExperience"
-                ? SAGE_MASTERY_EXP_CAP
-                : Infinity;
-        changes[field] = Math.min(old.userData[field] + amount, cap);
-      }
-    }
+    const user = mergeUserChanges(old.userData, known ?? {}, delta, USER_DELTA_CAPS);
+    if (!user) return undefined;
     applied = true;
-    return mergeUserCache(
-      old,
-      { ...old.userData, ...changes },
-      mutation.achievementProgress,
-    );
+    return mergeUserCache(old, user, mutation.achievementProgress);
   });
   if (!applied) await client.invalidateQueries({ queryKey: key, exact: true });
 };
 
-/** Relation projections must belong to the cached user and preserve omitted fields. */
-const mergeUserRelations = (
-  current: User,
-  patch: KnownUserPatch,
-): Partial<User> | undefined => {
-  const { village, clan, ...fields } = patch;
-  if (village && current.village?.id !== village.id) return undefined;
-  if (clan && current.clan?.id !== clan.id) return undefined;
-  const changes: Partial<User> = { ...fields };
-  if (village && current.village) {
-    const { shrineSettings, ...villageFields } = village;
-    changes.village = { ...current.village, ...villageFields };
-    if (shrineSettings) {
-      changes.village.shrineSettings = {
-        ...current.village.shrineSettings,
-        ...shrineSettings,
-        activeBoosts: {
-          ...current.village.shrineSettings?.activeBoosts,
-          ...shrineSettings.activeBoosts,
-        },
-      };
-    }
-  } else if (village === null) changes.village = null;
-  if (clan && current.clan) changes.clan = { ...current.clan, ...clan };
-  else if (clan === null) changes.clan = null;
-  return changes;
+const USER_DELTA_CAPS = {
+  skillPoints: MAX_SKILL_POINTS,
+  medicalExperience: MEDNIN_EXP_CAP,
+  sageMasteryExperience: SAGE_MASTERY_EXP_CAP,
 };
+
+/** Merge partial objects, validating identities and adding deltas to the original values. */
+const mergeUserChanges = <T extends object>(
+  current: T,
+  patch: object,
+  delta: object = {},
+  caps?: Readonly<Record<string, number>>,
+): T | undefined => {
+  const original = current as Record<string, unknown>;
+  const values = patch as Record<string, unknown>;
+  const amounts = delta as Record<string, unknown>;
+  if (
+    (values.id !== undefined && values.id !== original.id) ||
+    (amounts.id !== undefined && amounts.id !== original.id)
+  )
+    return undefined;
+  const updated = { ...original, ...values };
+  for (const field in { ...values, ...amounts }) {
+    const value = values[field];
+    const amount = amounts[field];
+    if (amount === undefined && value === original[field]) continue;
+    if (isCacheObject(value) || isCacheObject(amount)) {
+      const merged = mergeUserChanges(
+        isCacheObject(original[field]) ? original[field] : {},
+        isCacheObject(value) ? value : {},
+        isCacheObject(amount) ? amount : {},
+      );
+      if (!merged) return undefined;
+      updated[field] = merged;
+    } else if (typeof amount === "number" && field !== "id") {
+      const baseline = original[field];
+      if (typeof baseline !== "number") return undefined;
+      updated[field] = Math.min(baseline + amount, caps?.[field] ?? Infinity);
+    }
+  }
+  return updated as T;
+};
+
+const isCacheObject = (value: unknown): value is Record<string, unknown> =>
+  isPlainObject(value) && !(value instanceof Date);
 
 /** Keep navigation derived from profile fields in the same atomic cache update. */
 const mergeUserCache = (
