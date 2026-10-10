@@ -1220,6 +1220,7 @@ const persistentEffectSourceTypes = new Set<UserEffect["fromType"]>([
   "skill",
   "ranked",
   "village",
+  "elementalMastery",
   "sageMode",
   "sageModeAfter",
 ]);

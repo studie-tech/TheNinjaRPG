@@ -1,13 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
+import { ELEMENTAL_MASTERY_BOOST, ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
 import type { AiProfile } from "@/drizzle/schema";
 import { computeDamagePacket, emptyPreBattleGearModifiers } from "@/libs/combat/process";
+import { clear } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
+import { isEffectActive } from "@/libs/combat/util";
 import { activeTrainedElement, elementalGainRoom } from "@/libs/elementalMastery";
 import { processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { DamageTag } from "@/validators/combat";
 import { getUserElements } from "@/validators/user";
+import { makeEffect } from "./helpers/battleScenario";
 
 const user = (patch: Partial<CombatQueryUser> = {}): CombatQueryUser => ({
   userId: "caster", username: "caster", villageId: "village", level: 50, experience: 0,
@@ -48,6 +51,28 @@ describe("elemental mastery battle integration", () => {
       expect((await preload(caster)).userEffects.filter(effect => effect.fromType === "elementalMastery")).toHaveLength(0);
     }
     expect((await preload(user(), "RANKED_PVP")).userEffects.filter(effect => effect.fromType === "elementalMastery")).toHaveLength(0);
+  });
+
+  it("clear preserves the preloaded elemental passive while removing a temporary buff", async () => {
+    const result = await preload(user());
+    const passive = result.userEffects.find(effect => effect.fromType === "elementalMastery");
+    expect(passive).toBeDefined();
+    const temporaryBuff = makeEffect("increasedamagegiven", { power: 25, rounds: 10 }, {
+      creatorId: "caster", targetId: "caster", fromType: "jutsu",
+    });
+    const effects = [...result.userEffects, temporaryBuff];
+    const passiveDamage = packet(result.userEffects, "Wind");
+    expect(packet(effects, "Wind")).toBeGreaterThan(passiveDamage);
+
+    clear(makeEffect("clear", { power: 100 }, { targetId: "caster" }), effects, result.usersState[0]!);
+
+    expect(temporaryBuff.rounds).toBe(0);
+    expect(isEffectActive(passive!)).toBe(true);
+    expect(passive!.rounds).toBeUndefined();
+    expect(packet(effects, "Wind")).toBeCloseTo(passiveDamage);
+    expect(packet(effects, "Wind")).toBeCloseTo(packet([], "Wind") * (1 + ELEMENTAL_MASTERY_BOOST / 100));
+    expect(packet(effects, "Fire")).toBeCloseTo(packet([], "Fire"));
+    expect(packet(effects, "None")).toBeCloseTo(packet([], "None"));
   });
 
   it("does not expose progress until capped, and exposes at most one trained element", () => {
