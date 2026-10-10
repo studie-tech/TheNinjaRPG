@@ -357,6 +357,9 @@ export default function GameRules() {
         <ul className="list-disc pl-5">
           <li>
             Exploiting mechanics or using unauthorized third-party tools is prohibited.
+            Using an API or MCP client to access TNR&apos;s official MCP server as
+            permitted by section 7.4 is authorized. This does not authorize exploits or
+            bypassing game restrictions.
           </li>
           <li>
             Punishment escalates from temporary bans to permanent bans for repeated
@@ -368,20 +371,28 @@ export default function GameRules() {
           &nbsp;&nbsp;7.2 Account Sharing and Multiple Accounts
         </h3>
         <ul className="list-disc pl-5">
-          <li>Players are restricted to two accounts.</li>
           <li>
-            Accounts must be used by a single individual. Shared or multiple accounts on
-            the same IP must be reported to moderators to avoid penalties.
+            Each individual may own up to two accounts in total, including accounts
+            played by AI. Using multiple agents or API clients does not increase this
+            limit.
           </li>
           <li>
-            Sharing accounts between players on the same IP is prohibited. If this is
-            proven, it may lead to a warning or ban of all shared accounts.
+            Each account must have one human owner. Owner-authorized AI play permitted
+            by section 7.4 does not count as sharing an account with another player.
+            Multiple accounts on the same IP must be reported to moderators to avoid
+            penalties. A shared IP, including shared API hosting, does not by itself
+            establish account sharing or common ownership.
           </li>
           <li>
-            If multiple accounts on a single IP are discovered the account owner will be
-            asked to mark the additional accounts for deletion. Failure to do so may
-            result in bans on all accounts. Users will be given a 24hr window to reply
-            to the request before action will be taken.
+            Sharing accounts between human players is prohibited, including players on
+            the same IP. If this is proven, it may lead to a warning or ban of all
+            shared accounts.
+          </li>
+          <li>
+            If an individual is found to own more than two accounts, the owner will be
+            asked to mark the accounts exceeding this limit for deletion. Failure to do
+            so may result in bans on all their accounts. Users will be given a 24hr
+            window to reply to the request before action will be taken.
           </li>
           <li>
             The killing of one’s own secondary account, as well as the coordinated
@@ -395,6 +406,55 @@ export default function GameRules() {
         </h3>
         <ul className="list-disc pl-5">
           <li>Strictly prohibited and may result in permanent bans.</li>
+        </ul>
+
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;7.4 AI Players</h3>
+        <ul className="list-disc pl-5">
+          <li>
+            <b>Same Rules:</b> AI players and players using AI assistance must follow
+            all game rules, including account limits, fair play, and conduct rules. The
+            official API permission below does not waive these obligations.
+          </li>
+          <li>
+            <b>Identification and Responsibility:</b> Accounts played by an AI must
+            clearly identify themselves as AI players in their public profile and be
+            reported to moderators with their human owner identified. The human owner
+            remains responsible for all actions and content of the account.
+          </li>
+          <li>
+            <b>Official API:</b> With authorization from their human owner, AI players
+            may choose and execute game actions through TNR&apos;s official API (the MCP
+            server at /api/mcp) without the owner approving each action or remaining
+            continuously present. Follow the server&apos;s rate limits, game cooldowns,
+            and endpoint permissions. Do not bypass any limits or restrictions.
+          </li>
+          <li>
+            <b>Information Access:</b> AI players may use information available to their
+            account through normal gameplay or permitted use of the official API, and
+            publicly available resources, such as the public wiki, public channels, and
+            public lore. Accessing or using hidden game data, private information the
+            account is not authorized to see, or information obtained by bypassing
+            access restrictions is prohibited.
+          </li>
+          <li>
+            <b>Bug Reporting:</b> If an AI player finds a bug, exploit, or unintended
+            mechanic, it must report it through an official bug reporting channel and
+            must not use or exploit it. Discovering an exploit does not make it an
+            intended mechanic or give permission to use it.
+          </li>
+          <li>
+            <b>Rule Gaps:</b> Anything not explicitly covered by these rules is not
+            automatically allowed. In ambiguous cases, ask a moderator and wait for
+            clarification before acting.
+          </li>
+          <li>
+            <b>Presence and Pacing:</b> Outside the official API allowance above,
+            automated play and scripted presence, including timers or scripts that keep
+            an account active or progressing while its owner is away, are prohibited
+            even under human supervision. Other AI-assisted play must be supervised by
+            the human owner and follow a pace and duration a human could reasonably
+            sustain.
+          </li>
         </ul>
         <hr className="my-2" />
 
@@ -508,11 +568,12 @@ export default function GameRules() {
           regardless of whether it is run by a staff member or player, and is not
           required to follow the official TNR rules. These servers are joined at the
           risk of the player and are not the responsibility of TNR. Except when evidence
-          of in-game infractions (such as botting, account sharing, exploitation etc.)
-          or extreme, potentially criminal, circumstances (stalking, doxxing etc.)
-          official action will not be taken against a player for behaviour within those
-          servers. If users are experiencing negativity, harassment or disruptions
-          within these servers, they are encouraged to leave them.
+          of in-game infractions (such as prohibited automation under section 7.4,
+          account sharing, exploitation etc.) or extreme, potentially criminal,
+          circumstances (stalking, doxxing etc.) official action will not be taken
+          against a player for behaviour within those servers. If users are experiencing
+          negativity, harassment or disruptions within these servers, they are
+          encouraged to leave them.
         </p>
 
         <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;13.2.1 Staff</h3>
