@@ -18,14 +18,14 @@ const fixture = () => {
   };
   const raw = { userId: "viewer", level: 10, rank: "JONIN" as const,
     ...Object.fromEntries([...CombatStatNames, ...MasteryNames].map((field) => [field, 100])),
-    curEnergy: 10, money: 100, experience: 200, seichiSilver: 0, regenAt: new Date("2026-01-01T00:00:00Z"), earnedExperience: 100,
+    curEnergy: 10, money: 100, experience: 200, seichiSilver: 0, pveFights: 10, regenAt: new Date("2026-01-01T00:00:00Z"), earnedExperience: 100,
     bloodlineId: null, items: [gear], energyTrainingQueue: [] } as unknown as Parameters<typeof captureCombatCacheSnapshot>[0];
   const snapshot = captureCombatCacheSnapshot(raw);
   const { masterySources: _private, ...baseline } = snapshot;
   const items = [{ ...baseline.items[0]!, durability: 0 }];
   const update: CombatProfileUpdate = { userId: raw.userId, battleId: "fight", baseline, items,
     userDelta: { money: 20, experience: 30, offence: 2, ninjutsuMastery: 5, dailyArenaFights: 1 },
-    userPatch: { curHealth: 90, curChakra: 80, curStamina: 70, curEnergy: 12, regenAt: new Date("2026-01-01T00:00:10Z"), stealthCooldownAt: new Date(), pvpStreak: 0, questData: [],
+    userPatch: { curHealth: 90, curChakra: 80, curStamina: 70, curEnergy: 12, regenAt: new Date("2026-01-01T00:00:10Z"), stealthCooldownAt: new Date(), pvpStreak: 0, pveFights: 11, questData: [],
       ...combatCacheDerived(snapshot, items, { ninjutsuMastery: 5 }) },
   };
   const current = { ...raw, status: "BATTLE", battleId: "fight", money: 100, experience: 200, dailyArenaFights: 0, maxEnergy: calcMaxEnergy(raw), userQuests: [], questData: [] } as unknown as NonNullable<UserWithRelations>;
@@ -45,6 +45,7 @@ describe("confirmed combat profile reconciliation", () => {
     await updateUserCache(client, key, (user) => combatProfilePatch(user, update), { revision, delta: update.userDelta });
     const settled = client.getQueryData<{ userData: typeof current }>(key)!.userData;
     expect(settled.money).toBe(120);
+    expect(settled.pveFights).toBe(11);
     expect(settled.offence).toBe(102);
     expect(settled.ninjutsuMastery).toBe(105);
     expect(settled.items[0]!.durability).toBe(0);
@@ -78,6 +79,7 @@ describe("confirmed combat profile reconciliation", () => {
     for (const changed of [
       { userId: "someone-else" }, { battleId: "new-fight" }, { ninjutsuMastery: 101 },
       { money: 101 }, { experience: 201 }, { seichiSilver: 1 },
+      { pveFights: 11 }, { pveFights: 12 },
       { energyTrainingQueue: [{ stat: "offence", energy: 1 }] },
       { items: current.items.map((item) => ({ ...item, durability: 99 })) },
       { regenAt: new Date(current.regenAt.getTime() + 1) },
@@ -126,6 +128,8 @@ describe("confirmed combat profile reconciliation", () => {
     expect(canCacheCombatCompletion({ ...battle, usersState: [...battle.usersState, makeBattleUser("other", { isAi: false })] }, result, "viewer")).toBe(false);
     const legacy = { ...snapshot, money: undefined } as unknown as typeof snapshot;
     expect(canCacheCombatCompletion({ ...battle, extraState: { ...battle.extraState, profileCacheSnapshots: { viewer: legacy } } }, result, "viewer")).toBe(false);
+    const legacyCounter = { ...snapshot, pveFights: undefined } as unknown as typeof snapshot;
+    expect(canCacheCombatCompletion({ ...battle, extraState: { ...battle.extraState, profileCacheSnapshots: { viewer: legacyCounter } } }, result, "viewer")).toBe(false);
     snapshot.hadTrainingQueue = true;
     expect(canCacheCombatCompletion(battle, result, "viewer")).toBe(false);
   });

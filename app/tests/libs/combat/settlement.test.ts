@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import * as nextServer from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -10,7 +11,7 @@ import {
   logBattleLengths,
   userData,
 } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot } from "@/libs/combat/userCache";
+import { captureCombatCacheSnapshot, combatProfilePatch } from "@/libs/combat/userCache";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { combatEnergyRecoverySql, updateBattle, updateUser } from "@/libs/combat/database";
 import { applyEffects } from "@/libs/combat/process";
@@ -19,7 +20,9 @@ import { alignBattle, calcBattleResult } from "@/libs/combat/util";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
+import type { UserWithRelations } from "@/server/api/routers/profile";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers } from "../../setup/factories";
 import {
   callerFor,
@@ -155,6 +158,53 @@ describeWithDatabase("CAS combat settlement", () => {
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it.each([false, true])("reconciles the initiation PvE counter after arena settlement (refreshed start: %s)", async (refreshed) => {
+    const database = await getTestDatabase();
+    await insertUsers([
+      { userId: "counter-player", username: "CounterPlayer", rank: "NONE", level: 1, status: "AWAKE", isOutlaw: true, pveFights: 10, curHealth: 100, curChakra: 100, curStamina: 100, curEnergy: 10, regeneration: 0 },
+      { userId: "counter-ai", username: "CounterAI", isAi: true, isSummon: false, rank: "NONE", level: 1, curHealth: 100 },
+    ]);
+    await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    const original = (await database.query.userData.findFirst({ where: eq(userData.userId, "counter-player") }))!;
+    const started = await initiateBattle({ client: database, userIds: ["counter-player"], targetIds: ["counter-ai"] }, "ARENA");
+    expect(started.success).toBe(true);
+    const snapshot = (await database.query.battle.findFirst({ where: eq(battle.id, started.battleId!) }))! as CompleteBattle;
+    expect(snapshot.extraState.profileCacheSnapshots?.["counter-player"]?.pveFights).toBe(10);
+    const inBattle = (await database.query.userData.findFirst({ where: eq(userData.userId, "counter-player") }))!;
+    expect(inBattle.pveFights).toBe(11);
+    snapshot.usersState.find((user) => !user.isAi)!.curHealth = 100;
+    const enemy = snapshot.usersState.find((user) => user.isAi)!;
+    enemy.curHealth = 0;
+    enemy.leftBattle = true;
+    const result = calcBattleResult(snapshot, "counter-player", [])!;
+    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    await updateUser(database, pusher, snapshot, result, "counter-player");
+    const after = (await database.query.userData.findFirst({ where: eq(userData.userId, "counter-player") }))!;
+    expect(after.pveFights).toBe(11);
+    expect(result.profileUpdate?.userPatch.pveFights).toBe(after.pveFights);
+
+    const key = [["profile", "getUser"], { type: "query" }];
+    const client = new QueryClient();
+    const current = { ...(refreshed ? inBattle : original), items: [], questData: [], userQuests: [], completedQuests: [], status: "BATTLE", battleId: started.battleId } as unknown as NonNullable<UserWithRelations>;
+    client.setQueryData(key, { userData: current });
+    let reads = 0;
+    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
+      queryFn: async () => { reads++; return { userData: { ...current, ...after } }; } });
+    const close = observer.subscribe(() => {});
+    try {
+      await updateUserCache(client, key, (user) => combatProfilePatch(user, result.profileUpdate!), { revision: prepareUserUpdate(client, key), delta: result.profileUpdate!.userDelta });
+      const cached = client.getQueryData<{ userData: typeof current }>(key)!.userData;
+      expect(cached.pveFights).toBe(after.pveFights);
+      expect(cached.status).toBe("AWAKE");
+      expect(cached.battleId).toBeNull();
+      expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+      expect(reads).toBe(refreshed ? 1 : 0);
+    } finally {
+      close();
+      client.clear();
+    }
+  });
 
   it("returns confirmed compact PvE progression only for the player whose battle guard commits", async () => {
     const database = await getTestDatabase();

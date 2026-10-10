@@ -22,6 +22,7 @@ const baselineFields = [
   "experience",
   "money",
   "seichiSilver",
+  "pveFights",
 ] as const;
 type BaselineField = (typeof baselineFields)[number];
 export type CombatCacheBaseline = Pick<UserData, BaselineField> & {
@@ -48,6 +49,7 @@ export type CombatProfileUpdate = {
     regenAt: Date;
     stealthCooldownAt: Date;
     pvpStreak: number;
+    pveFights: number;
     maxEnergy: number;
     effectiveMasteries: ReturnType<typeof effectiveMasteries>;
     questData: NonNullable<UserWithRelations>["questData"];
@@ -178,8 +180,8 @@ export const canCacheCombatCompletion = (
   const baseline = battle.extraState.profileCacheSnapshots?.[userId];
   return (
     !!baseline &&
-    ["money", "seichiSilver", "experience", "earnedExperience"].every((field) =>
-      Number.isFinite(baseline[field as "money"]),
+    ["money", "seichiSilver", "experience", "earnedExperience", "pveFights"].every(
+      (field) => Number.isFinite(baseline[field as "money"]),
     ) &&
     !baseline.hadTrainingQueue &&
     result.curHealth > 0 &&

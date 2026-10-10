@@ -1788,6 +1788,7 @@ export const updateUser = async (
           ),
           pvpStreak: result.pvpStreak,
           questData: publicUser.questData,
+          pveFights: baseline.pveFights + 1,
           ...combatCacheDerived(baseline, settledItems, userDelta),
         },
         items: settledItems,
