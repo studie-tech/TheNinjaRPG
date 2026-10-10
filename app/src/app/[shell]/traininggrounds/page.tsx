@@ -143,6 +143,9 @@ export default function Training() {
   const focusJutsuTraining = isTutorialJutsuPickStep(currentStep);
   // Null until NavTabs restores the last visited section (or falls back to the first).
   const [section, setSection] = useState<string | null>(null);
+  const { data: trainingQueue } = api.jutsu.getTrainingQueue.useQuery(undefined, {
+    enabled: !!userData && access,
+  });
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -186,6 +189,12 @@ export default function Training() {
               onChange={setSection}
               options={trainingSections.options}
               aliases={trainingSections.aliases}
+              counts={{
+                Stats: energyQueueLength,
+                Masteries: getMasteryQueue(userData).length,
+                Jutsu: trainingQueue?.waiting.length ?? 0,
+              }}
+              countLabel="queued"
               icons={{
                 Stats: <Swords aria-hidden="true" className="h-4 w-4" />,
                 Masteries: <Medal aria-hidden="true" className="h-4 w-4" />,
@@ -198,28 +207,6 @@ export default function Training() {
             />
           </div>
         </div>
-        {(!!userData.currentlyTrainingMastery || energyQueueLength > 0) && (
-          <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
-            {userData.currentlyTrainingMastery && (
-              <button
-                type="button"
-                className="hover:underline"
-                onClick={() => selectSection("Masteries")}
-              >
-                Training {getTrainingLabel(userData.currentlyTrainingMastery)}
-              </button>
-            )}
-            {energyQueueLength > 0 && (
-              <button
-                type="button"
-                className="hover:underline"
-                onClick={() => selectSection("Stats")}
-              >
-                {energyQueueLength} queued
-              </button>
-            )}
-          </div>
-        )}
       </ContentBox>
       <TabsContent value={activeSection ?? ""} className="mt-0">
         {(activeSection === "Stats" || activeSection === "Masteries") && (
