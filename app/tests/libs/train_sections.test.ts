@@ -12,12 +12,14 @@ describe("training grounds sections", () => {
     expect(getTrainingSections(true).options).toEqual([
       "Stats",
       "Masteries",
+      "Elements",
       "Jutsu",
       "Covert & Sensei",
     ]);
     expect(getTrainingSections(false).options).toEqual([
       "Stats",
       "Masteries",
+      "Elements",
       "Jutsu",
       "Covert",
     ]);

@@ -8,9 +8,14 @@ import {
   UserRanks,
   UserRoles,
 } from "@/drizzle/constants";
+import { getBloodlineElements } from "@/libs/userElements";
+
+export { getBloodlineElements, isBloodlineEffectBeneficial } from "@/libs/userElements";
+
+import { activeTrainedElement } from "@/libs/elementalMastery";
 import { masteryGainRoom } from "@/libs/masteryProgression";
 import type { UserWithRelations } from "@/routers/profile";
-import { createStatSchema, type ZodAllTags } from "@/validators/combat";
+import { createStatSchema } from "@/validators/combat";
 import { dashboardContentPrioritySchema } from "@/validators/dashboard";
 import { genders, usernameSchema } from "@/validators/register";
 import {
@@ -127,38 +132,10 @@ export const getUserElements = (user: UserWithRelations) => {
     finalElements = userElements;
   }
 
+  const trained = user && activeTrainedElement(user);
+  if (trained) finalElements.push(trained);
   finalElements.push("None");
   return Array.from(new Set(finalElements));
-};
-
-export const getBloodlineElements = (user: UserWithRelations) => {
-  const bloodlineElements: ElementName[] = [];
-  user?.bloodline?.effects.forEach((effect) => {
-    if ("elements" in effect && effect.elements) {
-      if (isBloodlineEffectBeneficial(effect)) {
-        bloodlineElements.push(...effect.elements);
-      }
-    }
-  });
-  return bloodlineElements;
-};
-
-export const isBloodlineEffectBeneficial = (effect: ZodAllTags) => {
-  // Default to beneficial, as should be true for most bloodline effects
-  let isStrength = true;
-  // Certains tags are negative in a bloodline context
-  if (
-    [
-      "decreasedamagegiven",
-      "increasedamagetaken",
-      "decreaseheal",
-      "decreasestat",
-      "decreasemastery",
-      "damage",
-    ].includes(effect.type)
-  )
-    isStrength = false;
-  return isStrength;
 };
 
 export const getPublicUsersSchema = z.object({

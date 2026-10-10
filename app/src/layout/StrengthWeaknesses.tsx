@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import type { MasteryType } from "@/drizzle/constants";
 import {
   CombatStatNames,
+  ELEMENTAL_MASTERY_BOOST,
   getUserCaps,
   MAX_MASTERY_CAP,
   MasteryNames,
@@ -26,6 +27,7 @@ import ElementImage from "@/layout/ElementImage";
 import NavTabs from "@/layout/NavTabs";
 import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
 import SkillTreeFolderModal from "@/layout/SkillTreeFolderModal";
+import { activeTrainedElement } from "@/libs/elementalMastery";
 import { getMasteryRank, masteryTotal } from "@/libs/masteryProgression";
 import { withCappedStats } from "@/libs/profile";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
@@ -177,7 +179,12 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
             {userElements.map((element, i) => (
               <div key={`${element}-${i}`} className="flex flex-row pt-1">
                 <ElementImage element={element} className="w-6" />
-                <p className="pl-2">{element}</p>
+                <p className="pl-2">
+                  {element}
+                  {activeTrainedElement(userData) === element
+                    ? ` (+${ELEMENTAL_MASTERY_BOOST}% damage)`
+                    : ""}
+                </p>
               </div>
             ))}
           </div>
@@ -401,7 +408,12 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
           {userElements.map((element) => (
             <div key={element} className="flex items-center gap-2 text-sm">
               <ElementImage element={element} className="w-8" />
-              <span>{element}</span>
+              <span>
+                {element}
+                {activeTrainedElement(userData) === element
+                  ? ` (+${ELEMENTAL_MASTERY_BOOST}% damage)`
+                  : ""}
+              </span>
             </div>
           ))}
         </div>

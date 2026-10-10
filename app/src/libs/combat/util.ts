@@ -1203,7 +1203,15 @@ export const canStackEffect = (effect: UserEffect, applied: Set<string>) =>
  * apply first (Stage 1), then in-battle effects apply to the result (Stage 2).
  */
 export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
-  const stage1Types = ["armor", "accessory", "keystone", "skill", "village", "ranked"];
+  const stage1Types = [
+    "armor",
+    "accessory",
+    "keystone",
+    "skill",
+    "village",
+    "ranked",
+    "elementalMastery",
+  ];
   if (
     "fromType" in effect &&
     effect.fromType &&

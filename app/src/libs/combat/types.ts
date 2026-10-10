@@ -612,7 +612,8 @@ export type BattleEffect = ZodAllTags & {
     | "skill"
     | "ranked"
     | "sageMode"
-    | "sageModeAfter";
+    | "sageModeAfter"
+    | "elementalMastery";
   targetType?: "user" | "barrier";
   power?: number;
   highestGenerals?: (typeof GenNames)[number][];

@@ -1002,6 +1002,10 @@ export const BasicElementName = [
   "Lightning",
 ] as const;
 
+export type BasicElement = (typeof BasicElementName)[number];
+export const ELEMENTAL_MASTERY_CAP = 300_000;
+export const ELEMENTAL_MASTERY_BOOST = 15;
+
 export const ElementNames = [
   ...BasicElementName,
   "Ice",
@@ -3381,6 +3385,7 @@ export const TRANSFER_EXCLUDED_SOURCE_TYPES: ReadonlySet<string> = new Set([
   "village",
   "skill",
   "ranked",
+  "elementalMastery",
   "sageMode",
   "sageModeAfter",
 ]);

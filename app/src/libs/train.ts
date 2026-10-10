@@ -539,7 +539,7 @@ export const getTrainingSections = (canUseSenseiSystem: boolean) => {
   const covertSection = canUseSenseiSystem ? "Covert & Sensei" : "Covert";
   return {
     covertSection,
-    options: ["Stats", "Masteries", "Jutsu", covertSection],
+    options: ["Stats", "Masteries", "Elements", "Jutsu", covertSection],
     /** Saved values from before the sections merged, or from the other rank variant. */
     aliases: {
       Covert: covertSection,

@@ -2323,7 +2323,7 @@ export const trainingLog = mysqlTable(
     id: int("id").autoincrement().primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     amount: double("amount").notNull(),
-    stat: mysqlEnum("stat", consts.UserStatNames),
+    stat: mysqlEnum("stat", [...consts.UserStatNames, ...consts.BasicElementName]),
     speed: mysqlEnum("speed", consts.TrainingSpeeds),
     trainingFinishedAt: datetime("trainingFinishedAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
@@ -2439,6 +2439,14 @@ export const userData = mysqlTable(
     speed: double("speed").default(10).notNull(),
     offence: double("offence").default(10).notNull(),
     defence: double("defence").default(10).notNull(),
+    elementalMastery: json("elementalMastery")
+      .$type<Partial<Record<consts.BasicElement, number>>>()
+      .default({})
+      .notNull(),
+    activeTrainedElement: mysqlEnum("activeTrainedElement", consts.BasicElementName),
+    currentlyTrainingElement: mysqlEnum("currentlyTrainingElement", consts.BasicElementName),
+    elementalTrainingStartedAt: datetime("elementalTrainingStartedAt", { mode: "date", fsp: 3 }),
+    elementalTrainingSpeed: mysqlEnum("elementalTrainingSpeed", consts.TrainingSpeeds),
     /** Earned discipline ranks; absent entries are NONE and temporary modifiers never change them. */
     masteryRanks: json("masteryRanks")
       .$type<Partial<Record<consts.MasteryName, consts.MasteryRank>>>()
@@ -2713,6 +2721,9 @@ export const userData = mysqlTable(
 );
 export const insertAiSchema = createInsertSchema(userData)
   .omit({
+    elementalTrainingStartedAt: true,
+    currentlyTrainingElement: true,
+    elementalTrainingSpeed: true,
     occupationSignupAt: true,
     masteryTrainingStartedAt: true,
     currentlyTrainingMastery: true,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  BasicElementName,
   ElementNames,
   MASTERY_RANKS,
   MasteryNames,
@@ -70,6 +71,11 @@ export type UserDelta = z.infer<typeof userDeltaSchema>;
 
 // Absolute values are kept separate from arithmetic deltas so a saved field is never added.
 export const userPatchSchema = z.object({
+  elementalMastery: z.partialRecord(z.enum(BasicElementName), z.number()).optional(),
+  activeTrainedElement: z.enum(BasicElementName).nullable().optional(),
+  currentlyTrainingElement: z.enum(BasicElementName).nullable().optional(),
+  elementalTrainingStartedAt: z.date().nullable().optional(),
+  elementalTrainingSpeed: z.enum(TrainingSpeeds).nullable().optional(),
   dailySageActivations: z.number().optional(),
   dailyMedicalMissions: z.number().optional(),
   dailyWarMissions: z.number().optional(),
