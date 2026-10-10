@@ -21,6 +21,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import { showMutationToast } from "@/libs/toast";
+import { getUnique } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { AiRuleType, ZodAllAiAction, ZodAllAiCondition } from "@/validators/ai";
@@ -116,13 +117,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
     setCollapsedGroups([]);
   }, [profile, isStaff]);
 
-  const groups = [
-    ...new Map(
-      rules.flatMap((rule) =>
-        rule.group ? [[rule.group.id, rule.group] as const] : [],
-      ),
-    ).values(),
-  ];
+  const groups = getUnique(
+    rules.flatMap((rule) => (rule.group ? [rule.group] : [])),
+    "id",
+  );
   const updateGroup = (id: string, field: "name" | "note", value: string) => {
     setRules((previous) =>
       previous.map((rule) =>

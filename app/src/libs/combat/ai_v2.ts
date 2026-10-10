@@ -256,28 +256,19 @@ export const performAIaction = (
           return barriers[0];
         case "SELF":
           return userWithDistance;
-        case "EMPTY_GROUND_CLOSEST_TO_OPPONENT": {
-          const closestTiles = getTargetableTiles(origin, action);
-          const closestTarget = closestTiles?.[0];
-          if (closestTarget) {
-            return {
-              hex: closestTarget.hex,
-              distance: closestTarget.distance,
-              longitude: closestTarget.hex.col,
-              latitude: closestTarget.hex.row,
-            };
-          }
-          break;
-        }
+        case "EMPTY_GROUND_CLOSEST_TO_OPPONENT":
         case "EMPTY_GROUND_CLOSEST_TO_SELF": {
-          const furthestTiles = getTargetableTiles(origin, action, true);
-          const furthestTarget = furthestTiles?.[0];
-          if (furthestTarget) {
+          const target = getTargetableTiles(
+            origin,
+            action,
+            entry.target === "EMPTY_GROUND_CLOSEST_TO_SELF",
+          )?.[0];
+          if (target) {
             return {
-              hex: furthestTarget.hex,
-              distance: furthestTarget.distance,
-              longitude: furthestTarget.hex.col,
-              latitude: furthestTarget.hex.row,
+              hex: target.hex,
+              distance: target.distance,
+              longitude: target.hex.col,
+              latitude: target.hex.row,
             };
           }
           break;
