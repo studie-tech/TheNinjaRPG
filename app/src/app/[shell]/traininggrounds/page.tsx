@@ -1042,8 +1042,8 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
         <QuestPicker
           questType="mastery"
           title="Mastery Rank-Up Exams"
-          subtitle="Complete an exam at each mastery cap"
-          unavailableText="No exams available. Reach a mastery cap to unlock its next exam."
+          subtitle="Complete an available exam to advance your mastery rank"
+          unavailableText="No exams available. Published exams unlock when you meet their earned mastery and previous rank requirements."
           initialBreak
         />
       )}
