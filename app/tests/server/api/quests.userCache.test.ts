@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { quest, questHistory, userData, userVote } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
-import { SimpleObjective } from "@/validators/objectives";
+import { CollectItem, InstantNewQuestObjective, InstantStartBattleObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
@@ -15,6 +15,11 @@ const content = (value: number) => ({
   reward: ObjectiveReward.parse({ reward_money: 100, reward_exp: 50 }),
   sceneBackground: "", sceneCharacters: [],
 });
+const immediateObjectives = [
+  { name: "battle", done: false, objective: InstantStartBattleObjective.parse({ id: "instant", task: "start_battle", opponentAIs: [{ ids: ["cache-opponent"], number: 1 }] }) },
+  { name: "new quest", done: true, objective: InstantNewQuestObjective.parse({ id: "instant", task: "new_quest", newQuestIds: ["another-cache-quest"] }) },
+  { name: "item collection", done: true, objective: CollectItem.parse({ id: "instant", task: "collect_item", sector: 0, longitude: 10, latitude: 7, collectItemIds: ["cache-item"] }) },
+];
 
 const readPlayer = async () => (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, playerId) });
 
@@ -55,6 +60,24 @@ describeWithDatabase("confirmed quest cache responses", () => {
     expect(result.userPatch?.questData?.find((entry) => entry.id === missionId)).toBeDefined();
     expect(result.userPatch?.userQuests?.filter((entry) => entry.questId === missionId)).toHaveLength(1);
     expect(reads()).toBe(1);
+  });
+
+  it.each(["startQuest", "startRandom"] as const)("keeps reconciliation after %s emits an immediate objective consequence", async (method) => {
+    for (const { name, objective, done } of immediateObjectives) {
+      const database = await getTestDatabase();
+      await database.delete(questHistory).where(eq(questHistory.questId, missionId));
+      await database.update(userData).set({ questData: [], dailyMissions: 0 }).where(eq(userData.userId, playerId));
+      await database.update(quest).set({ questType: method === "startRandom" ? "crime" : "mission", content: { ...content(10), objectives: [objective] } }).where(eq(quest.id, missionId));
+      const api = await callerFor(questsRouter, playerId);
+      const result = method === "startQuest"
+        ? await api.startQuest({ questId: missionId, userSector: 0 })
+        : await api.startRandom({ type: "crime", rank: "A", userLevel: 50, userSector: 0, userVillageId: null });
+      expect(result.success, name).toBe(true);
+      expect(result.userPatch, name).toBeUndefined();
+      expect(result.achievementProgress, name).toBeUndefined();
+      const saved = await readPlayer();
+      expect(saved?.questData?.find((entry) => entry.id === missionId)?.goals[0]?.done, name).toBe(done);
+    }
   });
 
   it("returns a completed repeatable mission without exposing it as active or recreating its tracker", async () => {

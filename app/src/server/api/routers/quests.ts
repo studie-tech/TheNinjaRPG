@@ -532,7 +532,7 @@ export const questsRouter = createTRPCRouter({
           : null;
 
       // Insert quest entry
-      await Promise.all([
+      const [assignment] = await Promise.all([
         upsertQuestEntry(ctx.drizzle, user, result, "random_assignment", prevEntry),
         ctx.drizzle
           .update(userData)
@@ -558,7 +558,8 @@ export const questsRouter = createTRPCRouter({
       return {
         success: true,
         message: `Quest started: ${result.name}${rankInfo}`,
-        ...(!updatedUser.requiresProgressionRefresh &&
+        ...(assignment.userCacheEligible &&
+        !updatedUser.requiresProgressionRefresh &&
         getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0
           ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
           : {}),
@@ -588,7 +589,7 @@ export const questsRouter = createTRPCRouter({
       if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
       if (user.isBanned) return errorResponse("You are banned");
 
-      const result = await assignQuestToUser({
+      const { userCacheEligible, ...result } = await assignQuestToUser({
         client: ctx.drizzle,
         user,
         quest: questData,
@@ -599,6 +600,7 @@ export const questsRouter = createTRPCRouter({
       return {
         ...result,
         ...(result.success &&
+        userCacheEligible === true &&
         !updatedUser.requiresProgressionRefresh &&
         questData.questType !== "war" &&
         getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0
@@ -2458,7 +2460,7 @@ export const assignQuestToUser = async (args: {
   // Required: it feeds the availability / period-cap guards below and is threaded into
   // upsertQuestEntry to skip its findFirst round-trip. Both callers already fetch it.
   prevAttempt: Awaited<ReturnType<typeof fetchUserQuestByQuestId>>;
-}): Promise<{ success: boolean; message: string }> => {
+}): Promise<{ success: boolean; message: string; userCacheEligible?: boolean }> => {
   const {
     client,
     user,
@@ -2577,6 +2579,7 @@ export const assignQuestToUser = async (args: {
   // roundtrip; a crash before upsertQuestEntry then leaves a bounded (~2h) cross-bracket
   // stamp without a quest — the same fail-safe leak the equivalent merge in initiateBattle
   // accepts, and harmless since it only makes the user more attackable.
+  let assignment: Awaited<ReturnType<typeof upsertQuestEntry>>;
   if (questData.questType === "war") {
     const result = await client
       .update(userData)
@@ -2595,14 +2598,24 @@ export const assignQuestToUser = async (args: {
         `You have reached your daily war mission limit of ${WAR_MISSIONS_PER_DAY}`,
       );
     }
-    await upsertQuestEntry(client, user, questData, source, prevAttempt ?? null);
+    assignment = await upsertQuestEntry(
+      client,
+      user,
+      questData,
+      source,
+      prevAttempt ?? null,
+    );
   } else {
-    await Promise.all([
+    [assignment] = await Promise.all([
       upsertQuestEntry(client, user, questData, source, prevAttempt ?? null),
       incrementDailyQuestCounter(client, user, questData.questType),
     ]);
   }
-  return { success: true, message: `Quest started: ${questData.name}` };
+  return {
+    success: true,
+    message: `Quest started: ${questData.name}`,
+    userCacheEligible: assignment.userCacheEligible,
+  };
 };
 
 /**
@@ -2720,7 +2733,9 @@ export const upsertQuestEntry = async (
         farmingCollectionCount: await getFarmCollectionCount(client, user.userId),
       }
     : user;
-  const { trackers } = getNewTrackers(trackerUser, [{ task: "any" }]);
+  const { trackers, consequences, notifications } = getNewTrackers(trackerUser, [
+    { task: "any" },
+  ]);
   promises.push(
     client
       .update(userData)
@@ -2733,8 +2748,11 @@ export const upsertQuestEntry = async (
   await Promise.all(promises);
   user.questData = trackers;
   user.completedQuests = user.completedQuests.filter((row) => row.questId !== quest.id);
-  // Return the newest log entry
-  return entry;
+  // Instant objectives may become done before a later pass can recover their side effects.
+  return {
+    entry,
+    userCacheEligible: consequences.length === 0 && notifications.length === 0,
+  };
 };
 
 export const insertNextQuest = async (
@@ -2746,7 +2764,7 @@ export const insertNextQuest = async (
   const nextQuest = history?.[0];
   if (nextQuest) {
     const logEntry = await upsertQuestEntry(client, user, nextQuest, "system");
-    return { ...logEntry, quest: nextQuest };
+    return { ...logEntry.entry, quest: nextQuest };
   }
   return undefined;
 };
