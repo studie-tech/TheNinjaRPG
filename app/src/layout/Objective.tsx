@@ -45,6 +45,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
 
   // Check if this is a start_battle objective with recentlyDied flag
   const status = tracker?.goals.find((g) => g.id === objective.id);
+  const goalTarget = status?.target ?? ("value" in parsed ? parsed.value : undefined);
   const isStartBattleWithRecentlyDied =
     objective.task === "start_battle" && status?.recentlyDied;
 
@@ -150,18 +151,20 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         </div>
         <hr className="my-0" />
         <div className="pl-2">
-          {"value" in parsed && (
+          {goalTarget !== undefined && (
             <div className="flex flex-row items-center pr-3">
               <div className="grow">
-                <StatusBar
-                  key={`${tracker.id}-${objective.id}-${value}`}
-                  title="Goal"
-                  tooltip="Status points"
-                  color={getStatusColor(tier, done)}
-                  showText={true}
-                  current={value > parsed.value ? parsed.value : value}
-                  total={parsed.value}
-                />
+                {goalTarget > 0 && (
+                  <StatusBar
+                    key={`${tracker.id}-${objective.id}-${value}-${goalTarget}`}
+                    title="Goal"
+                    tooltip="Status points"
+                    color={getStatusColor(tier, done)}
+                    showText={true}
+                    current={Math.min(value, goalTarget)}
+                    total={goalTarget}
+                  />
+                )}
               </div>
               {indicatorIcons}
             </div>

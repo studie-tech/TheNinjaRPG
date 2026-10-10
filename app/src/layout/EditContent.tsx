@@ -2292,7 +2292,8 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     )
     .filter((value) => {
       return (
-        !SimpleTasks.includes(watchTask as SimpleTask) ||
+        (!SimpleTasks.includes(watchTask as SimpleTask) &&
+          watchTask !== "bloodline_collection") ||
         !["latitude", "longitude", "sector"].includes(value)
       );
     })
@@ -2855,6 +2856,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   completeQuestIds: "Quests to Complete",
   tagType: "Combat Tag Type",
   singleBattle: "Track best single-battle only (else cumulative)",
+  bloodlineRank: "Bloodline Rank",
   shieldRounds: "Shield Rounds",
 };
 

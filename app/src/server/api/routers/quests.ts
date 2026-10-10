@@ -137,11 +137,9 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
-import {
-  getFarmCollectionCount,
-  reduceActiveFarmPlotTimers,
-} from "@/server/utils/farming";
+import { reduceActiveFarmPlotTimers } from "@/server/utils/farming";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { hydrateQuestCollections } from "@/server/utils/questCollections";
 import { fetchQuestDiscoveryCandidates } from "@/server/utils/questDiscovery";
 import { awardRecruitRankMilestonesSafely } from "@/server/utils/recruitment";
 import { extendWarParticipantSql } from "@/server/utils/war";
@@ -2733,14 +2731,7 @@ export const upsertQuestEntry = async (
     ...user.userQuests.filter((row) => row.questId !== quest.id),
     { ...entry, quest },
   ];
-  const trackerUser = quest.content.objectives.some(
-    (objective) => objective.task === "farming_collection_log",
-  )
-    ? {
-        ...user,
-        farmingCollectionCount: await getFarmCollectionCount(client, user.userId),
-      }
-    : user;
+  const trackerUser = await hydrateQuestCollections(client, user);
   const { trackers, consequences, notifications } = getNewTrackers(trackerUser, [
     { task: "any" },
   ]);

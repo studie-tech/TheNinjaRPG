@@ -137,7 +137,6 @@ import {
   getNewTrackers,
   getPublicQuestUser,
   getUncheckedQuestTargetSectors,
-  getUserQuests,
   isAvailableUserQuests,
   mockAchievementHistoryEntries,
   questHasOverworldObjectives,
@@ -178,9 +177,9 @@ import {
   claimUserSnapshot,
 } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
-import { getFarmCollectionCount } from "@/server/utils/farming";
 import { hashIp } from "@/server/utils/ipHash";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
+import { hydrateQuestCollections } from "@/server/utils/questCollections";
 import { fetchQuestDiscoverySummaryCandidates } from "@/server/utils/questDiscovery";
 import {
   awardRecruitRankMilestonesSafely,
@@ -3460,17 +3459,7 @@ export const fetchUpdatedUser = async (props: {
     }
   }
   if (user) {
-    const hasActiveFarmingCollectionObjective = getUserQuests(user).some((quest) =>
-      quest.content.objectives.some(
-        (objective) => objective.task === "farming_collection_log",
-      ),
-    );
-    const trackerUser = hasActiveFarmingCollectionObjective
-      ? {
-          ...user,
-          farmingCollectionCount: await getFarmCollectionCount(client, user.userId),
-        }
-      : user;
+    const trackerUser = await hydrateQuestCollections(client, user);
     // Get the latest quest trackers
     const trackerResults = getNewTrackers(trackerUser, [{ task: "any" }]);
 

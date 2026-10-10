@@ -2473,6 +2473,8 @@ export const IMG_BADGE_USER_LEVEL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJo6lBgeZ9MPZpHJ7VliuEWDfATdxhv62SXnm4.webp";
 export const IMG_BADGE_MOVE_TO_LOCATION =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5qXZuJi797jl4ubX8xrRqTZasyMp2WA5eLGU.webp";
+export const IMG_BADGE_BLOODLINE_COLLECTION =
+  "https://ui0arpl8sm.ufs.sh/f/ZQyNIkckHEC2XXm5NvOi2.webp";
 export const IMG_BADGE_COLLECT_ITEM =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJtxtluhUYJDfpFXWm3nrcPluEtIZqyLkaSV1j.webp";
 export const IMG_BADGE_DEFEAT_OPPONENTS =

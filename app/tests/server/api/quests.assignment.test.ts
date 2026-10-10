@@ -85,6 +85,15 @@ const makeClient = (assignedQuest: { questId: string } | null = { questId: quest
       update,
       insert,
       query: {
+        bloodline: {
+          findMany: vi.fn().mockResolvedValue([
+            { id: "line-1", rank: "A", hidden: false },
+            { id: "line-2", rank: "A", hidden: false },
+          ]),
+        },
+        bloodlineRolls: {
+          findMany: vi.fn().mockResolvedValue([{ bloodlineId: "line-1" }]),
+        },
         item: { findMany: findItems },
         farmCollectionLog: { findMany: findCollectionRows },
         overworldAiPlacementQuest: { findFirst },
@@ -150,6 +159,24 @@ const makeBulkClient = (
 };
 
 describe("assignQuestToUser compatibility", () => {
+  it("initializes a collection objective from bloodlines owned before quest acceptance", async () => {
+    const { client, set } = makeClient();
+    const collector = { ...user, bloodlineId: "line-2", userQuests: [] };
+    const collectionQuest = {
+      ...quest,
+      content: {
+        ...quest.content,
+        objectives: [
+          { id: "collect", task: "bloodline_collection", bloodlineRank: "A" },
+        ],
+      },
+    };
+    await upsertQuestEntry(client, collector as never, collectionQuest as never, "ui", null);
+    expect(set.mock.calls[0]?.[0].questData).toMatchObject([
+      { id: quest.id, goals: [{ id: "collect", value: 2, target: 2, done: true }] },
+    ]);
+  });
+
   it("preserves the successful UI mission path: history upsert, tracker write, and counter", async () => {
     const { client, update, insert } = makeClient();
 

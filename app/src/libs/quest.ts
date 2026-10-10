@@ -35,6 +35,7 @@ import {
   WAR_MISSIONS_PER_DAY,
 } from "@/drizzle/constants";
 import type { GameSetting, Quest, UserData, UserItem } from "@/drizzle/schema";
+import type { BloodlineCollectionProgress } from "@/libs/bloodline";
 import { getFarmingLevel } from "@/libs/farming";
 import { getGatheringRank } from "@/libs/gathering";
 import { calcMedninRank } from "@/libs/hospital";
@@ -147,14 +148,15 @@ export const isMockQuestHistoryRow = (row: { id: string; questId: string }): boo
   row.id === row.questId;
 
 /**
- * Strip in-memory-only achievement trackers before persisting `UserData.questData`.
+ * Strip in-memory-only achievement trackers before persisting `UserData.questData`, except
+ * completed collection goals whose catalogue snapshot must survive until reward claim.
  * Mock rows from `mockAchievementHistoryEntries` use `id === questId`; real `QuestHistory.id` is a nanoid.
  */
 export const filterQuestTrackersForDbPersist = (
   trackers: QuestTrackerType[],
   user: NonNullable<UserWithRelations>,
 ) => {
-  const inMemoryOnlyAchievementQuestIds = new Set(
+  const inMemoryOnlyAchievements = new Map(
     user.userQuests
       // `uq.quest` is null for an orphaned QuestHistory row (its quest was deleted). Most callers
       // pass userQuests from fetchUpdatedUser, which already strips these, but item.ts's buy path
@@ -164,9 +166,19 @@ export const filterQuestTrackersForDbPersist = (
       .filter(
         (uq) => uq.quest?.questType === "achievement" && isMockQuestHistoryRow(uq),
       )
-      .map((uq) => uq.questId),
+      .map((uq) => [uq.questId, uq.quest]),
   );
-  return trackers.filter((t) => !inMemoryOnlyAchievementQuestIds.has(t.id));
+  return trackers.filter((tracker) => {
+    const achievement = inMemoryOnlyAchievements.get(tracker.id);
+    return (
+      !achievement ||
+      achievement.content?.objectives.some(
+        (objective) =>
+          objective.task === "bloodline_collection" &&
+          tracker.goals.some((goal) => goal.id === objective.id && goal.done),
+      )
+    );
+  });
 };
 
 /** Hidden active targets need server projection after changing sectors, even if currently revealed. */
@@ -990,6 +1002,7 @@ export const getNewTrackers = (
   user: NonNullable<UserWithRelations> & {
     useritems?: UserItem[];
     farmingCollectionCount?: number;
+    bloodlineCollectionProgress?: BloodlineCollectionProgress;
   },
   tasks: ObjectiveTrackerTaskInput[],
   combatContext?: CombatQuestContext,
@@ -1004,6 +1017,12 @@ export const getNewTrackers = (
   const trackers = activeQuests
     .map((quest) => {
       if (quest) {
+        const isInMemoryOnlyAchievement =
+          quest.questType === "achievement" &&
+          user.userQuests.some(
+            (entry) => entry.questId === quest.id && isMockQuestHistoryRow(entry),
+          ) &&
+          !questData.some((tracker) => tracker.id === quest.id);
         // Get the quest tracker for this quest, or create it
         let questTracker = questData.find((q) => q.id === quest.id);
         if (!questTracker) {
@@ -1214,7 +1233,31 @@ export const getNewTrackers = (
           const isKage = user.village?.kageId === user.userId;
 
           // General updates we want to apply every time
-          if (task === "user_level") {
+          if (objective.task === "bloodline_collection") {
+            const progress = user.bloodlineCollectionProgress?.find(
+              (entry) => entry.rank === objective.bloodlineRank,
+            );
+            if (progress) {
+              const isComplete =
+                progress.total > 0 && progress.collected === progress.total;
+              if (
+                (isComplete || !isInMemoryOnlyAchievement) &&
+                (status.value !== progress.collected ||
+                  status.target !== progress.total ||
+                  status.done !== isComplete)
+              ) {
+                consequences.push({
+                  type: "update_user",
+                  ids: ["bloodline_collection_update"],
+                });
+              }
+              status.value = progress.collected;
+              status.target = progress.total;
+              // An empty catalogue cannot award a collection achievement. Done goals are
+              // retained above, so catalogue growth never revokes a recorded completion.
+              status.done = isComplete;
+            }
+          } else if (task === "user_level") {
             // Use originalLevel if available (for combat-scaled users), otherwise use current level
             const userLevel =
               "originalLevel" in user && typeof user.originalLevel === "number"

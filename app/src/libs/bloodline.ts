@@ -4,6 +4,7 @@ import {
   BLOODLINE_SWAP_FREE_GOLD,
   BLOODLINE_SWAP_FREE_NORMAL,
   BLOODLINE_SWAP_FREE_SILVER,
+  LetterRanks,
   PITY_BLOODLINE_ROLLS,
 } from "@/drizzle/constants";
 import type {
@@ -12,6 +13,33 @@ import type {
   BloodlineRolls,
   UserData,
 } from "@/drizzle/schema";
+
+export type BloodlineCollectionProgress = {
+  rank: LetterRank | "ALL";
+  collected: number;
+  total: number;
+}[];
+
+/** Count distinct owned bloodlines against the current non-hidden catalogue. */
+export const buildBloodlineCollectionProgress = (
+  bloodlines: readonly Pick<Bloodline, "id" | "rank" | "hidden">[],
+  ownedIds: readonly string[],
+): BloodlineCollectionProgress => {
+  const owned = new Set(ownedIds);
+  const visible = bloodlines.filter((line) => !line.hidden);
+  return (["ALL", ...LetterRanks] as const).map((rank) => {
+    const eligible = new Set(
+      visible
+        .filter((line) => rank === "ALL" || line.rank === rank)
+        .map((line) => line.id),
+    );
+    return {
+      rank,
+      collected: [...eligible].filter((id) => owned.has(id)).length,
+      total: eligible.size,
+    };
+  });
+};
 
 /**
  * Filters and sorts a list of bloodlines based on the specified rank, user data, and previous rolls.
