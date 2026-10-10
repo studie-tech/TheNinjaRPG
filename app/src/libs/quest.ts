@@ -1692,20 +1692,26 @@ export const getNewTrackers = (
 export type GetNewTrackersResult = Awaited<ReturnType<typeof getNewTrackers>>;
 
 /**
- * Unfinished goals of active quests that carry a concrete map location which has not yet been
- * checked against the published sector map. Placement-bound objectives are skipped because the
- * overworld placement, not the stored coordinate, decides where they resolve.
+ * Unfinished goals with concrete map locations. Checked goals can be included in the player's
+ * current sector so a republished map cannot leave an active mission on blocked terrain.
+ * Placement-bound objectives use the overworld placement's location instead.
  */
-const getUncheckedLocatedGoals = (
+const getLocatedGoalsToCheck = (
   user: NonNullable<UserWithRelations>,
   trackers: QuestTrackerType[],
+  recheckCurrentSector = false,
 ) => {
   const located: { goal: ObjectiveTrackerType; objective: AllObjectivesType }[] = [];
   for (const quest of getUserQuests(user)) {
     const tracker = trackers.find((t) => t.id === quest.id);
     if (!tracker) continue;
     for (const goal of tracker.goals) {
-      if (goal.done || goal.locationChecked) continue;
+      if (
+        goal.done ||
+        (goal.locationChecked && !(recheckCurrentSector && goal.sector === user.sector))
+      ) {
+        continue;
+      }
       if (
         goal.sector === undefined ||
         goal.longitude === undefined ||
@@ -1729,19 +1735,23 @@ const getUncheckedLocatedGoals = (
 };
 
 /** Sectors whose published maps are needed by {@link snapQuestTargetsToReachable}. */
-export const getUncheckedQuestTargetSectors = (
+export const getQuestTargetSectorsToCheck = (
   user: NonNullable<UserWithRelations>,
   trackers: QuestTrackerType[],
+  recheckCurrentSector = false,
 ) => [
   ...new Set(
-    getUncheckedLocatedGoals(user, trackers).map(({ goal }) => goal.sector as number),
+    getLocatedGoalsToCheck(user, trackers, recheckCurrentSector).map(
+      ({ goal }) => goal.sector as number,
+    ),
   ),
 ];
 
 /**
- * Moves every unchecked quest target onto the nearest tile a player can walk to in its sector
- * and marks it checked, so random rolls, village-relative coordinates and admin-placed points
- * that land on water or obstacles stay completable. Mutates the trackers and the active
+ * Checks new quest targets and existing targets in the player's current sector against the
+ * published map, moving them onto the nearest reachable tile when needed. Checked remote
+ * targets wait until the player visits their sector to avoid fetching every mission's map
+ * on every profile read. Mutates the trackers and the active
  * quests' objectives in place, mirroring how getNewTrackers instantiates locations.
  *
  * @returns whether any tracker changed and must be persisted.
@@ -1755,7 +1765,7 @@ export const snapQuestTargetsToReachable = (
   >,
 ) => {
   let changed = false;
-  for (const { goal, objective } of getUncheckedLocatedGoals(user, trackers)) {
+  for (const { goal, objective } of getLocatedGoalsToCheck(user, trackers, true)) {
     // Without a published map (or any walkable tile) the goal stays unchecked so it is
     // re-evaluated once the sector has a usable map.
     const map = maps.get(goal.sector as number);
@@ -1766,6 +1776,13 @@ export const snapQuestTargetsToReachable = (
         })
       : null;
     if (!reachable) continue;
+    if (
+      goal.locationChecked &&
+      goal.longitude === reachable.x &&
+      goal.latitude === reachable.y
+    ) {
+      continue;
+    }
     goal.longitude = reachable.x;
     goal.latitude = reachable.y;
     if ("sector" in objective) {
