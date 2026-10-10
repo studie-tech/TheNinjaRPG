@@ -817,6 +817,11 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
             </div>
           }
         >
+          {userData.status === "ASLEEP" && (
+            <p className="mb-4 text-muted-foreground text-sm">
+              Wake up to add training. Existing queues continue while asleep.
+            </p>
+          )}
           {showCaptcha && captcha && (
             <div className="mb-4">
               {/* biome-ignore lint/performance/noImgElement: SVG captcha requires img element */}
@@ -848,11 +853,7 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     key={`${stat}-${i}`}
                     onClick={() => {
                       const block =
-                        statTrainingBlockMessage(
-                          isQueueingStats && userData.status === "ASLEEP"
-                            ? { ...userData, status: "AWAKE" }
-                            : userData,
-                        ) ??
+                        statTrainingBlockMessage(userData) ??
                         (overCap ? "Already capped" : null) ??
                         (isQueueingStats
                           ? energyQueueLength >= getQueueTotalCapacity(userData)
@@ -949,9 +950,11 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
               {MAX_DAILY_TRAININGS} daily sessions
             </p>
             <p className="text-muted-foreground text-xs">
-              {userData.currentlyTrainingMastery
-                ? "Choose an interval, then select a mastery image to add a session to the queue."
-                : "Choose an interval, then select a mastery image to start training."}
+              {userData.status === "ASLEEP"
+                ? "Wake up to add training. Existing queues continue while asleep."
+                : userData.currentlyTrainingMastery
+                  ? "Choose an interval, then select a mastery image to add a session to the queue."
+                  : "Choose an interval, then select a mastery image to start training."}
             </p>
           </div>
           <div inert={isPending}>
@@ -966,12 +969,15 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     key={`${stat}-${i}`}
                     onClick={() => {
                       const entry = { stat, speed: selectedMasterySpeed };
-                      const block = userData.currentlyTrainingMastery
-                        ? (queuedMasteryStartBlockMessage(userData, entry) ??
-                          (masteryEntries.length >= getQueueWaitingSlots(userData)
-                            ? "Mastery queue is full"
-                            : null))
-                        : masteryTrainingBlockMessage(userData);
+                      const block =
+                        userData.status !== "AWAKE"
+                          ? "Must be awake to train"
+                          : userData.currentlyTrainingMastery
+                            ? (queuedMasteryStartBlockMessage(userData, entry) ??
+                              (masteryEntries.length >= getQueueWaitingSlots(userData)
+                                ? "Mastery queue is full"
+                                : null))
+                            : masteryTrainingBlockMessage(userData);
                       if (block) showMutationToast({ success: false, message: block });
                       else if (overCap)
                         showMutationToast({

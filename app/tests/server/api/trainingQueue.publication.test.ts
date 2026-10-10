@@ -183,6 +183,31 @@ describeWithDatabase("Training queue atomic publication", () => {
     expect(saved.roundTrips).toBe(7);
   });
 
+  it.each(["ENERGY", "MASTERY"] as const)("rejects a %s addition if the player falls asleep before publication", async (kind) => {
+    const database = await getTestDatabase();
+    const client = new Proxy(database, {
+      get(target, property) {
+        if (property !== "transaction") return Reflect.get(target, property);
+        return async (callback: Parameters<typeof target.transaction>[0]) => {
+          // Sleep changes status without updating the snapshot timestamp.
+          await database.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, userId));
+          return target.transaction(callback);
+        };
+      },
+    });
+    const caller = callerForDatabase(trainRouter, userId, client);
+    const result = kind === "ENERGY"
+      ? await caller.updateEnergyTrainingQueue({ expectedEntries: [], entries: [{ stat: "strength", energy: 100 }] })
+      : await caller.updateMasteryTrainingQueue({ expectedEntries: [], entries: [genjutsu] });
+    expect(result).toMatchObject({ success: false });
+    const user = await readUser();
+    expect(user.status).toBe("ASLEEP");
+    expect(user.queue).toEqual([]);
+    expect(user.energyQueueHead).toBe(0);
+    expect(user.energyQueueTail).toBe(0);
+    expect(user.masteryQueueHead).toBe(0);
+  });
+
   it("retains the old queue until replacement rows commit and rejects an overlapping add", async () => {
     const database = await getTestDatabase();
     const normal = callerForDatabase(trainRouter, userId, database);

@@ -68,10 +68,7 @@ export const trainRouter = createTRPCRouter({
         expected: input.expectedEntries,
         entries: input.entries,
         validate: async () => {
-          const block = statTrainingBlockMessage({
-            ...user,
-            status: user.status === "ASLEEP" ? "AWAKE" : user.status,
-          });
+          const block = statTrainingBlockMessage(user);
           if (block) return block;
           if (input.entries.length > getQueueTotalCapacity(user))
             return "Training queue is full";
@@ -123,6 +120,7 @@ export const trainRouter = createTRPCRouter({
         entries: input.entries,
         // Adding or changing an entry needs an active session to queue behind.
         validate: () => {
+          if (user.status !== "AWAKE") return "Must be awake to train";
           if (!user.currentlyTrainingMastery)
             return "Start a mastery training before queueing more";
           if (input.entries.length > getQueueWaitingSlots(user))
@@ -136,6 +134,7 @@ export const trainRouter = createTRPCRouter({
               .find(Boolean) ?? null
           );
         },
+        where: [eq(userData.status, user.status)],
         messages: {
           stale: "Your mastery queue changed. Please refresh and try again",
           conflict: "Your mastery queue changed. Please try again",

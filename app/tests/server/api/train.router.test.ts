@@ -287,6 +287,32 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(await readEnergyQueue(USER_ID)).toEqual([]);
   });
 
+  it.each([
+    { name: "a new queue", current: [], entries: [{ stat: "offence", energy: 40 }] },
+    { name: "an appended entry", current: [{ stat: "offence", energy: 40 }], entries: [{ stat: "offence", energy: 40 }, { stat: "defence", energy: 40 }] },
+    { name: "a changed stat", current: [{ stat: "offence", energy: 40 }], entries: [{ stat: "defence", energy: 40 }] },
+    { name: "a changed threshold", current: [{ stat: "offence", energy: 40 }], entries: [{ stat: "offence", energy: 50 }] },
+    { name: "reordered entries", current: [{ stat: "offence", energy: 40 }, { stat: "defence", energy: 40 }], entries: [{ stat: "defence", energy: 40 }, { stat: "offence", energy: 40 }] },
+  ] satisfies { name: string; current: EnergyTrainingQueueEntry[]; entries: EnergyTrainingQueueEntry[] }[])("rejects $name while asleep without changing the Energy queue", async ({ current, entries }) => {
+    await trainee({ status: "ASLEEP", curEnergy: 0, regeneration: 0, energyQueue: current });
+    const before = await readUser();
+    expect(await (await caller()).updateEnergyTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "Must be awake to train" });
+    expect(await readEnergyQueue(USER_ID)).toEqual(current);
+    expect(await readUser()).toMatchObject({ status: "ASLEEP", energyQueueHead: before.energyQueueHead, energyQueueTail: before.energyQueueTail, curEnergy: 0, offence: before.offence, defence: before.defence, experience: before.experience });
+    expect(await readLogs()).toHaveLength(0);
+  });
+
+  it("allows removing and clearing Energy entries while asleep", async () => {
+    const entries = [{ stat: "offence" as const, energy: 40 }, { stat: "defence" as const, energy: 40 }];
+    await trainee({ status: "ASLEEP", curEnergy: 0, regeneration: 0, energyQueue: entries });
+    const api = await caller();
+    expect(await api.updateEnergyTrainingQueue({ expectedEntries: entries, entries: [entries[1]!] })).toMatchObject({ success: true });
+    expect(await readEnergyQueue(USER_ID)).toEqual([entries[1]!]);
+    expect(await api.updateEnergyTrainingQueue({ expectedEntries: [entries[1]!], entries: [] })).toMatchObject({ success: true });
+    expect(await readEnergyQueue(USER_ID)).toEqual([]);
+    expect((await readUser()).status).toBe("ASLEEP");
+  });
+
   it("allows removing queued entries while adding is blocked", async () => {
     const entries = [
       { stat: "offence" as const, energy: 40 },
