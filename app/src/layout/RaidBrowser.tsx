@@ -60,7 +60,12 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   const [selectedRaidId, setSelectedRaidId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"active" | "history">("active");
   const [isReadyToQueue, setIsReadyToQueue] = useState(false);
-  const { data: userData, pusher } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
 
   // Queries
   const { data: availableRaidsData, isFetching: raidsFetching } =
@@ -105,12 +110,18 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   // Mutations
   const { mutate: joinQueue, isPending: joinPending } =
     api.raids.joinRaidQueue.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         void util.raids.getUserRaidQueue.invalidate();
         void util.raids.getActiveRaidTeams.invalidate();
         void util.raids.getRaidDetails.invalidate();
-        void util.profile.getUser.invalidate();
+        if (data.success) {
+          void updateUser({ status: "QUEUED" }, { revision, delta: data.userDelta });
+        } else {
+          // Failed joins can roll back an already committed queue/status write.
+          void util.profile.getUser.invalidate();
+        }
       },
     });
 

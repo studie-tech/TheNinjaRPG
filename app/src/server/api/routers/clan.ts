@@ -85,6 +85,7 @@ import {
   checkCoLeader,
   clanBankDepositSchema,
   clanBoostTypeSchema,
+  clanColorResponseSchema,
   clanCreateSchema,
   clanGetRequestSchema,
   factionEditSchema,
@@ -739,7 +740,7 @@ export const clanRouter = createTRPCRouter({
   editClanColor: protectedProcedure
     .meta({ mcp: { description: "Change faction color" } })
     .input(z.object({ clanId: z.string(), color: z.string() }))
-    .output(baseServerResponse)
+    .output(clanColorResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -783,7 +784,7 @@ export const clanRouter = createTRPCRouter({
       }
 
       // Create a log entry for the color change
-      await Promise.all([
+      const [, colorResult] = await Promise.all([
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
@@ -802,6 +803,11 @@ export const clanRouter = createTRPCRouter({
       // Create
       return {
         success: true,
+        userDelta:
+          user.energyTrainingQueue?.length || colorResult.rowsAffected === 0
+            ? undefined
+            : { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST },
+        villageId: fetchedClan.villageId,
         message: `${groupLabel} color updated`,
       };
     }),

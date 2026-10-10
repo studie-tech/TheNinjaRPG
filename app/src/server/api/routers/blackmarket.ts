@@ -53,7 +53,10 @@ import {
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
 import { cosmeticUserUpdateOutputSchema, titleChangeSchema } from "@/validators/user";
-import { userDeltaResponseSchema } from "@/validators/userCache";
+import {
+  elementRerollResponseSchema,
+  userDeltaResponseSchema,
+} from "@/validators/userCache";
 import { fetchUser } from "./profile";
 
 export const blackMarketRouter = createTRPCRouter({
@@ -593,7 +596,7 @@ export const blackMarketRouter = createTRPCRouter({
       mcp: { description: "Reroll primary or secondary element" },
     })
     .input(z.object({ elementType: z.enum(["primary", "secondary"]) }))
-    .output(baseServerResponse)
+    .output(elementRerollResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch user and rolled elements in parallel
       const [user, rollHistory] = await Promise.all([
@@ -672,12 +675,23 @@ export const blackMarketRouter = createTRPCRouter({
       } else {
         updateData.secondaryElement = result.element;
       }
-      mutations.push(
-        ctx.drizzle
-          .update(userData)
-          .set(updateData)
-          .where(eq(userData.userId, ctx.userId)),
-      );
+      const update = await ctx.drizzle
+        .update(userData)
+        .set(updateData)
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.reputationPoints, COST_REROLL_ELEMENT),
+            user.primaryElement === null
+              ? isNull(userData.primaryElement)
+              : eq(userData.primaryElement, user.primaryElement),
+            user.secondaryElement === null
+              ? isNull(userData.secondaryElement)
+              : eq(userData.secondaryElement, user.secondaryElement),
+          ),
+        );
+      if (update.rowsAffected === 0)
+        return errorResponse("Your balance or elements changed. Please try again.");
 
       // Add element roll to actionLog for the new element
       mutations.push(
@@ -690,13 +704,22 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: `Element rerolled successfully. ${result.changes.join(", ")}`,
+        data: {
+          primaryElement:
+            input.elementType === "primary" ? result.element : user.primaryElement,
+          secondaryElement:
+            input.elementType === "secondary" ? result.element : user.secondaryElement,
+        },
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : { reputationPoints: -COST_REROLL_ELEMENT },
       };
     }),
   // Update stats
   updateStats: protectedProcedure
     .meta({ mcp: { description: "Redistribute user stats" } })
     .input(statSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const cost = canChangeContent(user.role) ? 0 : COST_RESET_STATS;
@@ -768,6 +791,9 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: `User stats updated for ${cost} reputation points`,
+          userDelta: user.energyTrainingQueue?.length
+            ? undefined
+            : { reputationPoints: -cost },
         };
       }
     }),

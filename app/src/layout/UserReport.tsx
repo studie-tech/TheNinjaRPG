@@ -119,23 +119,30 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
   // Get utils
   const utils = api.useUtils();
 
-  const onSuccess = async (data: BaseServerResponse) => {
+  const refreshAfterSuccess = async (
+    data: BaseServerResponse,
+    refreshUser: boolean,
+  ) => {
     showMutationToast(data);
     if (data.success) {
       await Promise.all([
         utils.reports.getAll.invalidate(),
         utils.reports.get.invalidate(),
         utils.comments.getReportComments.invalidate(),
-        utils.profile.getUser.invalidate(),
+        ...(refreshUser ? [utils.profile.getUser.invalidate()] : []),
       ]);
       reset();
     }
   };
 
+  const onSuccess = (data: BaseServerResponse) => refreshAfterSuccess(data, true);
+
   const banUser = api.reports.ban.useMutation({ onSuccess });
   const tradebanUser = api.reports.tradeBan.useMutation({ onSuccess });
   const clearReport = api.reports.clear.useMutation({ onSuccess });
-  const createComment = api.comments.createReportComment.useMutation({ onSuccess });
+  const createComment = api.comments.createReportComment.useMutation({
+    onSuccess: (data) => refreshAfterSuccess(data, false),
+  });
   const escalateReport = api.reports.escalate.useMutation({ onSuccess });
   const silenceUser = api.reports.silence.useMutation({ onSuccess });
   const timeoutUser = api.reports.timeout.useMutation({ onSuccess });

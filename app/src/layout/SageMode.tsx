@@ -24,16 +24,19 @@ interface CurrentSageModeProps {
 
 /** Equipped-mode viewer and reputation-paid removal control. */
 export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { data, isFetching } = api.sageMode.get.useQuery({ id: props.sageModeId }, {});
 
   const { mutate: remove, isPending: isRemoving } =
     api.sageMode.removeSageMode.useMutation({
-      onSuccess: async (result) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (result, _variables, revision) => {
         showMutationToast(result);
         if (result.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(
+            { sageModeId: null, sageMode: null },
+            { revision, delta: result.userDelta },
+          );
         }
       },
     });

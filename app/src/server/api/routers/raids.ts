@@ -69,6 +69,7 @@ import { canChangeContent } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import { AllTags } from "@/validators/combat";
 import type { RaidObjectiveType } from "@/validators/objectives";
+import { joinRaidQueueResponseSchema } from "@/validators/raids";
 import { ObjectiveReward } from "@/validators/rewards";
 
 export const raidsRouter = createTRPCRouter({
@@ -845,7 +846,7 @@ export const raidsRouter = createTRPCRouter({
         teamId: z.string().optional(), // If provided, join existing team
       }),
     )
-    .output(baseServerResponse.extend({ teamId: z.string().optional() }))
+    .output(joinRaidQueueResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query - parallel fetch all required data upfront
       const [user, raid, teamData, existingQueueEntries] = await Promise.all([
@@ -1093,6 +1094,7 @@ export const raidsRouter = createTRPCRouter({
         success: true,
         message: "Joined raid queue",
         teamId,
+        userDelta: user.energyTrainingQueue?.length ? undefined : {},
       };
     }),
 

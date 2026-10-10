@@ -61,7 +61,7 @@ describe("raid list/join slim user fetches", () => {
     );
   });
 
-  it("loads only ban, status, sector, and villageId for join guards", async () => {
+  it("loads join guard fields and pending training for cache reconciliation", async () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     await fetchRaidJoinUser({ query: { userData: { findFirst } } } as never, "user-1");
     expect(findFirst).toHaveBeenCalledWith(
@@ -71,12 +71,13 @@ describe("raid list/join slim user fetches", () => {
           sector: true,
           status: true,
           isBanned: true,
+          energyTrainingQueue: true,
         },
       }),
     );
     const columns = findFirst.mock.calls[0]?.[0]?.columns as Record<string, boolean>;
     expect(Object.keys(columns).sort()).toEqual(
-      ["isBanned", "sector", "status", "villageId"].sort(),
+      ["isBanned", "sector", "status", "villageId", "energyTrainingQueue"].sort(),
     );
   });
 });

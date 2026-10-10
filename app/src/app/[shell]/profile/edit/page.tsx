@@ -113,6 +113,7 @@ import {
 } from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
 import {
+  canAssignExperience,
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
 } from "@/libs/profile";
@@ -146,7 +147,7 @@ import {
   AiRule,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
-import type { StatSchemaType } from "@/validators/combat";
+import { type StatSchemaType, statSchema } from "@/validators/combat";
 import {
   type Attribute,
   attributes,
@@ -1473,17 +1474,30 @@ const SwapBloodline: React.FC = () => {
  */
 const ResetStats: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const submissionInFlight = useRef(false);
 
   // Mutations
   const { mutateAsync: updateStats, isPending } =
     api.blackmarket.updateStats.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, input, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate().catch(() => undefined);
+          await updateUser(
+            (current) => {
+              const stats = statSchema.parse(input);
+              const updated = { ...current, ...stats };
+              // Capacity changes can add or remove the derived Assign XP notification.
+              if (
+                current.earnedExperience > 0 &&
+                canAssignExperience(current) !== canAssignExperience(updated)
+              )
+                return undefined;
+              return stats;
+            },
+            { revision, delta: data.userDelta },
+          ).catch(() => undefined);
         }
       },
       onError: (error) => {
@@ -1967,8 +1981,7 @@ const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
  */
 const RerollElement: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // Derived
   const activeElements = getUserElements(userData);
@@ -1976,10 +1989,11 @@ const RerollElement: React.FC = () => {
   // Mutations
   const { mutate: roll, isPending: isRolling } =
     api.blackmarket.rerollElement.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(data.data, { revision, delta: data.userDelta });
         }
       },
     });
@@ -2630,6 +2644,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
 
   // Utility
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // Global tavern toggle
   const { data: globalTavernEnabled = true } =
@@ -2684,10 +2699,11 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
 
   const { mutate: awardExperienceToAll, isPending: isAwardingExperience } =
     api.profile.awardExperienceToAll.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(undefined, { revision, delta: data.userDelta });
         }
       },
     });
@@ -2909,7 +2925,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
  */
 const ResetSkills: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
 
   // Get reset info
@@ -2918,11 +2934,18 @@ const ResetSkills: React.FC = () => {
   // Mutations
   const { mutate: resetSkills, isPending } = api.skillTree.resetSkillPoints.useMutation(
     {
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            updateUser(
+              () => {
+                if (!data.data) return undefined;
+                return { userSkills: [], ...data.data };
+              },
+              { revision, delta: data.userDelta },
+            ),
             utils.skillTree.getUserSkills.invalidate(),
             utils.skillTree.getResetInfo.invalidate(),
           ]);

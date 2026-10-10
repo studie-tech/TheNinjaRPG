@@ -237,6 +237,7 @@ import {
   updateUserPreferencesSchema,
   updateUserSchema,
 } from "@/validators/user";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
 
@@ -1992,7 +1993,11 @@ export const profileRouter = createTRPCRouter({
       if (!result.success) {
         return errorResponse("Stats changed while assigning points. Please try again");
       } else {
-        return { success: true, message: "User stats updated", data };
+        return {
+          success: true,
+          message: "User stats updated",
+          data,
+        };
       }
     }),
   // Get nindo text of user
@@ -2560,7 +2565,7 @@ export const profileRouter = createTRPCRouter({
         amount: z.number().min(1).max(100000),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [awarder, target] = await Promise.all([
@@ -2604,6 +2609,13 @@ export const profileRouter = createTRPCRouter({
 
       return {
         success: true,
+        userDelta:
+          input.targetUserId === ctx.userId &&
+          target.earnedExperience > 0 &&
+          !target.energyTrainingQueue?.length &&
+          Number.isInteger(input.amount)
+            ? { earnedExperience: input.amount }
+            : undefined,
         message: `Awarded ${input.amount} experience points to ${target.username}`,
       };
     }),
@@ -2614,7 +2626,7 @@ export const profileRouter = createTRPCRouter({
         amount: z.number().min(1).max(100000),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const awarder = await fetchUser(ctx.drizzle, ctx.userId);
@@ -2649,6 +2661,12 @@ export const profileRouter = createTRPCRouter({
       return {
         success: true,
         message: `Awarded ${input.amount} experience points to all users`,
+        userDelta:
+          awarder.energyTrainingQueue?.length ||
+          awarder.earnedExperience <= 0 ||
+          !Number.isInteger(input.amount)
+            ? undefined
+            : { earnedExperience: input.amount },
       };
     }),
 });

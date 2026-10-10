@@ -1163,8 +1163,19 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const { mutateAsync: editColor, isPending: isEditingColor } =
     api.clan.editClanColor.useMutation({
-      onSuccess: (data) => {
+      onMutate,
+      onSuccess: async (data, input, revision) => {
         showMutationToast(data);
+        if (data.success)
+          await updateUser(
+            (current) =>
+              current.village &&
+              current.village.id === data.villageId &&
+              current.clanId === input.clanId
+                ? { village: { ...current.village, hexColor: input.color } }
+                : undefined,
+            { revision, delta: data.userDelta },
+          ).catch(() => undefined);
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1504,7 +1515,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       colorForm.reset(data);
       setIsColorModalOpen(false);
       void Promise.allSettled([
-        utils.profile.getUser.invalidate(),
         utils.clan.get.invalidate(),
         utils.village.getSectorOwnerships.invalidate(),
       ]);
