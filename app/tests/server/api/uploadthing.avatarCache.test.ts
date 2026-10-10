@@ -30,11 +30,21 @@ const callback = (endpoint: keyof typeof ourFileRouter, targetUserId = userId) =
 
 describeWithDatabase("uploaded avatar cache responses", () => {
   let savedWindow: PropertyDescriptor | undefined;
+  let savedUploadthingToken: string | undefined;
 
   beforeEach(async () => {
     // Bun shares its realm with browser suites; UploadThing checks for window at runtime.
     savedWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
     Reflect.deleteProperty(globalThis, "window");
+    // The SDK validates configuration before reaching the mocked deletion request.
+    savedUploadthingToken = process.env.UPLOADTHING_TOKEN;
+    process.env.UPLOADTHING_TOKEN = Buffer.from(
+      JSON.stringify({
+        apiKey: "sk_test_not_a_real_key",
+        appId: "avatar-test",
+        regions: ["fra1"],
+      }),
+    ).toString("base64");
     await resetTables(historicalAvatar, userData);
     await insertUsers([{ userId, username: "UploadAvatarCache" }]);
     vi.spyOn(moderator, "classifyNsfwImage").mockResolvedValue({
@@ -55,6 +65,8 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     resetServerModuleStubs();
     if (savedWindow) Object.defineProperty(globalThis, "window", savedWindow);
     else Reflect.deleteProperty(globalThis, "window");
+    if (savedUploadthingToken === undefined) delete process.env.UPLOADTHING_TOKEN;
+    else process.env.UPLOADTHING_TOKEN = savedUploadthingToken;
   });
 
   it.each([
