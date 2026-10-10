@@ -1622,8 +1622,8 @@ const AvatarChange: React.FC = () => {
               return;
             }
             if (serverData?.fileUrl) {
-              if ("avatarData" in serverData && serverData.avatarData)
-                void updateUser(serverData.avatarData);
+              if ("userPatch" in serverData && serverData.userPatch)
+                void updateUser(serverData.userPatch);
               else void utils.profile.getUser.invalidate();
             }
           }}

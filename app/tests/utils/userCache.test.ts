@@ -358,6 +358,33 @@ describe("user cache updates", () => {
 
 
 describe("shared mutation user response", () => {
+  it.each([
+    { name: "bank deposit", userDelta: { money: -10 }, money: 90, reputationPoints: 30, bank: 1010, repTreasury: 20 },
+    { name: "reputation donation", userDelta: { reputationPoints: -10 }, money: 100, reputationPoints: 20, bank: 1000, repTreasury: 30 },
+  ])("refreshes a committed $name when its clan cache read failed", async (update) => {
+    const test = setup();
+    const clan = { id: "current", bank: 1000, name: "Allies", repTreasury: 20 } as NonNullable<NonNullable<UserWithRelations>["clan"]>;
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, clan } });
+    const revision = prepareUserUpdate(test.client, key);
+    const latest = {
+      ...profile(update.money),
+      userData: { ...profile(update.money).userData, reputationPoints: update.reputationPoints,
+        clan: { ...clan, bank: update.bank, repTreasury: update.repTreasury } },
+    };
+    let reads = 0;
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
+    const response = userDeltaResponseSchema.parse({
+      success: true, message: "Committed", userDelta: update.userDelta, userPatch: {},
+    });
+    await updateUserCache(test.client, key,
+      () => response.userPatch?.clan ? response.userPatch : undefined,
+      { revision, delta: response.userDelta },
+    );
+    expect(test.value()?.userData).toEqual(latest.userData);
+    expect(reads).toBe(1);
+    test.close();
+  });
+
   it("preserves nullable saved fields and applies numeric deltas once without a profile read", async () => {
     const test = setup();
     const response = userDeltaResponseSchema.parse({

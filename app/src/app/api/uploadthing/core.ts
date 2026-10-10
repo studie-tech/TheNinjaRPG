@@ -164,13 +164,13 @@ export const ourFileRouter = {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, metadata.userId, true);
-      const avatarData = await drizzleDB.query.userData
+      const userPatch = await drizzleDB.query.userData
         .findFirst({
           columns: { avatar: true, avatarLight: true },
           where: eq(userData.userId, metadata.userId),
         })
         .catch(handleUserCacheReadError);
-      return { ...moderation, avatarData };
+      return { ...moderation, userPatch };
     }),
   avatarSilverUploader: f({ image: { maxFileSize: "1MB" } })
     .middleware(async ({ files }) => ({
@@ -181,13 +181,13 @@ export const ourFileRouter = {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, metadata.userId, true);
-      const avatarData = await drizzleDB.query.userData
+      const userPatch = await drizzleDB.query.userData
         .findFirst({
           columns: { avatar: true, avatarLight: true },
           where: eq(userData.userId, metadata.userId),
         })
         .catch(handleUserCacheReadError);
-      return { ...moderation, avatarData };
+      return { ...moderation, userPatch };
     }),
   avatarGoldUploader: f({ image: { maxFileSize: "2MB" } })
     .middleware(async ({ files }) => ({
@@ -198,13 +198,13 @@ export const ourFileRouter = {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
       await uploadHistoricalAvatar(file, metadata.userId, true);
-      const avatarData = await drizzleDB.query.userData
+      const userPatch = await drizzleDB.query.userData
         .findFirst({
           columns: { avatar: true, avatarLight: true },
           where: eq(userData.userId, metadata.userId),
         })
         .catch(handleUserCacheReadError);
-      return { ...moderation, avatarData };
+      return { ...moderation, userPatch };
     }),
   backgroundImageUploader: f({ image: { maxFileSize: "8MB" } })
     .middleware(async ({ files }) => ({
