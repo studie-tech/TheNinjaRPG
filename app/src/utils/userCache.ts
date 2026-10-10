@@ -35,14 +35,20 @@ export const updateUserCache = async (
 ) => {
   if (!mutation) {
     if (!patch) return;
+    const before = client.getQueryState(key);
+    let needsRefresh = !!before?.isInvalidated || before?.fetchStatus !== "idle";
     await client.cancelQueries({ queryKey: key, exact: true });
     client.setQueryData<UserCache>(key, (old) => {
+      const state = client.getQueryState(key);
+      needsRefresh ||= !!state?.isInvalidated || state?.fetchStatus !== "idle";
       if (!old?.userData) return undefined;
       const known = typeof patch === "function" ? patch(old.userData) : patch;
       return known === undefined
         ? undefined
         : { ...old, userData: { ...old.userData, ...known } };
     });
+    // A local patch must preserve reconciliation of unrelated fields.
+    if (needsRefresh) await client.invalidateQueries({ queryKey: key, exact: true });
     return;
   }
   const { revision } = mutation;

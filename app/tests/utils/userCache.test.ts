@@ -50,6 +50,46 @@ describe("user cache updates", () => {
     test.close();
   });
 
+  it("restarts required reconciliation after an ordinary patch", async () => {
+    const test = setup();
+    test.setDatabase(80);
+    const pending = test.client.fetchQuery({
+      queryKey: key,
+      queryFn: () => new Promise<ReturnType<typeof profile>>(() => {}),
+    }).catch(() => undefined);
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => profile(80) });
+    await updateUserCache(test.client, key, { tutorialEnabled: false });
+    await pending;
+    expect(test.value()?.userData.money).toBe(80);
+    test.close();
+  });
+
+  it("preserves an invalidation when applying an ordinary patch", async () => {
+    const test = setup();
+    test.setDatabase(80);
+    await test.client.invalidateQueries({ queryKey: key, refetchType: "none" });
+    await updateUserCache(test.client, key, { tutorialEnabled: false });
+    expect(test.value()?.userData.money).toBe(80);
+    expect(test.reads()).toBe(1);
+    test.close();
+  });
+
+  it("rejects a delayed village snapshot after a newer profile refresh", async () => {
+    const test = setup();
+    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
+    const village = { id: "village", tokens: 1000 } as Village;
+    test.client.setQueryData(key, { userData: { ...profile(100).userData, village } });
+    const revision = prepareUserUpdate(test.client, key);
+    const latest = { userData: { ...profile(100).userData, village: { ...village, tokens: 800 } } };
+    test.client.setQueryData(key, latest);
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => latest });
+    await updateUserCache(test.client, key, (current) => ({
+      village: { ...current.village!, tokens: 900 },
+    }), { revision });
+    expect(test.value()?.userData.village?.tokens).toBe(800);
+    test.close();
+  });
+
   it("guards an absolute patch without requiring an empty delta", async () => {
     const test = setup();
     const revision = prepareUserUpdate(test.client, key);

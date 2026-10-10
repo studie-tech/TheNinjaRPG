@@ -136,7 +136,7 @@ interface TabProps {
 
 const OverviewTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
-  const updateShrineVillage = useUpdateShrineVillage();
+  const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
 
   const { data: shrineData } = api.travel.getSectorData.useQuery(
     { sector: user.sector ?? 0 },
@@ -153,11 +153,12 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 
   const { mutate: upgradeShrine, isPending: isUpgrading } =
     api.shrine.upgradeShrine.useMutation({
-      onSuccess: (res) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (res, _variables, revision) => {
         showMutationToast(res);
         void utils.travel.getSectorData.invalidate();
         void utils.shrine.getCapturedSectors.invalidate();
-        void updateShrineVillage(res);
+        void updateShrineVillage(res, revision);
       },
     });
 
@@ -304,7 +305,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 
 const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
-  const updateShrineVillage = useUpdateShrineVillage();
+  const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
   const now = useUtcNow(isActive, 60_000);
   const nowMs = now.getTime();
   const currentDayOfWeek = now.getUTCDay();
@@ -322,10 +323,11 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
 
   const { mutate: activateBoost, isPending: isActivatingBoost } =
     api.shrine.activateBoost.useMutation({
-      onSuccess: (res) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (res, _variables, revision) => {
         showMutationToast(res);
         if (res.success) {
-          void updateShrineVillage(res);
+          void updateShrineVillage(res, revision);
         }
       },
     });
@@ -506,7 +508,7 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
 const DefendersTab = ({ user, isActive }: TabProps) => {
   const [selectedAiId, setSelectedAiId] = useState<string>("");
 
-  const updateShrineVillage = useUpdateShrineVillage();
+  const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
 
   const { data: aiData } = api.shrine.getShrineAis.useQuery(undefined, {
     enabled: isActive,
@@ -519,17 +521,19 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
 
   const { mutate: unlockAi, isPending: isUnlockingAi } =
     api.shrine.unlockAiDefender.useMutation({
-      onSuccess: (res) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (res, _variables, revision) => {
         showMutationToast(res);
-        void updateShrineVillage(res);
+        void updateShrineVillage(res, revision);
       },
     });
 
   const { mutate: toggleVillageAi, isPending: isTogglingAi } =
     api.shrine.toggleVillageAiDefender.useMutation({
-      onSuccess: (res) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (res, _variables, revision) => {
         showMutationToast(res);
-        void updateShrineVillage(res);
+        void updateShrineVillage(res, revision);
       },
     });
 
@@ -709,7 +713,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
 
 const MaintenanceTab = ({ user }: TabProps) => {
   const utils = api.useUtils();
-  const updateShrineVillage = useUpdateShrineVillage();
+  const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
 
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
     { villageId: user.villageId ?? "" },
@@ -718,10 +722,11 @@ const MaintenanceTab = ({ user }: TabProps) => {
 
   const { mutate: payMaintenance, isPending: isPaying } =
     api.shrine.payWeeklyMaintenance.useMutation({
-      onSuccess: (res) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (res, _variables, revision) => {
         showMutationToast(res);
         if (res.success) {
-          void updateShrineVillage(res);
+          void updateShrineVillage(res, revision);
           void utils.shrine.getCapturedSectors.invalidate();
         }
       },
@@ -948,7 +953,7 @@ const BoostTemplateGrid = ({
   currentSlotIndex,
 }: BoostTemplateGridProps) => {
   const utils = api.useUtils();
-  const updateShrineVillage = useUpdateShrineVillage();
+  const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
 
   const { data: templateData, isLoading } = api.shrine.getBoostTemplate.useQuery(
     { villageId },
@@ -1007,12 +1012,13 @@ const BoostTemplateGrid = ({
 
   const { mutate: saveTemplate, isPending: isSaving } =
     api.shrine.setBoostTemplate.useMutation({
-      onSuccess: async (res) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (res, _variables, revision) => {
         showMutationToast(res);
         if (res.success) {
           await Promise.all([
             utils.shrine.getBoostTemplate.invalidate({ villageId }),
-            updateShrineVillage(res),
+            updateShrineVillage(res, revision),
           ]);
           setIsDirty(false);
         }
@@ -1342,30 +1348,35 @@ const BoostTypeChecklist = ({
 );
 
 const useUpdateShrineVillage = () => {
-  const { updateUser } = useRequiredUserData();
-  const utils = api.useUtils();
-  return (result: ShrineVillageUpdateResponse) => {
+  const { updateUser, prepareUserUpdate } = useRequiredUserData();
+  const updateShrineVillage = (
+    result: ShrineVillageUpdateResponse,
+    revision: number | undefined,
+  ) => {
     if (!result.success || result.requiresUserRefresh || !result.villageUpdate) {
-      return utils.profile.getUser.invalidate();
+      return updateUser(undefined, { revision });
     }
     const villageUpdate = result.villageUpdate;
-    return updateUser((current) =>
-      current.village?.id === villageUpdate.id
-        ? {
-            village: {
-              ...current.village,
-              ...villageUpdate,
-              shrineSettings: {
-                ...current.village.shrineSettings,
-                ...villageUpdate.shrineSettings,
-                activeBoosts: {
-                  ...current.village.shrineSettings.activeBoosts,
-                  ...villageUpdate.shrineSettings?.activeBoosts,
+    return updateUser(
+      (current) =>
+        current.village?.id === villageUpdate.id
+          ? {
+              village: {
+                ...current.village,
+                ...villageUpdate,
+                shrineSettings: {
+                  ...current.village.shrineSettings,
+                  ...villageUpdate.shrineSettings,
+                  activeBoosts: {
+                    ...current.village.shrineSettings.activeBoosts,
+                    ...villageUpdate.shrineSettings?.activeBoosts,
+                  },
                 },
               },
-            },
-          }
-        : {},
+            }
+          : undefined,
+      { revision },
     );
   };
+  return { prepareUserUpdate, updateShrineVillage };
 };
