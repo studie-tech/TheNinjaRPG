@@ -1,7 +1,7 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { CombatStatNames, MasteryNames } from "@/drizzle/constants";
-import { captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate } from "@/libs/combat/userCache";
+import { captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatCacheIntegerDelta, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate } from "@/libs/combat/userCache";
 import { calcMaxEnergy } from "@/libs/profile";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -18,7 +18,7 @@ const fixture = () => {
   };
   const raw = { userId: "viewer", level: 10, rank: "JONIN" as const,
     ...Object.fromEntries([...CombatStatNames, ...MasteryNames].map((field) => [field, 100])),
-    curEnergy: 10, regenAt: new Date("2026-01-01T00:00:00Z"), earnedExperience: 100,
+    curEnergy: 10, money: 100, experience: 200, seichiSilver: 0, regenAt: new Date("2026-01-01T00:00:00Z"), earnedExperience: 100,
     bloodlineId: null, items: [gear], energyTrainingQueue: [] } as unknown as Parameters<typeof captureCombatCacheSnapshot>[0];
   const snapshot = captureCombatCacheSnapshot(raw);
   const { masterySources: _private, ...baseline } = snapshot;
@@ -77,6 +77,7 @@ describe("confirmed combat profile reconciliation", () => {
     const { current, update } = fixture();
     for (const changed of [
       { userId: "someone-else" }, { battleId: "new-fight" }, { ninjutsuMastery: 101 },
+      { money: 101 }, { experience: 201 }, { seichiSilver: 1 },
       { energyTrainingQueue: [{ stat: "offence", energy: 1 }] },
       { items: current.items.map((item) => ({ ...item, durability: 99 })) },
       { regenAt: new Date(current.regenAt.getTime() + 1) },
@@ -101,6 +102,10 @@ describe("confirmed combat profile reconciliation", () => {
     expect(maskBattle(battle, "opponent").extraState.profileCacheSnapshots).toEqual({});
   });
 
+  it("rounds integer rewards from their final balance rather than rounding negative deltas", () => {
+    expect(combatCacheIntegerDelta({ money: 100, experience: 200, earnedExperience: 0, seichiSilver: 0 }, { money: -0.5, experience: 0.75, earnedExperience: 0.25, seichiSilver: 0.5 })).toEqual({ money: 0, experience: 1, earnedExperience: 0, seichiSilver: 1 });
+  });
+
   it("uses fractional recovery, reward and caps at the bound settlement clock", () => {
     const { snapshot } = fixture();
     expect(combatCacheEnergy(snapshot, 100, 3, new Date("2026-01-01T00:00:01Z"), 0)).toBeGreaterThan(10);
@@ -119,6 +124,8 @@ describe("confirmed combat profile reconciliation", () => {
     expect(canCacheCombatCompletion({ ...battle, battleType: "COMBAT" }, result, "viewer")).toBe(false);
     expect(canCacheCombatCompletion(battle, { ...result, curHealth: 0 }, "viewer")).toBe(false);
     expect(canCacheCombatCompletion({ ...battle, usersState: [...battle.usersState, makeBattleUser("other", { isAi: false })] }, result, "viewer")).toBe(false);
+    const legacy = { ...snapshot, money: undefined } as unknown as typeof snapshot;
+    expect(canCacheCombatCompletion({ ...battle, extraState: { ...battle.extraState, profileCacheSnapshots: { viewer: legacy } } }, result, "viewer")).toBe(false);
     snapshot.hadTrainingQueue = true;
     expect(canCacheCombatCompletion(battle, result, "viewer")).toBe(false);
   });

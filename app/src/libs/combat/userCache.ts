@@ -19,6 +19,9 @@ const baselineFields = [
   "rank",
   "curEnergy",
   "earnedExperience",
+  "experience",
+  "money",
+  "seichiSilver",
 ] as const;
 type BaselineField = (typeof baselineFields)[number];
 export type CombatCacheBaseline = Pick<UserData, BaselineField> & {
@@ -175,6 +178,9 @@ export const canCacheCombatCompletion = (
   const baseline = battle.extraState.profileCacheSnapshots?.[userId];
   return (
     !!baseline &&
+    ["money", "seichiSilver", "experience", "earnedExperience"].every((field) =>
+      Number.isFinite(baseline[field as "money"]),
+    ) &&
     !baseline.hadTrainingQueue &&
     result.curHealth > 0 &&
     ["ARENA", "QUEST", "RANDOM_ENCOUNTER", "TRAINING", "OVERWORLD"].includes(
@@ -223,3 +229,26 @@ export const combatCacheItems = (
       ? { ...original, quantity: changed.quantity, durability: changed.durability }
       : original;
   });
+
+/** Integer-column deltas use the rounded final balance, including fractional debits. */
+export const combatCacheIntegerDelta = (
+  snapshot: Pick<
+    CombatCacheBaseline,
+    "money" | "experience" | "earnedExperience" | "seichiSilver"
+  >,
+  result: Pick<
+    CombatResult,
+    "money" | "experience" | "earnedExperience" | "seichiSilver"
+  >,
+) =>
+  Object.fromEntries(
+    (["money", "experience", "earnedExperience", "seichiSilver"] as const).map(
+      (field) => {
+        const final = snapshot[field] + result[field];
+        return [
+          field,
+          Math.sign(final) * Math.round(Math.abs(final)) - snapshot[field],
+        ];
+      },
+    ),
+  ) as Pick<UserDelta, "money" | "experience" | "earnedExperience" | "seichiSilver">;

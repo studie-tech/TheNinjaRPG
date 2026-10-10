@@ -51,6 +51,7 @@ import {
   canCacheCombatCompletion,
   combatCacheDerived,
   combatCacheEnergy,
+  combatCacheIntegerDelta,
   combatCacheItems,
 } from "@/libs/combat/userCache";
 import {
@@ -1745,10 +1746,7 @@ export const updateUser = async (
       const { masterySources: _privateSources, ...cacheBaseline } = baseline;
       const settledItems = combatCacheItems(baseline, user.items);
       const userDelta = {
-        money: result.money,
-        seichiSilver: result.seichiSilver,
-        experience: result.experience,
-        earnedExperience: result.earnedExperience,
+        ...combatCacheIntegerDelta(baseline, result),
         offence: result.offence,
         defence: result.defence,
         strength: result.strength,
@@ -1773,9 +1771,9 @@ export const updateUser = async (
         baseline: cacheBaseline,
         userDelta,
         userPatch: {
-          curHealth: result.curHealth,
-          curStamina: result.curStamina,
-          curChakra: result.curChakra,
+          curHealth: Math.round(result.curHealth),
+          curStamina: Math.round(result.curStamina),
+          curChakra: Math.round(result.curChakra),
           curEnergy: combatCacheEnergy(
             baseline,
             capacity,
