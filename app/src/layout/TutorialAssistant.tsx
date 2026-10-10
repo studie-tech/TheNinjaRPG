@@ -353,10 +353,9 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
   rightSideBarRef,
 }) => {
   // State
-  const { data: userData, userAgent } = useUserData();
+  const { data: userData, userAgent, updateUser } = useUserData();
   const pathname = usePublicPathname();
   const router = useRouter();
-  const utils = api.useUtils();
 
   // Mutation to disable tutorial
   const { mutateAsync: disableTutorial } = api.profile.updatePreferences.useMutation();
@@ -416,19 +415,12 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = ({
         return;
       }
 
-      await utils.profile.getUser.cancel();
+      await updateUser((current) =>
+        current.userId === request.userId ? { tutorialOn: false } : undefined,
+      );
       if (tutorialIdentityRef.current.userId !== request.userId) {
         return;
       }
-      utils.profile.getUser.setData(undefined, (current) => {
-        if (!current?.userData || current.userData.userId !== request.userId) {
-          return current;
-        }
-        return {
-          ...current,
-          userData: { ...current.userData, tutorialOn: false },
-        };
-      });
       disableTutorialRequestRef.current = undefined;
       setShowCancelConfirmDialog(false);
     } catch {
