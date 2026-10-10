@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import {
   getUserCaps,
   RANKED_PVP_STATS,

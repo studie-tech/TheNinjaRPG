@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import {
   adjustSeichiSilverAtomically,
   removeBloodlineFromPoolAtomically,
@@ -21,7 +20,7 @@ describe("adjustSeichiSilverAtomically", () => {
       userId: "u1",
       delta: 100,
     });
-    expect(update).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledTimes(1);
     expect(ok).toBe(true);
   });
 
@@ -54,8 +53,8 @@ describe("removeBloodlineFromPoolAtomically", () => {
       bloodlineId: "bl1",
       now: new Date(0),
     });
-    expect(del).toHaveBeenCalledOnce();
-    expect(update).toHaveBeenCalledOnce();
+    expect(del).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
     expect(ok).toBe(true);
   });
 

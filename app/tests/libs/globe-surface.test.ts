@@ -1,5 +1,5 @@
 import { Color } from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import {
   MAP_NAVIGABLE_LATITUDE_LIMIT,

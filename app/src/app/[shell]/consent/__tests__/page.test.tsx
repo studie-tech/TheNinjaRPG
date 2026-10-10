@@ -1,5 +1,5 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as contentBox from "@/layout/ContentBox";
 import { ensureDom } from "../../../../../tests/setup-dom.mjs";
 import CookieConsent from "../page";

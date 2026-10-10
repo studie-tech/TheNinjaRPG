@@ -1,6 +1,6 @@
 import { ensureDom } from "../setup-dom.mjs";
 import { fireEvent, render } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
 import { FarmPlotInspector } from "@/layout/FarmPlotInspector";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 

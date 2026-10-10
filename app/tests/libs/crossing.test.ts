@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import {
   MAP_NAVIGABLE_LATITUDE_LIMIT,
@@ -289,8 +289,8 @@ describe("game crossing wrapper", () => {
       const neighbors = getSectorNeighborIds(sector);
       const entryEdges = getSectorEntryEdges(sector);
       SectorNeighborDirections.forEach((direction, index) => {
-        expect(neighbors[direction]).toBe(tiles[sector]!.n[index]);
-        expect(entryEdges[direction]).toBe(tiles[sector]!.ne[index]);
+        expect(neighbors[direction]).toBe<number | undefined>(tiles[sector]!.n[index]);
+        expect(entryEdges[direction]).toBe<number | undefined>(tiles[sector]!.ne[index]);
         if (neighbors[direction] < 0) return;
 
         const globeExitEdge = index as EdgeIndex;

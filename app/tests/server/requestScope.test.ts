@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { scopedRead, withRequestScope } from "@/server/requestScope";
 
 /** A loader that records how many times it actually ran. */

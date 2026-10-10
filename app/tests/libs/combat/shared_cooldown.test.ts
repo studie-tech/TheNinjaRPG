@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { SHARED_COOLDOWN_ROUNDS } from "@/drizzle/constants";
 import type { Item, Jutsu } from "@/drizzle/schema";
 import {

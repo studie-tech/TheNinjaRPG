@@ -1,8 +1,7 @@
-// @vitest-environment node
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import * as nextServer from "next/server";
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   aiProfile,
   battle,
@@ -219,7 +218,7 @@ describeWithDatabase("CAS combat settlement", () => {
       expect(cached.effectiveMasteries).toEqual(authoritative.effectiveMasteries);
       expect(cached.items[0]!.durability).toBe(authoritative.items[0]!.durability);
       expect(authoritative.items[0]!.durability).toBe(100);
-      expect(cached.status).toBe("AWAKE");
+      expect(cached.status).toBe<NonNullable<UserWithRelations>["status"]>("AWAKE");
       expect(cached.battleId).toBeNull();
       expect(client.getQueryState(key)?.isInvalidated).toBe(false);
       expect(reads).toBe(0);

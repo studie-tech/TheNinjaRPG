@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   isMysqlDuplicateKeyError,
   isMysqlTransactionRetryableError,

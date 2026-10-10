@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getUserCaps } from "@/drizzle/constants";
 import { isStreakContinuous, nextStreakRefreshAt } from "@/libs/activityStreak";
 import { bankAccessBlockMessage } from "@/libs/bank";

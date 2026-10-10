@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { UserWithRelations } from "@/routers/profile";
 import { getOwnSectorVillage } from "@/utils/village";
 
@@ -27,7 +27,7 @@ const makeUser = (
 describe("getOwnSectorVillage", () => {
   it("returns the user's village while they stand in its sector", () => {
     const user = makeUser();
-    expect(getOwnSectorVillage(user)).toBe(user?.village);
+    expect(getOwnSectorVillage(user)).toBe<NonNullable<UserWithRelations>["village"] | undefined>(user?.village);
   });
 
   it("returns undefined outside the village sector", () => {

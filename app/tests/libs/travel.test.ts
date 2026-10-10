@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { NormalizedSectorTile } from "@/libs/sector-map/types";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import {

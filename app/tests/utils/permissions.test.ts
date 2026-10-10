@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import type { UserRole } from "@/drizzle/constants";
 import { UserRoles } from "@/drizzle/constants";
 import {

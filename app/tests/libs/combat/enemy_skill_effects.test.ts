@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { insertAction } from "@/libs/combat/actions";
 import { getBattleGrid } from "@/libs/combat/util";
 import { DamageTag, HealTag, MoveTag, PoisonTag, StealthTag } from "@/validators/combat";

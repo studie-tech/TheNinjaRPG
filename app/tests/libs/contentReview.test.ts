@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import sharp from "sharp";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { ContentAuditFocuses } from "@/drizzle/constants";
 import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
 import * as epidemic from "@/libs/contentReview/epidemic";
@@ -149,13 +148,13 @@ describe("audit snapshot helpers", () => {
       (time) => at(`${time}:00`),
     );
     const first = ContentAuditFocuses.findIndex((focus) => focus === runs[0]);
-    expect(runs).toEqual(
+    expect(runs).toEqual<Array<ReturnType<typeof resolveFocus> | undefined>>(
       runs.map((_, index) => ContentAuditFocuses[(first + index) % ContentAuditFocuses.length]),
     );
     // A run that GitHub starts late keeps the focus of its window.
-    expect(at("02:59:59")).toBe(runs[0]);
+    expect(at("02:59:59")).toBe<ReturnType<typeof resolveFocus> | undefined>(runs[0]);
     // The rotation carries on across days instead of restarting at midnight.
-    expect(resolveFocus("rotate", new Date("2026-10-01T00:40:00Z"))).toBe(runs[1]);
+    expect(resolveFocus("rotate", new Date("2026-10-01T00:40:00Z"))).toBe<ReturnType<typeof resolveFocus> | undefined>(runs[1]);
     expect(resolveFocus("sound")).toBe("sound");
   });
 

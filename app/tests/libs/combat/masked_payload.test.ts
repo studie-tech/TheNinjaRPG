@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import type { Bloodline, Quest, UserQuest } from "@/drizzle/schema";
 import { availableUserActions } from "@/libs/combat/actions";
 import { maskBattle, maskBattleDynamic } from "@/libs/combat/util";
@@ -26,7 +26,7 @@ describe("masked battle payload", () => {
     expect(masked.extraState.sectorExclusiveRaids).toEqual([]);
     expect(masked.extraState.textureAssets).toBe(battle.extraState.textureAssets);
     expect(masked.extraState.jutsus).toBe(battle.extraState.jutsus);
-    expect(masked.extraState.bloodlines.line).toEqual({ id: "line", name: "Visible bloodline" });
+    expect(masked.extraState.bloodlines.line).toEqual<{ id: string; name: string }>({ id: "line", name: "Visible bloodline" });
     expect(JSON.stringify(masked)).not.toContain("Secret catalog");
     expect(availableUserActions(masked, "me")).toEqual(availableUserActions(battle, "me"));
     expect(masked.usersState).toEqual(maskBattleDynamic(battle, "me").usersState);

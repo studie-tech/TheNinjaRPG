@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { applyFarmMutationPatch } from "@/libs/farm-state";
 import { getFarmingLevel } from "@/libs/farming";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";

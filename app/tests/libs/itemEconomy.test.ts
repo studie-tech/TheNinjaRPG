@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getAuctionPriceError, getItemPurchaseAllowance } from "@/libs/itemEconomy";
 import { getItemPurchasePeriodStart } from "@/utils/time";
 

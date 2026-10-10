@@ -1,8 +1,7 @@
-// @vitest-environment node
 
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import {
   bloodline,
   notification,

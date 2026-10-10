@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { pickSpriteAvatar } from "@/libs/threejs/util";
 

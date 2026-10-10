@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getUserCaps, MAX_SKILL_POINTS, SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";
 import { bloodline, item, quest, questHistory, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
 import { calcCP, calcEnergy, calcHP, calcLevelRequirements, calcSP } from "@/libs/profile";
@@ -35,7 +34,7 @@ describeWithDatabase("confirmed progression cache responses against MySQL", () =
     expect(result.success).toBe(true);
     const saved = await read();
     expect(result.userPatch).toMatchObject({ level: 31, maxHealth: calcHP(31), maxChakra: calcCP(31), maxStamina: calcSP(31), maxEnergy: calcEnergy(31), skillPoints: Math.min(skillPoints + 1, MAX_SKILL_POINTS), updatedAt: saved.updatedAt, curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina, curEnergy: saved.curEnergy });
-    expect(saved.skillPoints).toBe(result.userPatch?.skillPoints);
+    expect(saved.skillPoints).toBe<number | undefined>(result.userPatch?.skillPoints);
   });
 
   it("clears sensei at the final student level without a second profile fetch", async () => {

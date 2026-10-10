@@ -1,8 +1,7 @@
-// @vitest-environment node
 
 import { asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "bun:test";
 import {
   actionLog,
   historicalIp,
@@ -346,7 +345,7 @@ describeWithDatabase("awardRecruitRankMilestones", () => {
           },
           ...(["CHUNIN", "JONIN", "ELITE JONIN"] as const).map((rank) => ({
             rank,
-            reputation: rank === "CHUNIN" ? 5 : 10,
+            reputation: rank === "CHUNIN" ? 5 as const : 10 as const,
             reached: false,
             paid: false,
             status: null,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { ItemValidatorRawSchema } from "@/validators/combat";
 import { refineItemEconomy } from "@/validators/itemEconomy";
 import { auctionListingSchemaForItem } from "@/validators/auction";

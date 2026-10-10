@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import { clone, summon } from "@/libs/combat/tags";

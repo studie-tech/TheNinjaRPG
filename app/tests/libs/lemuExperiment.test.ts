@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { IMG_URL_ASSISTANT } from "@/drizzle/constants";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import { drawLemuVariant, getLemuImage, isLemuExperimentEnabled, LEMU_EXPERIMENT, normalizeLemuVariant } from "@/libs/lemuExperiment";
@@ -28,8 +28,8 @@ describe("Lemu experiment", () => {
     ["treatment_5", "https://ui0arpl8sm.ufs.sh/f/content-r6_prvN1P_dntlkbOEJSL.webp"],
     ["treatment_6", "https://ui0arpl8sm.ufs.sh/f/content-jMcyVJrtGlAclqlBlbJFR.webp"],
   ])("uses the selected portrait for %s and records the same arm", (variant, url) => {
-    expect(getLemuImage(variant)).toBe(url);
-    expect(normalizeLemuVariant(variant)).toBe(variant);
+    expect(getLemuImage(variant)).toBe<typeof url>(url);
+    expect(normalizeLemuVariant(variant)).toBe<typeof variant>(variant);
     expect(getLayoutExperimentAssignments({abLemuReplacementVariant:variant})).toEqual([{experiment:LEMU_EXPERIMENT,variant}]);
   });
 

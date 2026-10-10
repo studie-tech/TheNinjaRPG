@@ -1,5 +1,5 @@
 import { Group, Texture } from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { drawUsers } from "@/libs/threejs/sector";
 

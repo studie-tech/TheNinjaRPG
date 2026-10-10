@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getNewTrackers, isObjectiveLocationSatisfied } from "@/libs/quest";
 import { DeliverItem, SimpleObjective } from "@/validators/objectives";
 

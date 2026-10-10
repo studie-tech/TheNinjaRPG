@@ -1,12 +1,12 @@
-// @vitest-environment node
 //
 // tRPC validates a procedure's input before the resolver runs. A top-level
 // `z.object({...}).optional()` accepts a missing input but rejects an explicit
 // `null`, which clients legitimately send for "no arguments" — that turned every
 // such call into a BAD_REQUEST. `.nullish()` accepts both.
+
+import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
 
 const ROUTERS_DIR = join(import.meta.dirname, "..", "routers");
 
@@ -113,7 +113,7 @@ describe("tRPC procedure inputs", () => {
     expect(routerFiles.length).toBeGreaterThan(0);
   });
 
-  it.each(routerFiles)("%s uses .nullish() for optional inputs", (file) => {
+  it.each([...routerFiles])("%s uses .nullish() for optional inputs", (file) => {
     const lines = findBareOptionalInputs(readFileSync(join(ROUTERS_DIR, file), "utf8"));
     expect(
       lines,

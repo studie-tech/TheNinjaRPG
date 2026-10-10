@@ -1,7 +1,6 @@
-// @vitest-environment node
 import { setSystemTime } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import {
   actionLog,

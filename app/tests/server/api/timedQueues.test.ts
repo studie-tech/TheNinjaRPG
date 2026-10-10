@@ -1,7 +1,6 @@
-// @vitest-environment node
 import { and, eq } from "drizzle-orm";
 import { COOKING_BASE_SLOTS, JUTSU_LEVEL_CAP } from "@/drizzle/constants";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import {
   bloodline,
   craftingRequirement,

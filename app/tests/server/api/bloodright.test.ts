@@ -1,7 +1,6 @@
-// @vitest-environment node
 import { COST_SKILL_RESET } from "@/drizzle/constants";
 import { and, eq, ne } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { actionLog, bloodline, skillTree, userData, userSkill } from "@/drizzle/schema";
 import * as socials from "@/libs/socials";
 import { bloodrightSwapRefund, matchBloodrightSnapshot } from "@/libs/bloodright";

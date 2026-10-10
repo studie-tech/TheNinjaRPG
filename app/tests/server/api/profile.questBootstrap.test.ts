@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { quest, questHistory, type UserData } from "@/drizzle/schema";
 import {
   canBootstrapQuestType,

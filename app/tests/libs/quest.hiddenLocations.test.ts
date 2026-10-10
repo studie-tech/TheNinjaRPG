@@ -1,5 +1,5 @@
 import { SECTOR_WIDTH, SECTOR_HEIGHT } from "@/drizzle/constants";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   getNewTrackers,
   getPublicQuestUser,

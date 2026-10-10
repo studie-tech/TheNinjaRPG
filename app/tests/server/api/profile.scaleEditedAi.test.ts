@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { CombatStatNames, SCALED_AI_STAT_BUDGET_SHARE } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { calcLevelRequirements } from "@/libs/profile";

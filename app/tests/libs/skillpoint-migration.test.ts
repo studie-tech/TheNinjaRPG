@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 const migration = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0025_hot_ken_ellis.sql"),

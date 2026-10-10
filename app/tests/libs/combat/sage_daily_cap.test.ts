@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import { handleInjectedJutsus } from "@/libs/combat/actions";
 import { applySingleEffect } from "@/libs/combat/process";

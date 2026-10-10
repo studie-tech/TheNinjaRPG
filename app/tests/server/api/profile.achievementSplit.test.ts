@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { quest } from "@/drizzle/schema";
 import { questHasOverworldObjectives } from "@/libs/quest";
 import type { UserWithRelations } from "../../../src/server/api/routers/profile";

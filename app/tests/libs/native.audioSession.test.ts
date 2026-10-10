@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { deactivate, onRemoteCommand, setNowPlaying } from "@/libs/native/audioSession";
 
 const globals = ["window", "navigator", "MediaMetadata"] as const;
@@ -33,7 +33,7 @@ describe("native soundtrack metadata", () => {
         },
       },
     });
-    const session = { metadata: null, playbackState: "none" };
+    const session: { metadata: MediaMetadataInit | null; playbackState: string } = { metadata: null, playbackState: "none" };
     setGlobal("navigator", { mediaSession: session });
     setGlobal("MediaMetadata", function (info: MediaMetadataInit) {
       return info;

@@ -1,7 +1,6 @@
-// @vitest-environment node
 import { eq } from "drizzle-orm";
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { quest, questHistory, userData, userQueue, userVote } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
 import { profileRouter } from "@/server/api/routers/profile";

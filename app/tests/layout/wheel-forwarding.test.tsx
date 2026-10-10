@@ -2,7 +2,7 @@ import { ensureDom } from "../setup-dom.mjs";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import React from "react";
 import { PerspectiveCamera } from "three";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import { forwardVerticalWheelToDocumentScroll } from "@/components/layout/shared/layoutUtils";
 import { TrackballControls } from "@/libs/threejs/TrackBallControls";
 

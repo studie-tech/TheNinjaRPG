@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { DrizzleClient } from "@/server/db";
@@ -69,7 +69,7 @@ describe("published sector map cache", () => {
     // The single-sector variant shares the same cache
     const single = await fetchPublishedSectorMap(client, 7);
     expect(calls.findFirst).toBe(0);
-    expect(single).toBe(first.get(7));
+    expect(single).toBe<ReturnType<typeof first.get>>(first.get(7));
   });
 
   it("re-queries only the missing sectors of a window", async () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getReward, getNewTrackers } from "@/libs/quest";
 
 const winQuestObjective = (id: string) => ({

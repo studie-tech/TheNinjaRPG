@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   SAGE_MODE_DEFAULT_ACTION_COST_PERC,

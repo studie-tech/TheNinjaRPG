@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getNextClosedAt, getTicketUpdateActivities } from "@/libs/support";
 
 const now = new Date("2026-10-08T10:00:00Z");

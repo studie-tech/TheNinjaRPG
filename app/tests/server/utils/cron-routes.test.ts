@@ -1,8 +1,7 @@
-// @vitest-environment node
 
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { expect, it } from "vitest";
+import { expect, it } from "bun:test";
 
 const appRoot = resolve(import.meta.dirname, "../../..");
 const config = JSON.parse(readFileSync(resolve(appRoot, "vercel.json"), "utf8")) as {
@@ -14,7 +13,7 @@ const periodic = readdirSync(resolve(appRoot, "src/app/api"))
   .map((name) => `/api/${name}`);
 const routes = [...new Set([...config.crons.map((cron) => cron.path), ...periodic])];
 
-it.each(routes)("%s authenticates before timers or other work", (route) => {
+it.each([...routes])("%s authenticates before timers or other work", (route) => {
   const file = resolve(appRoot, `src/app${route}/route.ts`);
   const source = readFileSync(file, "utf8");
   expect(source).toContain('import { authenticateCronRequest } from "@/server/utils/cron";');

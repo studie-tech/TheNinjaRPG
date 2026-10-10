@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { REMOVAL_COST } from "@/drizzle/constants";
 import { actionLog, userData, userQueue } from "@/drizzle/schema";
 import { sageModeRouter } from "@/server/api/routers/sageMode";

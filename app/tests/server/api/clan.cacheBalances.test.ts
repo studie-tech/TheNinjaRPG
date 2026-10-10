@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { HIDEOUT_TOWN_UPGRADE } from "@/drizzle/constants";
 import { actionLog, clan, userData, userQueue } from "@/drizzle/schema";
 import { clanRouter } from "@/server/api/routers/clan";

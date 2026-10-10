@@ -1,5 +1,5 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as sentry from "@sentry/nextjs";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
 import {
   resetServerModuleStubs,

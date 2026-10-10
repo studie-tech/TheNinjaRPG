@@ -1,8 +1,7 @@
-// @vitest-environment node
 
 import { eq, type SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { getNewTrackers } from "@/libs/quest";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
@@ -320,7 +319,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
     });
 
     expect(result).toEqual({ outcome: "already_completed" });
-    expect(update).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledTimes(1);
     expect(sets).toHaveLength(1);
   });
 
@@ -380,8 +379,8 @@ describe("commitQuestObjectiveRewards compatibility", () => {
     });
 
     expect(result.outcome).toBe("claimed");
-    expect(deleteFrom).toHaveBeenCalledOnce();
-    expect(deleteWhere).toHaveBeenCalledOnce();
+    expect(deleteFrom).toHaveBeenCalledTimes(1);
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
     expect(sets).toHaveLength(2);
   });
 

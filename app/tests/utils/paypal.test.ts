@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { reps2dollars, dollars2reps } from "@/utils/paypal";
 
 describe("reps2dollars / dollars2reps round-trip", () => {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { getNewTrackers } from "@/libs/quest";
 
 // Timed collect_item objectives are gated server-side on the elapsed time since the

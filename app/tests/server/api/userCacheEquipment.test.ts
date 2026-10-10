@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { COST_EXTRA_ITEM_SLOT, COST_EXTRA_JUTSU_SLOT, DURABILITY_MAX_DEFAULT } from "@/drizzle/constants";
 import {
   bloodline,

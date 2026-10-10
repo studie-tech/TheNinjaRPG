@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { BloodlineValidator, JutsuValidatorRawSchema } from "@/validators/combat";
 
 // statClassification is nullable in the schema, so freshly created content -

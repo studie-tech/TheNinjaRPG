@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getUserCaps } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { AchievementProgress, UserWithRelations } from "@/server/api/routers/profile";

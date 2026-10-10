@@ -1,5 +1,5 @@
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { indexableConceptArt } from "@/libs/conceptart";
 
 describe("indexableConceptArt", () => {

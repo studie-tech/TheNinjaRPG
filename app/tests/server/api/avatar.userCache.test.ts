@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { historicalAvatar, userData } from "@/drizzle/schema";
 import * as replicate from "@/libs/replicate";
 import { avatarRouter } from "@/server/api/routers/avatar";
@@ -73,7 +72,7 @@ describeWithDatabase("Avatar cache reconciliation", () => {
         columns: { avatar: true, avatarLight: true },
         where: eq(historicalAvatar.userId, userId),
       }),
-    ).toEqual(result.userPatch);
+    ).toEqual<typeof result.userPatch>(result.userPatch);
   });
 
   it("returns the saved null thumbnail when generation has no thumbnail", async () => {

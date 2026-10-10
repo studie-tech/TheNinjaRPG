@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as liveActivity from "@/hooks/useLiveActivity";
 import * as push from "@/hooks/useNativePush";
 import * as native from "@/libs/native";
@@ -54,7 +54,7 @@ describe("native Back navigation", () => {
     document.addEventListener("keydown", dismiss);
     try {
       onBack?.(true);
-      expect(dismiss).toHaveBeenCalledOnce();
+      expect(dismiss).toHaveBeenCalledTimes(1);
       expect(dismiss.mock.calls[0]?.[0].key).toBe("Escape");
       expect(back).not.toHaveBeenCalled();
       expect(exit).not.toHaveBeenCalled();

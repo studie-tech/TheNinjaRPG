@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getFacingDirection } from "@/libs/combat/util";
 import type { ReturnedUserState } from "@/libs/combat/types";
 import type { UserEffect } from "@/libs/combat/types";

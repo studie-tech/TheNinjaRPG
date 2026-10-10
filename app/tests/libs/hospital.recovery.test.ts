@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { calcHealFinish } from "@/libs/hospital";

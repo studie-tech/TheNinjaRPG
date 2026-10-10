@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { actionLog, userData, userRequest, village } from "@/drizzle/schema";
 import { kageRouter } from "@/server/api/routers/kage";
 import { insertUsers } from "../../setup/factories";
@@ -43,7 +42,7 @@ describeWithDatabase("kage challenge availability cache response", () => {
       where: eq(village.id, "cache-village"),
     });
     expect(result.success).toBe(true);
-    expect(result.userPatch?.village).toEqual({
+    expect(result.userPatch?.village).toEqual<{ id: string | undefined; openForChallenges: boolean; openForChallengesAt: Date | undefined }>({
       id: stored?.id,
       openForChallenges: true,
       openForChallengesAt: stored?.openForChallengesAt,

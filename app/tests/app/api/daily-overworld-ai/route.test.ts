@@ -1,11 +1,10 @@
-// @vitest-environment node
 
 import {
   resetServerModuleStubs,
   stubCronAuth,
   stubDatabase,
 } from "../../../setup/serverModules";
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
 
 type DailyOverworldTestMocks = {
   authenticate: Mock<(request: Request) => Response | null>;
@@ -132,7 +131,7 @@ describe("daily-overworld-ai route", () => {
 
     expect(response.status).toBe(500);
     expect(mocks.update).not.toHaveBeenCalled();
-    expect(mocks.rollback).toHaveBeenCalledOnce();
+    expect(mocks.rollback).toHaveBeenCalledTimes(1);
   });
 
   it("updates every validated placement and increments its position version", async () => {

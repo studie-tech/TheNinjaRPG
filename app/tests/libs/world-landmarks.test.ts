@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import {

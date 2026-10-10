@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { IMG_BADGE_DAYS_IN_VILLAGE, IMG_BADGE_PVPKILLS } from "@/drizzle/constants";
 import { getObjectiveImage } from "@/libs/objectives";
 import {

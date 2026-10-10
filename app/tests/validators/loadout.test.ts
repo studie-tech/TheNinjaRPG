@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { renameLoadoutSchema } from "@/validators/loadout";
 import { LOADOUT_NAME_MAX_LENGTH } from "@/drizzle/constants";
 

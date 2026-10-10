@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { wantsHumanActionSet } from "@/libs/combat/util";
 import type { BattleUserState } from "@/libs/combat/types";
 

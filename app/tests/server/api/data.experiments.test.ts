@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { abEvent, userData } from "@/drizzle/schema";
 import { WALLPAPER_EXPERIMENT } from "@/libs/wallpaperExperiment";
 import { dataRouter } from "@/routers/data";

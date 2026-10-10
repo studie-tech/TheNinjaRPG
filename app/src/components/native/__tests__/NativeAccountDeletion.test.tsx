@@ -1,8 +1,8 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import * as clerkErrors from "@clerk/nextjs/errors";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import React from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as client from "@/app/_trpc/client";
 import * as dialog from "@/components/ui/dialog";
 import * as input from "@/components/ui/input";
@@ -58,32 +58,62 @@ beforeEach(() => {
   );
   // The server preload initializes React's legacy change-event fallback before DOM.
   // Keep this suite focused on confirmation/recovery, using a native input event.
-  vi.spyOn(input, "Input").mockImplementation(({ onChange, ...props }) => (
-    <input
-      {...props}
-      onInput={(event) =>
-        onChange?.(event as unknown as React.ChangeEvent<HTMLInputElement>)
-      }
-    />
-  ));
+  vi.spyOn(input, "Input").mockImplementation(
+    Object.assign(
+      ({ onChange, ...props }: React.ComponentProps<typeof input.Input>) => (
+        <input
+          {...props}
+          onInput={(event) =>
+            onChange?.(event as unknown as React.ChangeEvent<HTMLInputElement>)
+          }
+        />
+      ),
+      { displayName: input.Input.displayName },
+    ),
+  );
   vi.spyOn(dialog, "Dialog").mockImplementation(({ open, children }) =>
     open ? <>{children}</> : null,
   );
-  vi.spyOn(dialog, "DialogContent").mockImplementation(({ children }) => (
-    <div role="dialog">{children}</div>
-  ));
-  vi.spyOn(dialog, "DialogHeader").mockImplementation(({ children }) => (
-    <div>{children}</div>
-  ));
-  vi.spyOn(dialog, "DialogFooter").mockImplementation(({ children }) => (
-    <div>{children}</div>
-  ));
-  vi.spyOn(dialog, "DialogTitle").mockImplementation(({ children }) => (
-    <h2>{children}</h2>
-  ));
-  vi.spyOn(dialog, "DialogDescription").mockImplementation(({ children }) => (
-    <p>{children}</p>
-  ));
+  vi.spyOn(dialog, "DialogContent").mockImplementation(
+    Object.assign(
+      ({ children }: React.ComponentProps<typeof dialog.DialogContent>) => (
+        <div role="dialog">{children}</div>
+      ),
+      { displayName: dialog.DialogContent.displayName },
+    ),
+  );
+  vi.spyOn(dialog, "DialogHeader").mockImplementation(
+    Object.assign(
+      ({ children }: React.ComponentProps<typeof dialog.DialogHeader>) => (
+        <div>{children}</div>
+      ),
+      { displayName: dialog.DialogHeader.displayName },
+    ),
+  );
+  vi.spyOn(dialog, "DialogFooter").mockImplementation(
+    Object.assign(
+      ({ children }: React.ComponentProps<typeof dialog.DialogFooter>) => (
+        <div>{children}</div>
+      ),
+      { displayName: dialog.DialogFooter.displayName },
+    ),
+  );
+  vi.spyOn(dialog, "DialogTitle").mockImplementation(
+    Object.assign(
+      ({ children }: React.ComponentProps<typeof dialog.DialogTitle>) => (
+        <h2>{children}</h2>
+      ),
+      { displayName: dialog.DialogTitle.displayName },
+    ),
+  );
+  vi.spyOn(dialog, "DialogDescription").mockImplementation(
+    Object.assign(
+      ({ children }: React.ComponentProps<typeof dialog.DialogDescription>) => (
+        <p>{children}</p>
+      ),
+      { displayName: dialog.DialogDescription.displayName },
+    ),
+  );
   vi.spyOn(appleAuth, "isSupported").mockReturnValue(false);
 });
 const confirm = (phrase = "DELETE MY ACCOUNT") => {
@@ -160,8 +190,8 @@ describe("native deletion confirmation", () => {
       });
       fireEvent.click(button);
       fireEvent.click(button);
-      await waitFor(() => expect(state.signOut).toHaveBeenCalledOnce());
-      expect(state.mutate).toHaveBeenCalledOnce();
+      await waitFor(() => expect(state.signOut).toHaveBeenCalledTimes(1));
+      expect(state.mutate).toHaveBeenCalledTimes(1);
       expect(state.mutate.mock.calls[0]?.[0]).toMatchObject({
         expectedUserId: "user_test",
         confirmation: "DELETE MY ACCOUNT",
@@ -227,7 +257,7 @@ describe("native deletion confirmation", () => {
     ).toBe(false);
     state.mutate.mockResolvedValueOnce({ success: true });
     fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
-    await waitFor(() => expect(state.signOut).toHaveBeenCalledOnce());
+    await waitFor(() => expect(state.signOut).toHaveBeenCalledTimes(1));
     expect(state.mutate).toHaveBeenCalledTimes(2);
   });
 });

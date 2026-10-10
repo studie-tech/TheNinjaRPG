@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { Client } from "@planetscale/database";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { staffRouter } from "@/server/api/routers/staff";
 import { resetServerModuleStubs, stubProfile } from "../setup/serverModules";
 import { callerForDatabase } from "../setup/testDatabase";

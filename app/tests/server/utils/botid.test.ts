@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { env } from "@/env/server.mjs";
 import {
   BOTID_BLOCKED_MESSAGE,

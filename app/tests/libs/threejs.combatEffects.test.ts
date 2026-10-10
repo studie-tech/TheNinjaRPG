@@ -1,6 +1,6 @@
 import { Grid, rectangle } from "honeycomb-grid";
 import { Group, Texture, TextureLoader } from "three";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { GameAsset } from "@/drizzle/schema";
 import { defineHex } from "@/libs/hexgrid";
 import { drawCombatEffects, resetCombatCaches } from "@/libs/threejs/combat";
@@ -85,7 +85,7 @@ describe("combat effect animation lifecycle", () => {
       expect(info.groupEffects.children).toHaveLength(40);
       const oldFrame = previous?.currentDisplayTime;
       info.spriteMixer.update(0.016);
-      if (previous) expect(previous.currentDisplayTime).toBe(oldFrame);
+      if (previous) expect(previous.currentDisplayTime).toBe<typeof oldFrame>(oldFrame);
       previous = info.groupEffects.children[0]?.children.find(
         (child): child is ActionSprite => child instanceof ActionSprite,
       );

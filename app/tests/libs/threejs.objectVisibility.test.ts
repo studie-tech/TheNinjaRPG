@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { Group, Sprite } from "three";
 
 import { isObjectChainVisible } from "@/libs/threejs/util";

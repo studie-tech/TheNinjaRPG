@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { isAvailableUserQuests } from "@/libs/quest";
 

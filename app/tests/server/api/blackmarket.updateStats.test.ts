@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { COST_REROLL_ELEMENT, COST_RESET_STATS, getUserCaps } from "@/drizzle/constants";
 import { actionLog, userData } from "@/drizzle/schema";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";

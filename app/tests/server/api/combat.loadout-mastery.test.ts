@@ -7,7 +7,7 @@ import { jutsuRequirementWarning } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { manuallyAssignUserStats } from "@/libs/profile";
 import { validateItemLoadout } from "@/libs/ranked_pvp";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   aiProfile,
   battle,

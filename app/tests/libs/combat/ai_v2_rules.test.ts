@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";
 import { performAIaction } from "@/libs/combat/ai_v2";

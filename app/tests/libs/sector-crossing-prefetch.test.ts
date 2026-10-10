@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/drizzle/constants";
 import { sectorIdAt } from "@/libs/sector-map/world-grid";
 import {

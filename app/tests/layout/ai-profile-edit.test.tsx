@@ -1,7 +1,7 @@
 import { ensureDom } from "../setup-dom.mjs";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import { ActionEndTurn, getBackupRules, type AiRuleType } from "@/validators/ai";
 

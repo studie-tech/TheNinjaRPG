@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq, sql } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import {
   COST_CHANGE_GENDER,
   COST_CHANGE_USERNAME,
@@ -61,12 +60,12 @@ describeWithDatabase("Committed cosmetic cache patches", () => {
     await insertUsers([{ userId, username: "CacheUser", gender: "Other", reputationPoints } as never]);
   });
 
-  it.each(purchases)("returns only changed $name fields without another user read", async (purchase) => {
+  it.each([...purchases])("returns only changed $name fields without another user read", async (purchase) => {
     const database = await getTestDatabase();
     const counted = countUserReads(database);
     const result = await purchase.run(counted.client);
     expect(result.success).toBe(true);
-    expect(result.userPatch).toEqual(purchase.userPatch);
+    expect(result.userPatch).toEqual<typeof purchase.userPatch>(purchase.userPatch);
     expect(counted.getReads()).toBe(purchase.reads);
     const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
     for (const [field, value] of Object.entries(purchase.userPatch)) {
@@ -74,7 +73,7 @@ describeWithDatabase("Committed cosmetic cache patches", () => {
     }
   });
 
-  it.each(purchases)("rejects a concurrent balance change before the $name debit", async (purchase) => {
+  it.each([...purchases])("rejects a concurrent balance change before the $name debit", async (purchase) => {
     const database = await getTestDatabase();
     const result = await purchase.run(beforeStatements(database, userData, [
       async () => {
@@ -103,7 +102,7 @@ describeWithDatabase("Committed cosmetic cache patches", () => {
       columns: { occupation: true, occupationSignupAt: true },
       where: eq(userData.userId, userId),
     });
-    expect(result.userPatch).toEqual(saved);
+    expect(result.userPatch).toEqual<typeof saved>(saved);
   });
 
   it("rejects an intervening occupation change instead of resetting its cooldown", async () => {

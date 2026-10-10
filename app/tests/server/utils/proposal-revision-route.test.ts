@@ -1,5 +1,4 @@
-// @vitest-environment node
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "bun:test";
 import { GET, PATCH } from "@/app/api/content-review/proposals/[id]/route";
 import { resetServerModuleStubs, stubDatabase } from "../../setup/serverModules";
 

@@ -1,5 +1,4 @@
-// @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getRewardUserDelta } from "@/server/api/routers/quests";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 

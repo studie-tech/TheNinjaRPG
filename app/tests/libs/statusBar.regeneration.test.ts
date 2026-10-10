@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "bun:test";
 import { calcCurrent } from "@/layout/StatusBar";
 
 afterEach(() => vi.restoreAllMocks());

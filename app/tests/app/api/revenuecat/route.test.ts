@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
 
 interface RevenueCatRouteMocks {
   captureException: ReturnType<typeof vi.fn>;
@@ -82,7 +82,7 @@ describe("RevenueCat TRANSFER environment scoping", () => {
     const response = await POST(transferRequest("SANDBOX"));
 
     expect(response.status).toBe(200);
-    expect(mocks.transferStorePurchases).toHaveBeenCalledOnce();
+    expect(mocks.transferStorePurchases).toHaveBeenCalledTimes(1);
     expect(mocks.transferStorePurchases).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ isSandbox: true }),

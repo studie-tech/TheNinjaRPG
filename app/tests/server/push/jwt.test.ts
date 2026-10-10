@@ -1,5 +1,5 @@
 import { generateKeyPairSync, verify as cryptoVerify } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { base64url, normalisePrivateKey, signJwt } from "@/server/utils/push/jwt";
 
 const decodeSegment = (segment: string): Record<string, unknown> =>

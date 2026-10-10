@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { TavernColorPresets } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 import { AllTags } from "@/validators/combat";
@@ -70,7 +70,7 @@ describe("getSearchValidator", () => {
 });
 
 describe("tavernColorChangeSchema", () => {
-  it.each(TavernColorPresets)("accepts the %s preset for both targets", (color) => {
+  it.each([...TavernColorPresets])("accepts the %s preset for both targets", (color) => {
     expect(
       tavernColorChangeSchema.parse({
         target: "username",

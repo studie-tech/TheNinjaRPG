@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   COST_TAVERN_COLOR_CHANGE,
   getTavernColorChangeCost,
@@ -18,7 +18,7 @@ const LIGHT_TAVERN_SURFACE = parseHexColor("#ffffff")!;
 const DARK_TAVERN_SURFACE = parseHexColor("#334155")!;
 
 describe("tavern color styling", () => {
-  it.each(TavernColorPresets)("charges the configured cost for %s", (preset) => {
+  it.each([...TavernColorPresets])("charges the configured cost for %s", (preset) => {
     expect(getTavernColorChangeCost(preset)).toBe(COST_TAVERN_COLOR_CHANGE);
   });
 
@@ -53,7 +53,7 @@ describe("tavern color styling", () => {
     },
   );
 
-  it.each(TavernColorPresets)("gives %s title text WCAG contrast", (preset) => {
+  it.each([...TavernColorPresets])("gives %s title text WCAG contrast", (preset) => {
     const style = TAVERN_COLOR_STYLES[preset];
     const background = parseHexColor(style.titleHex);
     const foreground = parseHexColor(style.titleForeground);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { rollObjectiveAttackers } from "@/libs/quest";
 import { EncountersAtLocation, MoveToObjective } from "@/validators/objectives";
 

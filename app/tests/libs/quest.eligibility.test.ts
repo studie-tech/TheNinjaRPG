@@ -1,8 +1,7 @@
-// @vitest-environment node
 
 import type { SQL } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/mysql-core";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
 import { quest } from "@/drizzle/schema";
 import { questTypeConcurrentBlockMessage } from "@/libs/quest";

@@ -1,8 +1,7 @@
-// @vitest-environment node
 
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect, QueryBuilder } from "drizzle-orm/mysql-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { UserRoles, type UserRole } from "@/drizzle/constants";
 import * as socials from "@/libs/socials";
 import { dataRouter } from "@/server/api/routers/data";
@@ -231,8 +230,8 @@ describe("hidden skill-tree permissions", () => {
     expect(await invoke("update", drizzle, { id: visible.id, data })).toMatchObject({
       success: true,
     });
-    expect(drizzle.update).toHaveBeenCalledOnce();
-    expect(socials.callDiscordContent).toHaveBeenCalledOnce();
+    expect(drizzle.update).toHaveBeenCalledTimes(1);
+    expect(socials.callDiscordContent).toHaveBeenCalledTimes(1);
     expect(socials.callDiscordContent).toHaveBeenCalledWith(
       "staff-fixture",
       "Updated skill: public",
@@ -329,7 +328,7 @@ describe("hidden skill-tree permissions", () => {
     },
   );
 
-  it.each(UserRoles)("defines access for %s", (role) => {
+  it.each([...UserRoles])("defines access for %s", (role) => {
     expect(canAccessHiddenSkillTree(role)).toBe(!excluded.includes(role));
   });
 
@@ -406,7 +405,7 @@ describe("hidden skill-tree permissions", () => {
     },
   );
 
-  it.each(excluded)("rejects visible skills inside hidden folders for %s", async (role) => {
+  it.each([...excluded])("rejects visible skills inside hidden folders for %s", async (role) => {
     const { drizzle, skills, write } = setup(role);
     drizzle.query.skillTree.findFirst.mockResolvedValue(skills[2]);
     expect(await invoke("purchaseSkill", drizzle, { skillId: "folder-secret" })).toMatchObject({ success: false });
@@ -432,7 +431,7 @@ describe("hidden skill-tree permissions", () => {
     expect(await invoke("purchaseSkill", drizzle, { skillId: "secret" })).toMatchObject({
       success: true,
     });
-    expect(write).toHaveBeenCalledOnce();
+    expect(write).toHaveBeenCalledTimes(1);
   });
 
   it("counts special skills only after ownership is unlocked", async () => {

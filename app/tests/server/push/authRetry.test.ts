@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { retryRejectedOnce } from "@/server/utils/push/authRetry";
 
 interface Attempt {
@@ -21,7 +21,7 @@ describe("retryRejectedOnce", () => {
 
     await retryRejectedOnce(results, (result) => result.authRejected === true, retry);
 
-    expect(retry).toHaveBeenCalledOnce();
+    expect(retry).toHaveBeenCalledTimes(1);
     expect(retry).toHaveBeenCalledWith([1, 3]);
     expect(results.map((result) => result.token)).toEqual([
       "sent",

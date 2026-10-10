@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import { eq, inArray } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { questHistory, userData } from "@/drizzle/schema";
 import { QuestTracker } from "@/validators/objectives";
 import { upsertQuestEntries } from "../../../src/server/api/routers/quests";

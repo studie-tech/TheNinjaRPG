@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
 import { historicalAvatar, userData } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";

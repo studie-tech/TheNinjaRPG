@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import { readCampaignSource, storeCampaignSource } from "@/libs/campaignSource";
 import { ensureDom } from "../setup-dom.mjs";
 

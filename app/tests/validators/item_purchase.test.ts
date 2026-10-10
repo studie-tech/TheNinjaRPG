@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { MAX_ITEM_SHOP_PURCHASE_QUANTITY } from "@/drizzle/constants";
 import { itemBuySchema } from "@/validators/item";
 

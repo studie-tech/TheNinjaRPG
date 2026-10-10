@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { item, jutsu } from "@/drizzle/schema";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";

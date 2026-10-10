@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { type UserPatch, updateUserCache } from "@/utils/userCache";
@@ -87,7 +87,7 @@ describe("TutorialAssistant disable reconciliation", () => {
     const view = renderAssistant();
     confirmDisable(view);
     await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
-    expect(mocks.client.getQueryData(key)).toEqual(profile(100, "actor", false));
+    expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(100, "actor", false));
     expect(read).not.toHaveBeenCalled();
   });
 
@@ -98,7 +98,7 @@ describe("TutorialAssistant disable reconciliation", () => {
     expect(mocks.client.getQueryState(key)?.fetchStatus).toBe("fetching");
     const view = renderAssistant();
     confirmDisable(view);
-    await waitFor(() => expect(mocks.client.getQueryData(key)).toEqual(profile(200, "actor", false)));
+    await waitFor(() => expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(200, "actor", false)));
     await pending;
     expect(read).toHaveBeenCalledTimes(2);
     expect(view.queryByRole("dialog")).toBeNull();
@@ -110,7 +110,7 @@ describe("TutorialAssistant disable reconciliation", () => {
     await mocks.client.invalidateQueries({ queryKey: key, refetchType: "none" });
     const view = renderAssistant();
     confirmDisable(view);
-    await waitFor(() => expect(mocks.client.getQueryData(key)).toEqual(profile(200, "actor", false)));
+    await waitFor(() => expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(200, "actor", false)));
     expect(read).toHaveBeenCalledTimes(1);
   });
 
@@ -122,7 +122,7 @@ describe("TutorialAssistant disable reconciliation", () => {
     mocks.client.setQueryData(key, profile(300, "other"));
     view.rerender(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
     await act(async () => { resolve({ success: true, message: "Saved" }); });
-    expect(mocks.client.getQueryData(key)).toEqual(profile(300, "other"));
+    expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(300, "other"));
     expect(mocks.updateUser).not.toHaveBeenCalled();
     expect(view.getByRole("button", { name: "Skip Tutorial" })).toBeTruthy();
   });

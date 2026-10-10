@@ -1,8 +1,8 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import * as nextServer from "next/server";
 import superjson from "superjson";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import { accountDeletionRouter } from "@/server/api/routers/accountDeletion";
 import { drizzleDB } from "@/server/db";
@@ -18,7 +18,7 @@ import * as processor from "../process";
 const originalEnv = { ...process.env };
 
 const mocks = {
-  auth: vi.fn(),
+  auth: Object.assign(vi.fn(), { protect: vi.fn() }),
   after: vi.fn(),
   process: vi.fn(),
   insert: vi.fn(),
@@ -172,12 +172,12 @@ describe("native account deletion authorization", () => {
     expect(mocks.insert).not.toHaveBeenCalled();
     expect(mocks.after).not.toHaveBeenCalled();
     expect(await request()).toMatchObject({ success: true });
-    expect(mocks.insert).toHaveBeenCalledOnce();
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
   });
   it("starts only the saved account after returning acceptance", async () => {
     expect(await request()).toMatchObject({ success: true });
-    expect(mocks.save).toHaveBeenCalledOnce();
-    expect(mocks.after).toHaveBeenCalledOnce();
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+    expect(mocks.after).toHaveBeenCalledTimes(1);
     expect(mocks.save.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.after.mock.invocationCallOrder[0] ?? 0,
     );
@@ -203,7 +203,7 @@ describe("native account deletion authorization", () => {
     expect(await request()).toMatchObject({ success: true });
     expect(mocks.prepare).not.toHaveBeenCalled();
     expect(mocks.insert).not.toHaveBeenCalled();
-    expect(mocks.after).toHaveBeenCalledOnce();
+    expect(mocks.after).toHaveBeenCalledTimes(1);
   });
   it("does not enqueue when Apple ownership/revocation cannot be verified", async () => {
     mocks.prepare.mockRejectedValueOnce(new Error("Apple unavailable"));

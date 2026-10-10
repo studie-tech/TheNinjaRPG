@@ -1,10 +1,10 @@
-// @vitest-environment node
 //
 // These run in the Node environment on purpose: `/news`, `/forum` and the
 // conversation pages are server-rendered, so `parseHtml` output has to survive
 // `renderToString` without any DOM globals.
+
+import { describe, expect, it } from "bun:test";
 import { renderToString } from "react-dom/server";
-import { describe, expect, it } from "vitest";
 import { parseHtml } from "@/utils/parse";
 
 // parseHtml returns an array of nodes, so it needs a host element to render into.

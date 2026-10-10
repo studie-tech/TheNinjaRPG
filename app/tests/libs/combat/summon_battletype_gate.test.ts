@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { isSummonActionCastable, summonsAllowedInBattle } from "@/libs/combat/summon";
 import { BattleTypes, AutoBattleTypes } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";

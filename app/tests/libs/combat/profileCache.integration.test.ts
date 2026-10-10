@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { item, userData, userItem } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
 import { captureCombatCacheSnapshot } from "@/libs/combat/userCache";

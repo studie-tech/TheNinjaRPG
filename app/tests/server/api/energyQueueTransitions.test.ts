@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   aiProfile,
   battle,
@@ -193,7 +192,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     const result = await fetchUpdatedUser({ client, userId: USER });
     expect(result.requiresUserRefresh).toBe(true);
     expect(result.user?.offence).toBeGreaterThan(10);
-    expect(getEnergyQueue(result.user!)).toEqual([entries[1]]);
+    expect(getEnergyQueue(result.user!)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
   });
   it("does not credit away-sector ticks after walking home", async () => {
     await prepare();
@@ -209,7 +208,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     expect(user.offence).toBe(140);
     expect(user.defence).toBe(10);
     expect(user.curEnergy).toBe(0);
-    expect(await readEnergyQueue(USER)).toEqual([entries[1]]);
+    expect(await readEnergyQueue(USER)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
   });
   it("preserves all travel pools and unfinished ticks without training during travel", async () => {
     await prepare();
@@ -266,7 +265,7 @@ describeWithDatabase("Energy queue state transitions", () => {
       // The stored arrival Energy can train one entry, but travel ticks cannot replay.
       expect((await read())!.offence).toBe(140);
       expect((await read())!.defence).toBe(10);
-      expect(await readEnergyQueue(USER)).toEqual([entries[1]]);
+      expect(await readEnergyQueue(USER)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
     }
   });
 

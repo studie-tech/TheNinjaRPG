@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { fetchWithRetry } from "@/utils/http";
 
 // Tiny backoff so retry tests run in milliseconds with real timers
@@ -7,7 +7,7 @@ const FAST = { maxRetries: 3, baseDelayMs: 1, deadlineMs: 5_000 };
 const okResponse = (body: string) => new Response(body, { status: 200 });
 
 describe("fetchWithRetry", () => {
-  // bun's vitest shim lacks vi.stubGlobal; save/restore the real fetch instead
+  // Bun lacks vi.stubGlobal; save/restore the real fetch instead
   const realFetch = globalThis.fetch;
   const stubFetch = (mock: unknown) => {
     globalThis.fetch = mock as typeof fetch;

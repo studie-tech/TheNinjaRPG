@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getBattleClaimIds } from "@/libs/combat/util";
 
 // A single AI row backs every fight against that opponent, so the battle-start

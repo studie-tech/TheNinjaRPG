@@ -25,7 +25,7 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 
 | Command | Purpose |
 | --- | --- |
-| `make test` | Bun (Vitest-compatible test API); real-SQL suites skip without explicit throwaway DB configuration |
+| `make test` | Bun native test API; real-SQL suites skip without explicit throwaway DB configuration |
 | `make lint` | Biome |
 | `make typecheck` | Native TypeScript |
 | `make check` | Biome linting, formatting and TypeScript diagnostics |

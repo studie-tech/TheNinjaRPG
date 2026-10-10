@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { NormalizedSectorTile, SectorCoordinate } from "@/libs/sector-map/types";
 import { getNeighborCoordinates, getSectorTileKey } from "@/libs/sector-map/validation";
 import {

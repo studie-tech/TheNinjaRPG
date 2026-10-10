@@ -1,5 +1,5 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { useAudio } from "@/hooks/useAudio";
 import * as audioUtils from "@/utils/audio";
 import { ensureDom } from "../setup-dom.mjs";
@@ -14,7 +14,7 @@ beforeEach(() => {
     () => () => undefined,
   );
   audio = document.createElement("audio");
-  vi.spyOn(globalThis, "Audio").mockImplementation(function () {
+  vi.spyOn(globalThis as unknown as { Audio: (src?: string) => HTMLAudioElement }, "Audio").mockImplementation(function () {
     return audio;
   });
   vi.spyOn(audio, "play").mockImplementation(async () => {

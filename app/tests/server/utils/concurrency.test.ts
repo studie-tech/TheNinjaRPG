@@ -1,8 +1,7 @@
-// @vitest-environment node
 
 import type { SQL } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/mysql-core";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { userData, userItem } from "@/drizzle/schema";
 import {
   battleClaimRollbackStatus,
@@ -147,7 +146,7 @@ describe("concurrency helpers", () => {
 
     expect(client.insert).toHaveBeenCalledWith(userItem);
     expect(values).toHaveBeenCalledWith({ ...itemSnapshot, quantity: 2 });
-    expect(onDuplicateKeyUpdate).toHaveBeenCalledOnce();
+    expect(onDuplicateKeyUpdate).toHaveBeenCalledTimes(1);
     expect(onDuplicateKeyUpdate).toHaveBeenCalledWith({
       set: { quantity: expect.anything() },
     });
@@ -195,7 +194,7 @@ describe("concurrency helpers", () => {
     // no-ops it, and the fallback inserts the refund as a brand-new row that an
     // in-flight merge publish cannot overwrite.
     expect(client.insert).toHaveBeenCalledTimes(2);
-    expect(onDuplicateKeyUpdate).toHaveBeenCalledOnce();
+    expect(onDuplicateKeyUpdate).toHaveBeenCalledTimes(1);
     const fallbackRow = values.mock.calls[1]?.[0] as {
       id: string;
       quantity: number;
@@ -237,8 +236,8 @@ describe("concurrency helpers", () => {
 
     expect(client.update).toHaveBeenCalledWith(userItem);
     expect(client.delete).toHaveBeenCalledWith(userItem);
-    expect(updateWhere).toHaveBeenCalledOnce();
-    expect(deleteWhere).toHaveBeenCalledOnce();
+    expect(updateWhere).toHaveBeenCalledTimes(1);
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
 
     const restoredQuantity = set.mock.calls[0]?.[0].quantity as SQL;
     const rendered = new QueryBuilder()
@@ -357,7 +356,7 @@ describe("active NPC quest slot", () => {
 
     expect(client.update).toHaveBeenCalledWith(userData);
     expect(set).toHaveBeenCalledWith({ activeNpcQuestId: null });
-    expect(where).toHaveBeenCalledOnce();
+    expect(where).toHaveBeenCalledTimes(1);
     const clearWhere = where.mock.calls[0]?.[0] as SQL;
     const rendered = new QueryBuilder()
       .select()

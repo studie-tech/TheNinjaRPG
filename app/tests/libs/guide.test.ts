@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { GUIDE_HUB_CATEGORY_ORDER } from "@/drizzle/constants";
 import { SYSTEM_GUIDE_ARTICLES } from "@/libs/guide/articles";
 import { isGuideworthyEntityName } from "@/libs/guide/generate";

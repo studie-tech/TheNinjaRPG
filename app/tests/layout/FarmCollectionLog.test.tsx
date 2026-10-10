@@ -1,6 +1,6 @@
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ open, children }: { open?: boolean; children: ReactNode }) =>
