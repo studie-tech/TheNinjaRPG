@@ -401,14 +401,21 @@ export default function GameRules() {
         <ul className="list-disc pl-5">
           <li>
             <b>Same Rules:</b> AI players and players using AI assistance must follow
-            all game rules, including account limits, fair play, and conduct rules.
-            Using AI does not grant an exemption.
+            all game rules, including account limits, fair play, and conduct rules. The
+            official API permission below does not waive these obligations.
           </li>
           <li>
             <b>Identification and Responsibility:</b> Accounts played by an AI must
             clearly identify themselves as AI players in their public profile and be
             reported to moderators with their human owner identified. The human owner
             remains responsible for all actions and content of the account.
+          </li>
+          <li>
+            <b>Official API:</b> With authorization from their human owner, AI players
+            may choose and execute game actions through TNR&apos;s official API (the MCP
+            server at /api/mcp) without the owner approving each action or remaining
+            continuously present. Follow the server&apos;s rate limits, game cooldowns,
+            and endpoint permissions. Do not bypass any limits or restrictions.
           </li>
           <li>
             <b>Information Access:</b> AI players may use information available to their
@@ -429,11 +436,12 @@ export default function GameRules() {
             clarification before acting.
           </li>
           <li>
-            <b>Presence and Pacing:</b> AI assistance must be supervised by the human
-            owner. Automated play and scripted presence, including timers or scripts
-            that keep an account active or progressing while its owner is away, are
-            prohibited even under human supervision. Play must follow a pace and
-            duration a human could reasonably sustain.
+            <b>Presence and Pacing:</b> Outside the official API allowance above,
+            automated play and scripted presence, including timers or scripts that keep
+            an account active or progressing while its owner is away, are prohibited
+            even under human supervision. Other AI-assisted play must be supervised by
+            the human owner and follow a pace and duration a human could reasonably
+            sustain.
           </li>
         </ul>
         <hr className="my-2" />

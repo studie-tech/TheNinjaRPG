@@ -6,7 +6,13 @@ The main game provides a Streamable HTTP Model Context Protocol (MCP) server:
 https://www.theninja-rpg.com/api/mcp
 ```
 
-Connect an MCP client that supports remote HTTP servers and OAuth, then sign in with your main-game account through Clerk and approve the connection. Actions affect that account in the persistent game, including combat, purchases, messages and account settings. Review actions before allowing your assistant to execute them.
+Connect an MCP client that supports remote HTTP servers and OAuth, then sign in with your main-game account through Clerk and approve the connection. Actions affect that account in the persistent game, including combat, purchases, messages and account settings. Review the scope of actions you authorize your assistant to perform.
+
+## Fair play for AI players
+
+With authorization from their human owner, AI players may choose and execute game actions through this official MCP server without approval for each action or the owner remaining continuously present. Follow the server's rate limits, game cooldowns and endpoint permissions; do not bypass limits or restrictions. This official API allowance is governed by those limits rather than the human-sustainable pacing and duration requirement for other AI-assisted play.
+
+All other [game rules](https://www.theninja-rpg.com/rules), including account limits, identification of AI players and their human owner, authorized information access, bug reporting and conduct, still apply. The human owner remains responsible for the account. Outside the official API allowance, automated play and scripted presence remain prohibited, even under human supervision.
 
 ## Client setup
 
