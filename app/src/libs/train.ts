@@ -936,7 +936,16 @@ export const settleMasteryTrainingQueue = (
       calcMasteryTrainingAmount({ ...user, trainingSpeed: speed }, settings, seconds),
     );
     const nextDaily = dailyTrainings + (amount > 0 ? 1 : 0);
-    if (queuedMasteryStartBlockMessage({ ...user, dailyTrainings: nextDaily }, next))
+    // Choose the successor against the balance after this session's gain. A repeat
+    // that this completion caps must be consumed without starting a wasted interval.
+    const nextIndex = queue.findIndex(
+      (entry) => room(entry.stat) - (entry.stat === current ? amount : 0) > 0,
+    );
+    const successor = queue[nextIndex];
+    if (
+      successor &&
+      queuedMasteryStartBlockMessage({ ...user, dailyTrainings: nextDaily }, successor)
+    )
       break;
     if (amount > 0) {
       gains[current] = (gains[current] ?? 0) + amount;
@@ -949,10 +958,16 @@ export const settleMasteryTrainingQueue = (
       });
     }
     dailyTrainings = nextDaily;
-    queue.shift();
-    current = next.stat;
+    if (!successor) {
+      queue.length = 0;
+      current = null;
+      startedAt = null;
+      break;
+    }
+    queue.splice(0, nextIndex + 1);
+    current = successor.stat;
     startedAt = finishedAt;
-    speed = next.speed;
+    speed = successor.speed;
   }
   return {
     /** Entries taken off the front of the queue: started or dropped as capped */

@@ -15,7 +15,7 @@ import {
   userVote,
 } from "@/drizzle/schema";
 import { getMasteryQueue } from "@/libs/queue";
-import { calcJutsuTrainCost, calcJutsuTrainTime } from "@/libs/train";
+import { calcJutsuTrainCost, calcJutsuTrainTime, findJutsuInTraining } from "@/libs/train";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
@@ -464,6 +464,17 @@ describeWithDatabase("jutsu training queue", () => {
     expect(await readJutsuQueue()).toEqual([]);
   });
 
+  it("shows the next active jutsu when ownership is read after queue settlement", async () => {
+    await insertUser();
+    const finished = minutesFromNow(-0.5);
+    await trainingJutsuA(finished);
+    await queueJutsu("q-1", "jutsu-b", finished);
+    const caller = await callerFor(jutsuRouter, USER_ID);
+    expect((await caller.getTrainingQueue()).waiting).toEqual([]);
+    const owned = await caller.getUserJutsus({});
+    expect(findJutsuInTraining(owned, Date.now())?.jutsuId).toBe("jutsu-b");
+  });
+
   it("guards forgetting, evolving and transferring a jutsu with queued levels", async () => {
     await insertUser();
     await trainingJutsuA(minutesFromNow(10));
@@ -732,7 +743,7 @@ describeWithDatabase("mastery training queue", () => {
       masteryTrainingStartedAt: minutesFromNow(-10),
       masteryQueue: [{ stat: "taijutsuMastery", speed: "15min" }],
     });
-    const result = await (await callerFor(trainRouter, USER_ID)).stopMasteryTraining({});
+    const result = await (await callerFor(trainRouter, USER_ID)).stopMasteryTraining({ stat: "ninjutsuMastery", startedAt: (await readUser()).masteryTrainingStartedAt! });
     expect(result.success).toBe(true);
     const user = await readUser();
     expect(user.currentlyTrainingMastery).toBe("taijutsuMastery");
@@ -880,8 +891,8 @@ describeWithDatabase("queue round trips", () => {
     await queueJutsu("q-1", "jutsu-b", minutesFromNow(10));
     expect(await trips(refresh)).toBe(1);
     await makeDue();
-    // Parallel reads, the start (claim, owner read, jutsu write, owner write), a read again.
-    expect(await trips(refresh)).toBe(7);
+    // Parallel reads, serialized start transaction (owner lock and fresh deadline), reread.
+    expect(await trips(refresh)).toBe(11);
   });
 
   it("getSidebarTimers: one round trip unless a level is due", async () => {
@@ -892,7 +903,7 @@ describeWithDatabase("queue round trips", () => {
     await queueJutsu("q-1", "jutsu-b", minutesFromNow(10));
     expect(await trips(timers)).toBe(1);
     await makeDue();
-    expect(await trips(timers)).toBe(7);
+    expect(await trips(timers)).toBe(11);
   });
 
   it("queue views: one round trip per poll unless a job is due", async () => {
@@ -906,6 +917,6 @@ describeWithDatabase("queue round trips", () => {
     await queueJutsu("q-1", "jutsu-b", minutesFromNow(10));
     expect(await trips(jutsuQueue)).toBe(1);
     await makeDue();
-    expect(await trips(jutsuQueue)).toBe(7);
+    expect(await trips(jutsuQueue)).toBe(11);
   });
 });

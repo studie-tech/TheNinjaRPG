@@ -102,6 +102,22 @@ describe("mastery training queue settlement", () => {
     expect(result.consumed).toBe(2);
   });
 
+  it("collects the active session and drops its only repeat when that gain caps it", () => {
+    const result = settleMasteryTrainingQueue(
+      trainee({ ninjutsuMastery: mastery_cap - 0.5 }),
+      [{ stat: "ninjutsuMastery", speed: "1hr" }],
+      [],
+      after(20),
+    );
+    expect(result.gains.ninjutsuMastery).toBeCloseTo(0.5);
+    expect(result.currentlyTrainingMastery).toBeNull();
+    expect(result.masteryTrainingStartedAt).toBeNull();
+    expect(result.remaining).toEqual([]);
+    expect(result.consumed).toBe(1);
+    expect(result.completed).toHaveLength(1);
+    expect(result.dailyTrainings).toBe(1);
+  });
+
   it("pauses at the daily session limit and for banned non-8hr intervals", () => {
     const queue: Queue = [{ stat: "genjutsuMastery", speed: "15min" }];
     const capped = settleMasteryTrainingQueue(
@@ -127,8 +143,18 @@ describe("mastery training queue settlement", () => {
       { stat: "sageMastery", speed: "15min" },
     ]);
     expect(schedule).toEqual([
-      { stat: "genjutsuMastery", speed: "1hr", startsAt: after(15), finishesAt: after(75) },
-      { stat: "sageMastery", speed: "15min", startsAt: after(75), finishesAt: after(90) },
+      {
+        stat: "genjutsuMastery",
+        speed: "1hr",
+        startsAt: after(15),
+        finishesAt: after(75),
+      },
+      {
+        stat: "sageMastery",
+        speed: "15min",
+        startsAt: after(75),
+        finishesAt: after(90),
+      },
     ]);
     // Without an active session the chain starts now.
     const idle = getMasteryQueueSchedule(
@@ -137,7 +163,12 @@ describe("mastery training queue settlement", () => {
       after(5),
     );
     expect(idle).toEqual([
-      { stat: "genjutsuMastery", speed: "1hr", startsAt: after(5), finishesAt: after(65) },
+      {
+        stat: "genjutsuMastery",
+        speed: "1hr",
+        startsAt: after(5),
+        finishesAt: after(65),
+      },
     ]);
   });
 });

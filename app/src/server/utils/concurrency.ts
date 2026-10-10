@@ -36,7 +36,7 @@ import type { DrizzleClient } from "@/server/db";
 import type { QueryCondition } from "@/utils/typeutils";
 
 type ClaimUserSnapshotParams = {
-  client: DrizzleClient;
+  client: Pick<DrizzleClient, "update">;
   userId: string;
   updatedAt: Date;
   where?: QueryCondition[];

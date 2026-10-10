@@ -296,6 +296,14 @@ export const trainRouter = createTRPCRouter({
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
       const trained = user.currentlyTrainingMastery;
       const startedAt = user.masteryTrainingStartedAt;
+      if (
+        trained !== input.stat ||
+        startedAt?.getTime() !== input.startedAt.getTime()
+      ) {
+        return errorResponse(
+          "Your mastery training changed. Please refresh and try again",
+        );
+      }
       if (!trained || !startedAt) {
         return errorResponse("Not currently training a mastery");
       }

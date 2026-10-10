@@ -40,7 +40,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { fetchStudents } from "@/routers/sensei";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getQueueTotalCapacity } from "@/utils/paypal";
 import type {
   CraftingQueueMaterial,
@@ -50,7 +50,8 @@ import type {
 
 /**
  * Every queue lives in `UserQueue`. Queues are settled lazily, when their owner's data is
- * read, and every write is a single guarded statement (no database transactions).
+ * read. Single-row changes use guarded statements; publishing a replacement or starting
+ * a timed job uses a short transaction to commit its rows and owner state together.
  *
  * - JUTSU and CRAFT jobs are timed. A waiting job has already paid (ryo, materials).
  *   When its turn comes, deleting its row claims it, and it is started as a direct start
@@ -62,6 +63,9 @@ import type {
  * `fetchUpdatedUser` and combat setup load the rows with the user in the same query, so
  * users without rows pay no extra query, and timed jobs only cost writes when one is due.
  */
+
+type Transaction = Parameters<Parameters<DrizzleClient["transaction"]>[0]>[0];
+type QueueClient = DrizzleClient | Transaction;
 
 type JobOutcome = { finishesAt: Date } | "dropped" | "conflict";
 
@@ -279,7 +283,7 @@ const trainingQueueRows = (
 
 /** Delete MASTERY or ENERGY rows at or below `head`: already consumed or replaced. */
 const deleteDeadRows = (
-  client: DrizzleClient,
+  client: QueueClient,
   userId: string,
   kind: "MASTERY" | "ENERGY",
   head: number,
@@ -289,11 +293,9 @@ const deleteDeadRows = (
     .where(and(queueOf(userId, kind), sql`${userQueue.position} <= ${head}`));
 
 /**
- * Replace one training queue without a transaction. The snapshot claim moves the queue
- * head past every existing row of that kind, which retires them in the same statement
- * that guards against concurrent changes; the new rows go in after it. Inserting the
- * new rows and deleting the retired ones then run in parallel. Returns the saved user
- * fields (for a cache patch), or null when the snapshot moved on.
+ * Publish replacement rows and the head together. The snapshot guards the edit, while
+ * the transaction prevents readers seeing a new head with missing replacement rows
+ * and rolls the head back if insertion fails. Retired rows are removed in the same write.
  */
 export const claimAndReplaceTrainingQueue = async ({
   client,
@@ -321,32 +323,26 @@ export const claimAndReplaceTrainingQueue = async ({
     kind === "ENERGY"
       ? { energyQueueHead: head, energyQueueTail: head + entries.length }
       : { masteryQueueHead: head };
-  const claim = await claimUserSnapshot({
-    client,
-    userId: user.userId,
-    updatedAt: user.updatedAt,
-    where,
-    set: heads,
-  });
-  if (!claim.success) return null;
   const rows = trainingQueueRows(user.userId, kind, head, entries);
-  const [inserted, deleted] = await Promise.allSettled([
-    rows.length ? client.insert(userQueue).values(rows) : null,
-    existing.length ? deleteDeadRows(client, user.userId, kind, head) : null,
-  ]);
-  // Retired rows are ignored below the head, so failing to delete them is harmless.
-  if (deleted.status === "rejected") {
-    Sentry.captureException(deleted.reason, {
-      level: "warning",
-      tags: { source: "deleteRetiredQueueRows" },
-    });
-  }
-  if (inserted.status === "rejected") throw inserted.reason;
-  return {
-    updatedAt: claim.claimedAt,
-    ...heads,
-    queue: [...user.queue.filter((row) => row.kind !== kind), ...rows],
-  };
+  return retryOnDeadlock(() =>
+    client.transaction(async (tx) => {
+      const claim = await claimUserSnapshot({
+        client: tx,
+        userId: user.userId,
+        updatedAt: user.updatedAt,
+        where,
+        set: heads,
+      });
+      if (!claim.success) return null;
+      if (rows.length) await tx.insert(userQueue).values(rows);
+      if (existing.length) await deleteDeadRows(tx, user.userId, kind, head);
+      return {
+        updatedAt: claim.claimedAt,
+        ...heads,
+        queue: [...user.queue.filter((row) => row.kind !== kind), ...rows],
+      };
+    }),
+  );
 };
 
 /**
@@ -524,12 +520,14 @@ const settleJutsus = async (
   let sensei = students;
   return settleWaitingJobs({
     client,
+    userId,
+    kind: "JUTSU",
     waiting,
     now,
     lastFinish: latestDate(owned.map((row) => row.finishTraining)),
-    start: async (entry, startsAt) => {
+    start: async (tx, entry, startsAt) => {
       sensei ??= await fetchStudents(client, userId);
-      return startQueuedJutsu(client, entry, startsAt, sensei);
+      return startQueuedJutsu(tx, entry, startsAt, sensei);
     },
   });
 };
@@ -551,10 +549,12 @@ const settleCrafts = async (
   if (waiting.length === 0) return 0;
   return settleWaitingJobs({
     client,
+    userId,
+    kind: "CRAFT",
     waiting,
     now,
     lastFinish: latestDate(crafting.map((row) => row.craftingFinishedAt)),
-    start: (entry, startsAt) => startQueuedCraft(client, entry, startsAt),
+    start: (tx, entry, startsAt) => startQueuedCraft(tx, entry, startsAt),
   });
 };
 
@@ -681,42 +681,80 @@ const settleWaitingJobs = async <
   T extends { id: string; startsAt: Date; finishesAt: Date; durationSeconds: number },
 >(props: {
   client: DrizzleClient;
+  userId: string;
+  kind: TimedQueueKind;
   waiting: T[];
   now: Date;
   lastFinish: Date | null;
-  start: (entry: T, startsAt: Date) => Promise<JobOutcome>;
+  start: (client: Transaction, entry: T, startsAt: Date) => Promise<JobOutcome>;
 }) => {
-  const { client, waiting, now, lastFinish, start } = props;
-  let chainedFinish: Date | null = null;
-  let started = 0;
-  for (const [index, entry] of waiting.entries()) {
-    const startsAt = getQueuedJobStart({
-      scheduledStart: entry.startsAt,
-      lastFinish,
-      chainedFinish,
-      now,
-    });
-    if (!startsAt) {
-      const runningUntil = chainedFinish ?? lastFinish ?? now;
-      await rescheduleWaiting(client, waiting.slice(index), runningUntil);
-      break;
-    }
-    const outcome = await start(entry, startsAt);
-    // A lost race leaves the rest for the next settlement, which re-reads the queue.
-    if (outcome === "conflict") break;
-    if (outcome === "dropped") {
-      // The next job takes the dropped job's slot.
-      chainedFinish = startsAt;
-      continue;
-    }
-    chainedFinish = outcome.finishesAt;
-    started += 1;
+  const { client, userId, kind, waiting, now, start } = props;
+  if (props.lastFinish && props.lastFinish > now) {
+    await rescheduleWaiting(client, waiting, props.lastFinish);
+    return 0;
   }
-  return started;
+  // Different queue rows must not start in parallel. Lock the existing owner row,
+  // then read the active deadline: the upfront reads can come from different snapshots.
+  // Claim, rewards and active job commit together, so a failed start retains its receipt.
+  return retryOnDeadlock(() =>
+    client.transaction(async (tx) => {
+      await tx
+        .update(userData)
+        .set({
+          updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+        })
+        .where(eq(userData.userId, userId));
+      const deadlines =
+        kind === "JUTSU"
+          ? await tx
+              .select({ finish: userJutsu.finishTraining })
+              .from(userJutsu)
+              .where(
+                and(eq(userJutsu.userId, userId), isNotNull(userJutsu.finishTraining)),
+              )
+          : await tx
+              .select({ finish: userItem.craftingFinishedAt })
+              .from(userItem)
+              .where(
+                and(
+                  eq(userItem.userId, userId),
+                  isNotNull(userItem.craftingFinishedAt),
+                ),
+              );
+      const lastFinish = latestDate(deadlines.map((row) => row.finish));
+      let chainedFinish: Date | null = null;
+      let started = 0;
+      for (const [index, entry] of waiting.entries()) {
+        const startsAt = getQueuedJobStart({
+          scheduledStart: entry.startsAt,
+          lastFinish,
+          chainedFinish,
+          now,
+        });
+        if (!startsAt) {
+          await rescheduleWaiting(
+            tx,
+            waiting.slice(index),
+            chainedFinish ?? lastFinish ?? now,
+          );
+          break;
+        }
+        const outcome = await start(tx, entry, startsAt);
+        if (outcome === "conflict") break;
+        if (outcome === "dropped") {
+          chainedFinish = startsAt;
+          continue;
+        }
+        chainedFinish = outcome.finishesAt;
+        started++;
+      }
+      return started;
+    }),
+  );
 };
 
 const rescheduleWaiting = async (
-  client: DrizzleClient,
+  client: QueueClient,
   entries: { id: string; startsAt: Date; finishesAt: Date; durationSeconds: number }[],
   startsAt: Date,
 ) => {
@@ -741,7 +779,7 @@ const rescheduleWaiting = async (
  * is refunded. A level that can no longer be trained is dropped with a full refund.
  */
 const startQueuedJutsu = async (
-  client: DrizzleClient,
+  client: QueueClient,
   entry: QueuedJutsu,
   startsAt: Date,
   students: Awaited<ReturnType<typeof fetchStudents>>,
@@ -814,7 +852,7 @@ const startQueuedJutsu = async (
  * materials were taken on enqueue; a craft that is no longer possible returns them.
  */
 const startQueuedCraft = async (
-  client: DrizzleClient,
+  client: QueueClient,
   entry: QueuedCraft,
   startsAt: Date,
 ): Promise<JobOutcome> => {
@@ -874,7 +912,7 @@ const startQueuedCraft = async (
 };
 
 /** Deleting the row is the claim: only one settlement or cancellation can win it. */
-const claimQueueRow = async (client: DrizzleClient, id: string) => {
+const claimQueueRow = async (client: QueueClient, id: string) => {
   const result = await client.delete(userQueue).where(eq(userQueue.id, id));
   return result.rowsAffected === 1;
 };
@@ -884,7 +922,7 @@ const claimQueueRow = async (client: DrizzleClient, id: string) => {
  * cancelled instead and its ryo or materials are returned.
  */
 const restoreQueueRow = async (
-  client: DrizzleClient,
+  client: QueueClient,
   entry: QueuedJutsu | QueuedCraft,
 ) => {
   const { jutsu: _jutsu, item: _item, ...row } = entry as QueuedJutsu & QueuedCraft;
@@ -907,7 +945,7 @@ const QUEST_WRITE_ATTEMPTS = 3;
  * changed the owner first; after a few lost races the amounts are written without it.
  */
 const updateQueueOwner = async (
-  client: DrizzleClient,
+  client: QueueClient,
   owner: Awaited<ReturnType<typeof fetchQuestUser>>,
   changes: {
     refund?: number;
@@ -953,7 +991,7 @@ const updateQueueOwner = async (
     .where(eq(userData.userId, owner.userId));
 };
 
-const refundRyo = async (client: DrizzleClient, userId: string, amount: number) => {
+const refundRyo = async (client: QueueClient, userId: string, amount: number) => {
   if (amount <= 0) return;
   await client
     .update(userData)
@@ -967,7 +1005,7 @@ const refundRyo = async (client: DrizzleClient, userId: string, amount: number) 
  * in parallel (each is one guarded statement); the rest go in one insert.
  */
 const returnMaterials = async (
-  client: DrizzleClient,
+  client: QueueClient,
   userId: string,
   materials: CraftingQueueMaterial[],
 ) => {
@@ -1014,7 +1052,7 @@ export const returnCraftMaterials = returnMaterials;
  * regenerate pools, assign quests or mark the user online.
  */
 const fetchQuestUser = async (
-  client: DrizzleClient,
+  client: QueueClient,
   userId: string,
   jutsuId?: string,
 ) => {

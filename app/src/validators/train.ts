@@ -94,6 +94,8 @@ export const startMasteryTrainingInputSchema = z.object({
 });
 
 export const stopTrainingInputSchema = z.object({
+  stat: z.enum(MasteryNames),
+  startedAt: z.date(),
   guess: z.string().optional(),
 });
 

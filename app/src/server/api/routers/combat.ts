@@ -1988,15 +1988,16 @@ export const initiateBattle = async (
 
   // Start due jutsu levels and crafts before the participants are read for the fight,
   // e.g. an offline opponent's queued jutsu level. Rare, so the participants are read
-  // again when a job started.
+  // again after due settlement.
   let fetchedUsers = preloadedUsers;
   const queueOwners = fetchedUsers.filter(
     (user) => !user.isAi && hasDueTimedJob(user.queue),
   );
   if (queueOwners.length > 0) {
     try {
-      const started = await settleDueTimedQueues(client, queueOwners);
-      if (started > 0) fetchedUsers = await queryBattleUsers();
+      await settleDueTimedQueues(client, queueOwners);
+      // Dropped jobs also change balances, items and queue rows.
+      fetchedUsers = await queryBattleUsers();
     } catch (error) {
       // The fight goes ahead; the queues settle on the next refresh.
       Sentry.captureException(error, {

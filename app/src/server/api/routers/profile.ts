@@ -3092,17 +3092,15 @@ export const fetchUpdatedUser = async (props: {
 
   // Start timed jobs (jutsu levels, crafts) whose turn has come, backdated to when it
   // came. The in-memory check keeps every other request free of extra queries. When a
-  // job started, the user is read again.
+  // due queue was settled, the user is read again.
   let startedQueuedJobs = 0;
   if (user && hasDueTimedJob(user.queue, now)) {
     try {
       startedQueuedJobs = await settleDueTimedQueues(client, [user], now);
-      if (startedQueuedJobs > 0) {
-        user = await queryUpdatedUser();
-        // Started jobs change money, items, jutsus and quest progress at once.
-        requiresUserRefresh = true;
-        requiresProgressionRefresh = true;
-      }
+      // Drops refund resources and remove rows too; reconcile every due settlement.
+      user = await queryUpdatedUser();
+      requiresUserRefresh = true;
+      requiresProgressionRefresh = true;
     } catch (error) {
       // The queues stay as they are and are settled on the next request.
       Sentry.captureException(error, {
@@ -3443,9 +3441,8 @@ export const fetchUpdatedUser = async (props: {
           requiresProgressionRefresh = true;
           // Another mutation won the snapshot. Use its current pools and version rather than
           // returning the regeneration values calculated from our stale read.
-          const freshUser = await client.query.userData.findFirst({
-            where: eq(userData.userId, userId),
-          });
+          // Queue heads and their rows must come from the same winning snapshot.
+          const freshUser = await queryUpdatedUser();
           if (freshUser) Object.assign(user, freshUser);
           else if (queuedTrainingSnapshot) Object.assign(user, queuedTrainingSnapshot);
         }

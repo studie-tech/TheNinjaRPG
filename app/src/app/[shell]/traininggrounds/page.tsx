@@ -620,9 +620,15 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
     defaultValues: { guess: "" },
   });
 
+  const collectMasteryTraining = (guess?: string) => {
+    const stat = userData.currentlyTrainingMastery;
+    const startedAt = userData.masteryTrainingStartedAt;
+    if (stat && startedAt) stopMasteryTraining({ stat, startedAt, guess });
+  };
+
   // Form handlers
   const onSubmit = captchaForm.handleSubmit((data) => {
-    stopMasteryTraining(data);
+    collectMasteryTraining(data.guess);
   });
 
   const isPending = isStarting || isStartingMastery || isStoppingMastery || isChanging;
@@ -638,7 +644,7 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
       return (
         <XCircle
           className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-          onClick={() => stopMasteryTraining({})}
+          onClick={() => collectMasteryTraining()}
         />
       );
     }
@@ -1049,9 +1055,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             handleNextStep();
           }
         }
+        await utils.jutsu.getTrainingQueue.invalidate();
         await Promise.all([
           utils.jutsu.getUserJutsus.invalidate(),
-          utils.jutsu.getTrainingQueue.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
         ]);
       },
@@ -1066,9 +1072,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     api.jutsu.stopTraining.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
+        await utils.jutsu.getTrainingQueue.invalidate();
         await Promise.all([
           utils.jutsu.getUserJutsus.invalidate(),
-          utils.jutsu.getTrainingQueue.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
         ]);
       },
@@ -1088,8 +1094,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        await utils.jutsu.getTrainingQueue.invalidate();
         await Promise.all([
-          utils.jutsu.getTrainingQueue.invalidate(),
           utils.jutsu.getUserJutsus.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
           ...(data.success
@@ -1403,10 +1409,9 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         emptyText="Nothing in training. Select a jutsu above to start."
         onActiveFinish={async () => {
           setTrainingFinishedAt(Date.now());
-          await Promise.all([
-            utils.jutsu.getUserJutsus.invalidate(),
-            utils.jutsu.getTrainingQueue.invalidate(),
-          ]);
+          // serial-invalidation-ok: reading the queue starts the successor before ownership is read.
+          await utils.jutsu.getTrainingQueue.invalidate();
+          await utils.jutsu.getUserJutsus.invalidate();
         }}
       />
     </>
