@@ -4,9 +4,9 @@ import { processAccountDeletions } from "@/server/utils/accountDeletion/process"
 import {
   resetServerModuleStubs,
   stubDatabase,
-} from "../../../../../tests/setup/serverModules";
-import * as cleanup from "../cleanup";
-import * as identity from "../identity";
+} from "../../../setup/serverModules";
+import * as cleanup from "@/server/utils/accountDeletion/cleanup";
+import * as identity from "@/server/utils/accountDeletion/identity";
 
 const f = {
   find: vi.fn(),

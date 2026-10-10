@@ -11,9 +11,9 @@ import { ACCOUNT_DELETION_REVERIFICATION } from "@/validators/accountDeletion";
 import {
   resetServerModuleStubs,
   stubDatabase,
-} from "../../../../../tests/setup/serverModules";
-import * as apple from "../apple";
-import * as processor from "../process";
+} from "../../../setup/serverModules";
+import * as apple from "@/server/utils/accountDeletion/apple";
+import * as processor from "@/server/utils/accountDeletion/process";
 
 const originalEnv = { ...process.env };
 

@@ -3,8 +3,8 @@ import * as uploadthing from "uploadthing/server";
 import {
   resetServerModuleStubs,
   stubDatabase,
-} from "../../../../../tests/setup/serverModules";
-import { removeAccountProcessorData } from "../processors";
+} from "../../../setup/serverModules";
+import { removeAccountProcessorData } from "@/server/utils/accountDeletion/processors";
 
 const originalEnv = { ...process.env };
 const findMany = vi.fn();

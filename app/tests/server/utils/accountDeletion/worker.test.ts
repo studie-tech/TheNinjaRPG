@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "bun:test";
-import { runDeletionStep } from "../worker";
+import { runDeletionStep } from "@/server/utils/accountDeletion/worker";
 
 describe("permanent account deletion ordering", () => {
   const effects = () => ({

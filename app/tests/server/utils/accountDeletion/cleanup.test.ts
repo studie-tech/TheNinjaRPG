@@ -4,14 +4,14 @@ import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as clans from "@/server/api/routers/clan";
 import * as staff from "@/server/api/routers/staff";
 import * as grant from "@/server/utils/purchases/grant";
-import { insertUsers } from "../../../../../tests/setup/factories";
+import { insertUsers } from "../../../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
-} from "../../../../../tests/setup/testDatabase";
-import { removeAccountGameData } from "../cleanup";
-import * as processors from "../processors";
+} from "../../../setup/testDatabase";
+import { removeAccountGameData } from "@/server/utils/accountDeletion/cleanup";
+import * as processors from "@/server/utils/accountDeletion/processors";
 
 const depart = clans.removeFromClan;
 

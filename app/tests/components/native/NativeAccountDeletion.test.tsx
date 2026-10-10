@@ -9,8 +9,8 @@ import * as input from "@/components/ui/input";
 import * as shell from "@/hooks/useNativeShell";
 import * as contentBox from "@/layout/ContentBox";
 import { appleAuth } from "@/libs/native";
-import { ensureDom } from "../../../../tests/setup-dom.mjs";
-import { NativeAccountDeletion } from "../NativeAccountDeletion";
+import { ensureDom } from "../../setup-dom.mjs";
+import { NativeAccountDeletion } from "@/components/native/NativeAccountDeletion";
 
 let screen: ReturnType<typeof within>;
 const state = { native: true, mutate: vi.fn(), signOut: vi.fn(), cancel: false };

@@ -5,8 +5,8 @@ import * as liveActivity from "@/hooks/useLiveActivity";
 import * as push from "@/hooks/useNativePush";
 import * as native from "@/libs/native";
 import * as userContext from "@/utils/UserContext";
-import { ensureDom } from "../../../../tests/setup-dom.mjs";
-import NativeBridge from "../NativeBridge";
+import { ensureDom } from "../../setup-dom.mjs";
+import NativeBridge from "@/components/native/NativeBridge";
 
 const back = vi.fn();
 const exit = vi.fn();

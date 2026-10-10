@@ -8,7 +8,7 @@ import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const ROUTERS_DIR = join(import.meta.dirname, "..", "routers");
+const ROUTERS_DIR = join(import.meta.dirname, "../../../src/server/api/routers");
 
 /**
  * Blanks out string and template literals and comments so that parentheses inside

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import * as shell from "@/hooks/useNativeShell";
-import { ensureDom } from "../../../../tests/setup-dom.mjs";
-import { NativeSettingsEntry } from "../NativeSettingsEntry";
+import { ensureDom } from "../../setup-dom.mjs";
+import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry";
 
 const state = { native: true, signedIn: true };
 
