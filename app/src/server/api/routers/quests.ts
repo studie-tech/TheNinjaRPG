@@ -1166,6 +1166,9 @@ export const questsRouter = createTRPCRouter({
         getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0
           ? getUserProgressionUpdate(user, publishedAchievementIds)
           : undefined;
+      // Energy payouts advance the DB version in SQL; preserve the cached stamp
+      // until the next authoritative read can supply its new value.
+      const { updatedAt: _updatedAt, ...userPatch } = cacheUpdate?.userPatch ?? {};
       return {
         success: true,
         message: "Quest progress updated",
@@ -1186,8 +1189,7 @@ export const questsRouter = createTRPCRouter({
         ...(cacheUpdate
           ? {
               ...cacheUpdate,
-              // Energy payouts advance the DB version in SQL; only the next read knows that stamp.
-              userPatch: { ...cacheUpdate.userPatch, updatedAt: undefined },
+              userPatch,
               userDelta: balanceDelta,
             }
           : {}),

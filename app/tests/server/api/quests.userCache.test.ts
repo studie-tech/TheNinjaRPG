@@ -70,6 +70,7 @@ describeWithDatabase("confirmed quest cache responses", () => {
     expect(result.userDelta?.money).toBe((saved?.money ?? 0) - (before?.money ?? 0));
     expect(result.userPatch?.earnedExperience).toBe(saved?.earnedExperience);
     expect(result.userDelta?.earnedExperience).toBeUndefined();
+    expect(result.userPatch).not.toHaveProperty("updatedAt");
     expect(result.userPatch).toMatchObject({ missionsA: saved?.missionsA, curEnergy: saved?.curEnergy, questFinishAt: saved?.questFinishAt });
     expect(result.userPatch?.completedQuests?.some((entry) => entry.questId === missionId && entry.completed === 1)).toBe(true);
     expect(result.userPatch?.userQuests?.some((entry) => entry.questId === missionId)).toBe(false);
