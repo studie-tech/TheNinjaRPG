@@ -50,11 +50,7 @@ const mkBattle = (human: BattleUserState): CompleteBattle =>
     id: "b1", battleType: "ARENA", round: 1, version: 1, activeUserId: human.userId,
     createdAt: new Date(0), updatedAt: new Date(0), roundStartAt: new Date(0),
     background: "", width: 10, height: 10, rewardScaling: 1, forceKeepPools: false,
-    usersState: [
-      human,
-      mkUser({ userId: "foe", username: "Foe", controllerId: "foe",
-        longitude: 3, latitude: 3 }),
-    ],
+    usersState: [human],
     usersEffects: [], groundEffects: [],
     extraState: {
       jutsus: { [DAMAGE_JUTSU]: damageJutsu },
@@ -64,13 +60,7 @@ const mkBattle = (human: BattleUserState): CompleteBattle =>
       aiProfiles: {
         [PROFILE]: {
           id: PROFILE, name: "always strike", includeDefaultRules: false,
-          rules: [{
-            conditions: [],
-            action: ActionUseSpecificJutsu.parse({
-              jutsuId: DAMAGE_JUTSU,
-              target: "CLOSEST_OPPONENT",
-            }),
-          }],
+          rules: [],
         },
       },
     },
