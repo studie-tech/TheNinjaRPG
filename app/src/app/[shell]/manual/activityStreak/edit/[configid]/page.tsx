@@ -25,7 +25,10 @@ import { getRewardArray } from "@/libs/objectives";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { activityStreakFormSchema } from "@/validators/activityStreak";
+import {
+  activityStreakFormSchema,
+  streakDayRewardSchema,
+} from "@/validators/activityStreak";
 
 // Type aliases for form handling with z.coerce fields
 type ActivityStreakFormInput = z.input<typeof activityStreakFormSchema>;
@@ -70,6 +73,7 @@ interface SingleEditConfigProps {
 }
 
 const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) => {
+  const dayNumberSchema = streakDayRewardSchema.shape.dayNumber;
   const [rewards, setRewards] = useState<
     Array<{
       id: string;
@@ -123,13 +127,12 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
         rewards.some(
           (reward) =>
             !Number.isInteger(reward.dayNumber) ||
-            reward.dayNumber < 1 ||
-            reward.dayNumber > 60,
+            !dayNumberSchema.safeParse(reward.dayNumber).success,
         )
       ) {
         showMutationToast({
           success: false,
-          message: "Enter a whole day number between 1 and 60.",
+          message: `Enter a whole day number between ${dayNumberSchema.minValue} and ${dayNumberSchema.maxValue}.`,
         });
         return;
       }
@@ -273,8 +276,8 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
                       <div className="flex items-center gap-2">
                         <Label>Day</Label>
                         <NumberInput
-                          min={1}
-                          max={60}
+                          min={dayNumberSchema.minValue ?? undefined}
+                          max={dayNumberSchema.maxValue ?? undefined}
                           value={reward.dayNumber}
                           onValueChange={(value) =>
                             updateRewardDay(originalIndex, value)
