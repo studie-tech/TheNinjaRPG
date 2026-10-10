@@ -83,7 +83,7 @@ describeWithDatabase("Avatar cache reconciliation", () => {
       .set({ reputationPoints: 1 })
       .where(eq(userData.userId, userId));
     stubGeneration();
-    vi.spyOn(replicate, "createThumbnail").mockResolvedValue(undefined);
+    vi.spyOn(replicate, "createThumbnail").mockResolvedValue(null);
     const result = await callerForDatabase(
       avatarRouter,
       userId,

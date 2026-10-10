@@ -43,7 +43,6 @@ import {
   setActiveBoostExpression,
   setShrineSettingsKeyExpression,
 } from "@/server/utils/shrine";
-import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
@@ -172,12 +171,9 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Successfully upgraded shrine to level ${targetSector.shrineLevel + 1}!`,
-        userPatch: {
-          village: requiresUserRefresh
-            ? undefined
-            : await fetchVillageShrineTokens(ctx.drizzle, user.villageId),
-        },
-        userDelta: requiresUserRefresh ? undefined : {},
+        userDelta: requiresUserRefresh
+          ? undefined
+          : { village: { id: user.villageId, tokens: -SHRINE_UPGRADE_COST } },
       };
     }),
 
@@ -253,24 +249,16 @@ export const shrineRouter = createTRPCRouter({
         success: true,
         message: `${input.boostType} boost activated for ${SHRINE_BOOST_DURATION_HOURS} hours!`,
         userPatch: {
-          village: requiresUserRefresh
-            ? undefined
-            : await fetchVillageShrineSettings(ctx.drizzle, user.villageId).then(
-                (state) => {
-                  const boostEnd = state?.shrineSettings.activeBoosts[input.boostType];
-                  return state && boostEnd !== undefined
-                    ? {
-                        id: state.id,
-                        tokens: state.tokens,
-                        shrineSettings: {
-                          activeBoosts: { [input.boostType]: boostEnd },
-                        },
-                      }
-                    : undefined;
-                },
-              ),
+          village: {
+            id: user.villageId,
+            shrineSettings: {
+              activeBoosts: { [input.boostType]: boostExpiry.toISOString() },
+            },
+          },
         },
-        userDelta: requiresUserRefresh ? undefined : {},
+        userDelta: requiresUserRefresh
+          ? undefined
+          : { village: { id: user.villageId, tokens: -SHRINE_BOOST_COST } },
       };
     }),
 
@@ -332,20 +320,14 @@ export const shrineRouter = createTRPCRouter({
         success: true,
         message: `AI defender unlocked! Cost: ${SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens`,
         userPatch: {
-          village: requiresUserRefresh
-            ? undefined
-            : await fetchVillageShrineSettings(ctx.drizzle, user.villageId).then(
-                (state) =>
-                  state && {
-                    id: state.id,
-                    tokens: state.tokens,
-                    shrineSettings: {
-                      unlockedAiIds: state.shrineSettings.unlockedAiIds,
-                    },
-                  },
-              ),
+          village: {
+            id: user.villageId,
+            shrineSettings: { unlockedAiIds: updatedUnlocks },
+          },
         },
-        userDelta: requiresUserRefresh ? undefined : {},
+        userDelta: requiresUserRefresh
+          ? undefined
+          : { village: { id: user.villageId, tokens: -SHRINE_AI_UNLOCK_COST } },
       };
     }),
 
@@ -503,12 +485,11 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Weekly maintenance paid for sector ${targetSector.sector}: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
-        userPatch: {
-          village: requiresUserRefresh
-            ? undefined
-            : await fetchVillageShrineTokens(ctx.drizzle, user.villageId),
-        },
-        userDelta: requiresUserRefresh ? undefined : {},
+        userDelta: requiresUserRefresh
+          ? undefined
+          : {
+              village: { id: user.villageId, tokens: -SHRINE_WEEKLY_MAINTENANCE_COST },
+            },
       };
     }),
 
@@ -1310,23 +1291,6 @@ export const shrineRouter = createTRPCRouter({
       return errorResponse(`Failed to initiate shrine battle: ${result.message}`);
     }),
 });
-
-// Shared village balances can change through other members and cron without a local cache update.
-const fetchVillageShrineTokens = (client: DrizzleClient, villageId: string) =>
-  client.query.village
-    .findFirst({
-      where: eq(village.id, villageId),
-      columns: { id: true, tokens: true },
-    })
-    .catch(handleUserCacheReadError);
-
-const fetchVillageShrineSettings = (client: DrizzleClient, villageId: string) =>
-  client.query.village
-    .findFirst({
-      where: eq(village.id, villageId),
-      columns: { id: true, tokens: true, shrineSettings: true },
-    })
-    .catch(handleUserCacheReadError);
 
 /**
  * Returns whether the village controls at least one Level 3 shrine.

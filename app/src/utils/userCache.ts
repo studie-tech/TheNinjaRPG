@@ -108,8 +108,36 @@ export const updateUserCache = async (
     if (patch && known === undefined) return undefined;
     const changes = known ? mergeUserRelations(old.userData, known) : {};
     if (!changes) return undefined;
-    for (const field of Object.keys(delta) as (keyof UserDelta)[]) {
-      const amount = delta[field];
+    const { clan, village, ...fields } = delta;
+    // Shared balances use the same captured revision as personal counters, and must
+    // still belong to the cached relation before any part of the mutation is applied.
+    if (clan) {
+      if (old.userData.clan?.id !== clan.id) return undefined;
+      changes.clan = {
+        ...(changes.clan ?? old.userData.clan),
+        ...(clan.bank === undefined
+          ? {}
+          : { bank: old.userData.clan.bank + clan.bank }),
+        ...(clan.repTreasury === undefined
+          ? {}
+          : {
+              repTreasury: old.userData.clan.repTreasury + clan.repTreasury,
+            }),
+      };
+    }
+    if (village) {
+      if (old.userData.village?.id !== village.id) return undefined;
+      changes.village = {
+        ...(changes.village ?? old.userData.village),
+        ...(village.tokens === undefined
+          ? {}
+          : {
+              tokens: old.userData.village.tokens + village.tokens,
+            }),
+      };
+    }
+    for (const field of Object.keys(fields) as (keyof typeof fields)[]) {
+      const amount = fields[field];
       if (amount !== undefined) {
         const cap =
           field === "skillPoints"

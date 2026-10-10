@@ -51,11 +51,10 @@ describe("clan committed cache responses", () => {
     const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 250 });
     expect(result).toMatchObject({
       success: true,
-      userDelta: { money: -250 },
-      userPatch: { clan: { id: "clan-cache-clan", bank: 800 } },
+      userDelta: { money: -250, clan: { id: "clan-cache-clan", bank: 250 } },
     });
     expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
-    expect(database.query.clan.findFirst).toHaveBeenCalledTimes(2);
+    expect(database.query.clan.findFirst).toHaveBeenCalledTimes(1);
   });
 
   for (const amount of [0.5, 1.5, 1.6]) {
@@ -84,11 +83,10 @@ describe("clan committed cache responses", () => {
     });
     expect(result).toMatchObject({
       success: true,
-      userDelta: { reputationPoints: -10 },
-      userPatch: { clan: { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE } },
+      userDelta: { reputationPoints: -10, clan: { id: "clan-cache-clan", repTreasury: 10 } },
     });
     expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
-    expect(database.query.clan.findFirst).toHaveBeenCalledTimes(2);
+    expect(database.query.clan.findFirst).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -195,13 +193,12 @@ describeWithDatabase("clan mutation cache balances", () => {
     });
   });
 
-  it("returns both committed balances after depositing ryo", async () => {
+  it("returns both confirmed deltas after depositing ryo", async () => {
     const caller = await callerFor(clanRouter, "clan-cache-user");
     const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 250 });
     expect(result).toMatchObject({
       success: true,
-      userDelta: { money: -250 },
-      userPatch: { clan: { id: "clan-cache-clan", bank: 750 } },
+      userDelta: { money: -250, clan: { id: "clan-cache-clan", bank: 250 } },
     });
   });
 
@@ -213,8 +210,7 @@ describeWithDatabase("clan mutation cache balances", () => {
     });
     expect(result).toMatchObject({
       success: true,
-      userDelta: { reputationPoints: -10 },
-      userPatch: { clan: { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE } },
+      userDelta: { reputationPoints: -10, clan: { id: "clan-cache-clan", repTreasury: 10 } },
     });
   });
 

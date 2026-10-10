@@ -358,10 +358,76 @@ describe("user cache updates", () => {
 
 
 describe("shared mutation user response", () => {
+  it("applies a village debit while preserving unrelated boosts and the settings just saved", async () => {
+    const test = setup();
+    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
+    const village = {
+      id: "village", tokens: 1007, name: "Hidden Leaf",
+      shrineSettings: { activeBoosts: { PVP: "existing" }, unlockedAiIds: [], activeAiIds: [] },
+    } as unknown as Village;
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    const response = userDeltaResponseSchema.parse({
+      success: true, message: "Saved",
+      userDelta: { village: { id: "village", tokens: -100 } },
+      userPatch: { village: { id: "village", shrineSettings: { activeBoosts: { Training: "saved" } } } },
+    });
+    await updateUserCache(test.client, key, response.userPatch, {
+      revision: prepareUserUpdate(test.client, key), delta: response.userDelta,
+    });
+    expect(test.value()?.userData.village).toEqual({
+      ...village, tokens: 907,
+      shrineSettings: { ...village.shrineSettings, activeBoosts: { PVP: "existing", Training: "saved" } },
+    });
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  for (const relation of ["clan", "village"] as const) {
+    for (const unavailable of [true, false]) {
+      it(`refreshes all fields when ${relation} delta refers to a ${unavailable ? "missing" : "different"} relation`, async () => {
+        const test = setup();
+        const cached = { ...profile(100), userData: { ...profile(100).userData,
+          [relation]: unavailable ? null : { id: "current", bank: 100, repTreasury: 10, tokens: 100 },
+        } };
+        test.client.setQueryData(key, cached);
+        const latest = { ...cached, userData: { ...cached.userData, money: 90 } };
+        let reads = 0;
+        test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
+        const delta = userDeltaResponseSchema.parse({
+          success: true, message: "Saved", userDelta: { money: -10,
+            [relation]: relation === "clan" ? { id: "other", bank: 10 } : { id: "other", tokens: -10 },
+          },
+        }).userDelta;
+        await updateUserCache(test.client, key, undefined, {
+          revision: prepareUserUpdate(test.client, key), delta,
+        });
+        expect(test.value()?.userData).toEqual(latest.userData);
+        expect(reads).toBe(1);
+        test.close();
+      });
+    }
+  }
+
+  it("refreshes a delayed village debit after a newer profile already includes it", async () => {
+    const test = setup();
+    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
+    const village = { id: "village", tokens: 1000 } as Village;
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    const revision = prepareUserUpdate(test.client, key);
+    const latest = { ...profile(100), userData: { ...profile(100).userData, village: { ...village, tokens: 900 } } };
+    test.client.setQueryData(key, latest);
+    let reads = 0;
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
+    await updateUserCache(test.client, key, undefined, { revision, delta: { village: { id: "village", tokens: -100 } } });
+    expect(test.value()?.userData.village?.tokens).toBe(900);
+    expect(reads).toBe(1);
+    test.close();
+  });
+
   it.each([
-    { name: "bank deposit", userDelta: { money: -10 }, money: 90, reputationPoints: 30, bank: 1010, repTreasury: 20 },
-    { name: "reputation donation", userDelta: { reputationPoints: -10 }, money: 100, reputationPoints: 20, bank: 1000, repTreasury: 30 },
-  ])("refreshes a committed $name when its clan cache read failed", async (update) => {
+    { name: "bank deposit", userDelta: { money: -10, clan: { id: "current", bank: 10 } }, money: 90, reputationPoints: 30, bank: 1010, repTreasury: 20 },
+    { name: "reputation donation", userDelta: { reputationPoints: -10, clan: { id: "current", repTreasury: 10 } }, money: 100, reputationPoints: 20, bank: 1000, repTreasury: 30 },
+  ])("applies a confirmed $name without a clan readback or profile fetch", async (update) => {
     const test = setup();
     const clan = { id: "current", bank: 1000, name: "Allies", repTreasury: 20 } as NonNullable<NonNullable<UserWithRelations>["clan"]>;
     test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, clan } });
@@ -377,11 +443,11 @@ describe("shared mutation user response", () => {
       success: true, message: "Committed", userDelta: update.userDelta, userPatch: {},
     });
     await updateUserCache(test.client, key,
-      () => response.userPatch?.clan ? response.userPatch : undefined,
+      response.userPatch,
       { revision, delta: response.userDelta },
     );
     expect(test.value()?.userData).toEqual(latest.userData);
-    expect(reads).toBe(1);
+    expect(reads).toBe(0);
     test.close();
   });
 

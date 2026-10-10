@@ -75,7 +75,6 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canEditClans } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromDate } from "@/utils/time";
@@ -337,32 +336,24 @@ export const clanRouter = createTRPCRouter({
       } else {
         // Create donation message
         const message = `${user.username} donated ${repsCost} reputation points to faction`;
-        const [clanUpdate] = await Promise.all([
-          user.energyTrainingQueue?.length
-            ? undefined
-            : ctx.drizzle.query.clan
-                .findFirst({
-                  where: eq(clan.id, fetchedClan.id),
-                  columns: { id: true, repTreasury: true },
-                })
-                .catch(handleUserCacheReadError),
-          ctx.drizzle.insert(actionLog).values({
-            id: nanoid(),
-            userId: ctx.userId,
-            tableName: "clan",
-            changes: [message],
-            relatedId: fetchedClan.id,
-            relatedMsg: message,
-            relatedImage: fetchedClan.image,
-          }),
-        ]);
+        await ctx.drizzle.insert(actionLog).values({
+          id: nanoid(),
+          userId: ctx.userId,
+          tableName: "clan",
+          changes: [message],
+          relatedId: fetchedClan.id,
+          relatedMsg: message,
+          relatedImage: fetchedClan.image,
+        });
         return {
           success: true,
           message,
           userDelta: user.energyTrainingQueue?.length
             ? undefined
-            : { reputationPoints: -repsCost },
-          userPatch: { clan: clanUpdate },
+            : {
+                reputationPoints: -repsCost,
+                clan: { id: fetchedClan.id, repTreasury: repsCost },
+              },
         };
       }
     }),
@@ -1138,17 +1129,9 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: `Successfully deposited ${input.amount} ryo`,
-        userDelta: needsUserRefresh ? undefined : { money: -input.amount },
-        userPatch: {
-          clan: needsUserRefresh
-            ? undefined
-            : await ctx.drizzle.query.clan
-                .findFirst({
-                  where: eq(clan.id, fetchedClan.id),
-                  columns: { id: true, bank: true },
-                })
-                .catch(handleUserCacheReadError),
-        },
+        userDelta: needsUserRefresh
+          ? undefined
+          : { money: -input.amount, clan: { id: fetchedClan.id, bank: input.amount } },
       };
     }),
   purchaseBoost: protectedProcedure

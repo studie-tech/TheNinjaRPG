@@ -1351,7 +1351,11 @@ const useUpdateShrineVillage = () => {
     result: UserDeltaResponse,
     revision: number | undefined,
   ) => {
-    if (!result.success || !result.userDelta || !result.userPatch?.village) {
+    if (
+      !result.success ||
+      !result.userDelta ||
+      (!result.userPatch?.village && !result.userDelta.village)
+    ) {
       return updateUser(undefined, { revision });
     }
     return updateUser(result.userPatch, { revision, delta: result.userDelta });

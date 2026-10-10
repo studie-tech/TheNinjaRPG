@@ -105,13 +105,16 @@ describeWithDatabase("committed profile cache patches", () => {
     expect(before?.maxEnergy).toBe(calcEnergy(10));
     expect(before?.effectiveMasteries.ninjutsuMastery).toBe(100);
 
-    const caller = await callerFor(itemRouter, userId);
+    const counted = countUserReads(db);
+    const caller = callerForDatabase(itemRouter, userId, counted.client);
     const result = await caller.repair({ userItemId: "worn-armor" });
     expect(result.success).toBe(true);
+    expect(counted.getReads()).toBe(1);
     if (!("userPatch" in result) || !result.userPatch) throw new Error("Missing repair patch");
     const stored = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
-    expect(result.userPatch.money).toBe(stored?.money);
-    expect(result.userPatch.money).toBeLessThan(10000);
+    expect(result.userDelta?.money).toBe((stored?.money ?? 0) - 10000);
+    expect(result.userDelta?.money).toBeLessThan(0);
+    expect(result.userPatch.money).toBeUndefined();
     expect(result.userPatch.items!.map((row) => [row.id, row.durability])).toEqual([["worn-armor", 100]]);
     expect(result.userPatch.maxEnergy).toBe(calcEnergy(10) + 200);
     expect(result.userPatch.effectiveMasteries!.ninjutsuMastery).toBe(150);
@@ -131,6 +134,54 @@ describeWithDatabase("committed profile cache patches", () => {
     expect(result.userPatch.items).toEqual([]);
     expect(result.userPatch.maxEnergy).toBe(calcEnergy(10));
     expect(result.userPatch.effectiveMasteries!.ninjutsuMastery).toBe(100);
+  });
+
+  it.each(["repairAll", "useRepairItem", "useRepairAll"] as const)("projects confirmed %s without a postwrite profile read", async (method) => {
+    const db = await getTestDatabase();
+    await insertItems([{ id: "cache-repair-kit", itemType: "CONSUMABLE", maxDurability: 0, destroyOnUse: true, effects: [makeEffect("repair", { power: 100 })] }]);
+    await insertUserItems([{ id: "worn-kit", userId, itemId: "cache-repair-kit", equipped: "ITEM_1", quantity: 1 }]);
+    const counted = countUserReads(db);
+    const caller = callerForDatabase(itemRouter, userId, counted.client);
+    const result = method === "useRepairItem" ? await caller.useRepairItem({ repairItemId: "worn-kit", targetItemId: "worn-armor" }) : await caller[method]();
+    expect(result.success).toBe(true);
+    expect(counted.getReads()).toBe(1);
+    expect(result.userPatch?.items?.find((row) => row.id === "worn-armor")?.durability).toBe(100);
+    expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(150);
+    expect(result.userPatch?.maxEnergy).toBe(calcEnergy(10) + 200);
+    expect(result.userPatch?.items?.some((row) => row.id === "worn-kit")).toBe(method === "repairAll");
+    const stored = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+    expect(result.userDelta?.money).toBe((stored?.money ?? 0) - 10000);
+  });
+
+  it("refreshes partial bulk repairs instead of projecting the raced inventory", async () => {
+    const db = await getTestDatabase();
+    await insertItems([{ id: "cache-second-armor", maxDurability: 100 }]);
+    await insertUserItems([{ id: "second-armor", userId, itemId: "cache-second-armor", durability: 0 }]);
+    const interleaved = beforeStatements(db, userItem, [async () => {
+      await db.update(userItem).set({ storedAtHome: true, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
+    }]);
+    const counted = countUserReads(interleaved);
+    const result = await callerForDatabase(itemRouter, userId, counted.client).repairAll();
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(counted.getReads()).toBe(1);
+    expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "worn-armor") }))?.durability).toBe(0);
+  });
+
+  it("reuses the loadout's committed slots without another profile read", async () => {
+    const db = await getTestDatabase();
+    await db.update(userItem).set({ durability: 100, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
+    await db.insert(itemLoadout).values({ id: "cache-loadout", userId, name: "Cache", itemData: [{ userItemId: "worn-armor", slot: "CHEST" }] });
+    const counted = countUserReads(db);
+    const result = await callerForDatabase(itemRouter, userId, counted.client).selectItemLoadout({ id: "cache-loadout" });
+    expect(result.success).toBe(true);
+    // The original user and mastery-source reads run before writes; neither is repeated.
+    expect(counted.getReads()).toBe(2);
+    expect(result.userPatch?.itemLoadout).toBe("cache-loadout");
+    expect(result.userPatch?.items?.map((row) => row.equipped)).toEqual(["CHEST"]);
+    expect(result.userPatch?.maxEnergy).toBe(calcEnergy(10) + 200);
+    expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(150);
   });
 
   it("does not read the profile again when nothing is equipped", async () => {

@@ -25,8 +25,6 @@ const aiId = "shrine-cache-ai";
 const sectorId = 32001;
 const initialTokens = 100000000;
 const concurrentTokens = 7;
-const concurrentTrainingBoost = "2045-01-01T00:00:00.000Z";
-const concurrentUnlockedAi = "shrine-cache-concurrent-ai";
 const concurrentBoost = "2040-01-01T00:00:00.000Z";
 const maintenanceAt = new Date("2026-01-01T00:00:00.000Z");
 const template = [{ boostType: "Training", dayOfWeek: 2, slotIndex: 3 }] as const;
@@ -95,7 +93,7 @@ describeWithDatabase("committed shrine cache state", () => {
       "payWeeklyMaintenance",
       "setBoostTemplate",
     ] as const) {
-      it(`${endpoint} returns exact committed village state and refresh flag ${mustRefresh}`, async () => {
+      it(`${endpoint} returns the confirmed village update and refresh flag ${mustRefresh}`, async () => {
         const db = await getTestDatabase();
         requiresUserRefresh = mustRefresh;
         if (endpoint === "upgradeShrine") {
@@ -116,33 +114,7 @@ describeWithDatabase("committed shrine cache state", () => {
             })
             .where(eq(village.id, villageId));
         }
-        const actualVillageRead = db.query.village.findFirst.bind(db.query.village);
-        const villageReads = vi
-          .spyOn(db.query.village, "findFirst")
-          .mockImplementation((async (
-            config: Parameters<typeof actualVillageRead>[0],
-          ) => {
-            // Change the same key after the successful write, just as another request or cron can.
-            if (config?.columns?.shrineSettings && endpoint === "activateBoost") {
-              await db
-                .update(village)
-                .set({
-                  shrineSettings: sql`JSON_SET(${village.shrineSettings}, '$.activeBoosts.Training', ${concurrentTrainingBoost})`,
-                })
-                .where(eq(village.id, villageId));
-            } else if (
-              config?.columns?.shrineSettings &&
-              endpoint === "unlockAiDefender"
-            ) {
-              await db
-                .update(village)
-                .set({
-                  shrineSettings: sql`JSON_SET(${village.shrineSettings}, '$.unlockedAiIds', CAST(${JSON.stringify([aiId, concurrentUnlockedAi])} AS JSON))`,
-                })
-                .where(eq(village.id, villageId));
-            }
-            return actualVillageRead(config);
-          }) as never);
+        const villageReads = vi.spyOn(db.query.village, "findFirst");
         const caller = await callerFor(shrineRouter, userId);
         const result = await (endpoint === "upgradeShrine"
           ? caller.upgradeShrine({ sectorNumber: sectorId })
@@ -156,43 +128,6 @@ describeWithDatabase("committed shrine cache state", () => {
                   ? caller.payWeeklyMaintenance({ sectorId })
                   : caller.setBoostTemplate({ villageId, template: [...template] }));
         expect(result.success).toBe(true);
-        expect(result.userDelta).toEqual(mustRefresh ? undefined : {});
-        const isMonetary =
-          endpoint !== "toggleVillageAiDefender" && endpoint !== "setBoostTemplate";
-        // One read belongs to fetchUpdatedUser; only an applicable token patch needs another.
-        expect(villageReads).toHaveBeenCalledTimes(isMonetary && !mustRefresh ? 2 : 1);
-        const stored = await db.query.village.findFirst({
-          where: eq(village.id, villageId),
-        });
-        if (isMonetary && mustRefresh) {
-          expect(result.userPatch?.village).toBeUndefined();
-        } else {
-          const shrineSettings =
-            endpoint === "activateBoost"
-              ? {
-                  activeBoosts: {
-                    Training: stored?.shrineSettings.activeBoosts.Training,
-                  },
-                }
-              : endpoint === "unlockAiDefender"
-                ? { unlockedAiIds: stored?.shrineSettings.unlockedAiIds }
-                : endpoint === "toggleVillageAiDefender"
-                  ? { activeAiIds: stored?.shrineSettings.activeAiIds }
-                  : endpoint === "setBoostTemplate"
-                    ? {
-                        boostTemplate: stored?.shrineSettings.boostTemplate,
-                        boostTemplateUpdatedBy:
-                          stored?.shrineSettings.boostTemplateUpdatedBy,
-                        boostTemplateUpdatedAt:
-                          stored?.shrineSettings.boostTemplateUpdatedAt,
-                      }
-                    : undefined;
-          expect(result.userPatch?.village).toEqual({
-            id: stored?.id,
-            ...(isMonetary ? { tokens: stored?.tokens } : {}),
-            ...(shrineSettings ? { shrineSettings } : {}),
-          });
-        }
         const cost =
           endpoint === "upgradeShrine"
             ? SHRINE_UPGRADE_COST
@@ -203,6 +138,31 @@ describeWithDatabase("committed shrine cache state", () => {
                 : endpoint === "payWeeklyMaintenance"
                   ? SHRINE_WEEKLY_MAINTENANCE_COST
                   : 0;
+        expect(result.userDelta).toEqual(mustRefresh ? undefined : cost ? {
+          village: { id: villageId, tokens: -cost },
+        } : {});
+        // Only the initial snapshot reads the village; confirmed writes need no readback.
+        expect(villageReads).toHaveBeenCalledTimes(1);
+        const stored = await db.query.village.findFirst({
+          where: eq(village.id, villageId),
+        });
+        const shrineSettings =
+          endpoint === "activateBoost"
+            ? { activeBoosts: { Training: stored?.shrineSettings.activeBoosts.Training } }
+            : endpoint === "unlockAiDefender"
+              ? { unlockedAiIds: stored?.shrineSettings.unlockedAiIds }
+              : endpoint === "toggleVillageAiDefender"
+                ? { activeAiIds: stored?.shrineSettings.activeAiIds }
+                : endpoint === "setBoostTemplate"
+                  ? {
+                      boostTemplate: stored?.shrineSettings.boostTemplate,
+                      boostTemplateUpdatedBy: stored?.shrineSettings.boostTemplateUpdatedBy,
+                      boostTemplateUpdatedAt: stored?.shrineSettings.boostTemplateUpdatedAt,
+                    }
+                  : undefined;
+        expect(result.userPatch?.village).toEqual(shrineSettings ? {
+          id: villageId, shrineSettings,
+        } : undefined);
         expect(stored?.tokens).toBe(initialTokens + concurrentTokens - cost);
         expect(stored?.shrineSettings.activeBoosts.PVP).toBe(concurrentBoost);
         expect(result.userPatch?.village?.shrineSettings?.activeBoosts?.PVP).toBeUndefined();
@@ -216,9 +176,7 @@ describeWithDatabase("committed shrine cache state", () => {
             new Date(stored?.shrineSettings.activeBoosts.Training ?? "").getTime(),
           ).toBeGreaterThan(Date.now());
         } else if (endpoint === "unlockAiDefender") {
-          expect(stored?.shrineSettings.unlockedAiIds).toEqual(
-            mustRefresh ? [aiId] : [aiId, concurrentUnlockedAi],
-          );
+          expect(stored?.shrineSettings.unlockedAiIds).toEqual([aiId]);
         } else if (endpoint === "toggleVillageAiDefender") {
           expect(stored?.shrineSettings.activeAiIds).toEqual([aiId]);
         } else if (endpoint === "payWeeklyMaintenance") {

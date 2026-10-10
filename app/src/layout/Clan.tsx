@@ -1269,7 +1269,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success)
-          void updateUser(() => (data.userPatch?.clan ? data.userPatch : undefined), {
+          void updateUser(data.userPatch, {
             revision,
             delta: data.userDelta,
           });
@@ -1360,7 +1360,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUser(() => (data.userPatch?.clan ? data.userPatch : undefined), {
+          updateUser(data.userPatch, {
             revision,
             delta: data.userDelta,
           }),

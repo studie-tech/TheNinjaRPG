@@ -19,6 +19,19 @@ import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { boostTemplateEntrySchema } from "@/validators/shrine";
 
 export const userDeltaSchema = z.object({
+  clan: z
+    .object({
+      id: z.string(),
+      bank: z.number().optional(),
+      repTreasury: z.number().optional(),
+    })
+    .optional(),
+  village: z
+    .object({
+      id: z.string(),
+      tokens: z.number().optional(),
+    })
+    .optional(),
   offence: z.number().optional(),
   defence: z.number().optional(),
   strength: z.number().optional(),
