@@ -102,26 +102,21 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
         // Use functional setState to avoid reading state in effect body
         // This prevents React Compiler from adding state as a dependency
         setState((prevState) => {
+          const newState = calcCurrent(
+            current,
+            total,
+            status,
+            regen,
+            lastRegenAt,
+            timeDiff,
+          );
+          // Capacity can change while the bar is full; suppress only unchanged values.
           if (
-            (prevState.current < total || current < total) &&
-            (prevState.current >= 0 || current >= 0)
+            prevState.current !== newState.current ||
+            prevState.width !== newState.width ||
+            prevState.nextTickSeconds !== newState.nextTickSeconds
           ) {
-            const newState = calcCurrent(
-              current,
-              total,
-              status,
-              regen,
-              lastRegenAt,
-              timeDiff,
-            );
-            // Only update if values actually changed to prevent unnecessary re-renders
-            if (
-              prevState.current !== newState.current ||
-              prevState.width !== newState.width ||
-              prevState.nextTickSeconds !== newState.nextTickSeconds
-            ) {
-              return newState;
-            }
+            return newState;
           }
           return prevState;
         });
