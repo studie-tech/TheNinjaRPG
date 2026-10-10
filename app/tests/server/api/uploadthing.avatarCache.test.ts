@@ -29,7 +29,12 @@ const callback = (endpoint: keyof typeof ourFileRouter, targetUserId = userId) =
   });
 
 describeWithDatabase("uploaded avatar cache responses", () => {
+  let savedWindow: PropertyDescriptor | undefined;
+
   beforeEach(async () => {
+    // Bun shares its realm with browser suites; UploadThing checks for window at runtime.
+    savedWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    Reflect.deleteProperty(globalThis, "window");
     await resetTables(historicalAvatar, userData);
     await insertUsers([{ userId, username: "UploadAvatarCache" }]);
     vi.spyOn(moderator, "classifyNsfwImage").mockResolvedValue({
@@ -48,6 +53,8 @@ describeWithDatabase("uploaded avatar cache responses", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     resetServerModuleStubs();
+    if (savedWindow) Object.defineProperty(globalThis, "window", savedWindow);
+    else Reflect.deleteProperty(globalThis, "window");
   });
 
   it.each([
