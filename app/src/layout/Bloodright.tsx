@@ -21,7 +21,7 @@ import type { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const Bloodright = () => {
   const utils = api.useUtils();
-  const { data: user, prepareUserUpdate: onMutate, updateUser } = useRequiredUserData();
+  const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { data, isPending, isError, refetch } = api.bloodright.get.useQuery();
   const onSuccess = async (
     result: z.infer<typeof userDeltaResponseSchema>,
@@ -38,8 +38,14 @@ export const Bloodright = () => {
         }),
       ]);
   };
-  const purchase = api.bloodright.purchase.useMutation({ onMutate, onSuccess });
-  const refund = api.bloodright.refund.useMutation({ onMutate, onSuccess });
+  const purchase = api.bloodright.purchase.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess,
+  });
+  const refund = api.bloodright.refund.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess,
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const isMutating = purchase.isPending || refund.isPending;
@@ -185,10 +191,10 @@ export const Bloodright = () => {
 
 export const ResetBloodright = () => {
   const utils = api.useUtils();
-  const { prepareUserUpdate: onMutate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser } = useUserData();
   const { data: info, isError, refetch } = api.skillTree.getResetInfo.useQuery();
   const reset = api.bloodright.reset.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (result, _input, revision) => {
       showMutationToast(result);
       if (result.success)

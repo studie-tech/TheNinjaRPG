@@ -1097,11 +1097,7 @@ interface ClanInfoProps {
 
 export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   // Destructure
-  const {
-    userData,
-    updateUser,
-    prepareUserUpdate: onMutate,
-  } = useRequireInVillage("/clanhall");
+  const { userData, updateUser, prepareUserUpdate } = useRequireInVillage("/clanhall");
   const { clanData, defaultBackHref } = props;
   const clanId = clanData.id;
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
@@ -1163,7 +1159,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const { mutateAsync: editColor, isPending: isEditingColor } =
     api.clan.editClanColor.useMutation({
-      onMutate,
+      onMutate: prepareUserUpdate,
       onSuccess: async (data, input, revision) => {
         showMutationToast(data);
         if (data.success)
@@ -1269,7 +1265,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const { mutateAsync: clanDonate, isPending: isDonatingReputation } =
     api.clan.clanDonate.useMutation({
-      onMutate,
+      onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success)
@@ -1359,7 +1355,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     });
 
   const { mutate: toBank, isPending: isDepositing } = api.clan.toBank.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {

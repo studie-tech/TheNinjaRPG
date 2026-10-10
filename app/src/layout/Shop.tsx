@@ -256,7 +256,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost, catalog } =
     props;
 
-  const { prepareUserUpdate: captureUserUpdate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser } = useUserData();
   const silverCopy = SILVER_COPY[catalog?.silverLabel ?? "seichi"];
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -366,7 +366,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   }
 
   const { mutate: purchase, isPending: isPurchasing } = api.item.buy.useMutation({
-    onMutate: captureUserUpdate,
+    onMutate: prepareUserUpdate,
     onSuccess: (data, variables, revision) => {
       showMutationToast(data);
       if (data.success) {

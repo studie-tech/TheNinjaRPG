@@ -410,7 +410,7 @@ const Sector: React.FC<SectorProps> = (props) => {
     pusher,
     timeDiff,
     updateUser,
-    prepareUserUpdate: captureUserUpdate,
+    prepareUserUpdate,
   } = useRequiredUserData();
   timeDiffRef.current = timeDiff;
   const { data } = api.travel.getSectorData.useQuery(
@@ -1552,7 +1552,7 @@ const Sector: React.FC<SectorProps> = (props) => {
   };
 
   const { mutate: rob, isPending: isRobbing } = api.travel.robPlayer.useMutation({
-    onMutate: captureUserUpdate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
       if (result?.battleId || typeof result?.money === "number") {
         await updateUser(

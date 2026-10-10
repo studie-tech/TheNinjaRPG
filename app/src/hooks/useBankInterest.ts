@@ -21,10 +21,10 @@ export const usePendingBankInterest = (enabled = true, timeDiff = 0) => {
 };
 
 export const useClaimBankInterest = () => {
-  const { prepareUserUpdate: onMutate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser } = useUserData();
   const utils = api.useUtils();
   return api.bank.claimInterest.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && data.data) {

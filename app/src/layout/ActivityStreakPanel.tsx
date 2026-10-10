@@ -37,7 +37,7 @@ import { useUserData } from "@/utils/UserContext";
 
 export function ActivityStreakPanel() {
   const utils = api.useUtils();
-  const { timeDiff, prepareUserUpdate: onMutate, updateUser } = useUserData();
+  const { timeDiff, prepareUserUpdate, updateUser } = useUserData();
 
   const { data: userStreaks, isLoading: streaksLoading } = useActivityStreaks(
     true,
@@ -50,7 +50,7 @@ export function ActivityStreakPanel() {
   const claimStreak = useClaimStreakDay();
 
   const purchasePass = api.activityStreak.purchaseEventPass.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
