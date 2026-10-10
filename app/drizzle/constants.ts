@@ -1028,7 +1028,7 @@ export const HP_PER_LVL = 50;
 export const SP_PER_LVL = 50;
 export const CP_PER_LVL = 50;
 export const ENERGY_PER_LVL = 50;
-export const STATS_PER_ENERGY = 1.3;
+export const STATS_PER_ENERGY = 0.085;
 /** Kinds of entries held in `UserQueue`. */
 export const QueueKinds = ["JUTSU", "CRAFT", "MASTERY", "ENERGY"] as const;
 export type QueueKind = (typeof QueueKinds)[number];

@@ -98,11 +98,11 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
         forceRegen: true,
       });
       const after = await readUser();
-      expect(after.offence - before.offence).toBeCloseTo(130);
-      expect(after.defence - before.defence).toBeCloseTo(130);
+      expect(after.offence - before.offence).toBeCloseTo(8.5);
+      expect(after.defence - before.defence).toBeCloseTo(8.5);
       expect(after.curEnergy).toBe(100);
       expect(await readEnergyQueue(USER_ID)).toEqual([]);
-      expect(after.experience - before.experience).toBeCloseTo(260);
+      expect(after.experience - before.experience).toBeCloseTo(17);
       await fetchUpdatedUser({
         client: await getTestDatabase(),
         userId: USER_ID,
@@ -119,7 +119,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
       curEnergy: 100,
       regeneration: 0,
       offence: cap,
-      defence: cap - 1.3,
+      defence: cap - 0.085,
       energyQueue: [
         { stat: "offence", energy: 50 },
         { stat: "defence", energy: 50 },
@@ -173,8 +173,8 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     );
     const after = await readUser();
     expect(after.curEnergy).toBe(60);
-    expect(after.offence - before.offence).toBeCloseTo(52);
-    expect(after.experience - before.experience).toBeCloseTo(52);
+    expect(after.offence - before.offence).toBeCloseTo(3.4);
+    expect(after.experience - before.experience).toBe(3);
     expect(await readLogs()).toHaveLength(1);
   });
 
@@ -431,8 +431,8 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     const saved = await readUser();
     expect(getEnergyQueue(result.userPatch as never)).toEqual([]);
     expect(result.userPatch).toMatchObject({ curEnergy: 50, energyQueueHead: 1, offence: saved.offence, defence: saved.defence, experience: saved.experience, updatedAt: saved.updatedAt });
-    expect(result.userPatch?.defence).toBeCloseTo(before.defence + 52);
-    expect(result.userPatch?.experience).toBeCloseTo(before.experience + 65);
+    expect(result.userPatch?.defence).toBeCloseTo(before.defence + 3.4);
+    expect(result.userPatch?.experience).toBeCloseTo(before.experience + 4);
     expect(await readLogs()).toHaveLength(2);
   });
 
@@ -480,15 +480,15 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
   it("patches a completed training goal while leaving consecutive quest actions pending", async () => {
     await insertQuests([{ id: "training-consequence", questType: "daily", consecutiveObjectives: true,
       content: { objectives: [
-        SimpleObjective.parse({ id: "train-goal", task: "stats_trained", value: 10, description: "Train", successDescription: "Done" }),
+        SimpleObjective.parse({ id: "train-goal", task: "stats_trained", value: 5, description: "Train", successDescription: "Done" }),
         InstantNewQuestObjective.parse({ id: "next-quest", task: "new_quest", newQuestIds: ["follow-up-quest"] }),
       ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] },
     }]);
     await insertQuestHistory([{ userId: USER_ID, questId: "training-consequence", questType: "daily" }]);
     await trainee({ curEnergy: 100, regeneration: 0, questData: [{ id: "training-consequence", goals: [{ id: "train-goal", value: 0, done: false }] }] });
-    const result = await (await caller()).startTraining({ stat: "offence", energy: 10 });
+    const result = await (await caller()).startTraining({ stat: "offence", energy: 100 });
     expect(result.success).toBe(true);
-    expect(result.userPatch?.questData?.find(tracker => tracker.id === "training-consequence")?.goals).toEqual(expect.arrayContaining([expect.objectContaining({ id: "train-goal", done: true, value: 13 }), expect.objectContaining({ id: "next-quest", done: false })]));
+    expect(result.userPatch?.questData?.find(tracker => tracker.id === "training-consequence")?.goals).toEqual(expect.arrayContaining([expect.objectContaining({ id: "train-goal", done: true, value: 8.5 }), expect.objectContaining({ id: "next-quest", done: false })]));
   });
 
   it("recomputes effective gear masteries when collecting timed training unlocks a worn item", async () => {
@@ -538,8 +538,8 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(result.success).toBe(true);
     const after = await readUser();
     expect(after.curEnergy).toBe(90);
-    expect(after.experience - before.experience).toBeCloseTo(13);
-    for (const other of CombatStatNames) expect(after[other] - before[other]).toBeCloseTo(other === stat ? 13 : 0);
+    expect(after.experience - before.experience).toBe(1);
+    for (const other of CombatStatNames) expect(after[other] - before[other]).toBeCloseTo(other === stat ? 0.85 : 0);
     expect(await readLogs()).toHaveLength(1);
   });
 
@@ -549,7 +549,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     const result = await (await caller()).startTraining({ stat: "offence", energy: 100 });
     expect(result.success).toBe(true);
     const after = await readUser();
-    expect(after.offence - before.offence).toBeCloseTo(136.5);
+    expect(after.offence - before.offence).toBeCloseTo(8.925);
     expect(after.curEnergy).toBe(0);
   });
 
@@ -559,7 +559,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     const result = await (await caller()).startTraining({ stat: "offence", energy: 100 });
     expect(result.success).toBe(true);
     const after = await readUser();
-    expect(after.offence - before.offence).toBeCloseTo(65);
+    expect(after.offence - before.offence).toBeCloseTo(4.25);
     expect(after.curEnergy).toBe(0);
   });
 
@@ -606,7 +606,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(results.filter(result => result.success)).toHaveLength(1);
     const after = await readUser();
     expect(after.curEnergy).toBe(0);
-    expect(after.experience).toBeCloseTo(13);
+    expect(after.experience).toBe(1);
     expect(await readLogs()).toHaveLength(1);
   });
 
@@ -643,7 +643,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(refreshed.user?.curEnergy).toBe(0);
     expect((await readUser()).curEnergy).toBe(0);
     expect((await api.startTraining({stat: "defence", energy: 10})).success).toBe(false);
-    expect((await readUser()).experience).toBeCloseTo(13);
+    expect((await readUser()).experience).toBe(1);
     expect(await readLogs()).toHaveLength(1);
   });
 
@@ -690,7 +690,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
 
   it("spends only enough Energy to reach the cap and preserves stored overflow", async () => {
     const cap = getUserCaps("GENIN").stats_cap;
-    await trainee({offence: cap - 1.3, curEnergy: 100, regeneration: 0});
+    await trainee({offence: cap - 0.085, curEnergy: 100, regeneration: 0});
     expect((await (await caller()).startTraining({stat: "offence", energy: 100})).success).toBe(true);
     const after = await readUser();
     expect(after.offence).toBeCloseTo(cap);
