@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "bun:test";
+import { beforeEach, expect, it, setSystemTime } from "bun:test";
 import { actionLog, bloodlineReskin, contentProposal, contentProposalBasis, item, jutsu, userData, userJutsu } from "@/drizzle/schema";
 import { loadEntities, entityKey } from "@/libs/contentReview/entities";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
@@ -200,6 +200,39 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
     expect((await read(id)).cooldown).toBe(0);
     expect((await (await staff()).delete({ id: "parent" })).success).toBe(true);
     expect((await (await callerFor(bloodlineRouter, "staff")).deleteReskin({reskinId: "group"})).success).toBe(true);
+  });
+
+  it.each([
+    { clock: "same millisecond", offsets: [0, 0, 0] },
+    { clock: "regressed", offsets: [1000, 2000, 3000] },
+  ])("advances every family version with a $clock clock and rejects an overlapping child save", async ({ offsets }) => {
+    const db = await getTestDatabase();
+    const childId = await createChild();
+    const otherChildId = await createChild();
+    const ids = ["parent", childId, otherChildId];
+    const now = new Date("2030-01-01T12:00:00Z");
+    const versions = offsets.map((offset) => new Date(now.getTime() + offset));
+    await Promise.all(ids.map((id, index) => db.update(jutsu).set({ updatedAt: versions[index] }).where(eq(jutsu.id, id))));
+    const paused = pauseBeforeTransaction(db);
+    const caller = callerForDatabase(jutsuRouter, "staff", paused.client);
+    const pending = caller.update({ id: childId, data: JutsuValidator.parse({ ...await read(childId), description: "Stale cosmetics" }) });
+    await paused.reached;
+    setSystemTime(now);
+    try {
+      const saved = await save("parent", { cooldown: 23 });
+      paused.release();
+      const stale = await pending;
+      expect(saved.success).toBe(true);
+      expect(stale).toMatchObject({ success: false, message: "Jutsu changed; refresh before saving" });
+      const family = await Promise.all(ids.map(read));
+      const expectedVersion = Math.max(...versions.map((version) => version.getTime())) + 1;
+      expect(family.map((row) => row.updatedAt.getTime())).toEqual(ids.map(() => expectedVersion));
+      expect(await read(childId)).toMatchObject({ cooldown: 23, description: "Parent text" });
+      expect((await db.select().from(actionLog).where(eq(actionLog.relatedId, childId))).length).toBe(2);
+    } finally {
+      setSystemTime();
+      paused.release();
+    }
   });
 
   it("serializes simultaneous child creation and parent saves without stale mechanics", async () => {

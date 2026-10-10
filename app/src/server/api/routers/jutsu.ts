@@ -106,6 +106,7 @@ import {
   publicProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import {
   applyLoadoutRename,
   backfillLoadouts,
@@ -3322,7 +3323,12 @@ const saveJutsuFamily = async (
           );
       }
       const diff = calculateContentDiff(current, { ...current, ...data });
-      const updatedAt = new Date();
+      const latestUpdatedAt = children.reduce(
+        (latest, child) =>
+          child.updatedAt.getTime() > latest.getTime() ? child.updatedAt : latest,
+        current.updatedAt,
+      );
+      const updatedAt = getNextUserSnapshotAt(latestUpdatedAt);
       await tx
         .update(jutsu)
         .set({ ...data, updatedAt })
