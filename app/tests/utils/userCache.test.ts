@@ -426,3 +426,37 @@ describe("shared mutation user response", () => {
     test.close();
   });
 });
+
+
+describe("progression cache reconciliation", () => {
+  const progression = (earnedExperience: number, status: "AWAKE" | "BATTLE" | "HOSPITALIZED" = "AWAKE") => ({
+    ...profile(100).userData,
+    rank: "GENIN" as const, earnedExperience, status,
+    offence: 10, defence: 10, strength: 10, speed: 10, intelligence: 10, willpower: 10,
+    ninjutsuMastery: 10, genjutsuMastery: 10, taijutsuMastery: 10, bukijutsuMastery: 10,
+  });
+  it("reconciles achievement progress and Assign XP without touching unrelated notifications", async () => {
+    const client = new QueryClient();
+    client.setQueryData(key, { userData: progression(10), notifications: [
+      { id: "tutorial-unassigned-stats", href: "/profile/experience", name: "Assign XP", color: "blue" },
+      { href: "/inbox", name: "2 messages", color: "hidden" },
+    ], achievementProgress: [{ id: "old" }] });
+    await updateUserCache(client, key, { earnedExperience: 0 }, { revision: prepareUserUpdate(client, key), achievementProgress: [] });
+    expect(client.getQueryData(key)).toMatchObject({ achievementProgress: [], notifications: [{ href: "/inbox", name: "2 messages" }] });
+    client.clear();
+  });
+  it("adds Assign XP for a confirmed reward and caps capped profession balances", async () => {
+    const client = new QueryClient();
+    client.setQueryData(key, { userData: { ...progression(0), medicalExperience: 3_999_999 }, notifications: [] });
+    await updateUserCache(client, key, undefined, { revision: prepareUserUpdate(client, key), delta: { earnedExperience: 10, medicalExperience: 100 } });
+    expect(client.getQueryData(key)).toMatchObject({ userData: { earnedExperience: 10, medicalExperience: 4_000_000 }, notifications: [{ name: "Assign XP" }] });
+    client.clear();
+  });
+  it("replaces battle navigation with hospitalization in the same confirmed update", async () => {
+    const client = new QueryClient();
+    client.setQueryData(key, { userData: progression(0, "BATTLE"), notifications: [{ href: "/combat", name: "In combat", color: "red" }] });
+    await updateUserCache(client, key, { status: "HOSPITALIZED", battleId: null }, { revision: prepareUserUpdate(client, key) });
+    expect(client.getQueryData(key)).toMatchObject({ notifications: [{ href: "/hospital", name: "In hospital", color: "red" }] });
+    client.clear();
+  });
+});

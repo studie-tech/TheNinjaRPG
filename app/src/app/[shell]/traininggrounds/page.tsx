@@ -507,7 +507,8 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
   props,
 ) => {
   // Settings
-  const { userData, updateUser, timeDiff } = props;
+  const { userData, timeDiff } = props;
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const efficiency = trainEfficiency(userData);
   const [energy, setEnergy] = useState<number | null>(null);
   const [availableEnergy, setAvailableEnergy] = useState(() =>
@@ -537,38 +538,65 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
   // Mutations
   const { mutate: startTraining, isPending: isStarting } =
     api.train.startTraining.useMutation({
-      onSuccess: async (result) => {
+      onMutate: () => ({ revision: prepareUserUpdate() }),
+      onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
-        await utils.misc.getCaptcha.invalidate();
+        await Promise.all([
+          utils.misc.getCaptcha.invalidate(),
+          updateUser(result.success ? result.userPatch : undefined, {
+            revision: context?.revision,
+            achievementProgress: result?.achievementProgress,
+          }),
+        ]);
         captchaForm.reset();
-        if (result.success && result.data) {
-          await utils.profile.getUser.invalidate();
+        if (result.success) {
           sendGTMEvent({ event: "stats_training" });
           if (currentStep?.title === "Training") {
             handleNextStep();
           }
         }
       },
+      onError: async () => {
+        await Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.misc.getCaptcha.invalidate(),
+        ]);
+      },
     });
 
   const { mutate: startMasteryTraining, isPending: isStartingMastery } =
     api.train.startMasteryTraining.useMutation({
-      onSuccess: async (result) => {
+      onMutate: () => ({ revision: prepareUserUpdate() }),
+      onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
-        if (result.success && result.data) {
-          await updateUser(result.data);
+        await updateUser(result.success ? result.userPatch : undefined, {
+          revision: context?.revision,
+          achievementProgress: result?.achievementProgress,
+        });
+        if (result.success) {
           sendGTMEvent({ event: "mastery_training" });
         }
       },
+      onError: () => utils.profile.getUser.invalidate(),
     });
 
   const { mutate: stopMasteryTraining, isPending: isStoppingMastery } =
     api.train.stopMasteryTraining.useMutation({
-      onSuccess: async (result) => {
+      onMutate: () => ({ revision: prepareUserUpdate() }),
+      onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
         await Promise.all([
           utils.misc.getCaptcha.invalidate(),
+          updateUser(result.success ? result.userPatch : undefined, {
+            revision: context?.revision,
+            achievementProgress: result?.achievementProgress,
+          }),
+        ]);
+      },
+      onError: async () => {
+        await Promise.all([
           utils.profile.getUser.invalidate(),
+          utils.misc.getCaptcha.invalidate(),
         ]);
       },
     });

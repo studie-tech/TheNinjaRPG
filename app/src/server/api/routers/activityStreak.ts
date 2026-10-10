@@ -18,7 +18,7 @@ import {
 import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest";
 import { fetchUser } from "@/routers/profile";
-import { updateRewards } from "@/server/api/routers/quests";
+import { getRewardUserDelta, updateRewards } from "@/server/api/routers/quests";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -406,7 +406,7 @@ export const activityStreakRouter = createTRPCRouter({
   claimStreakDay: protectedProcedure
     .meta({ mcp: { description: "Claim daily streak reward" } })
     .input(claimStreakDaySchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch user, config, and progress in parallel
       const [user, config, existingProgress, completionLogs] = await Promise.all([
@@ -700,6 +700,12 @@ export const activityStreakRouter = createTRPCRouter({
       return {
         success: true,
         message: `Day ${newCurrentDay} claimed! ${resetMsg}${catchUpMsg}${rewardText}${completeMsg}`,
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : getRewardUserDelta(
+              processedRewards,
+              paidCatchUp ? COST_STREAK_CATCHUP_DAY : 0,
+            ),
       };
     }),
 

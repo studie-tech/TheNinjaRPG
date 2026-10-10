@@ -58,6 +58,23 @@ describeWithDatabase("recurring streak cycle timing", () => {
 
   afterEach(() => setSystemTime());
 
+  it("returns the accepted daily payout as a delta and does not repeat it after a rejected claim", async () => {
+    const caller = await callerFor(activityStreakRouter, "streak-user");
+    const first = await caller.claimStreakDay({ configId: "recurring" });
+    expect(first).toMatchObject({ success: true, userDelta: { money: 200, reputationPoints: 0 } });
+    const second = await caller.claimStreakDay({ configId: "recurring" });
+    expect(second.success).toBe(false);
+    expect(second.userDelta).toBeUndefined();
+  });
+
+  it("keeps reconciliation for a claim that can advance queued training", async () => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] }).where(eq(userData.userId, "streak-user"));
+    const result = await (await callerFor(activityStreakRouter, "streak-user")).claimStreakDay({ configId: "recurring" });
+    expect(result.success).toBe(true);
+    expect(result.userDelta).toBeUndefined();
+  });
+
   it.each(["2026-10-02T12:01:00Z", "2026-10-05T12:01:00Z"])(
     "starts the next cycle at its first free claim on %s, without offering a paid day two",
     async (restartAt) => {

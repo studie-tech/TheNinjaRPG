@@ -9,7 +9,6 @@ import {
   UserRoles,
 } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
-import { baseServerResponse } from "@/validators/base";
 import { createStatSchema, type ZodAllTags } from "@/validators/combat";
 import { dashboardContentPrioritySchema } from "@/validators/dashboard";
 import { genders, usernameSchema } from "@/validators/register";
@@ -50,25 +49,6 @@ export const createAssignedExperienceSchema = (
     maxValues: { ...maxValues, ...masteryRoom },
   };
 };
-
-export const assignedExperienceDataSchema = z.object({
-  ninjutsuMastery: z.number(),
-  genjutsuMastery: z.number(),
-  taijutsuMastery: z.number(),
-  bukijutsuMastery: z.number(),
-  offence: z.number(),
-  defence: z.number(),
-  strength: z.number(),
-  speed: z.number(),
-  intelligence: z.number(),
-  willpower: z.number(),
-  experience: z.number(),
-  earnedExperience: z.number(),
-});
-
-export const assignedExperienceOutputSchema = baseServerResponse.extend({
-  data: assignedExperienceDataSchema.optional(),
-});
 
 export const updateUserSchema = z.object({
   username: usernameSchema,

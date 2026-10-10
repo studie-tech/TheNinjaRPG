@@ -1,11 +1,11 @@
 // @vitest-environment node
 import {eq} from "drizzle-orm";
-import {beforeEach, expect, it} from "vitest";
+import {afterEach, beforeEach, expect, it, vi} from "vitest";
 import {CombatStatNames, getUserCaps} from "@/drizzle/constants";
 import {bloodline, item, userItem, quest, questHistory, trainingLog, userData, userVote} from "@/drizzle/schema";
 import {fetchUpdatedUser} from "@/server/api/routers/profile";
 import {trainRouter} from "@/server/api/routers/train";
-import {SimpleObjective} from "@/validators/objectives";
+import {InstantNewQuestObjective, SimpleObjective} from "@/validators/objectives";
 import {ObjectiveReward} from "@/validators/rewards";
 import {insertItems, insertUserItems, insertUsers, insertQuests, insertQuestHistory} from "../../setup/factories";
 import {callerFor, describeWithDatabase, getTestDatabase, resetTables} from "../../setup/testDatabase";
@@ -25,6 +25,8 @@ const trainee = async (patch: Record<string, unknown> = {}) => {
       username: "Trainee",
       status: "AWAKE",
       rank: "GENIN",
+      primaryElement: "Fire",
+      secondaryElement: "Water",
       isOutlaw: true,
       trainingSpeed: "15min",
       ...patch,
@@ -64,6 +66,7 @@ const backdate = async (patch: Partial<typeof userData.$inferInsert>) => {
 
 describeWithDatabase("Energy and mastery training against a real MySQL", () => {
   beforeEach(async () => { await resetTables(trainingLog, questHistory, quest, userVote, userItem, item, userData, bloodline); });
+  afterEach(() => vi.restoreAllMocks());
 
   it.each(["AWAKE", "ASLEEP"] as const)(
     "settles one-time %s queues offline without losing regenerated Energy to capacity",
@@ -298,6 +301,103 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect((await readUser()).ninjutsuMastery).toBe(10);
   });
 
+
+  it("returns saved queue and confirmed regenerated pools without a follow-up profile read", async () => {
+    await trainee({ level: 2, curEnergy: 0, curHealth: 0, curChakra: 0, curStamina: 0, regeneration: 10, regenAt: minutesAgo(2) });
+    const database = await getTestDatabase();
+    const actualRead = database.query.userData.findFirst.bind(database.query.userData);
+    let profileReads = 0;
+    vi.spyOn(database.query.userData, "findFirst").mockImplementation(((config: Parameters<typeof actualRead>[0]) => {
+      if (config?.with) profileReads += 1;
+      return actualRead(config);
+    }) as never);
+    const entries = [{ stat: "offence" as const, energy: 100 }];
+    const result = await (await caller()).updateEnergyTrainingQueue({ entries, expectedEntries: [] });
+    expect(result.success).toBe(true);
+    const saved = await readUser();
+    expect(result.userPatch).toMatchObject({ energyTrainingQueue: entries, curEnergy: saved.curEnergy, curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina, regenAt: saved.regenAt, updatedAt: saved.updatedAt });
+    expect(profileReads).toBe(1);
+  });
+
+  it("returns both queued gains and the subsequent instant spend in one patch", async () => {
+    await trainee({ curEnergy: 100, regeneration: 0, energyTrainingQueue: [{ stat: "defence", energy: 40 }] });
+    const before = await readUser();
+    const result = await (await caller()).startTraining({ stat: "offence", energy: 10 });
+    expect(result.success).toBe(true);
+    const saved = await readUser();
+    expect(result.userPatch).toMatchObject({ curEnergy: 50, energyTrainingQueue: [], offence: saved.offence, defence: saved.defence, experience: saved.experience, updatedAt: saved.updatedAt });
+    expect(result.userPatch?.defence).toBeCloseTo(before.defence + 52);
+    expect(result.userPatch?.experience).toBeCloseTo(before.experience + 65);
+    expect(await readLogs()).toHaveLength(2);
+  });
+
+  it.each(["queue", "instant", "mastery"] as const)("keeps a full refresh for %s after automatic element assignment", async (action) => {
+    await trainee({ primaryElement: null, curEnergy: 100, regeneration: 0 });
+    const api = await caller();
+    const result = action === "queue"
+      ? await api.updateEnergyTrainingQueue({ entries: [], expectedEntries: [] })
+      : action === "instant"
+        ? await api.startTraining({ stat: "offence", energy: 10 })
+        : await api.startMasteryTraining({ stat: "ninjutsuMastery" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect((await readUser()).primaryElement).not.toBeNull();
+  });
+
+
+  it("patches a completed training goal while leaving consecutive quest actions pending", async () => {
+    await insertQuests([{ id: "training-consequence", questType: "daily", consecutiveObjectives: true,
+      content: { objectives: [
+        SimpleObjective.parse({ id: "train-goal", task: "stats_trained", value: 10, description: "Train", successDescription: "Done" }),
+        InstantNewQuestObjective.parse({ id: "next-quest", task: "new_quest", newQuestIds: ["follow-up-quest"] }),
+      ], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] },
+    }]);
+    await insertQuestHistory([{ userId: USER_ID, questId: "training-consequence", questType: "daily" }]);
+    await trainee({ curEnergy: 100, regeneration: 0, questData: [{ id: "training-consequence", goals: [{ id: "train-goal", value: 0, done: false }] }] });
+    const result = await (await caller()).startTraining({ stat: "offence", energy: 10 });
+    expect(result.success).toBe(true);
+    expect(result.userPatch?.questData?.find(tracker => tracker.id === "training-consequence")?.goals).toEqual(expect.arrayContaining([expect.objectContaining({ id: "train-goal", done: true, value: 13 }), expect.objectContaining({ id: "next-quest", done: false })]));
+  });
+
+  it("recomputes effective gear masteries when collecting timed training unlocks a worn item", async () => {
+    await trainee({ ninjutsuMastery: 10, currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: minutesAgo(30), regeneration: 0 });
+    const tag = { type: "increasemastery", masteryTypes: ["Ninjutsu"], power: 500, powerPerLevel: 0, calculation: "static", rounds: 1 } as const;
+    await insertItems([{ id: "mastery-unlock-armor", itemType: "ARMOR", effects: [tag, { type: "increasemaxpools", poolsAffected: ["Energy"], power: 50, powerPerLevel: 0, calculation: "static", rounds: 1 }], requiredNinjutsuMastery: 100 } as never]);
+    await insertUserItems([{ id: "unlock-armor", userId: USER_ID, itemId: "mastery-unlock-armor", equipped: "CHEST", durability: 100, level: 1 }]);
+    const result = await (await caller()).stopMasteryTraining({});
+    expect(result.success).toBe(true);
+    expect(result.userPatch?.ninjutsuMastery).toBe(110);
+    expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(610);
+    expect(result.userPatch?.maxEnergy).toBe(150);
+    expect(result.userPatch?.currentlyTrainingMastery).toBeNull();
+    expect(result.userPatch?.masteryTrainingStartedAt).toBeNull();
+    expect(result.userPatch?.dailyTrainings).toBe(1);
+    expect((await readUser()).ninjutsuMastery).toBe(110);
+  });
+
+
+  it("returns the guarded capped mastery gain without lowering an over-cap stored value", async () => {
+    await trainee({ ninjutsuMastery: GENIN_MASTERY_CAP + 10, currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: minutesAgo(30), regeneration: 0 });
+    const result = await (await caller()).stopMasteryTraining({});
+    expect(result.success).toBe(true);
+    expect(result.userPatch?.ninjutsuMastery).toBe(GENIN_MASTERY_CAP + 10);
+    expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(GENIN_MASTERY_CAP);
+    expect(result.userPatch?.dailyTrainings).toBe(0);
+    expect(result.userPatch?.currentlyTrainingMastery).toBeNull();
+    expect((await readUser()).ninjutsuMastery).toBe(GENIN_MASTERY_CAP + 10);
+    expect(await readLogs()).toHaveLength(0);
+  });
+
+  it("does not patch an unclaimed concurrent mastery collection", async () => {
+    await trainee({ ninjutsuMastery: 10, currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: minutesAgo(30), regeneration: 0 });
+    const api = await caller();
+    const results = await Promise.all([api.stopMasteryTraining({}), api.stopMasteryTraining({})]);
+    expect(results.filter(result => result.success)).toHaveLength(1);
+    expect(results.find(result => !result.success)?.userPatch).toBeUndefined();
+    expect((await readUser()).ninjutsuMastery).toBe(110);
+    expect(await readLogs()).toHaveLength(1);
+  });
+
   it.each(CombatStatNames)("spends Energy only on %s and grants matching XP", async stat => {
     await trainee({curEnergy: 100, regeneration: 0});
     const before = await readUser();
@@ -476,8 +576,8 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     const before = await readUser();
     const result = await api.stopMasteryTraining({});
     expect(result.success).toBe(true);
-    expect(result.data?.amount).toBe(100);
-    expect(result.data?.creditedMinutes).toBeCloseTo(30, 0);
+    expect(result.userPatch?.ninjutsuMastery).toBe(before.ninjutsuMastery + 100);
+    expect(result.userPatch?.currentlyTrainingMastery).toBeNull();
     const after = await readUser();
     expect(after.curEnergy).toBe(before.curEnergy);
     expect(after.experience).toBe(before.experience);

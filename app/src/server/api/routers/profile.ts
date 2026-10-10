@@ -229,7 +229,6 @@ import type { GetPublicUsersSchema } from "@/validators/user";
 import {
   adjustSeichiSilverSchema,
   assignableMasteryNames,
-  assignedExperienceOutputSchema,
   createAssignedExperienceSchema,
   getPublicUsersSchema,
   tavernColorChangeSchema,
@@ -587,10 +586,16 @@ export const profileRouter = createTRPCRouter({
         description: "Level up user when experience threshold met",
       },
     })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const { user } = await fetchUpdatedUser({
+      const {
+        user,
+        requiresProgressionRefresh,
+        publishedAchievementIds,
+        progressionQuestCandidates,
+        questBootstrap,
+      } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -600,7 +605,13 @@ export const profileRouter = createTRPCRouter({
       if (block) return errorResponse(block);
       // Mutate
       const newLevel = user.level + 1;
-      const { trackers } = getNewTrackers(user, [
+      const progressedUser = { ...user, level: newLevel };
+      progressedUser.userQuests = progressionQuestCandidates.filter(
+        (entry) =>
+          isAvailableUserQuests({ ...entry.quest, ...entry }, progressedUser, true)
+            .check,
+      );
+      const { trackers, consequences, notifications } = getNewTrackers(progressedUser, [
         { task: "user_level", value: newLevel },
       ]);
       // Chunin+ ranks get 1 skill point per level from SKILL_POINT_MIN_LEVEL–MAX.
@@ -613,15 +624,17 @@ export const profileRouter = createTRPCRouter({
           ? 1
           : 0;
 
-      const result = await ctx.drizzle
-        .update(userData)
-        .set({
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
           level: newLevel,
           maxHealth: calcHP(newLevel),
           maxStamina: calcSP(newLevel),
           maxChakra: calcCP(newLevel),
           maxEnergy: calcEnergy(newLevel),
-          questData: filterQuestTrackersForDbPersist(trackers, user),
+          questData: filterQuestTrackersForDbPersist(trackers, progressedUser),
           ...(skillPointsGain > 0
             ? {
                 skillPoints: sql`LEAST(${userData.skillPoints} + 1, ${MAX_SKILL_POINTS})`,
@@ -630,9 +643,14 @@ export const profileRouter = createTRPCRouter({
           ...(newLevel > SENSEI_MAX_STUDENT_LEVEL && user.senseiId
             ? { senseiId: null }
             : {}),
-        })
-        .where(and(eq(userData.userId, ctx.userId), eq(userData.level, user.level)));
-      if (result.rowsAffected > 0 && user.recruiterId) {
+        },
+        where: [
+          eq(userData.level, user.level),
+          eq(userData.rank, user.rank),
+          eq(userData.skillPoints, user.skillPoints),
+        ],
+      });
+      if (result.success && user.recruiterId) {
         const amount = 10 * newLevel * newLevel * newLevel;
         await Promise.all([
           ctx.drizzle
@@ -649,10 +667,33 @@ export const profileRouter = createTRPCRouter({
         ]);
       }
       // Return response
-      if (result.rowsAffected === 0) return errorResponse("Could not update level");
+      if (!result.success) return errorResponse("Could not update level");
       const skillPointMessage =
         skillPointsGain > 0 ? ` and gained ${skillPointsGain} skill point!` : "";
+      Object.assign(progressedUser, {
+        maxHealth: calcHP(newLevel),
+        maxStamina: calcSP(newLevel),
+        maxChakra: calcCP(newLevel),
+        skillPoints: Math.min(user.skillPoints + skillPointsGain, MAX_SKILL_POINTS),
+        senseiId: newLevel > SENSEI_MAX_STUDENT_LEVEL ? null : user.senseiId,
+        questData: trackers,
+        updatedAt: result.claimedAt,
+      });
+      const needsBootstrap = BOOTSTRAP_QUEST_TYPES.some(
+        (type) =>
+          !user.userQuests.some((entry) => entry.quest.questType === type) &&
+          canBootstrapQuestType(questBootstrap, type, newLevel),
+      );
+      const canProject =
+        !requiresProgressionRefresh &&
+        !needsBootstrap &&
+        !notifications.length &&
+        !consequences.some((entry) => entry.type !== "update_user") &&
+        getUncheckedQuestTargetSectors(progressedUser, trackers).length === 0;
       return {
+        ...(canProject
+          ? getUserProgressionUpdate(progressedUser, publishedAchievementIds)
+          : {}),
         success: true,
         message: `User leveled up to ${newLevel}${skillPointMessage}`,
       };
@@ -1905,10 +1946,21 @@ export const profileRouter = createTRPCRouter({
   useUnusedExperiencePoints: protectedProcedure
     .meta({ mcp: { description: "Assign earned experience to stats" } })
     .input(createAssignedExperienceSchema().schema)
-    .output(assignedExperienceOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const user = await ctx.drizzle.query.userData.findFirst({
+        where: eq(userData.userId, ctx.userId),
+        with: {
+          bloodline: true,
+          items: {
+            where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
+            with: { item: true, imbuements: { with: { item: true } } },
+          },
+          userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
+        },
+      });
+      if (!user) return errorResponse("User not found");
       // Derived
       const inputSum = Object.values(input).reduce(
         (a, b) => Math.floor(a) + Math.floor(b),
@@ -1991,7 +2043,17 @@ export const profileRouter = createTRPCRouter({
         return {
           success: true,
           message: "User stats updated",
-          data,
+          // A pending queue is settled by the profile refresh, including quest progress.
+          ...(user.energyTrainingQueue?.length
+            ? {}
+            : {
+                userPatch: {
+                  ...data,
+                  updatedAt: result.claimedAt,
+                  effectiveMasteries: effectiveMasteries({ ...user, ...data }),
+                  maxEnergy: calcMaxEnergy({ ...user, ...data }),
+                },
+              }),
         };
       }
     }),
@@ -2896,6 +2958,7 @@ export const fetchUpdatedUser = async (props: {
   let { forceRegen } = props;
   // Partial mutation responses must reconcile automatic progression beyond passive pools.
   let requiresUserRefresh = Boolean(forceRegen);
+  let requiresProgressionRefresh = false;
   const now = new Date();
   // Shrine battle lobbies past this age are effectively dead — attackers
   // had LOBBY_SECONDS to gather, then STALE_LOBBY_SECONDS to initiate; beyond
@@ -2978,6 +3041,9 @@ export const fetchUpdatedUser = async (props: {
     user.bloodline = getReskinnedBloodline(user.bloodline, user.activeReskin);
   }
 
+  const publishedAchievementIds = achievements
+    .filter((entry) => !questHasOverworldObjectives(entry))
+    .map((entry) => entry.id);
   // Add votes entry if it doesn't exist
   if (user && !user.votes) {
     const smallNanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyzABCDEF", 8);
@@ -2989,9 +3055,11 @@ export const fetchUpdatedUser = async (props: {
     });
   }
 
+  let progressionQuestCandidates: NonNullable<typeof user>["userQuests"] = [];
   // Add in achievements (in-memory placeholders: `id === questId` until `QuestHistory` exists).
   if (user) {
     user.userQuests.push(...mockAchievementHistoryEntries(achievements, user));
+    progressionQuestCandidates = [...user.userQuests];
     user.userQuests = user.userQuests
       .filter((q) => q.quest)
       .filter((q) => isAvailableUserQuests({ ...q.quest, ...q }, user, true).check);
@@ -3104,6 +3172,7 @@ export const fetchUpdatedUser = async (props: {
         user.isOutlaw = true;
         forceRegen = true;
         requiresUserRefresh = true;
+        requiresProgressionRefresh = true;
         // Trigger message to user
         void pusher.trigger(user.userId, "event", {
           type: "userMessage",
@@ -3158,6 +3227,7 @@ export const fetchUpdatedUser = async (props: {
         if (await insertNextQuest(client, user, questType)) {
           forceRegen = true;
           requiresUserRefresh = true;
+          requiresProgressionRefresh = true;
         }
       } catch (e) {
         Sentry.captureException(e, {
@@ -3184,6 +3254,7 @@ export const fetchUpdatedUser = async (props: {
       user.travelFinishAt = null;
       forceRegen = true;
       requiresUserRefresh = true;
+      requiresProgressionRefresh = true;
       toastMessages.push("You have arrived at your destination!");
     }
 
@@ -3243,11 +3314,13 @@ export const fetchUpdatedUser = async (props: {
       if (rankId >= 1 && !user.primaryElement) {
         user.primaryElement = getRandomElement(BasicElementName) ?? null;
         requiresUserRefresh = true;
+        requiresProgressionRefresh = true;
       }
       if (rankId >= 2 && !user.secondaryElement) {
         const available = BasicElementName.filter((e) => e !== user.primaryElement);
         user.secondaryElement = getRandomElement(available) ?? null;
         requiresUserRefresh = true;
+        requiresProgressionRefresh = true;
       }
       // Update database (pools, questData, etc.; village columns only when includeVillageState)
       try {
@@ -3259,9 +3332,13 @@ export const fetchUpdatedUser = async (props: {
           forceRegen: forceRegen ?? false,
           originalUpdatedAt,
           queuedTraining,
+          onVillageStateChanged: () => {
+            requiresProgressionRefresh = true;
+          },
         });
         if (!persisted) {
           requiresUserRefresh = true;
+          requiresProgressionRefresh = true;
           // Another mutation won the snapshot. Use its current pools and version rather than
           // returning the regeneration values calculated from our stale read.
           const freshUser = await client.query.userData.findFirst({
@@ -3271,6 +3348,7 @@ export const fetchUpdatedUser = async (props: {
           else if (queuedTrainingSnapshot) Object.assign(user, queuedTrainingSnapshot);
         }
       } catch (error) {
+        requiresProgressionRefresh = true;
         if (queuedTrainingSnapshot) Object.assign(user, queuedTrainingSnapshot);
         // Regen is background bookkeeping and is already applied to the returned
         // in-memory user, so a database blip here must not fail the query that
@@ -3323,6 +3401,8 @@ export const fetchUpdatedUser = async (props: {
     }
 
     if (consequences.length > 0) requiresUserRefresh = true;
+    if (consequences.some((entry) => entry.type !== "update_user"))
+      requiresProgressionRefresh = true;
     const fullTrackers = trackers;
     user.questData = filterQuestTrackersForDbPersist(trackers, user);
 
@@ -3334,6 +3414,7 @@ export const fetchUpdatedUser = async (props: {
       notifications,
     );
     toastMessages.push(...consequenceResult.notifications);
+    if (!consequenceResult.claimed) requiresProgressionRefresh = true;
 
     user.questData = fullTrackers;
 
@@ -3342,6 +3423,13 @@ export const fetchUpdatedUser = async (props: {
     return {
       user: { ...responseUser, effectiveMasteries: effectiveMasteries(user) },
       settings,
+      publishedAchievementIds,
+      progressionQuestCandidates,
+      questBootstrap,
+      requiresProgressionRefresh:
+        requiresProgressionRefresh ||
+        toastMessages.length > 0 ||
+        Boolean(user?.unreadNotifications || user?.unreadRecruitRewards),
       toastMessages,
       hasUnvotedPolls,
       trackerResults,
@@ -3351,6 +3439,11 @@ export const fetchUpdatedUser = async (props: {
     return {
       user,
       settings,
+      publishedAchievementIds,
+      progressionQuestCandidates,
+      questBootstrap,
+      requiresProgressionRefresh:
+        requiresProgressionRefresh || toastMessages.length > 0,
       toastMessages,
       hasUnvotedPolls,
       trackerResults: null,
@@ -3368,6 +3461,7 @@ const persistPassiveRegenToDb = async ({
   forceRegen,
   originalUpdatedAt,
   queuedTraining,
+  onVillageStateChanged,
 }: {
   client: DrizzleClient;
   userId: string;
@@ -3376,6 +3470,7 @@ const persistPassiveRegenToDb = async ({
   forceRegen: boolean;
   originalUpdatedAt: Date;
   queuedTraining?: ReturnType<typeof settleEnergyTrainingQueue> | null;
+  onVillageStateChanged?: () => void;
 }) => {
   const includeVillageState = forceRegen || (user.villagePrestige < 0 && user.isOutlaw);
 
@@ -3409,6 +3504,12 @@ const persistPassiveRegenToDb = async ({
 
   let userForRegenPersist = user;
   if (includeVillageState && freshVillageRow) {
+    if (
+      freshVillageRow.villageId !== user.villageId ||
+      freshVillageRow.isOutlaw !== user.isOutlaw ||
+      freshVillageRow.villagePrestige !== user.villagePrestige
+    )
+      onVillageStateChanged?.();
     userForRegenPersist = { ...user, ...freshVillageRow };
   }
 
@@ -3926,4 +4027,93 @@ export type UserWithRelations =
 export type AiWithRelations = UserData & {
   jutsus: (UserJutsu & { jutsu: { id: string; name: string } })[];
   items: (UserItem & { item: { id: string; name: string } })[];
+};
+
+/** Project confirmed progression while keeping hidden quest targets and catalogue definitions private. */
+export const getUserProgressionUpdate = (
+  user: NonNullable<Awaited<ReturnType<typeof fetchUpdatedUser>>["user"]>,
+  publishedAchievementIds: readonly string[],
+) => {
+  const publicUser = getPublicQuestUser(user);
+  const publishedIds = new Set(publishedAchievementIds);
+  const achievementProgress: AchievementProgress[] = [];
+  publicUser.userQuests = publicUser.userQuests.filter((entry) => {
+    if (!publishedIds.has(entry.questId)) return true;
+    const { quest: _definition, ...progress } = entry;
+    achievementProgress.push(progress);
+    return false;
+  });
+  return {
+    achievementProgress,
+    userPatch: {
+      updatedAt: publicUser.updatedAt,
+      regenAt: publicUser.regenAt,
+      curHealth: publicUser.curHealth,
+      curChakra: publicUser.curChakra,
+      curStamina: publicUser.curStamina,
+      curEnergy: publicUser.curEnergy,
+      experience: publicUser.experience,
+      earnedExperience: publicUser.earnedExperience,
+      level: publicUser.level,
+      rank: publicUser.rank,
+      status: publicUser.status,
+      battleId: publicUser.battleId,
+      activeNpcQuestId: publicUser.activeNpcQuestId,
+      senseiId: publicUser.senseiId,
+      maxHealth: publicUser.maxHealth,
+      maxChakra: publicUser.maxChakra,
+      maxStamina: publicUser.maxStamina,
+      regeneration: publicUser.regeneration,
+      primaryElement: publicUser.primaryElement,
+      secondaryElement: publicUser.secondaryElement,
+      energyTrainingQueue: publicUser.energyTrainingQueue,
+      currentlyTrainingMastery: publicUser.currentlyTrainingMastery,
+      masteryTrainingStartedAt: publicUser.masteryTrainingStartedAt,
+      dailyTrainings: publicUser.dailyTrainings,
+      dailyMissions: publicUser.dailyMissions,
+      dailyErrands: publicUser.dailyErrands,
+      dailyMedicalMissions: publicUser.dailyMedicalMissions,
+      dailyWarMissions: publicUser.dailyWarMissions,
+      dailyArenaFights: publicUser.dailyArenaFights,
+      dailyPvpMissions: publicUser.dailyPvpMissions,
+      dailySageActivations: publicUser.dailySageActivations,
+      questFinishAt: publicUser.questFinishAt,
+      skillPoints: publicUser.skillPoints,
+      missionsD: publicUser.missionsD,
+      missionsC: publicUser.missionsC,
+      missionsB: publicUser.missionsB,
+      missionsA: publicUser.missionsA,
+      missionsS: publicUser.missionsS,
+      missionsH: publicUser.missionsH,
+      crimesD: publicUser.crimesD,
+      crimesC: publicUser.crimesC,
+      crimesB: publicUser.crimesB,
+      crimesA: publicUser.crimesA,
+      crimesS: publicUser.crimesS,
+      crimesH: publicUser.crimesH,
+      errands: publicUser.errands,
+      pveFights: publicUser.pveFights,
+      pvpFights: publicUser.pvpFights,
+      pvpActivity: publicUser.pvpActivity,
+      pvpStreak: publicUser.pvpStreak,
+      offence: user.offence,
+      defence: user.defence,
+      strength: user.strength,
+      speed: user.speed,
+      intelligence: user.intelligence,
+      willpower: user.willpower,
+      ninjutsuMastery: user.ninjutsuMastery,
+      genjutsuMastery: user.genjutsuMastery,
+      taijutsuMastery: user.taijutsuMastery,
+      bukijutsuMastery: user.bukijutsuMastery,
+      bloodlineMastery: user.bloodlineMastery,
+      sageMastery: user.sageMastery,
+
+      questData: publicUser.questData,
+      userQuests: publicUser.userQuests,
+      completedQuests: publicUser.completedQuests,
+      effectiveMasteries: effectiveMasteries(user),
+      maxEnergy: calcMaxEnergy(user),
+    },
+  };
 };

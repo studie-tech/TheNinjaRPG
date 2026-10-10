@@ -139,6 +139,7 @@ import type {
   ProcessingBattleUser,
   UserEffect,
 } from "@/libs/combat/types";
+import { captureCombatCacheSnapshot } from "@/libs/combat/userCache";
 import {
   alignBattle,
   applyPoolAdjustmentsToBase,
@@ -1978,6 +1979,12 @@ export const initiateBattle = async (
       : [],
   ]);
 
+  const profileCacheSnapshots = Object.fromEntries(
+    fetchedUsers
+      .filter((user) => !user.isAi && !user.isSummon)
+      .map((user) => [user.userId, captureCombatCacheSnapshot(user)]),
+  );
+
   // Capture real awake recovery before combat normalizes stats or changes loadouts.
   const energyRegeneration = Object.fromEntries(
     fetchedUsers.map((user) => [
@@ -2720,6 +2727,7 @@ export const initiateBattle = async (
       height: gridSize.height,
       extraState: {
         ...extraState,
+        profileCacheSnapshots,
         energyRewardEligible: (previousBattleResults?.[0]?.count ?? 0) === 0,
         energyRegeneration,
         energyCapacity,

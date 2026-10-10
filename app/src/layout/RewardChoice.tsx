@@ -35,7 +35,7 @@ import type { RewardChoiceDisplay } from "@/validators/rewards";
  * its own whenever an offer is waiting that the player has not dismissed in this session.
  */
 export const RewardChoiceModal: React.FC = () => {
-  const { data: userData } = useUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useUserData();
   const utils = api.useUtils();
   const [forceOpen, setForceOpen] = useAtom(rewardChoiceOpenAtom);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
@@ -52,17 +52,29 @@ export const RewardChoiceModal: React.FC = () => {
 
   const { mutate: claim, isPending: isClaiming } =
     api.quests.claimRewardChoice.useMutation({
-      onSuccess: async (data) => {
+      onMutate: () => ({ userRevision: prepareUserUpdate() }),
+      onSuccess: async (data, _variables, context) => {
         if (!data.success) {
           setErrorMessage(data.message);
           await utils.quests.getPendingRewardChoices.invalidate();
           return;
         }
         setErrorMessage(null);
-        showRewardToast([], data.rewards, data.message, false, undefined, data.badges);
+        if (data.rewards)
+          showRewardToast(
+            [],
+            data.rewards,
+            data.message,
+            false,
+            undefined,
+            data.badges,
+          );
         await Promise.all([
           utils.quests.getPendingRewardChoices.invalidate(),
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, {
+            revision: context?.userRevision,
+            delta: data.userDelta,
+          }),
         ]);
       },
       onError: (error) => setErrorMessage(error.message),

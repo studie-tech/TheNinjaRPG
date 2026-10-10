@@ -37,6 +37,7 @@ import type {
   CombatAction,
   ReturnedBattle,
 } from "@/libs/combat/types";
+import { combatProfilePatch } from "@/libs/combat/userCache";
 import {
   getBattlefieldHeightRatio,
   getTurnControl,
@@ -163,6 +164,10 @@ const Combat: React.FC<CombatProps> = (props) => {
   // getUser / travel / raid invalidation after a result must run once per
   // ended battle, not on every later props identity change while result is set.
   const endedBattleInvalidationRef = useRef<string | null>(null);
+  const completionRevisionRef = useRef<{
+    battleId: string;
+    revision: number | undefined;
+  } | null>(null);
 
   // Tutorial step
   const { currentStep, handleNextStepAsync } = useTutorialStep();
@@ -173,7 +178,13 @@ const Combat: React.FC<CombatProps> = (props) => {
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
   const setCombatActionId = useSetAtom(combatActionIdAtom);
-  const { data: userData, pusher, timeDiff, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    pusher,
+    timeDiff,
+    updateUser,
+    prepareUserUpdate,
+  } = useRequiredUserData();
   const [statDistribution] = useLocalStorage<StatSchemaType | undefined>(
     "statDistribution",
     undefined,
@@ -403,6 +414,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       onMutateCheck();
       document.body.style.cursor = "wait";
       setBattleState({ battle: battleRef.current, result: null, isPending: true });
+      return prepareUserUpdate();
     },
     onSettled: () => {
       document.body.style.cursor = "default";
@@ -411,7 +423,10 @@ const Combat: React.FC<CombatProps> = (props) => {
       setBattleState({ battle: battleRef.current, result: null, isPending: false });
       void utils.combat.getBattle.invalidate();
     },
-    onSuccess: async (data) => {
+    onSuccess: async (data, _variables, revision) => {
+      if (data.result && data.battleUpdate) {
+        completionRevisionRef.current = { battleId: data.battleUpdate.id, revision };
+      }
       // Clear the selected action only when control actually hands off to (or
       // away from) another actor — e.g. to/from a piloted summon. On the
       // player's own consecutive actions the controlled actor is unchanged, so
@@ -852,8 +867,22 @@ const Combat: React.FC<CombatProps> = (props) => {
       return;
     }
     endedBattleInvalidationRef.current = endedBattleId ?? null;
+    const profileUpdate = props.battleState.result?.profileUpdate;
+    const capturedCompletion = completionRevisionRef.current;
+    const revision =
+      capturedCompletion && capturedCompletion.battleId === endedBattleId
+        ? capturedCompletion.revision
+        : prepareUserUpdate();
+    const reconcileProfile = async () => {
+      await updateUser(
+        profileUpdate
+          ? (current) => combatProfilePatch(current, profileUpdate)
+          : undefined,
+        { revision, delta: profileUpdate?.userDelta },
+      );
+    };
     void Promise.all([
-      utils.profile.getUser.invalidate(),
+      reconcileProfile(),
       utils.travel.getSectorData.invalidate(),
       // Invalidate raid queries when a RAID battle ends so boss HP is refreshed
       ...(props.battleState.battle?.battleType === "RAID"

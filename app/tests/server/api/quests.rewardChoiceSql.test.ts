@@ -115,6 +115,7 @@ describeWithDatabase("quest reward choice against a real MySQL", () => {
       cardIds: ["reward_money", "reward_items:0:tanto"],
     });
     expect(result.success).toBe(true);
+    expect(result.userDelta).toBeUndefined();
     expect(await playerState()).toEqual({
       money: 500,
       exp: 0,
@@ -122,6 +123,26 @@ describeWithDatabase("quest reward choice against a real MySQL", () => {
       itemQuantity: 2,
     });
     expect(await (await caller()).getPendingRewardChoices()).toEqual([]);
+  });
+
+  it("returns the numeric rewards actually granted as composable deltas", async () => {
+    const database = await getTestDatabase();
+    const result = await (await caller()).claimRewardChoice({
+      questId: QUEST, choiceId: "offer-1", cardIds: ["reward_money", "reward_exp"],
+    });
+    expect(result.success).toBe(true);
+    expect(result.userDelta).toMatchObject({ money: 500, earnedExperience: 1000 });
+    expect(await playerState()).toMatchObject({ money: 500, exp: 1000, pending: null });
+    const saved = await database.query.userData.findFirst({ where: eq(userData.userId, PLAYER) });
+    expect(saved?.earnedExperience).toBe(result.userDelta?.earnedExperience);
+  });
+
+  it("reconciles queued training when claiming a numeric reward choice", async () => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] }).where(eq(userData.userId, PLAYER));
+    const result = await (await caller()).claimRewardChoice({ questId: QUEST, choiceId: "offer-1", cardIds: ["reward_money", "reward_exp"] });
+    expect(result.success).toBe(true);
+    expect(result.userDelta).toBeUndefined();
   });
 
   it("rejects a pick of the wrong size without touching the offer", async () => {

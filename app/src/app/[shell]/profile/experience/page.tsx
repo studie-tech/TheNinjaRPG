@@ -9,33 +9,22 @@ import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function AssignExperience() {
   // State
-  const {
-    data: userData,
-    notifications,
-    updateUser,
-    updateNotifications,
-  } = useRequiredUserData();
+  const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
   const utils = api.useUtils();
   const submissionInFlight = useRef(false);
-  const latestNotifications = useRef(notifications);
-  latestNotifications.current = notifications;
 
   // Mutations
   const { mutateAsync: updateStats, isPending } =
     api.profile.useUnusedExperiencePoints.useMutation({
-      onSuccess: async (result) => {
+      onMutate: () => ({ userRevision: prepareUserUpdate() }),
+      onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
-        if (result.success && result.data) {
-          await updateUser(result.data);
-          await utils.profile.getUser.invalidate();
-          if (result.data.earnedExperience <= 0) {
-            await updateNotifications(
-              latestNotifications.current?.filter(
-                (notification) => !notification.name.includes("Assign XP"),
-              ),
-            );
-          }
-        }
+        if (result.success)
+          await updateUser(result.userPatch, { revision: context?.userRevision });
+        else await utils.profile.getUser.invalidate();
+      },
+      onError: async () => {
+        await utils.profile.getUser.invalidate();
       },
     });
 

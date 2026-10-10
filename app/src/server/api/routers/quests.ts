@@ -87,6 +87,7 @@ import {
   getNewTrackers,
   getPublicQuestUser,
   getReward,
+  getUncheckedQuestTargetSectors,
   getUserQuests,
   isAvailableUserQuests,
   isQuestRankAllowed,
@@ -119,6 +120,7 @@ import {
   fetchPublishedAchievements,
   fetchUpdatedUser,
   fetchUser,
+  getUserProgressionUpdate,
 } from "@/routers/profile";
 import { deleteRequests } from "@/routers/sensei";
 import { fetchSectorVillage } from "@/routers/village";
@@ -171,6 +173,8 @@ import {
 } from "@/validators/rewards";
 import type { QuestCounterFieldName } from "@/validators/user";
 import { getQuestCounterFieldName } from "@/validators/user";
+import type { UserDelta } from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const questsRouter = createTRPCRouter({
   getAllNames: publicProcedure
@@ -381,7 +385,7 @@ export const questsRouter = createTRPCRouter({
         userVillageId: z.string().nullish(),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch user first
       const updatedUser = await fetchUpdatedUser({
@@ -543,12 +547,27 @@ export const questsRouter = createTRPCRouter({
           )
           .where(eq(userData.userId, user.userId)),
       ]);
-      return { success: true, message: `Quest started: ${result.name}${rankInfo}` };
+      const dailyCounter = isErrand
+        ? "dailyErrands"
+        : isMedical
+          ? "dailyMedicalMissions"
+          : isPvp
+            ? "dailyPvpMissions"
+            : "dailyMissions";
+      user[dailyCounter] += 1;
+      return {
+        success: true,
+        message: `Quest started: ${result.name}${rankInfo}`,
+        ...(!updatedUser.requiresProgressionRefresh &&
+        getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0
+          ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
+          : {}),
+      };
     }),
   startQuest: protectedProcedure
     .meta({ mcp: { description: "Start a specific quest by ID" } })
     .input(z.object({ questId: z.string(), userSector: z.number() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [updatedUser, sectorVillage, questData, prevAttempt] = await Promise.all([
@@ -569,7 +588,7 @@ export const questsRouter = createTRPCRouter({
       if (user.sector !== input.userSector) return errorResponse("Sector mismatch");
       if (user.isBanned) return errorResponse("You are banned");
 
-      return assignQuestToUser({
+      const result = await assignQuestToUser({
         client: ctx.drizzle,
         user,
         quest: questData,
@@ -577,6 +596,15 @@ export const questsRouter = createTRPCRouter({
         sectorVillage,
         prevAttempt,
       });
+      return {
+        ...result,
+        ...(result.success &&
+        !updatedUser.requiresProgressionRefresh &&
+        questData.questType !== "war" &&
+        getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0
+          ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
+          : {}),
+      };
     }),
   abandon: protectedProcedure
     .meta({ mcp: { description: "Abandon an active quest" } })
@@ -1024,57 +1052,30 @@ export const questsRouter = createTRPCRouter({
   checkRewards: protectedProcedure
     .meta({ mcp: { description: "Check and claim quest rewards" } })
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
-    .output(
-      z.union([
-        // Error response
-        z.object({
-          success: z.literal(false),
-          message: z.string(),
-          /** Completion refused because an earlier reward choice is still waiting. */
-          rewardChoicePending: z.boolean().optional(),
-        }),
-        // Success response
-        z.object({
-          success: z.literal(true),
-          notifications: z.array(z.string()),
-          rewards: PostProcessedRewardSchema,
-          userQuest: z
-            .object({
-              questId: z.string(),
-              quest: z.object({
-                name: z.string(),
-                successDescription: z.string().nullable(),
-              }),
-            })
-            .nullable(),
-          resolved: z.boolean(),
-          badges: z.array(
-            z.object({
-              id: z.string(),
-              name: z.string(),
-              image: z.string(),
-            }),
-          ),
-          /** The completion left a reward choice for the player to pick from. */
-          rewardChoicePending: z.boolean(),
-        }),
-      ]),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Resolved path: questHistory CAS → snapshot claim → updateRewards (SQL deltas on userdata).
-      const [{ user, toastMessages, settings }, questHistoryPrefetch] =
-        await Promise.all([
-          fetchUpdatedUser({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-          }),
-          ctx.drizzle.query.questHistory.findFirst({
-            where: and(
-              eq(questHistory.questId, input.questId),
-              eq(questHistory.userId, ctx.userId),
-            ),
-          }),
-        ]);
+      const [
+        {
+          user,
+          toastMessages,
+          settings,
+          requiresProgressionRefresh,
+          publishedAchievementIds,
+        },
+        questHistoryPrefetch,
+      ] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        ctx.drizzle.query.questHistory.findFirst({
+          where: and(
+            eq(questHistory.questId, input.questId),
+            eq(questHistory.userId, ctx.userId),
+          ),
+        }),
+      ]);
 
       // Guards
       if (!user) {
@@ -1116,6 +1117,7 @@ export const questsRouter = createTRPCRouter({
         const claimedQuest = user.userQuests.find((q) => q.questId === input.questId);
         return {
           success: true,
+          message: "Quest already completed",
           notifications: [],
           rewards: PostProcessedRewardSchema.parse({}),
           userQuest: claimedQuest?.quest
@@ -1151,8 +1153,19 @@ export const questsRouter = createTRPCRouter({
         finalNotifications.push(REWARD_CHOICE_READY_MESSAGE);
       }
 
+      const refreshedTrackers = getNewTrackers(user, [{ task: "any" }]);
+      user.questData = refreshedTrackers.trackers;
+      const cacheUpdate =
+        !requiresProgressionRefresh &&
+        claim.userCacheEligible &&
+        refreshedTrackers.consequences.length === 0 &&
+        claim.userDelta !== undefined &&
+        getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0
+          ? getUserProgressionUpdate(user, publishedAchievementIds)
+          : undefined;
       return {
         success: true,
+        message: "Quest progress updated",
         notifications: finalNotifications,
         rewards: claim.rewards,
         userQuest: userQuest
@@ -1167,6 +1180,14 @@ export const questsRouter = createTRPCRouter({
         resolved,
         badges: claim.badges,
         rewardChoicePending: claim.rewardChoicePending,
+        ...(cacheUpdate
+          ? {
+              ...cacheUpdate,
+              // Energy payouts advance the DB version in SQL; only the next read knows that stamp.
+              userPatch: { ...cacheUpdate.userPatch, updatedAt: undefined },
+              userDelta: claim.userDelta,
+            }
+          : {}),
       };
     }),
   getPendingRewardChoices: protectedProcedure
@@ -1195,19 +1216,7 @@ export const questsRouter = createTRPCRouter({
   claimRewardChoice: protectedProcedure
     .meta({ mcp: { description: "Pick and claim rewards from a quest reward choice" } })
     .input(ClaimRewardChoiceSchema)
-    .output(
-      z.union([
-        z.object({ success: z.literal(false), message: z.string() }),
-        z.object({
-          success: z.literal(true),
-          message: z.string(),
-          rewards: PostProcessedRewardSchema,
-          badges: z.array(
-            z.object({ id: z.string(), name: z.string(), image: z.string() }),
-          ),
-        }),
-      ]),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, history] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -1265,6 +1274,7 @@ export const questsRouter = createTRPCRouter({
           message: `You already have every reward offered by ${questName}`,
           rewards,
           badges: [],
+          userDelta: user.energyTrainingQueue?.length ? undefined : {},
         };
       }
       // Picked profession experience advances other quests' objectives, as at completion.
@@ -1306,6 +1316,9 @@ export const questsRouter = createTRPCRouter({
         message: `Claimed rewards from ${questName}`,
         rewards,
         badges,
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : getRewardUserDelta(rewards),
       };
     }),
   checkLocationQuest: protectedProcedure
@@ -1516,6 +1529,7 @@ export const updateRewards = async (info: {
   reason: string;
   rewards: GetRewardResult;
   questCounterField?: QuestCounterFieldName;
+  questFinishedAt?: Date;
   // Fully-hydrated user (with quest relations) passed ONLY by callers that want gathering drops
   // to advance the herbs_gathered tracker. Explicit opt-in — the herbs branch below no longer
   // sniffs `"userQuests" in user`, so a future caller cannot silently start incrementing it.
@@ -1539,6 +1553,7 @@ export const updateRewards = async (info: {
     user,
     rewards,
     questCounterField,
+    questFinishedAt,
     reason,
     questUser,
     postClaimUserDataPatch,
@@ -1769,7 +1784,7 @@ export const updateRewards = async (info: {
       : {}),
   };
   if (questCounterField) {
-    updatedUserData.questFinishAt = new Date();
+    updatedUserData.questFinishAt = questFinishedAt ?? new Date();
     updatedUserData[questCounterField] = sql`${userData[questCounterField]} + 1`;
   }
   // Fold any caller-supplied column patch into the same UPDATE (independent per-column, so it
@@ -2360,6 +2375,12 @@ export const incrementDailyQuestCounter = async (
       .update(userData)
       .set(updateField)
       .where(eq(userData.userId, user.userId));
+    const field = Object.keys(updateField)[0] as
+      | "dailyMedicalMissions"
+      | "dailyPvpMissions"
+      | "dailyWarMissions"
+      | "dailyMissions";
+    user[field] += 1;
   }
 };
 
@@ -2682,7 +2703,10 @@ export const upsertQuestEntry = async (
     );
   }
   // Get updated trackers and update user
-  user.userQuests?.push({ ...entry, quest });
+  user.userQuests = [
+    ...user.userQuests.filter((row) => row.questId !== quest.id),
+    { ...entry, quest },
+  ];
   const trackerUser = quest.content.objectives.some(
     (objective) => objective.task === "farming_collection_log",
   )
@@ -2702,6 +2726,8 @@ export const upsertQuestEntry = async (
   );
   // Execute promises
   await Promise.all(promises);
+  user.questData = trackers;
+  user.completedQuests = user.completedQuests.filter((row) => row.questId !== quest.id);
   // Return the newest log entry
   return entry;
 };
@@ -2786,8 +2812,9 @@ const runCheckRewardsPrepInParallel = async (
     }
   }
   if (prepTasks.length > 0) {
-    await Promise.all(prepTasks);
+    return (await Promise.all(prepTasks)).some(Boolean);
   }
+  return false;
 };
 
 type GetRewardTrackers = ReturnType<typeof getReward>["trackers"];
@@ -2808,6 +2835,8 @@ type CommitQuestObjectiveRewardsResult =
       badges: { id: string; name: string; image: string }[];
       /** The completion stored a reward-choice offer the player still has to pick from. */
       rewardChoicePending: boolean;
+      userDelta: UserDelta | undefined;
+      userCacheEligible: boolean;
     }
   /** Resolved completion lost the CAS and the row is already completed (idempotent re-claim). */
   | { outcome: "already_completed" }
@@ -2869,6 +2898,12 @@ export const commitQuestObjectiveRewards = async (info: {
     consequences,
   } = info;
   const rewardChoice = resolved ? (info.rewardChoice ?? null) : null;
+  const userDelta = getRewardUserDelta(rewards, 0, true);
+  // Consequences can start battles or change inventory/quest relations outside this snapshot.
+  const userCacheEligible =
+    consequences.every((entry) => entry.type === "update_user") &&
+    !(resolved && userQuest?.quest.questType === "achievement") &&
+    !(resolved && info.existingHistory === null);
 
   user.questData = filterQuestTrackersForDbPersist(trackers, user);
   // Once a quest resolves, remove its tracker so replayed assignments cannot inherit done goals.
@@ -2990,7 +3025,12 @@ export const commitQuestObjectiveRewards = async (info: {
   const isMission = userQuest?.quest.questType === "mission";
   const senseiId = hasSensei && isMission ? user.senseiId : null;
 
-  await runCheckRewardsPrepInParallel(client, user, resolved, userQuest);
+  const changedQuestAssignments = await runCheckRewardsPrepInParallel(
+    client,
+    user,
+    resolved,
+    userQuest,
+  );
 
   // If the quest is finished, we update additional fields on the userData model
   const questCounterField =
@@ -3053,6 +3093,7 @@ export const commitQuestObjectiveRewards = async (info: {
     user,
     rewards,
     questCounterField,
+    questFinishedAt: farmRewardAt,
     reason: "QUEST",
     // Opt in to the herbs_gathered tracker: this is the gathering-claim path and `user`
     // here is the fully-hydrated row (with quest relations).
@@ -3087,6 +3128,48 @@ export const commitQuestObjectiveRewards = async (info: {
       : []),
   ]);
   const { items, jutsus, bloodlines, badges, sageModes } = rewardResult;
+  if (userDelta) {
+    user.money += userDelta.money ?? 0;
+    user.seichiSilver += userDelta.seichiSilver ?? 0;
+    user.earnedExperience += userDelta.earnedExperience ?? 0;
+    user.reputationPoints += userDelta.reputationPoints ?? 0;
+    user.reputationPointsTotal += rewards.reward_reputation;
+    user.villagePrestige += rewards.reward_prestige;
+  }
+  if (resolved && userQuest && completedEndAt) {
+    const entry = user.userQuests.find((entry) => entry.questId === userQuest.questId);
+    if (entry) {
+      entry.completed = 1;
+      entry.endAt = completedEndAt;
+      entry.previousCompletes = (entry.previousCompletes ?? 0) + 1;
+      entry.pendingRewardChoice = rewardChoice;
+      const retryDelay = userQuest.quest.retryDelay ?? "none";
+      if (retryDelay !== "none") {
+        const start = periodStart(retryDelay, completedEndAt);
+        entry.periodCompletes =
+          !entry.periodStartAt || entry.periodStartAt < start
+            ? 1
+            : (entry.periodCompletes ?? 0) + 1;
+        entry.periodStartAt = start;
+      }
+    }
+    user.completedQuests = [
+      ...user.completedQuests.filter((entry) => entry.questId !== userQuest.questId),
+      { id: entry?.id ?? userQuest.id, questId: userQuest.questId, completed: 1 },
+    ];
+    if (user.activeNpcQuestId === userQuest.questId) user.activeNpcQuestId = null;
+  }
+  // getUser's relation query keeps active attempts and achievement history only.
+  // A repeatable finished mission must leave this projection before recomputing trackers.
+  user.userQuests = user.userQuests.filter(
+    (entry) =>
+      entry.quest.questType === "achievement" ||
+      (entry.completed === 0 && entry.endAt === null),
+  );
+  if (questCounterField) user[questCounterField] += 1;
+  if (questCounterField) user.questFinishAt = farmRewardAt;
+  if (energyReward > 0)
+    user.curEnergy = Math.min(user.maxEnergy, user.curEnergy + energyReward);
 
   if (energyReward > 0) {
     postNotifications.push(`Energy reward: ${energyReward} (restored up to capacity).`);
@@ -3114,6 +3197,11 @@ export const commitQuestObjectiveRewards = async (info: {
     rewards,
     badges,
     rewardChoicePending: !!rewardChoice,
+    userDelta,
+    userCacheEligible:
+      userCacheEligible &&
+      !changedQuestAssignments &&
+      !(farmRewardResult && farmRewardResult.rowsAffected > 0),
   };
 };
 
@@ -3720,4 +3808,47 @@ export const claimRewardChoiceTrackers = async (
     set: { questData: filterQuestTrackersForDbPersist(trackers, user) },
   });
   return claim.success;
+};
+
+/** Scalar rewards compose with other accepted cache updates; relation changes need reconciliation. */
+export const getRewardUserDelta = (
+  rewards: GetRewardResult,
+  reputationCost = 0,
+  hasQuestSnapshot = false,
+): UserDelta | undefined => {
+  if (
+    (!hasQuestSnapshot && rewards.reward_reputation !== 0) ||
+    rewards.reward_prestige < 0 ||
+    rewards.reward_rank !== "NONE" ||
+    rewards.reward_village_membership !== "NONE" ||
+    rewards.reward_items.length > 0 ||
+    rewards.reward_jutsus.length > 0 ||
+    rewards.reward_bloodlines.length > 0 ||
+    rewards.reward_sage_modes.length > 0 ||
+    rewards.reward_badges.length > 0 ||
+    rewards.reward_hunter_items ||
+    rewards.reward_gathering_items ||
+    rewards.reward_clanpoints !== 0 ||
+    rewards.reward_anbupoints !== 0 ||
+    rewards.reward_tokens !== 0 ||
+    rewards.reward_war_damage !== 0 ||
+    rewards.reward_war_healing !== 0 ||
+    rewards.reward_medical_experience !== 0 ||
+    rewards.reward_hunting_experience !== 0 ||
+    rewards.reward_crafting_experience !== 0 ||
+    rewards.reward_gathering_experience !== 0 ||
+    rewards.reward_sage_mastery_experience !== 0 ||
+    rewards.reward_skillpoints !== 0
+  ) {
+    // Content grants, profession milestones and shared relations change derived profile data.
+    return undefined;
+  }
+  return {
+    money: rewards.reward_money,
+    seichiSilver: rewards.reward_seichi_silver,
+    earnedExperience: rewards.reward_exp,
+    reputationPoints: rewards.reward_reputation - reputationCost,
+    reputationPointsTotal: rewards.reward_reputation,
+    villagePrestige: rewards.reward_prestige,
+  };
 };

@@ -43,6 +43,7 @@ import type { TerrainHex } from "@/libs/hexgrid";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
 import type { QuestTrackerType } from "@/validators/objectives";
 import type { DmgConfig } from "./constants";
+import type { CombatCacheSnapshot, CombatProfileUpdate } from "./userCache";
 
 export type BattleWar = War & {
   warAllies: { villageId: string; supportVillageId: string }[];
@@ -365,6 +366,8 @@ export type PreBattleGearModifiers = {
  * Static data is stored once at battle initiation and looked up by ID.
  */
 export type ExtraState = {
+  /** Persisted, unscaled player state for confirmed completion responses; never sent to opponents. */
+  profileCacheSnapshots?: Record<string, CombatCacheSnapshot>;
   /** Repeated-opponent eligibility captured before inserting this battle. */
   energyRewardEligible?: boolean;
   energyCapacity?: Record<string, number>;
@@ -469,6 +472,7 @@ export type DroppedItem = {
  * Result type for users when battle is ended
  */
 export type CombatResult = {
+  profileUpdate?: CombatProfileUpdate;
   energyReward?: number;
   masteryGains?: Partial<Record<MasteryName, number>>;
   outcome: "Won" | "Lost" | "Draw" | "Fled";

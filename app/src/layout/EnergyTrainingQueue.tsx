@@ -21,6 +21,7 @@ import { showMutationToast } from "@/libs/toast";
 import { isStatTrainingCapped, statTrainingBlockMessage } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { getQueueTotalCapacity } from "@/utils/paypal";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export const EnergyTrainingQueue = ({
   user,
@@ -34,6 +35,7 @@ export const EnergyTrainingQueue = ({
   refreshCaptcha: () => Promise<void>;
 }) => {
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const [stat, setStat] = useState<CombatStatName>("offence");
   const [energy, setEnergy] = useState(user.maxEnergy);
   const [error, setError] = useState<string | null>(null);
@@ -49,15 +51,19 @@ export const EnergyTrainingQueue = ({
   });
   const { mutate: saveQueue, isPending } =
     api.train.updateEnergyTrainingQueue.useMutation({
+      onMutate: () => ({ revision: prepareUserUpdate() }),
       onSuccess: (result) => {
         showMutationToast(result);
         setError(result.success ? null : result.message);
       },
       onError: (cause) => setError(cause.message),
-      onSettled: async (_result, _error, variables) => {
+      onSettled: async (result, _error, variables, context) => {
         // Validation consumes a captcha even when the guess or a later write fails.
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser(result?.success ? result.userPatch : undefined, {
+            revision: context?.revision,
+            achievementProgress: result?.achievementProgress,
+          }),
           ...(variables.entries.length && variables.guess ? [refreshCaptcha()] : []),
         ]);
       },

@@ -1,9 +1,24 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
-import type { UserWithRelations } from "@/server/api/routers/profile";
+import {
+  MAX_SKILL_POINTS,
+  MEDNIN_EXP_CAP,
+  SAGE_MASTERY_EXP_CAP,
+  UserRanks,
+} from "@/drizzle/constants";
+import type { NavBarDropdownLink } from "@/libs/menus";
+import { canAssignExperience } from "@/libs/profile";
+import type {
+  AchievementProgress,
+  UserWithRelations,
+} from "@/server/api/routers/profile";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 type User = NonNullable<UserWithRelations>;
-type UserCache = { userData?: User | null };
+type UserCache = {
+  userData?: User | null;
+  achievementProgress?: AchievementProgress[];
+  notifications?: NavBarDropdownLink[];
+};
 type KnownUserPatch = Partial<User> | UserCachePatch;
 export type UserPatch =
   | KnownUserPatch
@@ -27,6 +42,7 @@ export type UserUpdateOptions = {
   revision: number | undefined;
   // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
   delta?: UserDelta;
+  achievementProgress?: AchievementProgress[];
 };
 
 /** Merge local fields or reconcile a confirmed mutation against its captured revision. */
@@ -51,7 +67,7 @@ export const updateUserCache = async (
         needsRefresh = true;
         return undefined;
       }
-      return { ...old, userData: { ...old.userData, ...changes } };
+      return mergeUserCache(old, { ...old.userData, ...changes });
     });
     // A local patch must preserve reconciliation of unrelated fields.
     if (needsRefresh) await client.invalidateQueries({ queryKey: key, exact: true });
@@ -94,10 +110,24 @@ export const updateUserCache = async (
     if (!changes) return undefined;
     for (const field of Object.keys(delta) as (keyof UserDelta)[]) {
       const amount = delta[field];
-      if (amount !== undefined) changes[field] = old.userData[field] + amount;
+      if (amount !== undefined) {
+        const cap =
+          field === "skillPoints"
+            ? MAX_SKILL_POINTS
+            : field === "medicalExperience"
+              ? MEDNIN_EXP_CAP
+              : field === "sageMasteryExperience"
+                ? SAGE_MASTERY_EXP_CAP
+                : Infinity;
+        changes[field] = Math.min(old.userData[field] + amount, cap);
+      }
     }
     applied = true;
-    return { ...old, userData: { ...old.userData, ...changes } };
+    return mergeUserCache(
+      old,
+      { ...old.userData, ...changes },
+      mutation.achievementProgress,
+    );
   });
   if (!applied) await client.invalidateQueries({ queryKey: key, exact: true });
 };
@@ -128,4 +158,42 @@ const mergeUserRelations = (
   if (clan && current.clan) changes.clan = { ...current.clan, ...clan };
   else if (clan === null) changes.clan = null;
   return changes;
+};
+
+/** Keep navigation derived from profile fields in the same atomic cache update. */
+const mergeUserCache = (
+  old: UserCache,
+  user: User,
+  achievementProgress?: AchievementProgress[],
+): UserCache => {
+  const notifications = old.notifications?.filter(
+    (entry) =>
+      entry.id !== "tutorial-unassigned-stats" &&
+      entry.name !== "Assign XP" &&
+      entry.name !== "In combat" &&
+      entry.name !== "In hospital",
+  );
+  if (notifications) {
+    if (
+      UserRanks.includes(user.rank) &&
+      user.earnedExperience > 0 &&
+      canAssignExperience(user)
+    )
+      notifications.push({
+        id: "tutorial-unassigned-stats",
+        href: "/profile/experience",
+        name: "Assign XP",
+        color: "blue",
+      });
+    if (user.status === "BATTLE")
+      notifications.push({ href: "/combat", name: "In combat", color: "red" });
+    if (user.status === "HOSPITALIZED")
+      notifications.push({ href: "/hospital", name: "In hospital", color: "red" });
+  }
+  return {
+    ...old,
+    userData: user,
+    ...(achievementProgress ? { achievementProgress } : {}),
+    ...(notifications ? { notifications } : {}),
+  };
 };

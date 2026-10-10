@@ -10,6 +10,7 @@ import {
   logBattleLengths,
   userData,
 } from "@/drizzle/schema";
+import { captureCombatCacheSnapshot } from "@/libs/combat/userCache";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import { combatEnergyRecoverySql, updateBattle, updateUser } from "@/libs/combat/database";
 import { applyEffects } from "@/libs/combat/process";
@@ -154,6 +155,49 @@ describeWithDatabase("CAS combat settlement", () => {
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it("returns confirmed compact PvE progression only for the player whose battle guard commits", async () => {
+    const database = await getTestDatabase();
+    const snapshot = scenario(true);
+    snapshot.battleType = "ARENA";
+    snapshot.usersState[1]!.isAi = true;
+    snapshot.usersState[0]!.rank = "NONE";
+    const original = (await database.query.userData.findFirst({ where: eq(userData.userId, "winner") }))!;
+    snapshot.extraState.profileCacheSnapshots = { winner: captureCombatCacheSnapshot({ ...original, items: [] }) };
+    snapshot.extraState.energyCapacity = { winner: 100 };
+    snapshot.extraState.energyRegeneration = { winner: 0 };
+    const result = calcBattleResult(snapshot, "winner", [])!;
+    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    await updateUser(database, pusher, snapshot, result, "winner");
+    const after = (await database.query.userData.findFirst({ where: eq(userData.userId, "winner") }))!;
+    expect(result.profileUpdate?.userId).toBe("winner");
+    expect(result.profileUpdate?.userPatch.curEnergy).toBe(after.curEnergy);
+    expect(result.profileUpdate?.userPatch.regenAt).toEqual(after.regenAt);
+    expect(result.profileUpdate?.userDelta.money).toBe(after.money - original.money);
+    expect(result.profileUpdate?.userDelta.ninjutsuMastery).toBe(after.ninjutsuMastery - original.ninjutsuMastery);
+    expect(result.profileUpdate?.baseline).not.toHaveProperty("masterySources");
+    const replay = { ...result, profileUpdate: undefined };
+    await updateUser(database, pusher, snapshot, replay, "winner");
+    expect(replay.profileUpdate).toBeUndefined();
+    expect((await database.query.userData.findFirst({ where: eq(userData.userId, "winner") }))!.money).toBe(after.money);
+  });
+
+  it("omits PvE cache rewards when the player has already joined a replacement battle", async () => {
+    const database = await getTestDatabase();
+    const snapshot = scenario(true);
+    snapshot.battleType = "ARENA";
+    snapshot.usersState[1]!.isAi = true;
+    const original = (await database.query.userData.findFirst({ where: eq(userData.userId, "winner") }))!;
+    snapshot.extraState.profileCacheSnapshots = { winner: captureCombatCacheSnapshot({ ...original, items: [] }) };
+    snapshot.extraState.energyCapacity = { winner: 100 };
+    snapshot.extraState.energyRegeneration = { winner: 0 };
+    const result = calcBattleResult(snapshot, "winner", [])!;
+    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    await database.update(userData).set({ battleId: "replacement" }).where(eq(userData.userId, "winner"));
+    await updateUser(database, pusher, snapshot, result, "winner");
+    expect(result.profileUpdate).toBeUndefined();
+    expect((await database.query.userData.findFirst({ where: eq(userData.userId, "winner") }))!.battleId).toBe("replacement");
+  });
 
   it("does not credit Energy regeneration on a forced profile refresh during combat", async () => {
     const database = await getTestDatabase();
