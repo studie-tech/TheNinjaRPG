@@ -80,6 +80,22 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
     expect((await save("parent", { bloodlineId: "other" })).success).toBe(false);
   });
 
+  it("rejects reskin evolution parents and preserves cosmetic editing and ordinary evolution", async () => {
+    const id = await createChild();
+    const db = await getTestDatabase();
+    await db.insert(jutsu).values({ ...await read("parent"), id: "evolution", name: "Evolution" });
+
+    expect(await save("evolution", { parentJutsuId: id })).toMatchObject({
+      success: false,
+      message: "Reskins cannot be evolution parents",
+    });
+    expect((await read("evolution")).parentJutsuId).toBeNull();
+    expect((await save(id, { description: "Updated cosmetics" })).success).toBe(true);
+    expect((await read(id)).description).toBe("Updated cosmetics");
+    expect((await save("evolution", { parentJutsuId: "parent" })).success).toBe(true);
+    expect((await read("evolution")).parentJutsuId).toBe("parent");
+  });
+
   it("blocks parent and group deletion until the child is unlinked", async () => {
     const id = await createChild();
     expect((await (await staff()).delete({ id: "parent" })).success).toBe(false);

@@ -1012,6 +1012,8 @@ export const jutsuRouter = createTRPCRouter({
       if (input.data.parentJutsuId) {
         if (parent?.jutsuType === "AI")
           return errorResponse("AI jutsus cannot be evolution parents");
+        if (parent?.reskinParentJutsuId)
+          return errorResponse("Reskins cannot be evolution parents");
         const graphValidation = validateEvolutionGraph({
           contentId: input.id,
           parentId: input.data.parentJutsuId,
