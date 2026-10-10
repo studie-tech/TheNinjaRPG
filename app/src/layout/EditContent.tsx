@@ -96,6 +96,7 @@ export type FormEntry<K> = {
   id: K;
   label?: string;
   doubleWidth?: boolean;
+  fullWidth?: boolean;
   resetButton?: boolean;
   searchable?: boolean;
   readonly?: boolean;
@@ -588,7 +589,7 @@ export const EditContent = <
                       !(formEntry.type === "avatar" && formEntry.size === "landscape")
                       ? "row-span-5"
                       : "",
-                    formEntry.doubleWidth ? "md:col-span-2" : "",
+                    formEntry.fullWidth ? "col-span-full" : formEntry.doubleWidth ? "md:col-span-2" : "",
                     props.fixedWidths
                       ? `h-32 shrink-0 grow-0 px-2 pt-3 ${props.fixedWidths}`
                       : "",

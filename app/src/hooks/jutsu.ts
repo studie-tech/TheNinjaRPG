@@ -162,7 +162,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     {
       id: "reskinParentJutsuId",
       label: "Reskin Parent Jutsu",
-      doubleWidth: true,
+      fullWidth: true,
       type: "db_values",
       values: reskinParents?.filter((j) => j.id !== data.id),
       resetButton: true,
@@ -170,7 +170,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     {
       id: "bloodlineReskinId",
       label: "Bloodline Reskin",
-      doubleWidth: true,
+      fullWidth: true,
       type: "db_values",
       values: bloodlineReskins,
       resetButton: true,
