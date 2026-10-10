@@ -233,6 +233,7 @@ export const allObjectiveTasks = [
   ...InstantTasks,
   ...RaidTasks,
   ...TrackerObjectiveTasks,
+  "bloodline_collection",
   "reset_quest",
   "dialog",
 ] as const;
@@ -318,6 +319,10 @@ export const objectiveImageMap: Record<
     title: "Farming Collection",
   },
   farming_level: { image: IMG_FARM_PLOT_SOIL, title: "Farming Level" },
+  bloodline_collection: {
+    image: IMG_BADGE_COLLECT_ITEM,
+    title: "Bloodline Collection",
+  },
   move_to_location: { image: IMG_BADGE_MOVE_TO_LOCATION, title: "Travel" },
   win_encounter_at_location: {
     image: IMG_BADGE_RANDOM_ENCOUNTER_WINS,
@@ -616,6 +621,13 @@ export const DamageDealt = z.object({
   ...rewardFields,
 });
 
+export const BloodlineCollection = z.object({
+  ...baseObjectiveFields,
+  task: z.literal("bloodline_collection"),
+  bloodlineRank: z.enum(["ALL", ...LetterRanks]).prefault("ALL"),
+  ...rewardFields,
+});
+
 export const AllObjectives = z.discriminatedUnion("task", [
   SimpleObjective,
   InstantWinLoseObjective,
@@ -637,6 +649,7 @@ export const AllObjectives = z.discriminatedUnion("task", [
   UseSpecificJutsuCombat,
   TagUsageWin,
   DamageDealt,
+  BloodlineCollection,
 ]);
 export type AllObjectivesType = z.infer<typeof AllObjectives>;
 
@@ -644,6 +657,8 @@ export const ObjectiveTracker = z.object({
   id: z.string(),
   done: z.boolean().prefault(false),
   value: z.coerce.number().prefault(0),
+  /** Catalogue size when collection progress was last evaluated; frozen once done. */
+  target: z.coerce.number().int().min(0).optional(),
   collected: z.boolean().prefault(false),
   sector: z.coerce.number().min(0).optional(),
   longitude: z.coerce.number().min(0).optional(),
@@ -872,6 +887,8 @@ export const getObjectiveSchema = (type: string) => {
     return TagUsageWin;
   } else if (type === "damage_dealt") {
     return DamageDealt;
+  } else if (type === "bloodline_collection") {
+    return BloodlineCollection;
   }
   throw new Error(`Unknown objective task ${type}`);
 };
@@ -890,6 +907,7 @@ export const allObjectiveSchema = z.union([
   UseSpecificJutsuCombat,
   TagUsageWin,
   DamageDealt,
+  BloodlineCollection,
 ]);
 
 /**

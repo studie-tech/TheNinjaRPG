@@ -2292,7 +2292,8 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     )
     .filter((value) => {
       return (
-        !SimpleTasks.includes(watchTask as SimpleTask) ||
+        (!SimpleTasks.includes(watchTask as SimpleTask) &&
+          watchTask !== "bloodline_collection") ||
         !["latitude", "longitude", "sector"].includes(value)
       );
     })
@@ -2616,15 +2617,25 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
 
   // Re-used EditContent component for actually showing the form
   return (
-    <EditContent
-      schema={objectiveSchema}
-      form={form}
-      formData={formData}
-      formClassName={formClassName}
-      showSubmit={false}
-      buttonTxt="Confirm Changes (No database sync)"
-      submitLoading={props.submitLoading}
-    />
+    <>
+      {watchTask === "bloodline_collection" && (
+        <p className="mb-3 text-muted-foreground text-sm">
+          Requires ownership of every non-hidden bloodline in the selected rank, or
+          every rank for ALL. Progress includes previously owned bloodlines in the
+          player’s pool. Once completed, new bloodlines do not revoke completion or
+          earned rewards. An empty collection cannot complete this objective.
+        </p>
+      )}
+      <EditContent
+        schema={objectiveSchema}
+        form={form}
+        formData={formData}
+        formClassName={formClassName}
+        showSubmit={false}
+        buttonTxt="Confirm Changes (No database sync)"
+        submitLoading={props.submitLoading}
+      />
+    </>
   );
 };
 
@@ -2855,6 +2866,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   completeQuestIds: "Quests to Complete",
   tagType: "Combat Tag Type",
   singleBattle: "Track best single-battle only (else cumulative)",
+  bloodlineRank: "Bloodline Rank (ALL includes every non-hidden rank)",
   shieldRounds: "Shield Rounds",
 };
 

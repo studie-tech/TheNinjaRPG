@@ -9,6 +9,15 @@ import {
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 
 export const getObjectiveImage = (objective: AllObjectivesType) => {
+  if (objective.task === "bloodline_collection") {
+    return {
+      ...objectiveImageMap.bloodline_collection,
+      title:
+        objective.bloodlineRank === "ALL"
+          ? "Collect All Bloodlines"
+          : `Collect All ${objective.bloodlineRank}-Rank Bloodlines`,
+    };
+  }
   return objectiveImageMap[objective.task] ?? { image: "", title: "???" };
 };
 
