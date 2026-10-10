@@ -432,8 +432,8 @@ export default function GameRules() {
             <b>Presence and Pacing:</b> AI assistance must be supervised by the human
             owner. Automated play and scripted presence, including timers or scripts
             that keep an account active or progressing while its owner is away, are
-            prohibited. Play must follow a pace and duration a human could reasonably
-            sustain.
+            prohibited even under human supervision. Play must follow a pace and
+            duration a human could reasonably sustain.
           </li>
         </ul>
         <hr className="my-2" />
