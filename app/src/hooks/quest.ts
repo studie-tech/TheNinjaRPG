@@ -10,6 +10,7 @@ import {
   LetterRanks,
   MASTERY_RANKS,
   MasteryNames,
+  MasteryTypes,
   MEDNIN_RANKS,
   QUEST_REWARD_MODES,
   QUEST_REWARD_PICK_MAX,
@@ -437,9 +438,17 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   formData.push({ id: "reward_hunting_experience", type: "number" });
   formData.push({ id: "reward_crafting_experience", type: "number" });
   formData.push({ id: "reward_gathering_experience", type: "number" });
-  formData.push({ id: "reward_sage_mastery_experience", type: "number" });
-  for (const field of MASTERY_EXPERIENCE_FIELDS)
-    formData.push({ id: field, type: "number" });
+  formData.push({
+    id: "reward_sage_mastery_experience",
+    type: "number",
+    label: "Sage Mode XP",
+  });
+  for (const [index, field] of MASTERY_EXPERIENCE_FIELDS.entries())
+    formData.push({
+      id: field,
+      type: "number",
+      label: `${MasteryTypes[index]} Mastery XP`,
+    });
   formData.push({
     id: "reward_mastery_stat",
     type: "str_array",

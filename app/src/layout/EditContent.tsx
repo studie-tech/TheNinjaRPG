@@ -2288,7 +2288,17 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   const formData: FormEntry<Attribute>[] = attributes
     .filter(
       (value) =>
-        !["task", "id", "image", "item_name", "reward", "completed"].includes(value),
+        ![
+          "task",
+          "id",
+          "image",
+          "item_name",
+          "reward",
+          "completed",
+          // Mastery promotions are claimed only with the quest's final reward.
+          "reward_mastery_stat",
+          "reward_mastery_rank",
+        ].includes(value),
     )
     .filter((value) => {
       return (
