@@ -3,6 +3,7 @@ import {
   MAP_GLOBAL_TRAVEL_TIME_CAP_SECS,
   MAP_WAKE_ISLAND_SECTOR,
 } from "@/drizzle/constants";
+import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { getSectorTile } from "@/libs/sector-map/validation";
 import type { GlobalMapData, GlobalTile, SectorPoint } from "@/libs/threejs/types";
@@ -129,6 +130,35 @@ export const optimisticGlobalTravelFinish = () => ({
   status: "AWAKE" as const,
   travelFinishAt: null,
 });
+
+/**
+ * A fight nobody has touched for this long is abandoned. While any participant
+ * has the battle open, idle turns time out and advance the round (stamping
+ * Battle.updatedAt) at least every COMBAT_SECONDS, so a few missed rounds is a
+ * safe margin.
+ */
+export const SECTOR_BATTLE_STALE_SECONDS = COMBAT_LOBBY_SECONDS + COMBAT_SECONDS * 5;
+
+/**
+ * Drops BATTLE-status users whose fight is not live from the sector map.
+ *
+ * A user keeps status BATTLE until they personally settle the fight on the
+ * combat page; the winner is released immediately, but a knocked-out player
+ * who closed the tab stays in BATTLE against a battle row nobody advances
+ * anymore (deleted by the cleaner only after a day). Without this filter those
+ * players render as a crossed-swords marker for hours.
+ */
+export const filterLiveSectorBattleUsers = <
+  T extends { status: string; battleId: string | null },
+>(
+  users: T[],
+  liveBattleIds: ReadonlySet<string>,
+) =>
+  users.filter(
+    (user) =>
+      user.status !== "BATTLE" ||
+      (user.battleId !== null && liveBattleIds.has(user.battleId)),
+  );
 
 /**
  * Whether a position sits in a village zone. When a sector map is provided

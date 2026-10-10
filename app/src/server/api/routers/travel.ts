@@ -34,6 +34,7 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import {
   actionLog,
+  battle,
   clan,
   gameSetting,
   overworldAiPlacement,
@@ -56,9 +57,11 @@ import type { GlobalMapData } from "@/libs/threejs/types";
 import {
   calcGlobalTravelTime,
   calcIsInVillage,
+  filterLiveSectorBattleUsers,
   findGlobalTravelDestination,
   findLandingNear,
   maxDistance,
+  SECTOR_BATTLE_STALE_SECONDS,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
 import { initiateBattle } from "@/routers/combat";
@@ -435,9 +438,31 @@ export const travelRouter = createTRPCRouter({
         }),
       ]);
 
+      // Only draw battle markers for fights that still exist and are being played
+      const battleIds = [
+        ...new Set(
+          users.flatMap((u) =>
+            u.status === "BATTLE" && u.battleId ? [u.battleId] : [],
+          ),
+        ),
+      ];
+      const liveBattles =
+        battleIds.length > 0
+          ? await ctx.drizzle
+              .select({ id: battle.id })
+              .from(battle)
+              .where(
+                and(
+                  inArray(battle.id, battleIds),
+                  gte(battle.updatedAt, secondsFromNow(-SECTOR_BATTLE_STALE_SECONDS)),
+                ),
+              )
+          : [];
+      const liveBattleIds = new Set(liveBattles.map((b) => b.id));
+
       // Filter out stealthed players (unless it's the current user)
       // Then anonymize enemy ANBU squad members
-      const processedUsers = users
+      const processedUsers = filterLiveSectorBattleUsers(users, liveBattleIds)
         .filter((u) => {
           // Always show the current user
           if (u.userId === ctx.userId) return true;

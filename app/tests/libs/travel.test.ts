@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { NormalizedSectorTile } from "@/libs/sector-map/types";
+import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import {
+  filterLiveSectorBattleUsers,
   findGlobalTravelDestination,
   getBiomeAtSectorAnchor,
   optimisticGlobalTravelFinish,
   optimisticGlobalTravelStart,
+  SECTOR_BATTLE_STALE_SECONDS,
 } from "@/libs/travel";
 
 const makeTile = (
@@ -110,5 +113,31 @@ describe("optimisticGlobalTravelFinish", () => {
       status: "AWAKE",
       travelFinishAt: null,
     });
+  });
+});
+
+describe("filterLiveSectorBattleUsers", () => {
+  const users = [
+    { userId: "awake", status: "AWAKE", battleId: null },
+    { userId: "fighting", status: "BATTLE", battleId: "live" },
+    { userId: "knocked-out", status: "BATTLE", battleId: "abandoned" },
+    { userId: "orphaned", status: "BATTLE", battleId: null },
+  ];
+
+  it("keeps awake players and fighters in live battles", () => {
+    expect(
+      filterLiveSectorBattleUsers(users, new Set(["live"])).map((u) => u.userId),
+    ).toEqual(["awake", "fighting"]);
+  });
+
+  it("hides every battle marker when no battle is live", () => {
+    expect(filterLiveSectorBattleUsers(users, new Set()).map((u) => u.userId)).toEqual([
+      "awake",
+    ]);
+  });
+
+  it("allows several idle turn timeouts before treating a battle as abandoned", () => {
+    expect(SECTOR_BATTLE_STALE_SECONDS).toBeGreaterThanOrEqual(COMBAT_SECONDS * 3);
+    expect(SECTOR_BATTLE_STALE_SECONDS).toBeLessThan(60 * 60);
   });
 });
