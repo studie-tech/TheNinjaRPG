@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import AiProfileEdit from "@/layout/AiProfileEdit";
-import { ActionEndTurn, getBackupRules, type AiRuleType } from "@/validators/ai";
+import { ActionMoveTowardsOpponent, ActionEndTurn, getBackupRules, type AiRuleType } from "@/validators/ai";
 
 const mocks = {
   profile: { id: "custom", includeDefaultRules: true, rules: [] as AiRuleType[] },
@@ -102,5 +102,40 @@ describe("AI profile rule organization", () => {
     expect(rules[0]?.group).toBeUndefined();
     expect(rules[0]?.action.type).toBe("end_turn");
     expect(rules).toHaveLength(6);
+  });
+});
+
+
+const changeCoordinate = (view: ReturnType<typeof mount>, name: string, value: string) => {
+  const input = view.getByRole("spinbutton", { name });
+  // The server preload imports react-dom before jsdom, enabling its legacy
+  // change-event adapter. Supply the adapter methods on this input only.
+  Object.assign(input, { attachEvent: () => undefined, detachEvent: () => undefined });
+  fireEvent.focusIn(input);
+  fireEvent.change(input, { target: { value } });
+  fireEvent.keyUp(input, { key: "0" });
+  fireEvent.focusOut(input);
+};
+
+describe("AI coordinate editor", () => {
+  beforeEach(() => {
+    mocks.profile.rules[0]!.action = ActionMoveTowardsOpponent.parse({ target: "COORDINATE", coordinates: { longitude: 0, latitude: 4 } });
+  });
+  it("loads and saves X/Y coordinates, including zero", () => {
+    const view = mount();
+    fireEvent.click(headers(view)[0]!);
+    expect((view.getByRole("spinbutton", { name: "X (column)" }) as HTMLInputElement).value).toBe("0");
+    changeCoordinate(view, "Y (row)", "7");
+    expect(save(view).rules[0]!.action).toMatchObject({ target: "COORDINATE", coordinates: { longitude: 0, latitude: 7 } });
+  });
+  it.each(["", "-1", "1.5"])("shows validation and prevents saving invalid X=%s", (value) => {
+    const view = mount();
+    fireEvent.click(headers(view)[0]!);
+    changeCoordinate(view, "X (column)", value);
+    expect(view.getByRole("alert").textContent).toContain("non-negative whole number");
+    fireEvent.click(view.getByRole("button", { name: "Save Profile" }));
+    expect(mocks.save).not.toHaveBeenCalled();
+    changeCoordinate(view, "X (column)", "2");
+    expect(save(view).rules[0]!.action).toMatchObject({ coordinates: { longitude: 2, latitude: 4 } });
   });
 });

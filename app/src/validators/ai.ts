@@ -142,10 +142,26 @@ export const getConditionSchema = (type: ZodAllAiCondition["type"]) => {
 /*********************************/
 /*            Actions            */
 /*********************************/
+export const AvailableActionTargets = [...AvailableTargets, "COORDINATE"] as const;
+
+const coordinateAxis = z
+  .union([z.number(), z.string().trim().min(1)])
+  .pipe(z.coerce.number<string | number>().int().nonnegative());
+
+export const aiCoordinatesSchema = z.object({
+  longitude: coordinateAxis,
+  latitude: coordinateAxis,
+});
+
+const actionTargetSettings = {
+  target: z.enum(AvailableActionTargets).prefault("RANDOM_OPPONENT"),
+  coordinates: aiCoordinatesSchema.optional(),
+};
+
 export const ActionMoveTowardsOpponent = z.object({
   type: z.literal("move_towards_opponent").prefault("move_towards_opponent"),
   description: z.string().prefault("Move towards opponent"),
-  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  ...actionTargetSettings,
 });
 
 export const ActionEndTurn = z.object({
@@ -157,19 +173,19 @@ export const ActionUseSpecificJutsu = z.object({
   type: z.literal("use_specific_jutsu").prefault("use_specific_jutsu"),
   description: z.string().prefault("Select specific jutsu"),
   jutsuId: z.string().prefault(""),
-  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  ...actionTargetSettings,
 });
 
 export const ActionUseRandomJutsu = z.object({
   type: z.literal("use_random_jutsu").prefault("use_random_jutsu"),
   description: z.string().prefault("Use random jutsu"),
-  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  ...actionTargetSettings,
 });
 
 export const ActionWithHighestPowerJutsuEffect = z.object({
   type: z.literal("use_highest_power_jutsu").prefault("use_highest_power_jutsu"),
   description: z.string().prefault("Use jutsu with given effect with highest power"),
-  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  ...actionTargetSettings,
   effect: z.string().prefault("damage"),
 });
 
@@ -177,26 +193,26 @@ export const ActionUseSpecificItem = z.object({
   type: z.literal("use_specific_item").prefault("use_specific_item"),
   description: z.string().prefault("Select specific item"),
   itemId: z.string().prefault(""),
-  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  ...actionTargetSettings,
 });
 
 export const ActionUseRandomItem = z.object({
   type: z.literal("use_random_item").prefault("use_random_item"),
   description: z.string().prefault("Use random item"),
-  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  ...actionTargetSettings,
 });
 
 export const ActionWithHighestPowerItemEffect = z.object({
   type: z.literal("use_highest_power_item").prefault("use_highest_power_item"),
   description: z.string().prefault("Use item with given effect with highest power"),
-  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  ...actionTargetSettings,
   effect: z.string().prefault("damage"),
 });
 
 export const ActionWithEffectHighestPower = z.object({
   type: z.literal("use_highest_power_action").prefault("use_highest_power_action"),
   description: z.string().prefault("Use action with given effect with highest power"),
-  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  ...actionTargetSettings,
   effect: z.string().prefault("damage"),
 });
 
@@ -204,7 +220,7 @@ export const ActionSpecificCombo = z.object({
   type: z.literal("use_combo_action").prefault("use_combo_action"),
   description: z.string().prefault("Cycly through a specific combo of jutsu & items"),
   comboIds: z.array(z.string()).prefault([]),
-  target: z.enum(AvailableTargets).prefault("RANDOM_OPPONENT"),
+  ...actionTargetSettings,
 });
 
 export const ZodAllAiActions = z.union([
@@ -257,6 +273,17 @@ export const AiRule = z
     action: ZodAllAiActions,
   })
   .superRefine((rule, ctx) => {
+    if (
+      "target" in rule.action &&
+      rule.action.target === "COORDINATE" &&
+      !rule.action.coordinates
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Coordinate targets require X and Y coordinates",
+        path: ["action", "coordinates"],
+      });
+    }
     rule.conditions.forEach((condition, index) => {
       if ("minRange" in condition && condition.minRange > condition.maxRange) {
         ctx.addIssue({

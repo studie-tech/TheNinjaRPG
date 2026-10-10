@@ -4,7 +4,7 @@ import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { TerrainHex } from "@/libs/hexgrid";
 import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
-import { ActionUseSpecificJutsu, ActionEndTurn, AiRule, ConditionPlayerWithinRange, ConditionSummonWithinRange, ConditionSpecificRound, ConditionHealthBelow, getBackupRules, enforceExtraRules, type AvailableTarget, type ZodAllAiCondition } from "@/validators/ai";
+import { getActionSchema, type ZodAllAiAction, ActionMoveTowardsOpponent, ActionUseSpecificJutsu, ActionEndTurn, AiRule, ConditionPlayerWithinRange, ConditionSummonWithinRange, ConditionSpecificRound, ConditionHealthBelow, getBackupRules, enforceExtraRules, type AvailableTarget, type ZodAllAiCondition } from "@/validators/ai";
 const DAMAGE_JUTSU = "j-damage";
 const PROFILE = "profile-1";
 
@@ -53,7 +53,7 @@ const mkBattle = (human: BattleUserState): CompleteBattle =>
     usersState: [human],
     usersEffects: [], groundEffects: [],
     extraState: {
-      jutsus: { [DAMAGE_JUTSU]: damageJutsu },
+      jutsus: { [DAMAGE_JUTSU]: structuredClone(damageJutsu) },
       jutsuReskins: {}, items: {}, bloodlines: {}, villages: {}, anbuSquads: {},
       keystoneItems: {}, wars: {}, relations: {}, clans: {},
       userQuests: {}, completedQuests: {}, questData: {}, bounties: {}, bountySignups: {},
@@ -192,5 +192,122 @@ describe("AI rule validation and compatibility", () => {
     const rules = getBackupRules().map((rule, index) => ({ ...rule, id: `${index}`, group: { id: "group", name: "Fallback", note: "" } }));
     enforceExtraRules(rules, getBackupRules());
     expect(rules).toHaveLength(getBackupRules().length);
+  });
+});
+
+
+describe("AI coordinate actions", () => {
+  const coordinateAction = (longitude: number, latitude: number) => ActionUseSpecificJutsu.parse({
+    jutsuId: DAMAGE_JUTSU, target: "COORDINATE", coordinates: { longitude, latitude },
+  });
+  it("attacks the character on the configured tile rather than the closest enemy", () => {
+    const { battle, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = coordinateAction(4, 1);
+    const result = run();
+    expect(result.nextActionId).toBe(DAMAGE_JUTSU);
+    expect(result.nextBattle.usersState[1]!.curHealth).toBeLessThan(3000);
+    expect(result.nextBattle.usersState[2]!.curHealth).toBe(800);
+  });
+  it.each([[99, 1], [1, 99], [0, 0]])("skips invalid character target (%s, %s) without spending pools", (x, y) => {
+    const { battle, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = coordinateAction(x, y);
+    const result = run();
+    expect(result.nextActionId).toBe("wait");
+    expect(result.nextBattle.usersState[0]!.curStamina).toBe(5000);
+    expect(result.nextBattle.usersState[0]!.jutsus[0]!.lastUsedRound).toBe(-99);
+  });
+  it("respects jutsu range and falls through to the next rule", () => {
+    const { battle, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = coordinateAction(4, 1);
+    battle.extraState.jutsus[DAMAGE_JUTSU]!.range = 1;
+    expect(run().nextActionId).toBe("wait");
+  });
+  it("casts a ground movement jutsu at the exact coordinate", () => {
+    const { battle, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = coordinateAction(7, 4);
+    const jutsu = battle.extraState.jutsus[DAMAGE_JUTSU]!;
+    jutsu.target = "EMPTY_GROUND";
+    jutsu.effects = [{ type: "move", power: 100, powerPerLevel: 0, target: "INHERIT" }] as typeof jutsu.effects;
+    const result = run();
+    expect(result.nextActionId).toBe(DAMAGE_JUTSU);
+    expect(result.nextBattle.usersState[0]!.longitude).toBe(7);
+    expect(result.nextBattle.usersState[0]!.latitude).toBe(4);
+  });
+  it("rejects occupied destinations for ground movement", () => {
+    const { battle, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = coordinateAction(4, 1);
+    const jutsu = battle.extraState.jutsus[DAMAGE_JUTSU]!;
+    jutsu.target = "EMPTY_GROUND";
+    jutsu.effects = [{ type: "move", power: 100, powerPerLevel: 0, target: "INHERIT" }] as typeof jutsu.effects;
+    expect(run().nextActionId).toBe("wait");
+  });
+  it("summons a preloaded creature at the configured coordinate", () => {
+    const { battle, run } = setup();
+    battle.usersState.push(mkUser({ userId: "template", controllerId: "totem", isSummon: true, isSummonTemplate: true, curHealth: 0, longitude: -1, latitude: -1 }));
+    const jutsu = battle.extraState.jutsus[DAMAGE_JUTSU]!;
+    jutsu.target = "EMPTY_GROUND";
+    jutsu.effects = [{ type: "summon", aiId: "totem", aiHp: 100, power: 100, powerPerLevel: 0, calculation: "percentage", rounds: 3, target: "INHERIT" }] as typeof jutsu.effects;
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = coordinateAction(7, 4);
+    const result = run();
+    expect(result.nextActionId).toBe(DAMAGE_JUTSU);
+    const summoned = result.nextBattle.usersState.find((u) => u.controllerId === "actor" && u.isSummon);
+    expect(summoned).toMatchObject({ longitude: 7, latitude: 4, curHealth: 100 });
+  });
+  it.each(["use_random_jutsu", "use_highest_power_action", "use_highest_power_jutsu", "use_combo_action"] as const)("%s uses the same coordinate resolver", (type) => {
+    const { battle, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = getActionSchema(type).parse({
+      target: "COORDINATE", coordinates: { longitude: 4, latitude: 1 }, effect: "damage", comboIds: [DAMAGE_JUTSU],
+    }) as ZodAllAiAction;
+    const result = run();
+    expect(result.nextActionId).toBe(DAMAGE_JUTSU);
+    expect(result.nextBattle.usersState[1]!.curHealth).toBeLessThan(3000);
+  });
+  it.each(["use_specific_item", "use_random_item", "use_highest_power_item"] as const)("%s targets the configured tile", (type) => {
+    const { battle, run } = setup();
+    const itemId = "coordinate-item";
+    battle.usersState[0]!.jutsus = [];
+    battle.usersState[0]!.items = [{ id: "owned", itemId, quantity: 2, level: 1, experience: 0, dropChancePerc: 0, durability: 100, equipped: "HAND_1", lastUsedRound: -99, originalCooldown: 0 }] as BattleUserState["items"];
+    battle.extraState.items[itemId] = { ...structuredClone(damageJutsu), id: itemId, itemType: "WEAPON", maxDurability: 100, preventBattleUsage: false } as unknown as typeof battle.extraState.items[string];
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = getActionSchema(type).parse({
+      itemId, target: "COORDINATE", coordinates: { longitude: 4, latitude: 1 }, effect: "damage",
+    }) as ZodAllAiAction;
+    const result = run();
+    expect(result.nextActionId).toBe(itemId);
+    expect(result.nextBattle.usersState[1]!.curHealth).toBeLessThan(3000);
+    expect(result.nextBattle.usersState[2]!.curHealth).toBe(800);
+  });
+  it("walks the final step onto an adjacent coordinate", () => {
+    const { battle, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = ActionMoveTowardsOpponent.parse({
+      target: "COORDINATE", coordinates: { longitude: 0, latitude: 1 },
+    });
+    const result = run();
+    expect(result.nextActionId).toBe("move");
+    expect(result.nextBattle.usersState[0]!.longitude).toBe(0);
+    expect(result.nextBattle.usersState[0]!.latitude).toBe(1);
+  });
+  it("skips movement once already at the coordinate", () => {
+    const { battle, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = ActionMoveTowardsOpponent.parse({
+      target: "COORDINATE", coordinates: { longitude: 1, latitude: 1 },
+    });
+    expect(run().nextActionId).toBe("wait");
+  });
+  it("skips movement to a blocked adjacent coordinate", () => {
+    const { battle, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = ActionMoveTowardsOpponent.parse({
+      target: "COORDINATE", coordinates: { longitude: 1, latitude: 2 },
+    });
+    expect(run().nextActionId).toBe("wait");
+  });
+  it("paths toward distant coordinates one legal step at a time", () => {
+    const { battle, grid, run } = setup();
+    battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = ActionMoveTowardsOpponent.parse({
+      target: "COORDINATE", coordinates: { longitude: 0, latitude: 5 },
+    });
+    const result = run();
+    expect(result.nextActionId).toBe("move");
+    const moved = result.nextBattle.usersState[0]!;
+    expect(grid.distance(grid.getHex({ col: 1, row: 1 })!, grid.getHex({ col: moved.longitude, row: moved.latitude })!)).toBe(1);
   });
 });
