@@ -204,6 +204,8 @@ export const SAGE_MODE_ACTIVATION_JUTSU: Jutsu = {
   injectableInBattle: true,
   battleUsageType: "BOTH",
   parentJutsuId: null,
+  reskinParentJutsuId: null,
+  bloodlineReskinId: null,
   requiredNinjutsuMastery: null,
   requiredGenjutsuMastery: null,
   requiredTaijutsuMastery: null,

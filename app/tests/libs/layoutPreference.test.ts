@@ -3,6 +3,9 @@ import {
   LAYOUT_PREFERENCE_COOKIE,
   persistLayoutPreferenceCookie,
 } from "@/libs/layoutPreference";
+import { ensureDom } from "../setup-dom.mjs";
+
+ensureDom();
 
 describe("persistLayoutPreferenceCookie", () => {
   afterEach(() => {

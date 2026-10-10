@@ -67,7 +67,7 @@ import {
   reservePityCredit,
 } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
-import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -449,24 +449,52 @@ export const bloodlineRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, reskin] = await Promise.all([
+      const [user, reskin, linkedJutsus] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchBloodlineReskin(ctx.drizzle, input.reskinId),
+        ctx.drizzle.query.jutsu.findMany({
+          columns: { id: true },
+          where: eq(jutsu.bloodlineReskinId, input.reskinId),
+        }),
       ]);
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role)) return errorResponse("Unauthorized");
       if (!reskin) return errorResponse("Reskin not found");
+      if (linkedJutsus.length)
+        return errorResponse(
+          "Unlink or delete its jutsu reskins before deleting this bloodline reskin",
+        );
       // Mutate
+      const deleted = await retryOnDeadlock(() =>
+        ctx.drizzle.transaction(async (tx) => {
+          await tx
+            .select({ id: bloodlineReskin.id })
+            .from(bloodlineReskin)
+            .where(eq(bloodlineReskin.id, input.reskinId))
+            .for("update");
+          const children = await tx
+            .select({ id: jutsu.id })
+            .from(jutsu)
+            .where(eq(jutsu.bloodlineReskinId, input.reskinId));
+          if (children.length) return false;
+          await tx
+            .delete(bloodlineReskin)
+            .where(eq(bloodlineReskin.id, input.reskinId));
+          return true;
+        }),
+      );
+      if (!deleted)
+        return errorResponse(
+          "Unlink or delete its jutsu reskins before deleting this bloodline reskin",
+        );
       await Promise.all([
         ctx.drizzle
           .update(userData)
           .set({ bloodlineReskinId: null })
           .where(eq(userData.bloodlineReskinId, input.reskinId)),
-        ctx.drizzle
-          .delete(bloodlineReskin)
-          .where(eq(bloodlineReskin.id, input.reskinId)),
+
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,

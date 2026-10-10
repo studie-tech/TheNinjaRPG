@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import {
@@ -18,8 +18,13 @@ import {
 import type { Jutsu } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
 import { EVOLUTION_STAT_FORM_FIELDS } from "@/libs/evolution";
+import {
+  getJutsuReskinMechanics,
+  inheritJutsuReskinEffects,
+} from "@/libs/jutsu/reskins";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
+import { objectKeys } from "@/utils/typeutils";
 import type { ZodAllTags, ZodJutsuInput, ZodJutsuType } from "@/validators/combat";
 import { JutsuValidator } from "@/validators/combat";
 
@@ -49,6 +54,47 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     api.bloodline.getAllNames.useQuery(undefined);
   const { data: villages, isPending: l2 } = api.village.getAllNames.useQuery(undefined);
   const { data: jutsus, isPending: l4 } = api.jutsu.getAllNames.useQuery(undefined);
+  const { data: reskinParents, isPending: l6 } = api.jutsu.getReskinParents.useQuery();
+
+  const reskinParentId = useWatch({
+    control: form.control,
+    name: "reskinParentJutsuId",
+  });
+  const previousReskinParentId = useRef(reskinParentId);
+  // Preserve a saved group on load; changing the source requires a fresh selection.
+  useEffect(() => {
+    if (previousReskinParentId.current !== reskinParentId) {
+      form.setValue("bloodlineReskinId", null, { shouldDirty: true });
+      previousReskinParentId.current = reskinParentId;
+    }
+  }, [reskinParentId, form]);
+  const { data: reskinParent } = api.jutsu.get.useQuery(
+    { id: reskinParentId || "" },
+    { enabled: !!reskinParentId },
+  );
+  const { data: bloodlineReskins } = api.bloodline.getReskinsForBloodline.useQuery(
+    { bloodlineId: reskinParent?.bloodlineId || "" },
+    { enabled: !!reskinParent?.bloodlineId },
+  );
+
+  // Preview the same inheritance as the server, which re-reads the source on save.
+  useEffect(() => {
+    if (!reskinParent) return;
+    const inherited = getJutsuReskinMechanics(reskinParent);
+    for (const key of objectKeys(inherited)) {
+      form.setValue(key, inherited[key], { shouldDirty: true });
+    }
+    form.setValue("jutsuRank", "H", { shouldDirty: true });
+    form.setValue("parentJutsuId", null, { shouldDirty: true });
+    form.setValue(
+      "effects",
+      inheritJutsuReskinEffects(
+        reskinParent.effects,
+        form.getValues("effects") as ZodAllTags[],
+      ),
+      { shouldDirty: true },
+    );
+  }, [reskinParent, form]);
 
   // Watch bloodlineId to filter bloodline items to only those for the selected bloodline
   const selectedBloodlineId = useWatch({
@@ -70,12 +116,16 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     form.setValue("requiredBloodlineItemId", null, { shouldDirty: true });
   }, [selectedBloodlineId, form]);
 
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
   // Mutation for updating jutsu
   const { mutate: updateJutsu, isPending: l3 } = api.jutsu.update.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
-      refetch();
+      setUpdateError(data.success ? null : data.message);
+      if (data.success) refetch();
     },
+    onError: (error) => setUpdateError(error.message),
   });
 
   // Form submission
@@ -102,7 +152,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   };
 
   // Are we loading data
-  const loading = l1 || l2 || l3 || l4 || l5;
+  const loading = l1 || l2 || l3 || l4 || l5 || l6;
 
   // Watch for changes to avatar
   const imageUrl = useWatch({
@@ -112,6 +162,24 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
 
   // Object for form values
   const formData: FormEntry<keyof ZodJutsuType>[] = [
+    {
+      id: "reskinParentJutsuId",
+      label: "Reskin Parent Jutsu",
+      searchable: true,
+      fullWidth: true,
+      type: "db_values",
+      values: reskinParents?.filter((j) => j.id !== data.id),
+      resetButton: true,
+    },
+    {
+      id: "bloodlineReskinId",
+      label: "Bloodline Reskin",
+      searchable: true,
+      fullWidth: true,
+      type: "db_values",
+      values: bloodlineReskins,
+      resetButton: true,
+    },
     { id: "image", type: "avatar", href: imageUrl },
     { id: "name", type: "text" },
     { id: "actionCostPerc", label: "AP Cost [%]", type: "number" },
@@ -169,5 +237,28 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     ),
   ];
 
-  return { jutsu, effects, form, formData, loading, setEffects, handleJutsuSubmit };
+  const cosmeticFields = new Set([
+    "reskinParentJutsuId",
+    "bloodlineReskinId",
+    "image",
+    "name",
+    "description",
+    "battleDescription",
+    "hidden",
+    "injectableInBattle",
+  ]);
+  const visibleFormData = reskinParentId
+    ? formData.filter((field) => cosmeticFields.has(field.id))
+    : formData;
+  return {
+    jutsu,
+    effects,
+    form,
+    formData: visibleFormData,
+    loading,
+    setEffects,
+    handleJutsuSubmit,
+    reskinParentId,
+    updateError,
+  };
 };
