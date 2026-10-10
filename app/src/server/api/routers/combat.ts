@@ -1,3 +1,4 @@
+import { randomInt as secureRandomInt } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import {
   and,
@@ -3361,7 +3362,9 @@ export const processUsersForBattle = async (
             (taken) => taken.x === location.x && taken.y === location.y,
           ),
       );
-      const location = available[randomInt(0, available.length - 1)];
+      const location = available.length
+        ? available[secureRandomInt(available.length)]
+        : undefined;
       if (!location) throw new Error("No free battle spawn locations");
       takenLocations.push(location);
       user.longitude = location.x;
