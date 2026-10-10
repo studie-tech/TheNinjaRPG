@@ -143,7 +143,7 @@ export default function Training() {
   const focusJutsuTraining = isTutorialJutsuPickStep(currentStep);
   // Null until NavTabs restores the last visited section (or falls back to the first).
   const [section, setSection] = useState<string | null>(null);
-  const { data: trainingQueue } = api.jutsu.getTrainingQueue.useQuery(undefined, {
+  const { data: sidebarTimers } = api.profile.getSidebarTimers.useQuery(undefined, {
     enabled: !!userData && access,
   });
 
@@ -191,10 +191,17 @@ export default function Training() {
               aliases={trainingSections.aliases}
               counts={{
                 Stats: energyQueueLength,
-                Masteries: getMasteryQueue(userData).length,
-                Jutsu: trainingQueue?.waiting.length ?? 0,
+                Masteries:
+                  getMasteryQueue(userData).length +
+                  (userData.currentlyTrainingMastery ? 1 : 0),
+                Jutsu:
+                  (sidebarTimers?.jutsuQueue.count ?? 0) +
+                  (sidebarTimers?.jutsuTraining &&
+                  isJutsuInTraining(sidebarTimers.jutsuTraining, Date.now() - timeDiff)
+                    ? 1
+                    : 0),
               }}
-              countLabel="queued"
+              countLabel="in queue"
               icons={{
                 Stats: <Swords aria-hidden="true" className="h-4 w-4" />,
                 Masteries: <Medal aria-hidden="true" className="h-4 w-4" />,
@@ -1356,7 +1363,10 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             setTrainingFinishedAt(Date.now());
             // serial-invalidation-ok: reading the queue starts the successor before ownership is read.
             await utils.jutsu.getTrainingQueue.invalidate();
-            await utils.jutsu.getUserJutsus.invalidate();
+            await Promise.all([
+              utils.jutsu.getUserJutsus.invalidate(),
+              utils.profile.getSidebarTimers.invalidate(),
+            ]);
           }}
         />
       )}
