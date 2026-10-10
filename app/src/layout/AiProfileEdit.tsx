@@ -180,6 +180,17 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
     );
   };
 
+  const updateAction = (
+    ruleIndex: number,
+    update: (action: ZodAllAiAction) => ZodAllAiAction,
+  ) => {
+    setRules((previous) =>
+      previous.map((rule, index) =>
+        index === ruleIndex ? { ...rule, action: update(rule.action) } : rule,
+      ),
+    );
+  };
+
   // If no profile
   if (isPending) return <Loader explanation="Loading AI Profile" />;
   if (!profile) return <Loader explanation="No AI profiles? Should not get here" />;
@@ -622,20 +633,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                           defaultValue={rule.action.jutsuId}
                           value={rule.action.jutsuId}
                           onValueChange={(e) =>
-                            setRules((prevRules) =>
-                              prevRules.map((rule, k) => {
-                                if (k === ruleIndex) {
-                                  return {
-                                    ...rule,
-                                    action: {
-                                      ...rule.action,
-                                      jutsuId: e,
-                                    } as ZodAllAiAction,
-                                  };
-                                }
-                                return rule;
-                              }),
-                            )
+                            updateAction(ruleIndex, (action) => ({
+                              ...action,
+                              jutsuId: e,
+                            }))
                           }
                         >
                           <SelectTrigger>
@@ -658,20 +659,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                           defaultValue={rule.action.itemId}
                           value={rule.action.itemId}
                           onValueChange={(e) =>
-                            setRules((prevRules) =>
-                              prevRules.map((rule, k) => {
-                                if (k === ruleIndex) {
-                                  return {
-                                    ...rule,
-                                    action: {
-                                      ...rule.action,
-                                      itemId: e,
-                                    } as ZodAllAiAction,
-                                  };
-                                }
-                                return rule;
-                              }),
-                            )
+                            updateAction(ruleIndex, (action) => ({
+                              ...action,
+                              itemId: e,
+                            }))
                           }
                         >
                           <SelectTrigger>
@@ -699,22 +690,12 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                               label: uj.jutsu.name,
                             })) ?? []),
                           ]}
-                          onChange={(e) => {
-                            setRules((prevRules) =>
-                              prevRules.map((rule, k) => {
-                                if (k === ruleIndex) {
-                                  return {
-                                    ...rule,
-                                    action: {
-                                      ...rule.action,
-                                      comboIds: e,
-                                    } as ZodAllAiAction,
-                                  };
-                                }
-                                return rule;
-                              }),
-                            );
-                          }}
+                          onChange={(e) =>
+                            updateAction(ruleIndex, (action) => ({
+                              ...action,
+                              comboIds: e as string[],
+                            }))
+                          }
                         />
                       )}
                       {"target" in rule.action && (
@@ -722,29 +703,20 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                           defaultValue={rule.action.target}
                           value={rule.action.target}
                           onValueChange={(e) =>
-                            setRules((prevRules) =>
-                              prevRules.map((rule, k) => {
-                                if (k === ruleIndex) {
-                                  return {
-                                    ...rule,
-                                    action: {
-                                      ...rule.action,
-                                      target: e,
-                                      coordinates:
-                                        e === "COORDINATE"
-                                          ? (("coordinates" in rule.action
-                                              ? rule.action.coordinates
-                                              : undefined) ?? {
-                                              longitude: 0,
-                                              latitude: 0,
-                                            })
-                                          : undefined,
-                                    } as ZodAllAiAction,
-                                  };
-                                }
-                                return rule;
-                              }),
-                            )
+                            updateAction(ruleIndex, (action) => {
+                              if (!("target" in action)) return action;
+                              return {
+                                ...action,
+                                target: e as typeof action.target,
+                                coordinates:
+                                  e === "COORDINATE"
+                                    ? (action.coordinates ?? {
+                                        longitude: 0,
+                                        latitude: 0,
+                                      })
+                                    : undefined,
+                              };
+                            })
                           }
                         >
                           <SelectTrigger>
@@ -783,33 +755,22 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                                         ? coordinates?.[axis]
                                         : ""
                                     }
-                                    onChange={(event) =>
-                                      setRules((previous) =>
-                                        previous.map((current, index) => {
-                                          if (
-                                            index !== ruleIndex ||
-                                            !("target" in current.action)
-                                          )
-                                            return current;
-                                          return {
-                                            ...current,
-                                            action: {
-                                              ...current.action,
-                                              coordinates: {
-                                                ...(current.action.coordinates ?? {
-                                                  longitude: Number.NaN,
-                                                  latitude: Number.NaN,
-                                                }),
-                                                [axis]:
-                                                  event.target.value === ""
-                                                    ? Number.NaN
-                                                    : Number(event.target.value),
-                                              },
-                                            },
-                                          };
-                                        }),
-                                      )
-                                    }
+                                    onChange={(event) => {
+                                      const value = event.target.valueAsNumber;
+                                      updateAction(ruleIndex, (action) => {
+                                        if (!("target" in action)) return action;
+                                        return {
+                                          ...action,
+                                          coordinates: {
+                                            ...(action.coordinates ?? {
+                                              longitude: Number.NaN,
+                                              latitude: Number.NaN,
+                                            }),
+                                            [axis]: value,
+                                          },
+                                        };
+                                      });
+                                    }}
                                   />
                                 </Label>
                               ))}
@@ -827,20 +788,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                           defaultValue={rule.action.effect}
                           value={rule.action.effect}
                           onValueChange={(e) =>
-                            setRules((prevRules) =>
-                              prevRules.map((rule, k) => {
-                                if (k === ruleIndex) {
-                                  return {
-                                    ...rule,
-                                    action: {
-                                      ...rule.action,
-                                      effect: e,
-                                    } as ZodAllAiAction,
-                                  };
-                                }
-                                return rule;
-                              }),
-                            )
+                            updateAction(ruleIndex, (action) => ({
+                              ...action,
+                              effect: e,
+                            }))
                           }
                         >
                           <SelectTrigger>
