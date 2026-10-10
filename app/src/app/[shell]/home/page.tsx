@@ -15,6 +15,14 @@ import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   HomeTypeDetails,
@@ -24,6 +32,8 @@ import {
   IMG_HOME_TRAIN,
   IMG_OCCUPATION_FARMING,
   ITEM_LEVEL_CAP,
+  ItemRarities,
+  ItemTypes,
 } from "@/drizzle/constants";
 import type { UserItemWithItem } from "@/drizzle/schema";
 import { useSleepToggle } from "@/hooks/sleep";
@@ -57,6 +67,9 @@ export default function HomePage() {
     undefined,
   );
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [itemTypeFilter, setItemTypeFilter] = useState("ALL");
+  const [rarityFilter, setRarityFilter] = useState("ALL");
 
   // Queries
   const {
@@ -157,6 +170,20 @@ export default function HomePage() {
       .filter((useritem) => useritem.equipped === "NONE")
       .filter((useritem) => getHomeStorageBucket(useritem.item) === "cooking")
       .sort(byItemName) ?? [];
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const matchesFilters = (userItem: UserItemWithItem) =>
+    userItem.item.name.toLowerCase().includes(normalizedSearch) &&
+    (itemTypeFilter === "ALL" || userItem.item.itemType === itemTypeFilter) &&
+    (rarityFilter === "ALL" || userItem.item.rarity === rarityFilter);
+  const visibleStoredItems = storedItems.filter(matchesFilters);
+  const visibleStoredMaterials = storedMaterials.filter(matchesFilters);
+  const visibleStoredCooking = storedCooking.filter(matchesFilters);
+  const visibleInventoryItems = nonStoredItems.filter(matchesFilters);
+  const visibleInventoryMaterials = nonStoredMaterials.filter(matchesFilters);
+  const visibleInventoryCooking = nonStoredCooking.filter(matchesFilters);
+  const hasActiveFilters =
+    searchQuery !== "" || itemTypeFilter !== "ALL" || rarityFilter !== "ALL";
 
   const maxHouseMaterials =
     userData && homeData ? calcMaxHouseMaterials(userData, homeData.storage) : 0;
@@ -443,6 +470,58 @@ export default function HomePage() {
               <Loader explanation="Loading item storage data" />
             ) : (
               <Tabs defaultValue="stored" className="w-full">
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    aria-label="Search home storage by name"
+                    placeholder="Search by name..."
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    className="flex-1"
+                  />
+                  <Select value={itemTypeFilter} onValueChange={setItemTypeFilter}>
+                    <SelectTrigger
+                      aria-label="Filter by item type"
+                      className="w-full sm:w-40"
+                    >
+                      <SelectValue placeholder="Item type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Types</SelectItem>
+                      {ItemTypes.map((itemType) => (
+                        <SelectItem key={itemType} value={itemType}>
+                          {itemType.charAt(0) + itemType.slice(1).toLowerCase()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={rarityFilter} onValueChange={setRarityFilter}>
+                    <SelectTrigger
+                      aria-label="Filter by rarity"
+                      className="w-full sm:w-40"
+                    >
+                      <SelectValue placeholder="Rarity" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Rarities</SelectItem>
+                      {ItemRarities.map((rarity) => (
+                        <SelectItem key={rarity} value={rarity}>
+                          {rarity.charAt(0) + rarity.slice(1).toLowerCase()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    disabled={!hasActiveFilters}
+                    onClick={() => {
+                      setSearchQuery("");
+                      setItemTypeFilter("ALL");
+                      setRarityFilter("ALL");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
                 <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
                   <TabsTrigger value="stored">
                     <Package className="mr-2 h-5 w-5" /> Stored Items
@@ -459,14 +538,16 @@ export default function HomePage() {
                 </TabsList>
 
                 <TabsContent value="stored">
-                  {totalStoredItems === 0 ? (
+                  {visibleStoredItems.length === 0 ? (
                     <div className="p-4 text-center">
-                      You don&apos;t have any items stored in your home.
+                      {storedItems.length === 0
+                        ? "You don't have any items stored in your home."
+                        : "No items match your filters."}
                     </div>
                   ) : (
                     <div className="p-3">
                       <ActionSelector
-                        items={storedItems?.map((useritem) => ({
+                        items={visibleStoredItems?.map((useritem) => ({
                           ...useritem.item,
                           ...useritem,
                         }))}
@@ -480,7 +561,9 @@ export default function HomePage() {
                             setSelectedItem(undefined);
                             setIsModalOpen(false);
                           } else {
-                            const item = storedItems?.find((item) => item.id === id);
+                            const item = visibleStoredItems?.find(
+                              (item) => item.id === id,
+                            );
                             if (item) {
                               setSelectedItem(item as UserItemWithItem);
                               setIsModalOpen(true);
@@ -496,14 +579,16 @@ export default function HomePage() {
                   <div className="space-y-4">
                     <div>
                       <h4 className="mb-2 font-semibold">Stored Materials</h4>
-                      {storedMaterials.length === 0 ? (
+                      {visibleStoredMaterials.length === 0 ? (
                         <div className="p-4 text-center text-muted-foreground">
-                          No materials stored in your home.
+                          {storedMaterials.length === 0
+                            ? "No materials stored in your home."
+                            : "No materials match your filters."}
                         </div>
                       ) : (
                         <div className="p-3">
                           <ActionSelector
-                            items={storedMaterials?.map((useritem) => ({
+                            items={visibleStoredMaterials?.map((useritem) => ({
                               ...useritem.item,
                               ...useritem,
                             }))}
@@ -517,7 +602,7 @@ export default function HomePage() {
                                 setSelectedItem(undefined);
                                 setIsModalOpen(false);
                               } else {
-                                const item = storedMaterials?.find(
+                                const item = visibleStoredMaterials?.find(
                                   (item) => item.id === id,
                                 );
                                 if (item) {
@@ -537,14 +622,16 @@ export default function HomePage() {
                   <div className="space-y-4">
                     <div>
                       <h4 className="mb-2 font-semibold">Stored Cooking</h4>
-                      {storedCooking.length === 0 ? (
+                      {visibleStoredCooking.length === 0 ? (
                         <div className="p-4 text-center text-muted-foreground">
-                          No cooking items stored in your home.
+                          {storedCooking.length === 0
+                            ? "No cooking items stored in your home."
+                            : "No cooking items match your filters."}
                         </div>
                       ) : (
                         <div className="p-3">
                           <ActionSelector
-                            items={storedCooking?.map((useritem) => ({
+                            items={visibleStoredCooking?.map((useritem) => ({
                               ...useritem.item,
                               ...useritem,
                             }))}
@@ -558,7 +645,7 @@ export default function HomePage() {
                                 setSelectedItem(undefined);
                                 setIsModalOpen(false);
                               } else {
-                                const item = storedCooking?.find(
+                                const item = visibleStoredCooking?.find(
                                   (item) => item.id === id,
                                 );
                                 if (item) {
@@ -575,19 +662,23 @@ export default function HomePage() {
                 </TabsContent>
 
                 <TabsContent value="inventory">
-                  {nonStoredItems.length === 0 &&
-                  nonStoredMaterials.length === 0 &&
-                  nonStoredCooking.length === 0 ? (
+                  {visibleInventoryItems.length === 0 &&
+                  visibleInventoryMaterials.length === 0 &&
+                  visibleInventoryCooking.length === 0 ? (
                     <div className="p-4 text-center">
-                      You don&apos;t have any items in your inventory.
+                      {nonStoredItems.length === 0 &&
+                      nonStoredMaterials.length === 0 &&
+                      nonStoredCooking.length === 0
+                        ? "You don't have any items in your inventory."
+                        : "No inventory items match your filters."}
                     </div>
                   ) : (
                     <div className="p-3">
-                      {nonStoredItems.length > 0 && (
+                      {visibleInventoryItems.length > 0 && (
                         <div className="mb-4">
                           <h4 className="mb-2 font-semibold">Items</h4>
                           <ActionSelector
-                            items={nonStoredItems?.map((useritem) => ({
+                            items={visibleInventoryItems?.map((useritem) => ({
                               ...useritem.item,
                               ...useritem,
                             }))}
@@ -598,7 +689,7 @@ export default function HomePage() {
                             showLabels={false}
                             greyedIds={
                               !canStoreMoreItems
-                                ? nonStoredItems?.map((useritem) => useritem.id)
+                                ? visibleInventoryItems?.map((useritem) => useritem.id)
                                 : undefined
                             }
                             onClick={(id) => {
@@ -617,11 +708,11 @@ export default function HomePage() {
                         </div>
                       )}
 
-                      {nonStoredMaterials.length > 0 && (
+                      {visibleInventoryMaterials.length > 0 && (
                         <div className="mb-4">
                           <h4 className="mb-2 font-semibold">Materials</h4>
                           <ActionSelector
-                            items={nonStoredMaterials?.map((useritem) => ({
+                            items={visibleInventoryMaterials?.map((useritem) => ({
                               ...useritem.item,
                               ...useritem,
                             }))}
@@ -632,7 +723,9 @@ export default function HomePage() {
                             showLabels={false}
                             greyedIds={
                               !canStoreMoreMaterials
-                                ? nonStoredMaterials?.map((useritem) => useritem.id)
+                                ? visibleInventoryMaterials?.map(
+                                    (useritem) => useritem.id,
+                                  )
                                 : undefined
                             }
                             onClick={(id) => {
@@ -651,11 +744,11 @@ export default function HomePage() {
                         </div>
                       )}
 
-                      {nonStoredCooking.length > 0 && (
+                      {visibleInventoryCooking.length > 0 && (
                         <div>
                           <h4 className="mb-2 font-semibold">Cooking</h4>
                           <ActionSelector
-                            items={nonStoredCooking?.map((useritem) => ({
+                            items={visibleInventoryCooking?.map((useritem) => ({
                               ...useritem.item,
                               ...useritem,
                             }))}
@@ -666,7 +759,9 @@ export default function HomePage() {
                             showLabels={false}
                             greyedIds={
                               !canStoreMoreCooking
-                                ? nonStoredCooking?.map((useritem) => useritem.id)
+                                ? visibleInventoryCooking?.map(
+                                    (useritem) => useritem.id,
+                                  )
                                 : undefined
                             }
                             onClick={(id) => {
