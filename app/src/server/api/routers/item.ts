@@ -72,6 +72,7 @@ import {
   meetsEvolutionStatRequirements,
   validateEvolutionGraph,
 } from "@/libs/evolution";
+import { canDropFarmSeed } from "@/libs/farming";
 import {
   buildItemLoadoutData,
   calcItemRepairCost,
@@ -1615,6 +1616,11 @@ export const itemRouter = createTRPCRouter({
       }
       if (useritem.isInAuction) {
         return errorResponse("Cannot sell item in auction");
+      }
+      if (!canDropFarmSeed(useritem.item, user.farmCurrency)) {
+        return errorResponse(
+          `You need ${useritem.item.farmSellValue} farm coins to buy ${useritem.item.name} back, so it cannot be dropped. Plant it at your farm instead.`,
+        );
       }
       // Derived
       const cost = calcItemSellingPrice(user, useritem, structures);
