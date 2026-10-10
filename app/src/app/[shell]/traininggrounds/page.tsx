@@ -1063,7 +1063,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
   // Successive levels of the selected jutsu to buy in one go
-  const [levelCount, setLevelCount] = useState(1);
+  const [levelCount, setLevelCount] = useState<number | "">(1);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   // Re-renders the box when the countdown ends: the refetch it triggers returns the
   // same rows, which alone would leave the finished training's overlay on screen.
@@ -1315,7 +1315,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     (finishTrainingAt?.finishTraining ? 1 : 0) -
     queuedJobs.length;
   const maxLevelCount = Math.max(1, Math.min(freeSlots, levelCap - level));
-  const count = Math.min(levelCount, maxLevelCount);
+  const count = Math.min(levelCount || 1, maxLevelCount);
   const countLevels = Array.from({ length: count }, (_, i) => level + i);
   const trainSeconds =
     jutsu &&
@@ -1340,12 +1340,20 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const canAfford = userData && cost && userData.money >= cost;
   const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
   const canTrain =
-    okRank && okVillage && okBloodline && !isCapped && canAfford && !isQueueFull;
+    okRank &&
+    okVillage &&
+    okBloodline &&
+    !isCapped &&
+    canAfford &&
+    !isQueueFull &&
+    levelCount !== "";
 
   // Label for proceed button
   let proceed_label: string | undefined;
   if (!isPending && !isCapped) {
-    if (!canAfford) {
+    if (levelCount === "") {
+      proceed_label = "Enter a number of levels";
+    } else if (!canAfford) {
       proceed_label = `Need ${cost - userData.money} more ryo`;
     } else if (isCapped) {
       proceed_label = `Level capped`;
@@ -1451,6 +1459,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                 id="tutorial-traininggrounds-trainJutsu"
                 title="Confirm Purchase"
                 proceed_label={proceed_label}
+                proceedDisabled={levelCount === ""}
                 isOpen={isOpen}
                 setIsOpen={setJutsuConfirmOpen}
                 isValid={false}
@@ -1484,14 +1493,26 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                       <Input
                         id="jutsu-level-count"
                         type="number"
+                        inputMode="numeric"
                         min={1}
                         max={maxLevelCount}
-                        value={count}
+                        value={levelCount === "" ? "" : count}
                         onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
-                          if (!Number.isNaN(val) && val >= 1 && val <= maxLevelCount) {
+                          if (e.target.value === "") {
+                            setLevelCount("");
+                            return;
+                          }
+                          const val = Number(e.target.value);
+                          if (
+                            Number.isInteger(val) &&
+                            val >= 1 &&
+                            val <= maxLevelCount
+                          ) {
                             setLevelCount(val);
                           }
+                        }}
+                        onBlur={() => {
+                          if (levelCount === "") setLevelCount(1);
                         }}
                         className="w-full"
                       />

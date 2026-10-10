@@ -97,7 +97,8 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   const [selectedItem, setSelectedItem] = useState<CraftableItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [rarityFilter, setRarityFilter] = useState<string>("ALL");
-  const [craftQuantity, setCraftQuantity] = useState(1);
+  const [craftQuantityInput, setCraftQuantity] = useState<number | "">(1);
+  const craftQuantity = craftQuantityInput || 1;
   const [pendingCraftName, setPendingCraftName] = useState<string | null>(null);
   const craftRequestInFlight = useRef(false);
 
@@ -202,12 +203,14 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 
   // Check if user can craft the selected item
   const canCraft = useMemo(() => {
-    if (!selectedItem || !userItems || isQueueFull) return false;
+    if (!selectedItem || !userItems || isQueueFull || craftQuantityInput === "") {
+      return false;
+    }
     return selectedItem.craftingRequirements.every((req) => {
       const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
       return totalQuantity >= req.quantity * craftQuantity;
     });
-  }, [selectedItem, userItems, craftQuantity, isQueueFull]);
+  }, [selectedItem, userItems, craftQuantity, craftQuantityInput, isQueueFull]);
 
   // Handle craft
   const handleCraft = () => {
@@ -350,11 +353,13 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
         proceed_label={
           isQueueFull
             ? "Crafting Queue Full"
-            : !canCraft
-              ? "Missing Materials"
-              : isBusy
-                ? "Add to Queue"
-                : "Start Crafting"
+            : craftQuantityInput === ""
+              ? "Enter a quantity"
+              : !canCraft
+                ? "Missing Materials"
+                : isBusy
+                  ? "Add to Queue"
+                  : "Start Crafting"
         }
         proceed_loading_label="Crafting"
         isLoading={isCraftPending}
@@ -397,18 +402,26 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
               <Input
                 id="craft-quantity"
                 type="number"
+                inputMode="numeric"
                 min={maxCraftable > 0 ? 1 : 0}
                 max={maxCraftable > 0 ? Math.min(maxCraftable, 10) : 0}
-                value={maxCraftable > 0 ? craftQuantity : 0}
+                value={maxCraftable > 0 ? craftQuantityInput : 0}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
+                  if (e.target.value === "") {
+                    setCraftQuantity("");
+                    return;
+                  }
+                  const val = Number(e.target.value);
                   if (
-                    !Number.isNaN(val) &&
+                    Number.isInteger(val) &&
                     val >= 1 &&
                     val <= Math.min(maxCraftable, 10)
                   ) {
                     setCraftQuantity(val);
                   }
+                }}
+                onBlur={() => {
+                  if (craftQuantityInput === "") setCraftQuantity(1);
                 }}
                 disabled={maxCraftable === 0 || isCraftPending}
                 className="w-full"
