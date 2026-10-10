@@ -58,7 +58,7 @@ describe("user cache updates", () => {
       queryFn: () => new Promise<ReturnType<typeof profile>>(() => {}),
     }).catch(() => undefined);
     test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => profile(80) });
-    await updateUserCache(test.client, key, { tutorialEnabled: false });
+    await updateUserCache(test.client, key, { tutorialOn: false });
     await pending;
     expect(test.value()?.userData.money).toBe(80);
     test.close();
@@ -68,7 +68,7 @@ describe("user cache updates", () => {
     const test = setup();
     test.setDatabase(80);
     await test.client.invalidateQueries({ queryKey: key, refetchType: "none" });
-    await updateUserCache(test.client, key, { tutorialEnabled: false });
+    await updateUserCache(test.client, key, { tutorialOn: false });
     expect(test.value()?.userData.money).toBe(80);
     expect(test.reads()).toBe(1);
     test.close();
