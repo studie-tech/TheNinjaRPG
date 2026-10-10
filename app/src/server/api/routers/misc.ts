@@ -43,6 +43,7 @@ import { trackVisitorSchema } from "@/validators/analytics";
 import { confSchema } from "@/validators/combat";
 import { changeSettingSchema } from "@/validators/misc";
 import { awardSchema, awardsFilteringSchema } from "@/validators/reputation";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const miscRouter = createTRPCRouter({
   trackVisitor: publicProcedure
@@ -269,7 +270,7 @@ export const miscRouter = createTRPCRouter({
     }),
   awardReputation: protectedProcedure
     .input(awardSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch admin user
       const admin = await fetchUser(ctx.drizzle, ctx.userId);
@@ -300,7 +301,7 @@ export const miscRouter = createTRPCRouter({
       }));
 
       // Execute both operations in parallel
-      await Promise.all([
+      const [, credited] = await Promise.all([
         // Batch insert all rewards
         ctx.drizzle.insert(userRewards).values(rewardsToInsert),
 
@@ -317,6 +318,15 @@ export const miscRouter = createTRPCRouter({
 
       return {
         success: true,
+        // Reputation changes advance quest and achievement objectives on the next profile fetch.
+        userDelta:
+          !input.reputationAmount &&
+          input.userIds.includes(ctx.userId) &&
+          !admin.energyTrainingQueue?.length &&
+          credited.rowsAffected === users.length &&
+          Number.isInteger(input.moneyAmount ?? 0)
+            ? { money: input.moneyAmount ?? 0 }
+            : undefined,
         message: `Rewards awarded successfully to ${users.length} user(s)`,
       };
     }),

@@ -17,11 +17,12 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent } from "@/utils/permissions";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const avatarRouter = createTRPCRouter({
   createAvatar: protectedProcedure
     .meta({ mcp: { description: "Generate a new AI avatar" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user directly with a query that returns null if not found
       // This handles the case where the user was just created and the record
@@ -44,14 +45,14 @@ export const avatarRouter = createTRPCRouter({
         true,
       );
       if (!avatarUrl) return errorResponse("Failed to create avatar");
+      const userPatch = { avatar: avatarUrl, avatarLight: thumbnailUrl || null };
 
       // Mutate
       const [result] = await Promise.all([
         ctx.drizzle
           .update(userData)
           .set({
-            avatar: avatarUrl,
-            avatarLight: thumbnailUrl || null,
+            ...userPatch,
             reputationPoints: sql`${userData.reputationPoints} - 1`,
           })
           .where(
@@ -59,14 +60,18 @@ export const avatarRouter = createTRPCRouter({
           ),
         ctx.drizzle.insert(historicalAvatar).values({
           userId: ctx.userId,
-          avatar: avatarUrl,
-          avatarLight: thumbnailUrl || null,
+          ...userPatch,
           status: "success",
           done: true,
         }),
       ]);
       if (result.rowsAffected === 1) {
-        return { success: true, message: "Avatar created" };
+        return {
+          success: true,
+          message: "Avatar created",
+          userPatch,
+          userDelta: { reputationPoints: -1 },
+        };
       } else {
         return errorResponse("Failed to upload avatar");
       }
@@ -107,7 +112,7 @@ export const avatarRouter = createTRPCRouter({
   updateAvatar: protectedProcedure
     .meta({ mcp: { description: "Set active avatar from history" } })
     .input(z.object({ avatar: z.number(), type: z.enum(ContentTypes) }))
-    .output(baseServerResponse.extend({ url: z.string().nullish() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, avatar] = await Promise.all([
@@ -132,15 +137,28 @@ export const avatarRouter = createTRPCRouter({
           .set({ avatarLight: thumbnailUrl })
           .where(eq(historicalAvatar.id, input.avatar));
       }
-      // Mutation
-      switch (input.type) {
-        case "user":
-          await ctx.drizzle
-            .update(userData)
-            .set({ avatar: avatar.avatar, avatarLight: thumbnailUrl })
-            .where(eq(userData.userId, ctx.userId));
+      const data =
+        input.type === "user"
+          ? { avatar: avatar.avatar, avatarLight: thumbnailUrl }
+          : undefined;
+      if (
+        data &&
+        (user.avatar !== data.avatar || user.avatarLight !== data.avatarLight)
+      ) {
+        const result = await ctx.drizzle
+          .update(userData)
+          .set(data)
+          .where(eq(userData.userId, ctx.userId));
+        if (result.rowsAffected === 0) {
+          return errorResponse("Could not update avatar. Please try again");
+        }
       }
-      return { success: true, message: "Avatar updated", url: avatar.avatar };
+      return {
+        success: true,
+        message: "Avatar updated",
+        url: avatar.avatar,
+        userPatch: data,
+      };
     }),
   deleteAvatar: protectedProcedure
     .meta({ mcp: { description: "Delete an avatar from history" } })

@@ -82,6 +82,7 @@ import { getEffectiveStructureLevel } from "@/utils/village";
 import {
   checkAssassin,
   checkCoLeader,
+  clanBankDepositSchema,
   clanBoostTypeSchema,
   clanCreateSchema,
   clanGetRequestSchema,
@@ -89,6 +90,7 @@ import {
   strictClanNameField,
 } from "@/validators/clan";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
 
@@ -269,6 +271,7 @@ export const clanRouter = createTRPCRouter({
         clanId: z.string(),
       }),
     )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -292,6 +295,14 @@ export const clanRouter = createTRPCRouter({
         input.reputationPoints,
         HIDEOUT_TOWN_UPGRADE - fetchedClan.repTreasury,
       );
+      if (repsCost === 0) {
+        return {
+          success: true,
+          message: `${user.username} donated 0 reputation points to faction`,
+          userDelta: user.energyTrainingQueue?.length ? undefined : {},
+          userPatch: { clan: { id: fetchedClan.id } },
+        };
+      }
       // Mutate step 1 - update user
       const result = await ctx.drizzle
         .update(userData)
@@ -325,7 +336,6 @@ export const clanRouter = createTRPCRouter({
       } else {
         // Create donation message
         const message = `${user.username} donated ${repsCost} reputation points to faction`;
-        // Log action into database
         await ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
@@ -335,7 +345,17 @@ export const clanRouter = createTRPCRouter({
           relatedMsg: message,
           relatedImage: fetchedClan.image,
         });
-        return { success: true, message };
+        return {
+          success: true,
+          message,
+          userDelta: user.energyTrainingQueue?.length
+            ? undefined
+            : {
+                reputationPoints: -repsCost,
+                // The INT treasury rounds fractional donations; personal reputation is FLOAT.
+                clan: { id: fetchedClan.id, repTreasury: Math.round(repsCost) },
+              },
+        };
       }
     }),
   get: protectedProcedure
@@ -705,7 +725,7 @@ export const clanRouter = createTRPCRouter({
   editClanColor: protectedProcedure
     .meta({ mcp: { description: "Change faction color" } })
     .input(z.object({ clanId: z.string(), color: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -749,7 +769,7 @@ export const clanRouter = createTRPCRouter({
       }
 
       // Create a log entry for the color change
-      await Promise.all([
+      const [, colorResult] = await Promise.all([
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
           userId: ctx.userId,
@@ -768,6 +788,11 @@ export const clanRouter = createTRPCRouter({
       // Create
       return {
         success: true,
+        userDelta:
+          user.energyTrainingQueue?.length || colorResult.rowsAffected === 0
+            ? undefined
+            : { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST },
+        userPatch: { village: { id: fetchedClan.villageId, hexColor: input.color } },
         message: `${groupLabel} color updated`,
       };
     }),
@@ -1064,8 +1089,8 @@ export const clanRouter = createTRPCRouter({
     }),
   toBank: protectedProcedure
     .meta({ mcp: { description: "Deposit ryo to clan bank" } })
-    .input(z.object({ amount: z.number().min(0), clanId: z.string() }))
-    .output(baseServerResponse)
+    .input(clanBankDepositSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, fetchedClan] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -1075,6 +1100,15 @@ export const clanRouter = createTRPCRouter({
       if (user.isBanned) return errorResponse("You are banned");
       if (!user.clanId) return errorResponse("Not in a clan");
       if (fetchedClan?.id !== user.clanId) return errorResponse("Not in the clan");
+      const needsUserRefresh = !!user.energyTrainingQueue?.length;
+      if (input.amount === 0) {
+        return {
+          success: true,
+          message: "Successfully deposited 0 ryo",
+          userDelta: needsUserRefresh ? undefined : {},
+          userPatch: { clan: { id: fetchedClan.id } },
+        };
+      }
       const result = await ctx.drizzle
         .update(userData)
         .set({ money: sql`${userData.money} - ${input.amount}` })
@@ -1082,11 +1116,24 @@ export const clanRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return { success: false, message: "Not enough money in pocket" };
       }
-      await ctx.drizzle
+      const creditResult = await ctx.drizzle
         .update(clan)
         .set({ bank: sql`${clan.bank} + ${input.amount}` })
         .where(eq(clan.id, input.clanId));
-      return { success: true, message: `Successfully deposited ${input.amount} ryo` };
+      if (creditResult.rowsAffected === 0) {
+        await ctx.drizzle
+          .update(userData)
+          .set({ money: sql`${userData.money} + ${input.amount}` })
+          .where(eq(userData.userId, ctx.userId));
+        return errorResponse("Clan bank no longer exists; your deposit was refunded");
+      }
+      return {
+        success: true,
+        message: `Successfully deposited ${input.amount} ryo`,
+        userDelta: needsUserRefresh
+          ? undefined
+          : { money: -input.amount, clan: { id: fetchedClan.id, bank: input.amount } },
+      };
     }),
   purchaseBoost: protectedProcedure
     .meta({ mcp: { description: "Purchase clan stat boost" } })

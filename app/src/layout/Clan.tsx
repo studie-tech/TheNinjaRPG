@@ -1097,7 +1097,7 @@ interface ClanInfoProps {
 
 export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   // Destructure
-  const { userData, updateUser } = useRequireInVillage("/clanhall");
+  const { userData, updateUser, prepareUserUpdate } = useRequireInVillage("/clanhall");
   const { clanData, defaultBackHref } = props;
   const clanId = clanData.id;
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
@@ -1159,8 +1159,19 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const { mutateAsync: editColor, isPending: isEditingColor } =
     api.clan.editClanColor.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, input, revision) => {
         showMutationToast(data);
+        if (data.success)
+          await updateUser(
+            (current) =>
+              current.village &&
+              current.village.id === data.userPatch?.village?.id &&
+              current.clanId === input.clanId
+                ? { village: { ...current.village, hexColor: input.color } }
+                : undefined,
+            { revision, delta: data.userDelta },
+          ).catch(() => undefined);
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1254,8 +1265,14 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const { mutateAsync: clanDonate, isPending: isDonatingReputation } =
     api.clan.clanDonate.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.success)
+          void updateUser(data.userPatch, {
+            revision,
+            delta: data.userDelta,
+          });
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1279,14 +1296,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       if (!data.success) return;
 
       // The debit and treasury credit have committed. Close the stale repeat path
-      // immediately and refresh both authoritative balances independently; a cache
-      // failure must never recreate a costly action or require stale arithmetic.
+      // immediately; a cache failure must never recreate a costly action.
       setDonateReps("");
       setIsDonateModalOpen(false);
-      void Promise.allSettled([
-        utils.profile.getUser.invalidate(),
-        utils.clan.get.invalidate(),
-      ]);
+      void Promise.allSettled([utils.clan.get.invalidate()]);
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
       // Keep the exact draft and confirmation open so the user can safely retry.
@@ -1342,11 +1355,15 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     });
 
   const { mutate: toBank, isPending: isDepositing } = api.clan.toBank.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, {
+            revision,
+            delta: data.userDelta,
+          }),
           utils.clan.get.invalidate(),
         ]);
         toBankForm.reset();
@@ -1478,7 +1495,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       colorForm.reset(data);
       setIsColorModalOpen(false);
       void Promise.allSettled([
-        utils.profile.getUser.invalidate(),
         utils.clan.get.invalidate(),
         utils.village.getSectorOwnerships.invalidate(),
       ]);

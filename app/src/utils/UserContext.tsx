@@ -2,6 +2,8 @@
 
 import { useUser } from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
+import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { atom } from "jotai";
 import { useRouter } from "next/navigation";
 import type Pusher from "pusher-js";
@@ -24,6 +26,12 @@ import type { NavBarDropdownLink } from "@/libs/menus";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { secondsFromDate } from "@/utils/time";
+import {
+  prepareUserUpdate as captureUserUpdate,
+  type UserPatch,
+  type UserUpdateOptions,
+  updateUserCache,
+} from "@/utils/userCache";
 import { canAccessStructure } from "@/utils/village";
 
 /**
@@ -64,7 +72,11 @@ type UserContextValue = {
   isClerkLoaded: boolean;
   /** Server-known auth state until Clerk finishes loading, then Clerk's live state. */
   isSignedIn: boolean;
-  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
+  prepareUserUpdate: () => number | undefined;
+  updateUser: (
+    patch: UserPatch | undefined,
+    mutation?: UserUpdateOptions,
+  ) => Promise<void>;
   updateNotifications: (
     notifications: NavBarDropdownLink[] | undefined,
   ) => Promise<void>;
@@ -81,6 +93,7 @@ export const UserContext = createContext<UserContextValue>({
   userId: null,
   isClerkLoaded: false,
   isSignedIn: false,
+  prepareUserUpdate: () => undefined,
   updateUser: async () => {
     // do nothing
   },
@@ -124,18 +137,19 @@ export function UserContextProvider(props: {
   // Listen on user channel for live updates on things
   const pusher = usePusherHandler(userId, data?.userData);
 
-  // Optimistic user info update function
+  const queryClient = useQueryClient();
+  const userQueryKey = useMemo(
+    () => getQueryKey(api.profile.getUser, undefined, "query"),
+    [],
+  );
+  const prepareUserUpdate = useCallback(
+    () => captureUserUpdate(queryClient, userQueryKey),
+    [queryClient, userQueryKey],
+  );
   const updateUser = useCallback(
-    async (updatedData: Partial<UserWithRelations>) => {
-      await utils.profile.getUser.cancel();
-      utils.profile.getUser.setData(undefined, (old) => {
-        return {
-          ...old,
-          userData: { ...old?.userData, ...updatedData },
-        } as typeof old;
-      });
-    },
-    [utils],
+    (patch: UserPatch | undefined, mutation?: UserUpdateOptions) =>
+      updateUserCache(queryClient, userQueryKey, patch, mutation),
+    [queryClient, userQueryKey],
   );
 
   // Optimistic notification update function
@@ -210,7 +224,8 @@ export function UserContextProvider(props: {
       userId: userId,
       isClerkLoaded: isLoaded,
       isSignedIn: effectiveIsSignedIn,
-      updateUser: updateUser,
+      prepareUserUpdate,
+      updateUser,
       updateNotifications: updateNotifications,
     }),
     [
@@ -224,6 +239,7 @@ export function UserContextProvider(props: {
       userId,
       isLoaded,
       effectiveIsSignedIn,
+      prepareUserUpdate,
       updateUser,
       updateNotifications,
     ],
@@ -270,6 +286,7 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
     data: userData,
     notifications,
     timeDiff,
+    prepareUserUpdate,
     updateUser,
     updateNotifications,
   } = useRequiredUserData();
@@ -296,6 +313,7 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
   return {
     userData,
     notifications,
+    prepareUserUpdate,
     updateUser,
     updateNotifications,
     sectorVillage,

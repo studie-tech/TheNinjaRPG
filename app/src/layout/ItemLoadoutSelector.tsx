@@ -17,7 +17,7 @@ interface ItemLoadoutSelectorProps {
 
 const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // tRPC utility
   const utils = api.useUtils();
@@ -32,11 +32,12 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
 
   // Mutations
   const mutationResult = api.item.selectItemLoadout.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, { revision }),
           utils.item.getUserItems.invalidate(),
           utils.item.getUserItemsWithVariants.invalidate(),
         ]);

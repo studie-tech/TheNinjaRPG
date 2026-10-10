@@ -113,6 +113,7 @@ import {
 } from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
 import {
+  canAssignExperience,
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
 } from "@/libs/profile";
@@ -146,7 +147,7 @@ import {
   AiRule,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
-import type { StatSchemaType } from "@/validators/combat";
+import { type StatSchemaType, statSchema } from "@/validators/combat";
 import {
   type Attribute,
   attributes,
@@ -536,8 +537,8 @@ const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => {
     mutateAsync: updateBattleDescription,
     isPending: isUpdatingBattleDescription,
   } = api.profile.updateBattleDescription.useMutation({
-    onSuccess: async () => {
-      await utils.profile.getUser.invalidate();
+    onSuccess: async (result, input) => {
+      if (result.success) await updateUser(input);
     },
   });
 
@@ -1003,17 +1004,29 @@ const Marriage: React.FC = () => {
  */
 const NewAiAvatar: React.FC = () => {
   // Queries & mutations
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // tRPC utility
   const utils = api.useUtils();
 
   // Create new avatar mutation
   const createAvatar = api.avatar.createAvatar.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
       await Promise.all([
-        utils.profile.getUser.invalidate(),
+        data.success
+          ? updateUser(
+              data.userPatch?.avatar !== undefined &&
+                data.userPatch.avatarLight !== undefined
+                ? {
+                    avatar: data.userPatch.avatar,
+                    avatarLight: data.userPatch.avatarLight,
+                  }
+                : undefined,
+              { revision, delta: data.userDelta },
+            )
+          : utils.profile.getUser.invalidate(),
         utils.avatar.getHistoricalAvatars.invalidate(),
       ]);
     },
@@ -1096,7 +1109,7 @@ interface HistoricalAiAvatarProps {
 export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => {
   // Queries & mutations
   const [lastElement, setLastElement] = useState<HTMLButtonElement | null>(null);
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const { size = "square" } = props;
   const disabledRef = useRef(Boolean(props.disabled));
   const operationGenerationRef = useRef(props.operationGeneration ?? 0);
@@ -1140,7 +1153,15 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
         !disabledRef.current &&
         updateGenerationRef.current === operationGenerationRef.current
       ) {
-        await utils.profile.getUser.invalidate();
+        if (
+          data.userPatch?.avatar !== undefined &&
+          data.userPatch.avatarLight !== undefined
+        )
+          await updateUser({
+            avatar: data.userPatch.avatar,
+            avatarLight: data.userPatch.avatarLight,
+          });
+        else await utils.profile.getUser.invalidate();
         if (
           props.onUpdate &&
           !disabledRef.current &&
@@ -1469,17 +1490,30 @@ const SwapBloodline: React.FC = () => {
  */
 const ResetStats: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const submissionInFlight = useRef(false);
 
   // Mutations
   const { mutateAsync: updateStats, isPending } =
     api.blackmarket.updateStats.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, input, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate().catch(() => undefined);
+          await updateUser(
+            (current) => {
+              const stats = statSchema.parse(input);
+              const updated = { ...current, ...stats };
+              // Capacity changes can add or remove the derived Assign XP notification.
+              if (
+                current.earnedExperience > 0 &&
+                canAssignExperience(current) !== canAssignExperience(updated)
+              )
+                return undefined;
+              return stats;
+            },
+            { revision, delta: data.userDelta },
+          ).catch(() => undefined);
         }
       },
       onError: (error) => {
@@ -1551,7 +1585,7 @@ const ResetStats: React.FC = () => {
  */
 const AvatarChange: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
 
   // Only show if we have userData
@@ -1586,7 +1620,9 @@ const AvatarChange: React.FC = () => {
               return;
             }
             if (serverData?.fileUrl) {
-              setTimeout(() => void utils.profile.getUser.invalidate(), 1000);
+              if ("userPatch" in serverData && serverData.userPatch)
+                void updateUser(serverData.userPatch);
+              else void utils.profile.getUser.invalidate();
             }
           }}
           onUploadError={(error: Error) => {
@@ -1961,8 +1997,7 @@ const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
  */
 const RerollElement: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // Derived
   const activeElements = getUserElements(userData);
@@ -1970,10 +2005,18 @@ const RerollElement: React.FC = () => {
   // Mutations
   const { mutate: roll, isPending: isRolling } =
     api.blackmarket.rerollElement.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(data.userPatch, {
+            revision,
+            delta:
+              data.userPatch?.primaryElement !== undefined &&
+              data.userPatch.secondaryElement !== undefined
+                ? data.userDelta
+                : undefined,
+          });
         }
       },
     });
@@ -2013,8 +2056,7 @@ const RerollElement: React.FC = () => {
  */
 const NameChange: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showNameChangeConfirm, setShowNameChangeConfirm] = useState(false);
   const [isChangingUsername, setIsChangingUsername] = useState(false);
   const [usernameDraft, setUsernameDraft] = useState("");
@@ -2030,7 +2072,24 @@ const NameChange: React.FC = () => {
   );
 
   // Mutations
-  const { mutateAsync: updateUsername } = api.profile.updateUsername.useMutation();
+  const { mutateAsync: updateUsername } = api.profile.updateUsername.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _input, revision) => {
+      if (data.success) {
+        // Cache reconciliation must not make a committed purchase retryable.
+        await updateUser(
+          data.userPatch?.username !== undefined &&
+            data.userPatch.reputationPoints !== undefined
+            ? {
+                username: data.userPatch.username,
+                reputationPoints: data.userPatch.reputationPoints,
+              }
+            : undefined,
+          { revision },
+        ).catch(() => undefined);
+      }
+    },
+  });
 
   const handleUsernameChange = async () => {
     if (usernameRequestRef.current) return;
@@ -2044,7 +2103,6 @@ const NameChange: React.FC = () => {
       if (data.success) {
         // The paid mutation has already committed. A failed cache refresh must
         // not leave the confirmation retryable and charge the user twice.
-        await utils.profile.getUser.invalidate().catch(() => undefined);
         setShowNameChangeConfirm(false);
       } else {
         setUsernameDraft(submittedUsername);
@@ -2157,15 +2215,31 @@ const NameChange: React.FC = () => {
  */
 const CustomTitle: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showCustomTitleConfirm, setShowCustomTitleConfirm] = useState(false);
   const [isUpdatingCustomTitle, setIsUpdatingCustomTitle] = useState(false);
   const customTitleRequestRef = useRef(false);
 
   // Mutations
   const { mutateAsync: updateCustomTitle } =
-    api.blackmarket.updateCustomTitle.useMutation();
+    api.blackmarket.updateCustomTitle.useMutation({
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
+        if (data.success) {
+          // Cache reconciliation must not make a committed purchase retryable.
+          await updateUser(
+            data.userPatch?.customTitle !== undefined &&
+              data.userPatch.reputationPoints !== undefined
+              ? {
+                  customTitle: data.userPatch.customTitle,
+                  reputationPoints: data.userPatch.reputationPoints,
+                }
+              : undefined,
+            { revision },
+          ).catch(() => undefined);
+        }
+      },
+    });
 
   // Title form
   const form = useForm<TitleChangeSchema>({
@@ -2192,7 +2266,6 @@ const CustomTitle: React.FC = () => {
       if (data.success) {
         // The purchase already succeeded at this point; a cache refresh failure
         // must not leave a retryable dialog that could charge the user again.
-        await utils.profile.getUser.invalidate().catch(() => undefined);
         setShowCustomTitleConfirm(false);
       } else {
         form.setValue("title", submittedTitle, {
@@ -2280,8 +2353,7 @@ const CustomTitle: React.FC = () => {
 
 /** Preset-only tavern styling controls. Username and title are separate purchases. */
 const TavernColors: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [usernameColor, setUsernameColor] = useState<TavernColorPreset>(
     userData?.tavernUsernameColor ?? "DEFAULT",
   );
@@ -2297,9 +2369,26 @@ const TavernColors: React.FC = () => {
   }, [userData?.tavernUsernameColor, userData?.tavernTitleColor]);
 
   const updateColor = api.profile.updateTavernColor.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, input, revision) => {
       showMutationToast(data);
-      if (data.success) await utils.profile.getUser.invalidate();
+      if (data.success) {
+        const color =
+          input.target === "username"
+            ? data.userPatch?.tavernUsernameColor
+            : data.userPatch?.tavernTitleColor;
+        await updateUser(
+          color !== undefined && data.userPatch?.reputationPoints !== undefined
+            ? {
+                ...(input.target === "username"
+                  ? { tavernUsernameColor: color }
+                  : { tavernTitleColor: color }),
+                reputationPoints: data.userPatch.reputationPoints,
+              }
+            : undefined,
+          { revision },
+        );
+      }
     },
   });
 
@@ -2444,14 +2533,30 @@ const TavernColors: React.FC = () => {
  */
 const ChangeGender: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showGenderConfirmation, setShowGenderConfirmation] = useState(false);
   const [isChangingGender, setIsChangingGender] = useState(false);
   const genderChangeRequestRef = useRef(false);
 
   // Mutations
-  const { mutateAsync: changeGender } = api.blackmarket.changeUserGender.useMutation();
+  const { mutateAsync: changeGender } = api.blackmarket.changeUserGender.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _input, revision) => {
+      if (data.success) {
+        // Cache reconciliation must not make a committed purchase retryable.
+        await updateUser(
+          data.userPatch?.gender !== undefined &&
+            data.userPatch.reputationPoints !== undefined
+            ? {
+                gender: data.userPatch.gender,
+                reputationPoints: data.userPatch.reputationPoints,
+              }
+            : undefined,
+          { revision },
+        ).catch(() => undefined);
+      }
+    },
+  });
 
   // Gender form
   const form = useForm<GenderChangeSchema>({
@@ -2483,10 +2588,8 @@ const ChangeGender: React.FC = () => {
       const data = await changeGender({ gender: submittedGender });
       showMutationToast(data);
       if (data.success) {
-        // The purchase already succeeded at this point. Refresh gender and balance
-        // from the server once, then close even if the refresh fails, so stale cached
-        // reputation cannot overwrite a concurrent mutation or enable a repeat charge.
-        await utils.profile.getUser.invalidate().catch(() => undefined);
+        // The purchase has committed. Close even if cache reconciliation fails
+        // so retrying the dialog cannot charge again.
         setShowGenderConfirmation(false);
       } else {
         form.setValue("gender", submittedGender, {
@@ -2605,6 +2708,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
 
   // Utility
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // Global tavern toggle
   const { data: globalTavernEnabled = true } =
@@ -2659,10 +2763,11 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
 
   const { mutate: awardExperienceToAll, isPending: isAwardingExperience } =
     api.profile.awardExperienceToAll.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(undefined, { revision, delta: data.userDelta });
         }
       },
     });
@@ -2884,7 +2989,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
  */
 const ResetSkills: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
 
   // Get reset info
@@ -2893,11 +2998,23 @@ const ResetSkills: React.FC = () => {
   // Mutations
   const { mutate: resetSkills, isPending } = api.skillTree.resetSkillPoints.useMutation(
     {
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            updateUser(
+              () => {
+                if (
+                  !data.userPatch?.monthlySkillResets ||
+                  data.userPatch.maxEnergy === undefined ||
+                  !data.userPatch.effectiveMasteries
+                )
+                  return undefined;
+                return { userSkills: [], ...data.userPatch };
+              },
+              { revision, delta: data.userDelta },
+            ),
             utils.skillTree.getUserSkills.invalidate(),
             utils.skillTree.getResetInfo.invalidate(),
           ]);

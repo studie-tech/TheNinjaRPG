@@ -89,10 +89,12 @@ export const EventGainMultiplierPanel: React.FC<{
     api.misc.setEventGameSetting.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        await Promise.all([
-          utils.misc.getSetting.invalidate(),
-          utils.profile.getUser.invalidate(),
-        ]);
+        if (data.success) {
+          await Promise.all([
+            utils.misc.getSetting.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
+        }
       },
     });
 

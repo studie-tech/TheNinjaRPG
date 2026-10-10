@@ -41,6 +41,7 @@ import { availableQuestLetterRanks } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { isRetryableTrpcError } from "@/utils/error";
 import { capitalizeFirstLetter } from "@/utils/string";
+import { useUserData } from "@/utils/UserContext";
 
 interface MissionHallProps {
   userData: NonNullable<UserWithRelations>;
@@ -48,6 +49,7 @@ interface MissionHallProps {
 
 export default function MissionHall({ userData }: MissionHallProps) {
   const util = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useUserData();
   const activeContext = `${userData.userId}:${userData.sector}`;
   const activeContextRef = useRef(activeContext);
   activeContextRef.current = activeContext;
@@ -83,9 +85,13 @@ export default function MissionHall({ userData }: MissionHallProps) {
   );
 
   const { mutate: startRandom, isPending } = api.quests.startRandom.useMutation({
-    onSuccess: async (data) => {
+    onMutate: () => ({ userRevision: prepareUserUpdate() }),
+    onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
-      await util.profile.getUser.invalidate();
+      await updateUser(data.userPatch, {
+        revision: context?.userRevision,
+        achievementProgress: data.achievementProgress,
+      });
     },
   });
 
@@ -105,6 +111,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
     startRequestRef.current = request;
     setPendingQuestId(request.questId);
 
+    const userRevision = prepareUserUpdate();
     try {
       const data = await startQuest({
         questId: request.questId,
@@ -125,7 +132,10 @@ export default function MissionHall({ userData }: MissionHallProps) {
       setCommittedStart({ context: request.context, questId: request.questId });
       setPendingQuestId(null);
       void Promise.allSettled([
-        util.profile.getUser.invalidate(),
+        updateUser(data.userPatch, {
+          revision: userRevision,
+          achievementProgress: data.achievementProgress,
+        }),
         util.quests.missionHall.invalidate(),
       ]);
       return true;

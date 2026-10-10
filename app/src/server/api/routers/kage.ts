@@ -54,7 +54,9 @@ import { canChallengeKage } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";
+
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
 
@@ -608,7 +610,7 @@ export const kageRouter = createTRPCRouter({
       mcp: { description: "Toggle kage challenge availability" },
     })
     .input(z.object({ villageId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch all data in parallel
       const [user, requests, userVillage, lastToggle, dailyLockedTimeSeconds] =
@@ -668,30 +670,39 @@ export const kageRouter = createTRPCRouter({
         }
       }
 
-      // Update village and log the toggle
-      await Promise.all([
-        ctx.drizzle
-          .update(village)
-          .set({
-            openForChallenges: !userVillage.openForChallenges,
-            openForChallengesAt: new Date(),
-          })
-          .where(eq(village.id, input.villageId)),
-        ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "kageChallengeToggle",
-          changes: [
-            `Challenges ${!userVillage.openForChallenges ? "opened" : "closed"}`,
-          ],
-          relatedId: input.villageId,
-          relatedMsg: `Toggle: ${userVillage.openForChallenges ? "CLOSE" : "OPEN"}`,
-        }),
-      ]);
-
+      const availability = {
+        id: input.villageId,
+        openForChallenges: !userVillage.openForChallenges,
+        openForChallengesAt: new Date(),
+      };
+      const result = await ctx.drizzle
+        .update(village)
+        .set({
+          openForChallenges: availability.openForChallenges,
+          openForChallengesAt: availability.openForChallengesAt,
+        })
+        .where(
+          and(
+            eq(village.id, input.villageId),
+            eq(village.kageId, user.userId),
+            eq(village.openForChallenges, userVillage.openForChallenges),
+          ),
+        );
+      if (result.rowsAffected === 0) {
+        return errorResponse("Challenge availability changed. Please try again");
+      }
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        tableName: "kageChallengeToggle",
+        changes: [`Challenges ${availability.openForChallenges ? "opened" : "closed"}`],
+        relatedId: input.villageId,
+        relatedMsg: `Toggle: ${availability.openForChallenges ? "OPEN" : "CLOSE"}`,
+      });
       return {
         success: true,
-        message: `Village is now ${!userVillage.openForChallenges ? "open" : "closed"} for challenges`,
+        message: `Village is now ${availability.openForChallenges ? "open" : "closed"} for challenges`,
+        userPatch: { village: availability },
       };
     }),
 

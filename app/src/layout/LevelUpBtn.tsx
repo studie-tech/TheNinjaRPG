@@ -22,7 +22,7 @@ interface LevelUpBtnProps {
 const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
   // State
   const onMutateCheck = useGlobalOnMutateProtect();
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
   const [showModal, setShowModal] = useState<boolean>(false);
   const [isLevelling, setIsLevelling] = useState<boolean>(false);
 
@@ -37,24 +37,29 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
     onMutate: () => {
       onMutateCheck();
       setIsLevelling(true);
+      return { userRevision: prepareUserUpdate() };
     },
-    onSuccess: async (data) => {
+    onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
       if (data.success) void triggerConfetti();
-      if (currentStep?.title === "Level Up!") {
-        await handleNextStepAsync();
-      }
       if (data.success && userData) {
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, {
+            revision: context?.userRevision,
+            achievementProgress: data.achievementProgress,
+          }),
           utils.profile.getDashboard.invalidate(),
         ]);
+        if (currentStep?.title === "Level Up!") await handleNextStepAsync();
         sendGTMEvent({
           event: "level_up",
           level: userData.level + 1,
           character: userData.userId,
         });
       }
+    },
+    onError: async () => {
+      await utils.profile.getUser.invalidate();
     },
     onSettled: () => {
       document.body.style.cursor = "default";

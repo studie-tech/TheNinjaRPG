@@ -730,6 +730,7 @@ const KageHall: React.FC<{
 const KageChallenge: React.FC<{
   user: NonNullable<UserWithRelations>;
 }> = ({ user }) => {
+  const { updateUser } = useRequiredUserData();
   // tRPC utility
   const utils = api.useUtils();
 
@@ -841,7 +842,10 @@ const KageChallenge: React.FC<{
         if (data.success) {
           await Promise.all([
             utils.village.get.invalidate(),
-            utils.profile.getUser.invalidate(),
+            data.userPatch?.village?.openForChallenges !== undefined &&
+            data.userPatch.village.openForChallengesAt
+              ? updateUser({ village: data.userPatch.village })
+              : utils.profile.getUser.invalidate(),
           ]);
         }
       },

@@ -162,8 +162,8 @@ export const ourFileRouter = {
     .onUploadComplete(async ({ metadata, file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
-      await uploadHistoricalAvatar(file, metadata.userId, true);
-      return moderation;
+      const userPatch = await uploadHistoricalAvatar(file, metadata.userId, true);
+      return { ...moderation, userPatch };
     }),
   avatarSilverUploader: f({ image: { maxFileSize: "1MB" } })
     .middleware(async ({ files }) => ({
@@ -173,8 +173,8 @@ export const ourFileRouter = {
     .onUploadComplete(async ({ metadata, file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
-      await uploadHistoricalAvatar(file, metadata.userId, true);
-      return moderation;
+      const userPatch = await uploadHistoricalAvatar(file, metadata.userId, true);
+      return { ...moderation, userPatch };
     }),
   avatarGoldUploader: f({ image: { maxFileSize: "2MB" } })
     .middleware(async ({ files }) => ({
@@ -184,8 +184,8 @@ export const ourFileRouter = {
     .onUploadComplete(async ({ metadata, file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
-      await uploadHistoricalAvatar(file, metadata.userId, true);
-      return moderation;
+      const userPatch = await uploadHistoricalAvatar(file, metadata.userId, true);
+      return { ...moderation, userPatch };
     }),
   backgroundImageUploader: f({ image: { maxFileSize: "8MB" } })
     .middleware(async ({ files }) => ({
@@ -321,6 +321,7 @@ const uploadHistoricalAvatar = async (
 ) => {
   const fileUrl = servedUfsUrl(file);
   const thumbnailUrl = await createThumbnail(fileUrl);
+  const userPatch = { avatar: fileUrl, avatarLight: thumbnailUrl };
   const promises = [
     drizzleDB.insert(historicalAvatar).values({
       replicateId: null,
@@ -331,13 +332,9 @@ const uploadHistoricalAvatar = async (
       done: true,
     }),
     ...(updateUser
-      ? [
-          drizzleDB
-            .update(userData)
-            .set({ avatar: fileUrl, avatarLight: thumbnailUrl })
-            .where(eq(userData.userId, userId)),
-        ]
+      ? [drizzleDB.update(userData).set(userPatch).where(eq(userData.userId, userId))]
       : []),
   ];
-  await Promise.all(promises);
+  const [, userUpdate] = await Promise.all(promises);
+  return userUpdate?.rowsAffected === 1 ? userPatch : undefined;
 };

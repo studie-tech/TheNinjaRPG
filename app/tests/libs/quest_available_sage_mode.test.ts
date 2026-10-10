@@ -117,3 +117,26 @@ describe("isAvailableUserQuests - requiredSageRank", () => {
     expect(result.message).toContain("Quest requires a higher sage mode rank");
   });
 });
+
+describe("quest eligibility after sage removal", () => {
+  for (const questType of ["mission", "achievement"] as const) {
+    for (const [requiredMode, requiredRank] of [
+      ["sage-fire", null],
+      [null, "MASTER"],
+    ] as const) {
+      it(`requires profile reconciliation for ${questType} gated by ${requiredMode ?? requiredRank}`, () => {
+        const quest = { ...makeQuest(requiredMode, requiredRank), questType };
+        const before = makeUser("sage-fire", 250_000);
+        const after = { ...before, sageModeId: null };
+        expect(isAvailableUserQuests(quest, before, true).check).toBe(true);
+        expect(isAvailableUserQuests(quest, after, true).check).toBe(false);
+      });
+    }
+  }
+  it("preserves eligibility for quests without a sage requirement", () => {
+    const quest = makeQuest(null);
+    const before = makeUser("sage-fire", 250_000);
+    expect(isAvailableUserQuests(quest, before, true).check).toBe(true);
+    expect(isAvailableUserQuests(quest, { ...before, sageModeId: null }, true).check).toBe(true);
+  });
+});

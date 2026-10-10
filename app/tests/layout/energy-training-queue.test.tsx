@@ -1,24 +1,28 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getUserCaps } from "@/drizzle/constants";
 import { EnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
 import type { UserWithRelations } from "@/routers/profile";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { ensureDom } from "../setup-dom.mjs";
 
-type Result = { success: boolean; message: string };
+type Result = UserDeltaResponse;
 type QueueCallbacks = {
+  onMutate: () => { revision: number | undefined };
   onSuccess: (result: Result) => void;
   onError: (error: Error) => void;
   onSettled: (
     result: Result | undefined,
     error: Error | null,
     variables: { entries: unknown[]; guess?: string },
+    context?: { revision: number | undefined },
   ) => Promise<void>;
 };
 type QueueMocks = {
-  invalidate: ReturnType<typeof vi.fn>;
+  invalidate: Mock<() => Promise<void>>;
   mutate: ReturnType<typeof vi.fn>;
+  updateUser: Mock<(patch: unknown, options?: unknown) => Promise<void>>;
   callbacks: QueueCallbacks | null;
 };
 function testMocks(): QueueMocks {
@@ -26,6 +30,9 @@ function testMocks(): QueueMocks {
   globals.__energyQueueMocks ??= {
     invalidate: vi.fn(async () => undefined),
     mutate: vi.fn(),
+    updateUser: vi.fn(async (patch: unknown) => {
+      if (!patch) await testMocks().invalidate();
+    }),
     callbacks: null,
   };
   return globals.__energyQueueMocks;
@@ -43,6 +50,12 @@ vi.mock("@/app/_trpc/client", () => ({
       },
     },
   },
+}));
+vi.mock("@/utils/UserContext", () => ({
+  useRequiredUserData: () => ({
+    prepareUserUpdate: () => 7,
+    updateUser: testMocks().updateUser,
+  }),
 }));
 vi.mock("@/layout/ContentBox", () => ({
   default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -73,7 +86,7 @@ const user = {
 
 describe("Energy queue captcha recovery", () => {
   it.each([
-    { success: true, message: "Training queue saved" },
+    { success: true, message: "Training queue saved", userPatch: { energyTrainingQueue: [{ stat: "offence" as const, energy: 100 }], curEnergy: 50 } },
     { success: false, message: "Invalid captcha" },
   ])(
     "refreshes a consumed captcha after $message so another edit can proceed",
@@ -96,10 +109,11 @@ describe("Energy queue captcha recovery", () => {
       );
       await act(async () => {
         mocks.callbacks?.onSuccess(result);
-        await mocks.callbacks?.onSettled(result, null, mocks.mutate.mock.lastCall?.[0]);
+        await mocks.callbacks?.onSettled(result, null, mocks.mutate.mock.lastCall?.[0], mocks.callbacks?.onMutate());
       });
       expect(refreshCaptcha).toHaveBeenCalledTimes(1);
-      expect(mocks.invalidate).toHaveBeenCalledTimes(1);
+      expect(mocks.updateUser).toHaveBeenCalledWith(result.success ? result.userPatch : undefined, expect.objectContaining({ revision: 7 }));
+      expect(mocks.invalidate).toHaveBeenCalledTimes(result.success ? 0 : 1);
       fireEvent.click(view.getByRole("button", { name: "Add to queue" }));
       expect(mocks.mutate).toHaveBeenLastCalledWith(
         expect.objectContaining({ guess: "next challenge" }),
@@ -146,14 +160,25 @@ describe("Energy queue captcha recovery", () => {
     fireEvent.click(view.getByRole("button", { name: "Clear queue" }));
     await act(async () => {
       await mocks.callbacks?.onSettled(
-        { success: true, message: "Training queue cleared" },
+        { success: true, message: "Training queue cleared", userPatch: { energyTrainingQueue: [] } },
         null,
         mocks.mutate.mock.lastCall?.[0],
+        mocks.callbacks?.onMutate(),
       );
     });
     expect(refreshCaptcha).not.toHaveBeenCalled();
+    expect(mocks.updateUser).toHaveBeenCalledWith({ energyTrainingQueue: [] }, expect.objectContaining({ revision: 7 }));
+    expect(mocks.invalidate).not.toHaveBeenCalled();
+  });
+  it("refreshes when a successful save requires broader automatic reconciliation", async () => {
+    render(<EnergyTrainingQueue user={user} availableEnergy={100} getGuess={() => ""} refreshCaptcha={async () => {}} />);
+    await act(async () => {
+      await mocks.callbacks?.onSettled({ success: true, message: "Training queue saved" }, null, { entries: [] }, mocks.callbacks?.onMutate());
+    });
+    expect(mocks.updateUser).toHaveBeenCalledWith(undefined, expect.objectContaining({ revision: 7 }));
     expect(mocks.invalidate).toHaveBeenCalledTimes(1);
   });
+
 });
 
 

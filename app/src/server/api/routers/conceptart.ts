@@ -31,6 +31,7 @@ import {
   getTimeFrameinSeconds,
 } from "@/validators/art";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import type { DrizzleClient } from "../../db";
 
 export const CONCEPT_PROMPT = `, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, dramatic`;
@@ -99,7 +100,7 @@ export const conceptartRouter = createTRPCRouter({
     }),
   create: protectedProcedure
     .input(conceptArtPromptSchema)
-    .output(baseServerResponse.extend({ imageId: z.string().optional().nullable() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -131,29 +132,42 @@ export const conceptartRouter = createTRPCRouter({
       if (!imageUrl) return errorResponse("Failed to create image");
       // Mutate
       const imageId = nanoid();
-      await Promise.all([
-        ctx.drizzle
-          .update(userData)
-          .set({
-            reputationPoints: sql`${userData.reputationPoints}- ${COST_CONCEPT_IMAGE}`,
-          })
-          .where(eq(userData.userId, ctx.userId)),
-        ctx.drizzle.insert(conceptImage).values({
-          id: imageId,
-          userId: ctx.userId,
-          prompt: input.prompt,
-          seed: input.seed,
-          status: "success",
-          image: imageUrl,
-          mediaType: "image",
-          done: true,
-        }),
-      ]);
-      return { success: true, message: "Image created", imageId };
+      const debit = await ctx.drizzle
+        .update(userData)
+        .set({
+          reputationPoints: sql`${userData.reputationPoints} - ${COST_CONCEPT_IMAGE}`,
+        })
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.reputationPoints, COST_CONCEPT_IMAGE),
+          ),
+        );
+      if (debit.rowsAffected === 0) {
+        return errorResponse("Not enough reputation points");
+      }
+      await ctx.drizzle.insert(conceptImage).values({
+        id: imageId,
+        userId: ctx.userId,
+        prompt: input.prompt,
+        seed: input.seed,
+        status: "success",
+        image: imageUrl,
+        mediaType: "image",
+        done: true,
+      });
+      return {
+        success: true,
+        message: "Image created",
+        imageId,
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : { reputationPoints: -COST_CONCEPT_IMAGE },
+      };
     }),
   createVideo: protectedProcedure
     .input(conceptVideoPromptSchema)
-    .output(baseServerResponse.extend({ videoId: z.string().optional().nullable() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -235,7 +249,14 @@ export const conceptartRouter = createTRPCRouter({
           mediaType: "video",
           done: false,
         });
-        return { success: true, message: "Video generation started", videoId };
+        return {
+          success: true,
+          message: "Video generation started",
+          videoId,
+          userDelta: user.energyTrainingQueue?.length
+            ? undefined
+            : { reputationPoints: -COST_CONCEPT_VIDEO },
+        };
       } catch (error) {
         // Restore reputation points on failure
         await ctx.drizzle

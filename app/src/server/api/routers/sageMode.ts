@@ -27,6 +27,7 @@ import { SageModeValidator } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
 import type { SageModeFilteringSchema } from "@/validators/sageMode";
 import { sageModeFilteringSchema } from "@/validators/sageMode";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /**
  * Strip per-tag duration before writing a SageMode row. Duration lives on
@@ -273,7 +274,7 @@ export const sageModeRouter = createTRPCRouter({
    * the write is compare-and-swapped in `updateSageMode`.
    */
   removeSageMode: protectedProcedure
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!user.sageModeId) {
@@ -288,7 +289,13 @@ export const sageModeRouter = createTRPCRouter({
         return errorResponse("You do not have enough reputation points");
       }
       await updateSageMode(ctx.drizzle, user, REMOVAL_COST, "SageMode Removed");
-      return { success: true, message: `Sage Mode removed for ${REMOVAL_COST} reps` };
+      return {
+        success: true,
+        message: `Sage Mode removed for ${REMOVAL_COST} reps`,
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : { reputationPoints: -REMOVAL_COST },
+      };
     }),
 });
 

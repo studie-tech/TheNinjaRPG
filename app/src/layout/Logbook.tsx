@@ -843,6 +843,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
  */
 export const useCheckRewards = () => {
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const openRewardChoice = useOpenRewardChoice();
 
   // Tutorial step
@@ -851,7 +852,8 @@ export const useCheckRewards = () => {
   // Mutations
   const { mutate: checkRewards, isPending: isCheckingRewards } =
     api.quests.checkRewards.useMutation({
-      onSuccess: async (data, variables) => {
+      onMutate: () => ({ userRevision: prepareUserUpdate() }),
+      onSuccess: async (data, variables, context) => {
         // If a failutre, show a toast
         if (!data.success && "message" in data) {
           showMutationToast({ success: data.success, message: data.message });
@@ -862,7 +864,11 @@ export const useCheckRewards = () => {
         }
         // Update state
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, {
+            revision: context?.userRevision,
+            delta: data.userDelta,
+            achievementProgress: data.achievementProgress,
+          }),
           utils.profile.getDashboard.invalidate(),
           utils.quests.getQuestHistory.invalidate(),
           utils.quests.allianceBuilding.invalidate(),
@@ -877,8 +883,10 @@ export const useCheckRewards = () => {
           await handleNextStepAsync();
         }
         // If there is a userQuest, show the rewards
-        if ("userQuest" in data && data.userQuest) {
-          const { notifications, rewards, userQuest, resolved, badges } = data;
+        if (data.userQuest && data.rewards) {
+          const { rewards, userQuest, resolved } = data;
+          const notifications = data.notifications ?? [];
+          const badges = data.badges ?? [];
           const quest = userQuest.quest;
           const showToast =
             notifications.length > 0 ||

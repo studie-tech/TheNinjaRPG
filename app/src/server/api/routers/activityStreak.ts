@@ -18,7 +18,7 @@ import {
 import { getRewardPreview } from "@/libs/objectives";
 import { postProcessRewards } from "@/libs/quest";
 import { fetchUser } from "@/routers/profile";
-import { updateRewards } from "@/server/api/routers/quests";
+import { getRewardUserDelta, updateRewards } from "@/server/api/routers/quests";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -26,6 +26,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { canChangeContent } from "@/utils/permissions";
 import { isToday, isWithinDateRange } from "@/utils/time";
 import {
@@ -36,10 +37,7 @@ import {
 } from "@/validators/activityStreak";
 import { idSchema } from "@/validators/misc";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
-
-const getDefaultRewards = (): ObjectiveRewardType => {
-  return ObjectiveReward.parse({});
-};
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const activityStreakRouter = createTRPCRouter({
   // ===== Player Endpoints =====
@@ -260,7 +258,7 @@ export const activityStreakRouter = createTRPCRouter({
   purchaseEventPass: protectedProcedure
     .meta({ mcp: { description: "Purchase an event pass" } })
     .input(purchaseEventPassSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch purchase requirements and both current and historical ownership in parallel.
       const [user, config, existingProgress, completionLogs] = await Promise.all([
@@ -389,6 +387,15 @@ export const activityStreakRouter = createTRPCRouter({
       return {
         success: true,
         message: `Purchased "${config.name}" for ${costText}!`,
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : {
+              ...(config.ryoCost > 0 ? { money: -config.ryoCost } : {}),
+              ...(config.repsCost > 0 ? { reputationPoints: -config.repsCost } : {}),
+              ...(config.seichiSilverCost > 0
+                ? { seichiSilver: -config.seichiSilverCost }
+                : {}),
+            },
       };
     }),
 
@@ -396,7 +403,7 @@ export const activityStreakRouter = createTRPCRouter({
   claimStreakDay: protectedProcedure
     .meta({ mcp: { description: "Claim daily streak reward" } })
     .input(claimStreakDaySchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch user, config, and progress in parallel
       const [user, config, existingProgress, completionLogs] = await Promise.all([
@@ -452,28 +459,29 @@ export const activityStreakRouter = createTRPCRouter({
         : undefined;
       const normalizedCompletion = !!existingProgress && progress !== existingProgress;
 
-      // For RECURRING: auto-create progress if doesn't exist. Concurrent first
-      // claims can both reach this branch, so tolerate the row already existing and
-      // read back whichever insert won; the lastClaimDate guard below then rejects
-      // the loser with a normal error response.
+      // Successful creation already supplies the progress snapshot. Only a duplicate
+      // first claim needs the winning row; lastClaimDate still guards the payout.
       if (!progress && config.streakType === "RECURRING") {
-        await ctx.drizzle
-          .insert(userStreakProgress)
-          .values({
-            id: nanoid(),
-            userId: ctx.userId,
-            configId: config.id,
-            currentDay: 0,
-            lastClaimDate: null,
-            startedAt: new Date(),
-          })
-          .onDuplicateKeyUpdate({ set: { id: sql`id` } });
-        progress = await ctx.drizzle.query.userStreakProgress.findFirst({
-          where: and(
-            eq(userStreakProgress.userId, ctx.userId),
-            eq(userStreakProgress.configId, config.id),
-          ),
-        });
+        const createdProgress = {
+          id: nanoid(),
+          userId: ctx.userId,
+          configId: config.id,
+          currentDay: 0,
+          lastClaimDate: null,
+          startedAt: now,
+        };
+        try {
+          await ctx.drizzle.insert(userStreakProgress).values(createdProgress);
+          progress = createdProgress;
+        } catch (error) {
+          if (!isMysqlDuplicateKeyError(error)) throw error;
+          progress = await ctx.drizzle.query.userStreakProgress.findFirst({
+            where: and(
+              eq(userStreakProgress.userId, ctx.userId),
+              eq(userStreakProgress.configId, config.id),
+            ),
+          });
+        }
       }
 
       // Guard: must have progress (for EVENT_PASS, means must be purchased)
@@ -575,7 +583,8 @@ export const activityStreakRouter = createTRPCRouter({
 
       // Get rewards for this day
       const dayReward = config.rewards.find((r) => r.dayNumber === newCurrentDay);
-      const rewards = dayReward?.rewards ?? getDefaultRewards();
+      // Stored rewards can predate added fields; apply their schema defaults before payout.
+      const rewards = ObjectiveReward.parse(dayReward?.rewards ?? {});
       // Check if this completes the streak
       const isComplete = newCurrentDay >= config.totalDays;
 
@@ -690,6 +699,12 @@ export const activityStreakRouter = createTRPCRouter({
       return {
         success: true,
         message: `Day ${newCurrentDay} claimed! ${resetMsg}${catchUpMsg}${rewardText}${completeMsg}`,
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : getRewardUserDelta(
+              processedRewards,
+              paidCatchUp ? COST_STREAK_CATCHUP_DAY : 0,
+            ),
       };
     }),
 

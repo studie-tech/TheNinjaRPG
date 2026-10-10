@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,22 +16,36 @@ import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useUserData } from "@/utils/UserContext";
+import type { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const Bloodright = () => {
   const utils = api.useUtils();
-  const { data: user } = useRequiredUserData();
+  const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { data, isPending, isError, refetch } = api.bloodright.get.useQuery();
-  const onSuccess = async (result: { success: boolean; message: string }) => {
+  const onSuccess = async (
+    result: z.infer<typeof userDeltaResponseSchema>,
+    _input: unknown,
+    revision: number | undefined,
+  ) => {
     showMutationToast(result);
     if (result.success)
       await Promise.all([
         utils.bloodright.get.invalidate(),
-        utils.profile.getUser.invalidate(),
+        updateUser(result.userPatch, {
+          revision,
+          delta: result.userPatch?.bloodright ? result.userDelta : undefined,
+        }),
       ]);
   };
-  const purchase = api.bloodright.purchase.useMutation({ onSuccess });
-  const refund = api.bloodright.refund.useMutation({ onSuccess });
+  const purchase = api.bloodright.purchase.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess,
+  });
+  const refund = api.bloodright.refund.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess,
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const isMutating = purchase.isPending || refund.isPending;
@@ -176,14 +191,24 @@ export const Bloodright = () => {
 
 export const ResetBloodright = () => {
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useUserData();
   const { data: info, isError, refetch } = api.skillTree.getResetInfo.useQuery();
   const reset = api.bloodright.reset.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _input, revision) => {
       showMutationToast(result);
       if (result.success)
         await Promise.all([
           utils.bloodright.get.invalidate(),
-          utils.profile.getUser.invalidate(),
+          updateUser(result.userPatch, {
+            revision,
+            delta:
+              result.userPatch?.bloodright &&
+              result.userPatch.bloodrightSpent !== undefined &&
+              result.userPatch.monthlySkillResets
+                ? result.userDelta
+                : undefined,
+          }),
           utils.skillTree.getResetInfo.invalidate(),
         ]);
     },

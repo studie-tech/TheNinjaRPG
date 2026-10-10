@@ -34,6 +34,8 @@ import {
   userSkill,
 } from "@/drizzle/schema";
 import type { MasterySources } from "@/libs/mastery";
+import { effectiveMasteries } from "@/libs/mastery";
+import { calcMaxEnergy } from "@/libs/profile";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
@@ -63,6 +65,7 @@ import {
   skillTreeFilteringSchema,
   skillTreeFolderSchema,
 } from "@/validators/skillTree";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const skillTreeRouter = createTRPCRouter({
   // Get all skill names for selectors
@@ -540,16 +543,17 @@ export const skillTreeRouter = createTRPCRouter({
   // Reset user's skill points (clear all skills and refund points)
   resetSkillPoints: protectedProcedure
     .meta({ mcp: { description: "Reset user's skill tree" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user data
-      const [{ user }, monthlyResets] = await Promise.all([
+      const [updatedUser, monthlyResets] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
         fetchMonthlyResets(ctx.drizzle, ctx.userId),
       ]);
+      const { user } = updatedUser;
       // Guard
       if (!user) return errorResponse("User not found");
 
@@ -625,8 +629,22 @@ export const skillTreeRouter = createTRPCRouter({
 
       await Promise.all(writes);
 
+      const maxEnergy = calcMaxEnergy({ ...user, userSkills: [] });
       return {
         success: true,
+        userDelta: updatedUser.requiresUserRefresh
+          ? undefined
+          : isFreeReset
+            ? {}
+            : { reputationPoints: -COST_SKILL_RESET },
+        userPatch: {
+          monthlySkillResets: {
+            ...resetState,
+            count: resetState.count + (isStaffFreeReset ? 0 : 1),
+          },
+          maxEnergy,
+          effectiveMasteries: effectiveMasteries({ ...user, userSkills: [] }),
+        },
         message: `Skills points reset!${isFreeReset ? (isStaffFreeReset ? " (Free for staff member)" : ` (Free for ${federalStatus} supporter)`) : ""}`,
       };
     }),

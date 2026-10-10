@@ -59,7 +59,7 @@ export default function Occupations() {
   const utils = api.useUtils();
 
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const [selectedOccupation, setSelectedOccupation] = useState<OccupationType | null>(
     null,
   );
@@ -88,7 +88,12 @@ export default function Occupations() {
         if (data?.success) {
           setSelectedOccupation(null);
           setChangeDialogOpen(false);
-          await utils.profile.getUser.invalidate();
+          if (data.userPatch?.occupation && data.userPatch.occupationSignupAt) {
+            await updateUser({
+              occupation: data.userPatch.occupation,
+              occupationSignupAt: data.userPatch.occupationSignupAt,
+            });
+          } else await utils.profile.getUser.invalidate();
         }
       },
     });

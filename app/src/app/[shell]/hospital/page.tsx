@@ -1,4 +1,5 @@
 "use client";
+
 import { Clock, FastForward, Hand, ScanHeart } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -26,32 +27,47 @@ import { calcIsInVillage } from "@/libs/travel";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequireInVillage } from "@/utils/UserContext";
+import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
 
 export default function Hospital() {
   // Settings
-  const { userData, notifications, access, timeDiff, updateUser, updateNotifications } =
+  const { userData, access, timeDiff, prepareUserUpdate, updateUser } =
     useRequireInVillage("/hospital");
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
   // Current interest
+  const utils = api.useUtils();
   const boost = getStrucBoost("hospitalSpeedupPerLvl", userData?.village?.structures);
 
   // Mutations
   const { mutate: heal, isPending } = api.hospital.npcHeal.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
       if (result.success && result.data) {
-        await updateNotifications(notifications?.filter((n) => n.href !== "/hospital"));
-        await updateUser({
-          curHealth: result.data.curHealth,
-          curEnergy: result.data.curEnergy,
-          maxEnergy: result.data.maxEnergy,
-          money: result.data.money,
-          regenAt: result.data.regenAt,
-          status: "AWAKE",
-        });
+        await updateUser(
+          {
+            curHealth: result.data.curHealth,
+            curEnergy: result.data.curEnergy,
+            maxEnergy: result.data.maxEnergy,
+            money: result.data.money,
+            regenAt: result.data.regenAt,
+            status: "AWAKE",
+          },
+          { revision },
+        );
+        // A newer hospitalization must retain its notification after reconciliation.
+        utils.profile.getUser.setData(undefined, (current) =>
+          current?.userData?.status === "AWAKE"
+            ? {
+                ...current,
+                notifications: current.notifications?.filter(
+                  (n) => n.href !== "/hospital",
+                ),
+              }
+            : undefined,
+        );
       }
     },
   });
@@ -141,11 +157,7 @@ export default function Hospital() {
         <p className="p-3">You are not hospitalized.</p>
       )}
       {!isPending && !isHospitalized && canHealOthers && (
-        <HealOthersComponent
-          userData={userData}
-          timeDiff={timeDiff}
-          updateUser={updateUser}
-        />
+        <HealOthersComponent userData={userData} timeDiff={timeDiff} />
       )}
       {isPending && <Loader explanation="Healing User" />}
     </ContentBox>
@@ -161,12 +173,12 @@ export default function Hospital() {
 interface HealOthersComponentProps {
   userData: NonNullable<UserWithRelations>;
   timeDiff: number;
-  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
 }
 
 const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   // Settings
-  const { userData, timeDiff, updateUser } = props;
+  const { userData, timeDiff } = props;
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
 
   const pools = calcMedninHealablePool(userData);
   const medninRank = calcMedninRank(userData);
@@ -176,11 +188,12 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
 
   // Mutations
   const { mutate: userHeal, isPending } = api.hospital.userHeal.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       void utils.hospital.getHospitalizedUsers.invalidate();
       if (data.success && data.healer) {
-        await updateUser(data.healer);
+        await updateUser(data.healer, { revision });
       }
     },
   });

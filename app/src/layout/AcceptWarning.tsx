@@ -20,7 +20,7 @@ const AcceptWarning: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   // Query
-  const { data: userData } = useUserData();
+  const { data: userData, updateUser } = useUserData();
   const { data: report } = api.reports.getBan.useQuery(undefined, {
     enabled: !!userData?.isWarned,
   });
@@ -34,7 +34,7 @@ const AcceptWarning: React.FC = () => {
       if (data.success) {
         setIsModalOpen(false);
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser({ isWarned: false }),
           utils.reports.getBan.invalidate(),
         ]);
       }

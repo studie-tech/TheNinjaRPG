@@ -4,6 +4,7 @@ import { eq, type SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { quest, questHistory, userData } from "@/drizzle/schema";
+import { getNewTrackers } from "@/libs/quest";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import {
   claimRewardChoiceTrackers,
@@ -68,6 +69,14 @@ const makeUser = (retryDelay: "none" | "daily" = "none") => {
       role: "USER",
       level: 30,
       maxEnergy: 100,
+      curEnergy: 30,
+      money: 100,
+      seichiSilver: 0,
+      earnedExperience: 20,
+      reputationPoints: 10,
+      reputationPointsTotal: 10,
+      villagePrestige: 5,
+      missionsD: 0,
       villageId: "village-1",
       clanId: null,
       anbuId: null,
@@ -170,6 +179,45 @@ const makeGatheringClient = () => {
 };
 
 describe("commitQuestObjectiveRewards compatibility", () => {
+  it("does not regenerate a completed repeatable mission tracker from its closed history", async () => {
+    const { user, missionHistory } = makeUser();
+    const history = { ...missionHistory, quest: { ...missionHistory.quest, maxCompletes: 3 } };
+    const hydrated = { ...user, userQuests: [history, ...user.userQuests.slice(1)] };
+    const { client } = makeClient([
+      { rowsAffected: 1 }, { rowsAffected: 1 }, { rowsAffected: 1 }, { rowsAffected: 0 },
+    ]);
+    const result = await commitQuestObjectiveRewards({
+      client, userId: user.userId, user: hydrated as never, rewards: rewards(),
+      trackers: [], userQuest: history as never, resolved: true,
+      notifications: [], consequences: [], existingHistory: history,
+    });
+    expect(result).toMatchObject({ outcome: "claimed", userCacheEligible: true });
+    expect(hydrated.userQuests.some((entry) => entry.questId === history.questId)).toBe(false);
+    expect(getNewTrackers(hydrated as never, [{ task: "any" }]).trackers.some((tracker) => tracker.id === history.questId)).toBe(false);
+  });
+
+  it.each([0, 1])("projects accepted completion and requires reconciliation when %s farm timers change", async (farmRows) => {
+    const { user, missionHistory } = makeUser();
+    const { client, sets } = makeClient([
+      { rowsAffected: 1 },
+      { rowsAffected: 1 },
+      { rowsAffected: 1 },
+      { rowsAffected: farmRows },
+    ]);
+    const claimRewards = PostProcessedRewardSchema.parse({ reward_money: 50, reward_exp: 10 });
+    const result = await commitQuestObjectiveRewards({
+      client, userId: user.userId, user: user as never,
+      rewards: claimRewards, trackers: [], userQuest: missionHistory as never,
+      resolved: true, notifications: [], consequences: [], existingHistory: missionHistory,
+    });
+    expect(result).toMatchObject({ outcome: "claimed", userCacheEligible: farmRows === 0,
+      userDelta: { money: 50, earnedExperience: 10 } });
+    expect(user).toMatchObject({ money: 150, earnedExperience: 30, curEnergy: 50,
+      missionsD: 1, completedQuests: [{ id: missionHistory.id, questId: "mission-1", completed: 1 }] });
+    expect(missionHistory).toMatchObject({ completed: 1, endAt: expect.any(Date), previousCompletes: 1 });
+    expect(sets).toHaveLength(4);
+  });
+
   it.each([
     ["mission", true, 20],
     ["battlepyramid", true, 100],

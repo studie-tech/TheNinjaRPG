@@ -41,8 +41,9 @@ import {
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
 import { canChangeContent } from "@/utils/permissions";
-import { formatSecondsToTimeDisplay } from "@/utils/time";
+import { formatSecondsToTimeDisplay, getSecondPrecisionDate } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure
@@ -63,7 +64,7 @@ export const occupationRouter = createTRPCRouter({
   selectOccupation: protectedProcedure
     .meta({ mcp: { description: "Select a crafting occupation" } })
     .input(z.object({ occupation: z.enum(OCCUPATIONS) }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -85,13 +86,40 @@ export const occupationRouter = createTRPCRouter({
         }
       }
 
-      // Update user occupation
-      await ctx.drizzle
+      // Preserve the second precision of NOW() while returning the exact timestamp written.
+      const occupationSignupAt = getSecondPrecisionDate();
+      if (
+        user.occupation === input.occupation &&
+        user.occupationSignupAt?.getTime() === occupationSignupAt.getTime()
+      ) {
+        return {
+          success: true,
+          message: "Occupation selected successfully!",
+          userPatch: { occupation: input.occupation, occupationSignupAt },
+        };
+      }
+      const result = await ctx.drizzle
         .update(userData)
-        .set({ occupation: input.occupation, occupationSignupAt: sql`NOW()` })
-        .where(eq(userData.userId, ctx.userId));
-
-      return { success: true, message: "Occupation selected successfully!" };
+        .set({ occupation: input.occupation, occupationSignupAt })
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            user.occupation === null
+              ? isNull(userData.occupation)
+              : eq(userData.occupation, user.occupation),
+            user.occupationSignupAt === null
+              ? isNull(userData.occupationSignupAt)
+              : eq(userData.occupationSignupAt, user.occupationSignupAt),
+          ),
+        );
+      if (result.rowsAffected === 0) {
+        return errorResponse("Occupation changed while saving. Please try again");
+      }
+      return {
+        success: true,
+        message: "Occupation selected successfully!",
+        userPatch: { occupation: input.occupation, occupationSignupAt },
+      };
     }),
 
   craftItem: protectedProcedure

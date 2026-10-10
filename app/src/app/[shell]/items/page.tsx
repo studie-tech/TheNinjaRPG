@@ -79,7 +79,7 @@ import { displayCostType } from "@/validators/item";
 export default function MyItems() {
   // State
   const availableTabs = ["normal", "event", "materials", "cooking"];
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [activeTab, setActiveTab] = useState<(typeof availableTabs)[number]>("normal");
   const [isBuyItemSlotOpen, setIsBuyItemSlotOpen] = useState(false);
   const buyItemSlotInFlight = useRef(false);
@@ -99,10 +99,11 @@ export default function MyItems() {
   // Mutations
   const { mutate: buyItemSlot, isPending: isBuyingItemSlot } =
     api.blackmarket.buyItemSlot.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(undefined, { revision, delta: data.userDelta });
           setIsBuyItemSlotOpen(false);
         }
       },
@@ -130,12 +131,13 @@ export default function MyItems() {
 
   const { mutate: mutateRepairAll, isPending: isRepairingAll } =
     api.item.useRepairAll.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, { revision, delta: data.userDelta }),
           ]);
         }
       },
@@ -143,12 +145,13 @@ export default function MyItems() {
 
   const { mutate: mutateRepairAllRyo, isPending: isRepairingAllRyo } =
     api.item.repairAll.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, { revision, delta: data.userDelta }),
           ]);
         }
       },
@@ -156,11 +159,13 @@ export default function MyItems() {
 
   const { mutate: unequipAllItems, isPending: isUnequippingAll } =
     api.item.unequipAllItems.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (!data.success) return;
         await Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, { revision, delta: data.userDelta }),
           utils.item.getItemLoadouts.invalidate(),
         ]);
       },
@@ -771,6 +776,7 @@ interface BackpackProps {
 const Backpack: React.FC<BackpackProps> = (props) => {
   // Destructure
   const { useritems, allUserItems, userData } = props;
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // State
   const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
@@ -862,7 +868,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
 
   const { mutate: mutateRepairItem, isPending: isUsingRepairItem } =
     api.item.useRepairItem.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           setIsRepairModalOpen(false);
@@ -870,7 +877,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, { revision, delta: data.userDelta }),
           ]);
         }
       },
@@ -878,13 +885,14 @@ const Backpack: React.FC<BackpackProps> = (props) => {
 
   const { mutate: mutateRepairWithRyo, isPending: isRepairingWithRyo } =
     api.item.repair.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           onSettled();
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, { revision, delta: data.userDelta }),
           ]);
         }
       },
@@ -1343,6 +1351,7 @@ interface CharacterProps {
 const Character: React.FC<CharacterProps> = (props) => {
   // Set state
   const { useritems, userData } = props;
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const [slot, setSlot] = useState<ItemSlot | undefined>(undefined);
   const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
     undefined,
@@ -1425,7 +1434,8 @@ const Character: React.FC<CharacterProps> = (props) => {
 
   const { mutate: mutateRepairItem, isPending: isUsingRepairItem } =
     api.item.useRepairItem.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           setIsRepairModalOpen(false);
@@ -1433,7 +1443,7 @@ const Character: React.FC<CharacterProps> = (props) => {
           setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, { revision, delta: data.userDelta }),
           ]);
         }
       },
@@ -1441,14 +1451,15 @@ const Character: React.FC<CharacterProps> = (props) => {
 
   const { mutate: mutateRepairWithRyo, isPending: isRepairingWithRyo } =
     api.item.repair.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           setShowItemDetails(false);
           setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, { revision, delta: data.userDelta }),
           ]);
         }
       },
@@ -1703,6 +1714,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   onClose,
 }) => {
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const [isOpen, setIsOpen] = useState(true);
   const variants = userItem.item.variants ?? [];
 
@@ -1723,12 +1735,13 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
     ) ?? [];
 
   const purchase = api.item.purchaseVariant.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
       if (result.success) {
         await Promise.all([
           utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
-          utils.profile.getUser.invalidate(),
+          updateUser(undefined, { revision, delta: result.userDelta }),
         ]);
       }
     },

@@ -7,6 +7,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
+import { isAvailableUserQuests } from "@/libs/quest";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -24,16 +25,56 @@ interface CurrentSageModeProps {
 
 /** Equipped-mode viewer and reputation-paid removal control. */
 export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
-  const { data: userData } = useRequiredUserData();
+  const {
+    data: userData,
+    achievementProgress,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const utils = api.useUtils();
   const { data, isFetching } = api.sageMode.get.useQuery({ id: props.sageModeId }, {});
 
   const { mutate: remove, isPending: isRemoving } =
     api.sageMode.removeSageMode.useMutation({
-      onSuccess: async (result) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (result, _variables, revision) => {
         showMutationToast(result);
         if (result.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(
+            (current) => {
+              const patch = { sageModeId: null, sageMode: null };
+              const afterRemoval = { ...current, ...patch };
+              const catalogue = utils.quests.getAchievementCatalogue.getData();
+              // Published achievements leave userQuests; their eligibility still
+              // determines which progress rows the full profile contains.
+              if (achievementProgress?.length && !catalogue) return undefined;
+              if (
+                achievementProgress?.some(
+                  (entry) => !catalogue?.some((quest) => quest.id === entry.questId),
+                )
+              ) {
+                return undefined;
+              }
+              const quests = [
+                ...current.userQuests.map((entry) => ({ ...entry.quest, ...entry })),
+                ...(achievementProgress ?? []).flatMap((entry) => {
+                  const quest = catalogue?.find((quest) => quest.id === entry.questId);
+                  return quest ? [{ ...quest, ...entry }] : [];
+                }),
+              ];
+              if (
+                quests.some(
+                  (quest) =>
+                    isAvailableUserQuests(quest, current, true).check !==
+                    isAvailableUserQuests(quest, afterRemoval, true).check,
+                )
+              ) {
+                return undefined;
+              }
+              return patch;
+            },
+            { revision, delta: result.userDelta },
+          );
         }
       },
     });

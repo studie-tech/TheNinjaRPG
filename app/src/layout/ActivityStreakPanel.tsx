@@ -37,7 +37,7 @@ import { useUserData } from "@/utils/UserContext";
 
 export function ActivityStreakPanel() {
   const utils = api.useUtils();
-  const { timeDiff } = useUserData();
+  const { timeDiff, prepareUserUpdate, updateUser } = useUserData();
 
   const { data: userStreaks, isLoading: streaksLoading } = useActivityStreaks(
     true,
@@ -50,13 +50,14 @@ export function ActivityStreakPanel() {
   const claimStreak = useClaimStreakDay();
 
   const purchasePass = api.activityStreak.purchaseEventPass.useMutation({
-    onSuccess: (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         void Promise.allSettled([
           utils.activityStreak.getUserStreaks.invalidate(),
           utils.activityStreak.getAvailablePasses.invalidate(),
-          utils.profile.getUser.invalidate(),
+          updateUser(undefined, { revision, delta: data.userDelta }),
         ]);
       }
     },

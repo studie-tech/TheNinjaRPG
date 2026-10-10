@@ -48,6 +48,13 @@ import {
 import { stillInBattle } from "@/libs/combat/actions";
 import type { ActionEffect, CombatResult, CompleteBattle } from "@/libs/combat/types";
 import {
+  canCacheCombatCompletion,
+  combatCacheDerived,
+  combatCacheEnergy,
+  combatCacheIntegerDelta,
+  combatCacheItems,
+} from "@/libs/combat/userCache";
+import {
   buildCombatTrackerTasks,
   didKageChallengerWin,
   getItem,
@@ -59,7 +66,11 @@ import {
 import { getPvpFarmActivityReductionSeconds } from "@/libs/farming";
 import type { PusherClient } from "@/libs/pusher";
 import { broadcastRaidAvailability, updateUserOnMap } from "@/libs/pusher";
-import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import {
+  filterQuestTrackersForDbPersist,
+  getNewTrackers,
+  getPublicQuestUser,
+} from "@/libs/quest";
 import {
   getRaidChatConversationId,
   prepareExclusiveRaidActivation,
@@ -1351,7 +1362,14 @@ export const updateUser = async (
 
     // Single call to getNewTrackers with all tasks
     const hydratedUser = hydrateUserForQuests(curBattle, user);
-    const { trackers, notifications, questIdsUpdated } = getNewTrackers(
+    const previouslyDoneGoals = new Set(
+      hydratedUser.questData.flatMap((tracker) =>
+        tracker.goals
+          .filter((goal) => goal.done)
+          .map((goal) => `${tracker.id}:${goal.id}`),
+      ),
+    );
+    const { trackers, notifications, questIdsUpdated, consequences } = getNewTrackers(
       hydratedUser,
       trackerTasks,
       {
@@ -1486,6 +1504,10 @@ export const updateUser = async (
       }
     }
 
+    // Use one timestamp for persisted recovery and its compact completion response.
+    const settledAt = new Date();
+    let userSettlementCommitted = false;
+    let itemSettlementCommitted = true;
     // Update user & user items
     await Promise.all([
       ...(farmActivityReductionSeconds > 0
@@ -1533,7 +1555,11 @@ export const updateUser = async (
         ? [
             client
               .delete(userItem)
-              .where(and(inArray(userItem.id, deleteItems), gt(userItem.quantity, 0))),
+              .where(and(inArray(userItem.id, deleteItems), gt(userItem.quantity, 0)))
+              .then((saved) => {
+                if (saved.rowsAffected !== deleteItems.length)
+                  itemSettlementCommitted = false;
+              }),
             client
               .delete(userItemImbuement)
               .where(inArray(userItemImbuement.userItemId, deleteItems)),
@@ -1547,7 +1573,11 @@ export const updateUser = async (
             client
               .update(userItem)
               .set({ quantity: ui.quantity, durability: ui.durability })
-              .where(and(eq(userItem.id, ui.id), gt(userItem.quantity, 0))),
+              .where(and(eq(userItem.id, ui.id), gt(userItem.quantity, 0)))
+              .then((saved) => {
+                // A zero-row write can mean the stack was tombstoned concurrently.
+                if (saved.rowsAffected !== 1) itemSettlementCommitted = false;
+              }),
           )
         : []),
       // Jutsu experience & level from experience
@@ -1586,7 +1616,12 @@ export const updateUser = async (
         .set({
           // Settlement invalidates delayed passive-regeneration snapshots.
           updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
-          curEnergy: combatEnergyRecoverySql(curBattle, userId, result.energyReward),
+          curEnergy: combatEnergyRecoverySql(
+            curBattle,
+            userId,
+            result.energyReward,
+            settledAt,
+          ),
           experience: sql`experience + ${result.experience}`,
           earnedExperience: sql`earnedExperience + ${result.earnedExperience}`,
           pvpStreak: result.pvpStreak,
@@ -1622,7 +1657,7 @@ export const updateUser = async (
           questData: updatedQuestData,
           battleId: null,
           // Only Energy recovers in combat; reset the shared clock for other pools.
-          regenAt: sql`NOW(3)`,
+          regenAt: settledAt,
           // Stamp the winning war participant in the same row update (no extra roundtrip).
           // GREATEST() inside extendWarParticipantSql never shortens a longer existing stamp.
           ...(isWinningWarParticipant
@@ -1660,9 +1695,15 @@ export const updateUser = async (
           // Deactivate stealth and set cooldown after leaving combat (20 seconds)
           stealthActive: false,
           stealthActivatedAt: null,
-          stealthCooldownAt: sql`NOW() + INTERVAL ${STEALTH_POST_COMBAT_COOLDOWN_SECONDS} SECOND`,
+          stealthCooldownAt: new Date(
+            Math.floor(settledAt.getTime() / 1000) * 1000 +
+              STEALTH_POST_COMBAT_COOLDOWN_SECONDS * 1000,
+          ),
         })
-        .where(and(eq(userData.userId, userId), eq(userData.battleId, curBattle.id))),
+        .where(and(eq(userData.userId, userId), eq(userData.battleId, curBattle.id)))
+        .then((saved) => {
+          userSettlementCommitted = saved.rowsAffected === 1;
+        }),
       // Handle dropped items transfer if present on result. Currently only AI have droppable items, so no need to delete from loser
       ...(result.droppedItems.length > 0
         ? [
@@ -1677,6 +1718,82 @@ export const updateUser = async (
           ]
         : []),
     ]);
+    const baseline = curBattle.extraState.profileCacheSnapshots?.[userId];
+    const capacity = curBattle.extraState.energyCapacity?.[userId];
+    const regeneration = curBattle.extraState.energyRegeneration?.[userId];
+    const newlyDoneGoal = trackers.some((tracker) =>
+      tracker.goals.some(
+        (goal) => goal.done && !previouslyDoneGoals.has(`${tracker.id}:${goal.id}`),
+      ),
+    );
+    if (
+      userSettlementCommitted &&
+      itemSettlementCommitted &&
+      baseline &&
+      capacity !== undefined &&
+      regeneration !== undefined &&
+      canCacheCombatCompletion(curBattle, result, userId) &&
+      consequences.length === 0 &&
+      !newlyDoneGoal &&
+      iExp === 0 &&
+      user.items.every((item) => !item.progressionRowId) &&
+      result.droppedItems.length === 0
+    ) {
+      const publicUser = getPublicQuestUser({
+        ...hydratedUser,
+        questData: trackers,
+      } as NonNullable<UserWithRelations>);
+      const { masterySources: _privateSources, ...cacheBaseline } = baseline;
+      const settledItems = combatCacheItems(baseline, user.items);
+      const userDelta = {
+        ...combatCacheIntegerDelta(baseline, result),
+        offence: result.offence,
+        defence: result.defence,
+        strength: result.strength,
+        intelligence: result.intelligence,
+        willpower: result.willpower,
+        speed: result.speed,
+        dailyArenaFights: curBattle.battleType === "ARENA" ? 1 : 0,
+        dailySageActivations: user.sageModeUsedThisBattle ? 1 : 0,
+        ...Object.fromEntries(
+          MasteryNames.map((mastery) => [
+            mastery,
+            Math.min(
+              result.masteryGains?.[mastery] ?? 0,
+              Math.max(0, getUserCaps(user.rank).mastery_cap - baseline[mastery]),
+            ),
+          ]),
+        ),
+      };
+      result.profileUpdate = {
+        userId,
+        battleId: curBattle.id,
+        baseline: cacheBaseline,
+        userDelta,
+        userPatch: {
+          curHealth: Math.round(result.curHealth),
+          curStamina: Math.round(result.curStamina),
+          curChakra: Math.round(result.curChakra),
+          curEnergy: combatCacheEnergy(
+            baseline,
+            capacity,
+            regeneration,
+            settledAt,
+            result.energyReward ?? 0,
+          ),
+          regenAt: settledAt,
+          stealthCooldownAt: new Date(
+            Math.floor(settledAt.getTime() / 1000) * 1000 +
+              STEALTH_POST_COMBAT_COOLDOWN_SECONDS * 1000,
+          ),
+          pvpStreak: result.pvpStreak,
+          questData: publicUser.questData,
+          pveFights: baseline.pveFights + 1,
+          ...combatCacheDerived(baseline, settledItems, userDelta),
+        },
+        items: settledItems,
+      };
+    }
     // Update map status
     if (
       result.curHealth > 0 ||
@@ -1698,6 +1815,7 @@ export const combatEnergyRecoverySql = (
   snapshot?: CompleteBattle,
   userId?: string,
   reward = 0,
+  settledAt?: Date,
 ) => {
   const regeneration =
     (userId ? snapshot?.extraState.energyRegeneration?.[userId] : undefined) ??
@@ -1706,5 +1824,6 @@ export const combatEnergyRecoverySql = (
   const capacity =
     (userId ? snapshot?.extraState.energyCapacity?.[userId] : undefined) ??
     sql`GREATEST(${userData.maxEnergy}, ${userData.curEnergy})`;
-  return sql`LEAST(${capacity}, ${userData.curEnergy} + ${reward} + GREATEST(0, ${regeneration}) * GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, NOW(3))) / ${REGEN_SECONDS * 1_000_000})`;
+  const recoveryAt = settledAt ?? sql`NOW(3)`;
+  return sql`LEAST(${capacity}, ${userData.curEnergy} + ${reward} + GREATEST(0, ${regeneration}) * GREATEST(0, TIMESTAMPDIFF(MICROSECOND, ${userData.regenAt}, ${recoveryAt})) / ${REGEN_SECONDS * 1_000_000})`;
 };

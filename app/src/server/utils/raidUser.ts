@@ -22,7 +22,7 @@ export const fetchRaidListUser = async (client: DrizzleClient, userId: string) =
 
 /**
  * Fields required by joinRaidQueue guards (ban, AWAKE status, current sector,
- * village). Does not persist regen or rewrite quests — the later status CAS
+ * village, pending training). Does not persist regen or rewrite quests — the later status CAS
  * and rollback pairing remain the source of truth for queue transitions.
  */
 export const fetchRaidJoinUser = async (client: DrizzleClient, userId: string) => {
@@ -33,6 +33,7 @@ export const fetchRaidJoinUser = async (client: DrizzleClient, userId: string) =
       sector: true,
       status: true,
       isBanned: true,
+      energyTrainingQueue: true,
     },
   });
 };

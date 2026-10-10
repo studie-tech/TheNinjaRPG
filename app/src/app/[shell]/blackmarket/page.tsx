@@ -297,6 +297,8 @@ const Bloodline: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   userData,
 }) => {
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+
   // State
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [tab, setTab] = useState<"Active" | "Ledger">("Active");
@@ -308,11 +310,12 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   // Mutations
   const { mutate: create, isPending: isCreating } =
     api.blackmarket.createOffer.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            updateUser(undefined, { revision, delta: data.userDelta }),
             utils.blackmarket.getRyoOffers.invalidate(),
           ]);
         }
@@ -321,11 +324,12 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 
   const { mutate: delist, isPending: isDelisting } =
     api.blackmarket.delistOffer.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            updateUser(undefined, { revision, delta: data.userDelta }),
             utils.blackmarket.getRyoOffers.invalidate(),
           ]);
         }
@@ -334,11 +338,12 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 
   const { mutate: accept, isPending: isAccepting } =
     api.blackmarket.takeOffer.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            updateUser(undefined, { revision, delta: data.userDelta }),
             utils.blackmarket.getRyoOffers.invalidate(),
           ]);
         }

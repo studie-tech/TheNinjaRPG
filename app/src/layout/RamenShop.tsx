@@ -26,18 +26,26 @@ interface RamenShopProps {
 }
 
 const RamenShop: React.FC<RamenShopProps> = (props) => {
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   const { mutate, isPending } = api.village.buyFood.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && userData) {
-        await updateUser({
-          money: userData.money - (data?.cost || 0),
-          curHealth: data?.newHealth || userData.curHealth,
-          curStamina: data?.newStamina || userData.curStamina,
-          curChakra: data?.newChakra || userData.curChakra,
-        });
+        await updateUser(
+          (current) => ({
+            curHealth: data.newHealth ?? current.curHealth,
+            curStamina: data.newStamina ?? current.curStamina,
+            curChakra: data.newChakra ?? current.curChakra,
+          }),
+          {
+            revision,
+            delta: Number.isInteger(data.cost ?? 0)
+              ? { money: -(data.cost ?? 0) }
+              : undefined,
+          },
+        );
       }
     },
   });

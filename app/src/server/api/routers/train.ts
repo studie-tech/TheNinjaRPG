@@ -19,39 +19,37 @@ import {
 } from "@/libs/train";
 import { validateCaptcha } from "@/routers/misc";
 import type { UserWithRelations } from "@/routers/profile";
-import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
-import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { getQueueTotalCapacity } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
 import {
   startMasteryTrainingInputSchema,
-  startMasteryTrainingOutputSchema,
   startTrainingInputSchema,
-  startTrainingOutputSchema,
-  stopMasteryTrainingOutputSchema,
   stopTrainingInputSchema,
   trainingLogInputSchema,
   updateEnergyTrainingQueueInputSchema,
   updateTrainingSpeedInputSchema,
 } from "@/validators/train";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const trainRouter = createTRPCRouter({
   updateEnergyTrainingQueue: protectedProcedure
     .input(updateEnergyTrainingQueueInputSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        forceRegen: true,
-      });
+      const { user, requiresProgressionRefresh, publishedAchievementIds } =
+        await fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          forceRegen: true,
+        });
       if (!user) return errorResponse("User not found");
       if (
         JSON.stringify(user.energyTrainingQueue ?? []) !==
@@ -90,20 +88,31 @@ export const trainRouter = createTRPCRouter({
         message: input.entries.length
           ? "Training queue saved"
           : "Training queue cleared",
+        ...(!requiresProgressionRefresh
+          ? getUserProgressionUpdate(
+              {
+                ...user,
+                energyTrainingQueue: input.entries,
+                updatedAt: claim.claimedAt,
+              },
+              publishedAchievementIds,
+            )
+          : {}),
       };
     }),
 
   startTraining: protectedProcedure
     .meta({ mcp: { description: "Spend Energy to instantly train a combat stat" } })
     .input(startTrainingInputSchema)
-    .output(startTrainingOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, settings } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        userIp: ctx.userIp,
-        forceRegen: true,
-      });
+      const { user, settings, requiresProgressionRefresh, publishedAchievementIds } =
+        await fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          userIp: ctx.userIp,
+          forceRegen: true,
+        });
       if (!user) return errorResponse("User not found");
       const block =
         statTrainingBlockMessage(user) ??
@@ -127,7 +136,7 @@ export const trainRouter = createTRPCRouter({
       const spent = Math.min(input.energy, availableRoom / rate);
       const amount = spent * rate;
       if (amount <= 0) return errorResponse("No training gains available");
-      const { trackers } = getNewTrackers(user, [
+      const { trackers, consequences, notifications } = getNewTrackers(user, [
         { task: "stats_trained", increment: amount },
       ]);
       const claim = await claimUserSnapshot({
@@ -160,25 +169,33 @@ export const trainRouter = createTRPCRouter({
       return {
         success: true,
         message: `You gained ${amount.toFixed(2)} ${input.stat}`,
-        data: {
-          experience: amount,
-          amount,
-          stat: input.stat,
-          curEnergy: user.curEnergy - spent,
-        },
+        ...(!requiresProgressionRefresh && !consequences.length && !notifications.length
+          ? getUserProgressionUpdate(
+              {
+                ...user,
+                experience: Math.round(user.experience + amount),
+                [input.stat]: user[input.stat] + amount,
+                curEnergy: user.curEnergy - spent,
+                questData: trackers,
+                updatedAt: claim.claimedAt,
+              },
+              publishedAchievementIds,
+            )
+          : {}),
       };
     }),
   startMasteryTraining: protectedProcedure
     .meta({ mcp: { description: "Start training a mastery" } })
     .input(startMasteryTrainingInputSchema)
-    .output(startMasteryTrainingOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        userIp: ctx.userIp,
-        forceRegen: true,
-      });
+      const { user, requiresProgressionRefresh, publishedAchievementIds } =
+        await fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          userIp: ctx.userIp,
+          forceRegen: true,
+        });
       if (!user) return errorResponse("User not found");
       const block = masteryTrainingBlockMessage(user);
       if (block) return errorResponse(block);
@@ -188,34 +205,43 @@ export const trainRouter = createTRPCRouter({
         masteryTrainingStartedAt: new Date(),
         currentlyTrainingMastery: input.stat,
       };
-      const result = await ctx.drizzle
-        .update(userData)
-        .set(data)
-        .where(
-          and(
-            eq(userData.userId, ctx.userId),
-            isNull(userData.currentlyTrainingMastery),
-            eq(userData.status, "AWAKE"),
-            sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`,
-          ),
-        );
-      if (result.rowsAffected === 0) {
-        return explainRejectedStart(ctx);
-      }
-      return { success: true, message: `Started mastery training`, data };
+      const claim = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: data,
+        where: [
+          isNull(userData.currentlyTrainingMastery),
+          eq(userData.status, "AWAKE"),
+          sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`,
+        ],
+      });
+      if (!claim.success)
+        return errorResponse("Your training changed. Please try again");
+      return {
+        success: true,
+        message: "Started mastery training",
+        ...(!requiresProgressionRefresh
+          ? getUserProgressionUpdate(
+              { ...user, ...data, updatedAt: claim.claimedAt },
+              publishedAchievementIds,
+            )
+          : {}),
+      };
     }),
   stopMasteryTraining: protectedProcedure
     .meta({
       mcp: { description: "Stop mastery training and collect gains" },
     })
     .input(stopTrainingInputSchema)
-    .output(stopMasteryTrainingOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user, settings } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        forceRegen: true,
-      });
+      const { user, settings, requiresProgressionRefresh, publishedAchievementIds } =
+        await fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          forceRegen: true,
+        });
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE") return errorResponse("Must be awake");
       const trained = user.currentlyTrainingMastery;
@@ -234,14 +260,16 @@ export const trainRouter = createTRPCRouter({
       const gained = Math.max(0, Math.min(trainingAmount, mastery_cap - user[trained]));
       const creditedMinutes =
         gained > 0 ? Math.max(0, (Date.now() - startedAt.getTime()) / 60_000) : 0;
+      const trackerResult =
+        creditedMinutes > 0
+          ? getNewTrackers(user, [
+              { task: "minutes_training", increment: creditedMinutes },
+            ])
+          : undefined;
+      const trackers = trackerResult?.trackers ?? user.questData ?? [];
       const questData =
         creditedMinutes > 0
-          ? filterQuestTrackersForDbPersist(
-              getNewTrackers(user, [
-                { task: "minutes_training", increment: creditedMinutes },
-              ]).trackers,
-              user,
-            )
+          ? filterQuestTrackersForDbPersist(trackers, user)
           : undefined;
       // Claim exactly the session read above so concurrent collections cannot reuse it.
       const result = await claimUserSnapshot({
@@ -285,11 +313,22 @@ export const trainRouter = createTRPCRouter({
       return {
         success: true,
         message: `You gained ${gained.toFixed(2)} ${trained}${capNote}`,
-        data: {
-          amount: gained,
-          currentlyTrainingMastery: trained,
-          creditedMinutes,
-        },
+        ...(!requiresProgressionRefresh &&
+        !trackerResult?.consequences.length &&
+        !trackerResult?.notifications.length
+          ? getUserProgressionUpdate(
+              {
+                ...user,
+                [trained]: user[trained] + gained,
+                dailyTrainings: user.dailyTrainings + (gained > 0 ? 1 : 0),
+                masteryTrainingStartedAt: null,
+                currentlyTrainingMastery: null,
+                questData: trackers,
+                updatedAt: result.claimedAt,
+              },
+              publishedAchievementIds,
+            )
+          : {}),
       };
     }),
   updateTrainingSpeed: protectedProcedure
@@ -349,15 +388,3 @@ export const calcTrainingAmount = (
     trainEfficiency(user) *
     trainingMultiplier(user),
 });
-
-const explainRejectedStart = async (ctx: {
-  drizzle: DrizzleClient;
-  userId: string;
-}) => {
-  const { user } = await fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId });
-  return errorResponse(
-    user
-      ? (masteryTrainingBlockMessage(user) ?? "You are already training a mastery")
-      : "User not found",
-  );
-};

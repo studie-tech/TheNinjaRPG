@@ -75,7 +75,12 @@ export default function MyJutsu() {
   const state = useFiltering();
 
   // Settings
-  const { data: userData, updateUser, timeDiff } = useRequiredUserData();
+  const {
+    data: userData,
+    updateUser,
+    timeDiff,
+    prepareUserUpdate,
+  } = useRequiredUserData();
   // finishTraining is a server timestamp, so compare it on the server clock
   const serverNow = Date.now() - timeDiff;
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -242,10 +247,17 @@ export default function MyJutsu() {
 
   const { mutate: updateOrder, isPending: isReordering } =
     api.jutsu.updateUserJutsuOrder.useMutation({
-      onSuccess: async (data) => {
+      onSuccess: async (data, variables) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          if (data.userPatch?.loadout) {
+            const loadout = data.userPatch.loadout;
+            await updateUser((current) =>
+              current?.jutsuLoadout === variables.loadoutId ? { loadout } : {},
+            );
+          } else {
+            await utils.profile.getUser.invalidate();
+          }
         }
       },
       onSettled: () => {
@@ -268,29 +280,26 @@ export default function MyJutsu() {
 
   const { mutate: buyJutsuSlot, isPending: isUpgrading } =
     api.blackmarket.buyJutsuSlot.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(undefined, { revision, delta: data.userDelta });
         }
       },
     });
 
   const { mutate: transferLevel, isPending: isTransferring } =
     api.jutsu.transferLevel.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success && userData) {
           await Promise.all([
             utils.jutsu.getUserJutsus.invalidate(), // Refresh Jutsu list
             utils.jutsu.getRecentTransfers.invalidate(), // 🔹 Refresh free transfers
-            utils.profile.getUser.invalidate(), // Refresh user profile to update free transfer count
+            updateUser(undefined, { revision, delta: data.userDelta }),
           ]);
-          if (usedTransfers >= freeTransfers && transferCost > 0) {
-            await updateUser({
-              reputationPoints: userData.reputationPoints - transferCost,
-            });
-          }
         }
       },
       onSettled,

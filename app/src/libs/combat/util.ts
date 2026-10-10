@@ -1545,6 +1545,7 @@ export const maskBattle = (battle: Battle, userId: string) => {
           return [id, bloodline];
         }),
       ),
+      profileCacheSnapshots: {},
       enemySkills: {},
       userQuests: {},
       completedQuests: {},

@@ -24,6 +24,7 @@ import { z } from "zod";
 import type { ItemSlot } from "@/drizzle/constants";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
+  DURABILITY_MAX_DEFAULT,
   EVOLUTION_MAX_CHILDREN,
   IMG_AVATAR_DEFAULT,
   ITEM_LEVEL_CAP,
@@ -100,6 +101,7 @@ import {
   gearMissingMastery,
   missingMasteryRequirement,
 } from "@/libs/mastery";
+import { calcMaxEnergy } from "@/libs/profile";
 import {
   collapseRewards,
   filterQuestTrackersForDbPersist,
@@ -172,6 +174,7 @@ import { renameLoadoutSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import type { PostProcessedRewards } from "@/validators/rewards";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { updateRewards } from "./quests";
 
 const MIN_ITEM_SHOP_DISCOUNT_FACTOR = 0.05;
@@ -1181,7 +1184,7 @@ export const itemRouter = createTRPCRouter({
   // Purchase a variant with in-game currency
   purchaseVariant: protectedProcedure
     .input(z.object({ variantId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query — ownership check runs in parallel (variantId known upfront)
       const [user, variant, ownershipRows, existingUnlock] = await Promise.all([
@@ -1257,7 +1260,23 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("Failed to unlock variant — please try again");
       }
 
-      return { success: true, message: `Variant "${variant.name}" unlocked!` };
+      return {
+        success: true,
+        message: `Variant "${variant.name}" unlocked!`,
+        userDelta:
+          user.energyTrainingQueue?.length ||
+          (variant.cost > 0 && variant.costType === "VILLAGE_PRESTIGE")
+            ? undefined
+            : variant.cost === 0
+              ? {}
+              : {
+                  [variant.costType === "MONEY"
+                    ? "money"
+                    : variant.costType === "REPUTATION"
+                      ? "reputationPoints"
+                      : "seichiSilver"]: -variant.cost,
+                },
+      };
     }),
   // Set the active variant on a user item (null to clear)
   selectVariant: protectedProcedure
@@ -1724,22 +1743,15 @@ export const itemRouter = createTRPCRouter({
           "Unequip all items on the character and clear the active item loadout",
       },
     })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Equipped rows only (not fetchUserItems — it omits hidden items). `ctx.userId` is the session user; no extra userId guard.
-      const [user, loadouts, equippedItems] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [user, loadouts] = await Promise.all([
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
-        ctx.drizzle.query.userItem.findMany({
-          where: and(
-            eq(userItem.userId, ctx.userId),
-            ne(userItem.equipped, "NONE"),
-            eq(userItem.isInAuction, false),
-            gt(userItem.quantity, 0),
-          ),
-        }),
       ]);
       if (!user) return errorResponse("User not found");
+      const equippedItems = user.items.filter((entry) => !entry.isInAuction);
 
       const currentLoadout = user.itemLoadout
         ? loadouts.find((l) => l.id === user.itemLoadout)
@@ -1757,9 +1769,19 @@ export const itemRouter = createTRPCRouter({
                 eq(itemLoadout.userId, ctx.userId),
               ),
             );
-          return { success: true, message: "Cleared active loadout" };
+          return {
+            success: true,
+            message: "Cleared active loadout",
+            userPatch: user.energyTrainingQueue?.length ? undefined : {},
+            userDelta: user.energyTrainingQueue?.length ? undefined : {},
+          };
         }
-        return { success: true, message: "Nothing equipped" };
+        return {
+          success: true,
+          message: "Nothing equipped",
+          userPatch: user.energyTrainingQueue?.length ? undefined : {},
+          userDelta: user.energyTrainingQueue?.length ? undefined : {},
+        };
       }
 
       const itemUnequipPromises: Promise<{ rowsAffected: number }>[] =
@@ -1793,13 +1815,26 @@ export const itemRouter = createTRPCRouter({
               )
           : undefined;
 
-      await Promise.all([
+      const outcomes = await Promise.all([
         ...itemUnequipPromises,
         ...(loadoutClearPromise ? [loadoutClearPromise] : []),
       ]);
 
       return {
         success: true,
+        userPatch: outcomes.every((outcome) => outcome.rowsAffected === 1)
+          ? getUserEquipmentPatch({
+              ...user,
+              items: user.items.filter(
+                (entry) => !equippedItems.some((row) => row.id === entry.id),
+              ),
+            })
+          : undefined,
+        userDelta:
+          outcomes.every((outcome) => outcome.rowsAffected === 1) &&
+          !user.energyTrainingQueue?.length
+            ? {}
+            : undefined,
         message: `Unequipped ${equippedItems.length} item${equippedItems.length === 1 ? "" : "s"}${loadoutClearPromise ? " and cleared active loadout" : ""}`,
       };
     }),
@@ -2158,11 +2193,11 @@ export const itemRouter = createTRPCRouter({
   repair: protectedProcedure
     .meta({ mcp: { description: "Repair an item with ryo" } })
     .input(z.object({ userItemId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, useritem] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.userItemId),
       ]);
       // Guard
@@ -2212,17 +2247,22 @@ export const itemRouter = createTRPCRouter({
       }
       return {
         success: true,
+        ...getRepairedEquipmentUpdate(
+          user,
+          [{ before: useritem, durability: useritem.item.maxDurability }],
+          repairCost,
+        ),
         message: `Repaired ${useritem.item.name} for ${repairCost} ryo`,
       };
     }),
   // Repair all user items
   repairAll: protectedProcedure
     .meta({ mcp: { description: "Repair all items with ryo" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const [user, useritems] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
       // Guard
@@ -2291,6 +2331,14 @@ export const itemRouter = createTRPCRouter({
       }
       return {
         success: true,
+        ...getRepairedEquipmentUpdate(
+          user,
+          succeeded.map(({ useritem }) => ({
+            before: useritem,
+            durability: useritem.item.maxDurability,
+          })),
+          charged,
+        ),
         message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo`,
       };
     }),
@@ -2298,11 +2346,11 @@ export const itemRouter = createTRPCRouter({
   useRepairItem: protectedProcedure
     .meta({ mcp: { description: "Use repair kit on an item" } })
     .input(z.object({ repairItemId: z.string(), targetItemId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, repairUserItem, targetUserItem] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.repairItemId),
         fetchUserItem(ctx.drizzle, ctx.userId, input.targetItemId),
       ]);
@@ -2379,6 +2427,19 @@ export const itemRouter = createTRPCRouter({
           userId: ctx.userId,
           userItemId: input.repairItemId,
           expectedQuantity: repairUserItem.quantity,
+          where: [
+            eq(userItem.equipped, repairUserItem.equipped),
+            eq(userItem.level, repairUserItem.level),
+            eq(userItem.experience, repairUserItem.experience),
+            eq(
+              userItem.durability,
+              repairUserItem.id === targetUserItem.id
+                ? newDurability
+                : repairUserItem.durability,
+            ),
+            eq(userItem.storedAtHome, false),
+            eq(userItem.isInAuction, false),
+          ],
         });
         if (!consumed) {
           // Roll back durability so a kit race does not grant a free repair
@@ -2399,29 +2460,23 @@ export const itemRouter = createTRPCRouter({
       }
       return {
         success: true,
+        ...getRepairedEquipmentUpdate(user, [
+          { before: targetUserItem, durability: newDurability },
+          ...(repairUserItem.item.destroyOnUse
+            ? [{ before: repairUserItem, quantity: repairUserItem.quantity - 1 }]
+            : []),
+        ]),
         message: `Repaired ${targetUserItem.item.name} by ${actualRepair} durability using ${repairUserItem.item.name}`,
       };
     }),
   // Use repair items to repair all items
   useRepairAll: protectedProcedure
     .meta({ mcp: { description: "Use repair kits to fix all items" } })
-    .output(
-      baseServerResponse.extend({
-        kitsUsed: z
-          .array(
-            z.object({
-              repairItemId: z.string(),
-              repairItemName: z.string(),
-              quantityUsed: z.number(),
-            }),
-          )
-          .optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const [user, useritems] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId),
       ]);
       // Guard
@@ -2510,6 +2565,19 @@ export const itemRouter = createTRPCRouter({
             userItemId: repairItemId,
             expectedQuantity: repairKitRow.quantity,
             nextQuantity: repairKitRow.quantity - quantityUsed,
+            where: [
+              eq(userItem.equipped, repairKitRow.equipped),
+              eq(userItem.level, repairKitRow.level),
+              eq(userItem.experience, repairKitRow.experience),
+              eq(
+                userItem.durability,
+                itemsNeedingRepair.some((row) => row.id === repairKitRow.id)
+                  ? repairKitRow.item.maxDurability
+                  : repairKitRow.durability,
+              ),
+              eq(userItem.storedAtHome, false),
+              eq(userItem.isInAuction, false),
+            ],
           });
           return consumed ? { repairKitRow, quantityConsumed: quantityUsed } : false;
         }),
@@ -2547,8 +2615,23 @@ export const itemRouter = createTRPCRouter({
 
       return {
         success: true,
+        ...getRepairedEquipmentUpdate(user, [
+          ...itemsNeedingRepair.map((row) => ({
+            before: row,
+            durability: row.item.maxDurability,
+          })),
+          ...kitConsumeResults.flatMap((result) =>
+            result
+              ? [
+                  {
+                    before: result.repairKitRow,
+                    quantity: result.repairKitRow.quantity - result.quantityConsumed,
+                  },
+                ]
+              : [],
+          ),
+        ]),
         message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} using ${kitsUsedSummary}`,
-        kitsUsed: kitsToUse,
       };
     }),
   // Authenticated and uncached: allowance changes after purchases and UTC resets.
@@ -2566,7 +2649,7 @@ export const itemRouter = createTRPCRouter({
   buy: protectedProcedure
     .meta({ mcp: { description: "Buy an item from shop" } })
     .input(itemBuySchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const iid = input.itemId;
@@ -2574,22 +2657,16 @@ export const itemRouter = createTRPCRouter({
       const purchaseTime = new Date();
       // Read userData before inventory so the transactional updatedAt CAS below
       // detects any capacity mutation that commits between these snapshots.
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const [
-        info,
-        useritems,
-        structures,
-        questState,
-        masterySources,
-        purchaseCounters,
-      ] = await Promise.all([
-        fetchItem(ctx.drizzle, iid),
-        fetchUserItems(ctx.drizzle, uid),
-        fetchStructures(ctx.drizzle, input.villageId),
-        fetchUserQuestState(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, uid),
-        fetchPurchaseCounters(ctx.drizzle, uid, iid, purchaseTime),
-      ]);
+      const user = await fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId);
+      if (!user) return errorResponse("User not found");
+      const [info, useritems, structures, questState, purchaseCounters] =
+        await Promise.all([
+          fetchItem(ctx.drizzle, iid),
+          fetchUserItems(ctx.drizzle, uid),
+          fetchStructures(ctx.drizzle, input.villageId),
+          fetchUserQuestState(ctx.drizzle, ctx.userId),
+          fetchPurchaseCounters(ctx.drizzle, uid, iid, purchaseTime),
+        ]);
       // Derived — capacity counts carried stacks by dedicated inventory bucket
       const carriedItems = useritems?.filter((ui) => !ui.storedAtHome) ?? [];
       const bucketCounts = {
@@ -2656,10 +2733,7 @@ export const itemRouter = createTRPCRouter({
         instancesEquipped < info.maxEquips &&
         user.level >= info.requiredLevel &&
         (!info.bloodlineId || info.bloodlineId === user.bloodlineId) &&
-        !missingMasteryRequirement(
-          effectiveMasteries({ ...user, ...masterySources }),
-          info,
-        ) &&
+        !missingMasteryRequirement(effectiveMasteries(user), info) &&
         canEquipAdditional(
           info,
           useritems
@@ -2733,6 +2807,25 @@ export const itemRouter = createTRPCRouter({
       // Commit the user-snapshot claim, fund deduction, quest update, and item insert
       // together. The updatedAt CAS serializes the earlier capacity read with other
       // inventory mutations, while the transaction prevents charging without delivery.
+      // Persist the same complete row returned to the cache, including timestamps,
+      // so an equipped purchase needs no readback of database-generated defaults.
+      const purchasedItem: UserItem = {
+        id: nanoid(),
+        userId: uid,
+        itemId: iid,
+        createdAt: purchaseTime,
+        updatedAt: purchaseTime,
+        quantity: input.stack,
+        equipped,
+        level: 1,
+        experience: 0,
+        durability: DURABILITY_MAX_DEFAULT,
+        storedAtHome: false,
+        isInAuction: false,
+        craftingFinishedAt: null,
+        activeVariantId: null,
+        dropChancePerc: 0,
+      };
       const quotaConflict = new Error("Purchase quota changed");
       const purchaseCommitted = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
@@ -2789,13 +2882,7 @@ export const itemRouter = createTRPCRouter({
             if (claimed.rowsAffected !== 1) throw quotaConflict;
           }
 
-          await tx.insert(userItem).values({
-            id: nanoid(),
-            userId: uid,
-            itemId: iid,
-            quantity: input.stack,
-            equipped: equipped,
-          });
+          await tx.insert(userItem).values(purchasedItem);
           return true;
         }),
       ).catch((error: unknown) => {
@@ -2823,7 +2910,29 @@ export const itemRouter = createTRPCRouter({
           message: "Inventory or funds changed, please refresh and try again",
         };
       }
-      return { success: true, message: `You bought ${info.name}` };
+      return {
+        success: true,
+        message: `You bought ${info.name}`,
+        // Quest purchases keep the full refresh so achievement and masked objective state agree.
+        userDelta:
+          advancesBuyItemObjective || user.energyTrainingQueue?.length
+            ? undefined
+            : {
+                money: -ryoCost,
+                reputationPoints: -repsCost,
+                seichiSilver: -seichiSilverCost,
+              },
+        userPatch:
+          !advancesBuyItemObjective && equipped !== "NONE"
+            ? getUserEquipmentPatch({
+                ...user,
+                items: [
+                  ...user.items,
+                  { ...purchasedItem, item: info, imbuements: [] },
+                ],
+              })
+            : undefined,
+      };
     }),
   // Auto-equip optimal items based on cost
   autoEquipOptimal: protectedProcedure
@@ -2937,7 +3046,7 @@ export const itemRouter = createTRPCRouter({
   selectItemLoadout: protectedProcedure
     .meta({ mcp: { description: "Select an item loadout" } })
     .input(idSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [loadouts, user, useritems, masterySources] = await Promise.all([
@@ -2948,10 +3057,26 @@ export const itemRouter = createTRPCRouter({
       ]);
       // Mutate & return result
       const id = input.id;
-      return await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, {
+      const result = await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, {
         ...user,
         ...masterySources,
       });
+      return result.success
+        ? {
+            ...result,
+            userPatch:
+              "userCacheEligible" in result && result.userCacheEligible
+                ? getUserEquipmentPatch({
+                    ...user,
+                    ...masterySources,
+                    itemLoadout: id,
+                    items: useritems.filter(
+                      (entry) => entry.equipped !== "NONE" && entry.quantity > 0,
+                    ),
+                  })
+                : undefined,
+          }
+        : result;
     }),
 
   renameLoadout: protectedProcedure
@@ -3061,7 +3186,7 @@ export const selectItemLoadout = async (
   // the active-loadout pointer only AFTER it succeeds (one extra round-trip, not
   // a parallel Promise.all) so the pointer can never race ahead of the equip and
   // point at a loadout that was not actually applied.
-  await client
+  const pointerUpdate = await client
     .update(userData)
     .set({ itemLoadout: loadout.id })
     .where(eq(userData.userId, user.userId));
@@ -3075,16 +3200,27 @@ export const selectItemLoadout = async (
   const committedRows =
     assignmentIds.length > 0
       ? await client
-          .select({ id: userItem.id, equipped: userItem.equipped })
+          .select({
+            id: userItem.id,
+            equipped: userItem.equipped,
+            quantity: userItem.quantity,
+            durability: userItem.durability,
+            level: userItem.level,
+            experience: userItem.experience,
+          })
           .from(userItem)
           .where(
             and(eq(userItem.userId, user.userId), inArray(userItem.id, assignmentIds)),
           )
       : [];
   const committedSlot = new Map(
-    committedRows.filter((r) => r.equipped !== "NONE").map((r) => [r.id, r.equipped]),
+    committedRows
+      .filter((r) => r.equipped !== "NONE" && r.quantity > 0)
+      .map((r) => [r.id, r.equipped]),
   );
   useritems.forEach((ui) => {
+    const committed = committedRows.find((row) => row.id === ui.id);
+    if (committed) Object.assign(ui, committed);
     ui.equipped = committedSlot.get(ui.id) ?? "NONE";
   });
   // Surface any intended assignment the guard dropped to 'NONE' so the caller
@@ -3104,6 +3240,7 @@ export const selectItemLoadout = async (
   return {
     success: true,
     message,
+    userCacheEligible: pointerUpdate.rowsAffected === 1,
     items: useritems.filter((ui) => committedSlot.has(ui.id)),
   };
 };
@@ -3824,7 +3961,10 @@ export const splitItemStack = async (
 const tryRepairUserItemDurability = async (
   drizzle: DrizzleClient,
   userId: string,
-  target: { id: string; durability: number },
+  target: Pick<
+    UserItem,
+    "id" | "durability" | "quantity" | "equipped" | "level" | "experience"
+  >,
   newDurability: number,
 ) => {
   const result = await drizzle
@@ -3836,7 +3976,10 @@ const tryRepairUserItemDurability = async (
         eq(userItem.userId, userId),
         eq(userItem.storedAtHome, false),
         eq(userItem.isInAuction, false),
-        gt(userItem.quantity, 0),
+        eq(userItem.quantity, target.quantity),
+        eq(userItem.equipped, target.equipped),
+        eq(userItem.level, target.level),
+        eq(userItem.experience, target.experience),
         eq(userItem.durability, target.durability),
       ),
     );
@@ -4229,3 +4372,78 @@ const fetchPurchaseCounters = (
       ),
     ),
   });
+
+/** Load worn gear and its effect sources with the mutation's initial user snapshot. */
+const fetchUserEquipmentSnapshot = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    with: {
+      bloodline: { columns: { effects: true } },
+      userSkills: {
+        where: eq(userSkill.activated, true),
+        with: { skill: { columns: { target: true, effects: true } } },
+      },
+      items: {
+        where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
+        with: { item: true, imbuements: { with: { item: true } } },
+      },
+    },
+  });
+
+type EquipmentSnapshot = Omit<MasteryBuffUser, "items"> &
+  Pick<UserData, "energyTrainingQueue" | "itemLoadout"> & {
+    items: UserItemWithRelations[];
+  };
+
+/** Derive only the gear fields affected by a confirmed write; balances remain deltas. */
+const getUserEquipmentPatch = (user: EquipmentSnapshot) => {
+  if (user.energyTrainingQueue?.length) return;
+  return {
+    items: user.items,
+    itemLoadout: user.itemLoadout,
+    maxEnergy: calcMaxEnergy(user),
+    effectiveMasteries: effectiveMasteries(user),
+  };
+};
+
+/** A mismatched initial gear read cannot describe the target claimed by a repair. */
+const getRepairedEquipmentUpdate = (
+  user: EquipmentSnapshot,
+  changes: {
+    before: Pick<
+      UserItem,
+      "id" | "durability" | "quantity" | "equipped" | "level" | "experience"
+    >;
+    durability?: number;
+    quantity?: number;
+  }[],
+  cost = 0,
+) => {
+  if (
+    changes.some(({ before }) => {
+      const original = user.items.find((entry) => entry.id === before.id);
+      return original
+        ? original.durability !== before.durability ||
+            original.quantity !== before.quantity ||
+            original.equipped !== before.equipped ||
+            original.level !== before.level ||
+            original.experience !== before.experience
+        : before.equipped !== "NONE";
+    })
+  )
+    return {};
+  const items = user.items.flatMap((entry) => {
+    const updated = { ...entry };
+    for (const change of changes) {
+      if (change.before.id !== entry.id) continue;
+      if (change.durability !== undefined) updated.durability = change.durability;
+      if (change.quantity !== undefined) updated.quantity = change.quantity;
+    }
+    return updated.quantity > 0 ? [updated] : [];
+  });
+  const userPatch = getUserEquipmentPatch({ ...user, items });
+  return {
+    userPatch,
+    userDelta: userPatch ? { money: cost > 0 ? -cost : 0 } : undefined,
+  };
+};

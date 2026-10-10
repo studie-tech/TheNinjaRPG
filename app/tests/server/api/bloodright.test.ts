@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { COST_SKILL_RESET } from "@/drizzle/constants";
 import { and, eq, ne } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { actionLog, bloodline, skillTree, userData, userSkill } from "@/drizzle/schema";
@@ -7,6 +8,8 @@ import { bloodrightSwapRefund, matchBloodrightSnapshot } from "@/libs/bloodright
 import { bloodlineRouter, updateBloodline } from "@/server/api/routers/bloodline";
 import { staffRouter } from "@/server/api/routers/staff";
 import { bloodrightRouter } from "@/server/api/routers/bloodright";
+import { calcEnergy } from "@/libs/profile";
+import { callerForDatabase } from "../../setup/testDatabase";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
@@ -83,6 +86,35 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     expect((await resolver({ctx: {drizzle: db, userId}, input: undefined})).success).toBe(true);
     expect((await read()).reputationPoints).toBe(70);
     expect((await read()).monthlySkillResets.count).toBe(2);
+  });
+  it("returns reset capacity and exact allowance with one user read", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ curEnergy: 999 }).where(eq(userData.userId, userId));
+    await db.insert(userSkill).values({ id: "reset-skill", userId, skillId: "root", activated: true });
+    let reads = 0;
+    stubProfile("fetchUpdatedUser", async () => { reads++; return { user: await read(), requiresUserRefresh: false }; });
+    const result = await callerForDatabase(skillTreeRouter, userId, db).resetSkillPoints();
+    expect(result.success).toBe(true);
+    expect(result.userDelta).toEqual({});
+    const saved = await read();
+    expect(result.userPatch?.monthlySkillResets).toEqual(saved.monthlySkillResets);
+    expect(result.userPatch?.maxEnergy).toBe(calcEnergy(saved.level));
+    expect(saved.curEnergy).toBe(999);
+    expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(saved.ninjutsuMastery);
+    expect(await db.query.userSkill.findMany({ where: eq(userSkill.userId, userId) })).toEqual([]);
+    expect(reads).toBe(1);
+    const paid = await callerForDatabase(skillTreeRouter, userId, db).resetSkillPoints();
+    expect(paid.userDelta).toEqual({ reputationPoints: -COST_SKILL_RESET });
+    expect(paid.userPatch?.monthlySkillResets).toEqual((await read()).monthlySkillResets);
+    expect(reads).toBe(2);
+  });
+  it("keeps the reset refresh when fetching the user settled other progress", async () => {
+    const db = await getTestDatabase();
+    stubProfile("fetchUpdatedUser", async () => ({ user: await read(), requiresUserRefresh: true }));
+    const result = await callerForDatabase(skillTreeRouter, userId, db).resetSkillPoints();
+    expect(result.success).toBe(true);
+    expect(result.userDelta).toBeUndefined();
+    expect(result.userPatch?.monthlySkillResets).toEqual((await read()).monthlySkillResets);
   });
   it("gives Gold two free resets and cannot overspend reputation", async () => {
     const db = await getTestDatabase();

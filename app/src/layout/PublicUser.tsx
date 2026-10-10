@@ -407,7 +407,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const [committedExperienceAward, setCommittedExperienceAward] =
     useState<CommittedExperienceAward | null>(null);
   const experienceAwardRequestRef = useRef<ExperienceAwardTarget | null>(null);
-  const { data: userData, isSignedIn } = useUserData();
+  const { data: userData, isSignedIn, prepareUserUpdate, updateUser } = useUserData();
   const isGuest = !isSignedIn;
 
   const canSeeSecrets = userData && canSeeSecretData(userData.role);
@@ -647,9 +647,25 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   };
 
   // mutations related to badges and activity events were relocated to their tab components.
-  const awardMutation = api.misc.awardReputation.useMutation();
+  const awardMutation = api.misc.awardReputation.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, input, revision) => {
+      if (result.success && input.userIds.includes(userData?.userId ?? ""))
+        await updateUser(undefined, { revision, delta: result.userDelta }).catch(
+          () => undefined,
+        );
+    },
+  });
 
-  const awardExperience = api.profile.awardExperience.useMutation();
+  const awardExperience = api.profile.awardExperience.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, input, revision) => {
+      if (result.success && input.targetUserId === userData?.userId)
+        await updateUser(undefined, { revision, delta: result.userDelta }).catch(
+          () => undefined,
+        );
+    },
+  });
 
   const handleExperienceAwardSubmit = experienceForm.handleSubmit(async (data) => {
     if (
@@ -703,7 +719,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       experienceForm.reset({ amount: 100 });
       void Promise.allSettled([
         utils.profile.getPublicUser.invalidate({ userId: target.userId }),
-        utils.profile.getUser.invalidate(),
       ]);
     } catch {
       // The global mutation handler emits the transport toast once. Preserve the immutable
@@ -793,7 +808,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       setAwardNeedsRetry(false);
       void Promise.allSettled([
         utils.profile.getPublicUser.invalidate(),
-        utils.profile.getUser.invalidate(),
         utils.misc.getAllAwards.invalidate(),
       ]);
     } catch {

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -29,12 +29,7 @@ import {
 } from "@/libs/profile";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import { fetchVillages } from "@/routers/village";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-} from "@/server/api/trpc";
+import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { getRandomElement } from "@/utils/array";
@@ -53,6 +48,7 @@ import {
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
 import { titleChangeSchema } from "@/validators/user";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUser } from "./profile";
 
 export const blackMarketRouter = createTRPCRouter({
@@ -142,6 +138,7 @@ export const blackMarketRouter = createTRPCRouter({
         allowedUser: z.string().nullish(),
       }),
     )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, offers] = await Promise.all([
@@ -191,11 +188,18 @@ export const blackMarketRouter = createTRPCRouter({
         allowedPurchaserId: input.allowedUser,
       });
       // Response
-      return { success: true, message: "Offer created" };
+      return {
+        success: true,
+        message: "Offer created",
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : { reputationPoints: -input.reps },
+      };
     }),
   delistOffer: protectedProcedure
     .meta({ mcp: { description: "Remove a ryo trade offer" } })
     .input(z.object({ offerId: z.string() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, offer] = await Promise.all([
@@ -224,11 +228,20 @@ export const blackMarketRouter = createTRPCRouter({
           .where(eq(userData.userId, creatorId)),
       ]);
       // Response
-      return { success: true, message: "Offer delisted" };
+      return {
+        success: true,
+        message: "Offer delisted",
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : creatorId === ctx.userId
+            ? { reputationPoints: offer.repsForSale }
+            : {},
+      };
     }),
   takeOffer: protectedProcedure
     .meta({ mcp: { description: "Purchase a ryo trade offer" } })
     .input(z.object({ offerId: z.string() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch the offer, user, and seller data simultaneously
       const [offer, user] = await Promise.all([
@@ -372,13 +385,16 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: `Bought ${offer.repsForSale} reputation points for ${offer.requestedRyo} ryo.`,
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : { money: -offer.requestedRyo, reputationPoints: offer.repsForSale },
       };
     }),
   // Update custom title
   updateCustomTitle: protectedProcedure
     .meta({ mcp: { description: "Update user's custom title" } })
     .input(titleChangeSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, villages] = await Promise.all([
@@ -408,9 +424,16 @@ export const blackMarketRouter = createTRPCRouter({
           customTitle: input.title,
           reputationPoints: sql`reputationPoints - ${COST_CUSTOM_TITLE}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.customTitle, user.customTitle),
+            eq(userData.reputationPoints, user.reputationPoints),
+            gte(userData.reputationPoints, COST_CUSTOM_TITLE),
+          ),
+        );
       if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
+        return errorResponse("Your profile or reputation changed. Please try again");
       } else {
         await ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
@@ -421,13 +444,20 @@ export const blackMarketRouter = createTRPCRouter({
           relatedMsg: `Update: ${user.customTitle} -> ${input.title}`,
           relatedImage: user.avatarLight,
         });
-        return { success: true, message: "Custom title updated" };
+        return {
+          success: true,
+          message: "Custom title updated",
+          userPatch: {
+            customTitle: input.title,
+            reputationPoints: user.reputationPoints - COST_CUSTOM_TITLE,
+          },
+        };
       }
     }),
   changeUserGender: protectedProcedure
     .meta({ mcp: { description: "Change user's gender" } })
     .input(z.object({ gender: z.enum(genders) }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -442,17 +472,32 @@ export const blackMarketRouter = createTRPCRouter({
           gender: input.gender,
           reputationPoints: sql`reputationPoints - ${COST_CHANGE_GENDER}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            eq(userData.gender, user.gender),
+            eq(userData.reputationPoints, user.reputationPoints),
+            gte(userData.reputationPoints, COST_CHANGE_GENDER),
+          ),
+        );
       // Return message
       if (result.rowsAffected === 0) {
-        return { success: false, message: "Could not update user" };
+        return errorResponse("Your profile or reputation changed. Please try again");
       } else {
-        return { success: true, message: `Change gender in ${input.gender}` };
+        const userPatch = {
+          gender: input.gender,
+          reputationPoints: user.reputationPoints - COST_CHANGE_GENDER,
+        };
+        return {
+          success: true,
+          message: `Change gender in ${input.gender}`,
+          userPatch,
+        };
       }
     }),
   buyItemSlot: protectedProcedure
     .meta({ mcp: { description: "Purchase an extra item slot" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -467,7 +512,12 @@ export const blackMarketRouter = createTRPCRouter({
           extraItemSlots: sql`extraItemSlots + 1`,
           reputationPoints: sql`reputationPoints - ${COST_EXTRA_ITEM_SLOT}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.reputationPoints, COST_EXTRA_ITEM_SLOT),
+          ),
+        );
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could not update user" };
       } else {
@@ -480,12 +530,18 @@ export const blackMarketRouter = createTRPCRouter({
           relatedMsg: "Update: Item slot purchased",
           relatedImage: user.avatarLight,
         });
-        return { success: true, message: "Item slot purchased" };
+        return {
+          success: true,
+          message: "Item slot purchased",
+          userDelta: user.energyTrainingQueue?.length
+            ? undefined
+            : { reputationPoints: -COST_EXTRA_ITEM_SLOT, extraItemSlots: 1 },
+        };
       }
     }),
   buyJutsuSlot: protectedProcedure
     .meta({ mcp: { description: "Purchase an extra jutsu slot" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -503,7 +559,13 @@ export const blackMarketRouter = createTRPCRouter({
           extraJutsuSlots: sql`extraJutsuSlots + 1`,
           reputationPoints: sql`reputationPoints - ${COST_EXTRA_JUTSU_SLOT}`,
         })
-        .where(eq(userData.userId, ctx.userId));
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.reputationPoints, COST_EXTRA_JUTSU_SLOT),
+            lt(userData.extraJutsuSlots, MAX_EXTRA_JUTSU_SLOTS),
+          ),
+        );
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could not update user" };
       } else {
@@ -516,7 +578,13 @@ export const blackMarketRouter = createTRPCRouter({
           relatedMsg: "Update: Jutsu slot purchased",
           relatedImage: user.avatarLight,
         });
-        return { success: true, message: "Jutsu slot purchased" };
+        return {
+          success: true,
+          message: "Jutsu slot purchased",
+          userDelta: user.energyTrainingQueue?.length
+            ? undefined
+            : { reputationPoints: -COST_EXTRA_JUTSU_SLOT, extraJutsuSlots: 1 },
+        };
       }
     }),
   rerollElement: protectedProcedure
@@ -524,7 +592,7 @@ export const blackMarketRouter = createTRPCRouter({
       mcp: { description: "Reroll primary or secondary element" },
     })
     .input(z.object({ elementType: z.enum(["primary", "secondary"]) }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch user and rolled elements in parallel
       const [user, rollHistory] = await Promise.all([
@@ -603,12 +671,23 @@ export const blackMarketRouter = createTRPCRouter({
       } else {
         updateData.secondaryElement = result.element;
       }
-      mutations.push(
-        ctx.drizzle
-          .update(userData)
-          .set(updateData)
-          .where(eq(userData.userId, ctx.userId)),
-      );
+      const update = await ctx.drizzle
+        .update(userData)
+        .set(updateData)
+        .where(
+          and(
+            eq(userData.userId, ctx.userId),
+            gte(userData.reputationPoints, COST_REROLL_ELEMENT),
+            user.primaryElement === null
+              ? isNull(userData.primaryElement)
+              : eq(userData.primaryElement, user.primaryElement),
+            user.secondaryElement === null
+              ? isNull(userData.secondaryElement)
+              : eq(userData.secondaryElement, user.secondaryElement),
+          ),
+        );
+      if (update.rowsAffected === 0)
+        return errorResponse("Your balance or elements changed. Please try again.");
 
       // Add element roll to actionLog for the new element
       mutations.push(
@@ -621,13 +700,22 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: `Element rerolled successfully. ${result.changes.join(", ")}`,
+        userPatch: {
+          primaryElement:
+            input.elementType === "primary" ? result.element : user.primaryElement,
+          secondaryElement:
+            input.elementType === "secondary" ? result.element : user.secondaryElement,
+        },
+        userDelta: user.energyTrainingQueue?.length
+          ? undefined
+          : { reputationPoints: -COST_REROLL_ELEMENT },
       };
     }),
   // Update stats
   updateStats: protectedProcedure
     .meta({ mcp: { description: "Redistribute user stats" } })
     .input(statSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const cost = canChangeContent(user.role) ? 0 : COST_RESET_STATS;
@@ -699,6 +787,9 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: `User stats updated for ${cost} reputation points`,
+          userDelta: user.energyTrainingQueue?.length
+            ? undefined
+            : { reputationPoints: -cost },
         };
       }
     }),

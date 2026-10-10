@@ -76,7 +76,7 @@ export default function ConceptArt() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [creationType, setCreationType] = useState<"image" | "video">("image");
   const [deletedImageIds, setDeletedImageIds] = useState<Set<string>>(() => new Set());
-  const { data: userData } = useUserData();
+  const { data: userData, updateUser, prepareUserUpdate } = useUserData();
 
   // Routing
   const router = useRouter();
@@ -123,7 +123,8 @@ export default function ConceptArt() {
   // Create a new image
   const { mutate: create, isPending: isImagePending } =
     api.conceptart.create.useMutation({
-      onSuccess: async (result) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (result, _input, revision) => {
         showMutationToast(result);
         if (result.success && result.imageId) {
           promptForm.setValue("prompt", "");
@@ -132,7 +133,7 @@ export default function ConceptArt() {
           router.push(`/conceptart/${result.imageId}`);
           await Promise.all([
             utils.conceptart.getAll.refetch(),
-            utils.profile.getUser.refetch(),
+            updateUser(undefined, { revision, delta: result.userDelta }),
           ]);
         }
       },
@@ -144,7 +145,8 @@ export default function ConceptArt() {
   // Create a new video
   const { mutate: createVideo, isPending: isVideoPending } =
     api.conceptart.createVideo.useMutation({
-      onSuccess: async (result) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (result, _input, revision) => {
         showMutationToast({
           success: result.success,
           message: result.success
@@ -159,7 +161,7 @@ export default function ConceptArt() {
           router.push(`/conceptart/${result.videoId}`);
           await Promise.all([
             utils.conceptart.getAll.refetch(),
-            utils.profile.getUser.refetch(),
+            updateUser(undefined, { revision, delta: result.userDelta }),
           ]);
         }
       },

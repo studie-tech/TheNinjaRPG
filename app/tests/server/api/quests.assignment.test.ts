@@ -162,7 +162,7 @@ describe("assignQuestToUser compatibility", () => {
       prevAttempt: undefined,
     });
 
-    expect(result).toEqual({ success: true, message: "Quest started: A-rank mission" });
+    expect(result).toMatchObject({ success: true, message: "Quest started: A-rank mission" });
     expect(insert).toHaveBeenCalledOnce();
     expect(update).toHaveBeenCalledTimes(2);
   });
@@ -243,7 +243,7 @@ describe("assignQuestToUser compatibility", () => {
       prevAttempt: undefined,
     });
 
-    expect(result).toEqual({ success: true, message: "Quest started: A-rank mission" });
+    expect(result).toMatchObject({ success: true, message: "Quest started: A-rank mission" });
     expect(findFirst).toHaveBeenCalledOnce();
     expect(insert).toHaveBeenCalledOnce();
     expect(update).toHaveBeenCalledOnce();

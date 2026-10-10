@@ -34,7 +34,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
 
   // State
   const [localActiveElement, setLocalActiveElement] = useState<string>("");
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // State management
   const activeElement = props.activeQuestId || localActiveElement;
@@ -54,15 +54,17 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
 
   // Mutations
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
-    onSuccess: async (data) => {
+    onMutate: () => ({ userRevision: prepareUserUpdate() }),
+    onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
-      if (currentStep?.title === "Genin Exam") {
+      await updateUser(data.userPatch, {
+        revision: context?.userRevision,
+        achievementProgress: data.achievementProgress,
+      });
+      if (data.success && currentStep?.title === "Genin Exam") {
         await handleNextStepAsync();
       }
-      await Promise.all([
-        util.profile.getUser.invalidate(),
-        util.quests.specificQuests.invalidate(),
-      ]);
+      await Promise.all([util.quests.specificQuests.invalidate()]);
     },
   });
 

@@ -65,7 +65,7 @@ describeWithDatabase("profile useUnusedExperiencePoints against a real MySQL", (
     expect(result.success).toBe(true);
     const user = await readUser();
     expect(user).toMatchObject({ ninjutsuMastery: 20, genjutsuMastery: 30, taijutsuMastery: 40, bukijutsuMastery: 50, earnedExperience: 0, experience: 5000 });
-    expect(result.data).toMatchObject({ ninjutsuMastery: 20, earnedExperience: 0 });
+    expect(result.userPatch).toMatchObject({ ninjutsuMastery: 20, earnedExperience: 0 });
   });
 
   it("spends only mastery cap room and guards concurrent mastery changes", async () => {

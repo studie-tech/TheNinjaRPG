@@ -39,7 +39,7 @@ export default function OccupationCrafting() {
   const utils = api.useUtils();
 
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // API calls
   const { data: userItems } = api.item.getUserItems.useQuery();
@@ -89,24 +89,26 @@ export default function OccupationCrafting() {
   const removeImbuementMutation = api.occupation.removeImbuement.useMutation();
 
   const repairItemMutation = api.item.repair.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, { revision, delta: data.userDelta }),
         ]);
       }
     },
   });
 
   const repairAllMutation = api.item.repairAll.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, { revision, delta: data.userDelta }),
         ]);
       }
     },

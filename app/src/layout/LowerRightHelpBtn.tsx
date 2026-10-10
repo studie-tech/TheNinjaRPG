@@ -13,6 +13,7 @@ import { GameSettingsPanel } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { cn } from "@/libs/shadui";
+import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 import { type TicketType, TicketTypes } from "@/validators/misc";
 
@@ -39,13 +40,16 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
     "ai_support",
   );
   const [isOpen, setIsOpen] = useState(false);
-  const utils = api.useUtils();
 
   // Mutation to toggle tutorial
   const { mutate: toggleTutorial, isPending: isTogglingTutorial } =
     api.profile.updatePreferences.useMutation({
-      onSuccess: async () => {
-        await utils.profile.getUser.invalidate();
+      onSuccess: async (result, input) => {
+        if (!result.success) {
+          showMutationToast(result);
+          return;
+        }
+        await updateUser(input);
         setIsOpen(false);
       },
     });

@@ -6,6 +6,8 @@ import {
   battle,
   battleHistory,
   gameSetting,
+  quest,
+  questHistory,
   item,
   userItem,
   sectorMap,
@@ -141,6 +143,8 @@ describeWithDatabase("Energy queue state transitions", () => {
       item,
       aiProfile,
       gameSetting,
+      questHistory,
+      quest,
       trainingLog,
       sectorMap,
       userVote,
@@ -148,6 +152,35 @@ describeWithDatabase("Energy queue state transitions", () => {
       village,
     );
     invalidatePublishedMapCache();
+  });
+  it("allows a partial cache patch when no automatic transition runs", async () => {
+    await prepare([]);
+    const client = await getTestDatabase();
+    await fetchUpdatedUser({ client, userId: USER, forceRegen: true });
+    const result = await fetchUpdatedUser({ client, userId: USER });
+    expect(result.requiresUserRefresh).toBe(false);
+  });
+  it("requires cache reconciliation when passive pools are regenerated", async () => {
+    await prepare([]);
+    const client = await getTestDatabase();
+    await fetchUpdatedUser({ client, userId: USER, forceRegen: true });
+    await patch({
+      updatedAt: new Date(Date.now() - 360_000),
+      regenAt: new Date(Date.now() - 180_000),
+    });
+    const result = await fetchUpdatedUser({ client, userId: USER });
+    expect(result.requiresUserRefresh).toBe(true);
+    expect(result.user?.curEnergy).toBeGreaterThan(0);
+  });
+  it("requires cache reconciliation when a queued stat training advances", async () => {
+    await prepare();
+    const client = await getTestDatabase();
+    await fetchUpdatedUser({ client, userId: USER, forceRegen: true });
+    await patch({ regenAt: new Date(Date.now() - 65_000) });
+    const result = await fetchUpdatedUser({ client, userId: USER });
+    expect(result.requiresUserRefresh).toBe(true);
+    expect(result.user?.offence).toBeGreaterThan(10);
+    expect(result.user?.energyTrainingQueue).toEqual([entries[1]]);
   });
   it("does not credit away-sector ticks after walking home", async () => {
     await prepare();
