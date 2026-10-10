@@ -97,15 +97,15 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     expect(result.success).toBe(true);
     expect(result.userDelta).toEqual({});
     const saved = await read();
-    expect(result.data?.monthlySkillResets).toEqual(saved.monthlySkillResets);
-    expect(result.data?.maxEnergy).toBe(calcEnergy(saved.level));
+    expect(result.userPatch?.monthlySkillResets).toEqual(saved.monthlySkillResets);
+    expect(result.userPatch?.maxEnergy).toBe(calcEnergy(saved.level));
     expect(saved.curEnergy).toBe(999);
-    expect(result.data?.effectiveMasteries.ninjutsuMastery).toBe(saved.ninjutsuMastery);
+    expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(saved.ninjutsuMastery);
     expect(await db.query.userSkill.findMany({ where: eq(userSkill.userId, userId) })).toEqual([]);
     expect(reads).toBe(1);
     const paid = await callerForDatabase(skillTreeRouter, userId, db).resetSkillPoints();
     expect(paid.userDelta).toEqual({ reputationPoints: -COST_SKILL_RESET });
-    expect(paid.data?.monthlySkillResets).toEqual((await read()).monthlySkillResets);
+    expect(paid.userPatch?.monthlySkillResets).toEqual((await read()).monthlySkillResets);
     expect(reads).toBe(2);
   });
   it("keeps the reset refresh when fetching the user settled other progress", async () => {
@@ -114,7 +114,7 @@ describeWithDatabase("Bloodright economy on MySQL", () => {
     const result = await callerForDatabase(skillTreeRouter, userId, db).resetSkillPoints();
     expect(result.success).toBe(true);
     expect(result.userDelta).toBeUndefined();
-    expect(result.data?.monthlySkillResets).toEqual((await read()).monthlySkillResets);
+    expect(result.userPatch?.monthlySkillResets).toEqual((await read()).monthlySkillResets);
   });
   it("gives Gold two free resets and cannot overspend reputation", async () => {
     const db = await getTestDatabase();

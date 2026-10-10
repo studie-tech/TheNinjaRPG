@@ -1993,7 +1993,14 @@ const RerollElement: React.FC = () => {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUser(data.data, { revision, delta: data.userDelta });
+          await updateUser(data.userPatch, {
+            revision,
+            delta:
+              data.userPatch?.primaryElement !== undefined &&
+              data.userPatch.secondaryElement !== undefined
+                ? data.userDelta
+                : undefined,
+          });
         }
       },
     });
@@ -2941,8 +2948,13 @@ const ResetSkills: React.FC = () => {
           await Promise.all([
             updateUser(
               () => {
-                if (!data.data) return undefined;
-                return { userSkills: [], ...data.data };
+                if (
+                  !data.userPatch?.monthlySkillResets ||
+                  data.userPatch.maxEnergy === undefined ||
+                  !data.userPatch.effectiveMasteries
+                )
+                  return undefined;
+                return { userSkills: [], ...data.userPatch };
               },
               { revision, delta: data.userDelta },
             ),

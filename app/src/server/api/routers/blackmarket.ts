@@ -29,12 +29,7 @@ import {
 } from "@/libs/profile";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import { fetchVillages } from "@/routers/village";
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-} from "@/server/api/trpc";
+import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { getRandomElement } from "@/utils/array";
@@ -53,10 +48,7 @@ import {
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
 import { cosmeticUserUpdateOutputSchema, titleChangeSchema } from "@/validators/user";
-import {
-  elementRerollResponseSchema,
-  userDeltaResponseSchema,
-} from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUser } from "./profile";
 
 export const blackMarketRouter = createTRPCRouter({
@@ -596,7 +588,7 @@ export const blackMarketRouter = createTRPCRouter({
       mcp: { description: "Reroll primary or secondary element" },
     })
     .input(z.object({ elementType: z.enum(["primary", "secondary"]) }))
-    .output(elementRerollResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch user and rolled elements in parallel
       const [user, rollHistory] = await Promise.all([
@@ -704,7 +696,7 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: `Element rerolled successfully. ${result.changes.join(", ")}`,
-        data: {
+        userPatch: {
           primaryElement:
             input.elementType === "primary" ? result.element : user.primaryElement,
           secondaryElement:

@@ -14,7 +14,7 @@ import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/ap
 import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { canAccessHiddenSkillTree, isStaffMember } from "@/utils/permissions";
 import { bloodrightTierSchema } from "@/validators/skillTree";
-import { bloodrightResponseSchema } from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const bloodrightRouter = createTRPCRouter({
   get: protectedProcedure.query(async ({ ctx }) => {
@@ -38,7 +38,7 @@ export const bloodrightRouter = createTRPCRouter({
   }),
   purchase: protectedProcedure
     .input(bloodrightTierSchema)
-    .output(bloodrightResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [updatedUser, tier] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
@@ -108,12 +108,12 @@ export const bloodrightRouter = createTRPCRouter({
               seichiSilver: -tier.seichiSilverCost,
               bloodrightSpent: tier.seichiSilverCost,
             },
-        data: { bloodright },
+        userPatch: { bloodright },
       };
     }),
   refund: protectedProcedure
     .input(bloodrightTierSchema)
-    .output(bloodrightResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [updatedUser, tiers] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
@@ -160,12 +160,12 @@ export const bloodrightRouter = createTRPCRouter({
         userDelta: updatedUser.requiresUserRefresh
           ? undefined
           : { seichiSilver: refund, bloodrightSpent: -refund },
-        data: { bloodright },
+        userPatch: { bloodright },
         message: `Refunded ${refund} Seichi Silver and removed ${removed.length} tier(s)`,
       };
     }),
   reset: protectedProcedure
-    .output(bloodrightResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       const [updatedUser, monthlyResets] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
@@ -226,7 +226,7 @@ export const bloodrightRouter = createTRPCRouter({
               seichiSilver: user.bloodrightSpent,
               ...(cost > 0 ? { reputationPoints: -cost } : {}),
             },
-        data: { bloodright: [], bloodrightSpent: 0, monthlySkillResets },
+        userPatch: { bloodright: [], bloodrightSpent: 0, monthlySkillResets },
         message: `Bloodright reset; refunded ${user.bloodrightSpent} Seichi Silver${cost ? ` (-${cost} Reps)` : " (free)"}`,
       };
     }),

@@ -1,6 +1,7 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { updateUserCache, prepareUserUpdate } from "@/utils/userCache";
 
 const key = [["profile", "getUser"], { type: "query" }];
@@ -289,6 +290,50 @@ describe("user cache updates", () => {
     await updateUserCache(test.client, key, undefined, { delta: undefined, revision: revision });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(1);
+    test.close();
+  });
+});
+
+
+describe("shared mutation user response", () => {
+  it("preserves nullable saved fields and applies numeric deltas once without a profile read", async () => {
+    const test = setup();
+    const response = userDeltaResponseSchema.parse({
+      success: true,
+      message: "Updated",
+      userDelta: { reputationPoints: -10 },
+      userPatch: { primaryElement: "Fire", secondaryElement: null },
+    });
+    const revision = prepareUserUpdate(test.client, key);
+    await updateUserCache(test.client, key, response.userPatch, {
+      revision, delta: response.userDelta,
+    });
+    expect(test.value()?.userData).toMatchObject({
+      money: 100, reputationPoints: 20, primaryElement: "Fire", secondaryElement: null,
+    });
+    expect(test.value()?.notifications).toEqual(["preserved"]);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("replaces refunded tiers and spent totals without treating absolute values as deltas", async () => {
+    const test = setup();
+    const response = userDeltaResponseSchema.parse({
+      success: true,
+      message: "Updated",
+      userDelta: { seichiSilver: 40 },
+      userPatch: { bloodright: [], bloodrightSpent: 0, monthlySkillResets: { month: "2026-10", count: 1 } },
+    });
+    test.client.setQueryData(key, {
+      ...test.value(), userData: { ...test.value()?.userData, seichiSilver: 10, bloodrightSpent: 40, bloodright: [{skillId: "tier", cost: 40}] },
+    });
+    await updateUserCache(test.client, key, response.userPatch, {
+      revision: prepareUserUpdate(test.client, key), delta: response.userDelta,
+    });
+    expect(test.value()?.userData).toMatchObject({
+      seichiSilver: 50, bloodrightSpent: 0, bloodright: [], monthlySkillResets: { month: "2026-10", count: 1 },
+    });
+    expect(test.reads()).toBe(0);
     test.close();
   });
 });

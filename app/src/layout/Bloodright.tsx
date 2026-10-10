@@ -17,14 +17,14 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData, useUserData } from "@/utils/UserContext";
-import type { bloodrightResponseSchema } from "@/validators/userCache";
+import type { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const Bloodright = () => {
   const utils = api.useUtils();
   const { data: user, prepareUserUpdate: onMutate, updateUser } = useRequiredUserData();
   const { data, isPending, isError, refetch } = api.bloodright.get.useQuery();
   const onSuccess = async (
-    result: z.infer<typeof bloodrightResponseSchema>,
+    result: z.infer<typeof userDeltaResponseSchema>,
     _input: unknown,
     revision: number | undefined,
   ) => {
@@ -32,7 +32,10 @@ export const Bloodright = () => {
     if (result.success)
       await Promise.all([
         utils.bloodright.get.invalidate(),
-        updateUser(result.data, { revision, delta: result.userDelta }),
+        updateUser(result.userPatch, {
+          revision,
+          delta: result.userPatch?.bloodright ? result.userDelta : undefined,
+        }),
       ]);
   };
   const purchase = api.bloodright.purchase.useMutation({ onMutate, onSuccess });
@@ -191,7 +194,15 @@ export const ResetBloodright = () => {
       if (result.success)
         await Promise.all([
           utils.bloodright.get.invalidate(),
-          updateUser(result.data, { revision, delta: result.userDelta }),
+          updateUser(result.userPatch, {
+            revision,
+            delta:
+              result.userPatch?.bloodright &&
+              result.userPatch.bloodrightSpent !== undefined &&
+              result.userPatch.monthlySkillResets
+                ? result.userDelta
+                : undefined,
+          }),
           utils.skillTree.getResetInfo.invalidate(),
         ]);
     },

@@ -82,8 +82,8 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
     const result = await api.rerollElement({ elementType: "primary" });
     expect(result.success).toBe(true);
     const saved = await readUser();
-    expect(result.data).toEqual({ primaryElement: saved.primaryElement, secondaryElement: saved.secondaryElement });
-    expect(result.data?.primaryElement).not.toBe("Fire");
+    expect(result.userPatch).toEqual({ primaryElement: saved.primaryElement, secondaryElement: saved.secondaryElement });
+    expect(result.userPatch?.primaryElement).not.toBe("Fire");
     expect(result.userDelta).toEqual({ reputationPoints: -COST_REROLL_ELEMENT });
     expect(saved.reputationPoints).toBe(0);
   });

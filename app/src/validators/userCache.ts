@@ -14,42 +14,27 @@ export const userDeltaSchema = z.object({
 
 export type UserDelta = z.infer<typeof userDeltaSchema>;
 
+// Absolute values are kept separate from arithmetic deltas so a saved field is never added.
+export const userPatchSchema = z.object({
+  primaryElement: z.enum(ElementNames).nullable().optional(),
+  secondaryElement: z.enum(ElementNames).nullable().optional(),
+  bloodright: z.array(z.object({ skillId: z.string(), cost: z.number() })).optional(),
+  bloodrightSpent: z.number().optional(),
+  monthlySkillResets: z.object({ month: z.string(), count: z.number() }).optional(),
+  maxEnergy: z.number().optional(),
+  effectiveMasteries: z
+    .object({
+      ninjutsuMastery: z.number(),
+      genjutsuMastery: z.number(),
+      taijutsuMastery: z.number(),
+      bukijutsuMastery: z.number(),
+      bloodlineMastery: z.number(),
+      sageMastery: z.number(),
+    })
+    .optional(),
+});
+
 export const userDeltaResponseSchema = baseServerResponse.extend({
   userDelta: userDeltaSchema.optional(),
-});
-
-export const bloodrightResponseSchema = userDeltaResponseSchema.extend({
-  data: z
-    .object({
-      bloodright: z.array(z.object({ skillId: z.string(), cost: z.number() })),
-      bloodrightSpent: z.number().optional(),
-      monthlySkillResets: z.object({ month: z.string(), count: z.number() }).optional(),
-    })
-    .optional(),
-});
-
-export const elementRerollResponseSchema = userDeltaResponseSchema.extend({
-  data: z
-    .object({
-      primaryElement: z.enum(ElementNames).nullable(),
-      secondaryElement: z.enum(ElementNames).nullable(),
-    })
-    .optional(),
-});
-
-export const resetSkillPointsResponseSchema = userDeltaResponseSchema.extend({
-  data: z
-    .object({
-      monthlySkillResets: z.object({ month: z.string(), count: z.number() }),
-      maxEnergy: z.number(),
-      effectiveMasteries: z.object({
-        ninjutsuMastery: z.number(),
-        genjutsuMastery: z.number(),
-        taijutsuMastery: z.number(),
-        bukijutsuMastery: z.number(),
-        bloodlineMastery: z.number(),
-        sageMastery: z.number(),
-      }),
-    })
-    .optional(),
+  userPatch: userPatchSchema.optional(),
 });

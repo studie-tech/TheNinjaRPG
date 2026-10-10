@@ -65,7 +65,7 @@ import {
   skillTreeFilteringSchema,
   skillTreeFolderSchema,
 } from "@/validators/skillTree";
-import { resetSkillPointsResponseSchema } from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const skillTreeRouter = createTRPCRouter({
   // Get all skill names for selectors
@@ -543,7 +543,7 @@ export const skillTreeRouter = createTRPCRouter({
   // Reset user's skill points (clear all skills and refund points)
   resetSkillPoints: protectedProcedure
     .meta({ mcp: { description: "Reset user's skill tree" } })
-    .output(resetSkillPointsResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user data
       const [updatedUser, monthlyResets] = await Promise.all([
@@ -637,7 +637,7 @@ export const skillTreeRouter = createTRPCRouter({
           : isFreeReset
             ? {}
             : { reputationPoints: -COST_SKILL_RESET },
-        data: {
+        userPatch: {
           monthlySkillResets: {
             ...resetState,
             count: resetState.count + (isStaffFreeReset ? 0 : 1),
