@@ -331,133 +331,128 @@ export const travelRouter = createTRPCRouter({
       if (!["AWAKE", "TRAVEL", "QUEUED"].includes(user.status)) {
         return { users: [], village: null, sectorData: null, warData: null };
       }
-      const [users, villageData, sectorData, warData, placements] = await Promise.all([
-        ctx.drizzle.query.userData.findMany({
-          columns: {
-            userId: true,
-            username: true,
-            longitude: true,
-            latitude: true,
-            location: true,
-            curHealth: true,
-            maxHealth: true,
-            sector: true,
-            status: true,
-            avatar: true,
-            avatarLight: true,
-            level: true,
-            experience: true,
-            rank: true,
-            isOutlaw: true,
-            isBanned: true,
-            immunityUntil: true,
-            robImmunityUntil: true,
-            updatedAt: true,
-            villageId: true,
-            battleId: true,
-            anbuId: true,
-            stealthActive: true,
-            stealthActivatedAt: true,
-            stealth: true,
-          },
-          where: and(
-            eq(userData.sector, user.sector),
-            eq(userData.isAi, false),
-            inArray(userData.status, ["AWAKE", "BATTLE"]),
-            or(eq(userData.isBanned, false), eq(userData.userId, ctx.userId)),
-            or(
-              gte(userData.updatedAt, secondsFromNow(-36000)),
-              eq(userData.userId, ctx.userId),
+      const [users, villageData, sectorData, warData, placements, liveBattles] =
+        await Promise.all([
+          ctx.drizzle.query.userData.findMany({
+            columns: {
+              userId: true,
+              username: true,
+              longitude: true,
+              latitude: true,
+              location: true,
+              curHealth: true,
+              maxHealth: true,
+              sector: true,
+              status: true,
+              avatar: true,
+              avatarLight: true,
+              level: true,
+              experience: true,
+              rank: true,
+              isOutlaw: true,
+              isBanned: true,
+              immunityUntil: true,
+              robImmunityUntil: true,
+              updatedAt: true,
+              villageId: true,
+              battleId: true,
+              anbuId: true,
+              stealthActive: true,
+              stealthActivatedAt: true,
+              stealth: true,
+            },
+            where: and(
+              eq(userData.sector, user.sector),
+              eq(userData.isAi, false),
+              inArray(userData.status, ["AWAKE", "BATTLE"]),
+              or(eq(userData.isBanned, false), eq(userData.userId, ctx.userId)),
+              or(
+                gte(userData.updatedAt, secondsFromNow(-36000)),
+                eq(userData.userId, ctx.userId),
+              ),
             ),
-          ),
-          with: {
-            anbuSquad: {
-              columns: {
-                id: true,
-                name: true,
-                image: true,
-                villageId: true,
+            with: {
+              anbuSquad: {
+                columns: {
+                  id: true,
+                  name: true,
+                  image: true,
+                  villageId: true,
+                },
               },
             },
-          },
-        }),
-        ctx.drizzle.query.village.findFirst({
-          where: and(
-            eq(village.sector, user.sector),
-            inArray(village.type, ["VILLAGE", "OUTLAW", "TOWN", "HIDEOUT", "SAFEZONE"]),
-          ),
-          with: { structures: true },
-        }),
-        fetchSector(ctx.drizzle, user.sector),
-        ctx.drizzle.query.war.findMany({
-          where: eq(war.status, "ACTIVE"),
-          with: {
-            attackerVillage: {
-              columns: { name: true, id: true, villageGraphic: true, sector: true },
-            },
-            defenderVillage: {
-              columns: { name: true, id: true, villageGraphic: true, sector: true },
-            },
-            warAllies: {
-              columns: { villageId: true, supportVillageId: true },
-            },
-          },
-        }),
-        ctx.drizzle.query.overworldAiPlacement.findMany({
-          where: and(
-            eq(overworldAiPlacement.sector, user.sector),
-            eq(overworldAiPlacement.isActive, true),
-          ),
-          // Stable order so the arrival-prompt `find`-first NPC can't flip between polls when two
-          // placements share a tile (which would ping-pong the modal open on every sector refresh).
-          orderBy: asc(overworldAiPlacement.id),
-          columns: {
-            id: true,
-            aiTemplateUserId: true,
-            interactionType: true,
-            sector: true,
-            longitude: true,
-            latitude: true,
-            positionVersion: true,
-          },
-          with: {
-            aiTemplate: {
-              columns: {
-                userId: true,
-                username: true,
-                avatar: true,
-                avatarLight: true,
-                curHealth: true,
-                maxHealth: true,
-                level: true,
-                rank: true,
-                isAi: true,
+          }),
+          ctx.drizzle.query.village.findFirst({
+            where: and(
+              eq(village.sector, user.sector),
+              inArray(village.type, [
+                "VILLAGE",
+                "OUTLAW",
+                "TOWN",
+                "HIDEOUT",
+                "SAFEZONE",
+              ]),
+            ),
+            with: { structures: true },
+          }),
+          fetchSector(ctx.drizzle, user.sector),
+          ctx.drizzle.query.war.findMany({
+            where: eq(war.status, "ACTIVE"),
+            with: {
+              attackerVillage: {
+                columns: { name: true, id: true, villageGraphic: true, sector: true },
+              },
+              defenderVillage: {
+                columns: { name: true, id: true, villageGraphic: true, sector: true },
+              },
+              warAllies: {
+                columns: { villageId: true, supportVillageId: true },
               },
             },
-          },
-        }),
-      ]);
+          }),
+          ctx.drizzle.query.overworldAiPlacement.findMany({
+            where: and(
+              eq(overworldAiPlacement.sector, user.sector),
+              eq(overworldAiPlacement.isActive, true),
+            ),
+            // Stable order so the arrival-prompt `find`-first NPC can't flip between polls when two
+            // placements share a tile (which would ping-pong the modal open on every sector refresh).
+            orderBy: asc(overworldAiPlacement.id),
+            columns: {
+              id: true,
+              aiTemplateUserId: true,
+              interactionType: true,
+              sector: true,
+              longitude: true,
+              latitude: true,
+              positionVersion: true,
+            },
+            with: {
+              aiTemplate: {
+                columns: {
+                  userId: true,
+                  username: true,
+                  avatar: true,
+                  avatarLight: true,
+                  curHealth: true,
+                  maxHealth: true,
+                  level: true,
+                  rank: true,
+                  isAi: true,
+                },
+              },
+            },
+          }),
+          // All recently-advanced battles. The Battle table only holds a handful of rows
+          // (the cleaner drops them after a day), so this indexed range scan is cheaper than
+          // a second sequential round-trip filtered by the sector's battle ids.
+          ctx.drizzle
+            .select({ id: battle.id })
+            .from(battle)
+            .where(gte(battle.updatedAt, secondsFromNow(-SECTOR_BATTLE_STALE_SECONDS))),
+        ]);
 
       // Only draw battle markers for fights that still exist and are being played
-      const battleIds = [
-        ...new Set(
-          users.flatMap((u) =>
-            u.status === "BATTLE" && u.battleId ? [u.battleId] : [],
-          ),
-        ),
-      ];
-      const liveBattles =
-        battleIds.length > 0
-          ? await ctx.drizzle
-              .select({ id: battle.id })
-              .from(battle)
-              .where(
-                and(
-                  inArray(battle.id, battleIds),
-                  gte(battle.updatedAt, secondsFromNow(-SECTOR_BATTLE_STALE_SECONDS)),
-                ),
-              )
-          : [];
       const liveBattleIds = new Set(liveBattles.map((b) => b.id));
 
       // Filter out stealthed players (unless it's the current user)
