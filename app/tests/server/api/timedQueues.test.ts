@@ -709,9 +709,10 @@ describeWithDatabase("mastery training queue", () => {
     await resetTables(userQueue, trainingLog, userVote, userData);
   });
 
-  it("collects the finished session and starts the queued one when the account refreshes", async () => {
+  it.each(["AWAKE", "ASLEEP"] as const)("collects the finished session and starts the queued one while %s", async (status) => {
     const startedAt = minutesFromNow(-20);
     await insertUser({
+      status,
       trainingSpeed: "15min",
       currentlyTrainingMastery: "ninjutsuMastery",
       masteryTrainingStartedAt: startedAt,
@@ -719,6 +720,7 @@ describeWithDatabase("mastery training queue", () => {
     });
     await fetchUpdatedUser({ client: await getTestDatabase(), userId: USER_ID });
     const user = await readUser();
+    expect(user.status).toBe(status);
     expect(user.ninjutsuMastery).toBeGreaterThan(0);
     expect(user.currentlyTrainingMastery).toBe("genjutsuMastery");
     expect(user.trainingSpeed).toBe("1hr");
@@ -799,6 +801,33 @@ describeWithDatabase("mastery training queue", () => {
       (await caller.updateMasteryTrainingQueue({ expectedEntries: one, entries: [] }))
         .success,
     ).toBe(true);
+  });
+
+  it.each([
+    { name: "a new queue", current: [], entries: [{ stat: "genjutsuMastery", speed: "15min" }] },
+    { name: "an appended entry", current: [{ stat: "genjutsuMastery", speed: "15min" }], entries: [{ stat: "genjutsuMastery", speed: "15min" }, { stat: "taijutsuMastery", speed: "15min" }] },
+    { name: "a changed mastery", current: [{ stat: "genjutsuMastery", speed: "15min" }], entries: [{ stat: "taijutsuMastery", speed: "15min" }] },
+    { name: "a changed interval", current: [{ stat: "genjutsuMastery", speed: "15min" }], entries: [{ stat: "genjutsuMastery", speed: "1hr" }] },
+    { name: "reordered entries", current: [{ stat: "genjutsuMastery", speed: "15min" }, { stat: "taijutsuMastery", speed: "15min" }], entries: [{ stat: "taijutsuMastery", speed: "15min" }, { stat: "genjutsuMastery", speed: "15min" }] },
+  ] satisfies { name: string; current: MasteryTrainingQueueEntry[]; entries: MasteryTrainingQueueEntry[] }[])("rejects $name while asleep without changing the mastery queue", async ({ current, entries }) => {
+    await insertUser({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: new Date(), curEnergy: 0, regeneration: 0 });
+    await queueMasteries(USER_ID, current);
+    const caller = await callerFor(trainRouter, USER_ID);
+    expect(await caller.updateMasteryTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "Must be awake to train" });
+    expect(await liveMasteryQueue()).toEqual(current);
+    expect(await readUser()).toMatchObject({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery" });
+  });
+
+  it("allows removing and clearing mastery entries while asleep", async () => {
+    await insertUser({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: new Date(), curEnergy: 0, regeneration: 0 });
+    const entries = [{ stat: "genjutsuMastery" as const, speed: "15min" as const }, { stat: "taijutsuMastery" as const, speed: "15min" as const }];
+    await queueMasteries(USER_ID, entries);
+    const caller = await callerFor(trainRouter, USER_ID);
+    expect(await caller.updateMasteryTrainingQueue({ expectedEntries: entries, entries: [entries[1]!] })).toMatchObject({ success: true });
+    expect(await liveMasteryQueue()).toEqual([entries[1]!]);
+    expect(await caller.updateMasteryTrainingQueue({ expectedEntries: [entries[1]!], entries: [] })).toMatchObject({ success: true });
+    expect(await liveMasteryQueue()).toEqual([]);
+    expect((await readUser()).status).toBe("ASLEEP");
   });
 
   it("requires an active session to queue behind", async () => {
