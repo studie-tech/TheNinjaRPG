@@ -2388,21 +2388,10 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
     })
     .map((value) => {
       const innerType = getInner(objectiveSchema.shape[value]);
-      if ((["attackers"] as string[]).includes(value) && aiData) {
-        return {
-          id: value,
-          values: aiData
-            .sort((a, b) => a.level - b.level)
-            .map((ai) => ({
-              id: ai.userId,
-              name: `lvl ${ai.level}: ${ai.username}`,
-            })),
-          doubleWidth: true,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values_with_number",
-        };
-      } else if ((["opponentAIs", "allyAIs"] as string[]).includes(value) && aiData) {
+      if (
+        (["attackers", "opponentAIs", "allyAIs"] as string[]).includes(value) &&
+        aiData
+      ) {
         return {
           id: value,
           values: aiData
