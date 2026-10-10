@@ -1711,6 +1711,9 @@ export const jutsu = mysqlTable(
     battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
       .default("BOTH")
       .notNull(),
+    // Cosmetic variants inherit mechanics independently of the evolution tree.
+    reskinParentJutsuId: varchar("reskinParentJutsuId", { length: 191 }),
+    bloodlineReskinId: varchar("bloodlineReskinId", { length: 191 }),
     // Evolution fields
     parentJutsuId: varchar("parentJutsuId", { length: 191 }),
     // Mastery gates, checked against the UserData mastery stats of the same name. Note
@@ -1736,6 +1739,8 @@ export const jutsu = mysqlTable(
       bloodlineIdIdx: index("Jutsu_bloodlineId_idx").on(table.bloodlineId),
       villageIdIdx: index("Jutsu_villageId_idx").on(table.villageId),
       injectableIdx: index("Jutsu_injectable_idx").on(table.injectableInBattle),
+      reskinParentIdx: index("Jutsu_reskinParentJutsuId_idx").on(table.reskinParentJutsuId),
+      bloodlineReskinIdx: index("Jutsu_bloodlineReskinId_idx").on(table.bloodlineReskinId),
       parentJutsuIdIdx: index("Jutsu_parentJutsuId_idx").on(table.parentJutsuId),
       parentJutsuIdHiddenIdx: index("Jutsu_parentJutsuId_hidden_idx").on(
         table.parentJutsuId,

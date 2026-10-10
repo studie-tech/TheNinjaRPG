@@ -36,6 +36,7 @@ import type {
 import {
   actionLog,
   bloodline,
+  bloodlineReskin,
   item,
   jutsu,
   jutsuLoadout,
@@ -64,6 +65,10 @@ import {
   JUTSU_EQUIP_CAPS,
 } from "@/libs/jutsu";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
+import {
+  getJutsuReskinMechanics,
+  inheritJutsuReskinEffects,
+} from "@/libs/jutsu/reskins";
 import {
   buildMissingLoadouts,
   decideRename,
@@ -106,6 +111,7 @@ import {
   backfillLoadouts,
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
   cancelQueuedJutsuTraining,
   enqueueJutsuLevels,
@@ -128,16 +134,18 @@ import {
   canTransferJutsu,
 } from "@/utils/permissions";
 import { DAY_S, secondsFromDate } from "@/utils/time";
-import type { ZodAllTags } from "@/validators/combat";
+import type { ZodAllTags, ZodJutsuType } from "@/validators/combat";
 import { JutsuValidator } from "@/validators/combat";
 import type { JutsuFilteringSchema } from "@/validators/jutsu";
 import {
+  createLinkedJutsuSchema,
   evolveJutsuSchema,
   getEvolutionsSchema,
   getJutsuReskinSchema,
   jutsuFilteringSchema,
   jutsuReskinCreateSchema,
   updateJutsuReskinSchema,
+  updateJutsuSchema,
 } from "@/validators/jutsu";
 import { renameLoadoutSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
@@ -449,6 +457,81 @@ export const jutsuRouter = createTRPCRouter({
         : result;
     }),
 
+  getReskinParents: protectedProcedure.query(({ ctx }) =>
+    ctx.drizzle.query.jutsu.findMany({
+      columns: { id: true, name: true, bloodlineId: true },
+      where: and(isNull(jutsu.reskinParentJutsuId), ne(jutsu.jutsuRank, "H")),
+      orderBy: asc(jutsu.name),
+    }),
+  ),
+
+  getLinkedReskins: publicProcedure.input(idSchema).query(({ ctx, input }) =>
+    ctx.drizzle.query.jutsu.findMany({
+      where: eq(jutsu.bloodlineReskinId, input.id),
+      orderBy: asc(jutsu.name),
+    }),
+  ),
+
+  createLinkedReskin: protectedProcedure
+    .input(createLinkedJutsuSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [user, reskin] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        ctx.drizzle.query.bloodlineReskin.findFirst({
+          where: eq(bloodlineReskin.id, input.bloodlineReskinId),
+        }),
+      ]);
+      if (user.isBanned || !canChangeContent(user.role))
+        return errorResponse("Not allowed");
+      if (!reskin) return errorResponse("Bloodline reskin not found");
+      return retryOnDeadlock(() =>
+        ctx.drizzle.transaction(async (tx) => {
+          const [parent] = await tx
+            .select()
+            .from(jutsu)
+            .where(eq(jutsu.id, input.parentId))
+            .for("update");
+          if (!parent || parent.reskinParentJutsuId || parent.jutsuRank === "H") {
+            return errorResponse("Select a non-reskin parent jutsu");
+          }
+          if (parent.bloodlineId !== reskin.bloodlineId)
+            return errorResponse("Parent jutsu must belong to this bloodline");
+          const [currentGroup] = await tx
+            .select()
+            .from(bloodlineReskin)
+            .where(eq(bloodlineReskin.id, reskin.id))
+            .for("update");
+          if (!currentGroup || currentGroup.bloodlineId !== parent.bloodlineId)
+            return errorResponse("Bloodline reskin changed; refresh before creating");
+          const id = nanoid();
+          const name = `${reskin.name.slice(0, 70)}: ${parent.name.slice(0, 70)} - ${id}`;
+          await tx.insert(jutsu).values({
+            ...parent,
+            id,
+            name,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            reskinParentJutsuId: parent.id,
+            bloodlineReskinId: reskin.id,
+            parentJutsuId: null,
+            jutsuRank: "H",
+            hidden: true,
+          });
+          await tx.insert(actionLog).values({
+            id: nanoid(),
+            userId: ctx.userId,
+            tableName: "jutsu",
+            relatedId: id,
+            changes: [`Created reskin of ${parent.name} for ${reskin.name}`],
+            relatedMsg: `Create: ${name}`,
+            relatedImage: parent.image,
+          });
+          return { success: true, message: id };
+        }),
+      );
+    }),
+
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
     if (user.isBanned)
@@ -494,7 +577,8 @@ export const jutsuRouter = createTRPCRouter({
         relations.itemInjectors.length +
         relations.aiUsingJutsu.length +
         relations.questsUsingJutsu.length +
-        relations.childEvolutions.length;
+        relations.childEvolutions.length +
+        relations.linkedReskins.length;
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
@@ -511,14 +595,32 @@ export const jutsuRouter = createTRPCRouter({
           ...relations.aiUsingJutsu.map((a) => `AI: ${a.name}`),
           ...relations.questsUsingJutsu.map((q) => `Quest: ${q.name}`),
           ...relations.childEvolutions.map((e) => `Evolution: ${e.name}`),
+          ...relations.linkedReskins.map((e) => `Reskin: ${e.name}`),
         ].join(", ");
         return errorResponse(
           `Justu is being used by: ${message}. So you cannot delete it.`,
         );
       }
       // Mutate
+      const deleted = await retryOnDeadlock(() =>
+        ctx.drizzle.transaction(async (tx) => {
+          await tx
+            .select({ id: jutsu.id })
+            .from(jutsu)
+            .where(eq(jutsu.id, input.id))
+            .for("update");
+          const children = await tx
+            .select({ id: jutsu.id })
+            .from(jutsu)
+            .where(eq(jutsu.reskinParentJutsuId, input.id));
+          if (children.length) return false;
+          await tx.delete(jutsu).where(eq(jutsu.id, input.id));
+          return true;
+        }),
+      );
+      if (!deleted)
+        return errorResponse("Unlink or delete its reskins before deleting this jutsu");
       await Promise.all([
-        ctx.drizzle.delete(jutsu).where(eq(jutsu.id, input.id)),
         ctx.drizzle.delete(userJutsu).where(eq(userJutsu.jutsuId, input.id)),
         ctx.drizzle.insert(actionLog).values({
           id: nanoid(),
@@ -761,7 +863,7 @@ export const jutsuRouter = createTRPCRouter({
     }),
 
   update: protectedProcedure
-    .input(z.object({ id: z.string(), data: JutsuValidator }))
+    .input(updateJutsuSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query in parallel for performance
@@ -774,6 +876,8 @@ export const jutsuRouter = createTRPCRouter({
         siblings,
         evolutionGraph,
         requiredItem,
+        reskinParent,
+        reskinGroup,
       ] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchJutsu(ctx.drizzle, input.id),
@@ -803,7 +907,50 @@ export const jutsuRouter = createTRPCRouter({
               where: eq(item.id, input.data.requiredBloodlineItemId),
             })
           : Promise.resolve(null),
+        input.data.reskinParentJutsuId
+          ? fetchJutsu(ctx.drizzle, input.data.reskinParentJutsuId)
+          : Promise.resolve(null),
+        input.data.bloodlineReskinId
+          ? ctx.drizzle.query.bloodlineReskin.findFirst({
+              where: eq(bloodlineReskin.id, input.data.bloodlineReskinId),
+            })
+          : Promise.resolve(null),
       ]);
+      if (input.data.reskinParentJutsuId) {
+        if (
+          !reskinParent ||
+          reskinParent.id === input.id ||
+          reskinParent.reskinParentJutsuId ||
+          reskinParent.jutsuRank === "H"
+        ) {
+          return errorResponse("Select a different, non-reskin parent jutsu");
+        }
+        if (
+          input.data.parentJutsuId ||
+          relations.childEvolutions.length ||
+          relations.linkedReskins.length
+        ) {
+          return errorResponse(
+            "Reskins cannot have evolution links or reskin children",
+          );
+        }
+        input.data = {
+          ...input.data,
+          ...getJutsuReskinMechanics(reskinParent),
+          jutsuRank: "H",
+          effects: inheritJutsuReskinEffects(reskinParent.effects, input.data.effects),
+        };
+      }
+      if (
+        input.data.bloodlineReskinId &&
+        (!input.data.reskinParentJutsuId ||
+          !reskinGroup ||
+          reskinGroup.bloodlineId !== input.data.bloodlineId)
+      ) {
+        return errorResponse(
+          "Bloodline reskin must match the linked parent's bloodline",
+        );
+      }
       // Guard
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
@@ -815,7 +962,7 @@ export const jutsuRouter = createTRPCRouter({
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       // A required bloodline item must belong to the jutsu's own bloodline, otherwise the
       // in-combat gate could never be satisfied (or would gate on an unrelated item).
-      if (input.data.requiredBloodlineItemId) {
+      if (input.data.requiredBloodlineItemId && !input.data.reskinParentJutsuId) {
         if (!input.data.bloodlineId)
           return errorResponse("Set a bloodline before requiring a bloodline item");
         if (!requiredItem) return errorResponse("Required bloodline item not found");
@@ -879,25 +1026,12 @@ export const jutsuRouter = createTRPCRouter({
         });
         if (!graphValidation.ok) return errorResponse(graphValidation.message);
       }
-      // Diff
-      const diff = calculateContentDiff(entry, {
-        id: entry.id,
-        updatedAt: entry.updatedAt,
-        createdAt: entry.createdAt,
-        ...input.data,
-      });
-      // Update
+      // Parent and child mechanics must commit together. Lock the family root so
+      // concurrent parent edits and newly linked children cannot leave stale copies.
+      const saved = await saveJutsuFamily(ctx.drizzle, entry, input.data, ctx.userId);
+      if (!saved.success) return errorResponse(saved.message);
+      const diff = saved.diff;
       await Promise.all([
-        ctx.drizzle.update(jutsu).set(input.data).where(eq(jutsu.id, input.id)),
-        ctx.drizzle.insert(actionLog).values({
-          id: nanoid(),
-          userId: ctx.userId,
-          tableName: "jutsu",
-          changes: diff,
-          relatedId: entry.id,
-          relatedMsg: `Update: ${entry.name}`,
-          relatedImage: entry.image,
-        }),
         ...(input.data.hidden
           ? [
               ctx.drizzle
@@ -910,7 +1044,7 @@ export const jutsuRouter = createTRPCRouter({
       await outdateProposalsFor(
         ctx.drizzle,
         "JUTSU",
-        [entry.id],
+        saved.ids,
         editedReason("JUTSU", entry.name, user.username),
       );
       if (process.env.NODE_ENV !== "development") {
@@ -2201,6 +2335,7 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
     aiUsingJutsu,
     questsUsingJutsu,
     childEvolutions,
+    linkedReskins,
   ] = await Promise.all([
     client.query.jutsu.findMany({
       columns: { id: true, name: true },
@@ -2241,6 +2376,10 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
       columns: { id: true, name: true },
       where: eq(jutsu.parentJutsuId, jutsuId),
     }),
+    client.query.jutsu.findMany({
+      columns: { id: true, name: true },
+      where: eq(jutsu.reskinParentJutsuId, jutsuId),
+    }),
   ]);
 
   return {
@@ -2251,6 +2390,7 @@ export const getJutsuRelations = async (client: DrizzleClient, jutsuId: string) 
     aiUsingJutsu,
     questsUsingJutsu,
     childEvolutions,
+    linkedReskins,
   };
 };
 export type JutsuRelations = Awaited<ReturnType<typeof getJutsuRelations>>;
@@ -3064,3 +3204,166 @@ const removeJutsuIdFromLoadoutAtomically = async (args: {
     return false;
   }
 };
+
+const saveJutsuFamily = async (
+  client: DrizzleClient,
+  entry: Jutsu,
+  data: ZodJutsuType,
+  userId: string,
+) =>
+  retryOnDeadlock(() =>
+    client.transaction(async (tx) => {
+      const lockIds = [
+        ...new Set(
+          [entry.id, entry.reskinParentJutsuId, data.reskinParentJutsuId].filter(
+            (id): id is string => !!id,
+          ),
+        ),
+      ].sort();
+      const locked = await tx
+        .select()
+        .from(jutsu)
+        .where(inArray(jutsu.id, lockIds))
+        .orderBy(asc(jutsu.id))
+        .for("update");
+      const current = locked.find((row) => row.id === entry.id);
+      if (!current || current.updatedAt.getTime() !== entry.updatedAt.getTime())
+        return {
+          success: false as const,
+          message: "Jutsu changed; refresh before saving",
+        };
+      const children = await tx
+        .select()
+        .from(jutsu)
+        .where(eq(jutsu.reskinParentJutsuId, entry.id));
+      if (data.reskinParentJutsuId && children.length)
+        return {
+          success: false as const,
+          message: "Unlink child reskins before linking this jutsu",
+        };
+      const parent = locked.find((row) => row.id === data.reskinParentJutsuId);
+      if (
+        data.reskinParentJutsuId &&
+        (!parent || parent.reskinParentJutsuId || parent.jutsuRank === "H")
+      )
+        return {
+          success: false as const,
+          message: "Reskin parent changed; refresh before saving",
+        };
+      if (parent) {
+        // Use the current source mechanics, never the child editor's snapshot.
+        data = {
+          ...data,
+          ...getJutsuReskinMechanics(parent),
+          jutsuRank: "H",
+          effects: inheritJutsuReskinEffects(parent.effects, data.effects),
+        };
+        if (data.bloodlineReskinId) {
+          const [group] = await tx
+            .select()
+            .from(bloodlineReskin)
+            .where(eq(bloodlineReskin.id, data.bloodlineReskinId))
+            .for("update");
+          if (!group || group.bloodlineId !== parent.bloodlineId)
+            return {
+              success: false as const,
+              message: "Bloodline reskin no longer matches the parent",
+            };
+        }
+      }
+      if (
+        children.some(
+          (child) => child.bloodlineReskinId && child.bloodlineId !== data.bloodlineId,
+        )
+      )
+        return {
+          success: false as const,
+          message: "Unlink bloodline reskins before changing the parent's bloodline",
+        };
+      if (children.length && data.jutsuRank === "H")
+        return {
+          success: false as const,
+          message: "A reskin parent cannot have H rank",
+        };
+      const updates = children.map((child) => ({
+        ...child,
+        ...getJutsuReskinMechanics(data),
+        effects: inheritJutsuReskinEffects(data.effects, child.effects),
+      }));
+      for (const variant of [data, ...updates]) {
+        const valid = JutsuValidator.safeParse(variant);
+        if (!valid.success)
+          return {
+            success: false as const,
+            message: `Invalid reskin mechanics or cosmetics for ${variant.name}: ${valid.error.issues[0]?.message}`,
+          };
+        const hasAnimation = variant.effects.some(
+          (effect) =>
+            "appearAnimation" in effect &&
+            effect.appearAnimation &&
+            "appearSfx" in effect &&
+            effect.appearSfx,
+        );
+        if (!variant.hidden && !hasAnimation)
+          return {
+            success: false as const,
+            message: `Visible jutsu ${variant.name} needs an effect with both appear animation and sound`,
+          };
+      }
+      const diff = calculateContentDiff(current, { ...current, ...data });
+      const updatedAt = new Date();
+      await tx
+        .update(jutsu)
+        .set({ ...data, updatedAt })
+        .where(eq(jutsu.id, entry.id));
+      if (children.length) {
+        // One batched child write preserves each effect's cosmetic fields.
+        const cases = children.map(
+          (child) =>
+            sql`WHEN ${child.id} THEN ${JSON.stringify(inheritJutsuReskinEffects(data.effects, child.effects))}`,
+        );
+        await tx
+          .update(jutsu)
+          .set({
+            ...getJutsuReskinMechanics(data),
+            effects: sql`CASE ${jutsu.id} ${sql.join(cases, sql` `)} END`,
+            updatedAt,
+          })
+          .where(
+            inArray(
+              jutsu.id,
+              children.map((child) => child.id),
+            ),
+          );
+      }
+      await tx.insert(actionLog).values([
+        {
+          id: nanoid(),
+          userId,
+          tableName: "jutsu",
+          changes: diff,
+          relatedId: entry.id,
+          relatedMsg: `Update: ${entry.name}`,
+          relatedImage: entry.image,
+        },
+        ...children.map((child) => ({
+          id: nanoid(),
+          userId,
+          tableName: "jutsu",
+          changes: calculateContentDiff(child, {
+            ...child,
+            ...getJutsuReskinMechanics(data),
+            effects: inheritJutsuReskinEffects(data.effects, child.effects),
+          }),
+          relatedId: child.id,
+          relatedMsg: `Sync parent: ${data.name}`,
+          relatedImage: child.image,
+        })),
+      ]);
+      return {
+        success: true as const,
+        diff,
+        ids: [entry.id, ...children.map((child) => child.id)],
+      };
+    }),
+  );

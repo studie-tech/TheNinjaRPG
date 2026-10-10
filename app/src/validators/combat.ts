@@ -1412,6 +1412,14 @@ export const JutsuValidatorRawSchema = z.object({
   villageId: z.string().nullable(),
   effects: z.array(AllTags).superRefine(SuperRefineEffects),
   battleUsageType: z.enum(BattleUsageTypes).prefault("BOTH"),
+  reskinParentJutsuId: z
+    .string()
+    .nullish()
+    .transform((v) => v || null),
+  bloodlineReskinId: z
+    .string()
+    .nullish()
+    .transform((v) => v || null),
   parentJutsuId: z
     .string()
     .nullable()

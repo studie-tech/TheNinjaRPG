@@ -13,6 +13,7 @@ import { JutsuHelper } from "@/layout/ContentHelp";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
 import { SuggestChange } from "@/layout/SuggestChange";
+import { JUTSU_EFFECT_COSMETICS } from "@/libs/jutsu/reskins";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -94,8 +95,17 @@ interface SingleEditJutsuProps {
 
 const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
   // Form handling
-  const { loading, jutsu, effects, form, formData, setEffects, handleJutsuSubmit } =
-    useJutsuEditForm(props.jutsu, props.refetch);
+  const {
+    loading,
+    jutsu,
+    effects,
+    form,
+    formData,
+    setEffects,
+    handleJutsuSubmit,
+    reskinParentId,
+    updateError,
+  } = useJutsuEditForm(props.jutsu, props.refetch);
 
   // Filter out any undefined effects from useWatch
   const validEffects = (effects?.filter((e): e is ZodAllTags => e !== undefined) ??
@@ -132,6 +142,11 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
         {!jutsu && <p>Could not find this jutsu</p>}
         {!loading && jutsu && (
           <>
+            <p className="mb-4">
+              Linked reskins keep their name, descriptions, image, effect visuals and
+              visibility. Saving a reskin copies its parent's mechanics and sets its
+              rank to H. Future parent edits update all linked reskins automatically.
+            </p>
             <EditContent
               schema={JutsuValidatorRawSchema}
               form={form as unknown as UseFormReturn<ZodJutsuType, any>}
@@ -143,6 +158,11 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
               allowImageUpload={props.canSave}
               onAccept={handleJutsuSubmit}
             />
+            {updateError && (
+              <p role="alert" className="mt-2 text-destructive">
+                {updateError}
+              </p>
+            )}
             <div className="mt-2 flex justify-end">
               <SuggestChange
                 entityType="JUTSU"
@@ -155,7 +175,7 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
         )}
       </ContentBox>
 
-      {validEffects.length === 0 && (
+      {!reskinParentId && validEffects.length === 0 && (
         <ContentBox
           title={`Jutsu Tags`}
           initialBreak={true}
@@ -172,17 +192,19 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
             subtitle="Control battle effects"
             initialBreak={true}
             topRightContent={
-              <div className="flex flex-row">
-                {AddTagIcon}
-                <FileMinus
-                  className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                  onClick={() => {
-                    const newEffects = [...validEffects];
-                    newEffects.splice(i, 1);
-                    setEffects(newEffects);
-                  }}
-                />
-              </div>
+              !reskinParentId ? (
+                <div className="flex flex-row">
+                  {AddTagIcon}
+                  <FileMinus
+                    className="h-6 w-6 cursor-pointer hover:text-orange-500"
+                    onClick={() => {
+                      const newEffects = [...validEffects];
+                      newEffects.splice(i, 1);
+                      setEffects(newEffects);
+                    }}
+                  />
+                </div>
+              ) : undefined
             }
           >
             <EffectFormWrapper
@@ -190,6 +212,8 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
               type="jutsu"
               tag={tag}
               availableTags={tagTypes}
+              hideTagType={!!reskinParentId}
+              editableFields={reskinParentId ? JUTSU_EFFECT_COSMETICS : undefined}
               effects={validEffects}
               setEffects={setEffects}
             />

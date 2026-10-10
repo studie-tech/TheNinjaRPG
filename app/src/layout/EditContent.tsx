@@ -1565,6 +1565,7 @@ interface EffectFormWrapperProps {
   availableTags: readonly string[];
   formClassName?: string;
   hideTagType?: boolean;
+  editableFields?: readonly string[];
   tag: ZodAllTags;
   fixedWidths?: "basis-32" | "basis-64" | "basis-96";
   effects: ZodAllTags[];
@@ -1775,6 +1776,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   // Create the form data dynamically based on the tag type
   const formData: FormEntry<Attribute>[] = attributes
     .filter((value) => !ignore.includes(value))
+    .filter((value) => !props.editableFields || props.editableFields.includes(value))
     .filter((value) => {
       return (
         !["noncombatconsumereward", "noncombatgainskill"].includes(watchType) ||
@@ -2064,34 +2066,35 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   // Re-used EditContent component for actually showing the form
   return (
     <>
-      {isDamageModifier && (
-        <div className="mb-3 space-y-1">
-          <Label>Damage scope</Label>
-          <Select
-            value={hasElementFilter ? "element" : "offense"}
-            onValueChange={(value) => {
-              setHasElementFilter(value === "element");
-              if (value === "offense")
-                form.setValue("elements", [], {
-                  shouldDirty: true,
-                  shouldValidate: true,
-                });
-            }}
-          >
-            <SelectTrigger aria-label="Damage scope" className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="offense">Offense</SelectItem>
-              <SelectItem value="element">Element</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-muted-foreground text-xs">
-            Offense affects all damage. Element limits the modifier to selected
-            elements; leave elements empty to affect all damage.
-          </p>
-        </div>
-      )}
+      {isDamageModifier &&
+        (!props.editableFields || props.editableFields.includes("elements")) && (
+          <div className="mb-3 space-y-1">
+            <Label>Damage scope</Label>
+            <Select
+              value={hasElementFilter ? "element" : "offense"}
+              onValueChange={(value) => {
+                setHasElementFilter(value === "element");
+                if (value === "offense")
+                  form.setValue("elements", [], {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+              }}
+            >
+              <SelectTrigger aria-label="Damage scope" className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="offense">Offense</SelectItem>
+                <SelectItem value="element">Element</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-xs">
+              Offense affects all damage. Element limits the modifier to selected
+              elements; leave elements empty to affect all damage.
+            </p>
+          </div>
+        )}
       {(tag.type === "increasepotency" || tag.type === "decreasepotency") && (
         <p className="mb-3 text-muted-foreground text-sm">
           Static adds or subtracts power points. Percentage scales the selected tag’s

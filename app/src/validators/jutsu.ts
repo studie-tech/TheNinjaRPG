@@ -9,6 +9,7 @@ import {
   UserRanks,
 } from "@/drizzle/constants";
 import { statFilters } from "@/libs/train";
+import { JutsuValidator } from "@/validators/combat";
 
 // Basic name/level search
 export const searchJutsuSchema = z.object({
@@ -117,3 +118,10 @@ export const updateJutsuReskinSchema = getJutsuReskinSchema.extend({
 });
 
 export type JutsuReskinUpdateSchema = z.infer<typeof jutsuReskinUpdateSchema>;
+
+export const createLinkedJutsuSchema = z.object({
+  parentId: z.string().min(1),
+  bloodlineReskinId: z.string().min(1),
+});
+
+export const updateJutsuSchema = z.object({ id: z.string(), data: JutsuValidator });
