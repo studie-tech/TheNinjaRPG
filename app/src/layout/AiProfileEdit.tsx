@@ -596,18 +596,9 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                       defaultValue={currentActionType}
                       value={currentActionType}
                       onValueChange={(e) =>
-                        setRules((prevRules) => {
-                          const actionType = e as ZodAllAiAction["type"];
-                          return prevRules.map((rule, k) => {
-                            if (k === ruleIndex) {
-                              return {
-                                ...rule,
-                                action: getActionSchema(actionType).parse({}),
-                              };
-                            }
-                            return rule;
-                          });
-                        })
+                        updateAction(ruleIndex, () =>
+                          getActionSchema(e as ZodAllAiAction["type"]).parse({}),
+                        )
                       }
                     >
                       <Label htmlFor="available_action">Selected Action</Label>
