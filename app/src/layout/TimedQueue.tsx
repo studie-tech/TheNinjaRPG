@@ -26,6 +26,7 @@ interface TimedQueueProps {
     | (Omit<TimedQueueJob, "id" | "startsAt"> & {
         onStop?: () => void;
         stopLabel?: string;
+        stopControl?: React.ReactNode;
       })
     | null;
   waiting: TimedQueueJob[];
@@ -88,6 +89,7 @@ export const TimedQueue: React.FC<TimedQueueProps> = (props) => {
                     />
                   </span>
                 </span>
+                {active.stopControl}
                 {active.onStop && (
                   <Button
                     size="icon"

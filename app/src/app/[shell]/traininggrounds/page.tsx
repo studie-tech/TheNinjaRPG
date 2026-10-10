@@ -74,7 +74,10 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
-import { EnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
+import {
+  EnergyTrainingQueue,
+  useEnergyTrainingQueue,
+} from "@/layout/EnergyTrainingQueue";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, {
@@ -95,7 +98,7 @@ import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { effectiveMasteries } from "@/libs/mastery";
 import { useInfinitePagination } from "@/libs/pagination";
-import { getEnergyQueue } from "@/libs/queue";
+import { getEnergyQueue, getMasteryQueue } from "@/libs/queue";
 import { cn } from "@/libs/shadui";
 import { getStealthStatus } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
@@ -114,19 +117,16 @@ import {
   isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,
   masteryTrainingBlockMessage,
+  queuedMasteryStartBlockMessage,
   statTrainingBlockMessage,
   trainEfficiency,
   trainingEnergyMessage,
-  trainingSpeedSeconds,
 } from "@/libs/train";
 import { isTutorialJutsuPickStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
+import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { capitalizeFirstLetter } from "@/utils/string";
-import {
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  secondsFromDate,
-} from "@/utils/time";
+import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { CaptchaVerifySchema } from "@/validators/misc";
 import { captchaVerifySchema } from "@/validators/misc";
@@ -514,10 +514,17 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const efficiency = trainEfficiency(userData);
   const [energy, setEnergy] = useState<number | null>(null);
+  const [statTrainingMode, setStatTrainingMode] = useState("Train now");
+  const isQueueingStats = statTrainingMode === "Queue";
+  const [queuedMasterySpeed, setQueuedMasterySpeed] = useState<TrainingSpeed | null>(
+    null,
+  );
   const [availableEnergy, setAvailableEnergy] = useState(() =>
     currentTrainingEnergy(userData, timeDiff),
   );
-  const trainingEnergy = energy ?? availableEnergy;
+  const maxTrainingEnergy = isQueueingStats ? userData.maxEnergy : availableEnergy;
+  const trainingEnergy = energy ?? maxTrainingEnergy;
+  const energyQueueLength = getEnergyQueue(userData).length;
   useEffect(() => {
     const update = () => setAvailableEnergy(currentTrainingEnergy(userData, timeDiff));
     update();
@@ -567,6 +574,15 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
       },
     });
 
+  const {
+    saveQueue: queueStatTraining,
+    isPending: isQueueingEnergy,
+    error: energyQueueError,
+  } = useEnergyTrainingQueue(async () => {
+    await utils.misc.getCaptcha.invalidate();
+    captchaForm.reset();
+  });
+
   const { mutate: startMasteryTraining, isPending: isStartingMastery } =
     api.train.startMasteryTraining.useMutation({
       onMutate: () => ({ revision: prepareUserUpdate() }),
@@ -581,6 +597,17 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
         }
       },
       onError: () => utils.profile.getUser.invalidate(),
+    });
+
+  const { mutate: queueMasteryTraining, isPending: isQueueingMastery } =
+    api.train.updateMasteryTrainingQueue.useMutation({
+      onMutate: () => ({ revision: prepareUserUpdate() }),
+      onSuccess: (result) => showMutationToast(result),
+      onSettled: (result, _error, _variables, context) =>
+        updateUser(result?.success ? result.userPatch : undefined, {
+          revision: context?.revision,
+          achievementProgress: result?.achievementProgress,
+        }),
     });
 
   const { mutate: stopMasteryTraining, isPending: isStoppingMastery } =
@@ -631,28 +658,47 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
     collectMasteryTraining(data.guess);
   });
 
-  const isPending = isStarting || isStartingMastery || isStoppingMastery || isChanging;
+  const isPending =
+    isStarting ||
+    isQueueingEnergy ||
+    isStartingMastery ||
+    isQueueingMastery ||
+    isStoppingMastery ||
+    isChanging;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
   const iconClassName = "w-5 h-5 absolute top-1 right-1 text-blue-500";
   const { mastery_cap } = getUserCaps(userData.rank);
+  const masteryEntries = getMasteryQueue(userData);
+  const selectedMasterySpeed = userData.currentlyTrainingMastery
+    ? (queuedMasterySpeed ?? userData.trainingSpeed)
+    : userData.trainingSpeed;
 
   const renderCaptchaStop = () => {
     if (!showCaptcha) {
       return (
-        <XCircle
-          className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label="Collect and stop mastery training"
+          disabled={isPending}
           onClick={() => collectMasteryTraining()}
-        />
+        >
+          <XCircle className="h-4 w-4 text-red-600" />
+        </Button>
       );
     }
     if (!captcha) return <Loader explanation="Loading captcha" />;
     return (
       <Popover>
-        <PopoverTrigger className="absolute top-4 right-4 z-30">
-          <XCircle className="h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
+        <PopoverTrigger
+          aria-label="Collect and stop mastery training"
+          disabled={isPending}
+          className="flex h-9 w-9 items-center justify-center"
+        >
+          <XCircle className="h-4 w-4 text-red-600" />
         </PopoverTrigger>
         <PopoverContent>
           <p className="font-bold text-lg">Verify Humanity</p>
@@ -686,30 +732,6 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
     );
   };
 
-  const renderTrainingOverlay = (stat: MasteryName, startedAt: Date | null) => (
-    <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
-      <div className="m-auto flex flex-col items-center text-center text-white">
-        <p className="p-5 text-2xl">Training {getTrainingLabel(stat)}</p>
-        <Image src={getTrainingImage(stat)} alt={stat} width={128} height={128} />
-        <div className="w-2/3">
-          {startedAt && (
-            <p className="text-2xl">
-              Time Left:{" "}
-              <Countdown
-                targetDate={secondsFromDate(
-                  trainingSpeedSeconds(userData.trainingSpeed),
-                  startedAt,
-                )}
-                timeDiff={timeDiff}
-              />
-            </p>
-          )}
-          {renderCaptchaStop()}
-        </div>
-      </div>
-    </div>
-  );
-
   // Overlay rather than replace each box, so the sections below keep their place
   const pendingOverlay = isPending && (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
@@ -719,13 +741,31 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
 
   return (
     <>
+      {props.section === "Stats" && energyQueueLength > 0 && (
+        <EnergyTrainingQueue
+          user={userData}
+          availableEnergy={availableEnergy}
+          getGuess={() => captchaForm.getValues("guess")}
+          refreshCaptcha={async () => {
+            await utils.misc.getCaptcha.invalidate();
+            captchaForm.reset();
+          }}
+        />
+      )}
       {props.section === "Stats" && (
         <ContentBox
           title="Combat stats"
-          subtitle="Instant training"
+          subtitle={isQueueingStats ? "Train as Energy recovers" : "Instant training"}
           initialBreak={props.initialBreak}
           topRightContent={
             <div className="my-2 ml-2 flex flex-col gap-1">
+              <NavTabs
+                current={statTrainingMode}
+                options={["Train now", "Queue"]}
+                setValue={(value) => {
+                  if (!isPending) setStatTrainingMode(value);
+                }}
+              />
               <div className="flex items-center justify-end gap-1">
                 <Popover>
                   <PopoverTrigger
@@ -736,15 +776,18 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                   </PopoverTrigger>
                   <PopoverContent className="max-w-64 text-sm">
                     Choose how much Energy to spend, then select a stat to train it
-                    instantly. Each Energy gives {STATS_PER_ENERGY} stats before
-                    training bonuses. Max keeps the amount synced with available Energy
-                    as you spend and regenerate it. Enter an amount to turn Max off.
+                    instantly. Select Queue to train when the chosen Energy amount
+                    recovers, then add entries using the same stat images. Each Energy
+                    gives {STATS_PER_ENERGY} stats before training bonuses. Max keeps
+                    the amount synced with available Energy as you spend and regenerate
+                    it; in Queue mode, Max uses your Energy capacity. Enter an amount to
+                    turn Max off.
                   </PopoverContent>
                 </Popover>
                 <div className="flex">
                   <Input
                     id="training-energy"
-                    aria-label="Energy to spend"
+                    aria-label={isQueueingStats ? "Queued Energy" : "Energy to spend"}
                     type="number"
                     min={1}
                     step={1}
@@ -757,10 +800,16 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     variant={energy === null ? "default" : "outline"}
                     size="sm"
                     className="h-9 rounded-l-none border-l-0"
-                    aria-label="Automatically use available Energy"
+                    aria-label={
+                      isQueueingStats
+                        ? "Use maximum Energy threshold"
+                        : "Automatically use available Energy"
+                    }
                     aria-pressed={energy === null}
                     disabled={isPending}
-                    onClick={() => setEnergy(energy === null ? availableEnergy : null)}
+                    onClick={() =>
+                      setEnergy(energy === null ? maxTrainingEnergy : null)
+                    }
                   >
                     Max
                   </Button>
@@ -800,11 +849,30 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     key={`${stat}-${i}`}
                     onClick={() => {
                       const block =
-                        statTrainingBlockMessage(userData) ??
+                        statTrainingBlockMessage(
+                          isQueueingStats && userData.status === "ASLEEP"
+                            ? { ...userData, status: "AWAKE" }
+                            : userData,
+                        ) ??
                         (overCap ? "Already capped" : null) ??
-                        trainingEnergyMessage(trainingEnergy, availableEnergy);
+                        (isQueueingStats
+                          ? energyQueueLength >= getQueueTotalCapacity(userData)
+                            ? "Energy queue is full"
+                            : !Number.isInteger(trainingEnergy) ||
+                                trainingEnergy <= 0 ||
+                                trainingEnergy > userData.maxEnergy
+                              ? "Enter a whole Energy amount between 1 and your capacity."
+                              : null
+                          : trainingEnergyMessage(trainingEnergy, availableEnergy));
                       if (block) showMutationToast({ success: false, message: block });
-                      else
+                      else if (isQueueingStats) {
+                        const entries = getEnergyQueue(userData);
+                        queueStatTraining({
+                          expectedEntries: entries,
+                          entries: [...entries, { stat, energy: trainingEnergy }],
+                          guess: captchaForm.getValues("guess"),
+                        });
+                      } else
                         startTraining({
                           stat,
                           energy: trainingEnergy,
@@ -836,18 +904,21 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
               })}
             </div>
           </div>
+          {energyQueueError && (
+            <p role="alert" className="mt-2 text-destructive text-sm">
+              {energyQueueError}
+            </p>
+          )}
           {pendingOverlay}
         </ContentBox>
       )}
-      {props.section === "Stats" && (
-        <EnergyTrainingQueue
+      {props.section === "Masteries" && (
+        <MasteryTrainingQueue
           user={userData}
-          availableEnergy={availableEnergy}
-          getGuess={() => captchaForm.getValues("guess")}
-          refreshCaptcha={async () => {
-            await utils.misc.getCaptcha.invalidate();
-            captchaForm.reset();
-          }}
+          timeDiff={timeDiff}
+          getLabel={getTrainingLabel}
+          stopControl={renderCaptchaStop()}
+          isProcessing={isPending}
         />
       )}
       {props.section === "Masteries" && (
@@ -861,17 +932,19 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
               {efficiency}% efficiency · {userData.dailyTrainings} /{" "}
               {MAX_DAILY_TRAININGS} daily sessions
             </p>
+            <p className="text-muted-foreground text-xs">
+              {userData.currentlyTrainingMastery
+                ? "Choose an interval, then select a mastery image to add a session to the queue."
+                : "Choose an interval, then select a mastery image to start training."}
+            </p>
             <div className="overflow-x-auto overflow-y-hidden">
               <NavTabs
-                current={userData.trainingSpeed}
+                current={selectedMasterySpeed}
                 options={TrainingSpeeds}
                 setValue={(value) => {
                   if (isPending) return;
                   if (userData.currentlyTrainingMastery) {
-                    showMutationToast({
-                      success: false,
-                      message: "Cannot change training speed while training",
-                    });
+                    setQueuedMasterySpeed(value as TrainingSpeed);
                     return;
                   }
                   changeSpeed({ speed: value as TrainingSpeed });
@@ -890,12 +963,23 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
                     key={`${stat}-${i}`}
                     onClick={() => {
-                      const block = masteryTrainingBlockMessage(userData);
+                      const entry = { stat, speed: selectedMasterySpeed };
+                      const block = userData.currentlyTrainingMastery
+                        ? (queuedMasteryStartBlockMessage(userData, entry) ??
+                          (masteryEntries.length >= getQueueWaitingSlots(userData)
+                            ? "Mastery queue is full"
+                            : null))
+                        : masteryTrainingBlockMessage(userData);
                       if (block) showMutationToast({ success: false, message: block });
                       else if (overCap)
                         showMutationToast({
                           success: false,
                           message: "Already capped",
+                        });
+                      else if (userData.currentlyTrainingMastery)
+                        queueMasteryTraining({
+                          expectedEntries: masteryEntries,
+                          entries: [...masteryEntries, entry],
                         });
                       else startMasteryTraining({ stat });
                     }}
@@ -923,21 +1007,9 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                 );
               })}
             </div>
-            {userData.currentlyTrainingMastery &&
-              renderTrainingOverlay(
-                userData.currentlyTrainingMastery,
-                userData.masteryTrainingStartedAt,
-              )}
           </div>
           {pendingOverlay}
         </ContentBox>
-      )}
-      {props.section === "Masteries" && (
-        <MasteryTrainingQueue
-          user={userData}
-          timeDiff={timeDiff}
-          getLabel={getTrainingLabel}
-        />
       )}
     </>
   );
@@ -1266,6 +1338,33 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   return (
     <>
+      {(activeTraining || queuedJobs.length > 0) && (
+        <TimedQueue
+          title="Jutsu training queue"
+          subtitle="Levels that start when the active training ends"
+          capacity={trainingQueue?.capacity ?? 1}
+          help="Select a jutsu while another is training to queue its next level. Its ryo is paid when queued and refunded if you cancel it before it starts. Queued levels start one after another, also while you are offline; a level that became cheaper by then refunds the difference."
+          active={activeTraining}
+          waiting={queuedJobs.map((job) => ({
+            id: job.id,
+            title: job.name,
+            detail: `to level ${job.level}, ${job.reservedRyo.toLocaleString()} ryo`,
+            startsAt: job.startsAt,
+            finishesAt: job.finishesAt,
+          }))}
+          cancelLabel="Cancel and refund"
+          onCancel={(queueId) => cancelQueued({ queueId })}
+          isPending={isPending}
+          timeDiff={timeDiff}
+          emptyText="Nothing in training. Select a jutsu below to start."
+          onActiveFinish={async () => {
+            setTrainingFinishedAt(Date.now());
+            // serial-invalidation-ok: reading the queue starts the successor before ownership is read.
+            await utils.jutsu.getTrainingQueue.invalidate();
+            await utils.jutsu.getUserJutsus.invalidate();
+          }}
+        />
+      )}
       <ContentBox
         title="Techniques"
         subtitle="Jutsu Techniques"
@@ -1277,9 +1376,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       >
         <JutsuStatQuickFilters state={state} />
         {userData && (
-          // The grid scrolls in its own bounded viewport, so the training queue below
-          // stays a short scroll away however many jutsu are listed. A minimum height
-          // through the first load keeps the box from collapsing when the jutsu arrive.
+          // Bound the selector's scroll area; retain its height while jutsu load.
           <div className={cn("pt-3", !jutsus && "min-h-[320px]")}>
             <div
               id="jutsu-training-picker"
@@ -1389,31 +1486,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           </div>
         )}
       </ContentBox>
-      <TimedQueue
-        title="Jutsu training queue"
-        subtitle="Levels that start when the active training ends"
-        capacity={trainingQueue?.capacity ?? 1}
-        help="Select a jutsu while another is training to queue its next level. Its ryo is paid when queued and refunded if you cancel it before it starts. Queued levels start one after another, also while you are offline; a level that became cheaper by then refunds the difference."
-        active={activeTraining}
-        waiting={queuedJobs.map((job) => ({
-          id: job.id,
-          title: job.name,
-          detail: `to level ${job.level}, ${job.reservedRyo.toLocaleString()} ryo`,
-          startsAt: job.startsAt,
-          finishesAt: job.finishesAt,
-        }))}
-        cancelLabel="Cancel and refund"
-        onCancel={(queueId) => cancelQueued({ queueId })}
-        isPending={isPending}
-        timeDiff={timeDiff}
-        emptyText="Nothing in training. Select a jutsu above to start."
-        onActiveFinish={async () => {
-          setTrainingFinishedAt(Date.now());
-          // serial-invalidation-ok: reading the queue starts the successor before ownership is read.
-          await utils.jutsu.getTrainingQueue.invalidate();
-          await utils.jutsu.getUserJutsus.invalidate();
-        }}
-      />
     </>
   );
 };
