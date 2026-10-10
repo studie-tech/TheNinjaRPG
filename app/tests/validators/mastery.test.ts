@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
 import { masteryQuestTemplates } from "@/libs/masteryQuests";
 import { QuestValidator } from "@/validators/objectives";

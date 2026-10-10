@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { MasteryNames, TOTAL_MASTERY_CAP } from "@/drizzle/constants";
 import { userData, quest, questHistory } from "@/drizzle/schema";
 import { masteryQuestTemplates } from "@/libs/masteryQuests";
