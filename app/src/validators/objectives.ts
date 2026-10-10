@@ -8,6 +8,7 @@ import {
   IMG_BADGE_ARENAKILLS,
   IMG_BADGE_B_CRIME_TOTAL,
   IMG_BADGE_B_MISSION_TOTAL,
+  IMG_BADGE_BLOODLINE_COLLECTION,
   IMG_BADGE_BUY_ITEM,
   IMG_BADGE_C_CRIME_TOTAL,
   IMG_BADGE_C_MISSION_TOTAL,
@@ -320,7 +321,7 @@ export const objectiveImageMap: Record<
   },
   farming_level: { image: IMG_FARM_PLOT_SOIL, title: "Farming Level" },
   bloodline_collection: {
-    image: IMG_BADGE_COLLECT_ITEM,
+    image: IMG_BADGE_BLOODLINE_COLLECTION,
     title: "Bloodline Collection",
   },
   move_to_location: { image: IMG_BADGE_MOVE_TO_LOCATION, title: "Travel" },
