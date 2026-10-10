@@ -2200,9 +2200,7 @@ export const isAvailableUserQuests = (
   if (!masteryCheck)
     message +=
       "Quest requires more earned mastery (equipment and bloodline bonuses do not count)\n";
-  if (!promotionCheck)
-    message +=
-      "Complete the previous mastery exam and reach the earned mastery threshold first\n";
+  if (!promotionCheck) message += "Quest requires the previous mastery rank\n";
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
   if (!medicalRankCheck)
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;

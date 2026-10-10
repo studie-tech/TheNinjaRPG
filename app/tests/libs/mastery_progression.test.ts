@@ -48,6 +48,16 @@ describe("earned mastery progression", () => {
       expect(template.content.objectives).toHaveLength(3);
     }
   });
+  it("uses configured minimums for rank rewards instead of adding an implicit soft cap gate", () => {
+    const adept = { ...masteryQuestTemplates()[1]!, hidden: false, questType: "event" as const, requiredNinjutsuMastery: 500000 };
+    const novice = user({ ninjutsuMastery: 599999.85, masteryRanks: { ninjutsuMastery: "NOVICE" } });
+    expect(isAvailableUserQuests(adept, novice).check).toBe(true);
+    expect(isAvailableUserQuests(adept, { ...novice, ninjutsuMastery: 499999 }).check).toBe(false);
+    expect(isAvailableUserQuests(adept, user({ ...novice, baseStatsForModifiers: { ninjutsuMastery: 499999 } })).check).toBe(false);
+    expect(isAvailableUserQuests({ ...adept, requiredNinjutsuMastery: 0 }, { ...novice, ninjutsuMastery: 0 }).check).toBe(true);
+    expect(isAvailableUserQuests(adept, { ...novice, masteryRanks: { ninjutsuMastery: "ADEPT" } }).check).toBe(false);
+    expect(isAvailableUserQuests(adept, { ...novice, masteryRanks: {} }).check).toBe(false);
+  });
   it("keeps discipline XP separate from sage-mode XP while collapsing rewards", () => {
     const reward = collapseRewards([ObjectiveReward.parse({ reward_sage_stat_experience: 30, reward_sage_mastery_experience: 10 }), ObjectiveReward.parse({ reward_sage_stat_experience: 20 })]);
     expect(reward.reward_sage_stat_experience).toBe(50);

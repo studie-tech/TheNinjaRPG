@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
   MASTERY_RANK_CAPS,
-  MASTERY_RANK_REQUIREMENTS,
   MASTERY_RANKS,
   type MasteryName,
   MasteryNames,
@@ -31,8 +30,9 @@ export const masteryGainUpdates = (gains: Partial<Record<MasteryName, number>>) 
     }),
   );
 
-/** Quest claims provide replay protection; rank grants can only advance the next exam. */
+/** Quest eligibility enforces configured mastery minimums; claims prevent replays.
+ * The live rank guard keeps concurrent rewards from skipping or downgrading ranks. */
 export const masteryRankUpdate = (stat: MasteryName, rank: MasteryRank) => {
   const previous = MASTERY_RANKS[MASTERY_RANKS.indexOf(rank) - 1];
-  return sql`CASE WHEN COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${userData.masteryRanks}, ${`$.${stat}`})), 'NONE') = ${previous ?? "NONE"} AND ${userData[stat]} >= ${MASTERY_RANK_REQUIREMENTS[rank]} THEN JSON_SET(${userData.masteryRanks}, ${`$.${stat}`}, ${rank}) ELSE ${userData.masteryRanks} END`;
+  return sql`CASE WHEN COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${userData.masteryRanks}, ${`$.${stat}`})), 'NONE') = ${previous ?? "NONE"} THEN JSON_SET(${userData.masteryRanks}, ${`$.${stat}`}, ${rank}) ELSE ${userData.masteryRanks} END`;
 };

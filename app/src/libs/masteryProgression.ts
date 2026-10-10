@@ -1,6 +1,5 @@
 import {
   MASTERY_RANK_CAPS,
-  MASTERY_RANK_REQUIREMENTS,
   MASTERY_RANKS,
   type MasteryName,
   MasteryNames,
@@ -48,11 +47,10 @@ export const allocateMasteryGains = (
   return gains;
 };
 
+/** Earned mastery requirements belong to the quest's configurable minimum fields. */
 export const canPromoteMastery = (
   user: MasteryProgressionSource,
   stat: MasteryName,
   rank: MasteryRank,
 ) =>
-  MASTERY_RANKS.indexOf(rank) ===
-    MASTERY_RANKS.indexOf(getMasteryRank(user, stat)) + 1 &&
-  (user[stat] ?? 0) >= MASTERY_RANK_REQUIREMENTS[rank];
+  MASTERY_RANKS.indexOf(rank) === MASTERY_RANKS.indexOf(getMasteryRank(user, stat)) + 1;

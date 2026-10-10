@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { MAP_WAKE_ISLAND_SECTOR, MISSIONS_PER_DAY } from "@/drizzle/constants";
 import { resolveDashboardContent } from "@/libs/profileDashboard";
+import { ObjectiveReward } from "@/validators/rewards";
 
 type Candidate = Parameters<typeof resolveDashboardContent>[0][number];
 type User = Parameters<typeof resolveDashboardContent>[1];
@@ -23,6 +24,13 @@ const candidate = (patch: Partial<Candidate> = {}): Candidate => ({
   requiredBloodlineId: null,
   requiredSageModeId: null,
   requiredSageRank: null,
+  requiredNinjutsuMastery: null,
+  requiredGenjutsuMastery: null,
+  requiredTaijutsuMastery: null,
+  requiredBukijutsuMastery: null,
+  requiredBloodlineMastery: null,
+  requiredSageMastery: null,
+  content: { reward: ObjectiveReward.parse({}) },
   maxLevel: 100,
   maxAttempts: 0,
   maxCompletes: 0,
@@ -71,6 +79,13 @@ const user = (patch: Partial<User> = {}): User =>
   }) as User;
 
 describe("dashboard discovery from shared profile data", () => {
+  it("matches the quest board's configured mastery minimum and next-rank eligibility", () => {
+    const candidates = [candidate({ requiredNinjutsuMastery: 500000, content: { reward: ObjectiveReward.parse({ reward_mastery_stat: "ninjutsuMastery", reward_mastery_rank: "ADEPT" }) } })];
+    const novice = user({ ninjutsuMastery: 599999.85, masteryRanks: { ninjutsuMastery: "NOVICE" } });
+    expect(resolveDashboardContent(candidates, novice)).toHaveLength(1);
+    expect(resolveDashboardContent(candidates, { ...novice, ninjutsuMastery: 499999 })).toEqual([]);
+    expect(resolveDashboardContent(candidates, { ...novice, masteryRanks: { ninjutsuMastery: "ADEPT" } })).toEqual([]);
+  });
   it("unlocks cached candidates when getUser supplies a completed prerequisite", () => {
     const candidates = [candidate({ prerequisiteQuestId: "prerequisite" })];
     expect(resolveDashboardContent(candidates, user())).toEqual([]);
