@@ -5,18 +5,18 @@ START TRANSACTION;
 
 INSERT INTO `Badge` (`id`, `name`, `image`, `description`)
 VALUES
-  ('VS85nhAoJho0dkaysxEH8', 'D-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-wXJUcn5MH_aCeS6idk2Z1.webp', 'Owned every non-hidden bloodline of rank D.'),
-  ('nQUr5SFZm-YY4tdttiAFJ', 'C-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-Wdf8EdJAeq4ItKzJCG8zW.webp', 'Owned every non-hidden bloodline of rank C.'),
-  ('vBu_E1FTfNXUgIlLRXVMB', 'B-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-w1KP61NqsFz9NF-PEd-Sk.webp', 'Owned every non-hidden bloodline of rank B.'),
-  ('hyrjqNx7yMbgqFU7MG6rJ', 'A-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-K6CAoYe1RtXva13yzM7CG.webp', 'Owned every non-hidden bloodline of rank A.'),
-  ('8pQWSftrLCH7zNYWzb-vy', 'S-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-bwaOIZ0wnbXpESgwiRm1R.webp', 'Owned every non-hidden bloodline of rank S.'),
-  ('vlKAZg9W2dYR76q5iIqOl', 'H-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-tylMqcNz8D7jmW1o1oDZz.webp', 'Owned every non-hidden bloodline of rank H.'),
-  ('9ncRuqQdK638BoM4LdIFY', 'All Bloodlines', 'https://ui0arpl8sm.ufs.sh/f/content-wTb1jIfUGrucy47TdRJAk.webp', 'Owned every non-hidden bloodline across all ranks.')
+  ('VS85nhAoJho0dkaysxEH8', 'D-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/PCVBalojA_LBNC7vHc--s.webp', 'Owned every non-hidden bloodline of rank D.'),
+  ('nQUr5SFZm-YY4tdttiAFJ', 'C-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/KZBPst2aFUMA9VmKKSHBx.webp', 'Owned every non-hidden bloodline of rank C.'),
+  ('vBu_E1FTfNXUgIlLRXVMB', 'B-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/YlezKaHHmAHzmseBda6Yi.webp', 'Owned every non-hidden bloodline of rank B.'),
+  ('hyrjqNx7yMbgqFU7MG6rJ', 'A-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/5ccVstvRmHVZB1iid1so8.webp', 'Owned every non-hidden bloodline of rank A.'),
+  ('8pQWSftrLCH7zNYWzb-vy', 'S-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/YdYvNRYvoU_nF__fDM47v.webp', 'Owned every non-hidden bloodline of rank S.'),
+  ('vlKAZg9W2dYR76q5iIqOl', 'H-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/hancjMjcnBGiz4MrURaUI.webp', 'Owned every non-hidden bloodline of rank H.'),
+  ('9ncRuqQdK638BoM4LdIFY', 'All Bloodlines', 'https://ui0arpl8sm.ufs.sh/f/ZQyNIkckHEC2XXm5NvOi2.webp', 'Owned every non-hidden bloodline across all ranks.')
 ON DUPLICATE KEY UPDATE `id` = `Badge`.`id`;
 
 INSERT INTO `Quest` (`id`, `name`, `image`, `description`, `successDescription`, `questRank`, `requiredLevel`, `maxLevel`, `questType`, `content`, `hidden`, `consecutiveObjectives`, `maxAttempts`, `maxCompletes`, `retryDelay`, `attemptDelay`)
 VALUES
-  ('yUBrMxAvFnNMTIMdIqkWs', 'D-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-wXJUcn5MH_aCeS6idk2Z1.webp', 'Collect every non-hidden bloodline of rank D.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
+  ('yUBrMxAvFnNMTIMdIqkWs', 'D-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/PCVBalojA_LBNC7vHc--s.webp', 'Collect every non-hidden bloodline of rank D.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
   "reward": {
     "reward_exp": 0,
     "reward_rank": "NONE",
@@ -93,7 +93,7 @@ VALUES
     "OKW5jP7xcPcHlattw1XNJ"
   ]
 }', 0, 0, 1, 1, 'none', 'none'),
-  ('WhlFEtsIbCUq53L84FQo6', 'C-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-Wdf8EdJAeq4ItKzJCG8zW.webp', 'Collect every non-hidden bloodline of rank C.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
+  ('WhlFEtsIbCUq53L84FQo6', 'C-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/KZBPst2aFUMA9VmKKSHBx.webp', 'Collect every non-hidden bloodline of rank C.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
   "reward": {
     "reward_exp": 0,
     "reward_rank": "NONE",
@@ -170,7 +170,7 @@ VALUES
     "OKW5jP7xcPcHlattw1XNJ"
   ]
 }', 0, 0, 1, 1, 'none', 'none'),
-  ('pkkRYsVbB2Rs-V5Q9Kuod', 'B-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-w1KP61NqsFz9NF-PEd-Sk.webp', 'Collect every non-hidden bloodline of rank B.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
+  ('pkkRYsVbB2Rs-V5Q9Kuod', 'B-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/YlezKaHHmAHzmseBda6Yi.webp', 'Collect every non-hidden bloodline of rank B.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
   "reward": {
     "reward_exp": 0,
     "reward_rank": "NONE",
@@ -247,7 +247,7 @@ VALUES
     "OKW5jP7xcPcHlattw1XNJ"
   ]
 }', 0, 0, 1, 1, 'none', 'none'),
-  ('n05YRB5bl5zUjwqMPBJSN', 'A-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-K6CAoYe1RtXva13yzM7CG.webp', 'Collect every non-hidden bloodline of rank A.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
+  ('n05YRB5bl5zUjwqMPBJSN', 'A-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/5ccVstvRmHVZB1iid1so8.webp', 'Collect every non-hidden bloodline of rank A.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
   "reward": {
     "reward_exp": 0,
     "reward_rank": "NONE",
@@ -324,7 +324,7 @@ VALUES
     "OKW5jP7xcPcHlattw1XNJ"
   ]
 }', 0, 0, 1, 1, 'none', 'none'),
-  ('wNOr8nnxzGQy3f3JFk9ch', 'S-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-bwaOIZ0wnbXpESgwiRm1R.webp', 'Collect every non-hidden bloodline of rank S.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
+  ('wNOr8nnxzGQy3f3JFk9ch', 'S-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/YdYvNRYvoU_nF__fDM47v.webp', 'Collect every non-hidden bloodline of rank S.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
   "reward": {
     "reward_exp": 0,
     "reward_rank": "NONE",
@@ -401,7 +401,7 @@ VALUES
     "OKW5jP7xcPcHlattw1XNJ"
   ]
 }', 0, 0, 1, 1, 'none', 'none'),
-  ('-ox0s_IEnFE-PNg0LCSuc', 'H-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/content-tylMqcNz8D7jmW1o1oDZz.webp', 'Collect every non-hidden bloodline of rank H.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
+  ('-ox0s_IEnFE-PNg0LCSuc', 'H-Rank Bloodline Collector', 'https://ui0arpl8sm.ufs.sh/f/hancjMjcnBGiz4MrURaUI.webp', 'Collect every non-hidden bloodline of rank H.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
   "reward": {
     "reward_exp": 0,
     "reward_rank": "NONE",
@@ -478,7 +478,7 @@ VALUES
     "OKW5jP7xcPcHlattw1XNJ"
   ]
 }', 0, 0, 1, 1, 'none', 'none'),
-  ('l3ZJjFP0_BiyawXjxVHqU', 'All Bloodlines', 'https://ui0arpl8sm.ufs.sh/f/content-wTb1jIfUGrucy47TdRJAk.webp', 'Collect every non-hidden bloodline across all ranks.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
+  ('l3ZJjFP0_BiyawXjxVHqU', 'All Bloodlines', 'https://ui0arpl8sm.ufs.sh/f/ZQyNIkckHEC2XXm5NvOi2.webp', 'Collect every non-hidden bloodline across all ranks.', 'Collection complete.', 'D', 1, 100, 'achievement', '{
   "reward": {
     "reward_exp": 0,
     "reward_rank": "NONE",
