@@ -138,7 +138,7 @@ import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
   getPublicQuestUser,
-  getUncheckedQuestTargetSectors,
+  getQuestTargetSectorsToCheck,
   isAvailableUserQuests,
   mockAchievementHistoryEntries,
   questHasOverworldObjectives,
@@ -739,7 +739,7 @@ export const profileRouter = createTRPCRouter({
         !needsBootstrap &&
         !notifications.length &&
         !consequences.some((entry) => entry.type !== "update_user") &&
-        getUncheckedQuestTargetSectors(progressedUser, trackers).length === 0;
+        getQuestTargetSectorsToCheck(progressedUser, trackers).length === 0;
       return {
         ...(canProject
           ? getUserProgressionUpdate(progressedUser, publishedAchievementIds)
@@ -3472,11 +3472,11 @@ export const fetchUpdatedUser = async (props: {
     const { trackers, notifications, consequences } = trackerResults;
 
     // Quest targets (random rolls, village-relative or authored coordinates) may sit on
-    // water or obstacles of the published sector map. Each target is checked once, right
-    // after it is instantiated, and moved onto the nearest reachable tile; the check flag is
-    // persisted so later reads skip the map fetch. This depends on the sectors rolled above,
-    // so it cannot join an earlier Promise.all.
-    const targetSectors = getUncheckedQuestTargetSectors(user, trackers);
+    // water or obstacles of the published sector map. Check new targets and recheck those in
+    // the current sector so map edits cannot strand an active mission. Published maps use the
+    // shared TTL cache; unchanged targets do not trigger another tracker write. This depends
+    // on the sectors rolled above, so it cannot join an earlier Promise.all.
+    const targetSectors = getQuestTargetSectorsToCheck(user, trackers, true);
     if (targetSectors.length > 0) {
       const sectorMaps = await fetchPublishedSectorMaps(client, targetSectors).catch(
         (error: unknown) => {

@@ -6,7 +6,7 @@ import {
 } from "@/drizzle/constants";
 import {
   getNewTrackers,
-  getUncheckedQuestTargetSectors,
+  getQuestTargetSectorsToCheck,
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
@@ -168,7 +168,7 @@ describe("snapQuestTargetsToReachable", () => {
     const user = makeUser(quest);
     const { trackers } = getNewTrackers(user, [{ task: "any" }]);
 
-    expect(getUncheckedQuestTargetSectors(user, trackers)).toEqual([5]);
+    expect(getQuestTargetSectorsToCheck(user, trackers)).toEqual([5]);
     const changed = snapQuestTargetsToReachable(
       user,
       trackers,
@@ -185,7 +185,7 @@ describe("snapQuestTargetsToReachable", () => {
       goal?.longitude,
     );
     // Checked targets are not fetched or touched again.
-    expect(getUncheckedQuestTargetSectors(user, trackers)).toEqual([]);
+    expect(getQuestTargetSectorsToCheck(user, trackers)).toEqual([]);
     expect(snapQuestTargetsToReachable(user, trackers, new Map())).toBe(false);
   });
 
@@ -215,6 +215,63 @@ describe("snapQuestTargetsToReachable", () => {
     expect(goal).toMatchObject({ longitude: 3, latitude: 3, locationChecked: true });
   });
 
+  it("repairs a checked mission target when the player visits a changed sector", () => {
+    const quest = makeQuest("q1", [
+      moveObjective("m1", { sector: 724, longitude: 14, latitude: 6 }),
+    ]);
+    const user = makeUser(quest);
+    const { trackers } = getNewTrackers(user, [{ task: "any" }]);
+    snapQuestTargetsToReachable(
+      user,
+      trackers,
+      new Map([[724, makeMap([], undefined, 26)]]),
+    );
+    expect(trackers[0]?.goals[0]).toMatchObject({
+      longitude: 14,
+      latitude: 6,
+      locationChecked: true,
+    });
+
+    // A checked remote target does not fetch its map until the player visits.
+    expect(getQuestTargetSectorsToCheck(user, trackers, true)).toEqual([]);
+    user.sector = 724;
+    expect(getQuestTargetSectorsToCheck(user, trackers, true)).toEqual([724]);
+    const maps = new Map([[724, makeMap([[14, 6]], undefined, 26)]]);
+    expect(snapQuestTargetsToReachable(user, trackers, maps)).toBe(true);
+    const goal = trackers[0]?.goals[0];
+    expect({ x: goal?.longitude, y: goal?.latitude }).not.toEqual({ x: 14, y: 6 });
+    const objective = user.userQuests[0]?.quest.content.objectives[0];
+    expect(objective).toMatchObject({
+      longitude: goal?.longitude,
+      latitude: goal?.latitude,
+    });
+
+    // Rechecking the same map must not keep writing the tracker.
+    expect(snapQuestTargetsToReachable(user, trackers, maps)).toBe(false);
+    // Mutation response eligibility only asks whether initial checks are pending.
+    expect(getQuestTargetSectorsToCheck(user, trackers)).toEqual([]);
+  });
+
+  it("repairs a checked tile cut off from spawn by a map edit", () => {
+    const quest = makeQuest("q1", [moveObjective("m1", { longitude: 5, latitude: 2 })]);
+    const user = makeUser(quest);
+    const { trackers } = getNewTrackers(user, [{ task: "any" }]);
+    snapQuestTargetsToReachable(user, trackers, new Map([[5, makeMap([])]]));
+    user.sector = 5;
+    snapQuestTargetsToReachable(
+      user,
+      trackers,
+      new Map([[5, makeMap(wallAtColumn(3))]]),
+    );
+    expect(trackers[0]?.goals[0]).toMatchObject({ longitude: 2, latitude: 2 });
+
+    user.longitude = 2;
+    user.latitude = 2;
+    user.questData = trackers;
+    const progressed = getNewTrackers(user, [{ task: "move_to_location" }]);
+    expect(progressed.trackers[0]?.goals[0]?.done).toBe(true);
+  });
+
   it("keeps a goal unchecked while its sector has no published map", () => {
     const quest = makeQuest("q1", [moveObjective("m1")]);
     const user = makeUser(quest);
@@ -222,7 +279,7 @@ describe("snapQuestTargetsToReachable", () => {
 
     expect(snapQuestTargetsToReachable(user, trackers, new Map())).toBe(false);
     expect(trackers[0]?.goals[0]?.locationChecked).toBeUndefined();
-    expect(getUncheckedQuestTargetSectors(user, trackers)).toEqual([5]);
+    expect(getQuestTargetSectorsToCheck(user, trackers)).toEqual([5]);
   });
 
   it("skips finished and placement-bound objectives", () => {
@@ -280,7 +337,7 @@ describe("snapQuestTargetsToReachable", () => {
       },
     ];
 
-    expect(getUncheckedQuestTargetSectors(user, trackers)).toEqual([]);
+    expect(getQuestTargetSectorsToCheck(user, trackers)).toEqual([]);
     expect(
       snapQuestTargetsToReachable(user, trackers, new Map([[5, makeMap([[3, 3]])]])),
     ).toBe(false);

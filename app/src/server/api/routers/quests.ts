@@ -87,8 +87,8 @@ import {
   getMissionHallSettings,
   getNewTrackers,
   getPublicQuestUser,
+  getQuestTargetSectorsToCheck,
   getReward,
-  getUncheckedQuestTargetSectors,
   getUserQuests,
   isAvailableUserQuests,
   isQuestRankAllowed,
@@ -565,7 +565,7 @@ export const questsRouter = createTRPCRouter({
         message: `Quest started: ${result.name}${rankInfo}`,
         ...(assignment.userCacheEligible &&
         !updatedUser.requiresProgressionRefresh &&
-        getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0
+        getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
           ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
           : {}),
       };
@@ -608,7 +608,7 @@ export const questsRouter = createTRPCRouter({
         userCacheEligible === true &&
         !updatedUser.requiresProgressionRefresh &&
         questData.questType !== "war" &&
-        getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0
+        getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
           ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
           : {}),
       };
@@ -1180,7 +1180,7 @@ export const questsRouter = createTRPCRouter({
         ) &&
         refreshedTrackers.consequences.length === 0 &&
         claim.userDelta !== undefined &&
-        getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0
+        getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
           ? getUserProgressionUpdate(user, publishedAchievementIds)
           : undefined;
       // Energy payouts advance the DB version in SQL; preserve the cached stamp
