@@ -53,9 +53,11 @@ export const ElementalMastery = ({
   const onSuccess = async (result: { success: boolean; message: string }) => {
     setMessage(result.message);
     showMutationToast(result);
-    await utils.profile.getUser.invalidate();
-    await utils.profile.getPublicUser.invalidate();
-    await utils.misc.getCaptcha.invalidate();
+    await Promise.all([
+      utils.profile.getUser.invalidate(),
+      utils.profile.getPublicUser.invalidate(),
+      utils.misc.getCaptcha.invalidate(),
+    ]);
   };
   const onError = () => {
     setMessage("Could not save. Please try again.");
