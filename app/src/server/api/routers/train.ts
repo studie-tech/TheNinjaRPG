@@ -173,7 +173,7 @@ export const trainRouter = createTRPCRouter({
           ? getUserProgressionUpdate(
               {
                 ...user,
-                experience: user.experience + amount,
+                experience: Math.round(user.experience + amount),
                 [input.stat]: user[input.stat] + amount,
                 curEnergy: user.curEnergy - spent,
                 questData: trackers,

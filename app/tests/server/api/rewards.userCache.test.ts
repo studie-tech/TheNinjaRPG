@@ -28,6 +28,14 @@ describe("confirmed reward cache deltas", () => {
     expect(getRewardUserDelta(reward({ reward_reputation: 3 }))).toBeUndefined();
   });
 
+  it.each(["reward_money", "reward_seichi_silver", "reward_exp"])(
+    "reconciles fractional %s because its atomic payout targets an integer column",
+    (field) => {
+      expect(getRewardUserDelta(reward({ [field]: 0.6 }), 0, true)).toBeUndefined();
+      expect(getRewardUserDelta(reward({ [field]: -0.6 }), 0, true)).toBeUndefined();
+    },
+  );
+
   it.each([
     ["reward_prestige", -1],
     ["reward_rank", "GENIN"],

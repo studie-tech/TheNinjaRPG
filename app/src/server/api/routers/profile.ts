@@ -2016,7 +2016,7 @@ export const profileRouter = createTRPCRouter({
       const data = {
         ...stats,
         experience: user.experience + combatSpent,
-        earnedExperience: user.earnedExperience - spent,
+        earnedExperience: Math.round(user.earnedExperience - spent),
       };
       const result = await claimUserSnapshot({
         client: ctx.drizzle,
@@ -3284,9 +3284,10 @@ export const fetchUpdatedUser = async (props: {
         ? { ...user, questData: structuredClone(user.questData) }
         : null;
       const regen = user.regeneration * ticks;
-      user.curHealth = Math.min(user.curHealth + regen, user.maxHealth);
-      user.curStamina = Math.min(user.curStamina + regen, user.maxStamina);
-      user.curChakra = Math.min(user.curChakra + regen, user.maxChakra);
+      // These pools are integer columns; expose the same rounding MySQL persists.
+      user.curHealth = Math.round(Math.min(user.curHealth + regen, user.maxHealth));
+      user.curStamina = Math.round(Math.min(user.curStamina + regen, user.maxStamina));
+      user.curChakra = Math.round(Math.min(user.curChakra + regen, user.maxChakra));
       user.curEnergy =
         queuedTraining?.curEnergy ?? Math.min(user.curEnergy + regen, user.maxEnergy);
       if (queuedTraining) {
@@ -3298,7 +3299,7 @@ export const fetchUpdatedUser = async (props: {
         for (const [stat, amount] of Object.entries(queuedTraining.gains)) {
           user[stat as CombatStatName] += amount;
         }
-        user.experience += trained;
+        user.experience = Math.round(user.experience + trained);
         if (trained > 0)
           user.questData = filterQuestTrackersForDbPersist(
             getNewTrackers(user, [{ task: "stats_trained", increment: trained }])

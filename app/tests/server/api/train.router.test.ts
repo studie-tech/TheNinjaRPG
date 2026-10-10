@@ -2,7 +2,7 @@
 import {eq} from "drizzle-orm";
 import {afterEach, beforeEach, expect, it, vi} from "vitest";
 import {CombatStatNames, getUserCaps} from "@/drizzle/constants";
-import {bloodline, item, userItem, quest, questHistory, trainingLog, userData, userVote} from "@/drizzle/schema";
+import {bloodline, gameSetting, item, userItem, quest, questHistory, trainingLog, userData, userVote} from "@/drizzle/schema";
 import {fetchUpdatedUser} from "@/server/api/routers/profile";
 import {trainRouter} from "@/server/api/routers/train";
 import {InstantNewQuestObjective, SimpleObjective} from "@/validators/objectives";
@@ -65,7 +65,7 @@ const backdate = async (patch: Partial<typeof userData.$inferInsert>) => {
 };
 
 describeWithDatabase("Energy and mastery training against a real MySQL", () => {
-  beforeEach(async () => { await resetTables(trainingLog, questHistory, quest, userVote, userItem, item, userData, bloodline); });
+  beforeEach(async () => { await resetTables(trainingLog, questHistory, quest, userVote, userItem, item, userData, bloodline, gameSetting); });
   afterEach(() => vi.restoreAllMocks());
 
   it.each(["AWAKE", "ASLEEP"] as const)(
@@ -329,6 +329,33 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(result.userPatch?.defence).toBeCloseTo(before.defence + 52);
     expect(result.userPatch?.experience).toBeCloseTo(before.experience + 65);
     expect(await readLogs()).toHaveLength(2);
+  });
+
+  it.each(["queue", "instant"] as const)("matches persisted integer XP while keeping fractional %s stat gains", async (action) => {
+    const cap = getUserCaps("GENIN").stats_cap;
+    await trainee({ curEnergy: 100, regeneration: 0, offence: cap - 1.64, experience: 56,
+      energyTrainingQueue: action === "queue" ? [{ stat: "offence", energy: 40 }] : [] });
+    const result = action === "queue"
+      ? await (await caller()).updateEnergyTrainingQueue({ entries: [], expectedEntries: [] })
+      : await (await caller()).startTraining({ stat: "offence", energy: 40 });
+    expect(result.success).toBe(true);
+    const saved = await readUser();
+    expect(saved.experience).toBe(58);
+    expect(saved.offence).toBe(cap);
+    expect(result.userPatch).toMatchObject({ experience: saved.experience, offence: saved.offence });
+    expect(result.userPatch?.curEnergy).toBeCloseTo(saved.curEnergy, 10);
+    expect((await readLogs())[0]?.amount).toBeCloseTo(1.64);
+  });
+
+  it("returns integer pools matching confirmed boosted regeneration without rounding Energy", async () => {
+    await trainee({ level: 2, curEnergy: 0, curHealth: 0, curChakra: 0, curStamina: 0, regeneration: 10, regenAt: minutesAgo(2) });
+    await (await getTestDatabase()).insert(gameSetting).values({ id: "fractional-regen", name: "regenGainMultiplier", value: 1.391, time: new Date(Date.now() + 60_000) });
+    const result = await (await caller()).updateEnergyTrainingQueue({ entries: [], expectedEntries: [] });
+    expect(result.success).toBe(true);
+    const saved = await readUser();
+    expect(result.userPatch).toMatchObject({ curHealth: saved.curHealth, curChakra: saved.curChakra, curStamina: saved.curStamina, curEnergy: saved.curEnergy });
+    expect(saved.curHealth).toBe(28);
+    expect(saved.curEnergy).toBeCloseTo(27.82);
   });
 
   it.each(["queue", "instant", "mastery"] as const)("keeps a full refresh for %s after automatic element assignment", async (action) => {

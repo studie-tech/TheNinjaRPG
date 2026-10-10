@@ -3820,6 +3820,10 @@ export const getRewardUserDelta = (
   hasQuestSnapshot = false,
 ): UserDelta | undefined => {
   if (
+    // Integer columns round SQL payouts; fractional atomic increments need reconciliation.
+    [rewards.reward_money, rewards.reward_seichi_silver, rewards.reward_exp].some(
+      (amount) => !Number.isInteger(amount),
+    ) ||
     (!hasQuestSnapshot && rewards.reward_reputation !== 0) ||
     rewards.reward_prestige < 0 ||
     rewards.reward_rank !== "NONE" ||
