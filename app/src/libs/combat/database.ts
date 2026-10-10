@@ -140,7 +140,13 @@ export const updateBattle = async (
 
   // Get user and other user
   const user = newBattle.usersState.find((u) => u.userId === userId && !u.isSummon);
-  const other = newBattle.usersState.find((u) => u.userId !== userId && !u.isSummon);
+  const other = newBattle.usersState.find(
+    (u) =>
+      u.userId !== userId &&
+      !u.isSummon &&
+      (!["QUEST", "OVERWORLD"].includes(newBattle.battleType) ||
+        u.direction !== user?.direction),
+  );
 
   // Non-summon humans in this raid battle. Used to purge raid-chat memberships
   // on any raid battle-over (boss kill OR team wipe) and to release/notify

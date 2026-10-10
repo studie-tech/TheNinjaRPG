@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { Grid, rectangle } from "honeycomb-grid";
 import { TerrainHex } from "@/libs/hexgrid";
-import { aiProfile, battle, battleHistory, dataBattleAction, quest, questHistory, userData } from "@/drizzle/schema";
-import { saveUsage, updateUser } from "@/libs/combat/database";
+import { aiProfile, battle, battleHistory, dataBattleAction, logBattleLengths, quest, questHistory, userData } from "@/drizzle/schema";
+import { saveUsage, updateBattle, updateUser } from "@/libs/combat/database";
 import { DefeatOpponents, ObjectiveTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { getTargetUser } from "@/libs/combat/actions";
@@ -11,8 +11,9 @@ import { getBattleSpawnLocations } from "@/libs/combat/participants";
 import { calcBattleResult, getDistanceToClosestEnemy } from "@/libs/combat/util";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
+import { dataRouter } from "@/server/api/routers/data";
 import { insertUsers, insertQuests, insertQuestHistory } from "../../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 
 const scenario = (battleType: "QUEST" | "OVERWORLD", enemyHealth = 100) => makeCompleteBattle({
@@ -58,7 +59,7 @@ describe("quest ally teams", () => {
 
 describeWithDatabase("NPC ally battle initiation", () => {
   beforeEach(async () => {
-    await resetTables(battle, battleHistory, userData, aiProfile, quest, questHistory, dataBattleAction);
+    await resetTables(battle, battleHistory, userData, aiProfile, quest, questHistory, dataBattleAction, logBattleLengths);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     const database = await getTestDatabase();
     await database.insert(aiProfile).values({ id: "Default", userId: "template", rules: [] });
@@ -70,6 +71,34 @@ describeWithDatabase("NPC ally battle initiation", () => {
     ]);
   });
   afterEach(() => vi.restoreAllMocks());
+
+  for (const type of ["QUEST", "OVERWORLD"] as const) {
+    it(`${type} records enemy levels with no ally and either ally ordering`, async () => {
+      const client = await getTestDatabase();
+      for (const order of ["no-ally", "hero-first", "ally-first"] as const) {
+        const snapshot = scenario(type, 0);
+        snapshot.version = 1;
+        for (const user of snapshot.usersState) {
+          user.level = user.userId === "hero" ? 50 : user.userId === "guide" ? 10 : 40;
+        }
+        if (order === "no-ally") snapshot.usersState = snapshot.usersState.filter((u) => u.userId !== "guide");
+        if (order === "ally-first") snapshot.usersState = [snapshot.usersState[1]!, snapshot.usersState[0]!, snapshot.usersState[2]!];
+        await client.insert(battle).values(snapshot);
+        const result = calcBattleResult(snapshot, "hero", []);
+        expect(result?.didWin).toBe(1);
+        const claim = await updateBattle(client, result, "hero", snapshot, snapshot.version);
+        expect(claim).not.toBeNull();
+        await claim?.finishBattle();
+      }
+      const rows = await client.query.logBattleLengths.findMany();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ battleType: type, winnerLevel: 50, loserLevel: 40, count: 3 });
+      const caller = await callerFor(dataRouter, "hero");
+      const statistics = await caller.getBattleLengthStatistics({ battleTypes: [type], minLoserLevel: 40, maxLoserLevel: 40 });
+      expect(statistics[0]?.count).toBe(3);
+      expect(await caller.getBattleLengthStatistics({ battleTypes: [type], minLoserLevel: 10, maxLoserLevel: 10 })).toEqual([]);
+    });
+  }
 
   it("clones the same template onto both teams, preloads AI profiles and excludes allies from reward scaling", async () => {
     const client = await getTestDatabase();
