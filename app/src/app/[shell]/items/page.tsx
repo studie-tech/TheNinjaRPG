@@ -162,6 +162,7 @@ export default function MyItems() {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (!data.success) return;
         await Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),
           updateUser("data" in data ? data.data : undefined, { revision }),
