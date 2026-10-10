@@ -69,6 +69,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -399,13 +400,13 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
               >
                 Min
               </Label>
-              <Input
+              <NumberInput
                 id="minPrice"
-                type="number"
+                optional
                 min={0}
                 placeholder="0"
                 value={minPrice}
-                onChange={(e) => setMinPrice(e.target.value)}
+                onTextChange={setMinPrice}
                 className="mt-1 h-11 rounded-xl shadow-sm"
               />
             </div>
@@ -416,13 +417,13 @@ const AuctionListing: React.FC<AuctionListingProps> = ({ selectedStatus }) => {
               >
                 Max
               </Label>
-              <Input
+              <NumberInput
                 id="maxPrice"
-                type="number"
+                optional
                 min={0}
                 placeholder="∞"
                 value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
+                onTextChange={setMaxPrice}
                 className="mt-1 h-11 rounded-xl shadow-sm"
               />
             </div>
@@ -1112,12 +1113,11 @@ const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
                 </div>
 
                 <div className="flex flex-col gap-1.5 sm:flex-row">
-                  <Input
-                    type="number"
+                  <NumberInput
                     inputMode="numeric"
                     placeholder="Bid amount (whole numbers)"
                     value={bidAmount}
-                    onChange={(e) => setBidAmount(e.target.value)}
+                    onTextChange={setBidAmount}
                     min={minIntegerBid}
                     step={1}
                     className="h-9 flex-1"
@@ -1697,20 +1697,13 @@ export const NewAuctionListingDialog: React.FC = () => {
                   <FormItem>
                     <FormLabel>Quantity to Auction</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
+                      <NumberInput
                         min="1"
                         max={selectedItem?.quantity || 1}
                         placeholder={`1-${selectedItem?.quantity || 1}`}
                         {...field}
-                        onChange={(e) => {
-                          const value =
-                            e.target.value === ""
-                              ? undefined
-                              : parseInt(e.target.value, 10);
-                          field.onChange(Number.isNaN(value || 0) ? undefined : value);
-                        }}
-                        value={field.value || ""}
+                        onValueChange={field.onChange}
+                        value={field.value ?? ""}
                       />
                     </FormControl>
                     <p className="text-muted-foreground text-sm">
@@ -1756,8 +1749,7 @@ export const NewAuctionListingDialog: React.FC = () => {
                     <FormItem>
                       <FormLabel>Min bidder level</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <NumberInput
                           inputMode="numeric"
                           step={1}
                           min={AUCTION_BIDDER_LEVEL_MIN}
@@ -1766,16 +1758,7 @@ export const NewAuctionListingDialog: React.FC = () => {
                           name={field.name}
                           ref={field.ref}
                           onBlur={field.onBlur}
-                          onChange={(e) => {
-                            const n = Number.parseInt(e.target.value, 10);
-                            const next = Number.isFinite(n)
-                              ? Math.min(
-                                  AUCTION_BIDDER_LEVEL_MAX,
-                                  Math.max(AUCTION_BIDDER_LEVEL_MIN, n),
-                                )
-                              : AUCTION_BIDDER_LEVEL_MIN;
-                            field.onChange(next);
-                          }}
+                          onValueChange={field.onChange}
                         />
                       </FormControl>
                       <p className="text-muted-foreground text-xs">
@@ -1793,8 +1776,7 @@ export const NewAuctionListingDialog: React.FC = () => {
                     <FormItem>
                       <FormLabel>Max bidder level</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <NumberInput
                           inputMode="numeric"
                           step={1}
                           min={AUCTION_BIDDER_LEVEL_MIN}
@@ -1803,16 +1785,7 @@ export const NewAuctionListingDialog: React.FC = () => {
                           name={field.name}
                           ref={field.ref}
                           onBlur={field.onBlur}
-                          onChange={(e) => {
-                            const n = Number.parseInt(e.target.value, 10);
-                            const next = Number.isFinite(n)
-                              ? Math.min(
-                                  AUCTION_BIDDER_LEVEL_MAX,
-                                  Math.max(AUCTION_BIDDER_LEVEL_MIN, n),
-                                )
-                              : AUCTION_BIDDER_LEVEL_MAX;
-                            field.onChange(next);
-                          }}
+                          onValueChange={field.onChange}
                         />
                       </FormControl>
                       <p className="text-muted-foreground text-xs">
@@ -1866,8 +1839,7 @@ export const NewAuctionListingDialog: React.FC = () => {
                   <FormItem>
                     <FormLabel>Starting Price</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
+                      <NumberInput
                         inputMode="numeric"
                         step={1}
                         min={minimumTotal}
@@ -1877,15 +1849,7 @@ export const NewAuctionListingDialog: React.FC = () => {
                         name={field.name}
                         ref={field.ref}
                         onBlur={field.onBlur}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          if (raw === "") {
-                            field.onChange(undefined);
-                            return;
-                          }
-                          const n = Number(raw);
-                          field.onChange(Number.isFinite(n) ? n : undefined);
-                        }}
+                        onValueChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />
@@ -1900,8 +1864,8 @@ export const NewAuctionListingDialog: React.FC = () => {
                   <FormItem>
                     <FormLabel>Buyout Price (Optional)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
+                      <NumberInput
+                        optional
                         inputMode="numeric"
                         step={1}
                         min={Math.max(minimumTotal, (watchedStartingPrice ?? 0) + 1)}
@@ -1911,15 +1875,7 @@ export const NewAuctionListingDialog: React.FC = () => {
                         name={field.name}
                         ref={field.ref}
                         onBlur={field.onBlur}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          if (raw === "") {
-                            field.onChange(undefined);
-                            return;
-                          }
-                          const n = Number(raw);
-                          field.onChange(Number.isFinite(n) ? n : undefined);
-                        }}
+                        onOptionalValueChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />

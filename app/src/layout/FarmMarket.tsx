@@ -102,8 +102,17 @@ export function FarmMarket({ farmState, pendingKeys, onBuy }: FarmMarketProps) {
               <Button
                 className="w-full"
                 size="sm"
-                disabled={!entry.canPurchase || pending || quantity > max}
-                onClick={() => void onBuy(entry, quantity)}
+                disabled={
+                  !entry.canPurchase ||
+                  pending ||
+                  !Number.isInteger(quantity) ||
+                  quantity < 1 ||
+                  quantity > max
+                }
+                onClick={() => {
+                  if (Number.isInteger(quantity) && quantity >= 1 && quantity <= max)
+                    void onBuy(entry, quantity);
+                }}
               >
                 {pending ? "Purchasing…" : "Purchase"}
               </Button>

@@ -25,8 +25,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   COST_EXTRA_ITEM_SLOT,
   IMG_EQUIP_SILHOUETTE,
@@ -784,7 +784,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   );
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isSplitDialogOpen, setIsSplitDialogOpen] = useState<boolean>(false);
-  const [quantityToKeep, setQuantityToKeep] = useState<string>("");
+  const [quantityToKeep, setQuantityToKeep] = useState<number>(Number.NaN);
   const [isRepairModalOpen, setIsRepairModalOpen] = useState<boolean>(false);
   const [variantItem, setVariantItem] = useState<UserItemWithVariants | undefined>(
     undefined,
@@ -860,7 +860,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
         if (data.success) {
           await utils.item.getUserItemsWithVariants.invalidate();
           setIsSplitDialogOpen(false);
-          setQuantityToKeep("");
+          setQuantityToKeep(Number.NaN);
         }
       },
       onSettled,
@@ -962,9 +962,9 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   // Split stack handler
   const handleSplitStack = () => {
     if (!useritem) return;
-    const quantity = parseInt(quantityToKeep, 10);
+    const quantity = quantityToKeep;
     if (
-      Number.isNaN(quantity) ||
+      !Number.isInteger(quantity) ||
       quantity < 1 ||
       quantity >= useritem.quantity ||
       !useritem.item.canStack
@@ -1098,7 +1098,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                       variant="info"
                       onClick={() => {
                         setIsSplitDialogOpen(true);
-                        setQuantityToKeep("");
+                        setQuantityToKeep(Number.NaN);
                       }}
                     >
                       <Split className="mr-2 h-5 w-5" />
@@ -1272,23 +1272,21 @@ const Backpack: React.FC<BackpackProps> = (props) => {
             </DialogHeader>
             <div className="py-4">
               <Label htmlFor="quantity">Quantity to Keep</Label>
-              <Input
+              <NumberInput
                 id="quantity"
-                type="number"
                 min="1"
                 max={useritem.quantity - 1}
                 value={quantityToKeep}
-                onChange={(e) => setQuantityToKeep(e.target.value)}
+                onValueChange={setQuantityToKeep}
                 placeholder={`1-${useritem.quantity - 1}`}
                 className="mt-2"
               />
               <p className="mt-2 text-muted-foreground text-sm">
                 Current stack: {useritem.quantity} items
               </p>
-              {quantityToKeep && !Number.isNaN(parseInt(quantityToKeep, 10)) && (
+              {quantityToKeep && !!Number.isInteger(quantityToKeep) && (
                 <p className="mt-1 text-muted-foreground text-sm">
-                  New stack will have:{" "}
-                  {useritem.quantity - parseInt(quantityToKeep, 10)} items
+                  New stack will have: {useritem.quantity - quantityToKeep} items
                 </p>
               )}
             </div>
@@ -1297,7 +1295,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 variant="outline"
                 onClick={() => {
                   setIsSplitDialogOpen(false);
-                  setQuantityToKeep("");
+                  setQuantityToKeep(Number.NaN);
                 }}
                 disabled={isSplitting}
               >
@@ -1308,9 +1306,9 @@ const Backpack: React.FC<BackpackProps> = (props) => {
                 disabled={
                   isSplitting ||
                   !quantityToKeep ||
-                  Number.isNaN(parseInt(quantityToKeep, 10)) ||
-                  parseInt(quantityToKeep, 10) < 1 ||
-                  parseInt(quantityToKeep, 10) >= useritem.quantity
+                  !Number.isInteger(quantityToKeep) ||
+                  quantityToKeep < 1 ||
+                  quantityToKeep >= useritem.quantity
                 }
               >
                 {isSplitting ? "Splitting" : "Split Stack"}

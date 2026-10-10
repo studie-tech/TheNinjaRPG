@@ -9,6 +9,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -482,9 +483,8 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                 <label htmlFor="variant-order" className="font-medium text-sm">
                   Order (1–{MAX_ITEM_VARIANTS})
                 </label>
-                <Input
+                <NumberInput
                   id="variant-order"
-                  type="number"
                   {...form.register("order")}
                   min={1}
                   max={MAX_ITEM_VARIANTS}
@@ -522,12 +522,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({ itemId }) => {
                 <label htmlFor="variant-cost" className="font-medium text-sm">
                   Cost
                 </label>
-                <Input
-                  id="variant-cost"
-                  type="number"
-                  {...form.register("cost")}
-                  min={0}
-                />
+                <NumberInput id="variant-cost" {...form.register("cost")} min={0} />
                 {form.formState.errors.cost && (
                   <p className="mt-1 text-destructive text-xs">
                     {form.formState.errors.cost.message}

@@ -18,6 +18,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   COST_EXTRA_JUTSU_SLOT,
@@ -708,17 +709,14 @@ export default function MyJutsu() {
                           <>
                             <p>
                               Transfer{" "}
-                              <input
-                                type="number"
+                              <NumberInput
                                 min={1}
                                 max={Math.min(
                                   userjutsu.level - 1,
                                   JUTSU_TRANSFER_MAX_LEVEL - transferTarget.level,
                                 )}
                                 value={transferValue}
-                                onChange={(e) =>
-                                  setTransferValue(parseInt(e.target.value, 10) || 1)
-                                }
+                                onValueChange={setTransferValue}
                                 style={{
                                   width: "50px",
                                   margin: "0 5px",

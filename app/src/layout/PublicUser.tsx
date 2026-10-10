@@ -1,4 +1,5 @@
 "use client";
+import { NumberInput } from "@/components/ui/number-input";
 
 /**
  * WARNING: This page is loaded very frequently, so it is important to keep it as light as possible.
@@ -1183,13 +1184,13 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                           <FormItem>
                             <FormLabel>Reputation Amount</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
+                              <NumberInput
                                 step="any"
                                 placeholder="Enter reputation amount"
                                 disabled={awardPending || Boolean(awardTarget)}
                                 {...field}
                                 value={field.value as number}
+                                onValueChange={field.onChange}
                               />
                             </FormControl>
                             <FormMessage />
@@ -1204,13 +1205,13 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                           <FormItem>
                             <FormLabel>Money Amount</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
+                              <NumberInput
                                 step="1"
                                 placeholder="Enter money amount"
                                 disabled={awardPending || Boolean(awardTarget)}
                                 {...field}
                                 value={field.value as number}
+                                onValueChange={field.onChange}
                               />
                             </FormControl>
                             <FormMessage />
@@ -1318,16 +1319,11 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                               <FormItem>
                                 <FormLabel>Experience Amount</FormLabel>
                                 <FormControl>
-                                  <Input
-                                    type="number"
+                                  <NumberInput
                                     step="1"
                                     placeholder="Enter experience amount"
                                     {...field}
-                                    onChange={(event) =>
-                                      field.onChange(
-                                        Number.parseInt(event.target.value, 10) || 0,
-                                      )
-                                    }
+                                    onValueChange={field.onChange}
                                     min="1"
                                     max="100000"
                                   />
@@ -2854,18 +2850,14 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
                             <FormItem>
                               <FormLabel>Level</FormLabel>
                               <FormControl>
-                                <Input
-                                  type="number"
+                                <NumberInput
                                   className="w-20"
                                   min={0}
                                   max={25}
                                   step={1}
                                   disabled={isJutsuAdjustmentPending}
                                   {...field}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    field.onChange(value ? Number(value) : 0);
-                                  }}
+                                  onValueChange={field.onChange}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -3047,18 +3039,14 @@ const EditUserComponent: React.FC<EditUserComponentProps> = ({
                             <FormItem>
                               <FormLabel>Level</FormLabel>
                               <FormControl>
-                                <Input
-                                  type="number"
+                                <NumberInput
                                   className="w-20"
                                   min={1}
                                   max={ITEM_LEVEL_CAP}
                                   step={1}
                                   disabled={isItemAdjustmentPending}
                                   {...field}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    field.onChange(value ? Number(value) : 1);
-                                  }}
+                                  onValueChange={field.onChange}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -4874,11 +4862,10 @@ const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
           </p>
           <div className="space-y-2">
             <Label htmlFor="silver-delta">Amount (+/-)</Label>
-            <Input
+            <NumberInput
               id="silver-delta"
-              type="number"
               value={delta}
-              onChange={(e) => setDelta(e.target.value)}
+              onTextChange={setDelta}
               placeholder="e.g. 500 or -250"
             />
           </div>

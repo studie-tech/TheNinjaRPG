@@ -10,8 +10,8 @@ import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { ActivityStreakTypes, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
 import Accordion from "@/layout/Accordion";
@@ -119,10 +119,24 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
 
   const handleSubmit = form.handleSubmit(
     (data: ActivityStreakFormOutput) => {
+      if (
+        rewards.some(
+          (reward) =>
+            !Number.isInteger(reward.dayNumber) ||
+            reward.dayNumber < 1 ||
+            reward.dayNumber > 60,
+        )
+      ) {
+        showMutationToast({
+          success: false,
+          message: "Enter a whole day number between 1 and 60.",
+        });
+        return;
+      }
       updateConfig({
         id: config.id,
         ...data,
-        rewards: rewards.sort((a, b) => a.dayNumber - b.dayNumber),
+        rewards: [...rewards].sort((a, b) => a.dayNumber - b.dayNumber),
       });
     },
     (errors) => showFormErrorsToast(errors),
@@ -134,11 +148,12 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
     while (existingDays.includes(nextDay)) {
       nextDay++;
     }
+    const id = nanoid();
     setRewards([
       ...rewards,
-      { id: nanoid(), dayNumber: nextDay, rewards: ObjectiveReward.parse({}) },
+      { id, dayNumber: nextDay, rewards: ObjectiveReward.parse({}) },
     ]);
-    setOpenDay(`Day ${nextDay}`);
+    setOpenDay(id);
   };
 
   const removeReward = (index: number) => {
@@ -220,18 +235,19 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
         </div>
 
         <div className="space-y-1">
-          {rewards
+          {[...rewards]
             .sort((a, b) => a.dayNumber - b.dayNumber)
             .map((reward) => {
               const originalIndex = rewards.findIndex((r) => r.id === reward.id);
               const rewardSummary = getRewardArray(reward.rewards).join(" • ");
-              const dayKey = `day-${reward.dayNumber}`;
+              const dayKey = reward.id;
 
               const displayImage = reward.image || IMG_AVATAR_DEFAULT;
 
               return (
                 <Accordion
                   key={dayKey}
+                  selectionKey={dayKey}
                   title={`Day ${reward.dayNumber}`}
                   selectedTitle={openDay}
                   onClick={setOpenDay}
@@ -256,16 +272,12 @@ const SingleEditConfig: React.FC<SingleEditConfigProps> = ({ config, refetch }) 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Label>Day</Label>
-                        <Input
-                          type="number"
+                        <NumberInput
                           min={1}
                           max={60}
                           value={reward.dayNumber}
-                          onChange={(e) =>
-                            updateRewardDay(
-                              originalIndex,
-                              parseInt(e.target.value, 10) || 1,
-                            )
+                          onValueChange={(value) =>
+                            updateRewardDay(originalIndex, value)
                           }
                           className="w-20"
                         />

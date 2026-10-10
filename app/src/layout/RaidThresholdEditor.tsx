@@ -21,8 +21,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
 import { EditContent, EffectFormWrapper, type FormEntry } from "@/layout/EditContent";
 import Modal from "@/layout/Modal";
@@ -356,11 +356,12 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
                   <FormItem>
                     <FormLabel>Damage Required</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
+                      <NumberInput
+                        step="any"
                         min={1}
                         {...field}
                         value={field.value as number}
+                        onValueChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />
@@ -374,12 +375,13 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
                   <FormItem>
                     <FormLabel>Sort Order</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
+                      <NumberInput
+                        step="any"
                         min={0}
                         max={255}
                         {...field}
                         value={field.value as number}
+                        onValueChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />
@@ -437,13 +439,14 @@ export const RaidThresholdEditor: React.FC<RaidThresholdEditorProps> = ({
                     <FormItem>
                       <FormLabel>Effect Duration (minutes)</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <NumberInput
+                          step="any"
                           min={1}
                           max={10080}
                           placeholder="60"
                           {...field}
                           value={field.value as number}
+                          onValueChange={field.onChange}
                         />
                       </FormControl>
                       <p className="text-muted-foreground text-xs">

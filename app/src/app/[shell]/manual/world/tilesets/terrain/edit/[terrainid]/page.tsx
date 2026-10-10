@@ -8,6 +8,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { COMBAT_BIOMES } from "@/drizzle/constants";
 import type { MapTerrain } from "@/drizzle/schema";
@@ -226,9 +227,8 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
             <Label htmlFor="terrain-depression">
               Depression (0 = flat, 0.5 = deep water recess)
             </Label>
-            <Input
+            <NumberInput
               id="terrain-depression"
-              type="number"
               step="0.05"
               min="0"
               max="1"
@@ -237,9 +237,8 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
           </div>
           <div className="space-y-1">
             <Label htmlFor="terrain-walkcost">Default walk cost</Label>
-            <Input
+            <NumberInput
               id="terrain-walkcost"
-              type="number"
               min="1"
               max="50"
               {...form.register("defaultWalkCost", { valueAsNumber: true })}

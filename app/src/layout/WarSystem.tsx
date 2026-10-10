@@ -25,7 +25,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -548,12 +548,12 @@ export const WarMap: React.FC<{
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <Input
+                        <NumberInput
                           className="w-full"
                           placeholder={`Sector ID (0-${MAP_SECTOR_ID_MAX})`}
-                          type="number"
                           {...field}
                           value={field.value as number | undefined}
+                          onValueChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />
@@ -2234,16 +2234,12 @@ export const VillageWar: React.FC<{
                             render={({ field }) => (
                               <FormItem>
                                 <FormControl>
-                                  <Input
-                                    type="number"
+                                  <NumberInput
                                     disabled={isSurrendering || isAdminEnding}
                                     placeholder={`Token offer (min ${WAR_ALLY_OFFER_MIN}, max ${userVillage?.tokens?.toLocaleString()})`}
                                     {...field}
                                     value={field.value as number}
-                                    onChange={(e) => {
-                                      const value = parseInt(e.target.value, 10);
-                                      field.onChange(value);
-                                    }}
+                                    onValueChange={field.onChange}
                                   />
                                 </FormControl>
                                 <FormMessage className="text-xs" />

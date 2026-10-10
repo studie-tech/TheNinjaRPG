@@ -15,6 +15,9 @@ export function FarmTransactionSummary({
   unitPrice,
   suffix = "farm coins",
 }: FarmTransactionSummaryProps) {
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return <p className="text-muted-foreground text-xs">Enter a valid quantity.</p>;
+  }
   return (
     <p className="rounded-md bg-muted px-2 py-1.5 text-muted-foreground text-xs">
       {verb} {quantity}× {itemName}

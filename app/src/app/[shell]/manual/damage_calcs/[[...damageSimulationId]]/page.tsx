@@ -19,8 +19,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { NumberInput } from "@/components/ui/number-input";
 import { GeneralTypes, StatTypes } from "@/drizzle/constants";
 import type { DamageSimulation } from "@/drizzle/schema";
 import ContentBox from "@/layout/ContentBox";
@@ -413,7 +413,12 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>Set power</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
+                      <NumberInput
+                        step="any"
+                        {...field}
+                        value={field.value as number}
+                        onValueChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -467,7 +472,12 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>stats_scaling</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
+                      <NumberInput
+                        step="any"
+                        {...field}
+                        value={field.value as number}
+                        onValueChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -480,7 +490,12 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>base_hits</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
+                      <NumberInput
+                        step="any"
+                        {...field}
+                        value={field.value as number}
+                        onValueChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -493,7 +508,12 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>curve</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
+                      <NumberInput
+                        step="any"
+                        {...field}
+                        value={field.value as number}
+                        onValueChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -506,7 +526,12 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>amplitude</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
+                      <NumberInput
+                        step="any"
+                        {...field}
+                        value={field.value as number}
+                        onValueChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -519,7 +544,12 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>ep_normalization</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
+                      <NumberInput
+                        step="any"
+                        {...field}
+                        value={field.value as number}
+                        onValueChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -532,7 +562,12 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>gen_weight</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
+                      <NumberInput
+                        step="any"
+                        {...field}
+                        value={field.value as number}
+                        onValueChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -545,7 +580,12 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>advantage_min</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
+                      <NumberInput
+                        step="any"
+                        {...field}
+                        value={field.value as number}
+                        onValueChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -558,7 +598,12 @@ export default function Simulator(props: {
                   <FormItem>
                     <FormLabel>advantage_max</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} value={field.value as number} />
+                      <NumberInput
+                        step="any"
+                        {...field}
+                        value={field.value as number}
+                        onValueChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -712,7 +757,12 @@ const UserInput: React.FC<UserInputProps> = (props) => {
                 <FormItem>
                   <FormLabel>{stat}</FormLabel>
                   <FormControl>
-                    <Input type="number" {...field} value={field.value as number} />
+                    <NumberInput
+                      step="any"
+                      {...field}
+                      value={field.value as number}
+                      onValueChange={field.onChange}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

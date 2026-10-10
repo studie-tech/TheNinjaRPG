@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -635,20 +636,44 @@ export const EditContent = <
                               {formEntry.label ? formEntry.label : id}
                             </FormLabel>
                             <FormControl>
-                              <Input
-                                id={id}
-                                type={type}
-                                isDirty={fieldState.isDirty}
-                                readOnly={formEntry.readonly}
-                                {...field}
-                                value={
-                                  field.value as
-                                    | string
-                                    | number
-                                    | readonly string[]
-                                    | undefined
-                                }
-                              />
+                              {type === "number" ? (
+                                <NumberInput
+                                  id={id}
+                                  isDirty={fieldState.isDirty}
+                                  readOnly={formEntry.readonly}
+                                  name={field.name}
+                                  ref={field.ref}
+                                  onBlur={field.onBlur}
+                                  value={field.value as number | undefined}
+                                  optional={props.schema.shape[id]?.isOptional()}
+                                  onValueChange={
+                                    props.schema.shape[id]?.isOptional()
+                                      ? undefined
+                                      : field.onChange
+                                  }
+                                  onOptionalValueChange={
+                                    props.schema.shape[id]?.isOptional()
+                                      ? field.onChange
+                                      : undefined
+                                  }
+                                  step="any"
+                                />
+                              ) : (
+                                <Input
+                                  id={id}
+                                  type={type}
+                                  isDirty={fieldState.isDirty}
+                                  readOnly={formEntry.readonly}
+                                  {...field}
+                                  value={
+                                    field.value as
+                                      | string
+                                      | number
+                                      | readonly string[]
+                                      | undefined
+                                  }
+                                />
+                              )}
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1439,20 +1464,17 @@ export const EditContent = <
                                   </Popover>
                                   {/* Drop chance % input (for reward_items) or Number input (for others) */}
                                   <div className="flex items-center gap-1">
-                                    <Input
-                                      type="number"
+                                    <NumberInput
+                                      step="any"
                                       min={0}
                                       max={isRewardItems ? 100 : undefined}
                                       className="w-20"
                                       title={isRewardItems ? "Drop chance %" : "Number"}
                                       placeholder={isRewardItems ? "%" : "#"}
                                       value={entry.number}
-                                      onChange={(e) => {
+                                      onValueChange={(value) => {
                                         const updated = [...valueArr];
-                                        updated[entryIdx] = {
-                                          ...entry,
-                                          number: Number(e.target.value),
-                                        };
+                                        updated[entryIdx] = { ...entry, number: value };
                                         field.onChange(updated);
                                       }}
                                     />
@@ -1465,20 +1487,16 @@ export const EditContent = <
                                   {/* Quantity input (only for reward_items) */}
                                   {isRewardItems && (
                                     <div className="flex items-center gap-1">
-                                      <Input
-                                        type="number"
+                                      <NumberInput
                                         min={1}
                                         step={1}
                                         className="w-20"
                                         title="Quantity"
                                         placeholder="qty"
                                         value={entry.quantity ?? 1}
-                                        onChange={(e) => {
+                                        onValueChange={(value) => {
                                           const updated = [...valueArr];
-                                          updated[entryIdx] = {
-                                            ...entry,
-                                            quantity: Number(e.target.value),
-                                          };
+                                          updated[entryIdx] = { ...entry, quantity: value };
                                           field.onChange(updated);
                                         }}
                                       />
@@ -3030,11 +3048,11 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     const value = eff[field];
     const numVal = typeof value === "number" ? value : Number(value ?? 0);
     return (
-      <Input
-        type="number"
-        value={String(numVal)}
+      <NumberInput
+        value={numVal}
         disabled={opts.disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onValueChange={onChange}
+        step="any"
       />
     );
   }

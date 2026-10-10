@@ -15,8 +15,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -236,8 +236,13 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
 
   /** Parses and adds the pending sector number when it is valid and not already selected. */
   const addSector = () => {
-    const num = parseInt(sectorInput, 10);
-    if (Number.isNaN(num) || watchedSectorList.includes(num)) return;
+    const num = Number(sectorInput);
+    if (
+      sectorInput.trim() === "" ||
+      !Number.isInteger(num) ||
+      watchedSectorList.includes(num)
+    )
+      return;
     form.setValue("sectorList", [...watchedSectorList, num]);
     setSectorInput("");
   };
@@ -330,11 +335,11 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
               <FormItem>
                 <FormLabel>Sector List</FormLabel>
                 <div className="flex gap-2">
-                  <Input
-                    type="number"
+                  <NumberInput
+                    optional
                     placeholder="Add sector number"
                     value={sectorInput}
-                    onChange={(e) => setSectorInput(e.target.value)}
+                    onTextChange={setSectorInput}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -436,15 +441,12 @@ const PlacementsManager: React.FC<PlacementsManagerProps> = ({ aiId, placements 
                           <span className="flex-1 truncate">
                             {quest?.name ?? q.questId}
                           </span>
-                          <Input
-                            type="number"
+                          <NumberInput
                             min={0}
                             max={100}
                             className="h-8 w-20"
                             value={q.chance}
-                            onChange={(e) =>
-                              setQuestChance(q.questId, Number(e.target.value))
-                            }
+                            onValueChange={(value) => setQuestChance(q.questId, value)}
                           />
                           <span className="text-muted-foreground">%</span>
                         </div>
@@ -613,7 +615,11 @@ const IntegerField = ({
       <FormItem className={className}>
         <FormLabel>{label}</FormLabel>
         <FormControl>
-          <Input type="number" {...field} value={field.value as number} />
+          <NumberInput
+            {...field}
+            value={field.value as number}
+            onValueChange={field.onChange}
+          />
         </FormControl>
         <FormMessage />
       </FormItem>

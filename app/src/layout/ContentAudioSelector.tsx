@@ -1,4 +1,5 @@
 "use client";
+
 import { zodResolver } from "@hookform/resolvers/zod";
 import type React from "react";
 import { useState } from "react";
@@ -21,8 +22,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import Loader from "@/layout/Loader";
 import { cn } from "@/libs/shadui";
@@ -144,20 +145,13 @@ const ContentAudioSelector: React.FC<ContentAudioSelectorProps> = (props) => {
                         <FormLabel>Duration (seconds)</FormLabel>
                         <div className="flex items-center gap-2">
                           <FormControl>
-                            <Input
-                              type="number"
+                            <NumberInput
                               min={1}
                               max={5}
                               step={1}
                               className="w-28"
                               value={field.value as number}
-                              onChange={(e) =>
-                                field.onChange(
-                                  Number.isFinite(e.currentTarget.valueAsNumber)
-                                    ? e.currentTarget.valueAsNumber
-                                    : 1,
-                                )
-                              }
+                              onValueChange={field.onChange}
                             />
                           </FormControl>
                           <span className="text-muted-foreground text-sm">seconds</span>

@@ -25,6 +25,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -597,22 +598,15 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
                 <FormItem>
                   <FormLabel>Points to award</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
+                    <NumberInput
                       min={0}
                       max={500}
                       step={1}
                       inputMode="numeric"
                       disabled={reviewPromotion.isPending}
-                      value={Number.isNaN(field.value) ? "" : field.value}
+                      value={field.value}
                       onBlur={field.onBlur}
-                      onChange={(event) => {
-                        field.onChange(
-                          event.target.value === ""
-                            ? Number.NaN
-                            : event.target.valueAsNumber,
-                        );
-                      }}
+                      onValueChange={field.onChange}
                       name={field.name}
                       ref={field.ref}
                     />

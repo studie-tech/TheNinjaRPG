@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -2897,15 +2898,12 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Label htmlFor="experienceAmount">Experience Amount</Label>
-              <Input
+              <NumberInput
                 id="experienceAmount"
-                type="number"
                 min={1}
                 max={100000}
                 value={experienceAmount}
-                onChange={(e) =>
-                  setExperienceAmount(parseInt(e.target.value, 10) || 100)
-                }
+                onValueChange={setExperienceAmount}
                 className="w-32"
               />
             </div>
@@ -2943,12 +2941,11 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Label htmlFor="sectorNumber">Sector #</Label>
-              <Input
+              <NumberInput
                 id="sectorNumber"
-                type="number"
                 min={1}
                 value={sectorNumber}
-                onChange={(e) => setSectorNumber(parseInt(e.target.value, 10) || 1)}
+                onValueChange={setSectorNumber}
                 className="w-20"
               />
             </div>

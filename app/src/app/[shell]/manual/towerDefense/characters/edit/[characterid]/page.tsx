@@ -6,8 +6,8 @@ import { use, useCallback, useEffect, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -318,13 +318,12 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
                       <Label htmlFor={`duration-${index}`} className="text-sm">
                         Frame Duration (ms):
                       </Label>
-                      <Input
+                      <NumberInput
                         id={`duration-${index}`}
-                        type="number"
                         value={anim.frameDurationMs}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           updateAnimationSettings(index, {
-                            frameDurationMs: parseInt(e.target.value, 10) || 100,
+                            frameDurationMs: value,
                           })
                         }
                         className="w-24"
