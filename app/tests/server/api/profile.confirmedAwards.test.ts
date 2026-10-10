@@ -6,7 +6,7 @@ import { miscRouter } from "@/server/api/routers/misc";
 import { profileRouter } from "@/server/api/routers/profile";
 import { callerForDatabase } from "../../setup/testDatabase";
 
-const actor = { userId: "confirmed-award-actor", role: "OWNER", username: "Actor", avatarLight: "", isBanned: false, earnedExperience: 1000, reputationPoints: 100, energyTrainingQueue: [] };
+const actor = { userId: "confirmed-award-actor", role: "OWNER", username: "Actor", avatarLight: "", isBanned: false, earnedExperience: 1000, reputationPoints: 100, energyTrainingQueue: [] as unknown[] };
 const databaseFor = (rowsAffected = 1, queue: unknown[] = []) => ({
   query: {
     userData: {
@@ -14,7 +14,9 @@ const databaseFor = (rowsAffected = 1, queue: unknown[] = []) => ({
       findMany: vi.fn(async () => [{ ...actor, energyTrainingQueue: queue }]),
     },
   },
-  update: vi.fn(() => ({ set: () => ({ where: async () => ({ rowsAffected }) }) })),
+  update: vi.fn(() => ({ set: () => Object.assign(Promise.resolve({ rowsAffected }), {
+    where: async () => ({ rowsAffected }),
+  }) })),
   insert: vi.fn(() => ({ values: async () => ({ rowsAffected: 1 }) })),
 });
 
@@ -43,6 +45,22 @@ describe("confirmed self awards", () => {
       .awardExperience({ targetUserId: actor.userId, amount: 25 });
     expect(result.success).toBe(true);
     expect(result.userDelta).toBeUndefined();
+  });
+
+  it.each([
+    { amount: 25, earnedExperience: 1000, queue: [], delta: { earnedExperience: 25 } },
+    { amount: 25, earnedExperience: 0, queue: [], delta: undefined },
+    { amount: 1.5, earnedExperience: 1000, queue: [], delta: undefined },
+    { amount: 25, earnedExperience: 1000, queue: [{}], delta: undefined },
+  ])("reconciles mass XP (amount=$amount before=$earnedExperience queue=$queue)", async ({ amount, earnedExperience, queue, delta }) => {
+    const database = databaseFor(1, queue);
+    database.query.userData.findFirst.mockImplementation(async () => ({ ...actor, earnedExperience, energyTrainingQueue: queue }));
+    const result = await callerForDatabase(profileRouter, actor.userId, database as never)
+      .awardExperienceToAll({ amount });
+    expect(result.success).toBe(true);
+    expect(result.userDelta).toEqual(delta);
+    expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
+    expect(database.update).toHaveBeenCalledTimes(1);
   });
 
   it("does not confirm an experience increment when no row was written", async () => {
@@ -95,10 +113,15 @@ it.each([
   { rowsAffected: 1, queued: true },
 ])("reconciles faction color from confirmed writes (rows=$rowsAffected queue=$queued)", async ({ rowsAffected, queued }) => {
   const database = databaseFor();
-  database.update.mockImplementationOnce(() => ({ set: () => ({ where: async () => ({ rowsAffected: 1 }) }) }))
-    .mockImplementationOnce(() => ({ set: () => ({ where: async () => ({ rowsAffected }) }) }));
-  database.query.userData.findFirst.mockImplementation(async () => ({ ...actor, isOutlaw: true, clanId: "color-clan", energyTrainingQueue: queued ? [{}] : [] }) as typeof actor);
-  const withClan = { ...database, query: { ...database.query, clan: {
+  let updates = 0;
+  const update = vi.fn(() => {
+    const changedRows = updates++ === 0 ? 1 : rowsAffected;
+    return { set: () => Object.assign(Promise.resolve({ rowsAffected: changedRows }), {
+      where: async () => ({ rowsAffected: changedRows }),
+    }) };
+  });
+  const findFirst = vi.fn(async () => ({ ...actor, isOutlaw: true, clanId: "color-clan", energyTrainingQueue: queued ? [{}] : [] }));
+  const withClan = { ...database, update, query: { ...database.query, userData: { ...database.query.userData, findFirst }, clan: {
     findFirst: vi.fn(async () => ({ id: "color-clan", leaderId: actor.userId, villageId: "color-village", hasHideout: true })),
   } } };
   const result = await callerForDatabase(clanRouter, actor.userId, withClan as never)
@@ -106,6 +129,7 @@ it.each([
   expect(result).toMatchObject({ success: true, villageId: "color-village" });
   expect(result.userDelta).toEqual(rowsAffected && !queued
     ? { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST } : undefined);
-  expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
+  expect(findFirst).toHaveBeenCalledTimes(1);
+  expect(update).toHaveBeenCalledTimes(2);
   expect(withClan.query.clan.findFirst).toHaveBeenCalledTimes(1);
 });
