@@ -108,6 +108,22 @@ describe("AI targeting and clauses", () => {
     }
   });
 
+  for (const battleType of ["QUEST", "OVERWORLD"] as const) {
+    it(`${battleType} targets enemies by side even when an ally shares the enemy template`, () => {
+      const { battle, run } = setup("HIGHEST_MAX_HEALTH_OPPONENT");
+      battle.battleType = battleType;
+      for (const user of battle.usersState) {
+        user.direction = user.userId.startsWith("ally") || user.userId === "actor" ? "left" : "right";
+        user.villageId = "same-village";
+        user.controllerId = "same-template";
+      }
+      const result = run();
+      expect(result.nextActionId).toBe(DAMAGE_JUTSU);
+      expect(result.nextBattle.usersState.find((u) => u.userId === "boss")?.curHealth).toBeLessThan(3000);
+      expect(result.nextBattle.usersState.find((u) => u.userId === "ally-boss")?.curHealth).toBe(5000);
+    });
+  }
+
   it("ignores dead and fled targets", () => {
     const { battle, run } = setup("HIGHEST_MAX_HEALTH_OPPONENT");
     battle.usersState.push(

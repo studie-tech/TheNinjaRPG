@@ -198,13 +198,14 @@ export const fetchAiProfileByUserId = async (client: DrizzleClient, userId: stri
 };
 
 /**
- * Find quests referencing an AI in objectives (opponentAIs/attackers)
+ * Find quests referencing an AI in objectives (opponentAIs/allyAIs/attackers)
  */
 export const getAiRelations = async (client: DrizzleClient, aiId: string) => {
   const questsUsingAi = await client.query.quest.findMany({
     columns: { id: true, name: true },
     where: sql`(
       JSON_SEARCH(${quest.content}, 'one', ${aiId}, NULL, '$.objectives[*].opponentAIs[*].ids[*]') IS NOT NULL
+      OR JSON_SEARCH(${quest.content}, 'one', ${aiId}, NULL, '$.objectives[*].allyAIs[*].ids[*]') IS NOT NULL
       OR JSON_SEARCH(${quest.content}, 'one', ${aiId}, NULL, '$.objectives[*].attackers[*].ids[*]') IS NOT NULL
     )`,
   });

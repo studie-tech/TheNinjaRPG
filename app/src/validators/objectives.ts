@@ -374,6 +374,15 @@ export const attackerFields = {
   attackers_max_per_battle: z.coerce.number().min(0).max(100).prefault(1),
 };
 
+// NPC allies use combatant counts rather than drop percentages.
+const allyAIsField = z
+  .array(
+    idsWithNumberField.unwrap().element.extend({
+      number: z.coerce.number().int().min(1).max(100).prefault(1),
+    }),
+  )
+  .prefault([]);
+
 // Shared fields for battle objectives (start_battle, raids, defeat_opponents)
 export const battleObjectiveFields = {
   failObjectiveId: z.string().optional(),
@@ -433,6 +442,7 @@ export const InstantStartBattleObjective = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
   task: z.literal("start_battle"),
+  allyAIs: allyAIsField,
   opponentAIs: idsWithNumberField.refine((data) => data.length > 0, {
     error: "At least one opponent AI is required",
   }),
@@ -526,6 +536,7 @@ export const DefeatOpponents = z.object({
   ...baseObjectiveFields,
   ...battleObjectiveFields,
   task: z.literal("defeat_opponents"),
+  allyAIs: allyAIsField,
   opponentAIs: idsWithNumberField,
   ...complexObjectiveFields,
 });

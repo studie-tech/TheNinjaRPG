@@ -1,3 +1,4 @@
+import { randomInt as secureRandomInt } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import {
   and,
@@ -98,13 +99,7 @@ import {
   stillInBattle,
 } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import {
-  COMBAT_BORDER_BOTTOM,
-  COMBAT_BORDER_LEFT,
-  COMBAT_BORDER_RIGHT,
-  COMBAT_BORDER_TOP,
-  COMBAT_LOBBY_SECONDS,
-} from "@/libs/combat/constants";
+import { COMBAT_LOBBY_SECONDS } from "@/libs/combat/constants";
 import {
   createAction,
   saveUsage,
@@ -117,6 +112,7 @@ import {
   updateVillageAnbuClan,
   updateWars,
 } from "@/libs/combat/database";
+import { getBattleSpawnLocations } from "@/libs/combat/participants";
 import {
   applyEffects,
   applySageModeAfterRoundTransition,
@@ -1779,6 +1775,8 @@ export const initiateBattle = async (
     sector?: number;
     userIds: string[];
     targetIds: string[];
+    /** NPC templates joining the initiating team, independently of enemy templates. */
+    allyAiIds?: string[];
     client: DrizzleClient;
     userStatDistribution?: AssignableUserStats;
     targetStatDistribution?: AssignableUserStats;
@@ -1796,6 +1794,14 @@ export const initiateBattle = async (
   scaleGains = 1,
 ) => {
   const { longitude, latitude, sector, userIds, targetIds, client } = info;
+
+  const allyAiIds = info.allyAiIds ?? [];
+  if (allyAiIds.length > 0 && !["QUEST", "OVERWORLD"].includes(battleType)) {
+    return {
+      success: false,
+      message: "NPC allies are only supported in quest battles",
+    };
+  }
 
   // Pre-process loadouts if they exist
   const jutsusIds = [
@@ -1871,7 +1877,7 @@ export const initiateBattle = async (
         // Queue entries come with the user, so participants without queues cost nothing.
         queue: { orderBy: (table, { asc }) => [asc(table.position)] },
       },
-      where: or(inArray(userData.userId, userIds), inArray(userData.userId, targetIds)),
+      where: inArray(userData.userId, [...userIds, ...allyAiIds, ...targetIds]),
     });
 
   // Use Promise.all to fetch all independent data in parallel
@@ -2179,8 +2185,13 @@ export const initiateBattle = async (
     }
   }
 
-  // Create the users array to be inserted in battle. We do it like this in case some of the targetIds are entered multiple times
-  const users = [...userIds, ...targetIds]
+  // Allies must be NPC templates, never extra player accounts.
+  if (allyAiIds.some((id) => !fetchedUsers.find((u) => u.userId === id)?.isAi)) {
+    return { success: false, message: "One of the ally AIs is unavailable" };
+  }
+
+  // Clone each occurrence: one NPC template may appear repeatedly or on both teams.
+  const users = [...userIds, ...allyAiIds, ...targetIds]
     .map((id) => structuredClone(fetchedUsers.find((u) => u.userId === id)))
     .filter((u): u is NonNullable<typeof u> => u !== undefined);
 
@@ -2190,8 +2201,10 @@ export const initiateBattle = async (
       controlShownQuestLocationInformation(q.quest, user);
     });
   });
-  // Place attackers first
-  users.sort((a) => (userIds.includes(a.userId) ? -1 : 1));
+  // The ordered input keeps the initiating player first and each ally before the targets.
+  const leftSideUserCount = [...userIds, ...allyAiIds].filter((id) =>
+    fetchedUsers.some((u) => u.userId === id),
+  ).length;
 
   // Ensure SageMode row is present when sageModeId is set (relation can be null if stale)
   const missingSageIds = [
@@ -2252,6 +2265,25 @@ export const initiateBattle = async (
 
   // Calculate battle width and height
   const gridSize = getDefaultBattleSizes(battleType, users[0]?.level ?? 0);
+
+  {
+    const leftCapacity = getBattleSpawnLocations(
+      gridSize.width,
+      gridSize.height,
+      "left",
+    ).length;
+    const rightCapacity = getBattleSpawnLocations(
+      gridSize.width,
+      gridSize.height,
+      "right",
+    ).length;
+    if (
+      leftSideUserCount > leftCapacity ||
+      users.length - leftSideUserCount > rightCapacity
+    ) {
+      return { success: false, message: "Too many NPCs for this battlefield" };
+    }
+  }
 
   // Battle-global setup for the per-attacker XP bracket guard below. These do not depend on which
   // attacker is being evaluated, so they are derived once instead of re-derived per loop iteration.
@@ -2409,13 +2441,13 @@ export const initiateBattle = async (
     }
 
     // Scale targets
-    if (info?.scaleTarget && targetIds.includes(user.userId) && users[0]) {
+    if (info?.scaleTarget && i >= leftSideUserCount && users[0]) {
       user.level = users[0].level;
       scaleUserStats(user, user.isAi ? "ai" : "player");
     }
 
     // Manually Assign Stats
-    if (info?.targetStatDistribution && targetIds.includes(user.userId)) {
+    if (info?.targetStatDistribution && i >= leftSideUserCount) {
       manuallyAssignUserStats(user, info?.targetStatDistribution);
     }
     if (info?.userStatDistribution && userIds.includes(user.userId)) {
@@ -2456,7 +2488,8 @@ export const initiateBattle = async (
   }
 
   // Get previous battles between these two users within last 60min
-  let rewardScaling = (scaleGains * users.length) / 2;
+  // Friendly NPCs do not increase the reward for defeating the authored enemies.
+  let rewardScaling = (scaleGains * (users.length - allyAiIds.length)) / 2;
   if (PvpBattleTypes.includes(battleType) && previousBattleResults) {
     const previousBattles = previousBattleResults?.[0]?.count || 0;
     if (previousBattles > 0) {
@@ -2478,6 +2511,7 @@ export const initiateBattle = async (
       height: gridSize.height,
       hide: false,
       leftSideUserIds: userIds,
+      leftSideUserCount,
       isSummon: false,
     });
 
@@ -3110,6 +3144,8 @@ export const processUsersForBattle = async (
     battleType: BattleType;
     hide: boolean;
     leftSideUserIds?: string[];
+    /** Ordered team boundary, allowing the same AI template on opposing teams. */
+    leftSideUserCount?: number;
     isSummon: boolean;
     width: number;
     height: number;
@@ -3123,6 +3159,7 @@ export const processUsersForBattle = async (
     battleType,
     hide,
     leftSideUserIds,
+    leftSideUserCount,
     wars,
     width,
     height,
@@ -3140,7 +3177,7 @@ export const processUsersForBattle = async (
   const takenLocations: { x: number; y: number }[] = [];
 
   // Loop through users and transform to ProcessingBattleUser
-  const usersState: ProcessingBattleUser[] = users.map((inputUser) => {
+  const usersState: ProcessingBattleUser[] = users.map((inputUser, index) => {
     // Build the processing user object with all required fields
     const user: ProcessingBattleUser = {
       ...inputUser,
@@ -3149,7 +3186,13 @@ export const processUsersForBattle = async (
       enemySkillIds: [],
       userId: inputUser.isAi ? nanoid() : inputUser.userId,
       // Set direction based on team membership (leftSideUserIds determines left team)
-      direction: leftSideUserIds?.includes(inputUser.userId) ? "left" : "right",
+      direction: (
+        leftSideUserCount !== undefined
+          ? index < leftSideUserCount
+          : leftSideUserIds?.includes(inputUser.userId)
+      )
+        ? "left"
+        : "right",
       // Set the updated at to now, so that action bar starts at 0
       updatedAt: new Date(),
       // If no village, set to syndicate
@@ -3303,21 +3346,6 @@ export const processUsersForBattle = async (
       user.level = calcLevel(user.experience);
     }
 
-    // Half the width of the battlefield
-    const halfWidth = Math.floor(width / 2);
-
-    // Convenience function for assigning location of user
-    const assignLocation = (min: number, max: number) => {
-      let x = randomInt(min + COMBAT_BORDER_LEFT, max - COMBAT_BORDER_RIGHT);
-      let y = randomInt(1 + COMBAT_BORDER_BOTTOM, height - COMBAT_BORDER_TOP - 1);
-      do {
-        x = randomInt(min + COMBAT_BORDER_LEFT, max - COMBAT_BORDER_RIGHT);
-        y = randomInt(1 + COMBAT_BORDER_BOTTOM, height - COMBAT_BORDER_TOP - 1);
-      } while (takenLocations.some((l) => l.x === x && l.y === y));
-      takenLocations.push({ x, y });
-      return { x, y };
-    };
-
     // Store original location
     user.originalLongitude = user.longitude;
     user.originalLatitude = user.latitude;
@@ -3327,16 +3355,20 @@ export const processUsersForBattle = async (
       user.longitude = 0;
       user.latitude = 0;
       user.curHealth = 0;
-    } else if (leftSideUserIds && leftSideUserIds.length > 0) {
-      if (leftSideUserIds?.includes(user.userId)) {
-        const { x, y } = assignLocation(1, halfWidth);
-        user.longitude = x;
-        user.latitude = y;
-      } else {
-        const { x, y } = assignLocation(halfWidth + 1, width - 3);
-        user.longitude = x;
-        user.latitude = y;
-      }
+    } else if (leftSideUserCount !== undefined || leftSideUserIds?.length) {
+      const available = getBattleSpawnLocations(width, height, user.direction).filter(
+        (location) =>
+          !takenLocations.some(
+            (taken) => taken.x === location.x && taken.y === location.y,
+          ),
+      );
+      const location = available.length
+        ? available[secureRandomInt(available.length)]
+        : undefined;
+      if (!location) throw new Error("No free battle spawn locations");
+      takenLocations.push(location);
+      user.longitude = location.x;
+      user.latitude = location.y;
     }
 
     // Hide ANBU members who are being attacked (defenders)
