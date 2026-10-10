@@ -931,18 +931,9 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
           title="Masteries"
           subtitle="Timed training · No Energy cost"
           initialBreak={true}
-        >
-          <div className="mb-3 space-y-2">
-            <p className="text-muted-foreground text-xs">
-              {efficiency}% efficiency · {userData.dailyTrainings} /{" "}
-              {MAX_DAILY_TRAININGS} daily sessions
-            </p>
-            <p className="text-muted-foreground text-xs">
-              {userData.currentlyTrainingMastery
-                ? "Choose an interval, then select a mastery image to add a session to the queue."
-                : "Choose an interval, then select a mastery image to start training."}
-            </p>
-            <div className="overflow-x-auto overflow-y-hidden">
+          topRightCorntentBreakpoint="sm"
+          topRightContent={
+            <div className="my-2 ml-2 overflow-x-auto overflow-y-hidden">
               <NavTabs
                 current={selectedMasterySpeed}
                 options={TrainingSpeeds}
@@ -956,6 +947,18 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                 }}
               />
             </div>
+          }
+        >
+          <div className="mb-3 space-y-2">
+            <p className="text-muted-foreground text-xs">
+              {efficiency}% efficiency · {userData.dailyTrainings} /{" "}
+              {MAX_DAILY_TRAININGS} daily sessions
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {userData.currentlyTrainingMastery
+                ? "Choose an interval, then select a mastery image to add a session to the queue."
+                : "Choose an interval, then select a mastery image to start training."}
+            </p>
           </div>
           <div inert={isPending}>
             <div className="grid grid-cols-3 text-center font-bold">
