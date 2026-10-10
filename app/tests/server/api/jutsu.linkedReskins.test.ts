@@ -84,7 +84,31 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
     expect(updated.effects[0]?.description).toBe("Scarlet damage");
     expect(updated.jutsuRank).toBe("H");
     const db = await getTestDatabase();
-    expect((await db.select().from(actionLog).where(eq(actionLog.relatedId, id))).length).toBe(3);
+    const logs = await db.select().from(actionLog).where(eq(actionLog.relatedId, id));
+    expect(logs.length).toBe(3);
+    const synced = logs.find((log) => log.relatedMsg === "Sync parent: Parent");
+    const changes = synced?.changes as string[];
+    expect(changes.length).toBe(1);
+    expect(JSON.parse(changes[0]!.replace(/^Updated: /, ""))).toEqual({
+      cooldown: 19,
+      chakraCost: 0.2,
+      requiredBloodlineMastery: 500,
+      effects: { 0: { power: 9 } },
+    });
+  });
+
+  it("unequips only the edited jutsu when it is saved as hidden", async () => {
+    const db = await getTestDatabase();
+    await db.insert(jutsu).values({ ...await read("parent"), id: "other", name: "Other" });
+    await db.insert(userJutsu).values([
+      { id: "owned-parent", userId: "player", jutsuId: "parent", equipped: true },
+      { id: "owned-other", userId: "player", jutsuId: "other", equipped: true },
+    ]);
+    expect((await save("parent", { hidden: false })).success).toBe(true);
+    expect((await db.query.userJutsu.findFirst({ where: eq(userJutsu.id, "owned-parent") }))?.equipped).toBe(true);
+    expect((await save("parent", { hidden: true })).success).toBe(true);
+    expect((await db.query.userJutsu.findFirst({ where: eq(userJutsu.id, "owned-parent") }))?.equipped).toBe(false);
+    expect((await db.query.userJutsu.findFirst({ where: eq(userJutsu.id, "owned-other") }))?.equipped).toBe(true);
   });
 
   it("rejects player creation, self links, nested links, evolution links and mismatched groups", async () => {

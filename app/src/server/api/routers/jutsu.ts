@@ -1033,16 +1033,12 @@ export const jutsuRouter = createTRPCRouter({
       const saved = await saveJutsuFamily(ctx.drizzle, entry, input.data, ctx.userId);
       if (!saved.success) return errorResponse(saved.message);
       const diff = saved.diff;
-      await Promise.all([
-        ...(input.data.hidden
-          ? [
-              ctx.drizzle
-                .update(userJutsu)
-                .set({ equipped: false })
-                .where(eq(userJutsu.jutsuId, entry.id)),
-            ]
-          : []),
-      ]);
+      if (input.data.hidden) {
+        await ctx.drizzle
+          .update(userJutsu)
+          .set({ equipped: false })
+          .where(eq(userJutsu.jutsuId, entry.id));
+      }
       await outdateProposalsFor(
         ctx.drizzle,
         "JUTSU",
@@ -3233,17 +3229,11 @@ const saveJutsuFamily = async (
         .for("update");
       const current = locked.find((row) => row.id === entry.id);
       if (!current || current.updatedAt.getTime() !== entry.updatedAt.getTime())
-        return {
-          success: false as const,
-          message: "Jutsu changed; refresh before saving",
-        };
+        return errorResponse("Jutsu changed; refresh before saving");
       // Evolution edits and reskin linking share the candidate parent's lock.
       const evolutionParent = locked.find((row) => row.id === data.parentJutsuId);
       if (evolutionParent?.reskinParentJutsuId)
-        return {
-          success: false as const,
-          message: "Reskins cannot be evolution parents",
-        };
+        return errorResponse("Reskins cannot be evolution parents");
       const related = await tx
         .select()
         .from(jutsu)
@@ -3258,24 +3248,15 @@ const saveJutsuFamily = async (
         data.reskinParentJutsuId &&
         related.some((row) => row.parentJutsuId === entry.id)
       )
-        return {
-          success: false as const,
-          message: "Reskins cannot have evolution links or reskin children",
-        };
+        return errorResponse("Reskins cannot have evolution links or reskin children");
       if (data.reskinParentJutsuId && children.length)
-        return {
-          success: false as const,
-          message: "Unlink child reskins before linking this jutsu",
-        };
+        return errorResponse("Unlink child reskins before linking this jutsu");
       const parent = locked.find((row) => row.id === data.reskinParentJutsuId);
       if (
         data.reskinParentJutsuId &&
         (!parent || parent.reskinParentJutsuId || parent.jutsuRank === "H")
       )
-        return {
-          success: false as const,
-          message: "Reskin parent changed; refresh before saving",
-        };
+        return errorResponse("Reskin parent changed; refresh before saving");
       if (parent) {
         // Use the current source mechanics, never the child editor's snapshot.
         data = {
@@ -3291,10 +3272,7 @@ const saveJutsuFamily = async (
             .where(eq(bloodlineReskin.id, data.bloodlineReskinId))
             .for("update");
           if (!group || group.bloodlineId !== parent.bloodlineId)
-            return {
-              success: false as const,
-              message: "Bloodline reskin no longer matches the parent",
-            };
+            return errorResponse("Bloodline reskin no longer matches the parent");
         }
       }
       if (
@@ -3302,27 +3280,26 @@ const saveJutsuFamily = async (
           (child) => child.bloodlineReskinId && child.bloodlineId !== data.bloodlineId,
         )
       )
-        return {
-          success: false as const,
-          message: "Unlink bloodline reskins before changing the parent's bloodline",
-        };
+        return errorResponse(
+          "Unlink bloodline reskins before changing the parent's bloodline",
+        );
       if (children.length && data.jutsuRank === "H")
-        return {
-          success: false as const,
-          message: "A reskin parent cannot have H rank",
-        };
+        return errorResponse("A reskin parent cannot have H rank");
+      const mechanics = getJutsuReskinMechanics(data);
       const updates = children.map((child) => ({
-        ...child,
-        ...getJutsuReskinMechanics(data),
-        effects: inheritJutsuReskinEffects(data.effects, child.effects),
+        original: child,
+        updated: {
+          ...child,
+          ...mechanics,
+          effects: inheritJutsuReskinEffects(data.effects, child.effects),
+        },
       }));
-      for (const variant of [data, ...updates]) {
+      for (const variant of [data, ...updates.map(({ updated }) => updated)]) {
         const valid = JutsuValidator.safeParse(variant);
         if (!valid.success)
-          return {
-            success: false as const,
-            message: `Invalid reskin mechanics or cosmetics for ${variant.name}: ${valid.error.issues[0]?.message}`,
-          };
+          return errorResponse(
+            `Invalid reskin mechanics or cosmetics for ${variant.name}: ${valid.error.issues[0]?.message}`,
+          );
         const hasAnimation = variant.effects.some(
           (effect) =>
             "appearAnimation" in effect &&
@@ -3331,10 +3308,9 @@ const saveJutsuFamily = async (
             effect.appearSfx,
         );
         if (!variant.hidden && !hasAnimation)
-          return {
-            success: false as const,
-            message: `Visible jutsu ${variant.name} needs an effect with both appear animation and sound`,
-          };
+          return errorResponse(
+            `Visible jutsu ${variant.name} needs an effect with both appear animation and sound`,
+          );
       }
       const diff = calculateContentDiff(current, { ...current, ...data });
       const updatedAt = new Date();
@@ -3344,14 +3320,14 @@ const saveJutsuFamily = async (
         .where(eq(jutsu.id, entry.id));
       if (children.length) {
         // One batched child write preserves each effect's cosmetic fields.
-        const cases = children.map(
-          (child) =>
-            sql`WHEN ${child.id} THEN ${JSON.stringify(inheritJutsuReskinEffects(data.effects, child.effects))}`,
+        const cases = updates.map(
+          ({ updated }) =>
+            sql`WHEN ${updated.id} THEN ${JSON.stringify(updated.effects)}`,
         );
         await tx
           .update(jutsu)
           .set({
-            ...getJutsuReskinMechanics(data),
+            ...mechanics,
             effects: sql`CASE ${jutsu.id} ${sql.join(cases, sql` `)} END`,
             updatedAt,
           })
@@ -3372,18 +3348,14 @@ const saveJutsuFamily = async (
           relatedMsg: `Update: ${entry.name}`,
           relatedImage: entry.image,
         },
-        ...children.map((child) => ({
+        ...updates.map(({ original, updated }) => ({
           id: nanoid(),
           userId,
           tableName: "jutsu",
-          changes: calculateContentDiff(child, {
-            ...child,
-            ...getJutsuReskinMechanics(data),
-            effects: inheritJutsuReskinEffects(data.effects, child.effects),
-          }),
-          relatedId: child.id,
+          changes: calculateContentDiff(original, updated),
+          relatedId: original.id,
           relatedMsg: `Sync parent: ${data.name}`,
-          relatedImage: child.image,
+          relatedImage: original.image,
         })),
       ]);
       return {
