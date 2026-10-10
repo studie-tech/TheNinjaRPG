@@ -29,8 +29,10 @@ import {
   ActionMoveTowardsOpponent,
   AiActionTypes,
   AiConditionTypes,
+  AvailableActionTargets,
   AvailableEffectTypes,
   AvailableTargets,
+  aiCoordinatesSchema,
   enforceExtraRules,
   getActionSchema,
   getBackupRules,
@@ -206,7 +208,8 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
     >
       {rules.map((rule, ruleIndex) => {
         const currentActionType = rule.action.type;
-        const actionSchema = getActionSchema(currentActionType);
+        const coordinates =
+          "target" in rule.action ? rule.action.coordinates : undefined;
         const isLastTwo = ruleIndex >= rules.length - backupRules.length;
         const isLastThree = ruleIndex >= rules.length - backupRules.length - 1;
         const ruleKey = rule.id ?? `rule-${ruleIndex}`;
@@ -624,10 +627,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                                 if (k === ruleIndex) {
                                   return {
                                     ...rule,
-                                    action: actionSchema.parse({
+                                    action: {
                                       ...rule.action,
                                       jutsuId: e,
-                                    }),
+                                    } as ZodAllAiAction,
                                   };
                                 }
                                 return rule;
@@ -660,10 +663,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                                 if (k === ruleIndex) {
                                   return {
                                     ...rule,
-                                    action: actionSchema.parse({
+                                    action: {
                                       ...rule.action,
                                       itemId: e,
-                                    }),
+                                    } as ZodAllAiAction,
                                   };
                                 }
                                 return rule;
@@ -702,10 +705,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                                 if (k === ruleIndex) {
                                   return {
                                     ...rule,
-                                    action: actionSchema.parse({
+                                    action: {
                                       ...rule.action,
                                       comboIds: e,
-                                    }),
+                                    } as ZodAllAiAction,
                                   };
                                 }
                                 return rule;
@@ -724,10 +727,19 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                                 if (k === ruleIndex) {
                                   return {
                                     ...rule,
-                                    action: actionSchema.parse({
+                                    action: {
                                       ...rule.action,
                                       target: e,
-                                    }),
+                                      coordinates:
+                                        e === "COORDINATE"
+                                          ? (("coordinates" in rule.action
+                                              ? rule.action.coordinates
+                                              : undefined) ?? {
+                                              longitude: 0,
+                                              latitude: 0,
+                                            })
+                                          : undefined,
+                                    } as ZodAllAiAction,
                                   };
                                 }
                                 return rule;
@@ -739,7 +751,7 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                             <SelectValue placeholder={`None`} />
                           </SelectTrigger>
                           <SelectContent id="available_action">
-                            {AvailableTargets?.map((target, i) => (
+                            {AvailableActionTargets.map((target, i) => (
                               <SelectItem key={`${target}-${i}`} value={target}>
                                 {target}
                               </SelectItem>
@@ -747,6 +759,69 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                           </SelectContent>
                         </Select>
                       )}
+                      {"target" in rule.action &&
+                        rule.action.target === "COORDINATE" && (
+                          <div className="flex flex-col gap-2">
+                            <p>
+                              Zero-based battle tiles: X is the column, Y is the row.
+                              The top-left tile is (0, 0). Unavailable tiles skip this
+                              rule.
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {(["longitude", "latitude"] as const).map((axis) => (
+                                <Label key={axis}>
+                                  {axis === "longitude" ? "X (column)" : "Y (row)"}
+                                  <Input
+                                    aria-label={
+                                      axis === "longitude" ? "X (column)" : "Y (row)"
+                                    }
+                                    type="number"
+                                    min={0}
+                                    step={1}
+                                    value={
+                                      Number.isFinite(coordinates?.[axis])
+                                        ? coordinates?.[axis]
+                                        : ""
+                                    }
+                                    onChange={(event) =>
+                                      setRules((previous) =>
+                                        previous.map((current, index) => {
+                                          if (
+                                            index !== ruleIndex ||
+                                            !("target" in current.action)
+                                          )
+                                            return current;
+                                          return {
+                                            ...current,
+                                            action: {
+                                              ...current.action,
+                                              coordinates: {
+                                                ...(current.action.coordinates ?? {
+                                                  longitude: Number.NaN,
+                                                  latitude: Number.NaN,
+                                                }),
+                                                [axis]:
+                                                  event.target.value === ""
+                                                    ? Number.NaN
+                                                    : Number(event.target.value),
+                                              },
+                                            },
+                                          };
+                                        }),
+                                      )
+                                    }
+                                  />
+                                </Label>
+                              ))}
+                            </div>
+                            {!aiCoordinatesSchema.safeParse(rule.action.coordinates)
+                              .success && (
+                              <p role="alert" className="text-red-500">
+                                Enter a non-negative whole number for both X and Y.
+                              </p>
+                            )}
+                          </div>
+                        )}
                       {"effect" in rule.action && rule.action.effect && (
                         <Select
                           defaultValue={rule.action.effect}
@@ -757,10 +832,10 @@ const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
                                 if (k === ruleIndex) {
                                   return {
                                     ...rule,
-                                    action: actionSchema.parse({
+                                    action: {
                                       ...rule.action,
                                       effect: e,
-                                    }),
+                                    } as ZodAllAiAction,
                                   };
                                 }
                                 return rule;

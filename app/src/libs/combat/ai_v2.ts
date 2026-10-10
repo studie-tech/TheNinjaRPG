@@ -236,6 +236,15 @@ export const performAIaction = (
     ) => {
       if (!("target" in entry)) return undefined;
       switch (entry?.target) {
+        case "COORDINATE": {
+          if (!("coordinates" in entry) || !entry.coordinates) return undefined;
+          const { longitude, latitude } = entry.coordinates;
+          if (!Number.isInteger(longitude) || !Number.isInteger(latitude))
+            return undefined;
+          const hex = grid.getHex({ col: longitude, row: latitude });
+          if (!hex) return undefined;
+          return mapDistancesToTarget(grid, astar, { longitude, latitude }, origin);
+        }
         case "RANDOM_OPPONENT":
           return randomEnemy;
         case "CLOSEST_OPPONENT":
@@ -379,7 +388,9 @@ export const performAIaction = (
           if (move) {
             const path = getPath(origin, target);
             const hex = path?.[1];
-            if (path && hex && path.length > 2 && hex.cost < 100) {
+            // Entity targets stop beside their tile; coordinate targets reach it.
+            const minimumPathLength = rule.action.target === "COORDINATE" ? 1 : 2;
+            if (path && hex && path.length > minimumPathLength && hex.cost < 100) {
               nextAction = { action: move, long: hex.col, lat: hex.row };
             }
           }
