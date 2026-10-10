@@ -1,6 +1,6 @@
 import { MASTERY_RANK_CAPS } from "@/drizzle/constants";
 import { describe, expect, it } from "bun:test";
-import { getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
+import { MAX_DAILY_TRAININGS, TOTAL_MASTERY_CAP } from "@/drizzle/constants";
 import {
   calcMasteryTrainingAmount,
   getMasteryQueueSchedule,
@@ -136,6 +136,40 @@ describe("mastery training queue settlement", () => {
       after(20),
     );
     expect(banned.consumed).toBe(0);
+  });
+
+  it("drops other queued disciplines when the active gain fills the shared cap", () => {
+    const result = settleMasteryTrainingQueue(
+      trainee({
+        ninjutsuMastery: TOTAL_MASTERY_CAP / 6 - 1,
+        genjutsuMastery: TOTAL_MASTERY_CAP / 6,
+        taijutsuMastery: TOTAL_MASTERY_CAP / 6,
+        bukijutsuMastery: TOTAL_MASTERY_CAP / 6,
+        bloodlineMastery: TOTAL_MASTERY_CAP / 6,
+        sageMastery: TOTAL_MASTERY_CAP / 6,
+        masteryRanks: {
+          ninjutsuMastery: "MASTER",
+          genjutsuMastery: "MASTER",
+          taijutsuMastery: "MASTER",
+          bukijutsuMastery: "MASTER",
+          bloodlineMastery: "MASTER",
+          sageMastery: "MASTER",
+        },
+      }),
+      [
+        { stat: "genjutsuMastery", speed: "15min" },
+        { stat: "taijutsuMastery", speed: "15min" },
+      ],
+      [],
+      after(20),
+    );
+    expect(result.gains).toEqual({ ninjutsuMastery: 1 });
+    expect(result.currentlyTrainingMastery).toBeNull();
+    expect(result.masteryTrainingStartedAt).toBeNull();
+    expect(result.remaining).toEqual([]);
+    expect(result.consumed).toBe(2);
+    expect(result.completed).toHaveLength(1);
+    expect(result.dailyTrainings).toBe(1);
   });
 
   it("schedules queued sessions behind the active one for display", () => {

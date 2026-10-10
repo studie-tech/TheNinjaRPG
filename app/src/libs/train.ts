@@ -922,12 +922,12 @@ export const settleMasteryTrainingQueue = (
   let startedAt = user.masteryTrainingStartedAt;
   let speed = user.trainingSpeed;
   let dailyTrainings = user.dailyTrainings;
-  const room = (stat: MasteryName) =>
+  const room = (stat: MasteryName, pendingGains = gains) =>
     masteryGainRoom(
       {
         ...user,
         ...Object.fromEntries(
-          Object.entries(gains).map(([name, gain]) => [
+          Object.entries(pendingGains).map(([name, gain]) => [
             name,
             user[name as MasteryName] + gain,
           ]),
@@ -947,10 +947,14 @@ export const settleMasteryTrainingQueue = (
       calcMasteryTrainingAmount({ ...user, trainingSpeed: speed }, settings, seconds),
     );
     const nextDaily = dailyTrainings + (amount > 0 ? 1 : 0);
-    // Choose the successor against the balance after this session's gain. A repeat
-    // that this completion caps must be consumed without starting a wasted interval.
+    // Both the discipline cap and shared total use the post-completion balance.
+    // Keep these gains provisional until the successor's start guards pass.
+    const gainsAfterCompletion = {
+      ...gains,
+      [current]: (gains[current] ?? 0) + amount,
+    };
     const nextIndex = queue.findIndex(
-      (entry) => room(entry.stat) - (entry.stat === current ? amount : 0) > 0,
+      (entry) => room(entry.stat, gainsAfterCompletion) > 0,
     );
     const successor = queue[nextIndex];
     if (
