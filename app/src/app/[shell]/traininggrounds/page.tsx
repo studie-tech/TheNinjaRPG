@@ -514,7 +514,9 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const efficiency = trainEfficiency(userData);
   const [energy, setEnergy] = useState<number | null>(null);
-  const [statTrainingMode, setStatTrainingMode] = useState("Train now");
+  const [statTrainingMode, setStatTrainingMode] = useState<"Custom" | "Max" | "Queue">(
+    "Max",
+  );
   const isQueueingStats = statTrainingMode === "Queue";
   const [queuedMasterySpeed, setQueuedMasterySpeed] = useState<TrainingSpeed | null>(
     null,
@@ -522,8 +524,10 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
   const [availableEnergy, setAvailableEnergy] = useState(() =>
     currentTrainingEnergy(userData, timeDiff),
   );
-  const maxTrainingEnergy = isQueueingStats ? userData.maxEnergy : availableEnergy;
-  const trainingEnergy = energy ?? maxTrainingEnergy;
+  const trainingEnergy =
+    statTrainingMode === "Max"
+      ? availableEnergy
+      : (energy ?? (isQueueingStats ? userData.maxEnergy : availableEnergy));
   const energyQueueLength = getEnergyQueue(userData).length;
   useEffect(() => {
     const update = () => setAvailableEnergy(currentTrainingEnergy(userData, timeDiff));
@@ -755,17 +759,11 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
       {props.section === "Stats" && (
         <ContentBox
           title="Combat stats"
+          topRightCorntentBreakpoint="sm"
           subtitle={isQueueingStats ? "Train as Energy recovers" : "Instant training"}
           initialBreak={props.initialBreak}
           topRightContent={
             <div className="my-2 ml-2 flex flex-col gap-1">
-              <NavTabs
-                current={statTrainingMode}
-                options={["Train now", "Queue"]}
-                setValue={(value) => {
-                  if (!isPending) setStatTrainingMode(value);
-                }}
-              />
               <div className="flex items-center justify-end gap-1">
                 <Popover>
                   <PopoverTrigger
@@ -775,13 +773,11 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     <Zap className="h-5 w-5" />
                   </PopoverTrigger>
                   <PopoverContent className="max-w-64 text-sm">
-                    Choose how much Energy to spend, then select a stat to train it
-                    instantly. Select Queue to train when the chosen Energy amount
-                    recovers, then add entries using the same stat images. Each Energy
-                    gives {STATS_PER_ENERGY} stats before training bonuses. Max keeps
-                    the amount synced with available Energy as you spend and regenerate
-                    it; in Queue mode, Max uses your Energy capacity. Enter an amount to
-                    turn Max off.
+                    Custom trains immediately with the entered Energy amount. Max keeps
+                    the amount synced with available Energy. Queue adds training for
+                    when the entered Energy threshold recovers, starting with your
+                    capacity. Select a stat image to train or add a queue entry. Each
+                    Energy gives {STATS_PER_ENERGY} stats before training bonuses.
                   </PopoverContent>
                 </Popover>
                 <div className="flex">
@@ -793,26 +789,35 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     step={1}
                     value={trainingEnergy}
                     disabled={isPending}
-                    onChange={(event) => setEnergy(Number(event.target.value))}
+                    onChange={(event) => {
+                      setEnergy(Number(event.target.value));
+                      if (statTrainingMode === "Max") setStatTrainingMode("Custom");
+                    }}
                     className="w-20 rounded-r-none"
                   />
-                  <Button
-                    variant={energy === null ? "default" : "outline"}
-                    size="sm"
-                    className="h-9 rounded-l-none border-l-0"
-                    aria-label={
-                      isQueueingStats
-                        ? "Use maximum Energy threshold"
-                        : "Automatically use available Energy"
-                    }
-                    aria-pressed={energy === null}
-                    disabled={isPending}
-                    onClick={() =>
-                      setEnergy(energy === null ? maxTrainingEnergy : null)
-                    }
-                  >
-                    Max
-                  </Button>
+                  <fieldset aria-label="Energy training mode" className="flex">
+                    {(["Custom", "Max", "Queue"] as const).map((mode, index) => (
+                      <Button
+                        key={mode}
+                        variant={statTrainingMode === mode ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "h-9 rounded-none border-l-0 px-2 sm:px-3",
+                          index === 2 && "rounded-r-md",
+                        )}
+                        aria-pressed={statTrainingMode === mode}
+                        disabled={isPending}
+                        onClick={() => {
+                          if (statTrainingMode === mode) return;
+                          if (mode === "Custom") setEnergy(trainingEnergy);
+                          else if (mode === "Queue") setEnergy(userData.maxEnergy);
+                          setStatTrainingMode(mode);
+                        }}
+                      >
+                        {mode}
+                      </Button>
+                    ))}
+                  </fieldset>
                 </div>
               </div>
             </div>
