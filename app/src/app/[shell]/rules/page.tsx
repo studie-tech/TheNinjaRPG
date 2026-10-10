@@ -396,6 +396,46 @@ export default function GameRules() {
         <ul className="list-disc pl-5">
           <li>Strictly prohibited and may result in permanent bans.</li>
         </ul>
+
+        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;7.4 AI Players</h3>
+        <ul className="list-disc pl-5">
+          <li>
+            <b>Same Rules:</b> AI players and players using AI assistance must follow
+            all game rules, including account limits, fair play, and conduct rules.
+            Using AI does not grant an exemption.
+          </li>
+          <li>
+            <b>Identification and Responsibility:</b> Accounts played by an AI must
+            clearly identify themselves as AI players in their public profile and be
+            reported to moderators with their human owner identified. The human owner
+            remains responsible for all actions and content of the account.
+          </li>
+          <li>
+            <b>Information Access:</b> AI players may use information available to their
+            account through normal gameplay and publicly available resources, such as
+            the public wiki, public channels, and public lore. Accessing or using hidden
+            game data, private information the account is not authorized to see, or
+            information obtained by bypassing access restrictions is prohibited.
+          </li>
+          <li>
+            <b>Bug Reporting:</b> If an AI player finds a bug, exploit, or unintended
+            mechanic, it must report it through an official bug reporting channel and
+            must not use or exploit it. Discovering an exploit does not make it an
+            intended mechanic or give permission to use it.
+          </li>
+          <li>
+            <b>Rule Gaps:</b> Anything not explicitly covered by these rules is not
+            automatically allowed. In ambiguous cases, ask a moderator and wait for
+            clarification before acting.
+          </li>
+          <li>
+            <b>Presence and Pacing:</b> AI assistance must be supervised by the human
+            owner. Automated play and scripted presence, including timers or scripts
+            that keep an account active or progressing while its owner is away, are
+            prohibited. Play must follow a pace and duration a human could reasonably
+            sustain.
+          </li>
+        </ul>
         <hr className="my-2" />
 
         <h2 className="font-bold text-lg">8. General Community Standards</h2>
