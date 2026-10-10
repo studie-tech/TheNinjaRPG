@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -437,7 +438,8 @@ export const buildFilter = <
       if (field.type === "text" || field.type === "date")
         return typeof debouncedValue !== "string" || debouncedValue.length === 0;
       if (field.type === "tri-state") return debouncedValue === undefined;
-      if (field.type === "number") return debouncedValue === undefined;
+      if (field.type === "number")
+        return debouncedValue === undefined || !Number.isFinite(debouncedValue);
       if (
         "emptyValues" in field &&
         Array.isArray(field.emptyValues) &&
@@ -755,16 +757,13 @@ export const ContentFiltering = <
                 return (
                   <div key={field.id} className={field.doubleWidth ? "col-span-2" : ""}>
                     <Label>{field.label}</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
                       disabled={disabled}
                       value={(value as number | undefined) ?? ""}
                       placeholder={field.label}
-                      onChange={(e) =>
-                        setter(
-                          e.target.value === "" ? undefined : Number(e.target.value),
-                        )
-                      }
+                      optional
+                      onOptionalValueChange={setter}
+                      step="any"
                     />
                   </div>
                 );

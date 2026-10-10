@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
  * This is a modal that is used to display a modal.
  */
 import type React from "react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { validateNumberInputs } from "@/components/ui/number-input";
 import { cn } from "@/libs/shadui";
 
 export const modalViewportClassName =
@@ -55,6 +56,7 @@ interface ModalProps {
 }
 
 export const Modal: React.FC<ModalProps> = (props) => {
+  const bodyRef = useRef<HTMLDivElement>(null);
   const confirmBtnClassName = props.confirmClassName
     ? props.confirmClassName
     : "bg-blue-600 text-white hover:bg-blue-700";
@@ -67,7 +69,12 @@ export const Modal: React.FC<ModalProps> = (props) => {
         | React.MouseEvent<HTMLButtonElement, MouseEvent>
         | React.KeyboardEvent<KeyboardEvent>,
     ) => {
-      if (props.isLoading) return;
+      if (
+        props.isLoading ||
+        props.proceedDisabled ||
+        !validateNumberInputs(bodyRef.current)
+      )
+        return;
       // The close side-effect is independent of onAccept: dialogs that render a
       // Proceed button without an accept handler still use it to dismiss.
       props.onAccept?.(e);
@@ -77,6 +84,7 @@ export const Modal: React.FC<ModalProps> = (props) => {
     },
     [
       props.isLoading,
+      props.proceedDisabled,
       props.keepOpenOnAccept,
       props.onAccept,
       props.isValid,
@@ -167,6 +175,7 @@ export const Modal: React.FC<ModalProps> = (props) => {
         </DialogHeader>
 
         <div
+          ref={bodyRef}
           className={cn(
             modalScrollableBodyClassName,
             props.bodyClassName,

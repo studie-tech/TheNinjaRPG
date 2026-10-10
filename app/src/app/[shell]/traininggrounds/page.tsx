@@ -36,6 +36,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -782,16 +783,15 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                   </PopoverContent>
                 </Popover>
                 <div className="flex">
-                  <Input
+                  <NumberInput
                     id="training-energy"
                     aria-label={isQueueingStats ? "Queued Energy" : "Energy to spend"}
-                    type="number"
                     min={1}
                     step={1}
                     value={trainingEnergy}
                     disabled={isPending}
-                    onChange={(event) => {
-                      setEnergy(Number(event.target.value));
+                    onValueChange={(value) => {
+                      setEnergy(value);
                       if (statTrainingMode === "Max") setStatTrainingMode("Custom");
                     }}
                     className="w-20 rounded-r-none"
@@ -1063,7 +1063,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
   // Successive levels of the selected jutsu to buy in one go
-  const [levelCount, setLevelCount] = useState(1);
+  const [levelCount, setLevelCount] = useState<number>(1);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   // Re-renders the box when the countdown ends: the refetch it triggers returns the
   // same rows, which alone would leave the finished training's overlay on screen.
@@ -1315,7 +1315,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     (finishTrainingAt?.finishTraining ? 1 : 0) -
     queuedJobs.length;
   const maxLevelCount = Math.max(1, Math.min(freeSlots, levelCap - level));
-  const count = Math.min(levelCount, maxLevelCount);
+  const count = Math.min(levelCount || 1, maxLevelCount);
   const countLevels = Array.from({ length: count }, (_, i) => level + i);
   const trainSeconds =
     jutsu &&
@@ -1340,12 +1340,20 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const canAfford = userData && cost && userData.money >= cost;
   const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
   const canTrain =
-    okRank && okVillage && okBloodline && !isCapped && canAfford && !isQueueFull;
+    okRank &&
+    okVillage &&
+    okBloodline &&
+    !isCapped &&
+    canAfford &&
+    !isQueueFull &&
+    Number.isFinite(levelCount);
 
   // Label for proceed button
   let proceed_label: string | undefined;
   if (!isPending && !isCapped) {
-    if (!canAfford) {
+    if (!Number.isFinite(levelCount)) {
+      proceed_label = "Enter a number of levels";
+    } else if (!canAfford) {
       proceed_label = `Need ${cost - userData.money} more ryo`;
     } else if (isCapped) {
       proceed_label = `Level capped`;
@@ -1451,6 +1459,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                 id="tutorial-traininggrounds-trainJutsu"
                 title="Confirm Purchase"
                 proceed_label={proceed_label}
+                proceedDisabled={!Number.isFinite(levelCount)}
                 isOpen={isOpen}
                 setIsOpen={setJutsuConfirmOpen}
                 isValid={false}
@@ -1481,18 +1490,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
                         Levels to {isQueueing ? "queue" : "train"} (Max: {maxLevelCount}
                         )
                       </label>
-                      <Input
+                      <NumberInput
                         id="jutsu-level-count"
-                        type="number"
+                        inputMode="numeric"
                         min={1}
                         max={maxLevelCount}
-                        value={count}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
-                          if (!Number.isNaN(val) && val >= 1 && val <= maxLevelCount) {
-                            setLevelCount(val);
-                          }
-                        }}
+                        value={levelCount}
+                        onValueChange={setLevelCount}
+                        emptyFallback={1}
                         className="w-full"
                       />
                       <p className="mt-2 text-muted-foreground text-xs">

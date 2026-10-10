@@ -2,9 +2,9 @@ import { Filter } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { EffectType } from "@/validators/combat";
 import { effectFilters } from "@/validators/combat";
@@ -63,12 +63,12 @@ const SkillTreeBalanceFiltering: React.FC<SkillTreeBalanceFilteringProps> = (pro
           {/* Minimum Count */}
           <div>
             <Label>Minimum Count</Label>
-            <Input
-              type="number"
+            <NumberInput
               placeholder="Minimum count"
               min={1}
               value={minCount}
-              onChange={(e) => setMinCount(Number(e.target.value) || 1)}
+              onValueChange={setMinCount}
+              emptyFallback={1}
             />
           </div>
 
@@ -116,7 +116,7 @@ export default SkillTreeBalanceFiltering;
  */
 export const getFilter = (state: SkillTreeBalanceFilteringState) => {
   return {
-    minCount: state.minCount,
+    minCount: Number.isFinite(state.minCount) ? state.minCount : 1,
     skillEffects: state.skillEffects.length > 0 ? state.skillEffects : undefined,
     tiers: state.tiers.length > 0 ? state.tiers : undefined,
   };

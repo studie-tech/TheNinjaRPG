@@ -22,7 +22,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { dmgConfig as defaultDmgConfig } from "@/libs/combat/constants";
 import { showMutationToast } from "@/libs/toast";
 import { confSchema } from "@/validators/combat";
@@ -123,11 +123,11 @@ export const DmgConfigDialog = () => {
                     <FormItem>
                       <FormLabel className="text-xs">{f.label}</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <NumberInput
                           step="any"
                           {...field}
                           value={field.value as number}
+                          onValueChange={field.onChange}
                         />
                       </FormControl>
                       <p className="text-muted-foreground text-[10px]">

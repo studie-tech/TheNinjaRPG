@@ -1,11 +1,13 @@
 import { ensureDom } from "../setup-dom.mjs";
-import { cleanup, render } from "@testing-library/react";
+const { cleanup, fireEvent, render } = await import("@testing-library/react");
 import type { HTMLAttributes, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import Modal, {
   modalScrollableBodyClassName,
   modalViewportClassName,
 } from "@/layout/Modal";
+import { NumberInput } from "@/components/ui/number-input";
+import AutoAttackModal from "@/layout/AutoAttackModal";
 
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ open, children }: { open?: boolean; children: ReactNode }) =>
@@ -69,5 +71,49 @@ describe("Modal", () => {
     expect(footer?.contains(closeButton)).toBe(true);
     expect(scrollableBody?.nextElementSibling).toBe(footer);
     expect(scrollableBody?.contains(closeButton)).toBe(false);
+  });
+
+  it("blocks confirmation and closure for invalid numeric controls", () => {
+    const accept = vi.fn();
+    const close = vi.fn();
+    const { getByRole, rerender } = render(
+      <Modal isOpen setIsOpen={close} title="Quantity" proceed_label="Proceed" onAccept={accept}>
+        <NumberInput value="" min={1} />
+      </Modal>,
+    );
+    fireEvent.click(getByRole("button", { name: "Proceed" }));
+    fireEvent.keyDown(document, { key: "Enter" });
+    expect(accept).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+    rerender(
+      <Modal isOpen setIsOpen={close} title="Quantity" proceed_label="Proceed" onAccept={accept}>
+        <NumberInput value={3} min={1} />
+      </Modal>,
+    );
+    fireEvent.click(getByRole("button", { name: "Proceed" }));
+    expect(accept).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledWith(false);
+  });
+
+  it("keeps invalid auto-attack drafts out of storage and commits before enabling", () => {
+    const originalCustomEvent = globalThis.CustomEvent;
+    globalThis.CustomEvent = window.CustomEvent;
+    localStorage.setItem("autoAttackMinLevel", "1");
+    localStorage.setItem("autoAttackDelay", "5");
+    const enabled = vi.fn(() => {
+      expect(localStorage.getItem("autoAttackMinLevel")).toBe("3");
+      expect(localStorage.getItem("autoAttackDelay")).toBe("2");
+    });
+    const { getByRole } = render(<AutoAttackModal isOpen setIsOpen={vi.fn()} onEnable={enabled} />);
+    fireEvent.input(getByRole("spinbutton", { name: "Minimum Level to Attack" }), { target: { value: "" } });
+    expect(localStorage.getItem("autoAttackMinLevel")).toBe("1");
+    expect((getByRole("button", { name: "Enable Auto Attack" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.input(getByRole("spinbutton", { name: "Minimum Level to Attack" }), { target: { value: "3" } });
+    fireEvent.input(getByRole("spinbutton", { name: "Attack Delay (seconds)" }), { target: { value: "2" } });
+    fireEvent.click(getByRole("button", { name: "Enable Auto Attack" }));
+    expect(enabled).toHaveBeenCalledTimes(1);
+    localStorage.removeItem("autoAttackMinLevel");
+    localStorage.removeItem("autoAttackDelay");
+    globalThis.CustomEvent = originalCustomEvent;
   });
 });

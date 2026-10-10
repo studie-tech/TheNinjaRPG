@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
+import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -70,7 +71,12 @@ import type {
   ZodItemType,
   ZodJutsuType,
 } from "@/validators/combat";
-import { getTagSchema } from "@/validators/combat";
+import {
+  BloodlineValidator,
+  getTagSchema,
+  ItemValidator,
+  JutsuValidator,
+} from "@/validators/combat";
 import type { AllObjectivesType } from "@/validators/objectives";
 import {
   getObjectiveSchema,
@@ -635,20 +641,44 @@ export const EditContent = <
                               {formEntry.label ? formEntry.label : id}
                             </FormLabel>
                             <FormControl>
-                              <Input
-                                id={id}
-                                type={type}
-                                isDirty={fieldState.isDirty}
-                                readOnly={formEntry.readonly}
-                                {...field}
-                                value={
-                                  field.value as
-                                    | string
-                                    | number
-                                    | readonly string[]
-                                    | undefined
-                                }
-                              />
+                              {type === "number" ? (
+                                <NumberInput
+                                  id={id}
+                                  isDirty={fieldState.isDirty}
+                                  readOnly={formEntry.readonly}
+                                  name={field.name}
+                                  ref={field.ref}
+                                  onBlur={field.onBlur}
+                                  value={field.value as number | undefined}
+                                  optional={props.schema.shape[id]?.isOptional()}
+                                  onValueChange={
+                                    props.schema.shape[id]?.isOptional()
+                                      ? undefined
+                                      : field.onChange
+                                  }
+                                  onOptionalValueChange={
+                                    props.schema.shape[id]?.isOptional()
+                                      ? field.onChange
+                                      : undefined
+                                  }
+                                  step="any"
+                                />
+                              ) : (
+                                <Input
+                                  id={id}
+                                  type={type}
+                                  isDirty={fieldState.isDirty}
+                                  readOnly={formEntry.readonly}
+                                  {...field}
+                                  value={
+                                    field.value as
+                                      | string
+                                      | number
+                                      | readonly string[]
+                                      | undefined
+                                  }
+                                />
+                              )}
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1439,20 +1469,17 @@ export const EditContent = <
                                   </Popover>
                                   {/* Drop chance % input (for reward_items) or Number input (for others) */}
                                   <div className="flex items-center gap-1">
-                                    <Input
-                                      type="number"
+                                    <NumberInput
+                                      step="any"
                                       min={0}
                                       max={isRewardItems ? 100 : undefined}
                                       className="w-20"
                                       title={isRewardItems ? "Drop chance %" : "Number"}
                                       placeholder={isRewardItems ? "%" : "#"}
                                       value={entry.number}
-                                      onChange={(e) => {
+                                      onValueChange={(value) => {
                                         const updated = [...valueArr];
-                                        updated[entryIdx] = {
-                                          ...entry,
-                                          number: Number(e.target.value),
-                                        };
+                                        updated[entryIdx] = { ...entry, number: value };
                                         field.onChange(updated);
                                       }}
                                     />
@@ -1465,20 +1492,16 @@ export const EditContent = <
                                   {/* Quantity input (only for reward_items) */}
                                   {isRewardItems && (
                                     <div className="flex items-center gap-1">
-                                      <Input
-                                        type="number"
+                                      <NumberInput
                                         min={1}
                                         step={1}
                                         className="w-20"
                                         title="Quantity"
                                         placeholder="qty"
                                         value={entry.quantity ?? 1}
-                                        onChange={(e) => {
+                                        onValueChange={(value) => {
                                           const updated = [...valueArr];
-                                          updated[entryIdx] = {
-                                            ...entry,
-                                            quantity: Number(e.target.value),
-                                          };
+                                          updated[entryIdx] = { ...entry, quantity: value };
                                           field.onChange(updated);
                                         }}
                                       />
@@ -3030,11 +3053,11 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
     const value = eff[field];
     const numVal = typeof value === "number" ? value : Number(value ?? 0);
     return (
-      <Input
-        type="number"
-        value={String(numVal)}
+      <NumberInput
+        value={numVal}
         disabled={opts.disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onValueChange={onChange}
+        step="any"
       />
     );
   }
@@ -3198,6 +3221,7 @@ export const MassEffectEditor = <
 }) => {
   const { kind, entries, selectedFields } = props;
 
+  const editorRef = useRef<HTMLDivElement>(null);
   const [modified, setModified] = useState<Record<string, ZodAllTags[]>>({});
   const [committed, setCommitted] = useState<
     Record<string, { effects: ZodAllTags[]; baseUpdatedAt: number }>
@@ -3303,27 +3327,33 @@ export const MassEffectEditor = <
         };
         selectedFields.forEach((f) => {
           row[f] = (
-            <EffectFieldInputGeneric
-              effect={
-                modified[entry.id]?.[idx] ?? committed[entry.id]?.effects[idx] ?? effect
-              }
-              field={f}
-              onChange={(v) =>
-                setModified((prev) => {
-                  const next: Record<string, ZodAllTags[]> = { ...prev };
-                  const baseEffs =
-                    next[entry.id] ?? committed[entry.id]?.effects ?? entry.effects;
-                  const effsArray = Array.isArray(baseEffs) ? baseEffs : entry.effects;
-                  const updated = [...effsArray];
-                  const current = updated[idx] ?? effect;
-                  updated[idx] = { ...current, [f]: v } as ZodAllTags;
-                  next[entry.id] = updated;
-                  return next;
-                })
-              }
-              options={options}
-              disabled={editorPending}
-            />
+            <div data-effect-entry-id={entry.id}>
+              <EffectFieldInputGeneric
+                effect={
+                  modified[entry.id]?.[idx] ??
+                  committed[entry.id]?.effects[idx] ??
+                  effect
+                }
+                field={f}
+                onChange={(v) =>
+                  setModified((prev) => {
+                    const next: Record<string, ZodAllTags[]> = { ...prev };
+                    const baseEffs =
+                      next[entry.id] ?? committed[entry.id]?.effects ?? entry.effects;
+                    const effsArray = Array.isArray(baseEffs)
+                      ? baseEffs
+                      : entry.effects;
+                    const updated = [...effsArray];
+                    const current = updated[idx] ?? effect;
+                    updated[idx] = { ...current, [f]: v } as ZodAllTags;
+                    next[entry.id] = updated;
+                    return next;
+                  })
+                }
+                options={options}
+                disabled={editorPending}
+              />
+            </div>
           );
         });
         out.push(row);
@@ -3340,8 +3370,32 @@ export const MassEffectEditor = <
   const saveRow = async (row: Row) => {
     const entry = (entries || []).find((e) => e.id === row.entryId);
     if (!entry) return;
+    // Saving one row submits every effect for its entry, including sibling rows.
+    const fields = editorRef.current?.querySelectorAll<HTMLElement>(
+      "[data-effect-entry-id]",
+    );
+    for (const field of fields ?? []) {
+      if (field.dataset.effectEntryId === entry.id && !validateNumberInputs(field)) {
+        return;
+      }
+    }
     const effects =
       modified[row.entryId] ?? committed[row.entryId]?.effects ?? entry.effects;
+    const validator =
+      kind === "item"
+        ? ItemValidator
+        : kind === "jutsu"
+          ? JutsuValidator
+          : BloodlineValidator;
+    // Drafts remain in the payload when their field or effect row is hidden.
+    const parsed = validator.shape.effects.safeParse(effects);
+    if (!parsed.success) {
+      showMutationToast({
+        success: false,
+        message: parsed.error.issues.map((issue) => issue.message).join("; "),
+      });
+      return;
+    }
     if (kind === "item") {
       if (itemSaveInFlight.current) return;
       itemSaveInFlight.current = true;
@@ -3482,7 +3536,7 @@ export const MassEffectEditor = <
   }, [selectedFields]);
 
   return (
-    <div className="flex flex-col gap-2" aria-busy={editorPending}>
+    <div ref={editorRef} className="flex flex-col gap-2" aria-busy={editorPending}>
       <Table<Row, keyof Row>
         data={rows}
         columns={columns}

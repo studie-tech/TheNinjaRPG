@@ -1,9 +1,9 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useLocalStorage } from "@/hooks/localstorage";
+import { NumberInput } from "@/components/ui/number-input";
+import { safeLocalStorageSetItem, useLocalStorage } from "@/hooks/localstorage";
 import Modal from "@/layout/Modal";
 
 interface AutoAttackModalProps {
@@ -26,7 +26,29 @@ export default function AutoAttackModal({
     5,
   );
 
+  const [minLevelDraft, setMinLevelDraft] = useState(autoAttackMinLevel);
+  const [delayDraft, setDelayDraft] = useState(autoAttackDelay);
+  useEffect(() => {
+    if (isOpen) {
+      setMinLevelDraft(autoAttackMinLevel);
+      setDelayDraft(autoAttackDelay);
+    }
+  }, [isOpen, autoAttackMinLevel, autoAttackDelay]);
+  const isValid =
+    Number.isInteger(minLevelDraft) &&
+    minLevelDraft >= 1 &&
+    minLevelDraft <= 100 &&
+    Number.isInteger(delayDraft) &&
+    delayDraft >= 1 &&
+    delayDraft <= 60;
+
   const handleEnable = () => {
+    if (!isValid) return;
+    setAutoAttackMinLevel(minLevelDraft);
+    setAutoAttackDelay(delayDraft);
+    // Auto attack reads storage as soon as it starts, before storage-hook effects run.
+    safeLocalStorageSetItem("autoAttackMinLevel", JSON.stringify(minLevelDraft));
+    safeLocalStorageSetItem("autoAttackDelay", JSON.stringify(delayDraft));
     onEnable();
     setIsOpen(false);
   };
@@ -36,7 +58,7 @@ export default function AutoAttackModal({
       title="Auto Attack Configuration"
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      isValid={true}
+      isValid={isValid}
     >
       <div className="space-y-4">
         <div>
@@ -46,13 +68,13 @@ export default function AutoAttackModal({
           >
             Minimum Level to Attack
           </label>
-          <Input
+          <NumberInput
             id="auto-attack-min-level"
-            type="number"
             min="1"
             max="100"
-            value={autoAttackMinLevel}
-            onChange={(e) => setAutoAttackMinLevel(parseInt(e.target.value, 10) || 1)}
+            value={minLevelDraft}
+            onValueChange={setMinLevelDraft}
+            emptyFallback={1}
             className="w-full"
             placeholder="1"
           />
@@ -65,13 +87,13 @@ export default function AutoAttackModal({
           <label htmlFor="auto-attack-delay" className="mb-2 block font-medium text-sm">
             Attack Delay (seconds)
           </label>
-          <Input
+          <NumberInput
             id="auto-attack-delay"
-            type="number"
             min="1"
             max="60"
-            value={autoAttackDelay}
-            onChange={(e) => setAutoAttackDelay(parseInt(e.target.value, 10) || 5)}
+            value={delayDraft}
+            onValueChange={setDelayDraft}
+            emptyFallback={5}
             className="w-full"
             placeholder="5"
           />
@@ -84,7 +106,7 @@ export default function AutoAttackModal({
           <Button variant="outline" onClick={() => setIsOpen(false)} className="flex-1">
             Cancel
           </Button>
-          <Button onClick={handleEnable} className="flex-1">
+          <Button disabled={!isValid} onClick={handleEnable} className="flex-1">
             Enable Auto Attack
           </Button>
         </div>

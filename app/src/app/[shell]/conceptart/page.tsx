@@ -36,6 +36,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -428,14 +429,11 @@ const ImageCreationForm: React.FC<{
           <FormItem>
             <FormLabel>Seed value</FormLabel>
             <FormControl>
-              <Input
+              <NumberInput
+                optional
                 placeholder="Seed value"
-                type="number"
                 value={(field.value as number) ?? ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  field.onChange(value === "" ? undefined : Number(value));
-                }}
+                onOptionalValueChange={field.onChange}
                 onBlur={field.onBlur}
                 name={field.name}
                 ref={field.ref}
@@ -504,14 +502,11 @@ const VideoCreationForm: React.FC<{
           <FormItem>
             <FormLabel>Seed value</FormLabel>
             <FormControl>
-              <Input
+              <NumberInput
+                optional
                 placeholder="Seed value"
-                type="number"
                 value={(field.value as number) ?? ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  field.onChange(value === "" ? undefined : Number(value));
-                }}
+                onOptionalValueChange={field.onChange}
                 onBlur={field.onBlur}
                 name={field.name}
                 ref={field.ref}

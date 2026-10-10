@@ -181,7 +181,12 @@ export function FarmInventory({
                                   />
                                   <Button
                                     size="sm"
-                                    disabled={pending}
+                                    disabled={
+                                      pending ||
+                                      !Number.isInteger(quantity) ||
+                                      quantity < 1 ||
+                                      quantity > max
+                                    }
                                     onClick={() =>
                                       void onExtract(
                                         extractorSlot,
@@ -241,7 +246,12 @@ export function FarmInventory({
                         />
                         <Button
                           size="sm"
-                          disabled={pending}
+                          disabled={
+                            pending ||
+                            !Number.isInteger(quantity) ||
+                            quantity < 1 ||
+                            quantity > max
+                          }
                           onClick={() => void onSell(crop.userItemId, quantity)}
                         >
                           {pending ? "Selling…" : "Sell"}

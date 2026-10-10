@@ -24,7 +24,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -277,14 +277,11 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                   <FormItem>
                     <FormLabel>Ryo Amount</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
+                      <NumberInput
                         placeholder="Enter ryo amount"
                         {...field}
                         value={field.value as number}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value, 10) || 0)
-                        }
+                        onValueChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />
@@ -386,14 +383,11 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                         >
                           Amount (Ryo)
                         </label>
-                        <Input
+                        <NumberInput
                           id="amount"
-                          type="number"
                           placeholder="Enter amount"
                           value={addMoneyAmount}
-                          onChange={(e) =>
-                            setAddMoneyAmount(parseInt(e.target.value, 10) || 0)
-                          }
+                          onValueChange={setAddMoneyAmount}
                           min="1"
                         />
                       </div>
@@ -412,7 +406,11 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                           onClick={() =>
                             addMoney({ bountyId: b.id, amountRyo: addMoneyAmount })
                           }
-                          disabled={isAddingMoney || addMoneyAmount <= 0}
+                          disabled={
+                            isAddingMoney ||
+                            !Number.isInteger(addMoneyAmount) ||
+                            addMoneyAmount <= 0
+                          }
                         >
                           Add Money
                         </Button>

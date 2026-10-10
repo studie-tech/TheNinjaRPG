@@ -36,6 +36,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -1934,9 +1935,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                         <label className="font-medium text-sm" htmlFor="reps">
                           Reputation points to donate
                         </label>
-                        <Input
+                        <NumberInput
                           id="reps"
-                          type="number"
                           min={1}
                           max={donationCapacity}
                           step={1}
@@ -1946,7 +1946,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                           value={donateReps}
                           disabled={isDonationBusy}
                           aria-describedby="reputation-donation-balance"
-                          onChange={(e) => setDonateReps(e.target.value)}
+                          onTextChange={setDonateReps}
                         />
                       </Modal>
                     </>

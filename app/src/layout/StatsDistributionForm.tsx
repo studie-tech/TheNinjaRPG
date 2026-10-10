@@ -16,8 +16,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import {
   IMG_TRAIN_BUKI_OFF,
@@ -94,7 +94,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
   const handleAcceptWithTutorial = (data: AssignableUserStats) => {
     if (currentStep?.title === "Assigning Stats") {
       const formSum = Object.values(data)
-        .map((v) => Number(v))
+        .map((v) => (Number.isFinite(Number(v)) ? Number(v) : 0))
         .reduce((a, b) => a + b, 0);
 
       if (formSum === availableStats) {
@@ -482,7 +482,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   });
   const formValues = useWatch({ control: form.control });
   const formSum = Object.values(formValues)
-    .map((v) => Number(v))
+    .map((v) => (Number.isFinite(Number(v)) ? Number(v) : 0))
     .reduce((a, b) => a + b, 0);
 
   // Is the form the same as the default values
@@ -505,7 +505,9 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   } else if (isDefault) {
     buttonText = "Nothing changed";
   }
-  const isDisabled = buttonText !== "Assign points";
+  const isDisabled =
+    buttonText !== "Assign points" ||
+    Object.values(formValues).some((value) => !Number.isFinite(Number(value)));
 
   // Submit handler
   const onSubmit = form.handleSubmit((data) => {
@@ -534,7 +536,9 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
         {statNames.map((stat, i) => {
           const maxValue = maxValues[stat];
           const minValue = 0;
-          const currentValue = Number(formValues[stat] ?? 0);
+          const currentValue = Number.isFinite(Number(formValues[stat]))
+            ? Number(formValues[stat])
+            : 0;
 
           // Calculate remaining points and dynamic max for this slider
           // remainingPoints already includes currentValue freed up from the total
@@ -559,20 +563,12 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                     )}
                     {useInputBoxes ? (
                       <FormControl>
-                        <Input
-                          type="number"
+                        <NumberInput
                           min={minValue}
                           max={dynamicMax}
                           step={0.01}
                           value={(field.value as number) ?? 0}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
-                            const clampedValue = Math.max(
-                              minValue,
-                              Math.min(dynamicMax, value),
-                            );
-                            field.onChange(clampedValue);
-                          }}
+                          onValueChange={field.onChange}
                           onBlur={field.onBlur}
                           name={field.name}
                           className="w-full"

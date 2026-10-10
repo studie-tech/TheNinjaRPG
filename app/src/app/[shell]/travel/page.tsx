@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
@@ -1045,12 +1046,12 @@ function Travel() {
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Input
+                              <NumberInput
                                 className="w-full"
                                 placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
-                                type="number"
                                 {...field}
                                 value={field.value as number}
+                                onValueChange={field.onChange}
                               />
                             </FormControl>
                             <FormMessage />
@@ -1220,12 +1221,12 @@ function Travel() {
                       render={({ field }) => (
                         <FormItem>
                           <FormControl>
-                            <Input
+                            <NumberInput
                               className="w-full"
                               placeholder={`Sector ID (${MAP_SECTOR_ID_MIN}-${MAP_SECTOR_ID_MAX})`}
-                              type="number"
                               {...field}
                               value={field.value as number}
+                              onValueChange={field.onChange}
                             />
                           </FormControl>
                           <FormMessage />

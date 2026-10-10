@@ -2,7 +2,7 @@
 
 import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 
 type FarmQuantityStepperProps = {
   value: number;
@@ -37,14 +37,14 @@ export function FarmQuantityStepper({
       >
         <Minus className="h-3.5 w-3.5" />
       </Button>
-      <Input
+      <NumberInput
         aria-label={label}
-        type="number"
         min={min}
         max={max}
         value={value}
         disabled={disabled}
-        onChange={(event) => setQuantity(Number(event.target.value))}
+        onValueChange={onChange}
+        emptyFallback={min}
         className="h-8 w-16 text-center"
       />
       <Button

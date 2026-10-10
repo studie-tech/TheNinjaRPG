@@ -19,7 +19,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -818,11 +818,12 @@ const AssignTrainingDummyStats: React.FC<AssignTrainingDummyStatsProps> = (props
                         <FormItem className="pt-1">
                           <FormLabel>{stat}</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
+                            <NumberInput
+                              step="any"
                               placeholder={stat}
                               {...field}
                               value={field.value as number}
+                              onValueChange={field.onChange}
                             />
                           </FormControl>
                           <FormMessage />

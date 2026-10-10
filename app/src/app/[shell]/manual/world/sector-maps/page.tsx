@@ -15,6 +15,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
 import { useDelayState } from "@/hooks/useDelayState";
 import ContentBox from "@/layout/ContentBox";
@@ -122,7 +123,7 @@ function SectorMapEditorContent() {
       sector,
       status: statusFilter === "ALL" ? undefined : statusFilter,
     },
-    { enabled: canEdit },
+    { enabled: canEdit && isValidSectorId(sector) },
   );
 
   // Data for the always-on scene preview: the shared asset/terrain libraries
@@ -135,7 +136,7 @@ function SectorMapEditorContent() {
   });
   const { data: sectorVillage } = api.travel.getVillageInSector.useQuery(
     { sector, isOutlaw: false },
-    { enabled: canEdit },
+    { enabled: canEdit && isValidSectorId(sector) },
   );
   const decorationAssets = useMemo(
     () => mergeDecorationAssets(dbAssets ?? []),
@@ -290,7 +291,7 @@ function SectorMapEditorContent() {
   // Server-side validation of the editor JSON without saving anything
   const handlePreview = () => {
     const parsed = getParsedJson();
-    if (parsed.error) return;
+    if (parsed.error || !isValidSectorId(sector)) return;
     previewMap({
       sector,
       name,
@@ -301,7 +302,7 @@ function SectorMapEditorContent() {
   // Save the editor JSON as a new draft version, or publish it directly
   const handleSave = (publish: boolean) => {
     const parsed = getParsedJson();
-    if (parsed.error) return;
+    if (parsed.error || !isValidSectorId(sector)) return;
     saveMap({
       sector,
       name,
@@ -438,21 +439,19 @@ function SectorMapEditorContent() {
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="sector-map-sector">Sector</Label>
-                <Input
+                <NumberInput
                   id="sector-map-sector"
-                  type="number"
                   min={0}
                   max={MAP_SECTOR_ID_MAX}
                   value={sector}
-                  onChange={(event) => {
-                    const nextSector = Math.min(
-                      MAP_SECTOR_ID_MAX,
-                      Math.max(0, Number(event.target.value) || 0),
-                    );
+                  onValueChange={(nextSector) => {
                     setSector(nextSector);
-                    setName((current) =>
-                      current.startsWith("Sector ") ? `Sector ${nextSector}` : current,
-                    );
+                    if (Number.isFinite(nextSector))
+                      setName((current) =>
+                        current.startsWith("Sector ")
+                          ? `Sector ${nextSector}`
+                          : current,
+                      );
                   }}
                 />
               </div>
@@ -569,7 +568,11 @@ function SectorMapEditorContent() {
                   stay disabled while the map fails client-side validation */}
               {isDirty && (
                 <>
-                  <Button type="button" onClick={handlePreview} disabled={busy}>
+                  <Button
+                    type="button"
+                    onClick={handlePreview}
+                    disabled={busy || !isValidSectorId(sector)}
+                  >
                     <FileCheck className="mr-2 h-4 w-4" />
                     Validate
                   </Button>
@@ -577,7 +580,7 @@ function SectorMapEditorContent() {
                     type="button"
                     variant="secondary"
                     onClick={() => handleSave(false)}
-                    disabled={busy || !normalized.map}
+                    disabled={busy || !isValidSectorId(sector) || !normalized.map}
                     title={
                       normalized.map
                         ? undefined
@@ -590,7 +593,7 @@ function SectorMapEditorContent() {
                   <Button
                     type="button"
                     onClick={() => handleSave(true)}
-                    disabled={busy || !normalized.map}
+                    disabled={busy || !isValidSectorId(sector) || !normalized.map}
                     title={
                       normalized.map
                         ? undefined

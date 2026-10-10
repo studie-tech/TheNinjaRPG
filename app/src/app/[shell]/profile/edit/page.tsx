@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -2897,22 +2898,23 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Label htmlFor="experienceAmount">Experience Amount</Label>
-              <Input
+              <NumberInput
                 id="experienceAmount"
-                type="number"
                 min={1}
                 max={100000}
                 value={experienceAmount}
-                onChange={(e) =>
-                  setExperienceAmount(parseInt(e.target.value, 10) || 100)
-                }
+                onValueChange={setExperienceAmount}
                 className="w-32"
               />
             </div>
-            <p>
-              This will award <b>{experienceAmount}</b> experience points to{" "}
-              <b>ALL USERS</b>. Are you sure you want to continue?
-            </p>
+            {Number.isFinite(experienceAmount) ? (
+              <p>
+                This will award <b>{experienceAmount}</b> experience points to{" "}
+                <b>ALL USERS</b>. Are you sure you want to continue?
+              </p>
+            ) : (
+              <p>Enter a valid experience amount.</p>
+            )}
           </div>
         </Confirm>
       )}
@@ -2943,19 +2945,22 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Label htmlFor="sectorNumber">Sector #</Label>
-              <Input
+              <NumberInput
                 id="sectorNumber"
-                type="number"
                 min={1}
                 value={sectorNumber}
-                onChange={(e) => setSectorNumber(parseInt(e.target.value, 10) || 1)}
+                onValueChange={setSectorNumber}
                 className="w-20"
               />
             </div>
-            <p>
-              This will clear sector <b>{sectorNumber}</b> ownership from the database.
-              Are you sure you want to continue?
-            </p>
+            {Number.isFinite(sectorNumber) ? (
+              <p>
+                This will clear sector <b>{sectorNumber}</b> ownership from the
+                database. Are you sure you want to continue?
+              </p>
+            ) : (
+              <p>Enter a valid sector number.</p>
+            )}
           </div>
         </Confirm>
       )}
