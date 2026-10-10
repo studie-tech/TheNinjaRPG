@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { ELEMENTAL_MASTERY_BOOST, ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
 import type { AiProfile } from "@/drizzle/schema";
-import { computeDamagePacket, emptyPreBattleGearModifiers } from "@/libs/combat/process";
-import { clear } from "@/libs/combat/tags";
+import { applyEffects, computeDamagePacket, emptyPreBattleGearModifiers } from "@/libs/combat/process";
+import { clear, copy } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
 import { activeTrainedElement, elementalGainRoom } from "@/libs/elementalMastery";
@@ -10,7 +10,7 @@ import { processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { DamageTag } from "@/validators/combat";
 import { getUserElements } from "@/validators/user";
-import { makeEffect } from "./helpers/battleScenario";
+import { makeCompleteBattle, makeEffect } from "./helpers/battleScenario";
 
 const user = (patch: Partial<CombatQueryUser> = {}): CombatQueryUser => ({
   userId: "caster", username: "caster", villageId: "village", level: 50, experience: 0,
@@ -28,10 +28,10 @@ const preload = (caster: CombatQueryUser, battleType: "COMBAT" | "RANKED_PVP" = 
   width: 10, height: 10, settings: [], relations: [], wars: [], villages: [], defaultProfile: { id: "default" } as AiProfile,
 });
 
-const packet = (effects: UserEffect[], element: "Wind" | "Fire" | "None") => computeDamagePacket({
+const packet = (effects: UserEffect[], element: "Wind" | "Fire" | "None", battleRound = 1) => computeDamagePacket({
   rawDamage: 1000,
   damageEffect: { ...DamageTag.parse({ elements: [element] }), id: "damage", creatorId: "caster", targetId: "target", level: 50, isNew: false, castThisRound: false, createdRound: 1, longitude: 0, latitude: 0, barrierAbsorb: 0 } as UserEffect,
-  usersEffects: effects, attackerId: "caster", defenderId: "target", battleRound: 1,
+  usersEffects: effects, attackerId: "caster", defenderId: "target", battleRound,
   preBattleGearModifiers: { caster: emptyPreBattleGearModifiers(), target: emptyPreBattleGearModifiers() },
 }).damage;
 
@@ -73,6 +73,29 @@ describe("elemental mastery battle integration", () => {
     expect(packet(effects, "Wind")).toBeCloseTo(packet([], "Wind") * (1 + ELEMENTAL_MASTERY_BOOST / 100));
     expect(packet(effects, "Fire")).toBeCloseTo(packet([], "Fire"));
     expect(packet(effects, "None")).toBeCloseTo(packet([], "None"));
+  });
+
+  it("copy transfers temporary jutsu buffs without granting the target's elemental mastery", async () => {
+    const target = await preload(user({ userId: "target" }));
+    const caster = await preload(user({ primaryElement: "Wind", elementalMastery: {}, activeTrainedElement: null }));
+    const temporaryBuff = makeEffect("shield", { power: 100, rounds: 5 }, {
+      id: "temporary-shield", creatorId: "target", targetId: "target", targetType: "user", fromType: "jutsu", createdRound: 1,
+    });
+    const copyEffect = makeEffect("copy", { power: 100, rounds: 3 }, {
+      creatorId: "caster", targetId: "target", fromType: "jutsu", createdRound: 1, isNew: true, castThisRound: true,
+    });
+    const battle = makeCompleteBattle({
+      usersState: [...caster.usersState, ...target.usersState],
+      usersEffects: [...caster.userEffects, ...target.userEffects, temporaryBuff],
+      extraState: target.extraState,
+    });
+
+    copy(copyEffect, battle.usersEffects, caster.usersState[0]!, target.usersState[0]!);
+    const { newBattle } = applyEffects(battle, "caster");
+    const copied = newBattle.usersEffects.filter(effect => effect.targetId === "caster" && effect.fromEffectId);
+    expect(copied.map(effect => effect.fromEffectId)).toEqual([temporaryBuff.id]);
+    expect(newBattle.usersEffects.filter(effect => effect.fromType === "elementalMastery")).toHaveLength(1);
+    expect(packet(newBattle.usersEffects, "Wind", 2)).toBeCloseTo(packet([], "Wind", 2));
   });
 
   it("does not expose progress until capped, and exposes at most one trained element", () => {

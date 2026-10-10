@@ -3385,6 +3385,7 @@ export const TRANSFER_EXCLUDED_SOURCE_TYPES: ReadonlySet<string> = new Set([
   "village",
   "skill",
   "ranked",
+  "elementalMastery",
   "sageMode",
   "sageModeAfter",
 ]);
