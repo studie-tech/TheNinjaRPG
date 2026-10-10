@@ -781,7 +781,7 @@ describeWithDatabase("mastery training queue", () => {
     await insertUser({
       currentlyTrainingMastery: "ninjutsuMastery",
       masteryTrainingStartedAt: new Date(),
-      genjutsuMastery: 1_000_000_000,
+      genjutsuMastery: 375_000,
     });
     const caller = await callerFor(trainRouter, USER_ID);
     const one = [{ stat: "taijutsuMastery" as const, speed: "15min" as const }];
