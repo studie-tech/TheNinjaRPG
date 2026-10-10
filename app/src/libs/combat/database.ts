@@ -5,7 +5,6 @@ import type { BattleDataEntryType, BattleTypes } from "@/drizzle/constants";
 import {
   ENERGY_PVP_LOSS_REWARD,
   ENERGY_PVP_WIN_REWARD,
-  getUserCaps,
   HOSPITAL_LAT,
   HOSPITAL_LONG,
   ITEM_LEVEL_CAP,
@@ -13,7 +12,6 @@ import {
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_XP_TO_LEVEL,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
-  MasteryNames,
   REGEN_SECONDS,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   VILLAGE_SYNDICATE_ID,
@@ -64,6 +62,7 @@ import {
   isPvpEnergyRewardBattle,
 } from "@/libs/combat/util";
 import { getPvpFarmActivityReductionSeconds } from "@/libs/farming";
+import { allocateMasteryGains } from "@/libs/masteryProgression";
 import type { PusherClient } from "@/libs/pusher";
 import { broadcastRaidAvailability, updateUserOnMap } from "@/libs/pusher";
 import {
@@ -80,6 +79,7 @@ import { findWarsWithUser } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { reduceActiveFarmPlotTimers } from "@/server/utils/farming";
+import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
 import { extendWarParticipantSql } from "@/server/utils/war";
@@ -561,7 +561,7 @@ export const updateClanLeaders = async (
   // Guards
   if (!result) return;
   if (curBattle.battleType !== "CLAN_CHALLENGE") return;
-  if (!user || !user.clanId || !leader || !leader.clanId) return;
+  if (!user?.clanId || !leader?.clanId) return;
   if (user.clanId !== leader.clanId) return;
   if (!user.isAggressor) return;
   if (!result.didWin) return;
@@ -1036,7 +1036,7 @@ export const updateVillageAnbuClan = async (
   // Fetch
   const user = curBattle.usersState.find((u) => u.userId === userId);
   // Guards
-  if (!user || !user.villageId) return;
+  if (!user?.villageId) return;
   if (!result?.didWin) return;
   // Mutate
   await Promise.all([
@@ -1643,12 +1643,7 @@ export const updateUser = async (
             ? sql`seichiSilver + ${result.seichiSilver}`
             : sql`seichiSilver`,
           // Preserve stored over-cap entitlement; concurrent gains cannot exceed the cap.
-          ...Object.fromEntries(
-            MasteryNames.map((mastery) => [
-              mastery,
-              sql`${userData[mastery]} + LEAST(${result.masteryGains?.[mastery] ?? 0}, GREATEST(0, ${getUserCaps(user.rank).mastery_cap} - ${userData[mastery]}))`,
-            ]),
-          ),
+          ...masteryGainUpdates(result.masteryGains ?? {}),
           offence: sql`offence + ${result.offence}`,
           defence: sql`defence + ${result.defence}`,
           villagePrestige: sql`villagePrestige + ${result.villagePrestige}`,
@@ -1755,15 +1750,7 @@ export const updateUser = async (
         speed: result.speed,
         dailyArenaFights: curBattle.battleType === "ARENA" ? 1 : 0,
         dailySageActivations: user.sageModeUsedThisBattle ? 1 : 0,
-        ...Object.fromEntries(
-          MasteryNames.map((mastery) => [
-            mastery,
-            Math.min(
-              result.masteryGains?.[mastery] ?? 0,
-              Math.max(0, getUserCaps(user.rank).mastery_cap - baseline[mastery]),
-            ),
-          ]),
-        ),
+        ...allocateMasteryGains({ ...user, ...baseline }, result.masteryGains ?? {}),
       };
       result.profileUpdate = {
         userId,

@@ -7,6 +7,7 @@ import type {
   ElementName,
   GeneralType,
   MasteryName,
+  MasteryType,
   PoolType,
   StatType,
 } from "@/drizzle/constants";
@@ -171,7 +172,11 @@ export type CombatUserFields = {
   fledBattle: boolean;
   moneyStolen: number;
   allyVillage: boolean;
-  usedActions: { id: string; type: "jutsu" | "item" | "basic" | "bloodline" }[];
+  usedActions: {
+    id: string;
+    type: "jutsu" | "item" | "basic" | "bloodline";
+    masteryTypes?: MasteryType[];
+  }[];
   /** Distinct tag types the user applied this battle (for tag_usage_win tracker). Array not Set — serializes to JSON. */
   usedTagTypes: EffectType[];
   /** Enemy-targeted skill and bloodright sources preloaded for on-action application. */

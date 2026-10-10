@@ -24,6 +24,7 @@ const assigner = async (over: Record<string, number>) => {
       userId: USER_ID,
       username: "Assigner",
       rank: "GENIN",
+      masteryRanks: { ninjutsuMastery: "MASTER" },
       experience: 5_000,
       earnedExperience: 100,
       offence: 1_000,
@@ -138,5 +139,22 @@ describeWithDatabase("profile useUnusedExperiencePoints against a real MySQL", (
     expect(user.defence).toBe(1_050);
     expect(user.experience).toBe(5_050);
     expect(user.earnedExperience).toBe(100);
+  });
+});
+
+
+describeWithDatabase("whole-point mastery assignment", () => {
+  beforeEach(async () => { await resetTables(userData); });
+  it("charges every granted point across repeated fractional requests", async () => {
+    await assigner({ ninjutsuMastery: 10 });
+    const api = await callerFor(profileRouter, USER_ID);
+    for (let i = 0; i < 3; i++) expect((await api.useUnusedExperiencePoints({ ...assign(0, 0), ninjutsuMastery: 1.49 })).success).toBe(true);
+    expect(await readUser()).toMatchObject({ ninjutsuMastery: 13, earnedExperience: 97 });
+  });
+  it("does not grant a fractional cap remainder for free", async () => {
+    await assigner({ ninjutsuMastery: 1499999.6 });
+    const api = await callerFor(profileRouter, USER_ID);
+    expect((await api.useUnusedExperiencePoints({ ...assign(0, 0), ninjutsuMastery: 1.49 })).success).toBe(false);
+    expect(await readUser()).toMatchObject({ ninjutsuMastery: 1499999.6, earnedExperience: 100 });
   });
 });

@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  MASTERY_RANKS,
+  MasteryNames,
   QUEST_REWARD_MODES,
   QUEST_REWARD_PICK_MAX,
   STARTER_VILLAGES,
@@ -23,6 +25,14 @@ const LEGACY_STARTER_VILLAGE_MAP: Record<
 };
 
 export const rewardFields = {
+  reward_mastery_stat: z.enum(["None", ...MasteryNames]).optional(),
+  reward_mastery_rank: z.enum(MASTERY_RANKS).optional(),
+  reward_ninjutsu_experience: z.coerce.number().min(0).optional(),
+  reward_genjutsu_experience: z.coerce.number().min(0).optional(),
+  reward_taijutsu_experience: z.coerce.number().min(0).optional(),
+  reward_bukijutsu_experience: z.coerce.number().min(0).optional(),
+  reward_bloodline_experience: z.coerce.number().min(0).optional(),
+  reward_sage_stat_experience: z.coerce.number().min(0).optional(),
   reward_hunter_items: z.boolean().prefault(false),
   reward_hunter_items_ids: z.array(z.string()).prefault([]),
   reward_gathering_items: z.boolean().prefault(false),
@@ -91,6 +101,8 @@ export type PostProcessedRewards = z.infer<typeof PostProcessedRewardSchema>;
 export const hasReward = (reward: ObjectiveRewardType) => {
   const parsedReward = ObjectiveReward.parse(reward);
   return (
+    (parsedReward.reward_mastery_rank && parsedReward.reward_mastery_rank !== "NONE") ||
+    MASTERY_EXPERIENCE_FIELDS.some((field) => (parsedReward[field] ?? 0) > 0) ||
     parsedReward.reward_money > 0 ||
     parsedReward.reward_seichi_silver > 0 ||
     parsedReward.reward_clanpoints > 0 ||
@@ -131,7 +143,17 @@ export const questRewardModeFields = {
 };
 
 /** Scalar reward fields that each become one pickable card in a "choose" quest. */
+export const MASTERY_EXPERIENCE_FIELDS = [
+  "reward_ninjutsu_experience",
+  "reward_genjutsu_experience",
+  "reward_taijutsu_experience",
+  "reward_bukijutsu_experience",
+  "reward_bloodline_experience",
+  "reward_sage_stat_experience",
+] as const;
+
 export const REWARD_CHOICE_AMOUNT_FIELDS = [
+  ...MASTERY_EXPERIENCE_FIELDS,
   "reward_money",
   "reward_seichi_silver",
   "reward_clanpoints",

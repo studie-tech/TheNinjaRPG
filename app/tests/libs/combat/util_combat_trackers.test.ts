@@ -82,7 +82,7 @@ describe("buildCombatTrackerTasks — creatures_hunted", () => {
 });
 
 describe("buildCombatTrackerTasks — use_specific item/jutsu", () => {
-  it("emits one tick per distinct used jutsu and item id, regardless of outcome", () => {
+  it("emits every jutsu cast and one tick per distinct item, regardless of outcome", () => {
     const me = makeBattleUser("attacker", {
       usedActions: [
         { id: "jutsu-1", type: "jutsu" },
@@ -97,8 +97,9 @@ describe("buildCombatTrackerTasks — use_specific item/jutsu", () => {
     const tasks = buildCombatTrackerTasks(battle, me, makeResult(0)); // lost: any outcome
 
     expect(tasks.filter((t) => t.task === "use_specific_jutsu_combat")).toEqual([
-      { task: "use_specific_jutsu_combat", increment: 1, contentId: "jutsu-1" },
-      { task: "use_specific_jutsu_combat", increment: 1, contentId: "jutsu-2" },
+      { task: "use_specific_jutsu_combat", increment: 1, contentId: "jutsu-1", masteryTypes: undefined, combatType: "PVP" },
+      { task: "use_specific_jutsu_combat", increment: 1, contentId: "jutsu-1", masteryTypes: undefined, combatType: "PVP" },
+      { task: "use_specific_jutsu_combat", increment: 1, contentId: "jutsu-2", masteryTypes: undefined, combatType: "PVP" },
     ]);
     expect(tasks.filter((t) => t.task === "use_specific_item_combat")).toEqual([
       { task: "use_specific_item_combat", increment: 1, contentId: "item-1" },

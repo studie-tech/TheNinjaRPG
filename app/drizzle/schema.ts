@@ -2432,6 +2432,9 @@ export const userData = mysqlTable(
     speed: double("speed").default(10).notNull(),
     offence: double("offence").default(10).notNull(),
     defence: double("defence").default(10).notNull(),
+    masteryRanks: json("masteryRanks")
+      .$type<Partial<Record<consts.MasteryName, consts.MasteryRank>>>()
+      .default({}).notNull(),
     ninjutsuMastery: double("ninjutsuMastery").default(10).notNull(),
     genjutsuMastery: double("genjutsuMastery").default(10).notNull(),
     taijutsuMastery: double("taijutsuMastery").default(10).notNull(),
@@ -3827,6 +3830,12 @@ export const quest = mysqlTable(
     requiredBloodlineId: varchar("requiredBloodlineId", { length: 191 }),
     requiredSageModeId: varchar("requiredSageModeId", { length: 191 }),
     requiredSageRank: mysqlEnum("requiredSageRank", consts.SAGE_MASTERY_RANKS),
+    requiredNinjutsuMastery: int("requiredNinjutsuMastery"),
+    requiredGenjutsuMastery: int("requiredGenjutsuMastery"),
+    requiredTaijutsuMastery: int("requiredTaijutsuMastery"),
+    requiredBukijutsuMastery: int("requiredBukijutsuMastery"),
+    requiredBloodlineMastery: int("requiredBloodlineMastery"),
+    requiredSageMastery: int("requiredSageMastery"),
     maxLevel: int("maxLevel").default(100).notNull(),
     maxAttempts: int("maxAttempts").default(1).notNull(),
     maxCompletes: int("maxCompletes").default(1).notNull(),

@@ -1,5 +1,6 @@
 import type { ElementDefinition } from "cytoscape";
 import type { Quest } from "@/drizzle/schema";
+import { masteryRewardLabels } from "@/libs/masteryRewards";
 import { capitalizeFirstLetter } from "@/utils/string";
 import {
   type AllObjectivesType,
@@ -360,6 +361,7 @@ export const getRewardArray = (reward?: ObjectiveRewardType) => {
   if (questReward.reward_gathering_experience) {
     rewards.push(`${questReward.reward_gathering_experience} gathering experience`);
   }
+  rewards.push(...masteryRewardLabels(questReward));
   if (questReward.reward_sage_mastery_experience) {
     rewards.push(`${questReward.reward_sage_mastery_experience} sage mode experience`);
   }

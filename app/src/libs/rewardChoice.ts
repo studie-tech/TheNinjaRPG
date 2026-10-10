@@ -42,6 +42,8 @@ export const getFixedChoiceRewards = (
 ): ObjectiveRewardType =>
   ObjectiveReward.parse({
     reward_rank: reward.reward_rank,
+    reward_mastery_stat: reward.reward_mastery_stat,
+    reward_mastery_rank: reward.reward_mastery_rank,
     reward_village_membership: reward.reward_village_membership,
     reward_hunter_items: reward.reward_hunter_items,
     reward_hunter_items_ids: reward.reward_hunter_items_ids,
@@ -267,6 +269,12 @@ export const REWARD_CHOICE_READY_MESSAGE = "Choose your reward to claim it.";
 
 /** Player-facing names of the scalar reward cards. */
 export const REWARD_CHOICE_AMOUNT_LABELS: Record<RewardChoiceAmountField, string> = {
+  reward_ninjutsu_experience: "Ninjutsu Mastery XP",
+  reward_genjutsu_experience: "Genjutsu Mastery XP",
+  reward_taijutsu_experience: "Taijutsu Mastery XP",
+  reward_bukijutsu_experience: "Bukijutsu Mastery XP",
+  reward_bloodline_experience: "Bloodline Mastery XP",
+  reward_sage_stat_experience: "Sage Mastery XP",
   reward_money: "Ryo",
   reward_seichi_silver: "Seichi Silver",
   reward_clanpoints: "Clan Points",

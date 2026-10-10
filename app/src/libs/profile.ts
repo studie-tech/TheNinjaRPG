@@ -32,6 +32,7 @@ import {
   type MasteryBuffUser,
   wornGearTags,
 } from "@/libs/mastery";
+import { masteryGainRoom } from "@/libs/masteryProgression";
 import { getReducedGainsDays } from "@/libs/train";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { getStrucBoost } from "@/utils/village";
@@ -102,7 +103,7 @@ export const getExpBracket = (experience: number, rank?: UserRank): number => {
   for (const b of XP_BRACKETS) {
     if (xp >= b.min && xp <= b.max) return b.bracket;
   }
-  return XP_BRACKETS[XP_BRACKETS.length - 1]!.bracket;
+  return XP_BRACKETS.at(-1)?.bracket ?? 0;
 };
 
 /**
@@ -272,15 +273,18 @@ export const getRedistributableStatTotal = (
 export const canAssignExperience = (
   user: Pick<
     UserData,
-    "rank" | (typeof CombatStatNames)[number] | (typeof assignableMasteryNames)[number]
+    | "rank"
+    | "masteryRanks"
+    | (typeof CombatStatNames)[number]
+    | (typeof MasteryNames)[number]
   >,
 ) => {
-  const { stats_cap, gens_cap, mastery_cap } = getUserCaps(user.rank);
+  const { stats_cap, gens_cap } = getUserCaps(user.rank);
   return (
     CombatStatNames.some(
       (stat) =>
         user[stat] < (stat === "offence" || stat === "defence" ? stats_cap : gens_cap),
-    ) || assignableMasteryNames.some((name) => user[name] < mastery_cap)
+    ) || assignableMasteryNames.some((name) => masteryGainRoom(user, name) > 0)
   );
 };
 
@@ -320,7 +324,7 @@ export const activityStreakRewards = (streak: number) => {
 };
 
 export const showUserRank = (user?: { rank?: UserRank; isOutlaw?: boolean }) => {
-  if (!user || !user.rank) return "Unknown";
+  if (!user?.rank) return "Unknown";
   if (user.isOutlaw) {
     switch (user.rank) {
       case "CHUNIN":

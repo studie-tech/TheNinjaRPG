@@ -63,6 +63,7 @@ import {
   hasAnyJutsuEquipCap,
   JUTSU_EQUIP_CAPS,
 } from "@/libs/jutsu";
+import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import {
   buildMissingLoadouts,
   decideRename,
@@ -661,6 +662,7 @@ export const jutsuRouter = createTRPCRouter({
           task: "train_specific_jutsu",
           increment: 1,
           contentId: input.evolutionJutsuId,
+          masteryTypes: jutsuMasteryTypes(evolutionJutsu),
         },
       ]);
       const questDataForDb = filterQuestTrackersForDbPersist(trackers, user);
@@ -1198,7 +1200,12 @@ export const jutsuRouter = createTRPCRouter({
       if (!userjutsuObj) {
         const { trackers } = getNewTrackers(user, [
           { task: "jutsus_mastered", increment: 1 },
-          { task: "train_specific_jutsu", increment: 1, contentId: input.jutsuId },
+          {
+            task: "train_specific_jutsu",
+            increment: 1,
+            contentId: input.jutsuId,
+            masteryTypes: jutsuMasteryTypes(info),
+          },
         ]);
         questDataFull = trackers;
       }

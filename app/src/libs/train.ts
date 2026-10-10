@@ -43,6 +43,7 @@ import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import type { MasterySources, MasteryStatSource } from "@/libs/mastery";
 import { effectiveMasteries, hasMasteryRequirements } from "@/libs/mastery";
+import { masteryGainRoom } from "@/libs/masteryProgression";
 import {
   liveQueueRows,
   queueHeadAfter,
@@ -909,7 +910,6 @@ export const settleMasteryTrainingQueue = (
   now = new Date(),
 ) => {
   const queue = [...entries];
-  const { mastery_cap } = getUserCaps(user.rank);
   const gains: Partial<Record<MasteryName, number>> = {};
   const completed: {
     stat: MasteryName;
@@ -923,7 +923,18 @@ export const settleMasteryTrainingQueue = (
   let speed = user.trainingSpeed;
   let dailyTrainings = user.dailyTrainings;
   const room = (stat: MasteryName) =>
-    Math.max(0, mastery_cap - user[stat] - (gains[stat] ?? 0));
+    masteryGainRoom(
+      {
+        ...user,
+        ...Object.fromEntries(
+          Object.entries(gains).map(([name, gain]) => [
+            name,
+            user[name as MasteryName] + gain,
+          ]),
+        ),
+      },
+      stat,
+    );
   while (current && startedAt) {
     while (queue[0] && room(queue[0].stat) === 0) queue.shift();
     const next = queue[0];

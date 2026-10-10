@@ -42,7 +42,6 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import type { CombatStatName, MasteryName, TrainingSpeed } from "@/drizzle/constants";
 import {
   CombatStatNames,
-  getUserCaps,
   IMG_TRAIN_BUKI_DEF,
   IMG_TRAIN_BUKI_OFF,
   IMG_TRAIN_GEN_DEF,
@@ -56,6 +55,7 @@ import {
   IMG_TRAIN_TAI_OFF,
   IMG_TRAIN_WILLPOWER,
   JUTSU_LEVEL_CAP,
+  MASTERY_RANK_CAPS,
   MAX_DAILY_TRAININGS,
   MasteryNames,
   SENSEI_RANKS,
@@ -63,6 +63,7 @@ import {
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
+  TOTAL_MASTERY_CAP,
   TrainingSpeeds,
   TUTORIAL_JUTSU_ID,
 } from "@/drizzle/constants";
@@ -91,12 +92,18 @@ import { MasteryTrainingQueue } from "@/layout/MasteryTrainingQueue";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
+import QuestPicker from "@/layout/QuestPicker";
 import { calcCurrent } from "@/layout/StatusBar";
 import { TimedQueue } from "@/layout/TimedQueue";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { effectiveMasteries } from "@/libs/mastery";
+import {
+  getMasteryRank,
+  masteryGainRoom,
+  masteryTotal,
+} from "@/libs/masteryProgression";
 import { useInfinitePagination } from "@/libs/pagination";
 import { getEnergyQueue, getMasteryQueue } from "@/libs/queue";
 import { cn } from "@/libs/shadui";
@@ -668,7 +675,7 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
   const iconClassName = "w-5 h-5 absolute top-1 right-1 text-blue-500";
-  const { mastery_cap } = getUserCaps(userData.rank);
+
   const masteryEntries = getMasteryQueue(userData);
   const selectedMasterySpeed = userData.currentlyTrainingMastery
     ? (queuedMasterySpeed ?? userData.trainingSpeed)
@@ -961,7 +968,8 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
             <div className="grid grid-cols-3 text-center font-bold">
               {MasteryNames.map((stat, i) => {
                 const label = getTrainingLabel(stat);
-                const overCap = userData[stat] >= mastery_cap;
+                const overCap = masteryGainRoom(userData, stat) <= 0;
+                const masteryRank = getMasteryRank(userData, stat);
                 return (
                   <button
                     type="button"
@@ -982,7 +990,8 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                       else if (overCap)
                         showMutationToast({
                           success: false,
-                          message: "Already capped",
+                          message:
+                            "Mastery capped. Complete its rank-up exam or free space under the total cap.",
                         });
                       else if (userData.currentlyTrainingMastery)
                         queueMasteryTraining({
@@ -1007,6 +1016,11 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                       />
                       <Medal className={iconClassName} />
                       {label}
+                      <div className="font-normal text-xs">
+                        {capitalizeFirstLetter(masteryRank)} ·{" "}
+                        {userData[stat].toLocaleString()} /{" "}
+                        {MASTERY_RANK_CAPS[masteryRank].toLocaleString()}
+                      </div>
                     </div>
                     {overCap && (
                       <UserRoundCheck className="absolute top-[50%] left-[50%] h-10 w-10 translate-x-[-50%] translate-y-[-50%] text-slate-100 hover:cursor-pointer" />
@@ -1016,8 +1030,22 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
               })}
             </div>
           </div>
+          <p className="mt-3 text-sm">
+            Earned mastery total: {masteryTotal(userData).toLocaleString()} /{" "}
+            {TOTAL_MASTERY_CAP.toLocaleString()}. Rank-up exams use earned mastery;
+            equipment and bloodline bonuses do not count.
+          </p>
           {pendingOverlay}
         </ContentBox>
+      )}
+      {props.section === "Masteries" && (
+        <QuestPicker
+          questType="mastery"
+          title="Mastery Rank-Up Exams"
+          subtitle="Complete an exam at each mastery cap"
+          unavailableText="No exams available. Reach a mastery cap to unlock its next exam."
+          initialBreak
+        />
       )}
     </>
   );

@@ -22,6 +22,7 @@ import {
   IMG_AVATAR_DEFAULT,
   LetterRanks,
   MAX_SKILL_POINTS,
+  MasteryNames,
   MEDNIN_EXP_CAP,
   NPC_ONLY_QUEST_TYPES,
   QuestTypes,
@@ -138,6 +139,10 @@ import type { DrizzleClient } from "@/server/db";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { reduceActiveFarmPlotTimers } from "@/server/utils/farming";
+import {
+  masteryGainUpdates,
+  masteryRankUpdate,
+} from "@/server/utils/masteryProgression";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { hydrateQuestCollections } from "@/server/utils/questCollections";
 import { fetchQuestDiscoveryCandidates } from "@/server/utils/questDiscovery";
@@ -162,6 +167,7 @@ import { QuestTracker, QuestValidator } from "@/validators/objectives";
 import { questFilteringSchema } from "@/validators/quest";
 import {
   ClaimRewardChoiceSchema,
+  MASTERY_EXPERIENCE_FIELDS,
   type PendingRewardChoice,
   PendingRewardChoiceSchema,
   PostProcessedRewardSchema,
@@ -636,6 +642,7 @@ export const questsRouter = createTRPCRouter({
           "pvp",
           "war",
           "overworld",
+          "mastery",
         ].includes(current.questType)
       ) {
         return errorResponse(`Cannot abandon ${current.questType} quest type.`);
@@ -1774,7 +1781,25 @@ export const updateRewards = async (info: {
   const rolledSageMode =
     !user.sageModeId && sageModes.length > 0 ? getRandomElement(sageModes) : undefined;
 
+  const masteryGains = Object.fromEntries(
+    MasteryNames.map((stat, index) => [
+      stat,
+      rewards[MASTERY_EXPERIENCE_FIELDS[index]!] ?? 0,
+    ]),
+  );
   const updatedUserData: Record<string, unknown> = {
+    ...masteryGainUpdates(masteryGains),
+    ...(rewards.reward_mastery_stat &&
+    rewards.reward_mastery_stat !== "None" &&
+    rewards.reward_mastery_rank &&
+    rewards.reward_mastery_rank !== "NONE"
+      ? {
+          masteryRanks: masteryRankUpdate(
+            rewards.reward_mastery_stat,
+            rewards.reward_mastery_rank,
+          ),
+        }
+      : {}),
     ...(persistQuestData ? { questData: user.questData } : {}),
     money: sql`${userData.money} + ${rewards.reward_money ?? 0}`,
     seichiSilver: sql`${userData.seichiSilver} + ${rewards.reward_seichi_silver ?? 0}`,
@@ -2405,6 +2430,7 @@ export const incrementDailyQuestCounter = async (
  * reach assignQuestToUser, throw, and strand a player's NPC-quest claim.
  */
 export const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
+  "mastery",
   "story",
   "hunting",
   "gathering",
@@ -3863,6 +3889,8 @@ export const getRewardUserDelta = (
     rewards.reward_hunting_experience !== 0 ||
     rewards.reward_crafting_experience !== 0 ||
     rewards.reward_gathering_experience !== 0 ||
+    MASTERY_EXPERIENCE_FIELDS.some((field) => (rewards[field] ?? 0) > 0) ||
+    (rewards.reward_mastery_rank && rewards.reward_mastery_rank !== "NONE") ||
     rewards.reward_sage_mastery_experience !== 0 ||
     rewards.reward_skillpoints !== 0
   ) {

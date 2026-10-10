@@ -51,6 +51,7 @@ import {
   IMG_BADGE_WIN_QUEST,
   IMG_FARM_PLOT_SOIL,
   LetterRanks,
+  MasteryTypes,
   MEDNIN_RANKS,
   type QuestRewardMode,
   QuestTypes,
@@ -60,6 +61,7 @@ import {
 import { DateTimeRegExp } from "@/utils/regex";
 import { idsWithNumberField } from "@/validators/base";
 import { AllTags } from "@/validators/combat";
+import { masteryRequirementFields } from "@/validators/mastery";
 import {
   ObjectiveReward,
   type ObjectiveRewardType,
@@ -559,6 +561,7 @@ export const TrainSpecificJutsu = z.object({
   ...baseObjectiveFields,
   task: z.literal("train_specific_jutsu"),
   trainJutsuIds: z.array(z.string()).prefault([]),
+  masteryType: z.enum(["None", ...MasteryTypes]).prefault("None"),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
 });
@@ -595,6 +598,8 @@ export const UseSpecificJutsuCombat = z.object({
   ...baseObjectiveFields,
   task: z.literal("use_specific_jutsu_combat"),
   useJutsuIds: z.array(z.string()).prefault([]),
+  masteryType: z.enum(["None", ...MasteryTypes]).prefault("None"),
+  combatType: z.enum(["Any", "PVP", "PVE"]).prefault("Any"),
   value: z.coerce.number().min(0).prefault(1),
   ...rewardFields,
 });
@@ -691,6 +696,7 @@ export const QuestTracker = z.object({
 export type QuestTrackerType = z.infer<typeof QuestTracker>;
 
 export const QuestValidatorRawSchema = z.object({
+  ...masteryRequirementFields,
   name: z.string().min(1).max(191),
   image: z.url().optional().nullish(),
   description: z.string().min(1).max(5000).nullable(),
@@ -738,6 +744,31 @@ const questSuperRefine = (
   val: z.infer<typeof QuestValidatorRawSchema>,
   ctx: z.RefinementCtx,
 ) => {
+  const reward = val.content.reward;
+  const hasPromotionStat =
+    !!reward.reward_mastery_stat && reward.reward_mastery_stat !== "None";
+  const hasPromotionRank =
+    !!reward.reward_mastery_rank && reward.reward_mastery_rank !== "NONE";
+  if (hasPromotionStat !== hasPromotionRank) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Select both the mastery and its rank reward",
+      path: ["content", "reward"],
+    });
+  }
+  if (
+    val.content.objectives.some(
+      (objective) =>
+        objective.reward_mastery_rank && objective.reward_mastery_rank !== "NONE",
+    )
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message:
+        "Mastery rank rewards belong on the completed quest, not individual objectives",
+      path: ["content", "objectives"],
+    });
+  }
   // A real retry period means maxCompletes is a per-period cap, so 0 would
   // block the quest forever (or be silently uncapped). Require >= 1 to make intent
   // explicit. retryDelay "none"/omitted preserves the legacy lifetime-cap validation, where 0

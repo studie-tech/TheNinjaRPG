@@ -527,18 +527,28 @@ export const buildCombatTrackerTasks = (
 ): ObjectiveTrackerTask[] => {
   const tasks: ObjectiveTrackerTask[] = [];
 
-  // use_specific_item_combat / use_specific_jutsu_combat: one tick per DISTINCT used
-  // id, any outcome (cast-time usage is the intent). In usedActions a jutsu action's `id` is
-  // the jutsuId and an item action's `id` is the itemId (actions.ts insertAction).
-  const usedJutsuIds = [
-    ...new Set(user.usedActions.filter((a) => a.type === "jutsu").map((a) => a.id)),
-  ];
-  const usedItemIds = [
-    ...new Set(user.usedActions.filter((a) => a.type === "item").map((a) => a.id)),
-  ];
-  for (const id of usedJutsuIds) {
-    tasks.push({ task: "use_specific_jutsu_combat", increment: 1, contentId: id });
+  // Each cast counts, including repeated casts and battles lost or fled.
+  const isPvp = curBattle.usersState.some(
+    (opponent) =>
+      opponent.direction !== user.direction && !opponent.isAi && !opponent.isSummon,
+  );
+  const combatType = isPvp ? "PVP" : "PVE";
+  for (const action of user.usedActions.filter((action) => action.type === "jutsu")) {
+    tasks.push({
+      task: "use_specific_jutsu_combat",
+      increment: 1,
+      contentId: action.id,
+      masteryTypes: action.masteryTypes,
+      combatType,
+    });
   }
+  const usedItemIds = [
+    ...new Set(
+      user.usedActions
+        .filter((action) => action.type === "item")
+        .map((action) => action.id),
+    ),
+  ];
   for (const id of usedItemIds) {
     tasks.push({ task: "use_specific_item_combat", increment: 1, contentId: id });
   }

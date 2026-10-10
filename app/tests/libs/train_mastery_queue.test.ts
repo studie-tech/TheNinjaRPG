@@ -12,7 +12,7 @@ import type { MasteryTrainingQueueEntry } from "@/validators/train";
 const MINUTE = 60_000;
 const start = new Date(Date.UTC(2026, 0, 1, 12, 0));
 const after = (minutes: number) => new Date(start.getTime() + minutes * MINUTE);
-const { mastery_cap } = getUserCaps("GENIN");
+const mastery_cap = 375000;
 
 const trainee = (patch: Record<string, unknown> = {}) =>
   ({

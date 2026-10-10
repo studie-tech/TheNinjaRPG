@@ -10,7 +10,7 @@ type Cache = { userData: NonNullable<UserWithRelations>; notifications: NavBarDr
 const setup = () => {
   const client = new QueryClient();
   const cache = {
-    userData: { rank: "GENIN", status: "AWAKE", earnedExperience: 100, offence: 10, defence: 10, speed: 10, intelligence: 10, strength: 10, willpower: 10, ninjutsuMastery: 10, genjutsuMastery: 10, taijutsuMastery: 10, bukijutsuMastery: 10 } as NonNullable<UserWithRelations>,
+    userData: { masteryRanks: {}, bloodlineMastery: 0, sageMastery: 0, rank: "GENIN", status: "AWAKE", earnedExperience: 100, offence: 10, defence: 10, speed: 10, intelligence: 10, strength: 10, willpower: 10, ninjutsuMastery: 10, genjutsuMastery: 10, taijutsuMastery: 10, bukijutsuMastery: 10 } as NonNullable<UserWithRelations>,
     notifications: [{ id: "unrelated", href: "/mail", name: "Mail", color: "blue" }, { href: "/profile/experience", name: "Assign XP", color: "blue" }, { href: "/combat", name: "In combat", color: "red" }, { href: "/hospital", name: "In hospital", color: "red" }],
     achievementProgress: [{ questId: "old-progress" } as AchievementProgress],
   } satisfies Cache;

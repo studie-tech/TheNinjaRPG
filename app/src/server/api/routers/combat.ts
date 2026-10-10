@@ -223,6 +223,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
+import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
 import { hasDueTimedJob, settleDueTimedQueues } from "@/server/utils/userQueue";
 import { extendWarParticipantSql, liftBracketImmunitySql } from "@/server/utils/war";
@@ -2801,7 +2802,9 @@ export const initiateBattle = async (
         queueUpdate[stat] = queueCase(
           stat,
           masteryParticipants,
-          (entry) => sql`${userData[stat]} + ${entry.mastery?.gains[stat] ?? 0}`,
+          (entry) =>
+            masteryGainUpdates(entry.mastery?.gains ?? {})[stat] ??
+            sql`${userData[stat]}`,
         );
       }
     }
@@ -2923,6 +2926,8 @@ export const initiateBattle = async (
                 eq(userData.longitude, original.longitude),
                 eq(userData.latitude, original.latitude),
                 eq(userData.rank, original.rank),
+                ...MasteryNames.map((stat) => eq(userData[stat], original[stat])),
+                sql`${userData.masteryRanks} = CAST(${JSON.stringify(original.masteryRanks)} AS JSON)`,
                 eq(userData.isBanned, original.isBanned),
                 eq(userData.isOutlaw, original.isOutlaw),
                 original.villageId
