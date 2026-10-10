@@ -123,6 +123,66 @@ describe("NumberInput", () => {
     expect(input.value).toBe("4");
   });
 
+  it("preserves invalid fallback text for optional string-backed values", () => {
+    const changed = mock();
+    function StringValue() {
+      const [value, setValue] = useState("2");
+      return (
+        <NumberInput
+          optional
+          min={2}
+          value={value}
+          onTextChange={(next) => { changed(next); setValue(next); }}
+          emptyFallback={1}
+        />
+      );
+    }
+    const { getByRole, container } = render(<StringValue />);
+    const input = getByRole("spinbutton") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "" } });
+    expect(validateNumberInputs(container)).toBe(true);
+    fireEvent.blur(input);
+    expect(changed).toHaveBeenLastCalledWith("1");
+    expect(input.value).toBe("1");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(validateNumberInputs(container)).toBe(false);
+  });
+
+  it("uses the same numeric callback and forwards the original event on fallback", () => {
+    const requiredChanged = mock();
+    const optionalChanged = mock();
+    const onInput = mock();
+    const onBlur = mock();
+    function OptionalValue() {
+      const [value, setValue] = useState<number | undefined>(2);
+      return (
+        <NumberInput
+          optional
+          min={2}
+          value={value}
+          onValueChange={requiredChanged}
+          onOptionalValueChange={(next) => { optionalChanged(next); setValue(next); }}
+          emptyFallback={1}
+          onInput={onInput}
+          onBlur={onBlur}
+        />
+      );
+    }
+    const { getByRole } = render(<OptionalValue />);
+    const input = getByRole("spinbutton") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "" } });
+    expect(optionalChanged).toHaveBeenNthCalledWith(1, undefined);
+    fireEvent.blur(input);
+    expect(optionalChanged).toHaveBeenNthCalledWith(2, Number.NaN);
+    expect(optionalChanged).toHaveBeenCalledTimes(2);
+    expect(requiredChanged).not.toHaveBeenCalled();
+    expect(onInput).toHaveBeenCalledTimes(1);
+    expect(onInput.mock.calls[0]?.[0].type).toBe("input");
+    expect(onBlur).toHaveBeenCalledTimes(1);
+    expect(onBlur.mock.calls[0]?.[0].type).toBe("blur");
+    expect(input.value).toBe("1");
+  });
+
   it("forwards registered field events and refs without taking over uncontrolled values", async () => {
     const submitted = mock();
     function Registered() { const form = useForm({ defaultValues: { amount: 2 } }); return <form onSubmit={form.handleSubmit(submitted)}><NumberInput {...form.register("amount", { valueAsNumber: true })} /><button type="submit">Save</button></form>; }

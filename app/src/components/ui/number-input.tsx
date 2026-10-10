@@ -1,6 +1,6 @@
 "use client";
 
-import { type ChangeEvent, useState } from "react";
+import { type ChangeEvent, type SyntheticEvent, useState } from "react";
 import { Input, type InputProps } from "@/components/ui/input";
 
 /** Numeric fields keep their editing text until the parent supplies a new value.
@@ -26,6 +26,24 @@ export function NumberInput({
   const [isInvalid, setIsInvalid] = useState(false);
   const text = Object.is(draft.source, value) ? draft.text : formatValue(value);
 
+  const handleValueChange = (event: SyntheticEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const raw = input.value;
+    const isEmpty = raw === "" && !input.validity.badInput;
+    const valid = input.validity.valid;
+    const next = valid && !isEmpty ? input.valueAsNumber : Number.NaN;
+    setDraft({
+      source: onTextChange ? raw : onOptionalValueChange && isEmpty ? undefined : next,
+      text: raw,
+    });
+    setIsInvalid(!valid);
+    onTextChange?.(raw);
+    if (onOptionalValueChange) onOptionalValueChange(isEmpty ? undefined : next);
+    else onValueChange?.(next);
+    if (!onValueChange && !onOptionalValueChange && !onTextChange)
+      onChange?.(event as ChangeEvent<HTMLInputElement>);
+  };
+
   return (
     <Input
       {...props}
@@ -46,25 +64,7 @@ export function NumberInput({
       }
       // Input also fires for incomplete prefixes whose numeric value is still empty.
       onInput={(event) => {
-        const input = event.currentTarget;
-        const raw = input.value;
-        const isEmpty = raw === "" && !input.validity.badInput;
-        const valid = input.validity.valid;
-        const next = valid && !isEmpty ? input.valueAsNumber : Number.NaN;
-        setDraft({
-          source: onTextChange
-            ? raw
-            : onOptionalValueChange && isEmpty
-              ? undefined
-              : next,
-          text: raw,
-        });
-        setIsInvalid(!valid);
-        onTextChange?.(raw);
-        if (onOptionalValueChange) onOptionalValueChange(isEmpty ? undefined : next);
-        else onValueChange?.(next);
-        if (!onValueChange && !onOptionalValueChange && !onTextChange)
-          onChange?.(event as unknown as ChangeEvent<HTMLInputElement>);
+        handleValueChange(event);
         onInput?.(event);
       }}
       onBlur={(event) => {
@@ -74,15 +74,7 @@ export function NumberInput({
           !event.currentTarget.validity.badInput
         ) {
           event.currentTarget.value = String(emptyFallback);
-          const valid = event.currentTarget.validity.valid;
-          const next = valid ? emptyFallback : Number.NaN;
-          setDraft({ source: onTextChange ? String(next) : next, text: String(next) });
-          setIsInvalid(!valid);
-          onTextChange?.(String(next));
-          onValueChange?.(next);
-          onOptionalValueChange?.(next);
-          if (!onValueChange && !onOptionalValueChange && !onTextChange)
-            onChange?.(event as unknown as ChangeEvent<HTMLInputElement>);
+          handleValueChange(event);
         }
         onBlur?.(event);
       }}
