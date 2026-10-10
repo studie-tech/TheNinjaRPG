@@ -43,6 +43,7 @@ import {
 import { canChangeContent } from "@/utils/permissions";
 import { formatSecondsToTimeDisplay, getSecondPrecisionDate } from "@/utils/time";
 import { getShrineBoost } from "@/utils/village";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const occupationRouter = createTRPCRouter({
   getCraftableItems: protectedProcedure
@@ -63,16 +64,7 @@ export const occupationRouter = createTRPCRouter({
   selectOccupation: protectedProcedure
     .meta({ mcp: { description: "Select a crafting occupation" } })
     .input(z.object({ occupation: z.enum(OCCUPATIONS) }))
-    .output(
-      baseServerResponse.extend({
-        data: z
-          .object({
-            occupation: z.enum(OCCUPATIONS),
-            occupationSignupAt: z.date(),
-          })
-          .optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -103,7 +95,7 @@ export const occupationRouter = createTRPCRouter({
         return {
           success: true,
           message: "Occupation selected successfully!",
-          data: { occupation: input.occupation, occupationSignupAt },
+          userPatch: { occupation: input.occupation, occupationSignupAt },
         };
       }
       const result = await ctx.drizzle
@@ -126,7 +118,7 @@ export const occupationRouter = createTRPCRouter({
       return {
         success: true,
         message: "Occupation selected successfully!",
-        data: { occupation: input.occupation, occupationSignupAt },
+        userPatch: { occupation: input.occupation, occupationSignupAt },
       };
     }),
 

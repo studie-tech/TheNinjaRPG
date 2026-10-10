@@ -91,6 +91,68 @@ describe("user cache updates", () => {
     test.close();
   });
 
+  it("preserves an unrelated village relation when applying a projection", async () => {
+    const test = setup();
+    const village = { id: "village", tokens: 1000, name: "Hidden Leaf" } as unknown as NonNullable<NonNullable<UserWithRelations>["village"]>;
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    await updateUserCache(test.client, key, { village: { id: "village", tokens: 900 } }, {
+      revision: prepareUserUpdate(test.client, key),
+    });
+    expect(test.value()?.userData.village).toEqual({ ...village, tokens: 900 });
+    expect(test.value()?.notifications).toEqual(["preserved"]);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("merges a confirmed shrine boost without dropping other shrine fields or boosts", async () => {
+    const test = setup();
+    const village = {
+      id: "village", tokens: 1000, name: "Hidden Leaf",
+      shrineSettings: { activeBoosts: { training: "existing" }, activeAiIds: ["defender"], unlockedAiIds: ["defender"], boostTemplate: [] },
+    } as unknown as NonNullable<NonNullable<UserWithRelations>["village"]>;
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    await updateUserCache(test.client, key, { village: {
+      id: "village", tokens: 900, shrineSettings: { activeBoosts: { regeneration: "new" } },
+    } }, { revision: prepareUserUpdate(test.client, key), delta: { reputationPoints: -10 } });
+    expect(test.value()?.userData.village).toEqual({ ...village, tokens: 900,
+      shrineSettings: { ...village.shrineSettings, activeBoosts: { training: "existing", regeneration: "new" } },
+    });
+    expect(test.value()?.userData.reputationPoints).toBe(20);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("refreshes a mismatched village projection before applying its accompanying debit", async () => {
+    const test = setup();
+    const village = { id: "current", tokens: 1000 } as unknown as NonNullable<NonNullable<UserWithRelations>["village"]>;
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    const latest = { ...profile(90), userData: { ...profile(90).userData, village, reputationPoints: 30 } };
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => latest });
+    await updateUserCache(test.client, key, { village: { id: "other", tokens: 900 } }, {
+      revision: prepareUserUpdate(test.client, key), delta: { reputationPoints: -10 },
+    });
+    expect(test.value()?.userData).toEqual(latest.userData);
+    test.close();
+  });
+
+  it("preserves clan fields and rejects a projection for a different clan", async () => {
+    const test = setup();
+    const clan = { id: "current", bank: 1000, name: "Allies", repTreasury: 20 } as NonNullable<NonNullable<UserWithRelations>["clan"]>;
+    const latest = { ...profile(100), userData: { ...profile(100).userData, clan } };
+    test.client.setQueryData(key, latest);
+    await updateUserCache(test.client, key, { clan: { id: "current", bank: 900 } }, {
+      revision: prepareUserUpdate(test.client, key),
+    });
+    expect(test.value()?.userData.clan).toEqual({ ...clan, bank: 900 });
+    expect(test.reads()).toBe(0);
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => latest });
+    await updateUserCache(test.client, key, { clan: { id: "other", bank: 1 } }, {
+      revision: prepareUserUpdate(test.client, key), delta: { money: -10 },
+    });
+    expect(test.value()?.userData).toEqual(latest.userData);
+    test.close();
+  });
+
   it("guards an absolute patch without requiring an empty delta", async () => {
     const test = setup();
     const revision = prepareUserUpdate(test.client, key);

@@ -137,7 +137,7 @@ export default function MyItems() {
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser("data" in data ? data.data : undefined, { revision }),
+            updateUser(data.userPatch, { revision }),
           ]);
         }
       },
@@ -151,7 +151,7 @@ export default function MyItems() {
         if (data.success) {
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser("data" in data ? data.data : undefined, { revision }),
+            updateUser(data.userPatch, { revision }),
           ]);
         }
       },
@@ -165,7 +165,7 @@ export default function MyItems() {
         if (!data.success) return;
         await Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),
-          updateUser("data" in data ? data.data : undefined, { revision }),
+          updateUser(data.userPatch, { revision }),
           utils.item.getItemLoadouts.invalidate(),
         ]);
       },
@@ -877,7 +877,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser("data" in data ? data.data : undefined, { revision }),
+            updateUser(data.userPatch, { revision }),
           ]);
         }
       },
@@ -892,7 +892,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
           onSettled();
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser("data" in data ? data.data : undefined, { revision }),
+            updateUser(data.userPatch, { revision }),
           ]);
         }
       },
@@ -1443,7 +1443,7 @@ const Character: React.FC<CharacterProps> = (props) => {
           setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser("data" in data ? data.data : undefined, { revision }),
+            updateUser(data.userPatch, { revision }),
           ]);
         }
       },
@@ -1459,7 +1459,7 @@ const Character: React.FC<CharacterProps> = (props) => {
           setUserItem(undefined);
           await Promise.all([
             utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser("data" in data ? data.data : undefined, { revision }),
+            updateUser(data.userPatch, { revision }),
           ]);
         }
       },

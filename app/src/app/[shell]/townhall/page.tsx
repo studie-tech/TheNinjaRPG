@@ -842,13 +842,9 @@ const KageChallenge: React.FC<{
         if (data.success) {
           await Promise.all([
             utils.village.get.invalidate(),
-            data.data
-              ? updateUser((current) => {
-                  const availability = data.data;
-                  if (!current.village || current.village.id !== availability?.id)
-                    return {};
-                  return { village: { ...current.village, ...availability } };
-                })
+            data.userPatch?.village?.openForChallenges !== undefined &&
+            data.userPatch.village.openForChallengesAt
+              ? updateUser({ village: data.userPatch.village })
               : utils.profile.getUser.invalidate(),
           ]);
         }

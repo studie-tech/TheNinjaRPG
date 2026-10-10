@@ -250,11 +250,10 @@ export default function MyJutsu() {
       onSuccess: async (data, variables) => {
         showMutationToast(data);
         if (data.success) {
-          if (data.data) {
+          if (data.userPatch?.loadout) {
+            const loadout = data.userPatch.loadout;
             await updateUser((current) =>
-              current?.jutsuLoadout === variables.loadoutId
-                ? { loadout: data.data }
-                : {},
+              current?.jutsuLoadout === variables.loadoutId ? { loadout } : {},
             );
           } else {
             await utils.profile.getUser.invalidate();

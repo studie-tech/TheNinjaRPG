@@ -47,7 +47,7 @@ import {
   isReservedCustomTitle,
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
-import { cosmeticUserUpdateOutputSchema, titleChangeSchema } from "@/validators/user";
+import { titleChangeSchema } from "@/validators/user";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUser } from "./profile";
 
@@ -394,7 +394,7 @@ export const blackMarketRouter = createTRPCRouter({
   updateCustomTitle: protectedProcedure
     .meta({ mcp: { description: "Update user's custom title" } })
     .input(titleChangeSchema)
-    .output(cosmeticUserUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, villages] = await Promise.all([
@@ -447,7 +447,7 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: "Custom title updated",
-          data: {
+          userPatch: {
             customTitle: input.title,
             reputationPoints: user.reputationPoints - COST_CUSTOM_TITLE,
           },
@@ -457,7 +457,7 @@ export const blackMarketRouter = createTRPCRouter({
   changeUserGender: protectedProcedure
     .meta({ mcp: { description: "Change user's gender" } })
     .input(z.object({ gender: z.enum(genders) }))
-    .output(cosmeticUserUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -484,11 +484,15 @@ export const blackMarketRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return errorResponse("Your profile or reputation changed. Please try again");
       } else {
-        const data = {
+        const userPatch = {
           gender: input.gender,
           reputationPoints: user.reputationPoints - COST_CHANGE_GENDER,
         };
-        return { success: true, message: `Change gender in ${input.gender}`, data };
+        return {
+          success: true,
+          message: `Change gender in ${input.gender}`,
+          userPatch,
+        };
       }
     }),
   buyItemSlot: protectedProcedure

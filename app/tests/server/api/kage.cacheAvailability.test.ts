@@ -43,14 +43,14 @@ describeWithDatabase("kage challenge availability cache response", () => {
       where: eq(village.id, "cache-village"),
     });
     expect(result.success).toBe(true);
-    expect(result.data).toEqual({
+    expect(result.userPatch?.village).toEqual({
       id: stored?.id,
       openForChallenges: true,
       openForChallengesAt: stored?.openForChallengesAt,
     });
     const retry = await caller.toggleOpenForChallenges({ villageId: "cache-village" });
     expect(retry.success).toBe(false);
-    expect(retry.data).toBeUndefined();
+    expect(retry.userPatch).toBeUndefined();
   });
 
   it("rejects an intervening availability change without a success log or patch", async () => {
@@ -62,7 +62,7 @@ describeWithDatabase("kage challenge availability cache response", () => {
     const result = await callerForDatabase(kageRouter, "cache-kage", client)
       .toggleOpenForChallenges({ villageId: "cache-village" });
     expect(result.success).toBe(false);
-    expect(result.data).toBeUndefined();
+    expect(result.userPatch).toBeUndefined();
     expect(await db.query.actionLog.findMany()).toHaveLength(0);
   });
 
@@ -70,7 +70,7 @@ describeWithDatabase("kage challenge availability cache response", () => {
     const caller = await callerFor(kageRouter, "cache-member");
     const result = await caller.toggleOpenForChallenges({ villageId: "cache-village" });
     expect(result.success).toBe(false);
-    expect(result.data).toBeUndefined();
+    expect(result.userPatch).toBeUndefined();
     const stored = await (await getTestDatabase()).query.village.findFirst({
       where: eq(village.id, "cache-village"),
     });

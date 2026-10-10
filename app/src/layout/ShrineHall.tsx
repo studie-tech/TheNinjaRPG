@@ -55,10 +55,8 @@ import {
   isNewSlotDue,
 } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import type {
-  BoostTemplateEntry,
-  ShrineVillageUpdateResponse,
-} from "@/validators/shrine";
+import type { BoostTemplateEntry } from "@/validators/shrine";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
  * ShrineHall
@@ -1350,33 +1348,13 @@ const BoostTypeChecklist = ({
 const useUpdateShrineVillage = () => {
   const { updateUser, prepareUserUpdate } = useRequiredUserData();
   const updateShrineVillage = (
-    result: ShrineVillageUpdateResponse,
+    result: UserDeltaResponse,
     revision: number | undefined,
   ) => {
-    if (!result.success || result.requiresUserRefresh || !result.villageUpdate) {
+    if (!result.success || !result.userDelta || !result.userPatch?.village) {
       return updateUser(undefined, { revision });
     }
-    const villageUpdate = result.villageUpdate;
-    return updateUser(
-      (current) =>
-        current.village?.id === villageUpdate.id
-          ? {
-              village: {
-                ...current.village,
-                ...villageUpdate,
-                shrineSettings: {
-                  ...current.village.shrineSettings,
-                  ...villageUpdate.shrineSettings,
-                  activeBoosts: {
-                    ...current.village.shrineSettings.activeBoosts,
-                    ...villageUpdate.shrineSettings?.activeBoosts,
-                  },
-                },
-              },
-            }
-          : undefined,
-      { revision },
-    );
+    return updateUser(result.userPatch, { revision, delta: result.userDelta });
   };
   return { prepareUserUpdate, updateShrineVillage };
 };

@@ -99,7 +99,7 @@ export default function OccupationCrafting() {
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          updateUser("data" in data ? data.data : undefined, { revision }),
+          updateUser(data.userPatch, { revision }),
         ]);
       }
     },
@@ -112,7 +112,7 @@ export default function OccupationCrafting() {
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          updateUser("data" in data ? data.data : undefined, { revision }),
+          updateUser(data.userPatch, { revision }),
         ]);
       }
     },

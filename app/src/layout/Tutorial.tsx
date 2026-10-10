@@ -304,9 +304,9 @@ const Tutorial: React.FC<TutorialProps> = ({
   // Update user's tutorial step
   const updateTutorialStep = api.profile.updateTutorialStep.useMutation({
     onSuccess: async (data) => {
-      if (data.success && data.data) {
-        await updateUser({ tutorialStep: data.data.tutorialStep });
-        const nextStepPage = TUTORIAL_STEPS[data.data.tutorialStep]?.page;
+      if (data.success && data.userPatch?.tutorialStep !== undefined) {
+        await updateUser({ tutorialStep: data.userPatch.tutorialStep });
+        const nextStepPage = TUTORIAL_STEPS[data.userPatch.tutorialStep]?.page;
         if (nextStepPage && pathname !== nextStepPage) {
           router.push(nextStepPage);
         }

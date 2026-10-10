@@ -1743,6 +1743,7 @@ export const itemRouter = createTRPCRouter({
           "Unequip all items on the character and clear the active item loadout",
       },
     })
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Equipped rows only (not fetchUserItems — it omits hidden items). `ctx.userId` is the session user; no extra userId guard.
       const [user, loadouts, equippedItems] = await Promise.all([
@@ -1778,13 +1779,13 @@ export const itemRouter = createTRPCRouter({
           return {
             success: true,
             message: "Cleared active loadout",
-            data: user.energyTrainingQueue?.length ? undefined : {},
+            userPatch: user.energyTrainingQueue?.length ? undefined : {},
           };
         }
         return {
           success: true,
           message: "Nothing equipped",
-          data: user.energyTrainingQueue?.length ? undefined : {},
+          userPatch: user.energyTrainingQueue?.length ? undefined : {},
         };
       }
 
@@ -1826,7 +1827,7 @@ export const itemRouter = createTRPCRouter({
 
       return {
         success: true,
-        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+        userPatch: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Unequipped ${equippedItems.length} item${equippedItems.length === 1 ? "" : "s"}${loadoutClearPromise ? " and cleared active loadout" : ""}`,
       };
     }),
@@ -2185,6 +2186,7 @@ export const itemRouter = createTRPCRouter({
   repair: protectedProcedure
     .meta({ mcp: { description: "Repair an item with ryo" } })
     .input(z.object({ userItemId: z.string() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, useritem] = await Promise.all([
@@ -2238,13 +2240,14 @@ export const itemRouter = createTRPCRouter({
       }
       return {
         success: true,
-        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+        userPatch: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Repaired ${useritem.item.name} for ${repairCost} ryo`,
       };
     }),
   // Repair all user items
   repairAll: protectedProcedure
     .meta({ mcp: { description: "Repair all items with ryo" } })
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const [user, useritems] = await Promise.all([
@@ -2312,13 +2315,13 @@ export const itemRouter = createTRPCRouter({
       if (failed.length > 0) {
         return {
           success: true,
-          data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+          userPatch: await fetchUserEquipment(ctx.drizzle, ctx.userId),
           message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo (${failed.length} skipped — stored, auctioned, or changed)`,
         };
       }
       return {
         success: true,
-        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+        userPatch: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Repaired ${succeeded.length} item${succeeded.length !== 1 ? "s" : ""} for ${charged.toLocaleString()} ryo`,
       };
     }),
@@ -2326,6 +2329,7 @@ export const itemRouter = createTRPCRouter({
   useRepairItem: protectedProcedure
     .meta({ mcp: { description: "Use repair kit on an item" } })
     .input(z.object({ repairItemId: z.string(), targetItemId: z.string() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, repairUserItem, targetUserItem] = await Promise.all([
@@ -2426,13 +2430,14 @@ export const itemRouter = createTRPCRouter({
       }
       return {
         success: true,
-        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+        userPatch: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Repaired ${targetUserItem.item.name} by ${actualRepair} durability using ${repairUserItem.item.name}`,
       };
     }),
   // Use repair items to repair all items
   useRepairAll: protectedProcedure
     .meta({ mcp: { description: "Use repair kits to fix all items" } })
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const [user, useritems] = await Promise.all([
@@ -2562,9 +2567,8 @@ export const itemRouter = createTRPCRouter({
 
       return {
         success: true,
-        data: await fetchUserEquipment(ctx.drizzle, ctx.userId),
+        userPatch: await fetchUserEquipment(ctx.drizzle, ctx.userId),
         message: `Repaired ${itemsNeedingRepair.length} item${itemsNeedingRepair.length !== 1 ? "s" : ""} using ${kitsUsedSummary}`,
-        kitsUsed: kitsToUse,
       };
     }),
   // Authenticated and uncached: allowance changes after purchases and UTC resets.
@@ -2582,6 +2586,7 @@ export const itemRouter = createTRPCRouter({
   buy: protectedProcedure
     .meta({ mcp: { description: "Buy an item from shop" } })
     .input(itemBuySchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const iid = input.itemId;
@@ -2852,7 +2857,7 @@ export const itemRouter = createTRPCRouter({
                 reputationPoints: -repsCost,
                 seichiSilver: -seichiSilverCost,
               },
-        data:
+        userPatch:
           !advancesBuyItemObjective && equipped !== "NONE"
             ? await fetchUserEquipment(ctx.drizzle, ctx.userId)
             : undefined,
@@ -2970,6 +2975,7 @@ export const itemRouter = createTRPCRouter({
   selectItemLoadout: protectedProcedure
     .meta({ mcp: { description: "Select an item loadout" } })
     .input(idSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [loadouts, user, useritems, masterySources] = await Promise.all([
@@ -2985,7 +2991,7 @@ export const itemRouter = createTRPCRouter({
         ...masterySources,
       });
       return result.success
-        ? { ...result, data: await fetchUserEquipment(ctx.drizzle, ctx.userId) }
+        ? { ...result, userPatch: await fetchUserEquipment(ctx.drizzle, ctx.userId) }
         : result;
     }),
 

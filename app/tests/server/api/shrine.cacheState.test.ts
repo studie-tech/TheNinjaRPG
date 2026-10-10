@@ -156,7 +156,7 @@ describeWithDatabase("committed shrine cache state", () => {
                   ? caller.payWeeklyMaintenance({ sectorId })
                   : caller.setBoostTemplate({ villageId, template: [...template] }));
         expect(result.success).toBe(true);
-        expect(result.requiresUserRefresh).toBe(mustRefresh);
+        expect(result.userDelta).toEqual(mustRefresh ? undefined : {});
         const isMonetary =
           endpoint !== "toggleVillageAiDefender" && endpoint !== "setBoostTemplate";
         // One read belongs to fetchUpdatedUser; only an applicable token patch needs another.
@@ -165,7 +165,7 @@ describeWithDatabase("committed shrine cache state", () => {
           where: eq(village.id, villageId),
         });
         if (isMonetary && mustRefresh) {
-          expect(result.villageUpdate).toBeUndefined();
+          expect(result.userPatch?.village).toBeUndefined();
         } else {
           const shrineSettings =
             endpoint === "activateBoost"
@@ -187,7 +187,7 @@ describeWithDatabase("committed shrine cache state", () => {
                           stored?.shrineSettings.boostTemplateUpdatedAt,
                       }
                     : undefined;
-          expect(result.villageUpdate).toEqual({
+          expect(result.userPatch?.village).toEqual({
             id: stored?.id,
             ...(isMonetary ? { tokens: stored?.tokens } : {}),
             ...(shrineSettings ? { shrineSettings } : {}),
@@ -205,7 +205,7 @@ describeWithDatabase("committed shrine cache state", () => {
                   : 0;
         expect(stored?.tokens).toBe(initialTokens + concurrentTokens - cost);
         expect(stored?.shrineSettings.activeBoosts.PVP).toBe(concurrentBoost);
-        expect(result.villageUpdate?.shrineSettings?.activeBoosts?.PVP).toBeUndefined();
+        expect(result.userPatch?.village?.shrineSettings?.activeBoosts?.PVP).toBeUndefined();
         if (endpoint === "upgradeShrine") {
           const updated = await db.query.sector.findFirst({
             where: eq(sector.id, sectorId),

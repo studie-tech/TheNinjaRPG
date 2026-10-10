@@ -18,16 +18,12 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChangeContent } from "@/utils/permissions";
-import { avatarUserDataSchema } from "@/validators/avatar";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const avatarRouter = createTRPCRouter({
   createAvatar: protectedProcedure
     .meta({ mcp: { description: "Generate a new AI avatar" } })
-    .output(
-      baseServerResponse.extend({
-        data: avatarUserDataSchema.extend({ reputationPoints: z.number() }).optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user directly with a query that returns null if not found
       // This handles the case where the user was just created and the record
@@ -78,7 +74,7 @@ export const avatarRouter = createTRPCRouter({
             where: eq(userData.userId, ctx.userId),
           })
           .catch(handleUserCacheReadError);
-        return { success: true, message: "Avatar created", data };
+        return { success: true, message: "Avatar created", userPatch: data };
       } else {
         return errorResponse("Failed to upload avatar");
       }
@@ -119,12 +115,7 @@ export const avatarRouter = createTRPCRouter({
   updateAvatar: protectedProcedure
     .meta({ mcp: { description: "Set active avatar from history" } })
     .input(z.object({ avatar: z.number(), type: z.enum(ContentTypes) }))
-    .output(
-      baseServerResponse.extend({
-        url: z.string().nullish(),
-        data: avatarUserDataSchema.optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, avatar] = await Promise.all([
@@ -165,7 +156,12 @@ export const avatarRouter = createTRPCRouter({
           return errorResponse("Could not update avatar. Please try again");
         }
       }
-      return { success: true, message: "Avatar updated", url: avatar.avatar, data };
+      return {
+        success: true,
+        message: "Avatar updated",
+        url: avatar.avatar,
+        userPatch: data,
+      };
     }),
   deleteAvatar: protectedProcedure
     .meta({ mcp: { description: "Delete an avatar from history" } })

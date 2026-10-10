@@ -66,19 +66,6 @@ export const assignedExperienceDataSchema = z.object({
   earnedExperience: z.number(),
 });
 
-export const cosmeticUserUpdateOutputSchema = baseServerResponse.extend({
-  data: z
-    .object({
-      reputationPoints: z.number(),
-      username: z.string().optional(),
-      customTitle: z.string().optional(),
-      gender: z.string().optional(),
-      tavernUsernameColor: z.enum(TavernColorPresets).optional(),
-      tavernTitleColor: z.enum(TavernColorPresets).optional(),
-    })
-    .optional(),
-});
-
 export const assignedExperienceOutputSchema = baseServerResponse.extend({
   data: assignedExperienceDataSchema.optional(),
 });

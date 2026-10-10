@@ -372,8 +372,8 @@ const Shop: React.FC<ShopProps> = (props) => {
       if (data.success) {
         setItemConfirmOpen(false);
         void utils.item.getUserItemCounts.invalidate();
-        void ("data" in data && data.data
-          ? updateUser(data.data, { revision })
+        void (data.userPatch
+          ? updateUser(data.userPatch, { revision })
           : updateUser(undefined, {
               revision,
               delta: "userDelta" in data ? data.userDelta : undefined,

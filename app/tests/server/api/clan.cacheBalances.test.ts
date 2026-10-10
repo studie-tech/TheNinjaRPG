@@ -52,7 +52,7 @@ describe("clan committed cache responses", () => {
     expect(result).toMatchObject({
       success: true,
       userDelta: { money: -250 },
-      clanUpdate: { id: "clan-cache-clan", bank: 800 },
+      userPatch: { clan: { id: "clan-cache-clan", bank: 800 } },
     });
     expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
     expect(database.query.clan.findFirst).toHaveBeenCalledTimes(2);
@@ -85,7 +85,7 @@ describe("clan committed cache responses", () => {
     expect(result).toMatchObject({
       success: true,
       userDelta: { reputationPoints: -10 },
-      clanUpdate: { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE },
+      userPatch: { clan: { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE } },
     });
     expect(database.query.userData.findFirst).toHaveBeenCalledTimes(1);
     expect(database.query.clan.findFirst).toHaveBeenCalledTimes(2);
@@ -114,7 +114,7 @@ describe("clan missing bank rejection", () => {
     const result = await caller.toBank({ clanId: "gone-bank", amount: 25 });
     expect(result.success).toBe(false);
     expect(result.userDelta).toBeUndefined();
-    expect(result.clanUpdate).toBeUndefined();
+    expect(result.userPatch?.clan).toBeUndefined();
     expect(database.update.mock.calls.map(([table]) => table)).toEqual([
       userData,
       clan,
@@ -158,7 +158,7 @@ describe("clan zero-cost cache responses", () => {
       expect(result).toMatchObject({
         success: true,
         userDelta: {},
-        clanUpdate: { id: "clan-zero-clan" },
+        userPatch: { clan: { id: "clan-zero-clan" } },
       });
       expect(userRead).toHaveBeenCalledTimes(1);
       expect(clanRead).toHaveBeenCalledTimes(1);
@@ -201,7 +201,7 @@ describeWithDatabase("clan mutation cache balances", () => {
     expect(result).toMatchObject({
       success: true,
       userDelta: { money: -250 },
-      clanUpdate: { id: "clan-cache-clan", bank: 750 },
+      userPatch: { clan: { id: "clan-cache-clan", bank: 750 } },
     });
   });
 
@@ -214,7 +214,7 @@ describeWithDatabase("clan mutation cache balances", () => {
     expect(result).toMatchObject({
       success: true,
       userDelta: { reputationPoints: -10 },
-      clanUpdate: { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE },
+      userPatch: { clan: { id: "clan-cache-clan", repTreasury: HIDEOUT_TOWN_UPGRADE } },
     });
   });
 
@@ -231,7 +231,7 @@ describeWithDatabase("clan mutation cache balances", () => {
         : caller.clanDonate({ clanId: "clan-cache-clan", reputationPoints: 50 }));
       expect(result.success).toBe(true);
       expect(result.userDelta).toBeUndefined();
-      expect(result.clanUpdate).toBeUndefined();
+      expect(result.userPatch?.clan).toBeUndefined();
     });
   }
 
@@ -256,7 +256,7 @@ describeWithDatabase("clan mutation cache balances", () => {
     expect(result.success).toBe(false);
     expect(result.message).toContain("refunded");
     expect(result.userDelta).toBeUndefined();
-    expect(result.clanUpdate).toBeUndefined();
+    expect(result.userPatch?.clan).toBeUndefined();
     expect(reads).toHaveBeenCalledTimes(1);
     const stored = await db.query.userData.findFirst({
       where: eq(userData.userId, "clan-cache-user"),
@@ -269,6 +269,6 @@ describeWithDatabase("clan mutation cache balances", () => {
     const result = await caller.toBank({ clanId: "clan-cache-clan", amount: 1001 });
     expect(result.success).toBe(false);
     expect(result.userDelta).toBeUndefined();
-    expect(result.clanUpdate).toBeUndefined();
+    expect(result.userPatch?.clan).toBeUndefined();
   });
 });

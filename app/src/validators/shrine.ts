@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { SHRINE_BOOST_TYPES } from "@/drizzle/constants";
-import { baseServerResponse } from "@/validators/base";
 
 const MAX_BOOST_TEMPLATE_ENTRIES = 7 * 12 * SHRINE_BOOST_TYPES.length;
 
@@ -11,30 +10,6 @@ export const boostTemplateEntrySchema = z.object({
 });
 
 export type BoostTemplateEntry = z.infer<typeof boostTemplateEntrySchema>;
-
-export const shrineVillageUpdateOutputSchema = baseServerResponse.extend({
-  requiresUserRefresh: z.boolean().optional(),
-  villageUpdate: z
-    .object({
-      id: z.string(),
-      tokens: z.number().optional(),
-      shrineSettings: z
-        .object({
-          unlockedAiIds: z.array(z.string()).optional(),
-          activeBoosts: z.record(z.string(), z.string()).optional(),
-          activeAiIds: z.array(z.string()).optional(),
-          boostTemplate: z.array(boostTemplateEntrySchema).optional(),
-          boostTemplateUpdatedBy: z.string().optional(),
-          boostTemplateUpdatedAt: z.string().optional(),
-        })
-        .optional(),
-    })
-    .optional(),
-});
-
-export type ShrineVillageUpdateResponse = z.infer<
-  typeof shrineVillageUpdateOutputSchema
->;
 
 export const boostTemplateSchema = z
   .array(boostTemplateEntrySchema)

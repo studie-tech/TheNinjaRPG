@@ -108,13 +108,13 @@ describeWithDatabase("committed profile cache patches", () => {
     const caller = await callerFor(itemRouter, userId);
     const result = await caller.repair({ userItemId: "worn-armor" });
     expect(result.success).toBe(true);
-    if (!("data" in result) || !result.data) throw new Error("Missing repair patch");
+    if (!("userPatch" in result) || !result.userPatch) throw new Error("Missing repair patch");
     const stored = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
-    expect(result.data.money).toBe(stored?.money);
-    expect(result.data.money).toBeLessThan(10000);
-    expect(result.data.items.map((row) => [row.id, row.durability])).toEqual([["worn-armor", 100]]);
-    expect(result.data.maxEnergy).toBe(calcEnergy(10) + 200);
-    expect(result.data.effectiveMasteries.ninjutsuMastery).toBe(150);
+    expect(result.userPatch.money).toBe(stored?.money);
+    expect(result.userPatch.money).toBeLessThan(10000);
+    expect(result.userPatch.items!.map((row) => [row.id, row.durability])).toEqual([["worn-armor", 100]]);
+    expect(result.userPatch.maxEnergy).toBe(calcEnergy(10) + 200);
+    expect(result.userPatch.effectiveMasteries!.ninjutsuMastery).toBe(150);
 
     const rejected = await caller.repair({ userItemId: "worn-armor" });
     expect(rejected.success).toBe(false);
@@ -127,10 +127,10 @@ describeWithDatabase("committed profile cache patches", () => {
     const caller = await callerFor(itemRouter, userId);
     const result = await caller.unequipAllItems();
     expect(result.success).toBe(true);
-    if (!("data" in result) || !result.data || !("items" in result.data)) throw new Error("Missing unequip patch");
-    expect(result.data.items).toEqual([]);
-    expect(result.data.maxEnergy).toBe(calcEnergy(10));
-    expect(result.data.effectiveMasteries.ninjutsuMastery).toBe(100);
+    if (!("userPatch" in result) || !result.userPatch || !("items" in result.userPatch)) throw new Error("Missing unequip patch");
+    expect(result.userPatch.items).toEqual([]);
+    expect(result.userPatch.maxEnergy).toBe(calcEnergy(10));
+    expect(result.userPatch.effectiveMasteries!.ninjutsuMastery).toBe(100);
   });
 
   it("does not read the profile again when nothing is equipped", async () => {
@@ -139,7 +139,7 @@ describeWithDatabase("committed profile cache patches", () => {
     const reads = vi.spyOn(db.query.userData, "findFirst");
     const caller = await callerFor(itemRouter, userId);
     const result = await caller.unequipAllItems();
-    expect(result).toMatchObject({ success: true, data: {} });
+    expect(result).toMatchObject({ success: true, userPatch: {} });
     expect(reads).toHaveBeenCalledTimes(1);
   });
 

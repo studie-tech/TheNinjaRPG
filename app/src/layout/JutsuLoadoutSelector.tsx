@@ -36,7 +36,12 @@ const JutsuLoadoutSelector: React.FC<JutsuLoadoutSelectorProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          data.data ? updateUser(data.data) : utils.profile.getUser.invalidate(),
+          data.userPatch?.jutsuLoadout && data.userPatch.loadout
+            ? updateUser({
+                jutsuLoadout: data.userPatch.jutsuLoadout,
+                loadout: data.userPatch.loadout,
+              })
+            : utils.profile.getUser.invalidate(),
           utils.item.getUserItems.invalidate(),
           utils.jutsu.getUserJutsus.invalidate(),
         ]);

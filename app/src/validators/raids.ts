@@ -1,10 +1,5 @@
 import { z } from "zod";
 import { ObjectiveReward } from "@/validators/rewards";
-import { userDeltaResponseSchema } from "@/validators/userCache";
-
-export const joinRaidQueueResponseSchema = userDeltaResponseSchema.extend({
-  teamId: z.string().optional(),
-});
 
 export const thresholdFormSchema = z.object({
   damageRequired: z.coerce.number().min(1, "Damage must be at least 1"),

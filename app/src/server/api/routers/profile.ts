@@ -230,7 +230,6 @@ import {
   adjustSeichiSilverSchema,
   assignableMasteryNames,
   assignedExperienceOutputSchema,
-  cosmeticUserUpdateOutputSchema,
   createAssignedExperienceSchema,
   getPublicUsersSchema,
   tavernColorChangeSchema,
@@ -418,11 +417,7 @@ export const profileRouter = createTRPCRouter({
       mcp: { description: "Update user's tutorial progress step" },
     })
     .input(z.object({ step: z.number() }))
-    .output(
-      baseServerResponse.extend({
-        data: z.object({ tutorialStep: z.number() }).optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Update the database
       await ctx.drizzle
@@ -470,7 +465,7 @@ export const profileRouter = createTRPCRouter({
       return {
         success: true,
         message: `Tutorial step updated to ${input.step}`,
-        data: { tutorialStep: input.step },
+        userPatch: { tutorialStep: input.step },
       };
     }),
   // Update user preferences
@@ -1770,7 +1765,7 @@ export const profileRouter = createTRPCRouter({
       mcp: { description: "Change user's username for reputation cost" },
     })
     .input(z.object({ username: usernameSchema }))
-    .output(cosmeticUserUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, target, moderationResult] = await Promise.all([
@@ -1821,7 +1816,7 @@ export const profileRouter = createTRPCRouter({
         return {
           success: true,
           message: "Username updated",
-          data: {
+          userPatch: {
             username: input.username,
             reputationPoints: user.reputationPoints - COST_CHANGE_USERNAME,
           },
@@ -1835,7 +1830,7 @@ export const profileRouter = createTRPCRouter({
       },
     })
     .input(tavernColorChangeSchema)
-    .output(cosmeticUserUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const storedColor =
@@ -1899,7 +1894,7 @@ export const profileRouter = createTRPCRouter({
       });
       return {
         success: true,
-        data: {
+        userPatch: {
           ...colorUpdate,
           reputationPoints: user.reputationPoints - cost,
         },

@@ -88,8 +88,12 @@ export default function Occupations() {
         if (data?.success) {
           setSelectedOccupation(null);
           setChangeDialogOpen(false);
-          if (data.data) await updateUser(data.data);
-          else await utils.profile.getUser.invalidate();
+          if (data.userPatch?.occupation && data.userPatch.occupationSignupAt) {
+            await updateUser({
+              occupation: data.userPatch.occupation,
+              occupationSignupAt: data.userPatch.occupationSignupAt,
+            });
+          } else await utils.profile.getUser.invalidate();
         }
       },
     });

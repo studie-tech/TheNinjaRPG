@@ -1016,7 +1016,18 @@ const NewAiAvatar: React.FC = () => {
       showMutationToast(data);
       await Promise.all([
         data.success
-          ? updateUser(data.data, { revision })
+          ? updateUser(
+              data.userPatch?.avatar !== undefined &&
+                data.userPatch.avatarLight !== undefined &&
+                data.userPatch.reputationPoints !== undefined
+                ? {
+                    avatar: data.userPatch.avatar,
+                    avatarLight: data.userPatch.avatarLight,
+                    reputationPoints: data.userPatch.reputationPoints,
+                  }
+                : undefined,
+              { revision },
+            )
           : utils.profile.getUser.invalidate(),
         utils.avatar.getHistoricalAvatars.invalidate(),
       ]);
@@ -1144,7 +1155,14 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
         !disabledRef.current &&
         updateGenerationRef.current === operationGenerationRef.current
       ) {
-        if (data.data) await updateUser(data.data);
+        if (
+          data.userPatch?.avatar !== undefined &&
+          data.userPatch.avatarLight !== undefined
+        )
+          await updateUser({
+            avatar: data.userPatch.avatar,
+            avatarLight: data.userPatch.avatarLight,
+          });
         else await utils.profile.getUser.invalidate();
         if (
           props.onUpdate &&
@@ -2061,7 +2079,16 @@ const NameChange: React.FC = () => {
     onSuccess: async (data, _input, revision) => {
       if (data.success) {
         // Cache reconciliation must not make a committed purchase retryable.
-        await updateUser(data.data, { revision }).catch(() => undefined);
+        await updateUser(
+          data.userPatch?.username !== undefined &&
+            data.userPatch.reputationPoints !== undefined
+            ? {
+                username: data.userPatch.username,
+                reputationPoints: data.userPatch.reputationPoints,
+              }
+            : undefined,
+          { revision },
+        ).catch(() => undefined);
       }
     },
   });
@@ -2202,7 +2229,16 @@ const CustomTitle: React.FC = () => {
       onSuccess: async (data, _input, revision) => {
         if (data.success) {
           // Cache reconciliation must not make a committed purchase retryable.
-          await updateUser(data.data, { revision }).catch(() => undefined);
+          await updateUser(
+            data.userPatch?.customTitle !== undefined &&
+              data.userPatch.reputationPoints !== undefined
+              ? {
+                  customTitle: data.userPatch.customTitle,
+                  reputationPoints: data.userPatch.reputationPoints,
+                }
+              : undefined,
+            { revision },
+          ).catch(() => undefined);
         }
       },
     });
@@ -2336,10 +2372,24 @@ const TavernColors: React.FC = () => {
 
   const updateColor = api.profile.updateTavernColor.useMutation({
     onMutate: prepareUserUpdate,
-    onSuccess: async (data, _input, revision) => {
+    onSuccess: async (data, input, revision) => {
       showMutationToast(data);
       if (data.success) {
-        await updateUser(data.data, { revision });
+        const color =
+          input.target === "username"
+            ? data.userPatch?.tavernUsernameColor
+            : data.userPatch?.tavernTitleColor;
+        await updateUser(
+          color !== undefined && data.userPatch?.reputationPoints !== undefined
+            ? {
+                ...(input.target === "username"
+                  ? { tavernUsernameColor: color }
+                  : { tavernTitleColor: color }),
+                reputationPoints: data.userPatch.reputationPoints,
+              }
+            : undefined,
+          { revision },
+        );
       }
     },
   });
@@ -2496,7 +2546,16 @@ const ChangeGender: React.FC = () => {
     onSuccess: async (data, _input, revision) => {
       if (data.success) {
         // Cache reconciliation must not make a committed purchase retryable.
-        await updateUser(data.data, { revision }).catch(() => undefined);
+        await updateUser(
+          data.userPatch?.gender !== undefined &&
+            data.userPatch.reputationPoints !== undefined
+            ? {
+                gender: data.userPatch.gender,
+                reputationPoints: data.userPatch.reputationPoints,
+              }
+            : undefined,
+          { revision },
+        ).catch(() => undefined);
       }
     },
   });

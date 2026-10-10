@@ -27,12 +27,11 @@ import { canDeleteConceptArt, getBanOrSilenceRestriction } from "@/utils/permiss
 import {
   conceptArtFilterSchema,
   conceptArtPromptSchema,
-  conceptImageCreateResponseSchema,
-  conceptVideoCreateResponseSchema,
   conceptVideoPromptSchema,
   getTimeFrameinSeconds,
 } from "@/validators/art";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import type { DrizzleClient } from "../../db";
 
 export const CONCEPT_PROMPT = `, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, dramatic`;
@@ -101,7 +100,7 @@ export const conceptartRouter = createTRPCRouter({
     }),
   create: protectedProcedure
     .input(conceptArtPromptSchema)
-    .output(conceptImageCreateResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -168,7 +167,7 @@ export const conceptartRouter = createTRPCRouter({
     }),
   createVideo: protectedProcedure
     .input(conceptVideoPromptSchema)
-    .output(conceptVideoCreateResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);

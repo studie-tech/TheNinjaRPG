@@ -850,9 +850,9 @@ export const useTutorialStep = () => {
   const { mutate: updateTutorialStep, isPending } =
     api.profile.updateTutorialStep.useMutation({
       onSuccess: async (data) => {
-        if (data.success && data.data) {
-          await updateUser({ tutorialStep: data.data.tutorialStep });
-          const nextStepPage = TUTORIAL_STEPS[data.data.tutorialStep]?.page;
+        if (data.success && data.userPatch?.tutorialStep !== undefined) {
+          await updateUser({ tutorialStep: data.userPatch.tutorialStep });
+          const nextStepPage = TUTORIAL_STEPS[data.userPatch.tutorialStep]?.page;
           const onBattlePage = pathname === "/combat";
           if (nextStepPage && pathname !== nextStepPage && !onBattlePage) {
             if (nextStepPage.includes("#")) {

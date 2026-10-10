@@ -41,7 +41,7 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUser("data" in data ? data.data : undefined, { revision }),
+          updateUser(data.userPatch, { revision }),
           utils.item.getUserItems.invalidate(),
           utils.item.getUserItemsWithVariants.invalidate(),
         ]);

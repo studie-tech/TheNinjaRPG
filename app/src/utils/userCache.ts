@@ -1,10 +1,13 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import type { UserDelta } from "@/validators/userCache";
+import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 type User = NonNullable<UserWithRelations>;
 type UserCache = { userData?: User | null };
-export type UserPatch = Partial<User> | ((current: User) => Partial<User> | undefined);
+type KnownUserPatch = Partial<User> | UserCachePatch;
+export type UserPatch =
+  | KnownUserPatch
+  | ((current: User) => KnownUserPatch | undefined);
 
 export const prepareUserUpdate = (client: QueryClient, key: QueryKey) => {
   // An action can render before the initial profile; leave that loading query running.
@@ -43,9 +46,12 @@ export const updateUserCache = async (
       needsRefresh ||= !!state?.isInvalidated || state?.fetchStatus !== "idle";
       if (!old?.userData) return undefined;
       const known = typeof patch === "function" ? patch(old.userData) : patch;
-      return known === undefined
-        ? undefined
-        : { ...old, userData: { ...old.userData, ...known } };
+      const changes = known && mergeUserRelations(old.userData, known);
+      if (!changes) {
+        needsRefresh = true;
+        return undefined;
+      }
+      return { ...old, userData: { ...old.userData, ...changes } };
     });
     // A local patch must preserve reconciliation of unrelated fields.
     if (needsRefresh) await client.invalidateQueries({ queryKey: key, exact: true });
@@ -84,7 +90,8 @@ export const updateUserCache = async (
     }
     const known = typeof patch === "function" ? patch(old.userData) : patch;
     if (patch && known === undefined) return undefined;
-    const changes: Partial<User> = { ...known };
+    const changes = known ? mergeUserRelations(old.userData, known) : {};
+    if (!changes) return undefined;
     for (const field of Object.keys(delta) as (keyof UserDelta)[]) {
       const amount = delta[field];
       if (amount !== undefined) changes[field] = old.userData[field] + amount;
@@ -93,4 +100,32 @@ export const updateUserCache = async (
     return { ...old, userData: { ...old.userData, ...changes } };
   });
   if (!applied) await client.invalidateQueries({ queryKey: key, exact: true });
+};
+
+/** Relation projections must belong to the cached user and preserve omitted fields. */
+const mergeUserRelations = (
+  current: User,
+  patch: KnownUserPatch,
+): Partial<User> | undefined => {
+  const { village, clan, ...fields } = patch;
+  if (village && current.village?.id !== village.id) return undefined;
+  if (clan && current.clan?.id !== clan.id) return undefined;
+  const changes: Partial<User> = { ...fields };
+  if (village && current.village) {
+    const { shrineSettings, ...villageFields } = village;
+    changes.village = { ...current.village, ...villageFields };
+    if (shrineSettings) {
+      changes.village.shrineSettings = {
+        ...current.village.shrineSettings,
+        ...shrineSettings,
+        activeBoosts: {
+          ...current.village.shrineSettings?.activeBoosts,
+          ...shrineSettings.activeBoosts,
+        },
+      };
+    }
+  } else if (village === null) changes.village = null;
+  if (clan && current.clan) changes.clan = { ...current.clan, ...clan };
+  else if (clan === null) changes.clan = null;
+  return changes;
 };

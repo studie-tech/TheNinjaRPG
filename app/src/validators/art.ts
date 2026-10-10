@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { MONTH_S, WEEK_S, YEAR_S } from "@/utils/time";
-import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const sortOptions = ["Most Recent", "Most Liked"] as const;
 export type SortOption = (typeof sortOptions)[number];
@@ -61,11 +60,3 @@ export const getTimeFrameinSeconds = (
       return null;
   }
 };
-
-export const conceptImageCreateResponseSchema = userDeltaResponseSchema.extend({
-  imageId: z.string().optional().nullable(),
-});
-
-export const conceptVideoCreateResponseSchema = userDeltaResponseSchema.extend({
-  videoId: z.string().optional().nullable(),
-});

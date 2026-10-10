@@ -29,28 +29,28 @@ const purchases = [
     name: "username",
     run: (client: DrizzleClient) => callerForDatabase(profileRouter, userId, client)
       .updateUsername({ username: "CacheName" }),
-    data: { username: "CacheName", reputationPoints: reputationPoints - COST_CHANGE_USERNAME },
+    userPatch: { username: "CacheName", reputationPoints: reputationPoints - COST_CHANGE_USERNAME },
     reads: 2,
   },
   {
     name: "custom title",
     run: (client: DrizzleClient) => callerForDatabase(blackMarketRouter, userId, client)
       .updateCustomTitle({ title: "Cache Fixture" }),
-    data: { customTitle: "Cache Fixture", reputationPoints: reputationPoints - COST_CUSTOM_TITLE },
+    userPatch: { customTitle: "Cache Fixture", reputationPoints: reputationPoints - COST_CUSTOM_TITLE },
     reads: 1,
   },
   {
     name: "gender",
     run: (client: DrizzleClient) => callerForDatabase(blackMarketRouter, userId, client)
       .changeUserGender({ gender: "Female" }),
-    data: { gender: "Female", reputationPoints: reputationPoints - COST_CHANGE_GENDER },
+    userPatch: { gender: "Female", reputationPoints: reputationPoints - COST_CHANGE_GENDER },
     reads: 1,
   },
   {
     name: "tavern username color",
     run: (client: DrizzleClient) => callerForDatabase(profileRouter, userId, client)
       .updateTavernColor({ target: "username", currentColor: "DEFAULT", color: "NAVY" }),
-    data: { tavernUsernameColor: "NAVY", reputationPoints: reputationPoints - getTavernColorChangeCost("NAVY") },
+    userPatch: { tavernUsernameColor: "NAVY", reputationPoints: reputationPoints - getTavernColorChangeCost("NAVY") },
     reads: 1,
   },
 ];
@@ -66,10 +66,10 @@ describeWithDatabase("Committed cosmetic cache patches", () => {
     const counted = countUserReads(database);
     const result = await purchase.run(counted.client);
     expect(result.success).toBe(true);
-    expect(result.data).toEqual(purchase.data);
+    expect(result.userPatch).toEqual(purchase.userPatch);
     expect(counted.getReads()).toBe(purchase.reads);
     const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
-    for (const [field, value] of Object.entries(purchase.data)) {
+    for (const [field, value] of Object.entries(purchase.userPatch)) {
       expect(saved?.[field as keyof NonNullable<typeof saved>]).toEqual(value);
     }
   });
@@ -84,7 +84,7 @@ describeWithDatabase("Committed cosmetic cache patches", () => {
       },
     ]));
     expect(result.success).toBe(false);
-    expect(result.data).toBeUndefined();
+    expect(result.userPatch).toBeUndefined();
     const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
     expect(saved?.reputationPoints).toBe(reputationPoints + 1);
     const logs = await database.query.actionLog.findMany({ where: eq(actionLog.userId, userId) });
@@ -97,13 +97,13 @@ describeWithDatabase("Committed cosmetic cache patches", () => {
     const result = await callerForDatabase(occupationRouter, userId, counted.client)
       .selectOccupation({ occupation: "CRAFTING" });
     expect(result.success).toBe(true);
-    expect(result.data?.occupationSignupAt.getMilliseconds()).toBe(0);
+    expect(result.userPatch?.occupationSignupAt?.getMilliseconds()).toBe(0);
     expect(counted.getReads()).toBe(1);
     const saved = await database.query.userData.findFirst({
       columns: { occupation: true, occupationSignupAt: true },
       where: eq(userData.userId, userId),
     });
-    expect(result.data).toEqual(saved);
+    expect(result.userPatch).toEqual(saved);
   });
 
   it("rejects an intervening occupation change instead of resetting its cooldown", async () => {
@@ -116,7 +116,7 @@ describeWithDatabase("Committed cosmetic cache patches", () => {
     const result = await callerForDatabase(occupationRouter, userId, client)
       .selectOccupation({ occupation: "CRAFTING" });
     expect(result.success).toBe(false);
-    expect(result.data).toBeUndefined();
+    expect(result.userPatch).toBeUndefined();
     const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
     expect(saved?.occupationSignupAt).toEqual(signupAt);
   });

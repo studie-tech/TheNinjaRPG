@@ -56,6 +56,7 @@ import { secondsFromDate, secondsFromNow, secondsPassed } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";
 
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
 
@@ -609,17 +610,7 @@ export const kageRouter = createTRPCRouter({
       mcp: { description: "Toggle kage challenge availability" },
     })
     .input(z.object({ villageId: z.string() }))
-    .output(
-      baseServerResponse.extend({
-        data: z
-          .object({
-            id: z.string(),
-            openForChallenges: z.boolean(),
-            openForChallengesAt: z.date(),
-          })
-          .optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch all data in parallel
       const [user, requests, userVillage, lastToggle, dailyLockedTimeSeconds] =
@@ -711,7 +702,7 @@ export const kageRouter = createTRPCRouter({
       return {
         success: true,
         message: `Village is now ${availability.openForChallenges ? "open" : "closed"} for challenges`,
-        data: availability,
+        userPatch: { village: availability },
       };
     }),
 

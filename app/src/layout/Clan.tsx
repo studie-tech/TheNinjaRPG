@@ -1170,7 +1170,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
           await updateUser(
             (current) =>
               current.village &&
-              current.village.id === data.villageId &&
+              current.village.id === data.userPatch?.village?.id &&
               current.clanId === input.clanId
                 ? { village: { ...current.village, hexColor: input.color } }
                 : undefined,
@@ -1273,18 +1273,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success)
-          void updateUser(
-            (current) =>
-              current.clan && current.clan.id === data.clanUpdate?.id && data.clanUpdate
-                ? {
-                    clan: {
-                      ...current.clan,
-                      ...data.clanUpdate,
-                    },
-                  }
-                : undefined,
-            { revision, delta: data.userDelta },
-          );
+          void updateUser(data.userPatch?.clan ? data.userPatch : undefined, {
+            revision,
+            delta: data.userDelta,
+          });
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1372,18 +1364,10 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUser(
-            (current) =>
-              current.clan && current.clan.id === data.clanUpdate?.id && data.clanUpdate
-                ? {
-                    clan: {
-                      ...current.clan,
-                      ...data.clanUpdate,
-                    },
-                  }
-                : undefined,
-            { revision, delta: data.userDelta },
-          ),
+          updateUser(data.userPatch?.clan ? data.userPatch : undefined, {
+            revision,
+            delta: data.userDelta,
+          }),
           utils.clan.get.invalidate(),
         ]);
         toBankForm.reset();

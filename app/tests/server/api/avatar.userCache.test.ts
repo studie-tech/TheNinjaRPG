@@ -39,17 +39,17 @@ describeWithDatabase("Avatar cache reconciliation", () => {
     const result = await caller.updateAvatar({ avatar: 11, type: "user" });
     expect(counted.getReads()).toBe(1);
     expect(result.success).toBe(true);
-    expect(result.data).toEqual({ avatar, avatarLight });
+    expect(result.userPatch).toEqual({ avatar, avatarLight });
     const saved = await database.query.userData.findFirst({
       columns: { avatar: true, avatarLight: true },
       where: eq(userData.userId, userId),
     });
-    expect(result.data).toEqual(saved);
+    expect(result.userPatch).toEqual(saved);
     expect(counted.getUserWrites()).toBe(1);
     // Selecting the active pair succeeds without relying on driver no-op row counts.
     const repeated = await caller.updateAvatar({ avatar: 11, type: "user" });
     expect(repeated.success).toBe(true);
-    expect(repeated.data).toEqual({ avatar, avatarLight });
+    expect(repeated.userPatch).toEqual({ avatar, avatarLight });
     expect(counted.getReads()).toBe(2);
     expect(counted.getUserWrites()).toBe(1);
   });
@@ -58,7 +58,7 @@ describeWithDatabase("Avatar cache reconciliation", () => {
     const caller = await callerFor(avatarRouter, userId);
     const result = await caller.updateAvatar({ avatar: 99, type: "user" });
     expect(result.success).toBe(false);
-    expect(result.data).toBeUndefined();
+    expect(result.userPatch).toBeUndefined();
   });
 
   it("does not supply a user patch when the avatar belongs to another player", async () => {
@@ -74,6 +74,6 @@ describeWithDatabase("Avatar cache reconciliation", () => {
     const caller = await callerFor(avatarRouter, userId);
     const result = await caller.updateAvatar({ avatar: 11, type: "user" });
     expect(result.success).toBe(false);
-    expect(result.data).toBeUndefined();
+    expect(result.userPatch).toBeUndefined();
   });
 });

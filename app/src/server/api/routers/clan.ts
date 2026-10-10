@@ -85,7 +85,6 @@ import {
   checkCoLeader,
   clanBankDepositSchema,
   clanBoostTypeSchema,
-  clanColorResponseSchema,
   clanCreateSchema,
   clanGetRequestSchema,
   factionEditSchema,
@@ -273,13 +272,7 @@ export const clanRouter = createTRPCRouter({
         clanId: z.string(),
       }),
     )
-    .output(
-      userDeltaResponseSchema.extend({
-        clanUpdate: z
-          .object({ id: z.string(), repTreasury: z.number().optional() })
-          .optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -308,7 +301,7 @@ export const clanRouter = createTRPCRouter({
           success: true,
           message: `${user.username} donated 0 reputation points to faction`,
           userDelta: user.energyTrainingQueue?.length ? undefined : {},
-          clanUpdate: { id: fetchedClan.id },
+          userPatch: { clan: { id: fetchedClan.id } },
         };
       }
       // Mutate step 1 - update user
@@ -369,7 +362,7 @@ export const clanRouter = createTRPCRouter({
           userDelta: user.energyTrainingQueue?.length
             ? undefined
             : { reputationPoints: -repsCost },
-          clanUpdate,
+          userPatch: { clan: clanUpdate },
         };
       }
     }),
@@ -740,7 +733,7 @@ export const clanRouter = createTRPCRouter({
   editClanColor: protectedProcedure
     .meta({ mcp: { description: "Change faction color" } })
     .input(z.object({ clanId: z.string(), color: z.string() }))
-    .output(clanColorResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -807,7 +800,7 @@ export const clanRouter = createTRPCRouter({
           user.energyTrainingQueue?.length || colorResult.rowsAffected === 0
             ? undefined
             : { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST },
-        villageId: fetchedClan.villageId,
+        userPatch: { village: { id: fetchedClan.villageId, hexColor: input.color } },
         message: `${groupLabel} color updated`,
       };
     }),
@@ -1105,13 +1098,7 @@ export const clanRouter = createTRPCRouter({
   toBank: protectedProcedure
     .meta({ mcp: { description: "Deposit ryo to clan bank" } })
     .input(clanBankDepositSchema)
-    .output(
-      userDeltaResponseSchema.extend({
-        clanUpdate: z
-          .object({ id: z.string(), bank: z.number().optional() })
-          .optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, fetchedClan] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -1127,7 +1114,7 @@ export const clanRouter = createTRPCRouter({
           success: true,
           message: "Successfully deposited 0 ryo",
           userDelta: needsUserRefresh ? undefined : {},
-          clanUpdate: { id: fetchedClan.id },
+          userPatch: { clan: { id: fetchedClan.id } },
         };
       }
       const result = await ctx.drizzle
@@ -1152,14 +1139,16 @@ export const clanRouter = createTRPCRouter({
         success: true,
         message: `Successfully deposited ${input.amount} ryo`,
         userDelta: needsUserRefresh ? undefined : { money: -input.amount },
-        clanUpdate: needsUserRefresh
-          ? undefined
-          : await ctx.drizzle.query.clan
-              .findFirst({
-                where: eq(clan.id, fetchedClan.id),
-                columns: { id: true, bank: true },
-              })
-              .catch(handleUserCacheReadError),
+        userPatch: {
+          clan: needsUserRefresh
+            ? undefined
+            : await ctx.drizzle.query.clan
+                .findFirst({
+                  where: eq(clan.id, fetchedClan.id),
+                  columns: { id: true, bank: true },
+                })
+                .catch(handleUserCacheReadError),
+        },
       };
     }),
   purchaseBoost: protectedProcedure

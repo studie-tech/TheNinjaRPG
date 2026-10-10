@@ -47,11 +47,8 @@ import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
-import {
-  getBoostTemplateSchema,
-  setBoostTemplateSchema,
-  shrineVillageUpdateOutputSchema,
-} from "@/validators/shrine";
+import { getBoostTemplateSchema, setBoostTemplateSchema } from "@/validators/shrine";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchActiveUserMpvpBattles } from "./clan";
 import { fetchAlliances } from "./village";
 import { fetchActiveWars } from "./war";
@@ -106,7 +103,7 @@ export const shrineRouter = createTRPCRouter({
   upgradeShrine: protectedProcedure
     .meta({ mcp: { description: "Upgrade a shrine level (Kage only)" } })
     .input(z.object({ sectorNumber: z.number() }))
-    .output(shrineVillageUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [{ user, requiresUserRefresh }, targetSector] = await Promise.all([
         fetchUpdatedUser({
@@ -175,10 +172,12 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Successfully upgraded shrine to level ${targetSector.shrineLevel + 1}!`,
-        villageUpdate: requiresUserRefresh
-          ? undefined
-          : await fetchVillageShrineTokens(ctx.drizzle, user.villageId),
-        requiresUserRefresh,
+        userPatch: {
+          village: requiresUserRefresh
+            ? undefined
+            : await fetchVillageShrineTokens(ctx.drizzle, user.villageId),
+        },
+        userDelta: requiresUserRefresh ? undefined : {},
       };
     }),
 
@@ -186,7 +185,7 @@ export const shrineRouter = createTRPCRouter({
   activateBoost: protectedProcedure
     .meta({ mcp: { description: "Activate village-wide shrine boost" } })
     .input(z.object({ boostType: z.enum(SHRINE_BOOST_TYPES), villageId: z.string() }))
-    .output(shrineVillageUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [{ user, requiresUserRefresh }, hasShrine] = await Promise.all([
@@ -253,21 +252,25 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `${input.boostType} boost activated for ${SHRINE_BOOST_DURATION_HOURS} hours!`,
-        villageUpdate: requiresUserRefresh
-          ? undefined
-          : await fetchVillageShrineSettings(ctx.drizzle, user.villageId).then(
-              (state) => {
-                const boostEnd = state?.shrineSettings.activeBoosts[input.boostType];
-                return state && boostEnd !== undefined
-                  ? {
-                      id: state.id,
-                      tokens: state.tokens,
-                      shrineSettings: { activeBoosts: { [input.boostType]: boostEnd } },
-                    }
-                  : undefined;
-              },
-            ),
-        requiresUserRefresh,
+        userPatch: {
+          village: requiresUserRefresh
+            ? undefined
+            : await fetchVillageShrineSettings(ctx.drizzle, user.villageId).then(
+                (state) => {
+                  const boostEnd = state?.shrineSettings.activeBoosts[input.boostType];
+                  return state && boostEnd !== undefined
+                    ? {
+                        id: state.id,
+                        tokens: state.tokens,
+                        shrineSettings: {
+                          activeBoosts: { [input.boostType]: boostEnd },
+                        },
+                      }
+                    : undefined;
+                },
+              ),
+        },
+        userDelta: requiresUserRefresh ? undefined : {},
       };
     }),
 
@@ -275,7 +278,7 @@ export const shrineRouter = createTRPCRouter({
   unlockAiDefender: protectedProcedure
     .meta({ mcp: { description: "Unlock an AI defender for village" } })
     .input(z.object({ aiId: z.string() }))
-    .output(shrineVillageUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [{ user, requiresUserRefresh }, ai] = await Promise.all([
         fetchUpdatedUser({
@@ -328,17 +331,21 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `AI defender unlocked! Cost: ${SHRINE_AI_UNLOCK_COST.toLocaleString()} tokens`,
-        villageUpdate: requiresUserRefresh
-          ? undefined
-          : await fetchVillageShrineSettings(ctx.drizzle, user.villageId).then(
-              (state) =>
-                state && {
-                  id: state.id,
-                  tokens: state.tokens,
-                  shrineSettings: { unlockedAiIds: state.shrineSettings.unlockedAiIds },
-                },
-            ),
-        requiresUserRefresh,
+        userPatch: {
+          village: requiresUserRefresh
+            ? undefined
+            : await fetchVillageShrineSettings(ctx.drizzle, user.villageId).then(
+                (state) =>
+                  state && {
+                    id: state.id,
+                    tokens: state.tokens,
+                    shrineSettings: {
+                      unlockedAiIds: state.shrineSettings.unlockedAiIds,
+                    },
+                  },
+              ),
+        },
+        userDelta: requiresUserRefresh ? undefined : {},
       };
     }),
 
@@ -346,7 +353,7 @@ export const shrineRouter = createTRPCRouter({
   toggleVillageAiDefender: protectedProcedure
     .meta({ mcp: { description: "Toggle AI defender active status" } })
     .input(z.object({ aiId: z.string() }))
-    .output(shrineVillageUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Queries
       const [{ user, requiresUserRefresh }, ai] = await Promise.all([
@@ -398,11 +405,13 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message,
-        villageUpdate: {
-          id: user.villageId,
-          shrineSettings: { activeAiIds: newAssigns },
+        userPatch: {
+          village: {
+            id: user.villageId,
+            shrineSettings: { activeAiIds: newAssigns },
+          },
         },
-        requiresUserRefresh,
+        userDelta: requiresUserRefresh ? undefined : {},
       };
     }),
 
@@ -410,7 +419,7 @@ export const shrineRouter = createTRPCRouter({
   payWeeklyMaintenance: protectedProcedure
     .meta({ mcp: { description: "Pay weekly shrine maintenance" } })
     .input(z.object({ sectorId: z.number() }))
-    .output(shrineVillageUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [{ user, requiresUserRefresh }, targetSector] = await Promise.all([
         fetchUpdatedUser({
@@ -494,10 +503,12 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: `Weekly maintenance paid for sector ${targetSector.sector}: ${SHRINE_WEEKLY_MAINTENANCE_COST.toLocaleString()} tokens`,
-        villageUpdate: requiresUserRefresh
-          ? undefined
-          : await fetchVillageShrineTokens(ctx.drizzle, user.villageId),
-        requiresUserRefresh,
+        userPatch: {
+          village: requiresUserRefresh
+            ? undefined
+            : await fetchVillageShrineTokens(ctx.drizzle, user.villageId),
+        },
+        userDelta: requiresUserRefresh ? undefined : {},
       };
     }),
 
@@ -546,7 +557,7 @@ export const shrineRouter = createTRPCRouter({
       },
     })
     .input(setBoostTemplateSchema)
-    .output(shrineVillageUpdateOutputSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [{ user, requiresUserRefresh }, hasShrine] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
@@ -584,15 +595,17 @@ export const shrineRouter = createTRPCRouter({
       return {
         success: true,
         message: "Boost template saved",
-        villageUpdate: {
-          id: user.villageId,
-          shrineSettings: {
-            boostTemplate: input.template,
-            boostTemplateUpdatedBy: user.username,
-            boostTemplateUpdatedAt: templateUpdatedAt,
+        userPatch: {
+          village: {
+            id: user.villageId,
+            shrineSettings: {
+              boostTemplate: input.template,
+              boostTemplateUpdatedBy: user.username,
+              boostTemplateUpdatedAt: templateUpdatedAt,
+            },
           },
         },
-        requiresUserRefresh,
+        userDelta: requiresUserRefresh ? undefined : {},
       };
     }),
 

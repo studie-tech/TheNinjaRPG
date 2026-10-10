@@ -387,16 +387,7 @@ export const jutsuRouter = createTRPCRouter({
   selectJutsuLoadout: protectedProcedure
     .meta({ mcp: { description: "Select a jutsu loadout" } })
     .input(idSchema)
-    .output(
-      baseServerResponse.extend({
-        data: z
-          .object({
-            jutsuLoadout: z.string(),
-            loadout: z.object({ jutsuIds: z.array(z.string()) }),
-          })
-          .optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // fetchUpdatedUser (not fetchUser) so the full relations canUseJutsu reads
       // (bloodline/village/elements) are present for validation, mirroring
@@ -427,7 +418,7 @@ export const jutsuRouter = createTRPCRouter({
       return result.success && loadout && !data.requiresUserRefresh
         ? {
             ...result,
-            data: { jutsuLoadout: id, loadout: { jutsuIds: loadout.jutsuIds } },
+            userPatch: { jutsuLoadout: id, loadout: { jutsuIds: loadout.jutsuIds } },
           }
         : result;
     }),
@@ -1515,11 +1506,7 @@ export const jutsuRouter = createTRPCRouter({
         moveForward: z.boolean(),
       }),
     )
-    .output(
-      baseServerResponse.extend({
-        data: z.object({ jutsuIds: z.array(z.string()) }).optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const loadouts = await fetchJutsuLoadouts(ctx.drizzle, ctx.userId);
       const loadout = loadouts.find((l) => l.id === input.loadoutId);
@@ -1545,7 +1532,11 @@ export const jutsuRouter = createTRPCRouter({
         .set({ jutsuIds: newOrder })
         .where(eq(jutsuLoadout.id, loadout.id));
 
-      return { success: true, message: `Order updated`, data: { jutsuIds: newOrder } };
+      return {
+        success: true,
+        message: `Order updated`,
+        userPatch: { loadout: { jutsuIds: newOrder } },
+      };
     }),
 
   renameLoadout: protectedProcedure

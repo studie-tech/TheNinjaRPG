@@ -6,7 +6,6 @@ import {
   looseFactionNameField,
   RESERVED_FACTION_NAMES,
 } from "@/validators/reservedName";
-import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const clanBoostTypeSchema = z.enum(ClanBoostTypes);
 
@@ -99,7 +98,3 @@ export const getClanSearchSchema = (maxClans: number) =>
       .max(maxClans),
   });
 export type ClanSearchSchema = z.infer<ReturnType<typeof getClanSearchSchema>>;
-
-export const clanColorResponseSchema = userDeltaResponseSchema.extend({
-  villageId: z.string().optional(),
-});

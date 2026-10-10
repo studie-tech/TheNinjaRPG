@@ -126,7 +126,7 @@ it.each([
   } } };
   const result = await callerForDatabase(clanRouter, actor.userId, withClan as never)
     .editClanColor({ clanId: "color-clan", color: "#ABCDEF" });
-  expect(result).toMatchObject({ success: true, villageId: "color-village" });
+  expect(result).toMatchObject({ success: true, userPatch: { village: { id: "color-village", hexColor: "#ABCDEF" } } });
   expect(result.userDelta).toEqual(rowsAffected && !queued
     ? { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST } : undefined);
   expect(findFirst).toHaveBeenCalledTimes(1);
