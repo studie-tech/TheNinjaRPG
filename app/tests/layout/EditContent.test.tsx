@@ -1,7 +1,6 @@
 import { ensureDom } from "../setup-dom.mjs";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+const { cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { MassEffectEditor } from "@/layout/EditContent";
 import { DamageTag, HealTag, type ZodAllTags } from "@/validators/combat";
 
 const save = vi.fn(async (_input: { id: string; data: { effects: ZodAllTags[] } }) => ({
@@ -26,6 +25,8 @@ vi.mock("@/app/_trpc/client", () => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/libs/toast", () => ({ showMutationToast: toast }));
 vi.mock("@/layout/ContentImageSelector", () => ({ default: () => null }));
+
+const { MassEffectEditor } = await import("@/layout/EditContent");
 
 beforeEach(() => {
   ensureDom();
