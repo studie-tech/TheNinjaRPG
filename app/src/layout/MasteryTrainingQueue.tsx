@@ -29,7 +29,6 @@ export const MasteryTrainingQueue = ({
   stopControl: ReactNode;
   isProcessing: boolean;
 }) => {
-  const utils = api.useUtils();
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const [error, setError] = useState<string | null>(null);
   const entries = getMasteryQueue(user);
@@ -87,8 +86,6 @@ export const MasteryTrainingQueue = ({
       isPending={isPending || isProcessing}
       timeDiff={timeDiff}
       emptyText="Select a mastery below to start."
-      // The finished session is collected, and the next one started, on the refresh.
-      onActiveFinish={() => void utils.profile.getUser.invalidate()}
     >
       {block && <p className="text-muted-foreground text-xs">Queue paused: {block}</p>}
       {error && (
