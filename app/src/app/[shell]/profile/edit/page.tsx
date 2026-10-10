@@ -92,6 +92,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { ElementalMastery } from "@/layout/ElementalMastery";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
@@ -392,6 +393,7 @@ export default function EditProfile() {
           icon={Swords}
           onClick={setActiveElement}
         >
+          <ElementalMastery mode="settings" />
           <BattleSettingsEdit userId={userData.userId} />
         </Accordion>
         <Accordion

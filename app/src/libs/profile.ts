@@ -1,5 +1,6 @@
 import type { CombatStatName, MasteryName, UserRank } from "@/drizzle/constants";
 import {
+  BasicElementName,
   CLAN_BOOST_MAX_LEVEL,
   CLAN_BOOST_PERCENT_PER_LEVEL,
   CombatStatNames,
@@ -26,6 +27,10 @@ import type {
   Village,
   VillageStructure,
 } from "@/drizzle/schema";
+import {
+  type ElementalMasterySource,
+  elementalGainRoom,
+} from "@/libs/elementalMastery";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import {
   gearMissingMastery,
@@ -272,7 +277,7 @@ export const getRedistributableStatTotal = (
 /**
  * Whether unused experience can still go anywhere on /profile/experience: one of the six
  * combat stats has rank capacity, or an assignable mastery has room under both its
- * discipline-rank cap and the shared earned total.
+ * discipline-rank cap and the shared earned total, or an eligible elemental track.
  */
 export const canAssignExperience = (
   user: Pick<
@@ -281,14 +286,18 @@ export const canAssignExperience = (
     | "masteryRanks"
     | (typeof CombatStatNames)[number]
     | (typeof MasteryNames)[number]
-  >,
+  > &
+    ElementalMasterySource,
 ) => {
   const { stats_cap, gens_cap } = getUserCaps(user.rank);
   return (
     CombatStatNames.some(
       (stat) =>
         user[stat] < (stat === "offence" || stat === "defence" ? stats_cap : gens_cap),
-    ) || assignableMasteryNames.some((name) => masteryGainRoom(user, name) > 0)
+    ) ||
+    assignableMasteryNames.some((name) => masteryGainRoom(user, name) > 0) ||
+    (user.elementalMastery !== undefined &&
+      BasicElementName.some((element) => elementalGainRoom(user, element) > 0))
   );
 };
 

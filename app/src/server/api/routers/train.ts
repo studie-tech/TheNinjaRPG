@@ -8,6 +8,7 @@ import {
 } from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
+import { activeTrainedElement, elementalGainRoom } from "@/libs/elementalMastery";
 import { masteryGainRoom } from "@/libs/masteryProgression";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
@@ -41,6 +42,12 @@ import { editTrainingQueue } from "@/server/utils/userQueue";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
 import {
+  collectElementalTrainingSchema,
+  investElementalExperienceSchema,
+  selectTrainedElementSchema,
+  startElementalTrainingSchema,
+} from "@/validators/elementalMastery";
+import {
   startMasteryTrainingInputSchema,
   startTrainingInputSchema,
   stopTrainingInputSchema,
@@ -52,6 +59,193 @@ import {
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const trainRouter = createTRPCRouter({
+  startElementalTraining: protectedProcedure
+    .input(startElementalTrainingSchema)
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+      });
+      if (!user) return errorResponse("User not found");
+      const block = masteryTrainingBlockMessage({
+        ...user,
+        trainingSpeed: input.speed,
+      });
+      if (block) return errorResponse(block);
+      if (user.currentlyTrainingElement)
+        return errorResponse("You are already training an element");
+      if (elementalGainRoom(user, input.element) <= 0)
+        return errorResponse("This element is already provided or fully mastered");
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
+          currentlyTrainingElement: input.element,
+          elementalTrainingStartedAt: new Date(),
+          elementalTrainingSpeed: input.speed,
+        },
+        where: [
+          ...elementalSnapshotConditions(user),
+          isNull(userData.currentlyTrainingElement),
+          isNull(userData.currentlyTrainingMastery),
+          eq(userData.status, "AWAKE"),
+          sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`,
+        ],
+      });
+      return result.success
+        ? { success: true, message: "Started elemental training" }
+        : errorResponse("Your training changed. Please try again");
+    }),
+  collectElementalTraining: protectedProcedure
+    .input(collectElementalTrainingSchema)
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const { user, settings } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        forceRegen: true,
+      });
+      if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE") return errorResponse("Must be awake");
+      if (
+        user.currentlyTrainingElement !== input.element ||
+        user.elementalTrainingStartedAt?.getTime() !== input.startedAt.getTime() ||
+        !user.elementalTrainingSpeed
+      )
+        return errorResponse(
+          "Your elemental training changed. Please refresh and try again",
+        );
+      if (showTrainingCapcha(user)) {
+        if (!input.guess) return errorResponse("Captcha required");
+        if (!(await validateCaptcha(ctx.drizzle, ctx.userId, input.guess)))
+          return errorResponse("Invalid captcha");
+      }
+      const amount = Math.max(
+        0,
+        Math.min(
+          elementalGainRoom(user, input.element),
+          calcMasteryTrainingAmount(
+            { ...user, trainingSpeed: user.elementalTrainingSpeed },
+            settings,
+            Math.max(0, secondsPassed(input.startedAt, undefined, false)),
+          ),
+        ),
+      );
+      const elementalMastery = {
+        ...user.elementalMastery,
+        [input.element]: (user.elementalMastery[input.element] ?? 0) + amount,
+      };
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
+          elementalMastery,
+          currentlyTrainingElement: null,
+          elementalTrainingStartedAt: null,
+          elementalTrainingSpeed: null,
+          ...(amount > 0
+            ? { dailyTrainings: sql`${userData.dailyTrainings} + 1` }
+            : {}),
+        },
+        where: [
+          ...elementalSnapshotConditions(user),
+          eq(userData.currentlyTrainingElement, input.element),
+          eq(userData.elementalTrainingStartedAt, input.startedAt),
+          eq(userData.elementalTrainingSpeed, user.elementalTrainingSpeed),
+          eq(userData.status, "AWAKE"),
+        ],
+      });
+      if (!result.success)
+        return errorResponse("Your training changed. Please try again");
+      if (amount > 0)
+        await ctx.drizzle.insert(trainingLog).values({
+          userId: ctx.userId,
+          stat: input.element,
+          amount,
+          speed: user.elementalTrainingSpeed,
+        });
+      return {
+        success: true,
+        message: `Collected ${amount.toFixed(2)} ${input.element} elemental mastery`,
+      };
+    }),
+  investElementalExperience: protectedProcedure
+    .input(investElementalExperienceSchema)
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.drizzle.query.userData.findFirst({
+        where: eq(userData.userId, ctx.userId),
+        with: { bloodline: true },
+      });
+      if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE") return errorResponse("Must be awake");
+      const amount = Math.min(
+        input.amount,
+        Math.ceil(elementalGainRoom(user, input.element)),
+      );
+      if (amount <= 0)
+        return errorResponse("This element is already provided or fully mastered");
+      if (input.amount > user.earnedExperience)
+        return errorResponse("Not enough unused experience");
+      // Whole unused-XP points can finish fractional room left by timed training.
+      const gained = Math.min(amount, elementalGainRoom(user, input.element));
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: {
+          elementalMastery: {
+            ...user.elementalMastery,
+            [input.element]: (user.elementalMastery[input.element] ?? 0) + gained,
+          },
+          earnedExperience: sql`${userData.earnedExperience} - ${amount}`,
+        },
+        where: [
+          ...elementalSnapshotConditions(user),
+          eq(userData.status, "AWAKE"),
+          gte(userData.earnedExperience, amount),
+        ],
+      });
+      return result.success
+        ? {
+            success: true,
+            message: `Invested ${amount.toLocaleString()} unused XP in ${input.element}`,
+          }
+        : errorResponse("Your progress changed. Please try again");
+    }),
+  selectTrainedElement: protectedProcedure
+    .input(selectTrainedElementSchema)
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.drizzle.query.userData.findFirst({
+        where: eq(userData.userId, ctx.userId),
+        with: { bloodline: true },
+      });
+      if (!user) return errorResponse("User not found");
+      if (user.status !== "AWAKE")
+        return errorResponse("Must be awake to change your trained element");
+      if (
+        input.element &&
+        !activeTrainedElement({ ...user, activeTrainedElement: input.element })
+      )
+        return errorResponse(
+          "Choose a fully mastered element not provided innately or by your bloodline",
+        );
+      const result = await claimUserSnapshot({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        updatedAt: user.updatedAt,
+        set: { activeTrainedElement: input.element },
+        where: [...elementalSnapshotConditions(user), eq(userData.status, "AWAKE")],
+      });
+      return result.success
+        ? { success: true, message: "Active trained element updated" }
+        : errorResponse("Your elements changed. Please try again");
+    }),
   updateEnergyTrainingQueue: protectedProcedure
     .input(updateEnergyTrainingQueueInputSchema)
     .output(userDeltaResponseSchema)
@@ -250,6 +444,8 @@ export const trainRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       const block = masteryTrainingBlockMessage(user);
       if (block) return errorResponse(block);
+      if (user.currentlyTrainingElement)
+        return errorResponse("You are already training an element");
       if (masteryGainRoom(user, input.stat) <= 0)
         return errorResponse(
           "Mastery capped. Complete its rank-up quest or free space under the total cap.",
@@ -265,6 +461,7 @@ export const trainRouter = createTRPCRouter({
         set: data,
         where: [
           isNull(userData.currentlyTrainingMastery),
+          isNull(userData.currentlyTrainingElement),
           eq(userData.status, "AWAKE"),
           sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`,
         ],
@@ -490,3 +687,22 @@ const withSavedQueue = (
       : {}),
   };
 };
+
+/** Guard sources that other profile mutations can change without advancing updatedAt. */
+const elementalSnapshotConditions = (
+  user: Pick<
+    NonNullable<UserWithRelations>,
+    "elementalMastery" | "bloodlineId" | "primaryElement" | "secondaryElement"
+  >,
+) => [
+  sql`${userData.elementalMastery} = CAST(${JSON.stringify(user.elementalMastery)} AS JSON)`,
+  user.bloodlineId
+    ? eq(userData.bloodlineId, user.bloodlineId)
+    : isNull(userData.bloodlineId),
+  user.primaryElement
+    ? eq(userData.primaryElement, user.primaryElement)
+    : isNull(userData.primaryElement),
+  user.secondaryElement
+    ? eq(userData.secondaryElement, user.secondaryElement)
+    : isNull(userData.secondaryElement),
+];
