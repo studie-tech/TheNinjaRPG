@@ -8,11 +8,13 @@ import {
   isNull,
   lte,
   or,
+  sql,
 } from "drizzle-orm";
 import { type LetterRank, type QuestType, UserRoles } from "@/drizzle/constants";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { canPlayHiddenQuests } from "@/utils/permissions";
+import type { QuestContentType } from "@/validators/objectives";
 
 interface QuestDiscoveryOptions {
   questTypes: QuestType[];
@@ -77,6 +79,18 @@ export const fetchQuestDiscoverySummaryCandidates = async (
       requiredBloodlineId: quest.requiredBloodlineId,
       requiredSageModeId: quest.requiredSageModeId,
       requiredSageRank: quest.requiredSageRank,
+      requiredNinjutsuMastery: quest.requiredNinjutsuMastery,
+      requiredGenjutsuMastery: quest.requiredGenjutsuMastery,
+      requiredTaijutsuMastery: quest.requiredTaijutsuMastery,
+      requiredBukijutsuMastery: quest.requiredBukijutsuMastery,
+      requiredBloodlineMastery: quest.requiredBloodlineMastery,
+      requiredSageMastery: quest.requiredSageMastery,
+      // Eligibility needs final rank rewards, but the dashboard does not need objectives.
+      content:
+        sql`JSON_OBJECT('reward', JSON_EXTRACT(${quest.content}, '$.reward'))`.mapWith(
+          (value: string) =>
+            quest.content.mapFromDriverValue(value) as Pick<QuestContentType, "reward">,
+        ),
       maxLevel: quest.maxLevel,
       maxAttempts: quest.maxAttempts,
       maxCompletes: quest.maxCompletes,

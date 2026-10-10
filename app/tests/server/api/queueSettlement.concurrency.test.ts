@@ -211,7 +211,7 @@ const masteryUser = (start: Date) => ({
   trainingSpeed: "15min" as const,
   currentlyTrainingMastery: "ninjutsuMastery" as const,
   masteryTrainingStartedAt: start,
-  ninjutsuMastery: getUserCaps("GENIN").mastery_cap - 0.5,
+  ninjutsuMastery: 375000 - 0.5,
   genjutsuMastery: 0,
   taijutsuMastery: 0,
   bukijutsuMastery: 0,
@@ -380,7 +380,7 @@ describeWithDatabase("Queue settlement concurrency and caps", () => {
       .where(eq(userData.userId, userId));
     await fetchUpdatedUser({ client: database, userId, forceRegen: true });
     const first = await readUser();
-    expect(first.ninjutsuMastery).toBe(getUserCaps("GENIN").mastery_cap);
+    expect(first.ninjutsuMastery).toBe(375000);
     expect(first.masteryQueueHead).toBe(2);
     expect(first.masteryTrainingStartedAt?.getTime()).toBe(
       start.getTime() + 15 * minute,

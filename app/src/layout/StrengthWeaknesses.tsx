@@ -12,10 +12,12 @@ import type { MasteryType } from "@/drizzle/constants";
 import {
   CombatStatNames,
   getUserCaps,
+  MAX_MASTERY_CAP,
   MasteryNames,
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
+  TOTAL_MASTERY_CAP,
   UserRolesWithSkillTreeAccess,
 } from "@/drizzle/constants";
 import { Bloodright } from "@/layout/Bloodright";
@@ -24,6 +26,7 @@ import ElementImage from "@/layout/ElementImage";
 import NavTabs from "@/layout/NavTabs";
 import SkillTreeFolderGrid from "@/layout/SkillTreeFolderGrid";
 import SkillTreeFolderModal from "@/layout/SkillTreeFolderModal";
+import { getMasteryRank, masteryTotal } from "@/libs/masteryProgression";
 import { withCappedStats } from "@/libs/profile";
 import { getSageMasteryDisplayRank } from "@/libs/sageMode";
 import { getStealthStatus } from "@/libs/stealth";
@@ -189,6 +192,10 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
       <div className="space-y-3">
         <div>
           <b>Masteries</b>
+          <p className="text-muted-foreground text-xs">
+            Earned total: {masteryTotal(userData).toLocaleString()} /{" "}
+            {TOTAL_MASTERY_CAP.toLocaleString()}
+          </p>
           {MasteryNames.map((name) => {
             const label =
               name.charAt(0).toUpperCase() + name.slice(1).replace("Mastery", "");
@@ -199,7 +206,8 @@ export const StatsTab: React.FC<StatsTabProps> = ({ userData }) => {
                   element={label as MasteryType}
                   className="mr-1 mb-1 h-6 w-6"
                 />
-                {label}: {Number(userData[name].toFixed(2)).toLocaleString()}
+                {label} ({getMasteryRank(userData, name)}):{" "}
+                {Number(userData[name].toFixed(2)).toLocaleString()}
                 {bonus !== 0 && (
                   <span
                     className="ml-1 text-muted-foreground"
@@ -240,7 +248,7 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
   const combatChartRef = useRef<HTMLCanvasElement>(null);
   const userElements = getUserElements(userData);
   const activeLayout = useActiveLayout();
-  const { stats_cap, mastery_cap } = getUserCaps(userData.rank);
+  const { stats_cap } = getUserCaps(userData.rank);
 
   useEffect(() => {
     const masteries = userData.effectiveMasteries ?? userData;
@@ -380,7 +388,8 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
           />
         </div>
         <p className="mt-3 border-t pt-2 text-muted-foreground text-xs">
-          Rank cap: {mastery_cap.toLocaleString()} per mastery
+          Maximum: {MAX_MASTERY_CAP.toLocaleString()} per mastery ·{" "}
+          {TOTAL_MASTERY_CAP.toLocaleString()} earned total
         </p>
       </section>
       <p className="text-muted-foreground text-xs sm:col-span-2">

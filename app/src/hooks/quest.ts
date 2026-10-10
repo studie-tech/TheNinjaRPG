@@ -8,6 +8,9 @@ import {
   IMG_AVATAR_DEFAULT,
   IMG_BADGE_DIALOG,
   LetterRanks,
+  MASTERY_RANKS,
+  MasteryNames,
+  MasteryTypes,
   MEDNIN_RANKS,
   QUEST_REWARD_MODES,
   QUEST_REWARD_PICK_MAX,
@@ -20,6 +23,7 @@ import {
 } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import type { FormEntry } from "@/layout/EditContent";
+import { MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation } from "@/utils/permissions";
@@ -30,6 +34,7 @@ import type {
   ZodQuestFormType,
 } from "@/validators/objectives";
 import { QuestFormSchema } from "@/validators/objectives";
+import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 
 // A merged type for quest with its rewards, so that we can show both in the same form
 export type ZodCombinedQuest = ZodQuestFormType;
@@ -168,6 +173,15 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
           reward_crafting_experience: data.reward_crafting_experience,
           reward_gathering_experience: data.reward_gathering_experience,
           reward_sage_mastery_experience: data.reward_sage_mastery_experience,
+          reward_mastery_stat: data.reward_mastery_stat,
+          reward_mastery_rank: data.reward_mastery_rank,
+          reward_ninjutsu_experience: data.reward_ninjutsu_experience,
+          reward_genjutsu_experience: data.reward_genjutsu_experience,
+          reward_taijutsu_experience: data.reward_taijutsu_experience,
+          reward_bukijutsu_experience: data.reward_bukijutsu_experience,
+          reward_bloodline_experience: data.reward_bloodline_experience,
+          reward_sage_stat_experience: data.reward_sage_stat_experience,
+
           reward_tokens: data.reward_tokens,
           reward_prestige: data.reward_prestige,
           reward_reputation: data.reward_reputation,
@@ -349,6 +363,8 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     label: "Required Sage Rank (min mastery — INITIATE = any sage user)",
   });
 
+  for (const [field, , label] of MASTERY_REQUIREMENT_FIELDS)
+    formData.push({ id: field, type: "number", label: `Minimum Earned ${label}` });
   formData.push({ id: "description", type: "richinput", doubleWidth: true });
   formData.push({ id: "successDescription", type: "richinput", doubleWidth: true });
 
@@ -422,7 +438,29 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   formData.push({ id: "reward_hunting_experience", type: "number" });
   formData.push({ id: "reward_crafting_experience", type: "number" });
   formData.push({ id: "reward_gathering_experience", type: "number" });
-  formData.push({ id: "reward_sage_mastery_experience", type: "number" });
+  formData.push({
+    id: "reward_sage_mastery_experience",
+    type: "number",
+    label: "Sage Mode XP",
+  });
+  for (const [index, field] of MASTERY_EXPERIENCE_FIELDS.entries())
+    formData.push({
+      id: field,
+      type: "number",
+      label: `${MasteryTypes[index]} Mastery XP`,
+    });
+  formData.push({
+    id: "reward_mastery_stat",
+    type: "str_array",
+    values: ["None", ...MasteryNames],
+    label: "Mastery to Rank Up",
+  });
+  formData.push({
+    id: "reward_mastery_rank",
+    type: "str_array",
+    values: MASTERY_RANKS,
+    label: "Mastery Rank Reward",
+  });
   formData.push({ id: "reward_war_damage", type: "number" });
   formData.push({ id: "reward_war_healing", type: "number" });
   formData.push({ id: "reward_rank", type: "str_array", values: UserRanks });

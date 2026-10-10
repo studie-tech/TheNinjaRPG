@@ -105,6 +105,7 @@ export const publicState = [
  * Which user state is private
  */
 export const privateState = [
+  "masteryRanks",
   "usedMasteries",
   "bloodlineMastery",
   "bukijutsuMastery",

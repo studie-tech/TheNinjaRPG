@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "bun:test";
 import {
   getUserCaps,
+  MAX_MASTERY_CAP,
   RANKED_PVP_STATS,
   SCALED_AI_STAT_BUDGET_SHARE,
 } from "@/drizzle/constants";
@@ -356,7 +357,7 @@ const readSeededAiRows = () => {
 };
 
 test("capUserStats caps every stat at the given rank, the user's own by default", () => {
-  const { stats_cap, gens_cap, mastery_cap } = getUserCaps("GENIN");
+  const { stats_cap, gens_cap } = getUserCaps("GENIN");
   const over = () =>
     ({
       rank: "GENIN",
@@ -366,7 +367,7 @@ test("capUserStats caps every stat at the given rank, the user's own by default"
       speed: 10,
       intelligence: 10,
       willpower: 10,
-      ninjutsuMastery: mastery_cap + 1000,
+      ninjutsuMastery: MAX_MASTERY_CAP + 1000,
       genjutsuMastery: 10,
       taijutsuMastery: 10,
       bukijutsuMastery: 10,
@@ -379,7 +380,7 @@ test("capUserStats caps every stat at the given rank, the user's own by default"
   expect([own.offence, own.strength, own.ninjutsuMastery]).toEqual([
     stats_cap,
     gens_cap,
-    mastery_cap,
+    MAX_MASTERY_CAP,
   ]);
 
   // Ranked plays everyone as an ELITE JONIN
@@ -388,24 +389,27 @@ test("capUserStats caps every stat at the given rank, the user's own by default"
   expect([ranked.offence, ranked.strength, ranked.ninjutsuMastery]).toEqual([
     stats_cap + 1000,
     gens_cap + 1000,
-    mastery_cap + 1000,
+    MAX_MASTERY_CAP,
   ]);
 });
 
 test("canAssignExperience stays true while any assignable mastery is below its cap", () => {
-  const { stats_cap, gens_cap, mastery_cap } = getUserCaps("JONIN");
+  const { stats_cap, gens_cap } = getUserCaps("JONIN");
   const statCapped = {
     rank: "JONIN" as const,
+    bloodlineMastery: 0,
+    sageMastery: 0,
+    masteryRanks: {},
     offence: stats_cap,
     defence: stats_cap,
     strength: gens_cap,
     speed: gens_cap,
     intelligence: gens_cap,
     willpower: gens_cap,
-    ninjutsuMastery: 450_000,
-    genjutsuMastery: 450_000,
-    taijutsuMastery: 450_000,
-    bukijutsuMastery: 450_000,
+    ninjutsuMastery: 300_000,
+    genjutsuMastery: 300_000,
+    taijutsuMastery: 300_000,
+    bukijutsuMastery: 300_000,
   };
   // Every combat stat capped, masteries still have room: the Assign XP notice must show
   expect(canAssignExperience(statCapped)).toBe(true);
@@ -413,22 +417,22 @@ test("canAssignExperience stays true while any assignable mastery is below its c
   // Only one mastery left with room is enough
   const oneMasteryLeft = {
     ...statCapped,
-    ninjutsuMastery: mastery_cap,
-    genjutsuMastery: mastery_cap,
-    taijutsuMastery: mastery_cap,
+    ninjutsuMastery: 375_000,
+    genjutsuMastery: 375_000,
+    taijutsuMastery: 375_000,
   };
   expect(canAssignExperience(oneMasteryLeft)).toBe(true);
 
   // Everything capped, including masteries: nowhere to put experience
   expect(
-    canAssignExperience({ ...oneMasteryLeft, bukijutsuMastery: mastery_cap }),
+    canAssignExperience({ ...oneMasteryLeft, bukijutsuMastery: 375_000 }),
   ).toBe(false);
 
   // A single uncapped combat stat is enough as well
   expect(
     canAssignExperience({
       ...oneMasteryLeft,
-      bukijutsuMastery: mastery_cap,
+      bukijutsuMastery: 375_000,
       speed: gens_cap - 1,
     }),
   ).toBe(true);

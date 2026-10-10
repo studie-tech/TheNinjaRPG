@@ -43,6 +43,7 @@ import { isEvolution, meetsEvolutionStatRequirements } from "@/libs/evolution";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import type { MasterySources, MasteryStatSource } from "@/libs/mastery";
 import { effectiveMasteries, hasMasteryRequirements } from "@/libs/mastery";
+import { masteryGainRoom } from "@/libs/masteryProgression";
 import {
   liveQueueRows,
   queueHeadAfter,
@@ -849,7 +850,7 @@ export const trainingBoost = (
   );
 };
 
-/** Mastery gained by a timed session of `elapsedSeconds`, before the rank cap. */
+/** Raw timed-session mastery gain; settlement applies discipline and shared-total caps. */
 export const calcMasteryTrainingAmount = (
   user: NonNullable<UserWithRelations>,
   settings: GameSetting[],
@@ -909,7 +910,6 @@ export const settleMasteryTrainingQueue = (
   now = new Date(),
 ) => {
   const queue = [...entries];
-  const { mastery_cap } = getUserCaps(user.rank);
   const gains: Partial<Record<MasteryName, number>> = {};
   const completed: {
     stat: MasteryName;
@@ -922,8 +922,19 @@ export const settleMasteryTrainingQueue = (
   let startedAt = user.masteryTrainingStartedAt;
   let speed = user.trainingSpeed;
   let dailyTrainings = user.dailyTrainings;
-  const room = (stat: MasteryName) =>
-    Math.max(0, mastery_cap - user[stat] - (gains[stat] ?? 0));
+  const room = (stat: MasteryName, pendingGains = gains) =>
+    masteryGainRoom(
+      {
+        ...user,
+        ...Object.fromEntries(
+          Object.entries(pendingGains).map(([name, gain]) => [
+            name,
+            user[name as MasteryName] + gain,
+          ]),
+        ),
+      },
+      stat,
+    );
   while (current && startedAt) {
     while (queue[0] && room(queue[0].stat) === 0) queue.shift();
     const next = queue[0];
@@ -936,10 +947,14 @@ export const settleMasteryTrainingQueue = (
       calcMasteryTrainingAmount({ ...user, trainingSpeed: speed }, settings, seconds),
     );
     const nextDaily = dailyTrainings + (amount > 0 ? 1 : 0);
-    // Choose the successor against the balance after this session's gain. A repeat
-    // that this completion caps must be consumed without starting a wasted interval.
+    // Both the discipline cap and shared total use the post-completion balance.
+    // Keep these gains provisional until the successor's start guards pass.
+    const gainsAfterCompletion = {
+      ...gains,
+      [current]: (gains[current] ?? 0) + amount,
+    };
     const nextIndex = queue.findIndex(
-      (entry) => room(entry.stat) - (entry.stat === current ? amount : 0) > 0,
+      (entry) => room(entry.stat, gainsAfterCompletion) > 0,
     );
     const successor = queue[nextIndex];
     if (

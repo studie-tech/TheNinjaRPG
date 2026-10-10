@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   ElementNames,
+  MASTERY_RANKS,
   MasteryNames,
   OCCUPATIONS,
   TavernColorPresets,
@@ -105,6 +106,7 @@ export const userPatchSchema = z.object({
   speed: z.number().optional(),
   intelligence: z.number().optional(),
   willpower: z.number().optional(),
+  masteryRanks: z.partialRecord(z.enum(MasteryNames), z.enum(MASTERY_RANKS)).optional(),
   ninjutsuMastery: z.number().optional(),
   genjutsuMastery: z.number().optional(),
   taijutsuMastery: z.number().optional(),

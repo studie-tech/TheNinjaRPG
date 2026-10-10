@@ -7,6 +7,7 @@ import type {
   ElementName,
   GeneralType,
   MasteryName,
+  MasteryType,
   PoolType,
   StatType,
 } from "@/drizzle/constants";
@@ -171,7 +172,13 @@ export type CombatUserFields = {
   fledBattle: boolean;
   moneyStolen: number;
   allyVillage: boolean;
-  usedActions: { id: string; type: "jutsu" | "item" | "basic" | "bloodline" }[];
+  /** One entry per successful action, including repeated casts; serialized for end-of-battle quest progress. */
+  usedActions: {
+    id: string;
+    type: "jutsu" | "item" | "basic" | "bloodline";
+    /** Catalog disciplines captured at cast time so settlement needs no content query. */
+    masteryTypes?: MasteryType[];
+  }[];
   /** Distinct tag types the user applied this battle (for tag_usage_win tracker). Array not Set — serializes to JSON. */
   usedTagTypes: EffectType[];
   /** Enemy-targeted skill and bloodright sources preloaded for on-action application. */

@@ -15,6 +15,7 @@ import {
   IMG_MISSION_PVP,
   IMG_MISSION_S,
   type LetterRank,
+  type MasteryType,
   MEDICAL_MISSIONS_PER_DAY,
   type MEDNIN_RANK,
   MEDNIN_RANKS,
@@ -40,6 +41,11 @@ import { getFarmingLevel } from "@/libs/farming";
 import { getGatheringRank } from "@/libs/gathering";
 import { calcMedninRank } from "@/libs/hospital";
 import { getHuntingRank } from "@/libs/hunting";
+import {
+  MASTERY_REQUIREMENT_FIELDS,
+  type MasteryRequirementFields,
+} from "@/libs/mastery";
+import { canPromoteMastery } from "@/libs/masteryProgression";
 import {
   findCompletedPredecessor,
   isQuestComplete,
@@ -75,11 +81,16 @@ import type {
   AllObjectivesType,
   AllObjectiveTask,
   ObjectiveTrackerType,
+  QuestContentType,
   QuestTrackerType,
 } from "@/validators/objectives";
 import { ObjectiveTracker, QuestTracker } from "@/validators/objectives";
 import type { ObjectiveRewardType, PendingRewardChoice } from "@/validators/rewards";
-import { ObjectiveReward, type PostProcessedRewards } from "@/validators/rewards";
+import {
+  MASTERY_EXPERIENCE_FIELDS,
+  ObjectiveReward,
+  type PostProcessedRewards,
+} from "@/validators/rewards";
 import { getQuestCounterFieldName } from "@/validators/user";
 
 /**
@@ -451,6 +462,9 @@ export const getReward = (
           rawRewards.reward_gathering_experience +=
             objective.reward_gathering_experience;
         }
+        for (const field of MASTERY_EXPERIENCE_FIELDS)
+          if (objective[field])
+            rawRewards[field] = (rawRewards[field] ?? 0) + (objective[field] ?? 0);
         if (objective.reward_sage_mastery_experience) {
           rawRewards.reward_sage_mastery_experience +=
             objective.reward_sage_mastery_experience;
@@ -517,6 +531,9 @@ export const getReward = (
       target.reward_gathering_experience = Math.floor(
         target.reward_gathering_experience * factor,
       );
+      for (const field of MASTERY_EXPERIENCE_FIELDS)
+        if (target[field] !== undefined)
+          target[field] = Math.floor((target[field] ?? 0) * factor);
       target.reward_sage_mastery_experience = Math.floor(
         target.reward_sage_mastery_experience * factor,
       );
@@ -789,6 +806,17 @@ export const collapseRewards = (
     if (reward.reward_gathering_experience) {
       collapsed.reward_gathering_experience += reward.reward_gathering_experience;
     }
+    for (const field of MASTERY_EXPERIENCE_FIELDS)
+      if (reward[field])
+        collapsed[field] = (collapsed[field] ?? 0) + (reward[field] ?? 0);
+    if (
+      reward.reward_mastery_stat &&
+      reward.reward_mastery_stat !== "None" &&
+      reward.reward_mastery_rank
+    ) {
+      collapsed.reward_mastery_stat = reward.reward_mastery_stat;
+      collapsed.reward_mastery_rank = reward.reward_mastery_rank;
+    }
     if (reward.reward_sage_mastery_experience) {
       collapsed.reward_sage_mastery_experience += reward.reward_sage_mastery_experience;
     }
@@ -984,6 +1012,10 @@ export type ObjectiveTrackerTaskInput = {
   value?: number;
   text?: string;
   contentId?: string;
+  /** Distinct jutsu disciplines captured when training starts or an action is performed. */
+  masteryTypes?: MasteryType[];
+  /** Opponent classification for combat-use filters, independent of the battle outcome. */
+  combatType?: "PVP" | "PVE";
   warFoe?: boolean;
 };
 
@@ -1389,14 +1421,13 @@ export const getNewTrackers = (
                   status.value = taskUpdate.value;
                 }
               }
-              // Content-gated objectives: credit only when the emitted contentId belongs to
-              // this objective's own id-list. One shared matcher across all content-gated tasks.
+              // Content objectives use their ID filter and, for jutsu, optional discipline
+              // and combat filters. The matcher rejects unconfigured and "any" events.
               if (
                 status &&
                 "value" in objective &&
                 CONTENT_GATED_TASKS.has(task) &&
-                taskUpdate.contentId !== undefined &&
-                objectiveContentIds(objective).includes(taskUpdate.contentId) &&
+                matchesContentObjective(objective, taskUpdate) &&
                 // A quest can never satisfy its own complete_specific_quest objective: the
                 // resolving quest is still active in getUserQuests when getReward emits this
                 // (its `completed` flag flips later in checkRewards), so guard the self-tick.
@@ -1962,7 +1993,8 @@ export const controlShownQuestLocationInformation = (
  * @returns The combined availability decision and user-facing reasons for failed checks.
  */
 export const isAvailableUserQuests = (
-  questAndUserQuestInfo: {
+  questAndUserQuestInfo: MasteryRequirementFields & {
+    content?: Pick<QuestContentType, "reward">;
     hidden: boolean;
     maxAttempts: number;
     maxCompletes: number;
@@ -2013,6 +2045,29 @@ export const isAvailableUserQuests = (
     : null;
   const userGatherRankIdx = GATHERING_RANKS.indexOf(userGatherRank);
 
+  // Exams read stored mastery only; temporary combat and equipment modifiers cannot qualify.
+  const baseMasteries = {
+    ...user,
+    ...("baseStatsForModifiers" in user
+      ? (user.baseStatsForModifiers as Partial<UserData>)
+      : {}),
+  };
+  const masteryCheck = MASTERY_REQUIREMENT_FIELDS.every(
+    ([field, stat]) =>
+      !questAndUserQuestInfo[field] ||
+      (baseMasteries[stat] ?? 0) >= (questAndUserQuestInfo[field] ?? 0),
+  );
+  const promotion = questAndUserQuestInfo.content?.reward;
+  const promotionCheck =
+    !promotion?.reward_mastery_stat ||
+    promotion.reward_mastery_stat === "None" ||
+    !promotion.reward_mastery_rank ||
+    promotion.reward_mastery_rank === "NONE" ||
+    canPromoteMastery(
+      baseMasteries,
+      promotion.reward_mastery_stat,
+      promotion.reward_mastery_rank,
+    );
   // Checks
   const now = new Date();
   const hideCheck = !questAndUserQuestInfo.hidden || canPlayHiddenQuests(user.role);
@@ -2101,6 +2156,8 @@ export const isAvailableUserQuests = (
     bloodlineCheck &&
     sageModeCheck &&
     sageRankCheck &&
+    masteryCheck &&
+    promotionCheck &&
     prerequisiteCheck &&
     medicalRankCheck &&
     huntingRankCheck &&
@@ -2120,6 +2177,10 @@ export const isAvailableUserQuests = (
   if (!bloodlineCheck) message += "Quest requires a specific bloodline\n";
   if (!sageModeCheck) message += "Quest requires a specific sage mode\n";
   if (!sageRankCheck) message += "Quest requires a higher sage mode rank\n";
+  if (!masteryCheck)
+    message +=
+      "Quest requires more earned mastery (equipment and bloodline bonuses do not count)\n";
+  if (!promotionCheck) message += "Quest requires the previous mastery rank\n";
   if (!prerequisiteCheck) message += "You must complete the prerequisite quest first\n";
   if (!medicalRankCheck)
     message += `Quest requires medical rank ${capitalizeFirstLetter(questMedRank ?? "NONE")}\n`;
@@ -2598,6 +2659,8 @@ export const questDailyQuota = (
 /** Structure used by the quest's normal UI entry point. */
 export const questStructureRoute = (questType: string) => {
   switch (questType) {
+    case "mastery":
+      return "/traininggrounds" as const;
     case "event":
       return "/adminbuilding" as const;
     case "story":
@@ -2656,3 +2719,36 @@ export const isQuestRankAllowed = (
   source === "random_assignment" && quest.questType !== "mission"
     ? true
     : availableQuestLetterRanks(user.rank).includes(quest.questRank);
+
+/**
+ * Match one content event against an objective's configured filters.
+ * Jutsu IDs and mastery filters intersect when both are set; a mastery-only objective
+ * permits an empty ID list, but leaving both unset cannot credit arbitrary content.
+ * Combat-type restrictions require matching event metadata. Exact task and content ID
+ * checks keep passive "any" re-evaluation events from incrementing content counters.
+ */
+const matchesContentObjective = (
+  objective: AllObjectivesType,
+  event: ObjectiveTrackerTaskInput,
+): boolean => {
+  if (event.task !== objective.task || event.contentId === undefined) return false;
+  const contentIds = objectiveContentIds(objective);
+  if (!("masteryType" in objective)) return contentIds.includes(event.contentId);
+
+  const hasMasteryFilter = !!objective.masteryType && objective.masteryType !== "None";
+  if (contentIds.length === 0 && !hasMasteryFilter) return false;
+  if (contentIds.length > 0 && !contentIds.includes(event.contentId)) return false;
+  if (
+    objective.masteryType &&
+    objective.masteryType !== "None" &&
+    !event.masteryTypes?.includes(objective.masteryType)
+  )
+    return false;
+
+  return (
+    !("combatType" in objective) ||
+    !objective.combatType ||
+    objective.combatType === "Any" ||
+    objective.combatType === event.combatType
+  );
+};

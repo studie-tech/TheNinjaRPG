@@ -660,6 +660,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
                 "starter",
                 "anbu",
                 "overworld",
+                "mastery",
               ].includes(quest.questType) && (
                 <Button
                   type="button"

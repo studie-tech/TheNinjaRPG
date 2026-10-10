@@ -33,6 +33,7 @@ import { getPotencyDescription, POTENCY_TAG_LABELS } from "@/libs/combat/potency
 import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFarmPlantExperience } from "@/libs/farming";
+import { masteryRewardLabels } from "@/libs/masteryRewards";
 import { getRewardArray } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -1456,6 +1457,10 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                               <b>Reward Reputation</b>: {parsedEffect.reward_reputation}
                             </p>
                           )}
+                        {"reward_money" in parsedEffect &&
+                          masteryRewardLabels(parsedEffect).map((label) => (
+                            <p key={label}>{label}</p>
+                          ))}
                         {"reward_rank" in parsedEffect &&
                           parsedEffect.reward_rank &&
                           parsedEffect.reward_rank !== "NONE" && (

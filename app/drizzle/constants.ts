@@ -892,6 +892,7 @@ export const QuestTypes = [
   "war",
   "raid",
   "overworld",
+  "mastery",
 ] as const;
 export type QuestType = (typeof QuestTypes)[number];
 export const NPC_ONLY_QUEST_TYPES = ["overworld"] as const satisfies readonly QuestType[];
@@ -929,6 +930,7 @@ export const QuestRewardMetrics = [
 export type QuestRewardMetric = (typeof QuestRewardMetrics)[number];
 
 export const QuestTypesWithMaxAttempts = [
+  "mastery",
   "event",
   "story",
   "battlepyramid",
@@ -1052,6 +1054,27 @@ export const RYO_CAP = 3000000000;
 export const MAX_STATS_CAP = 1300000;
 export const MAX_GENS_CAP = 400000;
 export const MAX_MASTERY_CAP = 1500000;
+/** Shared ceiling for earned mastery; equipment and bloodline modifiers are excluded. */
+export const TOTAL_MASTERY_CAP = 4200000;
+/** Persisted progression order, independent of the character's ninja rank. */
+export const MASTERY_RANKS = ["NONE", "NOVICE", "ADEPT", "MASTER", "LEGENDARY"] as const;
+export type MasteryRank = (typeof MASTERY_RANKS)[number];
+/** Gain ceiling at each current rank; the Legendary exam changes rank without raising it. */
+export const MASTERY_RANK_CAPS: Record<MasteryRank, number> = {
+  NONE: 375000,
+  NOVICE: 600000,
+  ADEPT: 1000000,
+  MASTER: MAX_MASTERY_CAP,
+  LEGENDARY: MAX_MASTERY_CAP,
+};
+/** Default earned minimums for exam templates; published quests may override these. */
+export const MASTERY_RANK_REQUIREMENTS: Record<MasteryRank, number> = {
+  NONE: 0,
+  NOVICE: 375000,
+  ADEPT: 600000,
+  MASTER: 1000000,
+  LEGENDARY: MAX_MASTERY_CAP,
+};
 export const PVP_MASTERY_WIN_REWARD = 200;
 export const PVP_MASTERY_LOSS_REWARD = 100;
 // AI rows retain their catalog tuning: half the level budget over 6 stats is 1/12 each.
@@ -1225,38 +1248,33 @@ export const BankTransferTypes = ["bank", "sensei", "recruiter"] as const;
 // Caps lookup table
 export const USER_CAPS: Record<
   UserRank,
-  { GENS_CAP: number; STATS_CAP: number; MASTERY_CAP: number; LVL_CAP: number }
+  { GENS_CAP: number; STATS_CAP: number; LVL_CAP: number }
 > = {
-  STUDENT: { GENS_CAP: 20000, STATS_CAP: 20000, MASTERY_CAP: 20000, LVL_CAP: 10 },
-  GENIN: { GENS_CAP: 60000, STATS_CAP: 60000, MASTERY_CAP: 60000, LVL_CAP: 30 },
+  STUDENT: { GENS_CAP: 20000, STATS_CAP: 20000, LVL_CAP: 10 },
+  GENIN: { GENS_CAP: 60000, STATS_CAP: 60000, LVL_CAP: 30 },
   CHUNIN: {
     GENS_CAP: MAX_GENS_CAP,
     STATS_CAP: MAX_STATS_CAP,
-    MASTERY_CAP: MAX_MASTERY_CAP,
     LVL_CAP: 100,
   },
   JONIN: {
     GENS_CAP: MAX_GENS_CAP,
     STATS_CAP: MAX_STATS_CAP,
-    MASTERY_CAP: MAX_MASTERY_CAP,
     LVL_CAP: 100,
   },
   "ELITE JONIN": {
     GENS_CAP: MAX_GENS_CAP,
     STATS_CAP: MAX_STATS_CAP,
-    MASTERY_CAP: MAX_MASTERY_CAP,
     LVL_CAP: 100,
   },
   ELDER: {
     GENS_CAP: MAX_GENS_CAP,
     STATS_CAP: MAX_STATS_CAP,
-    MASTERY_CAP: MAX_MASTERY_CAP,
     LVL_CAP: 100,
   },
   NONE: {
     GENS_CAP: MAX_GENS_CAP,
     STATS_CAP: MAX_STATS_CAP,
-    MASTERY_CAP: MAX_MASTERY_CAP,
     LVL_CAP: 100,
   },
 } as const;
@@ -3137,13 +3155,11 @@ export function getUserCaps(rank?: UserRank | null) {
     return {
       stats_cap: MAX_STATS_CAP,
       gens_cap: MAX_GENS_CAP,
-      mastery_cap: MAX_MASTERY_CAP,
       lvl_cap: 100,
     };
   return {
     stats_cap: caps.STATS_CAP,
     gens_cap: caps.GENS_CAP,
-    mastery_cap: caps.MASTERY_CAP,
     lvl_cap: caps.LVL_CAP,
   };
 }

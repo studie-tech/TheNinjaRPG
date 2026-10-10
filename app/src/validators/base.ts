@@ -6,6 +6,13 @@ export const baseServerResponse = z.object({
 });
 export type BaseServerResponse = z.infer<typeof baseServerResponse>;
 
+/** Optional integer prerequisite stored in SQL: blank, null and omitted values are ungated. */
+export const makeCappedNullableNumber = (max: number) =>
+  z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? null : value),
+    z.coerce.number().int().min(0).max(max).nullable(),
+  );
+
 /**
  * Schema for specifying item/jutsu/AI IDs with drop chance and quantity.
  * Used in objectives for attackers, rewards, and other ID-based fields.

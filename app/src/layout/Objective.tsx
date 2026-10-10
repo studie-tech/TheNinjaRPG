@@ -9,6 +9,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Modal from "@/layout/Modal";
 import StatusBar from "@/layout/StatusBar";
+import { masteryRewardLabels } from "@/libs/masteryRewards";
 import { getObjectiveImage, isObjectiveComplete } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
@@ -275,6 +276,10 @@ export const Reward: React.FC<RewardProps> = (props) => {
   }
   if (info?.reward_gathering_experience) {
     rewards += `${rewards ? ", " : ""} ${info.reward_gathering_experience} Gathering Experience`;
+  }
+  if (info) {
+    const mastery = masteryRewardLabels(info).join(", ");
+    if (mastery) rewards += `${rewards ? ", " : ""}${mastery}`;
   }
   if (info?.reward_sage_mastery_experience) {
     rewards += `${rewards ? ", " : ""} ${info.reward_sage_mastery_experience} Sage Mode Exp`;

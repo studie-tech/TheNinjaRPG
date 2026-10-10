@@ -3,10 +3,12 @@ import {
   getUserCaps,
   MAX_DAILY_TRAININGS,
   type MasteryName,
+  MasteryNames,
   STATS_PER_ENERGY,
 } from "@/drizzle/constants";
 import { trainingLog, userData } from "@/drizzle/schema";
 import { showTrainingCapcha } from "@/libs/captcha";
+import { masteryGainRoom } from "@/libs/masteryProgression";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
   getEnergyQueue,
@@ -34,6 +36,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { editTrainingQueue } from "@/server/utils/userQueue";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
@@ -125,8 +128,7 @@ export const trainRouter = createTRPCRouter({
             return "Start a mastery training before queueing more";
           if (input.entries.length > getQueueWaitingSlots(user))
             return "Mastery queue is full";
-          const { mastery_cap } = getUserCaps(user.rank);
-          if (input.entries.some((entry) => user[entry.stat] >= mastery_cap))
+          if (input.entries.some((entry) => masteryGainRoom(user, entry.stat) <= 0))
             return "A queued mastery is already capped";
           return (
             input.entries
@@ -248,8 +250,10 @@ export const trainRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       const block = masteryTrainingBlockMessage(user);
       if (block) return errorResponse(block);
-      const { mastery_cap } = getUserCaps(user.rank);
-      if (user[input.stat] >= mastery_cap) return errorResponse("Already capped");
+      if (masteryGainRoom(user, input.stat) <= 0)
+        return errorResponse(
+          "Mastery capped. Complete its rank-up quest or free space under the total cap.",
+        );
       const data = {
         masteryTrainingStartedAt: new Date(),
         currentlyTrainingMastery: input.stat,
@@ -313,8 +317,10 @@ export const trainRouter = createTRPCRouter({
         }
       }
       const { trainingAmount } = calcTrainingAmount(user, settings, startedAt);
-      const { mastery_cap } = getUserCaps(user.rank);
-      const gained = Math.max(0, Math.min(trainingAmount, mastery_cap - user[trained]));
+      const gained = Math.max(
+        0,
+        Math.min(trainingAmount, masteryGainRoom(user, trained)),
+      );
       const creditedMinutes =
         gained > 0 ? Math.max(0, (Date.now() - startedAt.getTime()) / 60_000) : 0;
       const trackerResult =
@@ -332,7 +338,7 @@ export const trainRouter = createTRPCRouter({
       // the front are dropped; one further back is dropped when it reaches the front.
       const queue = liveQueueRows(user.queue ?? [], "MASTERY", user.masteryQueueHead);
       const isCapped = (stat: MasteryName) =>
-        (stat === trained ? user[trained] + gained : user[stat]) >= mastery_cap;
+        masteryGainRoom({ ...user, [trained]: user[trained] + gained }, stat) <= 0;
       let skipped = 0;
       while (queue[skipped] && isCapped(queue[skipped]?.stat as MasteryName)) skipped++;
       const nextRow = queue[skipped];
@@ -363,15 +369,16 @@ export const trainRouter = createTRPCRouter({
           ...(gained > 0
             ? {
                 dailyTrainings: sql`dailyTrainings + 1`,
-                // LEAST keeps the gain inside the rank cap, and GREATEST keeps a value
-                // already above it (kept for a rank-up) from being lowered. Nothing else
-                // clamps stored masteries: capUserStats only caps in-memory copies.
-                [trained]: sql`GREATEST(${userData[trained]}, LEAST(${userData[trained]} + ${trainingAmount}, ${mastery_cap}))`,
+                // Apply both live progression caps without lowering stored entitlement;
+                // the snapshot guards keep the gain and queued-session handoff consistent.
+                ...masteryGainUpdates({ [trained]: gained }),
               }
             : {}),
           ...(questData ? { questData } : {}),
         },
         where: [
+          ...MasteryNames.map((stat) => eq(userData[stat], user[stat])),
+          sql`${userData.masteryRanks} = CAST(${JSON.stringify(user.masteryRanks)} AS JSON)`,
           eq(userData.currentlyTrainingMastery, trained),
           eq(userData.masteryTrainingStartedAt, startedAt),
           eq(userData.status, "AWAKE"),
@@ -390,7 +397,7 @@ export const trainRouter = createTRPCRouter({
         });
       }
       const capNote =
-        gained < trainingAmount ? ` (capped at ${mastery_cap.toLocaleString()})` : "";
+        gained < trainingAmount ? ` (mastery rank or total cap reached)` : "";
       const nextNote = startsNext ? `. Started queued ${next.stat} training` : "";
       return {
         success: true,

@@ -5,7 +5,7 @@ import { getTagSchema } from "@/validators/combat";
 import type { CombatAction, UserEffect } from "@/libs/combat/types";
 import { makeUser, makeEffect, makeDamageEffect } from "./helpers/battleScenario";
 
-const user = () => makeUser({ rank: "JONIN", ninjutsuMastery: 100, taijutsuMastery: 100, usedMasteries: { ninjutsuMastery: 1, taijutsuMastery: 1 } });
+const user = () => makeUser({ rank: "JONIN", masteryRanks: { ninjutsuMastery: "MASTER", taijutsuMastery: "MASTER", sageMastery: "NOVICE" }, ninjutsuMastery: 100, taijutsuMastery: 100, usedMasteries: { ninjutsuMastery: 1, taijutsuMastery: 1 } });
 const opponent = makeUser({ userId: "enemy", isAi: false });
 
 describe("combat mastery rewards", () => {
@@ -28,7 +28,7 @@ describe("combat mastery rewards", () => {
   });
   it("uses unbuffed mastery bases for cap room and never lowers over-cap bases", () => {
     const u = user(); u.ninjutsuMastery = 1800000;
-    u.baseStatsForModifiers = { ninjutsuMastery: 1499995, taijutsuMastery: 1600000 };
+    u.baseStatsForModifiers = { ninjutsuMastery: 1499995, taijutsuMastery: 1600000, genjutsuMastery: 0, bukijutsuMastery: 0, bloodlineMastery: 0, sageMastery: 0 };
     expect(combatMasteryGains({ battleType: "COMBAT", rewardScaling: 1 }, u, [opponent], "Won", 20)).toMatchObject({ ninjutsuMastery: 5, taijutsuMastery: 0 });
   });
   it("records classification, required disciplines and bloodline once per action", () => {

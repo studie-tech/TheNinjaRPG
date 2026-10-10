@@ -70,6 +70,7 @@ import {
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
 import { calcCombatHealPercentage } from "@/libs/hospital";
+import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import { hasMasteryRequirements } from "@/libs/mastery";
 import { getSageDailyCap, getSageModeActivationCost } from "@/libs/sageMode";
 import {
@@ -1160,7 +1161,13 @@ export const insertAction = (info: {
       updateStatUsage(user, effect as UserEffect);
     });
     recordMasteryUsage(user, action);
-    user.usedActions.push({ id: action.id, type: action.type });
+    user.usedActions.push({
+      id: action.id,
+      type: action.type,
+      ...(action.type === "jutsu" && action.data
+        ? { masteryTypes: jutsuMasteryTypes(action.data) }
+        : {}),
+    });
     // Check if action affected anything
     if (affectedTiles.size > 0) {
       // If this was an item, check if we should destroy on use

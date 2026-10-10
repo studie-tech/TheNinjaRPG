@@ -2288,7 +2288,17 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   const formData: FormEntry<Attribute>[] = attributes
     .filter(
       (value) =>
-        !["task", "id", "image", "item_name", "reward", "completed"].includes(value),
+        ![
+          "task",
+          "id",
+          "image",
+          "item_name",
+          "reward",
+          "completed",
+          // Mastery promotions are claimed only with the quest's final reward.
+          "reward_mastery_stat",
+          "reward_mastery_rank",
+        ].includes(value),
     )
     .filter((value) => {
       return (
@@ -2827,6 +2837,17 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   reward_crafting_experience: "Crafting Exp",
   reward_gathering_experience: "Gathering Exp",
   reward_sage_mastery_experience: "Sage Mode Exp",
+  masteryType: "Jutsu Mastery Type (and selected jutsu, if any)",
+  combatType: "Combat Type",
+  reward_mastery_stat: "Mastery to Rank Up",
+  reward_mastery_rank: "Mastery Rank Reward",
+  reward_ninjutsu_experience: "Ninjutsu Mastery XP",
+  reward_genjutsu_experience: "Genjutsu Mastery XP",
+  reward_taijutsu_experience: "Taijutsu Mastery XP",
+  reward_bukijutsu_experience: "Bukijutsu Mastery XP",
+  reward_bloodline_experience: "Bloodline Mastery XP",
+  reward_sage_stat_experience: "Sage Mastery XP",
+
   reward_rank: "Reward Rank",
   reward_village_membership: "Village Membership",
   reward_tokens: "Tokens",

@@ -2,12 +2,13 @@ import { z } from "zod";
 import type { ElementName, LetterRank, QuestType } from "@/drizzle/constants";
 import {
   GeneralTypes,
-  getUserCaps,
+  MAX_MASTERY_CAP,
   SEICHI_SILVER_ADJUST_LIMIT,
   TavernColorPresets,
   UserRanks,
   UserRoles,
 } from "@/drizzle/constants";
+import { masteryGainRoom } from "@/libs/masteryProgression";
 import type { UserWithRelations } from "@/routers/profile";
 import { createStatSchema, type ZodAllTags } from "@/validators/combat";
 import { dashboardContentPrioritySchema } from "@/validators/dashboard";
@@ -28,11 +29,10 @@ export const createAssignedExperienceSchema = (
   user?: NonNullable<UserWithRelations>,
 ) => {
   const { schema, maxValues } = createStatSchema(0, 0, user);
-  const { mastery_cap } = getUserCaps(user?.rank);
   const masteryRoom = Object.fromEntries(
     assignableMasteryNames.map((name) => [
       name,
-      Math.max(0, mastery_cap - (user?.[name] ?? 0)),
+      user ? masteryGainRoom(user, name) : MAX_MASTERY_CAP,
     ]),
   ) as Record<(typeof assignableMasteryNames)[number], number>;
   const masteryFields = Object.fromEntries(

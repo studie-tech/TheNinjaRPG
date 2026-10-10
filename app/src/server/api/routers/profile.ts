@@ -37,6 +37,7 @@ import {
   KAGE_PRESTIGE_REQUIREMENT,
   MAX_ATTRIBUTES,
   MAX_SKILL_POINTS,
+  MasteryNames,
   REGEN_SECONDS,
   SENSEI_MAX_STUDENT_LEVEL,
   SHRINE_BOOST_TYPES,
@@ -117,6 +118,7 @@ import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import { effectiveMasteries, type MasteryStatSource } from "@/libs/mastery";
+import { allocateMasteryGains } from "@/libs/masteryProgression";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { moderateContent, validateUserUpdateReason } from "@/libs/moderator";
 import {
@@ -178,6 +180,7 @@ import {
 } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { hashIp } from "@/server/utils/ipHash";
+import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { hydrateQuestCollections } from "@/server/utils/questCollections";
 import { fetchQuestDiscoverySummaryCandidates } from "@/server/utils/questDiscovery";
@@ -998,7 +1001,7 @@ export const profileRouter = createTRPCRouter({
       // Add a voting link
       let hasVoted = true;
       ACTIVE_VOTING_SITES.forEach((site) => {
-        if (!user?.votes || user.votes[site] !== true) {
+        if (user?.votes?.[site] !== true) {
           hasVoted = false;
         }
       });
@@ -2021,30 +2024,27 @@ export const profileRouter = createTRPCRouter({
       }
       // Mutate: points stop at the rank cap and only the points that land are spent. A
       // stat already stored above its cap keeps its value; it counts again after a rank-up.
-      const { stats_cap, gens_cap, mastery_cap } = getUserCaps(user.rank);
+      const { stats_cap, gens_cap } = getUserCaps(user.rank);
+      // Unused XP is stored as whole points, unlike timed and combat mastery gains.
+      const allocatedMastery = allocateMasteryGains(
+        user,
+        Object.fromEntries(
+          assignableMasteryNames.map((stat) => [stat, Math.floor(input[stat])]),
+        ),
+      );
+      const masteryGains = Object.fromEntries(
+        assignableMasteryNames.map((stat) => [
+          stat,
+          Math.floor(allocatedMastery[stat] ?? 0),
+        ]),
+      );
       const assign = (current: number, points: number, cap: number) =>
         Math.max(current, Math.min(current + Math.floor(points), cap));
       const stats = {
-        ninjutsuMastery: assign(
-          user.ninjutsuMastery,
-          input.ninjutsuMastery,
-          mastery_cap,
-        ),
-        genjutsuMastery: assign(
-          user.genjutsuMastery,
-          input.genjutsuMastery,
-          mastery_cap,
-        ),
-        taijutsuMastery: assign(
-          user.taijutsuMastery,
-          input.taijutsuMastery,
-          mastery_cap,
-        ),
-        bukijutsuMastery: assign(
-          user.bukijutsuMastery,
-          input.bukijutsuMastery,
-          mastery_cap,
-        ),
+        ninjutsuMastery: user.ninjutsuMastery + (masteryGains.ninjutsuMastery ?? 0),
+        genjutsuMastery: user.genjutsuMastery + (masteryGains.genjutsuMastery ?? 0),
+        taijutsuMastery: user.taijutsuMastery + (masteryGains.taijutsuMastery ?? 0),
+        bukijutsuMastery: user.bukijutsuMastery + (masteryGains.bukijutsuMastery ?? 0),
         offence: assign(user.offence, input.offence, stats_cap),
         defence: assign(user.defence, input.defence, stats_cap),
         strength: assign(user.strength, input.strength, gens_cap),
@@ -2076,7 +2076,8 @@ export const profileRouter = createTRPCRouter({
         },
         where: [
           eq(userData.rank, user.rank),
-          ...[...CombatStatNames, ...assignableMasteryNames].map((stat) =>
+          sql`${userData.masteryRanks} = CAST(${JSON.stringify(user.masteryRanks)} AS JSON)`,
+          ...[...CombatStatNames, ...MasteryNames].map((stat) =>
             eq(userData[stat], user[stat]),
           ),
           eq(userData.experience, user.experience),
@@ -3131,11 +3132,13 @@ export const fetchUpdatedUser = async (props: {
   let progressionQuestCandidates: NonNullable<typeof user>["userQuests"] = [];
   // Add in achievements (in-memory placeholders: `id === questId` until `QuestHistory` exists).
   if (user) {
+    // Deleted quests can leave history behind; progression candidates need live definitions.
+    user.userQuests = user.userQuests.filter((entry) => entry.quest);
     user.userQuests.push(...mockAchievementHistoryEntries(achievements, user));
     progressionQuestCandidates = [...user.userQuests];
-    user.userQuests = user.userQuests
-      .filter((q) => q.quest)
-      .filter((q) => isAvailableUserQuests({ ...q.quest, ...q }, user, true).check);
+    user.userQuests = user.userQuests.filter(
+      (q) => isAvailableUserQuests({ ...q.quest, ...q }, user, true).check,
+    );
   }
 
   // Filter and attach active wars for enemy_village sector type resolution
@@ -3346,6 +3349,8 @@ export const fetchUpdatedUser = async (props: {
     const masteryTrainingSession = {
       currentlyTrainingMastery: user.currentlyTrainingMastery,
       masteryTrainingStartedAt: user.masteryTrainingStartedAt,
+      masteryRanks: user.masteryRanks,
+      ...Object.fromEntries(MasteryNames.map((stat) => [stat, user[stat]])),
     };
     if (
       newDay ||
@@ -3567,8 +3572,9 @@ const persistPassiveRegenToDb = async ({
     | (NonNullable<ReturnType<typeof settleQueuedTraining>["mastery"]> & {
         original: Pick<
           UserData,
-          "currentlyTrainingMastery" | "masteryTrainingStartedAt"
-        >;
+          "currentlyTrainingMastery" | "masteryTrainingStartedAt" | "masteryRanks"
+        > &
+          Partial<Record<MasteryName, number>>;
       })
     | null;
 }) => {
@@ -3637,9 +3643,7 @@ const persistPassiveRegenToDb = async ({
     derivedUserUpdate.masteryTrainingStartedAt = queuedMastery.masteryTrainingStartedAt;
     derivedUserUpdate.trainingSpeed = queuedMastery.trainingSpeed;
     derivedUserUpdate.dailyTrainings = queuedMastery.dailyTrainings;
-    for (const stat of Object.keys(queuedMastery.gains)) {
-      derivedUserUpdate[stat] = user[stat as MasteryName];
-    }
+    Object.assign(derivedUserUpdate, masteryGainUpdates(queuedMastery.gains));
   }
 
   // A delayed regeneration must not restore pools from before a heal or another user claim.
@@ -3668,6 +3672,10 @@ const persistPassiveRegenToDb = async ({
       // The settled session must still be the one that was read.
       ...(queuedMastery
         ? [
+            ...MasteryNames.map((stat) =>
+              eq(userData[stat], queuedMastery.original[stat] ?? 0),
+            ),
+            sql`${userData.masteryRanks} = CAST(${JSON.stringify(queuedMastery.original.masteryRanks)} AS JSON)`,
             queuedMastery.original.currentlyTrainingMastery
               ? eq(
                   userData.currentlyTrainingMastery,

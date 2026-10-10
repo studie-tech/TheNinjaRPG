@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { getUserCaps, MAX_SKILL_POINTS, SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";
+import { MASTERY_RANK_CAPS, MAX_SKILL_POINTS, SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";
 import { bloodline, item, quest, questHistory, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
 import { calcCP, calcEnergy, calcHP, calcLevelRequirements, calcSP } from "@/libs/profile";
 import { getEnergyQueue } from "@/libs/queue";
@@ -114,13 +114,13 @@ describeWithDatabase("confirmed progression cache responses against MySQL", () =
   });
 
   it("matches the integer XP balance debit when only fractional mastery cap room remains", async () => {
-    const { mastery_cap } = getUserCaps("JONIN");
+    const mastery_cap = MASTERY_RANK_CAPS.NONE;
     await seed({ ninjutsuMastery: mastery_cap - 1.64, earnedExperience: 100 });
     const result = await (await callerFor(profileRouter, USER_ID)).useUnusedExperiencePoints(assign(10));
     const saved = await read();
     expect(result.success).toBe(true);
-    expect(saved.ninjutsuMastery).toBe(mastery_cap);
-    expect(saved.earnedExperience).toBe(98);
+    expect(saved.ninjutsuMastery).toBeCloseTo(mastery_cap - 0.64, 5);
+    expect(saved.earnedExperience).toBe(99);
     expect(result.userPatch).toMatchObject({ ninjutsuMastery: saved.ninjutsuMastery, earnedExperience: saved.earnedExperience, experience: saved.experience });
   });
 

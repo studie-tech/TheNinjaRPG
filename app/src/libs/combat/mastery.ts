@@ -1,6 +1,5 @@
 import type { MasteryName } from "@/drizzle/constants";
 import {
-  getUserCaps,
   MasteryNames,
   PVP_MASTERY_LOSS_REWARD,
   PVP_MASTERY_WIN_REWARD,
@@ -11,6 +10,7 @@ import type {
   CompleteBattle,
 } from "@/libs/combat/types";
 import { MASTERY_REQUIREMENT_FIELDS, MASTERY_TYPE_TO_STAT } from "@/libs/mastery";
+import { allocateMasteryGains } from "@/libs/masteryProgression";
 
 /** Count the disciplines of a successfully performed action once, not once per effect. */
 export const recordMasteryUsage = (user: BattleUserState, action: CombatAction) => {
@@ -31,7 +31,14 @@ export const recordMasteryUsage = (user: BattleUserState, action: CombatAction) 
   }
 };
 
-/** One battle reward budget, weighted by actual discipline usage; mastery grants no XP. */
+/**
+ * Allocate one battle's mastery budget by performed discipline usage against earned caps.
+ * Preloaded baseStatsForModifiers removes temporary bonuses before cap calculations.
+ * Fleeing, draws and practice/ranked battles grant no mastery; quest cast tracking is
+ * independent and still counts their performed actions. Requested shares are floored to
+ * hundredths; caps can reduce them further. Gains never contribute combat-stat XP.
+ * Persistence rechecks the live row's gain capacity.
+ */
 export const combatMasteryGains = (
   battle: Pick<CompleteBattle, "battleType" | "rewardScaling">,
   user: BattleUserState,
@@ -58,15 +65,14 @@ export const combatMasteryGains = (
     ? (outcome === "Won" ? PVP_MASTERY_WIN_REWARD : PVP_MASTERY_LOSS_REWARD) *
       battle.rewardScaling
     : Math.max(0, pveGrowth);
-  const cap = getUserCaps(user.rank).mastery_cap;
-  return Object.fromEntries(
-    MasteryNames.map((mastery) => {
-      const base = user.baseStatsForModifiers?.[mastery] ?? user[mastery];
-      const gain = Math.min(
-        Math.max(0, cap - base),
-        (budget * (usage[mastery] ?? 0)) / total,
-      );
-      return [mastery, Math.floor(gain * 100) / 100];
-    }),
+  const base = { ...user, ...user.baseStatsForModifiers };
+  return allocateMasteryGains(
+    base,
+    Object.fromEntries(
+      MasteryNames.map((mastery) => [
+        mastery,
+        Math.floor(((budget * (usage[mastery] ?? 0)) / total) * 100) / 100,
+      ]),
+    ),
   );
 };

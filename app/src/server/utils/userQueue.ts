@@ -22,6 +22,7 @@ import {
   userQueue,
 } from "@/drizzle/schema";
 import { getInventoryBucket, getInventoryBucketCapacity } from "@/libs/item";
+import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import {
   getNextQueueSchedule,
@@ -840,7 +841,12 @@ const startQueuedJutsu = async (
       ? undefined
       : [
           { task: "jutsus_mastered", increment: 1 },
-          { task: "train_specific_jutsu", increment: 1, contentId: entry.jutsuId },
+          {
+            task: "train_specific_jutsu",
+            increment: 1,
+            contentId: entry.jutsuId,
+            masteryTypes: jutsuMasteryTypes(info),
+          },
         ],
   });
   return { finishesAt };
