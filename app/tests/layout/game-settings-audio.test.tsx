@@ -1,9 +1,11 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MUSIC_HALLOWEEN_THEME, MUSIC_WELCOME_TO_SEICHI } from "@/drizzle/constants";
 import * as audioHook from "@/hooks/useAudio";
 import { GlobalAudioProvider } from "@/layout/GameSettings";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
+import * as timeUtils from "@/utils/time";
 import { ensureDom } from "../setup-dom.mjs";
 
 type RemoteCommand = "play" | "pause" | "toggle";
@@ -93,6 +95,32 @@ afterEach(() => {
 });
 
 describe("GlobalAudioProvider", () => {
+  it("switches Halloween music only after login and restores welcome music on logout", () => {
+    vi.spyOn(timeUtils, "getCurrentSeason").mockReturnValue("halloween");
+    const useAudioSpy = vi.spyOn(audioHook, "useAudio");
+    const view = render(
+      <GlobalAudioProvider>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    const currentSource = () => useAudioSpy.mock.calls.at(-1)?.[0].src;
+    expect(currentSource()).toBe(MUSIC_WELCOME_TO_SEICHI);
+
+    view.rerender(
+      <GlobalAudioProvider userData={user(1)}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    expect(currentSource()).toBe(MUSIC_HALLOWEEN_THEME);
+
+    view.rerender(
+      <GlobalAudioProvider userData={null}>
+        <span>child</span>
+      </GlobalAudioProvider>,
+    );
+    expect(currentSource()).toBe(MUSIC_WELCOME_TO_SEICHI);
+  });
+
   it("ignores Android remote commands while the saved music preference is off", async () => {
     const originalCapacitor = Object.getOwnPropertyDescriptor(window, "Capacitor");
     Object.defineProperty(window, "Capacitor", {

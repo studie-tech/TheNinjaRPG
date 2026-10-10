@@ -2894,6 +2894,8 @@ export const MUSIC_WINTER_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMIfxyadtsO4cexqW2RDgkE3zZbNXSFGitmna";
 export const MUSIC_SHADOWS_DANCE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJhUwWfeMfUBdnwAX5LTajlNc4mrgzi0RJtqpM";
+export const MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD =
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJmK3DnyHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap";
 export const MUSIC_HEAVENLY_SONATA_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJpoak58fbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75";
 export const MUSIC_BLUE_BLADE_THEME =
