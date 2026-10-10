@@ -100,6 +100,7 @@ import {
   gearMissingMastery,
   missingMasteryRequirement,
 } from "@/libs/mastery";
+import { calcMaxEnergy } from "@/libs/profile";
 import {
   collapseRewards,
   filterQuestTrackersForDbPersist,
@@ -141,7 +142,7 @@ import {
   fetchLoadoutUser,
 } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { fetchUserEquipment } from "@/server/utils/userCache";
+import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { fedItemLoadouts } from "@/utils/paypal";
@@ -4263,3 +4264,62 @@ const fetchPurchaseCounters = (
       ),
     ),
   });
+
+/** Refresh worn gear and the values derived from it without quest or notification work. */
+export const fetchUserEquipment = async (client: DrizzleClient, userId: string) => {
+  const user = await client.query.userData
+    .findFirst({
+      columns: {
+        money: true,
+        bank: true,
+        reputationPoints: true,
+        seichiSilver: true,
+        curEnergy: true,
+        curHealth: true,
+        curChakra: true,
+        curStamina: true,
+        regenAt: true,
+        energyTrainingQueue: true,
+        itemLoadout: true,
+        level: true,
+        rank: true,
+        isAi: true,
+        bloodlineId: true,
+        ninjutsuMastery: true,
+        genjutsuMastery: true,
+        taijutsuMastery: true,
+        bukijutsuMastery: true,
+        bloodlineMastery: true,
+        sageMastery: true,
+      },
+      where: eq(userData.userId, userId),
+      with: {
+        bloodline: { columns: { effects: true } },
+        userSkills: {
+          where: eq(userSkill.activated, true),
+          with: { skill: { columns: { target: true, effects: true } } },
+        },
+        items: {
+          where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
+          with: { item: true, imbuements: { with: { item: true } } },
+        },
+      },
+    })
+    .catch(handleUserCacheReadError);
+  if (!user || user.energyTrainingQueue?.length) return;
+  return {
+    money: user.money,
+    bank: user.bank,
+    reputationPoints: user.reputationPoints,
+    seichiSilver: user.seichiSilver,
+    curEnergy: user.curEnergy,
+    curHealth: user.curHealth,
+    curChakra: user.curChakra,
+    curStamina: user.curStamina,
+    regenAt: user.regenAt,
+    itemLoadout: user.itemLoadout,
+    items: user.items,
+    maxEnergy: calcMaxEnergy(user),
+    effectiveMasteries: effectiveMasteries(user),
+  };
+};
