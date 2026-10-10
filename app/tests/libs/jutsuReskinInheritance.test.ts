@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { ElementNames, StatTypes } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { getJutsuReskinMechanics, inheritJutsuReskinEffects } from "@/libs/jutsu/reskins";
@@ -14,7 +14,7 @@ describe("linked jutsu reskin inheritance", () => {
       bloodlineReskinId: null, jutsuRank: "S", effects: [], cooldown: 12, range: 3,
       requiredNinjutsuMastery: 300, chakraCost: 0.2, statClassification: null,
     } as unknown as Jutsu;
-    expect(getJutsuReskinMechanics(source)).toEqual({
+    expect<unknown>(getJutsuReskinMechanics(source)).toEqual({
       cooldown: 12, range: 3, requiredNinjutsuMastery: 300, chakraCost: 0.2,
       statClassification: "None", elementClassification: "None",
     });
@@ -24,7 +24,7 @@ describe("linked jutsu reskin inheritance", () => {
     const cachedParent = { statClassification: null, elementClassification: null };
     setNullsToEmptyStrings(cachedParent);
     const inherited = getJutsuReskinMechanics(cachedParent as unknown as Jutsu);
-    expect(cachedParent).toEqual({ statClassification: "", elementClassification: "" });
+    expect<unknown>(cachedParent).toEqual({ statClassification: "", elementClassification: "" });
     expect(inherited.statClassification).toBe("None");
     expect(inherited.elementClassification).toBe("None");
     expect(

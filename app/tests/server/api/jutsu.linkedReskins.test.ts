@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { actionLog, bloodlineReskin, contentProposal, contentProposalBasis, item, jutsu, userData, userJutsu } from "@/drizzle/schema";
 import { loadEntities, entityKey } from "@/libs/contentReview/entities";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
