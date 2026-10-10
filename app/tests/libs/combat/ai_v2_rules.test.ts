@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Grid, rectangle } from "honeycomb-grid";
+import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { TerrainHex } from "@/libs/hexgrid";
 import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
@@ -129,9 +130,13 @@ describe("AI targeting and clauses", () => {
   it("uses effective maximum health including active pool effects", () => {
     const { battle, run } = setup("HIGHEST_MAX_HEALTH_OPPONENT");
     battle.usersEffects.push({ id: "buff", type: "increasemaxpools", targetId: "minion", creatorId: "minion", power: 20000, powerPerLevel: 0, level: 1, calculation: "static", poolsAffected: ["Health"], rounds: 5 } as UserEffect);
+    const minion = battle.usersState.find((user) => user.userId === "minion")!;
+    applyPoolAdjustmentsToBase(minion, battle.usersEffects);
+    const startingHealth = minion.curHealth;
     const result = run();
+    expect(result.nextActionId).toBe(DAMAGE_JUTSU);
     expect(result.nextBattle.usersState.find((user) => user.userId === "boss")!.curHealth).toBe(3000);
-    expect(result.nextBattle.usersState.find((user) => user.userId === "minion")!.curHealth).toBeLessThan(20800);
+    expect(result.nextBattle.usersState.find((user) => user.userId === "minion")!.curHealth).toBeLessThan(startingHealth);
   });
 
   for (const type of ["player", "summon"] as const) {
