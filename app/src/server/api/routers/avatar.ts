@@ -16,7 +16,6 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { handleUserCacheReadError } from "@/server/utils/userCache";
 import { canChangeContent } from "@/utils/permissions";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -46,14 +45,14 @@ export const avatarRouter = createTRPCRouter({
         true,
       );
       if (!avatarUrl) return errorResponse("Failed to create avatar");
+      const userPatch = { avatar: avatarUrl, avatarLight: thumbnailUrl || null };
 
       // Mutate
       const [result] = await Promise.all([
         ctx.drizzle
           .update(userData)
           .set({
-            avatar: avatarUrl,
-            avatarLight: thumbnailUrl || null,
+            ...userPatch,
             reputationPoints: sql`${userData.reputationPoints} - 1`,
           })
           .where(
@@ -61,20 +60,18 @@ export const avatarRouter = createTRPCRouter({
           ),
         ctx.drizzle.insert(historicalAvatar).values({
           userId: ctx.userId,
-          avatar: avatarUrl,
-          avatarLight: thumbnailUrl || null,
+          ...userPatch,
           status: "success",
           done: true,
         }),
       ]);
       if (result.rowsAffected === 1) {
-        const data = await ctx.drizzle.query.userData
-          .findFirst({
-            columns: { avatar: true, avatarLight: true, reputationPoints: true },
-            where: eq(userData.userId, ctx.userId),
-          })
-          .catch(handleUserCacheReadError);
-        return { success: true, message: "Avatar created", userPatch: data };
+        return {
+          success: true,
+          message: "Avatar created",
+          userPatch,
+          userDelta: { reputationPoints: -1 },
+        };
       } else {
         return errorResponse("Failed to upload avatar");
       }

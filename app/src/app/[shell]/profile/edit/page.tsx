@@ -1018,15 +1018,13 @@ const NewAiAvatar: React.FC = () => {
         data.success
           ? updateUser(
               data.userPatch?.avatar !== undefined &&
-                data.userPatch.avatarLight !== undefined &&
-                data.userPatch.reputationPoints !== undefined
+                data.userPatch.avatarLight !== undefined
                 ? {
                     avatar: data.userPatch.avatar,
                     avatarLight: data.userPatch.avatarLight,
-                    reputationPoints: data.userPatch.reputationPoints,
                   }
                 : undefined,
-              { revision },
+              { revision, delta: data.userDelta },
             )
           : utils.profile.getUser.invalidate(),
         utils.avatar.getHistoricalAvatars.invalidate(),
