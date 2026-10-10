@@ -1,7 +1,7 @@
 import { ensureDom } from "../setup-dom.mjs";
-import { render } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import Modal, {
   modalScrollableBodyClassName,
   modalViewportClassName,
@@ -42,6 +42,7 @@ vi.mock("@/components/ui/dialog", () => ({
 
 describe("Modal", () => {
   beforeEach(ensureDom);
+  afterEach(cleanup);
 
   it("keeps the footer outside the scrollable body on small viewports", () => {
     const { getByRole } = render(
