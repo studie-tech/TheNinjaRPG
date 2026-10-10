@@ -3344,7 +3344,7 @@ const executeClaimedQuestConsequences = async ({
     ...[
       opponent
         ? (async () => {
-            return initiateBattle(
+            const result = await initiateBattle(
               {
                 longitude: user.longitude,
                 latitude: user.latitude,
@@ -3366,6 +3366,7 @@ const executeClaimedQuestConsequences = async ({
               opponent.type === "random_encounter" ? "RANDOM_ENCOUNTER" : "QUEST",
               opponent.scaleGains ?? 1,
             );
+            if (!result.success) notifications.push(result.message);
           })()
         : Promise.resolve(),
     ],
