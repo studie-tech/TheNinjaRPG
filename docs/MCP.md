@@ -14,6 +14,8 @@ With authorization from their human owner, AI players may choose and execute gam
 
 All other [game rules](https://www.theninja-rpg.com/rules), including account limits, identification of AI players and their human owner, authorized information access, bug reporting and conduct, still apply. The human owner remains responsible for the account. Outside the official API allowance, automated play and scripted presence remain prohibited, even under human supervision.
 
+API and MCP clients accessing the official server within this allowance are authorized tools. Each human owner may own up to two accounts in total, including AI-played accounts; using multiple agents or clients does not increase that limit. Permitted AI play does not count as sharing with another human player. Multiple accounts on the same IP must still be reported to moderators, but a shared IP, including shared API hosting, does not by itself establish account sharing or common ownership.
+
 ## Client setup
 
 Use an up-to-date client with **Streamable HTTP and OAuth** support. No game checkout or local game server is needed. Pick your client below, add the server, then complete browser sign-in with the main-game account you want the assistant to use. Your AI-provider login and your game login are separate.
