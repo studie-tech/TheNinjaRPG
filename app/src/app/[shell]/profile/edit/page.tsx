@@ -83,7 +83,6 @@ import type { Bloodline, Village } from "@/drizzle/schema";
 import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import Accordion from "@/layout/Accordion";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
@@ -1004,20 +1003,19 @@ const Marriage: React.FC = () => {
  */
 const NewAiAvatar: React.FC = () => {
   // Queries & mutations
-  const { data: userData } = useRequiredUserData();
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // tRPC utility
   const utils = api.useUtils();
 
   // Create new avatar mutation
   const createAvatar = api.avatar.createAvatar.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
       await Promise.all([
         data.success
-          ? updateUserDelta(data.data ? {} : undefined, revision, data.data)
+          ? updateUser(data.data, { revision })
           : utils.profile.getUser.invalidate(),
         utils.avatar.getHistoricalAvatars.invalidate(),
       ]);
@@ -2021,8 +2019,7 @@ const RerollElement: React.FC = () => {
  */
 const NameChange: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showNameChangeConfirm, setShowNameChangeConfirm] = useState(false);
   const [isChangingUsername, setIsChangingUsername] = useState(false);
   const [usernameDraft, setUsernameDraft] = useState("");
@@ -2039,13 +2036,11 @@ const NameChange: React.FC = () => {
 
   // Mutations
   const { mutateAsync: updateUsername } = api.profile.updateUsername.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _input, revision) => {
       if (data.success) {
         // Cache reconciliation must not make a committed purchase retryable.
-        await updateUserDelta(data.data ? {} : undefined, revision, data.data).catch(
-          () => undefined,
-        );
+        await updateUser(data.data, { revision }).catch(() => undefined);
       }
     },
   });
@@ -2174,8 +2169,7 @@ const NameChange: React.FC = () => {
  */
 const CustomTitle: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showCustomTitleConfirm, setShowCustomTitleConfirm] = useState(false);
   const [isUpdatingCustomTitle, setIsUpdatingCustomTitle] = useState(false);
   const customTitleRequestRef = useRef(false);
@@ -2183,13 +2177,11 @@ const CustomTitle: React.FC = () => {
   // Mutations
   const { mutateAsync: updateCustomTitle } =
     api.blackmarket.updateCustomTitle.useMutation({
-      onMutate,
+      onMutate: prepareUserUpdate,
       onSuccess: async (data, _input, revision) => {
         if (data.success) {
           // Cache reconciliation must not make a committed purchase retryable.
-          await updateUserDelta(data.data ? {} : undefined, revision, data.data).catch(
-            () => undefined,
-          );
+          await updateUser(data.data, { revision }).catch(() => undefined);
         }
       },
     });
@@ -2306,8 +2298,7 @@ const CustomTitle: React.FC = () => {
 
 /** Preset-only tavern styling controls. Username and title are separate purchases. */
 const TavernColors: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [usernameColor, setUsernameColor] = useState<TavernColorPreset>(
     userData?.tavernUsernameColor ?? "DEFAULT",
   );
@@ -2323,11 +2314,11 @@ const TavernColors: React.FC = () => {
   }, [userData?.tavernUsernameColor, userData?.tavernTitleColor]);
 
   const updateColor = api.profile.updateTavernColor.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
       if (data.success) {
-        await updateUserDelta(data.data ? {} : undefined, revision, data.data);
+        await updateUser(data.data, { revision });
       }
     },
   });
@@ -2473,21 +2464,18 @@ const TavernColors: React.FC = () => {
  */
 const ChangeGender: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [showGenderConfirmation, setShowGenderConfirmation] = useState(false);
   const [isChangingGender, setIsChangingGender] = useState(false);
   const genderChangeRequestRef = useRef(false);
 
   // Mutations
   const { mutateAsync: changeGender } = api.blackmarket.changeUserGender.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _input, revision) => {
       if (data.success) {
         // Cache reconciliation must not make a committed purchase retryable.
-        await updateUserDelta(data.data ? {} : undefined, revision, data.data).catch(
-          () => undefined,
-        );
+        await updateUser(data.data, { revision }).catch(() => undefined);
       }
     },
   });

@@ -33,7 +33,6 @@ import {
   RESKIN_LIMIT,
 } from "@/drizzle/constants";
 import type { UserItemWithItem, UserJutsuWithRelations } from "@/drizzle/schema";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -69,7 +68,6 @@ import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
 
 export default function MyJutsu() {
-  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
   // tRPC utility
   const utils = api.useUtils();
 
@@ -77,7 +75,12 @@ export default function MyJutsu() {
   const state = useFiltering();
 
   // Settings
-  const { data: userData, updateUser, timeDiff } = useRequiredUserData();
+  const {
+    data: userData,
+    updateUser,
+    timeDiff,
+    prepareUserUpdate,
+  } = useRequiredUserData();
   // finishTraining is a server timestamp, so compare it on the server clock
   const serverNow = Date.now() - timeDiff;
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -278,25 +281,25 @@ export default function MyJutsu() {
 
   const { mutate: buyJutsuSlot, isPending: isUpgrading } =
     api.blackmarket.buyJutsuSlot.useMutation({
-      onMutate: captureUserDelta,
+      onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUserDelta(data.userDelta, revision);
+          await updateUser(undefined, { revision, delta: data.userDelta });
         }
       },
     });
 
   const { mutate: transferLevel, isPending: isTransferring } =
     api.jutsu.transferLevel.useMutation({
-      onMutate: captureUserDelta,
+      onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success && userData) {
           await Promise.all([
             utils.jutsu.getUserJutsus.invalidate(), // Refresh Jutsu list
             utils.jutsu.getRecentTransfers.invalidate(), // 🔹 Refresh free transfers
-            updateUserDelta(data.userDelta, revision),
+            updateUser(undefined, { revision, delta: data.userDelta }),
           ]);
         }
       },

@@ -33,7 +33,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { BANK_INTEREST_CLAIM_DAYS, IMG_BUILDING_BANK } from "@/drizzle/constants";
 import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import BanInfo from "@/layout/BanInfo";
 import ContentBox from "@/layout/ContentBox";
 import GraphBankLedger from "@/layout/GraphBankLedger";
@@ -58,8 +57,8 @@ export default function Bank() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // User data
-  const { userData, access, timeDiff } = useRequireInVillage("/bank");
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { userData, access, timeDiff, prepareUserUpdate, updateUser } =
+    useRequireInVillage("/bank");
   const money = userData?.money ?? 0;
   const bank = userData?.bank ?? 0;
 
@@ -90,41 +89,50 @@ export default function Bank() {
 
   // Mutations
   const { mutate: toBank, isPending: l1 } = api.bank.toBank.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && data.data) {
-        await updateUserDelta({}, revision, {
-          bank: data.data.bank,
-          money: data.data.money,
-        });
+        await updateUser(
+          {
+            bank: data.data.bank,
+            money: data.data.money,
+          },
+          { revision },
+        );
         toBankForm.reset();
       }
     },
   });
 
   const { mutate: toPocket, isPending: l2 } = api.bank.toPocket.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && data.data) {
-        await updateUserDelta({}, revision, {
-          bank: data.data.bank,
-          money: data.data.money,
-        });
+        await updateUser(
+          {
+            bank: data.data.bank,
+            money: data.data.money,
+          },
+          { revision },
+        );
         toPocketForm.reset();
       }
     },
   });
 
   const { mutate: transfer, isPending: l3 } = api.bank.transfer.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && data.data) {
-        await updateUserDelta({}, revision, {
-          bank: data.data.bank,
-        });
+        await updateUser(
+          {
+            bank: data.data.bank,
+          },
+          { revision },
+        );
         toUserForm.reset();
       }
     },

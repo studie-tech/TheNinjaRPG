@@ -10,20 +10,18 @@ import {
   SKILL_TREE_RESET_FREE_GOLD,
   SKILL_TREE_RESET_FREE_NORMAL,
 } from "@/drizzle/constants";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import { BloodrightTree } from "@/layout/BloodrightTree";
 import Confirm from "@/layout/Confirm";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useUserData } from "@/utils/UserContext";
 import type { bloodrightResponseSchema } from "@/validators/userCache";
 
 export const Bloodright = () => {
   const utils = api.useUtils();
-  const { data: user } = useRequiredUserData();
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { data: user, prepareUserUpdate: onMutate, updateUser } = useRequiredUserData();
   const { data, isPending, isError, refetch } = api.bloodright.get.useQuery();
   const onSuccess = async (
     result: z.infer<typeof bloodrightResponseSchema>,
@@ -34,7 +32,7 @@ export const Bloodright = () => {
     if (result.success)
       await Promise.all([
         utils.bloodright.get.invalidate(),
-        updateUserDelta(result.userDelta, revision, result.data),
+        updateUser(result.data, { revision, delta: result.userDelta }),
       ]);
   };
   const purchase = api.bloodright.purchase.useMutation({ onMutate, onSuccess });
@@ -184,7 +182,7 @@ export const Bloodright = () => {
 
 export const ResetBloodright = () => {
   const utils = api.useUtils();
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { prepareUserUpdate: onMutate, updateUser } = useUserData();
   const { data: info, isError, refetch } = api.skillTree.getResetInfo.useQuery();
   const reset = api.bloodright.reset.useMutation({
     onMutate,
@@ -193,7 +191,7 @@ export const ResetBloodright = () => {
       if (result.success)
         await Promise.all([
           utils.bloodright.get.invalidate(),
-          updateUserDelta(result.userDelta, revision, result.data),
+          updateUser(result.data, { revision, delta: result.userDelta }),
           utils.skillTree.getResetInfo.invalidate(),
         ]);
     },

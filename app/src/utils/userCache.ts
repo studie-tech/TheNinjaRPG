@@ -4,11 +4,9 @@ import type { UserDelta } from "@/validators/userCache";
 
 type User = NonNullable<UserWithRelations>;
 type UserCache = { userData?: User | null };
-export type UserDeltaPatch =
-  | Partial<User>
-  | ((current: User) => Partial<User> | undefined);
+export type UserPatch = Partial<User> | ((current: User) => Partial<User> | undefined);
 
-export const prepareUserDelta = (client: QueryClient, key: QueryKey) => {
+export const prepareUserUpdate = (client: QueryClient, key: QueryKey) => {
   // An action can render before the initial profile; leave that loading query running.
   // Pending or invalidated reads may reconcile another action, so keep those too.
   const state = client.getQueryState(key);
@@ -22,14 +20,34 @@ export const prepareUserDelta = (client: QueryClient, key: QueryKey) => {
   return state.dataUpdateCount;
 };
 
-/** Apply confirmed changes only to the snapshot that preceded the mutation. */
-export const applyUserDelta = async (
+export type UserUpdateOptions = {
+  revision: number | undefined;
+  // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
+  delta?: UserDelta;
+};
+
+/** Merge local fields or reconcile a confirmed mutation against its captured revision. */
+export const updateUserCache = async (
   client: QueryClient,
   key: QueryKey,
-  delta: UserDelta | undefined,
-  revision: number | undefined,
-  patch?: UserDeltaPatch,
+  patch: UserPatch | undefined,
+  mutation?: UserUpdateOptions,
 ) => {
+  if (!mutation) {
+    if (!patch) return;
+    await client.cancelQueries({ queryKey: key, exact: true });
+    client.setQueryData<UserCache>(key, (old) => {
+      if (!old?.userData) return undefined;
+      const known = typeof patch === "function" ? patch(old.userData) : patch;
+      return known === undefined
+        ? undefined
+        : { ...old, userData: { ...old.userData, ...known } };
+    });
+    return;
+  }
+  const { revision } = mutation;
+  const delta =
+    "delta" in mutation ? mutation.delta : patch === undefined ? undefined : {};
   if (delta === undefined || revision === undefined) {
     // Invalidation reuses an initial fetch without cached data. Cancel it first so
     // a snapshot taken before the mutation cannot satisfy this reconciliation.

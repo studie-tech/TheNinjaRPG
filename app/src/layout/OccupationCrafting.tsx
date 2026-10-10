@@ -13,7 +13,6 @@ import {
   CRAFTING_TIMES_MINS,
 } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -40,8 +39,11 @@ export default function OccupationCrafting() {
   const utils = api.useUtils();
 
   // State
-  const { data: userData } = useRequiredUserData();
-  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
+  const {
+    data: userData,
+    prepareUserUpdate: captureUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
 
   // API calls
   const { data: userItems } = api.item.getUserItems.useQuery();
@@ -91,34 +93,26 @@ export default function OccupationCrafting() {
   const removeImbuementMutation = api.occupation.removeImbuement.useMutation();
 
   const repairItemMutation = api.item.repair.useMutation({
-    onMutate: captureUserDelta,
+    onMutate: captureUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          updateUserDelta(
-            "data" in data && data.data ? {} : undefined,
-            revision,
-            "data" in data ? data.data : undefined,
-          ),
+          updateUser("data" in data ? data.data : undefined, { revision }),
         ]);
       }
     },
   });
 
   const repairAllMutation = api.item.repairAll.useMutation({
-    onMutate: captureUserDelta,
+    onMutate: captureUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),
-          updateUserDelta(
-            "data" in data && data.data ? {} : undefined,
-            revision,
-            "data" in data ? data.data : undefined,
-          ),
+          updateUser("data" in data ? data.data : undefined, { revision }),
         ]);
       }
     },

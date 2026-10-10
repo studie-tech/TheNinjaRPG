@@ -28,7 +28,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { getRewardPreview } from "@/libs/objectives";
@@ -38,8 +37,7 @@ import { useUserData } from "@/utils/UserContext";
 
 export function ActivityStreakPanel() {
   const utils = api.useUtils();
-  const { timeDiff } = useUserData();
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { timeDiff, prepareUserUpdate: onMutate, updateUser } = useUserData();
 
   const { data: userStreaks, isLoading: streaksLoading } = useActivityStreaks(
     true,
@@ -59,7 +57,7 @@ export function ActivityStreakPanel() {
         void Promise.allSettled([
           utils.activityStreak.getUserStreaks.invalidate(),
           utils.activityStreak.getAvailablePasses.invalidate(),
-          updateUserDelta(data.userDelta, revision),
+          updateUser(undefined, { revision, delta: data.userDelta }),
         ]);
       }
     },

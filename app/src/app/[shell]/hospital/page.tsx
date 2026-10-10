@@ -6,7 +6,6 @@ import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { IMG_BUILDING_HOSPITAL, MEDNIN_MIN_RANK } from "@/drizzle/constants";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
@@ -28,33 +27,36 @@ import { calcIsInVillage } from "@/libs/travel";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequireInVillage } from "@/utils/UserContext";
+import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
 
 export default function Hospital() {
   // Settings
-  const { userData, access, timeDiff } = useRequireInVillage("/hospital");
+  const { userData, access, timeDiff, prepareUserUpdate, updateUser } =
+    useRequireInVillage("/hospital");
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
   // Current interest
-  const { onMutate, updateUserDelta } = useUserDelta();
   const utils = api.useUtils();
   const boost = getStrucBoost("hospitalSpeedupPerLvl", userData?.village?.structures);
 
   // Mutations
   const { mutate: heal, isPending } = api.hospital.npcHeal.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
       if (result.success && result.data) {
-        await updateUserDelta({}, revision, {
-          curHealth: result.data.curHealth,
-          curEnergy: result.data.curEnergy,
-          maxEnergy: result.data.maxEnergy,
-          money: result.data.money,
-          regenAt: result.data.regenAt,
-          status: "AWAKE",
-        });
+        await updateUser(
+          {
+            curHealth: result.data.curHealth,
+            curEnergy: result.data.curEnergy,
+            maxEnergy: result.data.maxEnergy,
+            money: result.data.money,
+            regenAt: result.data.regenAt,
+            status: "AWAKE",
+          },
+          { revision },
+        );
         // A newer hospitalization must retain its notification after reconciliation.
         utils.profile.getUser.setData(undefined, (current) =>
           current?.userData?.status === "AWAKE"
@@ -176,7 +178,7 @@ interface HealOthersComponentProps {
 const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   // Settings
   const { userData, timeDiff } = props;
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
 
   const pools = calcMedninHealablePool(userData);
   const medninRank = calcMedninRank(userData);
@@ -186,12 +188,12 @@ const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
 
   // Mutations
   const { mutate: userHeal, isPending } = api.hospital.userHeal.useMutation({
-    onMutate,
+    onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       void utils.hospital.getHospitalizedUsers.invalidate();
       if (data.success && data.healer) {
-        await updateUserDelta({}, revision, data.healer);
+        await updateUser(data.healer, { revision });
       }
     },
   });

@@ -2,7 +2,6 @@
 
 import type React from "react";
 import { api } from "@/app/_trpc/client";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import { showMutationToast } from "@/libs/toast";
 import { fedItemLoadouts } from "@/utils/paypal";
@@ -18,8 +17,11 @@ interface ItemLoadoutSelectorProps {
 
 const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
   // State
-  const { data: userData } = useRequiredUserData();
-  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
+  const {
+    data: userData,
+    prepareUserUpdate: captureUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
 
   // tRPC utility
   const utils = api.useUtils();
@@ -34,16 +36,12 @@ const ItemLoadoutSelector: React.FC<ItemLoadoutSelectorProps> = (props) => {
 
   // Mutations
   const mutationResult = api.item.selectItemLoadout.useMutation({
-    onMutate: captureUserDelta,
+    onMutate: captureUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUserDelta(
-            "data" in data && data.data ? {} : undefined,
-            revision,
-            "data" in data ? data.data : undefined,
-          ),
+          updateUser("data" in data ? data.data : undefined, { revision }),
           utils.item.getUserItems.invalidate(),
           utils.item.getUserItemsWithVariants.invalidate(),
         ]);

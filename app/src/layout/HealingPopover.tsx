@@ -5,7 +5,6 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IMG_ICON_HEAL } from "@/drizzle/constants";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import AvatarImage from "@/layout/Avatar";
 import Image from "@/layout/Image";
 import { calcCurrent } from "@/layout/StatusBar";
@@ -13,6 +12,7 @@ import { calcChakraToPools } from "@/libs/hospital";
 import type { SectorUser } from "@/libs/threejs/types";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
+import { useUserData } from "@/utils/UserContext";
 
 /**
  * A reusable healing popover component that allows medical ninja to heal other users.
@@ -73,7 +73,7 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
   onOpenChange,
 }) => {
   const utils = api.useUtils();
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { prepareUserUpdate: onMutate, updateUser } = useUserData();
 
   // Mutations
   const { mutate: userHeal, isPending: isHealing } = api.hospital.userHeal.useMutation({
@@ -82,7 +82,7 @@ const HealingPopover: React.FC<HealingPopoverProps> = ({
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUserDelta(data.healer ? {} : undefined, revision, data.healer),
+          updateUser(data.healer, { revision }),
           utils.village.getAll.invalidate(),
         ]);
         onHealComplete?.();

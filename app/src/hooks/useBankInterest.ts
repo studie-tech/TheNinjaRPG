@@ -1,8 +1,8 @@
 import { api } from "@/app/_trpc/client";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import { showMutationToast } from "@/libs/toast";
 import { nextUtcDayAt } from "@/utils/time";
+import { useUserData } from "@/utils/UserContext";
 
 export const usePendingBankInterest = (enabled = true, timeDiff = 0) => {
   const query = api.bank.getPendingInterest.useQuery(undefined, {
@@ -21,14 +21,14 @@ export const usePendingBankInterest = (enabled = true, timeDiff = 0) => {
 };
 
 export const useClaimBankInterest = () => {
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { prepareUserUpdate: onMutate, updateUser } = useUserData();
   const utils = api.useUtils();
   return api.bank.claimInterest.useMutation({
     onMutate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.success && data.data) {
-        await updateUserDelta({}, revision, { bank: data.data.bank });
+        await updateUser({ bank: data.data.bank }, { revision });
         await utils.bank.getPendingInterest.invalidate();
       }
     },

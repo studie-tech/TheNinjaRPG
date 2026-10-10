@@ -36,7 +36,6 @@ import {
 } from "@/drizzle/constants";
 import type { Item, ItemType } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
@@ -56,6 +55,7 @@ import { showMutationToast } from "@/libs/toast";
 import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake, usePublicPathname } from "@/utils/routing";
+import { useUserData } from "@/utils/UserContext";
 import { getStrucBoost } from "@/utils/village";
 
 /** First-page catalog size; further rows load through the existing infinite-query cursor. */
@@ -256,7 +256,7 @@ const Shop: React.FC<ShopProps> = (props) => {
   const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost, catalog } =
     props;
 
-  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
+  const { prepareUserUpdate: captureUserUpdate, updateUser } = useUserData();
   const silverCopy = SILVER_COPY[catalog?.silverLabel ?? "seichi"];
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -366,18 +366,18 @@ const Shop: React.FC<ShopProps> = (props) => {
   }
 
   const { mutate: purchase, isPending: isPurchasing } = api.item.buy.useMutation({
-    onMutate: captureUserDelta,
+    onMutate: captureUserUpdate,
     onSuccess: (data, variables, revision) => {
       showMutationToast(data);
       if (data.success) {
         setItemConfirmOpen(false);
         void utils.item.getUserItemCounts.invalidate();
         void ("data" in data && data.data
-          ? updateUserDelta({}, revision, data.data)
-          : updateUserDelta(
-              "userDelta" in data ? data.userDelta : undefined,
+          ? updateUser(data.data, { revision })
+          : updateUser(undefined, {
               revision,
-            ));
+              delta: "userDelta" in data ? data.userDelta : undefined,
+            }));
         void utils.item.getUserItems.invalidate();
         void utils.item.getPurchaseAllowance.invalidate();
         if (isItemBuyStep && variables.itemId === TUTORIAL_ITEM_ID) {

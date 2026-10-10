@@ -69,7 +69,6 @@ import {
 import type { Jutsu } from "@/drizzle/schema";
 import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -125,7 +124,7 @@ import {
   getTimeLeftStr,
   secondsFromDate,
 } from "@/utils/time";
-import { useRequireInVillage } from "@/utils/UserContext";
+import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { CaptchaVerifySchema } from "@/validators/misc";
 import { captchaVerifySchema } from "@/validators/misc";
 import { getSearchValidator } from "@/validators/register";
@@ -908,7 +907,7 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
 const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Settings
   const { userData, timeDiff } = props;
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
@@ -1000,12 +999,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Mutations
   const { mutate: train, isPending: isStartingTrain } =
     api.jutsu.startTraining.useMutation({
-      onMutate,
+      onMutate: prepareUserUpdate,
       onSuccess: async (result, variables, revision) => {
         showMutationToast(result);
         if (result.success && result.data) {
           sendGTMEvent({ event: "jutsu_training" });
-          await updateUserDelta({}, revision, result.data);
+          await updateUser(result.data, { revision });
           if (isJutsuPickStep && variables.jutsuId === TUTORIAL_JUTSU_ID) {
             handleNextStep();
           }

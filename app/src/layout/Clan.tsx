@@ -81,7 +81,6 @@ import {
 } from "@/drizzle/constants";
 import type { UserNindo, UserRank } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import ActionLogs from "@/layout/ActionLog";
 import { getFilter, useFiltering } from "@/layout/ActionLogFiltering";
 import AvatarImage from "@/layout/Avatar";
@@ -1098,8 +1097,11 @@ interface ClanInfoProps {
 
 export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   // Destructure
-  const { userData, updateUser } = useRequireInVillage("/clanhall");
-  const { onMutate, updateUserDelta } = useUserDelta();
+  const {
+    userData,
+    updateUser,
+    prepareUserUpdate: onMutate,
+  } = useRequireInVillage("/clanhall");
   const { clanData, defaultBackHref } = props;
   const clanId = clanData.id;
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
@@ -1260,15 +1262,17 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success)
-          void updateUserDelta(data.userDelta, revision, (current) =>
-            current.clan && current.clan.id === data.clanUpdate?.id && data.clanUpdate
-              ? {
-                  clan: {
-                    ...current.clan,
-                    ...data.clanUpdate,
-                  },
-                }
-              : undefined,
+          void updateUser(
+            (current) =>
+              current.clan && current.clan.id === data.clanUpdate?.id && data.clanUpdate
+                ? {
+                    clan: {
+                      ...current.clan,
+                      ...data.clanUpdate,
+                    },
+                  }
+                : undefined,
+            { revision, delta: data.userDelta },
           );
       },
       onError: (error) => {
@@ -1357,15 +1361,17 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          updateUserDelta(data.userDelta, revision, (current) =>
-            current.clan && current.clan.id === data.clanUpdate?.id && data.clanUpdate
-              ? {
-                  clan: {
-                    ...current.clan,
-                    ...data.clanUpdate,
-                  },
-                }
-              : undefined,
+          updateUser(
+            (current) =>
+              current.clan && current.clan.id === data.clanUpdate?.id && data.clanUpdate
+                ? {
+                    clan: {
+                      ...current.clan,
+                      ...data.clanUpdate,
+                    },
+                  }
+                : undefined,
+            { revision, delta: data.userDelta },
           ),
           utils.clan.get.invalidate(),
         ]);

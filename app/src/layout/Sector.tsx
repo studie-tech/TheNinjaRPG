@@ -43,7 +43,6 @@ import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { usePerformanceMonitor } from "@/hooks/performance-monitor";
 import { useTutorialStep } from "@/hooks/tutorial";
-import { useUserDelta } from "@/hooks/useUserDelta";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
@@ -406,8 +405,13 @@ const Sector: React.FC<SectorProps> = (props) => {
   const openRewardChoice = useOpenRewardChoice();
 
   // Data from db
-  const { data: userData, pusher, timeDiff, updateUser } = useRequiredUserData();
-  const { onMutate: captureUserDelta, updateUserDelta } = useUserDelta();
+  const {
+    data: userData,
+    pusher,
+    timeDiff,
+    updateUser,
+    prepareUserUpdate: captureUserUpdate,
+  } = useRequiredUserData();
   timeDiffRef.current = timeDiff;
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
@@ -1548,15 +1552,18 @@ const Sector: React.FC<SectorProps> = (props) => {
   };
 
   const { mutate: rob, isPending: isRobbing } = api.travel.robPlayer.useMutation({
-    onMutate: captureUserDelta,
+    onMutate: captureUserUpdate,
     onSuccess: async (result, _variables, revision) => {
       if (result?.battleId || typeof result?.money === "number") {
-        await updateUserDelta({}, revision, {
-          ...(typeof result.money === "number" ? { money: result.money } : {}),
-          ...(result.battleId
-            ? { battleId: result.battleId, updatedAt: new Date() }
-            : {}),
-        });
+        await updateUser(
+          {
+            ...(typeof result.money === "number" ? { money: result.money } : {}),
+            ...(result.battleId
+              ? { battleId: result.battleId, updatedAt: new Date() }
+              : {}),
+          },
+          { revision },
+        );
       }
       showMutationToast(result);
     },
