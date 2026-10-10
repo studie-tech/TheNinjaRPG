@@ -159,12 +159,16 @@ export const GlobalAudioProvider: React.FC<{
   );
 
   // Battle, event, bloodline, outlaw or village theme (see getBackgroundMusicSrc)
-  const musicSrc = getBackgroundMusicSrc({
-    villageName: userData?.village?.name,
-    isOutlaw: userData?.isOutlaw,
-    bloodlineId: userData?.bloodlineId,
-    inBattle: userData?.status === "BATTLE",
-  });
+  const musicSrc = getBackgroundMusicSrc(
+    userData
+      ? {
+          villageName: userData.village?.name,
+          isOutlaw: userData.isOutlaw,
+          bloodlineId: userData.bloodlineId,
+          inBattle: userData.status === "BATTLE",
+        }
+      : undefined,
+  );
 
   // Initialize the single audio instance
   const {

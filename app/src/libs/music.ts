@@ -3,12 +3,12 @@ import {
   HEAVENLY_SONATA_BLOODLINE_ID,
   MUSIC_AKASUMI_THEME,
   MUSIC_AKIKAZE_THEME,
+  MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD,
   MUSIC_BLUE_BLADE_THEME,
   MUSIC_HALLOWEEN_THEME,
   MUSIC_HEAVENLY_SONATA_THEME,
   MUSIC_HORIZON_THEME,
   MUSIC_HYORIN_THEME,
-  MUSIC_SHADOWS_DANCE,
   MUSIC_SHIROHANA_THEME,
   MUSIC_SYNDICATE_THEME,
   MUSIC_TSUKIMORI_THEME,
@@ -44,26 +44,27 @@ const BLOODLINE_MUSIC = new Map<string, string>([
   [BLUE_BLADE_EYES_BLOODLINE_ID, MUSIC_BLUE_BLADE_THEME],
 ]);
 
-/** Event themes that replace every other theme while their season lasts */
+/** Event themes that replace non-battle themes while their season lasts */
 const SEASON_MUSIC: Partial<Record<Season, string>> = {
   halloween: MUSIC_HALLOWEEN_THEME,
   winter: MUSIC_WINTER_THEME,
 };
 
 /**
- * Pick the background music track, in priority order: battle theme (Shadow's
- * Dance, for every PvE and PvP fight), seasonal event theme,
+ * Pick the background music track, in priority order: battle theme (Another
+ * day, Another battlefield, for every PvE and PvP fight), seasonal event theme,
  * bloodline theme, outlaw theme (for every outlaw, whether their village is the
  * Syndicate, a hideout or a town), village theme, then Welcome to Seichi.
  * Seasons follow `getCurrentSeason`, the same calendar that switches the
  * seasonal wallpapers, so event music and artwork agree.
+ * Halloween music requires a loaded user; visitors hear Welcome to Seichi.
  */
 export const getBackgroundMusicSrc = (
   user?: BackgroundMusicUser | null,
   season: Season = getCurrentSeason(),
 ): string => {
-  if (user?.inBattle) return MUSIC_SHADOWS_DANCE;
-  const seasonal = SEASON_MUSIC[season];
+  if (user?.inBattle) return MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD;
+  const seasonal = season === "halloween" && !user ? undefined : SEASON_MUSIC[season];
   if (seasonal) return seasonal;
   const bloodline = BLOODLINE_MUSIC.get(user?.bloodlineId ?? "");
   if (bloodline) return bloodline;

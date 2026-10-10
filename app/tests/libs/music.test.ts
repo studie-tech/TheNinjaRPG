@@ -3,12 +3,12 @@ import {
   BLUE_BLADE_EYES_BLOODLINE_ID,
   HEAVENLY_SONATA_BLOODLINE_ID,
   MUSIC_AKASUMI_THEME,
+  MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD,
   MUSIC_BLUE_BLADE_THEME,
   MUSIC_HALLOWEEN_THEME,
   MUSIC_HEAVENLY_SONATA_THEME,
   MUSIC_HORIZON_THEME,
   MUSIC_HYORIN_THEME,
-  MUSIC_SHADOWS_DANCE,
   MUSIC_SYNDICATE_THEME,
   MUSIC_WELCOME_TO_SEICHI,
   MUSIC_WINTER_THEME,
@@ -76,11 +76,10 @@ describe("getBackgroundMusicSrc", () => {
     ).toBe(MUSIC_BLUE_BLADE_THEME);
   });
 
-  it("overrides every other theme with the event theme during Halloween and winter", () => {
+  it("overrides character themes with the event theme during Halloween and winter", () => {
     expect(getBackgroundMusicSrc({ villageName: "Hyorin" }, "halloween")).toBe(
       MUSIC_HALLOWEEN_THEME,
     );
-    expect(getBackgroundMusicSrc(undefined, "halloween")).toBe(MUSIC_HALLOWEEN_THEME);
     expect(getBackgroundMusicSrc({ villageName: "Akikaze" }, "winter")).toBe(
       MUSIC_WINTER_THEME,
     );
@@ -96,21 +95,35 @@ describe("getBackgroundMusicSrc", () => {
     ).toBe(MUSIC_WINTER_THEME);
   });
 
-  it("plays Shadow's Dance in every battle, over all other themes", () => {
+  it("keeps Halloween music off without a loaded user", () => {
+    expect(getBackgroundMusicSrc(undefined, "halloween")).toBe(
+      MUSIC_WELCOME_TO_SEICHI,
+    );
+    expect(getBackgroundMusicSrc(null, "halloween")).toBe(
+      MUSIC_WELCOME_TO_SEICHI,
+    );
+    expect(getBackgroundMusicSrc({}, "halloween")).toBe(MUSIC_HALLOWEEN_THEME);
+  });
+
+  it("plays Another day, Another battlefield in every battle, over all other themes", () => {
     expect(getBackgroundMusicSrc({ villageName: "Hyorin", inBattle: true }, "fall")).toBe(
-      MUSIC_SHADOWS_DANCE,
+      MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD,
     );
     expect(
       getBackgroundMusicSrc({ villageName: "Syndicate", isOutlaw: true, inBattle: true }, "spring"),
-    ).toBe(MUSIC_SHADOWS_DANCE);
+    ).toBe(MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD);
     expect(
       getBackgroundMusicSrc(
         { bloodlineId: HEAVENLY_SONATA_BLOODLINE_ID, inBattle: true },
         "summer",
       ),
-    ).toBe(MUSIC_SHADOWS_DANCE);
-    expect(getBackgroundMusicSrc({ inBattle: true }, "halloween")).toBe(MUSIC_SHADOWS_DANCE);
-    expect(getBackgroundMusicSrc({ inBattle: true }, "winter")).toBe(MUSIC_SHADOWS_DANCE);
+    ).toBe(MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD);
+    expect(getBackgroundMusicSrc({ inBattle: true }, "halloween")).toBe(
+      MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD,
+    );
+    expect(getBackgroundMusicSrc({ inBattle: true }, "winter")).toBe(
+      MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD,
+    );
   });
 
   it("returns to the normal theme once the battle is over", () => {
