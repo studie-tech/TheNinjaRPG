@@ -73,7 +73,7 @@ const mkCorneredBattle = (grid: Grid<TerrainHex>) => {
 
   const player = mkUser({
     userId: "user_player", username: "Player", controllerId: "user_player",
-    isAi: false, aiProfileId: undefined, villageId: "village-player",
+    isAi: false, aiProfileId: undefined, villageId: "village-player", direction: "left",
     longitude: corner.col, latitude: corner.row,
   });
   const blockers = neighbours.map((hex, i) =>

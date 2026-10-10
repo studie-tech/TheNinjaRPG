@@ -1607,6 +1607,9 @@ export const calcBattleResult = (
     if (battleType === "CLAN_BATTLE") {
       targets = users.filter((u) => u.clanId !== user.clanId && !u.isSummon);
       friends = users.filter((u) => u.clanId === user.clanId && !u.isSummon);
+    } else if (battleType === "QUEST" || battleType === "OVERWORLD") {
+      targets = users.filter((u) => u.direction !== user.direction && !u.isSummon);
+      friends = users.filter((u) => u.direction === user.direction && !u.isSummon);
     } else if (villageIds.length === 1) {
       targets = users.filter((u) => u.controllerId !== userId && !u.isSummon);
       friends = users.filter((u) => u.controllerId === userId && !u.isSummon);
@@ -3065,9 +3068,11 @@ export const getDistanceToClosestEnemy = (
   ];
   const enemies = battle.usersState.filter((u) => {
     const isEnemy =
-      villageIds.length > 1
-        ? u.villageId !== user.villageId
-        : u.controllerId !== user.controllerId;
+      battle.battleType === "QUEST" || battle.battleType === "OVERWORLD"
+        ? u.direction !== user.direction
+        : villageIds.length > 1
+          ? u.villageId !== user.villageId
+          : u.controllerId !== user.controllerId;
     return isEnemy && stillInBattle(u, effects);
   });
 

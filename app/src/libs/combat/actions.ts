@@ -1042,7 +1042,13 @@ export const insertAction = (info: {
         });
       } else {
         // ADD USER EFFECTS
-        const target = getTargetUser(alive, action.target, tile, user.userId);
+        const target = getTargetUser(
+          alive,
+          action.target,
+          tile,
+          user.userId,
+          battle.battleType === "QUEST" || battle.battleType === "OVERWORLD",
+        );
         castTags.forEach((tag, tagIndex) => {
           const effect = realizeTag({
             tag: tag as UserEffect,
@@ -1275,6 +1281,7 @@ export const getTargetUser = (
   target: (typeof AttackTargets)[number],
   tile: TerrainHex,
   userId: string,
+  useBattleTeams = false,
 ) => {
   let result: BattleUserState | undefined;
   const user = users.find((u) => u.userId === userId);
@@ -1284,7 +1291,12 @@ export const getTargetUser = (
     } else if (target === "OPPONENT") {
       result = users.find((u) => u.direction !== user.direction && u.hex === tile);
     } else if (target === "ALLY") {
-      result = users.find((u) => u.villageId === user.villageId && u.hex === tile);
+      result = users.find(
+        (u) =>
+          (useBattleTeams
+            ? u.direction === user.direction
+            : u.villageId === user.villageId) && u.hex === tile,
+      );
     } else if (target === "OTHER_USER") {
       result = users.find((u) => u.userId !== user.userId && u.hex === tile);
     } else if (target === "CHARACTER") {

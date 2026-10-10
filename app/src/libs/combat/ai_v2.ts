@@ -105,12 +105,14 @@ export const performAIaction = (
       nextBattle.usersState,
       user.userId,
       nextBattle.usersEffects,
+      nextBattle.battleType === "QUEST" || nextBattle.battleType === "OVERWORLD",
     ).map((u) => mapDistancesToTarget(grid, astar, u, origin));
     // Get user allies - use nextBattle to get latest state after earlier actions
     const allies = getAllies(
       nextBattle.usersState,
       user.userId,
       nextBattle.usersEffects,
+      nextBattle.battleType === "QUEST" || nextBattle.battleType === "OVERWORLD",
     ).map((u) => mapDistancesToTarget(grid, astar, u, origin));
     // Derived for convenience
     const userWithDistance = { ...user, path: undefined, distance: 0 };
@@ -548,6 +550,7 @@ const getEnemies = (
   usersState: BattleUserState[],
   userId: string,
   effects?: UserEffect[],
+  useBattleTeams = false,
 ) => {
   const villageIds = [
     ...new Set(
@@ -557,9 +560,11 @@ const getEnemies = (
   const user = usersState.find((u) => u.userId === userId);
   return usersState
     .filter((u) =>
-      villageIds.length > 1
-        ? u.villageId !== user?.villageId
-        : u.controllerId !== user?.controllerId,
+      useBattleTeams
+        ? u.direction !== user?.direction
+        : villageIds.length > 1
+          ? u.villageId !== user?.villageId
+          : u.controllerId !== user?.controllerId,
     )
     .filter((u) => stillInBattle(u, effects));
 };
@@ -580,6 +585,7 @@ const getAllies = (
   usersState: BattleUserState[],
   userId: string,
   effects?: UserEffect[],
+  useBattleTeams = false,
 ) => {
   const villageIds = [
     ...new Set(
@@ -589,9 +595,11 @@ const getAllies = (
   const user = usersState.find((u) => u.userId === userId);
   return usersState
     .filter((u) =>
-      villageIds.length > 1
-        ? u.villageId === user?.villageId
-        : u.controllerId === user?.controllerId,
+      useBattleTeams
+        ? u.direction === user?.direction
+        : villageIds.length > 1
+          ? u.villageId === user?.villageId
+          : u.controllerId === user?.controllerId,
     )
     .filter((u) => stillInBattle(u, effects));
 };

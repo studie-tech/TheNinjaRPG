@@ -434,6 +434,12 @@ export const overworldAiRouter = createTRPCRouter({
             userId: ctx.userId,
             scaleTarget,
             scaleGains,
+            allyAiIds:
+              "allyAIs" in full
+                ? full.allyAIs.flatMap((ally) =>
+                    Array(ally.number).fill(ally.ids).flat(),
+                  )
+                : [],
           });
           return battle.success
             ? { success: true, message: "Battle started", battleId: battle.battleId }
@@ -828,6 +834,7 @@ const startOverworldBattle = (opts: {
   userId: string;
   scaleTarget: boolean;
   scaleGains: number;
+  allyAiIds?: string[];
 }) =>
   initiateBattle(
     {
@@ -836,6 +843,7 @@ const startOverworldBattle = (opts: {
       sector: opts.placement.sector,
       userIds: [opts.userId],
       targetIds: [opts.placement.aiTemplateUserId],
+      allyAiIds: opts.allyAiIds,
       client: opts.client,
       scaleTarget: opts.scaleTarget,
       biome: "default",

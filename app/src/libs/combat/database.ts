@@ -353,7 +353,7 @@ export const saveUsage = async (
     const oppositeOutcome =
       outcome === "Won" ? "Lost" : outcome === "Lost" ? "Won" : "Fled";
     const oppositeBattleWon =
-      oppositeOutcome === "Won" ? 1 : oppositeOutcome === "Lost" ? 2 : 0;
+      oppositeOutcome === "Won" ? 1 : oppositeOutcome === "Fled" ? 2 : 0;
     // Basic actions from this user
     const data: DataBattleAction[] = [];
     user.usedActions?.forEach((action) => {
@@ -382,12 +382,25 @@ export const saveUsage = async (
           type: "ai",
           contentId: ai.controllerId,
           battleType,
-          battleWon: ai.controllerId === userId ? battleWon : oppositeBattleWon,
+          battleWon: (
+            battleType === "QUEST" || battleType === "OVERWORLD"
+              ? ai.direction === user.direction
+              : ai.controllerId === userId
+          )
+            ? battleWon
+            : oppositeBattleWon,
         });
       });
-    // Reduce data to only have unique type-contentId pairs
+    // Keep one usage per content and outcome, including templates on both teams.
     const uniqueData = data.reduce((a, c) => {
-      if (!a.find((d) => d.type === c.type && d.contentId === c.contentId)) {
+      if (
+        !a.find(
+          (d) =>
+            d.type === c.type &&
+            d.contentId === c.contentId &&
+            d.battleWon === c.battleWon,
+        )
+      ) {
         return a.concat([c]);
       } else {
         return a;
@@ -1325,7 +1338,12 @@ export const updateUser = async (
     // Add other tracker events
     const trackerEvents = [
       ...curBattle.usersState
-        .filter((u) => u.userId !== userId)
+        .filter(
+          (u) =>
+            u.userId !== userId &&
+            (!["QUEST", "OVERWORLD"].includes(curBattle.battleType) ||
+              (!u.isSummon && u.direction !== user.direction)),
+        )
         .flatMap((u) => [
           // Defeat opponent with outcome; gated per quest type in getNewTrackers (pvp → war-torn
           // sector, war → this opponent being an active-war foe).

@@ -3351,6 +3351,7 @@ const executeClaimedQuestConsequences = async ({
                 sector: user.sector,
                 userIds: [user.userId],
                 targetIds: opponent.ids,
+                allyAiIds: opponent.allyAiIds,
                 client: client,
                 scaleTarget: !!opponent.scaleStats,
                 biome: "default",
