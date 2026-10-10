@@ -1064,6 +1064,7 @@ export const questsRouter = createTRPCRouter({
           settings,
           requiresProgressionRefresh,
           publishedAchievementIds,
+          progressionQuestCandidates,
         },
         questHistoryPrefetch,
       ] = await Promise.all([
@@ -1160,9 +1161,17 @@ export const questsRouter = createTRPCRouter({
       // XP is already included in the accepted progression snapshot.
       const { earnedExperience: _earnedExperience, ...balanceDelta } =
         claim.userDelta ?? {};
+      const projectedQuestIds = new Set(user.userQuests.map((entry) => entry.questId));
       const cacheUpdate =
         !requiresProgressionRefresh &&
         claim.userCacheEligible &&
+        // Newly eligible achievements need getUser to hydrate their trackers.
+        !progressionQuestCandidates.some(
+          (entry) =>
+            entry.quest.questType === "achievement" &&
+            !projectedQuestIds.has(entry.questId) &&
+            isAvailableUserQuests({ ...entry.quest, ...entry }, user, true).check,
+        ) &&
         refreshedTrackers.consequences.length === 0 &&
         claim.userDelta !== undefined &&
         getUncheckedQuestTargetSectors(user, user.questData ?? []).length === 0

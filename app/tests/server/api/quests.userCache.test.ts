@@ -1,8 +1,11 @@
 // @vitest-environment node
 import { eq } from "drizzle-orm";
+import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { quest, questHistory, userData, userVote } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
+import { profileRouter } from "@/server/api/routers/profile";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { CollectItem, InstantNewQuestObjective, InstantStartBattleObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
@@ -126,5 +129,39 @@ describeWithDatabase("confirmed quest cache responses", () => {
     });
     expect(result.userDelta?.money).toBe((saved?.money ?? 0) - (before?.money ?? 0));
     expect(reads()).toBe(1);
+  });
+
+  it.each([1, 60])("reconciles prerequisite achievements only when the player's level meets %s", async (requiredLevel) => {
+    const achievementId = "cache-prerequisite-achievement";
+    await insertQuests([{ id: achievementId, name: "Prerequisite achievement", questType: "achievement", prerequisiteQuestId: missionId, requiredLevel,
+      content: { ...content(10), objectives: [SimpleObjective.parse({ id: "level", task: "user_level", value: 70 })] },
+    }]);
+    const api = await callerFor(questsRouter, playerId);
+    expect((await api.startQuest({ questId: missionId, userSector: 0 })).success).toBe(true);
+    await (await getTestDatabase()).update(userData).set({ questData: [{ id: missionId, startAt: new Date().toISOString(), goals: [{ id: "train", value: 10, done: true, collected: false, recentlyDied: false }] }] }).where(eq(userData.userId, playerId));
+    const profileApi = await callerFor(profileRouter, playerId);
+    const before = await profileApi.getUser();
+    expect(before.achievementProgress?.some((entry) => entry.questId === achievementId)).toBe(false);
+    const client = new QueryClient();
+    const key = ["prerequisite-profile"];
+    client.setQueryData(key, before);
+    const revision = prepareUserUpdate(client, key);
+    const reads = await countProfileReads();
+    const result = await api.checkRewards({ questId: missionId });
+    expect(result).toMatchObject({ success: true, resolved: true });
+    expect(reads()).toBe(1);
+    await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
+    const isEligible = requiredLevel <= 50;
+    expect(client.getQueryState(key)?.isInvalidated).toBe(isEligible);
+    if (isEligible) {
+      expect(result.userPatch).toBeUndefined();
+      expect(result.achievementProgress).toBeUndefined();
+      const authoritative = await profileApi.getUser();
+      expect(authoritative.achievementProgress?.some((entry) => entry.questId === achievementId)).toBe(true);
+      expect(authoritative.userData?.questData?.some((entry) => entry.id === achievementId)).toBe(true);
+    } else {
+      expect(result.userPatch).toBeDefined();
+      expect(result.achievementProgress?.some((entry) => entry.questId === achievementId)).toBe(false);
+    }
   });
 });
