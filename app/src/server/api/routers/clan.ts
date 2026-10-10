@@ -91,7 +91,7 @@ import {
   strictClanNameField,
 } from "@/validators/clan";
 import { idSchema } from "@/validators/misc";
-import { userDeltaSchema } from "@/validators/userCache";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
 
@@ -273,8 +273,7 @@ export const clanRouter = createTRPCRouter({
       }),
     )
     .output(
-      baseServerResponse.extend({
-        userDelta: userDeltaSchema.optional(),
+      userDeltaResponseSchema.extend({
         clanUpdate: z
           .object({ id: z.string(), repTreasury: z.number().optional() })
           .optional(),
@@ -1101,8 +1100,7 @@ export const clanRouter = createTRPCRouter({
     .meta({ mcp: { description: "Deposit ryo to clan bank" } })
     .input(clanBankDepositSchema)
     .output(
-      baseServerResponse.extend({
-        userDelta: userDeltaSchema.optional(),
+      userDeltaResponseSchema.extend({
         clanUpdate: z
           .object({ id: z.string(), bank: z.number().optional() })
           .optional(),

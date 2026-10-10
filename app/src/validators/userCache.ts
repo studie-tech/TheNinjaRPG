@@ -16,8 +16,7 @@ export const userDeltaResponseSchema = baseServerResponse.extend({
   userDelta: userDeltaSchema.optional(),
 });
 
-export const bloodrightResponseSchema = baseServerResponse.extend({
-  userDelta: userDeltaSchema.optional(),
+export const bloodrightResponseSchema = userDeltaResponseSchema.extend({
   data: z
     .object({
       bloodright: z.array(z.object({ skillId: z.string(), cost: z.number() })),
