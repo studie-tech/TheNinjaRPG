@@ -2427,6 +2427,19 @@ export const itemRouter = createTRPCRouter({
           userId: ctx.userId,
           userItemId: input.repairItemId,
           expectedQuantity: repairUserItem.quantity,
+          where: [
+            eq(userItem.equipped, repairUserItem.equipped),
+            eq(userItem.level, repairUserItem.level),
+            eq(userItem.experience, repairUserItem.experience),
+            eq(
+              userItem.durability,
+              repairUserItem.id === targetUserItem.id
+                ? newDurability
+                : repairUserItem.durability,
+            ),
+            eq(userItem.storedAtHome, false),
+            eq(userItem.isInAuction, false),
+          ],
         });
         if (!consumed) {
           // Roll back durability so a kit race does not grant a free repair
@@ -2552,6 +2565,19 @@ export const itemRouter = createTRPCRouter({
             userItemId: repairItemId,
             expectedQuantity: repairKitRow.quantity,
             nextQuantity: repairKitRow.quantity - quantityUsed,
+            where: [
+              eq(userItem.equipped, repairKitRow.equipped),
+              eq(userItem.level, repairKitRow.level),
+              eq(userItem.experience, repairKitRow.experience),
+              eq(
+                userItem.durability,
+                itemsNeedingRepair.some((row) => row.id === repairKitRow.id)
+                  ? repairKitRow.item.maxDurability
+                  : repairKitRow.durability,
+              ),
+              eq(userItem.storedAtHome, false),
+              eq(userItem.isInAuction, false),
+            ],
           });
           return consumed ? { repairKitRow, quantityConsumed: quantityUsed } : false;
         }),
@@ -3030,14 +3056,17 @@ export const itemRouter = createTRPCRouter({
       return result.success
         ? {
             ...result,
-            userPatch: getUserEquipmentPatch({
-              ...user,
-              ...masterySources,
-              itemLoadout: id,
-              items: useritems.filter(
-                (entry) => entry.equipped !== "NONE" && entry.quantity > 0,
-              ),
-            }),
+            userPatch:
+              "userCacheEligible" in result && result.userCacheEligible
+                ? getUserEquipmentPatch({
+                    ...user,
+                    ...masterySources,
+                    itemLoadout: id,
+                    items: useritems.filter(
+                      (entry) => entry.equipped !== "NONE" && entry.quantity > 0,
+                    ),
+                  })
+                : undefined,
           }
         : result;
     }),
@@ -3149,7 +3178,7 @@ export const selectItemLoadout = async (
   // the active-loadout pointer only AFTER it succeeds (one extra round-trip, not
   // a parallel Promise.all) so the pointer can never race ahead of the equip and
   // point at a loadout that was not actually applied.
-  await client
+  const pointerUpdate = await client
     .update(userData)
     .set({ itemLoadout: loadout.id })
     .where(eq(userData.userId, user.userId));
@@ -3163,7 +3192,14 @@ export const selectItemLoadout = async (
   const committedRows =
     assignmentIds.length > 0
       ? await client
-          .select()
+          .select({
+            id: userItem.id,
+            equipped: userItem.equipped,
+            quantity: userItem.quantity,
+            durability: userItem.durability,
+            level: userItem.level,
+            experience: userItem.experience,
+          })
           .from(userItem)
           .where(
             and(eq(userItem.userId, user.userId), inArray(userItem.id, assignmentIds)),
@@ -3196,6 +3232,7 @@ export const selectItemLoadout = async (
   return {
     success: true,
     message,
+    userCacheEligible: pointerUpdate.rowsAffected === 1,
     items: useritems.filter((ui) => committedSlot.has(ui.id)),
   };
 };
@@ -3916,7 +3953,10 @@ export const splitItemStack = async (
 const tryRepairUserItemDurability = async (
   drizzle: DrizzleClient,
   userId: string,
-  target: { id: string; durability: number },
+  target: Pick<
+    UserItem,
+    "id" | "durability" | "quantity" | "equipped" | "level" | "experience"
+  >,
   newDurability: number,
 ) => {
   const result = await drizzle
@@ -3928,7 +3968,10 @@ const tryRepairUserItemDurability = async (
         eq(userItem.userId, userId),
         eq(userItem.storedAtHome, false),
         eq(userItem.isInAuction, false),
-        gt(userItem.quantity, 0),
+        eq(userItem.quantity, target.quantity),
+        eq(userItem.equipped, target.equipped),
+        eq(userItem.level, target.level),
+        eq(userItem.experience, target.experience),
         eq(userItem.durability, target.durability),
       ),
     );
@@ -4359,7 +4402,10 @@ const getUserEquipmentPatch = (user: EquipmentSnapshot) => {
 const getRepairedEquipmentUpdate = (
   user: EquipmentSnapshot,
   changes: {
-    before: Pick<UserItem, "id" | "durability" | "quantity" | "equipped">;
+    before: Pick<
+      UserItem,
+      "id" | "durability" | "quantity" | "equipped" | "level" | "experience"
+    >;
     durability?: number;
     quantity?: number;
   }[],
@@ -4371,7 +4417,9 @@ const getRepairedEquipmentUpdate = (
       return original
         ? original.durability !== before.durability ||
             original.quantity !== before.quantity ||
-            original.equipped !== before.equipped
+            original.equipped !== before.equipped ||
+            original.level !== before.level ||
+            original.experience !== before.experience
         : before.equipped !== "NONE";
     })
   )
@@ -4386,7 +4434,10 @@ const getRepairedEquipmentUpdate = (
     return updated.quantity > 0 ? [updated] : [];
   });
   const userPatch = getUserEquipmentPatch({ ...user, items });
-  return { userPatch, userDelta: userPatch ? { money: -cost } : undefined };
+  return {
+    userPatch,
+    userDelta: userPatch ? { money: cost > 0 ? -cost : 0 } : undefined,
+  };
 };
 
 /** Refresh worn gear and the values derived from it without quest or notification work. */

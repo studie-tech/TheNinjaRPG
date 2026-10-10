@@ -3,6 +3,7 @@ import {
   MAX_SKILL_POINTS,
   MEDNIN_EXP_CAP,
   SAGE_MASTERY_EXP_CAP,
+  SHRINE_BOOST_TYPES,
   UserRanks,
 } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
@@ -11,6 +12,7 @@ import type {
   AchievementProgress,
   UserWithRelations,
 } from "@/server/api/routers/profile";
+import { getShrineBoost } from "@/utils/village";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 type User = NonNullable<UserWithRelations>;
@@ -210,10 +212,26 @@ const mergeUserCache = (
     desired.push({ href: "/combat", name: "In combat", color: "red" });
   if (user.status === "HOSPITALIZED")
     desired.push({ href: "/hospital", name: "In hospital", color: "red" });
+  for (const boostType of SHRINE_BOOST_TYPES) {
+    const boost =
+      getShrineBoost(user.village?.sectors?.length ?? 0, boostType, user.village) * 100;
+    if (boost > 0)
+      desired.push({
+        href: "/shrine",
+        name: `Shrine: +${boost}% ${boostType} gains`,
+        color: "green",
+        group: "Active boosts",
+      });
+  }
   let notifications = old.notifications?.flatMap((entry) => {
     if (
       entry.id !== "tutorial-unassigned-stats" &&
-      !["Assign XP", "In combat", "In hospital"].includes(entry.name)
+      !["Assign XP", "In combat", "In hospital"].includes(entry.name) &&
+      !(
+        entry.href === "/shrine" &&
+        entry.group === "Active boosts" &&
+        entry.name.startsWith("Shrine: +")
+      )
     )
       return [entry];
     const index = desired.findIndex((next) => next.name === entry.name);

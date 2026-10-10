@@ -529,6 +529,45 @@ describe("progression cache reconciliation", () => {
 
 
 describe("notification effects during cache updates", () => {
+  it("adds and removes shrine notifications from confirmed settings without fetching", async () => {
+    const test = setup();
+    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
+    const village = { id: "village", sectors: [{}], shrineSettings: { activeBoosts: {} } } as Village;
+    test.client.setQueryData(key, { userData: { ...profile(100).userData, village }, notifications: [] });
+    await updateUserCache(test.client, key, { village: { id: village.id, shrineSettings: { activeBoosts: { Training: new Date(Date.now() + 60000).toISOString() } } } }, { revision: prepareUserUpdate(test.client, key), delta: {} });
+    const boosted = test.client.getQueryData<{ notifications: { name: string }[] }>(key)?.notifications;
+    expect(boosted?.map((entry) => entry.name)).toEqual(["Shrine: +10% Training gains"]);
+    await updateUserCache(test.client, key, { village: { id: village.id, shrineSettings: { activeBoosts: { Training: new Date(Date.now() - 60000).toISOString() } } } }, { revision: prepareUserUpdate(test.client, key), delta: {} });
+    expect(test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications).toEqual([]);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+  it("preserves existing boost links without duplicates or replaying toasts", async () => {
+    const client = new QueryClient();
+    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
+    const expires = new Date(Date.now() + 60000).toISOString();
+    const village = { id: "village", sectors: [{}], shrineSettings: { activeBoosts: { PVP: expires } } } as unknown as Village;
+    const existing = { href: "/shrine", name: "Shrine: +10% PVP gains", color: "green", group: "Active boosts" };
+    const unrelated = { href: "/shrine", name: "Shrine: +other announcement", color: "blue" };
+    const mail = { href: "/inbox", name: "Mail", color: "blue" };
+    client.setQueryData(key, { userData: { ...profile(100).userData, village }, notifications: [
+      existing, unrelated, mail, { href: "/news", name: "Reward received", color: "toast" },
+    ] });
+    await updateUserCache(client, key, { village: { id: "village", shrineSettings: { activeBoosts: { Training: expires } } } }, {
+      revision: prepareUserUpdate(client, key), delta: {},
+    });
+    type Notifications = { notifications: typeof existing[] };
+    const updated = client.getQueryData<Notifications>(key)!.notifications;
+    expect(updated.map(entry => entry.name)).toEqual([
+      existing.name, unrelated.name, mail.name, "Shrine: +10% Training gains",
+    ]);
+    expect(updated[0]).toBe(existing);
+    expect(updated[1]).toBe(unrelated);
+    expect(updated[2]).toBe(mail);
+    await updateUserCache(client, key, { money: 150 });
+    expect(client.getQueryData<Notifications>(key)?.notifications).toBe(updated);
+    client.clear();
+  });
   it("preserves notification identity for unrelated balance changes", async () => {
     const client = new QueryClient();
     const notifications = [{ href: "/news", name: "Reward received", color: "toast" as const }];

@@ -82,6 +82,7 @@ type UpdateUserItemQuantityAtomicallyParams = {
   userItemId: string;
   expectedQuantity: number;
   nextQuantity: number;
+  where?: QueryCondition[];
 };
 
 /**
@@ -94,6 +95,7 @@ export const updateUserItemQuantityAtomically = async ({
   userItemId,
   expectedQuantity,
   nextQuantity,
+  where: conditions = [],
 }: UpdateUserItemQuantityAtomicallyParams) => {
   if (expectedQuantity <= 0 || nextQuantity < 0 || nextQuantity >= expectedQuantity) {
     return false;
@@ -103,6 +105,7 @@ export const updateUserItemQuantityAtomically = async ({
     eq(userItem.id, userItemId),
     eq(userItem.userId, userId),
     eq(userItem.quantity, expectedQuantity),
+    ...conditions,
   );
 
   const result =
@@ -113,12 +116,10 @@ export const updateUserItemQuantityAtomically = async ({
   return result.rowsAffected === 1;
 };
 
-type ConsumeUserItemAtomicallyParams = {
-  client: DrizzleClient;
-  userId: string;
-  userItemId: string;
-  expectedQuantity: number;
-};
+type ConsumeUserItemAtomicallyParams = Omit<
+  UpdateUserItemQuantityAtomicallyParams,
+  "nextQuantity"
+>;
 
 /** Decrements quantity by 1 or deletes the stack when quantity was 1. */
 export const consumeUserItemAtomically = async ({
@@ -126,6 +127,7 @@ export const consumeUserItemAtomically = async ({
   userId,
   userItemId,
   expectedQuantity,
+  where,
 }: ConsumeUserItemAtomicallyParams) => {
   return updateUserItemQuantityAtomically({
     client,
@@ -133,6 +135,7 @@ export const consumeUserItemAtomically = async ({
     userItemId,
     expectedQuantity,
     nextQuantity: expectedQuantity - 1,
+    where,
   });
 };
 

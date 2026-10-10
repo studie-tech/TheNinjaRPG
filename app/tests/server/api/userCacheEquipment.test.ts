@@ -138,7 +138,7 @@ describeWithDatabase("committed profile cache patches", () => {
 
   it.each(["repairAll", "useRepairItem", "useRepairAll"] as const)("projects confirmed %s without a postwrite profile read", async (method) => {
     const db = await getTestDatabase();
-    await insertItems([{ id: "cache-repair-kit", itemType: "CONSUMABLE", maxDurability: 0, destroyOnUse: true, effects: [makeEffect("repair", { power: 100 })] }]);
+    await insertItems([{ id: "cache-repair-kit", name: "Cache repair kit", itemType: "CONSUMABLE", maxDurability: 0, destroyOnUse: true, effects: [makeEffect("repair", { power: 100 })] }]);
     await insertUserItems([{ id: "worn-kit", userId, itemId: "cache-repair-kit", equipped: "ITEM_1", quantity: 1 }]);
     const counted = countUserReads(db);
     const caller = callerForDatabase(itemRouter, userId, counted.client);
@@ -155,7 +155,7 @@ describeWithDatabase("committed profile cache patches", () => {
 
   it("refreshes partial bulk repairs instead of projecting the raced inventory", async () => {
     const db = await getTestDatabase();
-    await insertItems([{ id: "cache-second-armor", maxDurability: 100 }]);
+    await insertItems([{ id: "cache-second-armor", name: "Cache second armor", maxDurability: 100 }]);
     await insertUserItems([{ id: "second-armor", userId, itemId: "cache-second-armor", durability: 0 }]);
     const interleaved = beforeStatements(db, userItem, [async () => {
       await db.update(userItem).set({ storedAtHome: true, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
@@ -169,19 +169,81 @@ describeWithDatabase("committed profile cache patches", () => {
     expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "worn-armor") }))?.durability).toBe(0);
   });
 
+  it.each([
+    { equipped: "NONE" as const },
+    { quantity: 2 },
+    { level: 2 },
+    { experience: 10 },
+  ])("rejects a repair when its projected ownership state changes: %j", async (change) => {
+    const db = await getTestDatabase();
+    const client = beforeStatements(db, userItem, [async () => {
+      await db.update(userItem).set(change).where(eq(userItem.id, "worn-armor"));
+    }]);
+    const result = await callerForDatabase(itemRouter, userId, client).repair({ userItemId: "worn-armor" });
+    expect(result.success).toBe(false);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "worn-armor") }))?.durability).toBe(0);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))?.money).toBe(10000);
+  });
+
+  it("reconciles when the initial worn-gear and target reads have different progression", async () => {
+    const db = await getTestDatabase();
+    const read = db.query.userData.findFirst.bind(db.query.userData);
+    vi.spyOn(db.query.userData, "findFirst").mockImplementation((async (options: Parameters<typeof read>[0]) => {
+      const snapshot = await read(options);
+      if (snapshot && "items" in snapshot && Array.isArray(snapshot.items)) {
+        const worn = snapshot.items.find((row: { id: string }) => row.id === "worn-armor");
+        if (worn) worn.level = 2;
+      }
+      return snapshot;
+    }) as never);
+    const result = await (await callerFor(itemRouter, userId)).repair({ userItemId: "worn-armor" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    const saved = await db.query.userItem.findFirst({ where: eq(userItem.id, "worn-armor") });
+    expect(saved).toMatchObject({ level: 1, durability: 100 });
+  });
+
+  it("rolls back a repair when its worn kit changes slots before consumption", async () => {
+    const db = await getTestDatabase();
+    await insertItems([{ id: "cache-repair-kit", name: "Cache repair kit", itemType: "CONSUMABLE", maxDurability: 0, destroyOnUse: true, effects: [makeEffect("repair", { power: 100 })] }]);
+    await insertUserItems([{ id: "worn-kit", userId, itemId: "cache-repair-kit", equipped: "ITEM_1", quantity: 2 }]);
+    const client = beforeStatements(db, userItem, [async () => {}, async () => {
+      await db.update(userItem).set({ equipped: "NONE" }).where(eq(userItem.id, "worn-kit"));
+    }]);
+    const result = await callerForDatabase(itemRouter, userId, client).useRepairItem({ repairItemId: "worn-kit", targetItemId: "worn-armor" });
+    expect(result.success).toBe(false);
+    expect(result.userPatch).toBeUndefined();
+    expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "worn-armor") }))?.durability).toBe(0);
+    expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "worn-kit") }))?.quantity).toBe(2);
+  });
+
   it("reuses the loadout's committed slots without another profile read", async () => {
     const db = await getTestDatabase();
     await db.update(userItem).set({ durability: 100, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
-    await db.insert(itemLoadout).values({ id: "cache-loadout", userId, name: "Cache", itemData: [{ userItemId: "worn-armor", slot: "CHEST" }] });
-    const counted = countUserReads(db);
-    const result = await callerForDatabase(itemRouter, userId, counted.client).selectItemLoadout({ id: "cache-loadout" });
+    await db.insert(itemLoadout).values({ id: "cache-loadout", userId, name: "Cache", itemData: [{ userItemId: "worn-armor", itemId: "cache-armor", slot: "CHEST" }] });
+    const reads = vi.spyOn(db.query.userData, "findFirst");
+    const result = await (await callerFor(itemRouter, userId)).selectItemLoadout({ id: "cache-loadout" });
     expect(result.success).toBe(true);
     // The original user and mastery-source reads run before writes; neither is repeated.
-    expect(counted.getReads()).toBe(2);
+    expect(reads).toHaveBeenCalledTimes(2);
     expect(result.userPatch?.itemLoadout).toBe("cache-loadout");
     expect(result.userPatch?.items?.map((row) => row.equipped)).toEqual(["CHEST"]);
     expect(result.userPatch?.maxEnergy).toBe(calcEnergy(10) + 200);
     expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(150);
+  });
+
+  it("keeps reconciliation when the loadout pointer write cannot confirm the user", async () => {
+    const db = await getTestDatabase();
+    await db.insert(itemLoadout).values({ id: "cache-loadout", userId, name: "Cache", itemData: [] });
+    const client = beforeStatements(db, userData, [async () => {
+      await db.delete(userData).where(eq(userData.userId, userId));
+    }]);
+    const result = await callerForDatabase(itemRouter, userId, client).selectItemLoadout({ id: "cache-loadout" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
   });
 
   it("does not read the profile again when nothing is equipped", async () => {
