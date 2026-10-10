@@ -1711,8 +1711,10 @@ export const jutsu = mysqlTable(
     battleUsageType: mysqlEnum("battleUsageType", consts.BattleUsageTypes)
       .default("BOTH")
       .notNull(),
-    // Cosmetic variants inherit mechanics independently of the evolution tree.
+    // Mechanics source for a staff-created H-rank variant, separate from evolution
+    // and player-owned JutsuReskin cosmetics. Null means no mechanics inheritance.
     reskinParentJutsuId: varchar("reskinParentJutsuId", { length: 191 }),
+    // Optional BloodlineReskin grouping; its bloodline must match the source jutsu.
     bloodlineReskinId: varchar("bloodlineReskinId", { length: 191 }),
     // Evolution fields
     parentJutsuId: varchar("parentJutsuId", { length: 191 }),

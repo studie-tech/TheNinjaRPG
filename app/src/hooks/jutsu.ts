@@ -61,6 +61,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     name: "reskinParentJutsuId",
   });
   const previousReskinParentId = useRef(reskinParentId);
+  // Preserve a saved group on load; changing the source requires a fresh selection.
   useEffect(() => {
     if (previousReskinParentId.current !== reskinParentId) {
       form.setValue("bloodlineReskinId", null, { shouldDirty: true });
@@ -76,6 +77,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     { enabled: !!reskinParent?.bloodlineId },
   );
 
+  // Preview the same inheritance as the server, which re-reads the source on save.
   useEffect(() => {
     if (!reskinParent) return;
     const inherited = getJutsuReskinMechanics(reskinParent);

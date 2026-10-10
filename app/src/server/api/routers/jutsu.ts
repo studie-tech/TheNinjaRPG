@@ -64,11 +64,11 @@ import {
   hasAnyJutsuEquipCap,
   JUTSU_EQUIP_CAPS,
 } from "@/libs/jutsu";
-import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import {
   getJutsuReskinMechanics,
   inheritJutsuReskinEffects,
 } from "@/libs/jutsu/reskins";
+import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import {
   buildMissingLoadouts,
   decideRename,
@@ -485,6 +485,8 @@ export const jutsuRouter = createTRPCRouter({
       if (user.isBanned || !canChangeContent(user.role))
         return errorResponse("Not allowed");
       if (!reskin) return errorResponse("Bloodline reskin not found");
+      // Match family saves' jutsu-before-group lock order, so creation cannot copy
+      // stale mechanics or race parent conversion/deletion or group deletion.
       return retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
           const [parent] = await tx
@@ -3203,6 +3205,13 @@ const removeJutsuIdFromLoadoutAtomically = async (args: {
   }
 };
 
+/**
+ * Commit the edited jutsu, inherited child mechanics and their audit logs together.
+ * A single guarded update cannot preserve this multi-row invariant. Creation,
+ * linking and deletion share the source row lock; sorted jutsu locks precede group
+ * locks. Re-read under those locks before validating, then batch the child write.
+ * Callers invalidate content proposals only after this transaction succeeds.
+ */
 const saveJutsuFamily = async (
   client: DrizzleClient,
   entry: Jutsu,

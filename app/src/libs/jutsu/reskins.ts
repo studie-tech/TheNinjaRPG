@@ -1,8 +1,12 @@
 import type { Jutsu } from "@/drizzle/schema";
 import type { ZodAllTags, ZodJutsuType } from "@/validators/combat";
 
-// Operational flags and evolution links belong to each content entry. All other
-// non-cosmetic fields, including future mechanics, come from its reskin parent.
+/**
+ * Shared by the editor preview and authoritative server saves. Operational flags,
+ * identity, cosmetics and links stay local; all other fields inherit by default,
+ * including newly added mechanics. Rank and effects are handled by the caller.
+ * Normalize empty database/cache classifications to the validator's "None" value.
+ */
 export const getJutsuReskinMechanics = (parent: Jutsu | ZodJutsuType) => {
   const {
     name,
@@ -27,6 +31,7 @@ export const getJutsuReskinMechanics = (parent: Jutsu | ZodJutsuType) => {
   };
 };
 
+/** The same cosmetic allowlist governs effect editing and server inheritance. */
 export const JUTSU_EFFECT_COSMETICS = [
   "description",
   "appearAnimation",
@@ -37,7 +42,11 @@ export const JUTSU_EFFECT_COSMETICS = [
   "staticAnimation",
 ] as const;
 
-/** Pair repeated effect types by occurrence; new types use the parent's visuals. */
+/**
+ * Keep the parent's effect order and mechanics, pairing repeated types by occurrence
+ * to preserve the child's cosmetics. Added types use the parent's visuals; removed
+ * types disappear. Neither input is mutated.
+ */
 export const inheritJutsuReskinEffects = (
   parent: ZodAllTags[],
   child: ZodAllTags[],

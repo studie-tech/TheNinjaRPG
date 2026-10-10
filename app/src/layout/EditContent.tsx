@@ -96,6 +96,7 @@ export type FormEntry<K> = {
   id: K;
   label?: string;
   doubleWidth?: boolean;
+  /** Span every grid track at all breakpoints, including implicit mobile tracks. */
   fullWidth?: boolean;
   resetButton?: boolean;
   searchable?: boolean;
