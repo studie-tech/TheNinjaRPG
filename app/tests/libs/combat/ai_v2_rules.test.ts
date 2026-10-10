@@ -266,7 +266,7 @@ describe("AI coordinate actions", () => {
     const { battle, run } = setup();
     const itemId = "coordinate-item";
     battle.usersState[0]!.jutsus = [];
-    battle.usersState[0]!.items = [{ id: "owned", itemId, quantity: 2, level: 1, experience: 0, dropChancePerc: 0, durability: 100, equipped: "WEAPON_1", lastUsedRound: -99, originalCooldown: 0 }] as BattleUserState["items"];
+    battle.usersState[0]!.items = [{ id: "owned", itemId, quantity: 2, level: 1, experience: 0, dropChancePerc: 0, durability: 100, equipped: "HAND_1", lastUsedRound: -99, originalCooldown: 0 }] as BattleUserState["items"];
     battle.extraState.items[itemId] = { ...structuredClone(damageJutsu), id: itemId, itemType: "WEAPON", maxDurability: 100, preventBattleUsage: false } as unknown as typeof battle.extraState.items[string];
     battle.extraState.aiProfiles[PROFILE]!.rules[0]!.action = getActionSchema(type).parse({
       itemId, target: "COORDINATE", coordinates: { longitude: 4, latitude: 1 }, effect: "damage",
