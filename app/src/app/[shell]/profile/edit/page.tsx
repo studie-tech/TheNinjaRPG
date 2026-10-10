@@ -2907,10 +2907,14 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
                 className="w-32"
               />
             </div>
-            <p>
-              This will award <b>{experienceAmount}</b> experience points to{" "}
-              <b>ALL USERS</b>. Are you sure you want to continue?
-            </p>
+            {Number.isFinite(experienceAmount) ? (
+              <p>
+                This will award <b>{experienceAmount}</b> experience points to{" "}
+                <b>ALL USERS</b>. Are you sure you want to continue?
+              </p>
+            ) : (
+              <p>Enter a valid experience amount.</p>
+            )}
           </div>
         </Confirm>
       )}
@@ -2949,10 +2953,14 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
                 className="w-20"
               />
             </div>
-            <p>
-              This will clear sector <b>{sectorNumber}</b> ownership from the database.
-              Are you sure you want to continue?
-            </p>
+            {Number.isFinite(sectorNumber) ? (
+              <p>
+                This will clear sector <b>{sectorNumber}</b> ownership from the
+                database. Are you sure you want to continue?
+              </p>
+            ) : (
+              <p>Enter a valid sector number.</p>
+            )}
           </div>
         </Confirm>
       )}

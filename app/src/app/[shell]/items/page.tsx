@@ -1284,7 +1284,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
               <p className="mt-2 text-muted-foreground text-sm">
                 Current stack: {useritem.quantity} items
               </p>
-              {quantityToKeep && !!Number.isInteger(quantityToKeep) && (
+              {Number.isInteger(quantityToKeep) && quantityToKeep > 0 && (
                 <p className="mt-1 text-muted-foreground text-sm">
                   New stack will have: {useritem.quantity - quantityToKeep} items
                 </p>

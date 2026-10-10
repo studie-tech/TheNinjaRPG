@@ -729,15 +729,20 @@ export default function MyJutsu() {
                               level(s) from {userjutsu.jutsu.name} to{" "}
                               {transferTarget.jutsu.name}?
                             </p>
-                            <p>
-                              This will subtract {transferValue} level
-                              {transferValue > 1 ? "s" : ""} from {userjutsu.jutsu.name}{" "}
-                              (new level: {userjutsu.level - transferValue}) and add{" "}
-                              {transferValue} level
-                              {transferValue > 1 ? "s" : ""} to{" "}
-                              {transferTarget.jutsu.name} (new level:{" "}
-                              {transferTarget.level + transferValue}).
-                            </p>
+                            {Number.isFinite(transferValue) ? (
+                              <p>
+                                This will subtract {transferValue} level
+                                {transferValue > 1 ? "s" : ""} from{" "}
+                                {userjutsu.jutsu.name} (new level:{" "}
+                                {userjutsu.level - transferValue}) and add{" "}
+                                {transferValue} level
+                                {transferValue > 1 ? "s" : ""} to{" "}
+                                {transferTarget.jutsu.name} (new level:{" "}
+                                {transferTarget.level + transferValue}).
+                              </p>
+                            ) : (
+                              <p>Enter a valid number of levels.</p>
+                            )}
                             <p>
                               Cost:{" "}
                               {usedTransfers < freeTransfers
