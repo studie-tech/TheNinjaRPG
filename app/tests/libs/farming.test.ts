@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WORLD_CYCLE_SECONDS } from "@/drizzle/constants";
 import {
+  canDropFarmSeed,
   canWaterPlot,
   getExtractorCropCapacity,
   getFarmGrowTimeSeconds,
@@ -18,6 +19,7 @@ import {
   getPvpFarmActivityReductionSeconds,
   getSeedExtractionDurationSeconds,
   getTotalFarmPlots,
+  isFarmMarketSeed,
   isPlotReady,
   qualifiesForFarmActivityReward,
   summarizeFarmPlots,
@@ -250,5 +252,32 @@ describe("farming", () => {
     expect(getFarmQuantityPrice(25, 4)).toBe(100);
     expect(getFarmQuantityPrice(25, 0)).toBe(0);
     expect(getFarmQuantityPrice(25, 1.5)).toBe(0);
+  });
+});
+
+describe("farm seed dropping", () => {
+  const marketSeed = { isFarmSeed: true, inShop: false, hidden: false, farmSellValue: 10 };
+
+  it("recognises seeds the farm market sells", () => {
+    expect(isFarmMarketSeed(marketSeed)).toBe(true);
+    expect(isFarmMarketSeed({ ...marketSeed, isFarmSeed: false })).toBe(false);
+    expect(isFarmMarketSeed({ ...marketSeed, inShop: true })).toBe(false);
+    expect(isFarmMarketSeed({ ...marketSeed, hidden: true })).toBe(false);
+    expect(isFarmMarketSeed({ ...marketSeed, farmSellValue: 0 })).toBe(false);
+  });
+
+  it("blocks dropping a market seed the player cannot afford to buy back", () => {
+    expect(canDropFarmSeed(marketSeed, 0)).toBe(false);
+    expect(canDropFarmSeed(marketSeed, 9)).toBe(false);
+  });
+
+  it("allows dropping once a replacement is affordable", () => {
+    expect(canDropFarmSeed(marketSeed, 10)).toBe(true);
+    expect(canDropFarmSeed(marketSeed, 500)).toBe(true);
+  });
+
+  it("never blocks items that are not market seeds", () => {
+    expect(canDropFarmSeed({ ...marketSeed, isFarmSeed: false }, 0)).toBe(true);
+    expect(canDropFarmSeed({ ...marketSeed, hidden: true }, 0)).toBe(true);
   });
 });

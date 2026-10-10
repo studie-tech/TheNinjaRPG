@@ -266,6 +266,21 @@ export const getFarmQuantityPrice = (unitPrice: number, quantity: number) => {
   return unitPrice * quantity;
 };
 
+/** True when the farm market sells this item as a seed, priced in farm coins. */
+export const isFarmMarketSeed = (
+  seed: Pick<Item, "isFarmSeed" | "inShop" | "hidden" | "farmSellValue">,
+) => seed.isFarmSeed && !seed.inShop && !seed.hidden && seed.farmSellValue > 0;
+
+/**
+ * Farm coins only come from selling crops, and crops only from planting seeds, so a player
+ * who throws away their seeds without the coins to buy one back can never farm again. A
+ * market seed may only be dropped while the player could afford to replace one of it.
+ */
+export const canDropFarmSeed = (
+  seed: Pick<Item, "isFarmSeed" | "inShop" | "hidden" | "farmSellValue">,
+  farmCurrency: number,
+) => !isFarmMarketSeed(seed) || farmCurrency >= seed.farmSellValue;
+
 export const patchFarmPlot = (plots: FarmPlotState[], updatedPlot: FarmPlotState) =>
   plots.map((plot) => (plot.id === updatedPlot.id ? updatedPlot : plot));
 
