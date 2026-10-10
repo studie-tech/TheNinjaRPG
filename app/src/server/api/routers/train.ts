@@ -369,9 +369,8 @@ export const trainRouter = createTRPCRouter({
           ...(gained > 0
             ? {
                 dailyTrainings: sql`dailyTrainings + 1`,
-                // LEAST keeps the gain inside the rank cap, and GREATEST keeps a value
-                // already above it (kept for a rank-up) from being lowered. Nothing else
-                // clamps stored masteries: capUserStats only caps in-memory copies.
+                // Apply both live progression caps without lowering stored entitlement;
+                // the snapshot guards keep the gain and queued-session handoff consistent.
                 ...masteryGainUpdates({ [trained]: gained }),
               }
             : {}),

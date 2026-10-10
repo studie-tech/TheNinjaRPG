@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "bun:test";
 import {
   getUserCaps,
+  MAX_MASTERY_CAP,
   RANKED_PVP_STATS,
   SCALED_AI_STAT_BUDGET_SHARE,
 } from "@/drizzle/constants";
@@ -356,7 +357,7 @@ const readSeededAiRows = () => {
 };
 
 test("capUserStats caps every stat at the given rank, the user's own by default", () => {
-  const { stats_cap, gens_cap, mastery_cap } = getUserCaps("GENIN");
+  const { stats_cap, gens_cap } = getUserCaps("GENIN");
   const over = () =>
     ({
       rank: "GENIN",
@@ -366,7 +367,7 @@ test("capUserStats caps every stat at the given rank, the user's own by default"
       speed: 10,
       intelligence: 10,
       willpower: 10,
-      ninjutsuMastery: mastery_cap + 1000,
+      ninjutsuMastery: MAX_MASTERY_CAP + 1000,
       genjutsuMastery: 10,
       taijutsuMastery: 10,
       bukijutsuMastery: 10,
@@ -379,7 +380,7 @@ test("capUserStats caps every stat at the given rank, the user's own by default"
   expect([own.offence, own.strength, own.ninjutsuMastery]).toEqual([
     stats_cap,
     gens_cap,
-    mastery_cap,
+    MAX_MASTERY_CAP,
   ]);
 
   // Ranked plays everyone as an ELITE JONIN
@@ -388,7 +389,7 @@ test("capUserStats caps every stat at the given rank, the user's own by default"
   expect([ranked.offence, ranked.strength, ranked.ninjutsuMastery]).toEqual([
     stats_cap + 1000,
     gens_cap + 1000,
-    mastery_cap,
+    MAX_MASTERY_CAP,
   ]);
 });
 

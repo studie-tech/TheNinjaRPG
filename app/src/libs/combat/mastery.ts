@@ -31,7 +31,14 @@ export const recordMasteryUsage = (user: BattleUserState, action: CombatAction) 
   }
 };
 
-/** One battle reward budget, weighted by actual discipline usage; mastery grants no XP. */
+/**
+ * Allocate one battle's mastery budget by performed discipline usage against earned caps.
+ * Preloaded baseStatsForModifiers removes temporary bonuses before cap calculations.
+ * Fleeing, draws and practice/ranked battles grant no mastery; quest cast tracking is
+ * independent and still counts their performed actions. Requested shares are floored to
+ * hundredths; caps can reduce them further. Gains never contribute combat-stat XP.
+ * Persistence rechecks the live row's gain capacity.
+ */
 export const combatMasteryGains = (
   battle: Pick<CompleteBattle, "battleType" | "rewardScaling">,
   user: BattleUserState,

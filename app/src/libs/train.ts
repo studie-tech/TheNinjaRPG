@@ -850,7 +850,7 @@ export const trainingBoost = (
   );
 };
 
-/** Mastery gained by a timed session of `elapsedSeconds`, before the rank cap. */
+/** Raw timed-session mastery gain; settlement applies discipline and shared-total caps. */
 export const calcMasteryTrainingAmount = (
   user: NonNullable<UserWithRelations>,
   settings: GameSetting[],

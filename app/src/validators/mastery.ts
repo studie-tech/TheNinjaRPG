@@ -1,10 +1,12 @@
-import { z } from "zod";
 import { MAX_MASTERY_CAP } from "@/drizzle/constants";
+import { makeCappedNullableNumber } from "@/validators/base";
+
+/** Optional earned-mastery minimums for quests; null/zero leaves the discipline ungated. */
 export const masteryRequirementFields = {
-  requiredNinjutsuMastery: z.coerce.number().min(0).max(MAX_MASTERY_CAP).nullish(),
-  requiredGenjutsuMastery: z.coerce.number().min(0).max(MAX_MASTERY_CAP).nullish(),
-  requiredTaijutsuMastery: z.coerce.number().min(0).max(MAX_MASTERY_CAP).nullish(),
-  requiredBukijutsuMastery: z.coerce.number().min(0).max(MAX_MASTERY_CAP).nullish(),
-  requiredBloodlineMastery: z.coerce.number().min(0).max(MAX_MASTERY_CAP).nullish(),
-  requiredSageMastery: z.coerce.number().min(0).max(MAX_MASTERY_CAP).nullish(),
+  requiredNinjutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredGenjutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredTaijutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredBukijutsuMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredBloodlineMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
+  requiredSageMastery: makeCappedNullableNumber(MAX_MASTERY_CAP),
 };

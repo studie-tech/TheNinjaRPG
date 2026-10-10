@@ -32,6 +32,7 @@ import {
 } from "@/drizzle/constants";
 import type { Item, UserData } from "@/drizzle/schema";
 import { DateTimeRegExp } from "@/utils/regex";
+import { makeCappedNullableNumber } from "@/validators/base";
 import { itemEconomySchema, refineItemEconomy } from "@/validators/itemEconomy";
 import { rewardFields } from "@/validators/rewards";
 
@@ -1367,15 +1368,7 @@ export const SuperRefineEffects = (effects: ZodAllTags[], ctx: z.RefinementCtx) 
   });
 };
 
-/**
- * Jutsu Type. Used for validating a jutsu object is set up properly
- */
-const makeCappedNullableNumber = (max: number) =>
-  z.preprocess(
-    (v) => (v === "" || v === null || v === undefined ? null : v),
-    z.coerce.number().int().min(0).max(max).nullable(),
-  );
-
+/** Jutsu catalog validation, including integer mastery and general-stat prerequisites. */
 export const JutsuValidatorRawSchema = z.object({
   name: z.string().trim(),
   image: z.string(),

@@ -6,7 +6,7 @@ import type {
 } from "@/drizzle/constants";
 import {
   DURABILITY_USABILITY_THR,
-  getUserCaps,
+  MAX_MASTERY_CAP,
   MasteryNames,
 } from "@/drizzle/constants";
 import type { ZodAllTags } from "@/validators/combat";
@@ -111,9 +111,9 @@ export const missingMasteryRequirement = (
 };
 
 /**
- * Masteries as the pre-battle gates see them: the stored values, capped at the user's rank
- * as battle caps them, plus the increasemastery
- * and decreasemastery tags processUsersForBattle applies from the bloodline, skills and worn
+ * Masteries as the pre-battle gates see them: stored values capped at MAX_MASTERY_CAP
+ * when a character rank is present, plus the increasemastery and decreasemastery tags
+ * processUsersForBattle applies from the bloodline, skills and worn
  * gear, sized as the combat tags size them. Positive gear buffs can unlock more gear,
  * starting from non-gear sources, so self-unlocks and unsupported cycles cannot count.
  * Gear with mastery penalties stays anchored in non-gear sources: admitting a penalty
@@ -127,7 +127,7 @@ export const effectiveMasteries = (
 ): MasteryStatSource => resolveMasteryGear(user, excludeUserItemId).masteries;
 
 const resolveMasteryGear = (user: MasteryBuffUser, excludeUserItemId?: string) => {
-  const cap = user.rank ? getUserCaps(user.rank).mastery_cap : Number.POSITIVE_INFINITY;
+  const cap = user.rank ? MAX_MASTERY_CAP : Number.POSITIVE_INFINITY;
   const stored = Object.fromEntries(
     MasteryNames.map((name) => [name, Math.min(user[name], cap)]),
   ) as MasteryStatSource;

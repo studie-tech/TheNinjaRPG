@@ -12,6 +12,7 @@ import type { MasteryType } from "@/drizzle/constants";
 import {
   CombatStatNames,
   getUserCaps,
+  MAX_MASTERY_CAP,
   MasteryNames,
   STEALTH_SENSORY_CAP,
   STEALTH_SENSORY_DEFAULT,
@@ -247,7 +248,7 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
   const combatChartRef = useRef<HTMLCanvasElement>(null);
   const userElements = getUserElements(userData);
   const activeLayout = useActiveLayout();
-  const { stats_cap, mastery_cap } = getUserCaps(userData.rank);
+  const { stats_cap } = getUserCaps(userData.rank);
 
   useEffect(() => {
     const masteries = userData.effectiveMasteries ?? userData;
@@ -387,7 +388,7 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
           />
         </div>
         <p className="mt-3 border-t pt-2 text-muted-foreground text-xs">
-          Maximum: {mastery_cap.toLocaleString()} per mastery ·{" "}
+          Maximum: {MAX_MASTERY_CAP.toLocaleString()} per mastery ·{" "}
           {TOTAL_MASTERY_CAP.toLocaleString()} earned total
         </p>
       </section>

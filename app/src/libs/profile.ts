@@ -8,6 +8,7 @@ import {
   getUserCaps,
   HomeTypeDetails,
   HP_PER_LVL,
+  MAX_MASTERY_CAP,
   MasteryNames,
   PLAYER_LEVEL_XP_BASE_FACTOR,
   PLAYER_LEVEL_XP_HIGH_FACTOR,
@@ -153,25 +154,27 @@ export const withCappedStats = <T extends UserData>(user: T): T => {
 };
 
 /**
- * Cap user stats to a rank's caps
+ * Clamp an in-memory user's combat stats to the character rank and masteries to the
+ * individual maximum. Mastery rank and shared-total caps restrict earned gains only;
+ * callers must not persist this display/battle copy over stored mastery entitlement.
  * @param user - the user to cap the stats of
  * @param rank - the rank whose caps apply, the user's own by default
  * @returns void
  */
 export function capUserStats(user: UserData, rank: UserRank = user.rank) {
-  const { stats_cap, gens_cap, mastery_cap } = getUserCaps(rank);
+  const { stats_cap, gens_cap } = getUserCaps(rank);
   if (user.offence > stats_cap) user.offence = stats_cap;
   if (user.defence > stats_cap) user.defence = stats_cap;
   if (user.strength > gens_cap) user.strength = gens_cap;
   if (user.speed > gens_cap) user.speed = gens_cap;
   if (user.intelligence > gens_cap) user.intelligence = gens_cap;
   if (user.willpower > gens_cap) user.willpower = gens_cap;
-  if (user.ninjutsuMastery > mastery_cap) user.ninjutsuMastery = mastery_cap;
-  if (user.genjutsuMastery > mastery_cap) user.genjutsuMastery = mastery_cap;
-  if (user.taijutsuMastery > mastery_cap) user.taijutsuMastery = mastery_cap;
-  if (user.bukijutsuMastery > mastery_cap) user.bukijutsuMastery = mastery_cap;
-  if (user.bloodlineMastery > mastery_cap) user.bloodlineMastery = mastery_cap;
-  if (user.sageMastery > mastery_cap) user.sageMastery = mastery_cap;
+  if (user.ninjutsuMastery > MAX_MASTERY_CAP) user.ninjutsuMastery = MAX_MASTERY_CAP;
+  if (user.genjutsuMastery > MAX_MASTERY_CAP) user.genjutsuMastery = MAX_MASTERY_CAP;
+  if (user.taijutsuMastery > MAX_MASTERY_CAP) user.taijutsuMastery = MAX_MASTERY_CAP;
+  if (user.bukijutsuMastery > MAX_MASTERY_CAP) user.bukijutsuMastery = MAX_MASTERY_CAP;
+  if (user.bloodlineMastery > MAX_MASTERY_CAP) user.bloodlineMastery = MAX_MASTERY_CAP;
+  if (user.sageMastery > MAX_MASTERY_CAP) user.sageMastery = MAX_MASTERY_CAP;
 }
 
 /** Which scale a unit's stored stats are on; see scaleUserStats. */
@@ -268,7 +271,8 @@ export const getRedistributableStatTotal = (
 
 /**
  * Whether unused experience can still go anywhere on /profile/experience: one of the six
- * combat stats or one of the assignable masteries is still below its rank cap.
+ * combat stats has rank capacity, or an assignable mastery has room under both its
+ * discipline-rank cap and the shared earned total.
  */
 export const canAssignExperience = (
   user: Pick<

@@ -465,14 +465,6 @@ export const getReward = (
         for (const field of MASTERY_EXPERIENCE_FIELDS)
           if (objective[field])
             rawRewards[field] = (rawRewards[field] ?? 0) + (objective[field] ?? 0);
-        if (
-          objective.reward_mastery_stat &&
-          objective.reward_mastery_stat !== "None" &&
-          objective.reward_mastery_rank
-        ) {
-          rawRewards.reward_mastery_stat = objective.reward_mastery_stat;
-          rawRewards.reward_mastery_rank = objective.reward_mastery_rank;
-        }
         if (objective.reward_sage_mastery_experience) {
           rawRewards.reward_sage_mastery_experience +=
             objective.reward_sage_mastery_experience;
@@ -1020,7 +1012,9 @@ export type ObjectiveTrackerTaskInput = {
   value?: number;
   text?: string;
   contentId?: string;
+  /** Distinct jutsu disciplines captured when training starts or an action is performed. */
   masteryTypes?: MasteryType[];
+  /** Opponent classification for combat-use filters, independent of the battle outcome. */
   combatType?: "PVP" | "PVE";
   warFoe?: boolean;
 };
@@ -1427,27 +1421,13 @@ export const getNewTrackers = (
                   status.value = taskUpdate.value;
                 }
               }
-              // Content-gated objectives: credit only when the emitted contentId belongs to
-              // this objective's own id-list. One shared matcher across all content-gated tasks.
+              // Content objectives use their ID filter and, for jutsu, optional discipline
+              // and combat filters. The matcher rejects unconfigured and "any" events.
               if (
                 status &&
                 "value" in objective &&
                 CONTENT_GATED_TASKS.has(task) &&
-                taskUpdate.contentId !== undefined &&
-                taskUpdate.task === task &&
-                ("masteryType" in objective
-                  ? (objectiveContentIds(objective).length > 0 ||
-                      (objective.masteryType && objective.masteryType !== "None")) &&
-                    (objectiveContentIds(objective).length === 0 ||
-                      objectiveContentIds(objective).includes(taskUpdate.contentId)) &&
-                    (!objective.masteryType ||
-                      objective.masteryType === "None" ||
-                      taskUpdate.masteryTypes?.includes(objective.masteryType)) &&
-                    (!("combatType" in objective) ||
-                      !objective.combatType ||
-                      objective.combatType === "Any" ||
-                      objective.combatType === taskUpdate.combatType)
-                  : objectiveContentIds(objective).includes(taskUpdate.contentId)) &&
+                matchesContentObjective(objective, taskUpdate) &&
                 // A quest can never satisfy its own complete_specific_quest objective: the
                 // resolving quest is still active in getUserQuests when getReward emits this
                 // (its `completed` flag flips later in checkRewards), so guard the self-tick.
@@ -2739,3 +2719,36 @@ export const isQuestRankAllowed = (
   source === "random_assignment" && quest.questType !== "mission"
     ? true
     : availableQuestLetterRanks(user.rank).includes(quest.questRank);
+
+/**
+ * Match one content event against an objective's configured filters.
+ * Jutsu IDs and mastery filters intersect when both are set; a mastery-only objective
+ * permits an empty ID list, but leaving both unset cannot credit arbitrary content.
+ * Combat-type restrictions require matching event metadata. Exact task and content ID
+ * checks keep passive "any" re-evaluation events from incrementing content counters.
+ */
+const matchesContentObjective = (
+  objective: AllObjectivesType,
+  event: ObjectiveTrackerTaskInput,
+): boolean => {
+  if (event.task !== objective.task || event.contentId === undefined) return false;
+  const contentIds = objectiveContentIds(objective);
+  if (!("masteryType" in objective)) return contentIds.includes(event.contentId);
+
+  const hasMasteryFilter = !!objective.masteryType && objective.masteryType !== "None";
+  if (contentIds.length === 0 && !hasMasteryFilter) return false;
+  if (contentIds.length > 0 && !contentIds.includes(event.contentId)) return false;
+  if (
+    objective.masteryType &&
+    objective.masteryType !== "None" &&
+    !event.masteryTypes?.includes(objective.masteryType)
+  )
+    return false;
+
+  return (
+    !("combatType" in objective) ||
+    !objective.combatType ||
+    objective.combatType === "Any" ||
+    objective.combatType === event.combatType
+  );
+};

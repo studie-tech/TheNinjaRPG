@@ -1054,9 +1054,12 @@ export const RYO_CAP = 3000000000;
 export const MAX_STATS_CAP = 1300000;
 export const MAX_GENS_CAP = 400000;
 export const MAX_MASTERY_CAP = 1500000;
+/** Shared ceiling for earned mastery; equipment and bloodline modifiers are excluded. */
 export const TOTAL_MASTERY_CAP = 4200000;
+/** Persisted progression order, independent of the character's ninja rank. */
 export const MASTERY_RANKS = ["NONE", "NOVICE", "ADEPT", "MASTER", "LEGENDARY"] as const;
 export type MasteryRank = (typeof MASTERY_RANKS)[number];
+/** Gain ceiling at each current rank; the Legendary exam changes rank without raising it. */
 export const MASTERY_RANK_CAPS: Record<MasteryRank, number> = {
   NONE: 375000,
   NOVICE: 600000,
@@ -1064,6 +1067,7 @@ export const MASTERY_RANK_CAPS: Record<MasteryRank, number> = {
   MASTER: MAX_MASTERY_CAP,
   LEGENDARY: MAX_MASTERY_CAP,
 };
+/** Default earned minimums for exam templates; published quests may override these. */
 export const MASTERY_RANK_REQUIREMENTS: Record<MasteryRank, number> = {
   NONE: 0,
   NOVICE: 375000,
@@ -3151,13 +3155,11 @@ export function getUserCaps(rank?: UserRank | null) {
     return {
       stats_cap: MAX_STATS_CAP,
       gens_cap: MAX_GENS_CAP,
-      mastery_cap: MAX_MASTERY_CAP,
       lvl_cap: 100,
     };
   return {
     stats_cap: caps.STATS_CAP,
     gens_cap: caps.GENS_CAP,
-    mastery_cap: MAX_MASTERY_CAP,
     lvl_cap: caps.LVL_CAP,
   };
 }

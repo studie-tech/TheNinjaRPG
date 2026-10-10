@@ -2432,9 +2432,11 @@ export const userData = mysqlTable(
     speed: double("speed").default(10).notNull(),
     offence: double("offence").default(10).notNull(),
     defence: double("defence").default(10).notNull(),
+    /** Earned discipline ranks; absent entries are NONE and temporary modifiers never change them. */
     masteryRanks: json("masteryRanks")
       .$type<Partial<Record<consts.MasteryName, consts.MasteryRank>>>()
-      .default({}).notNull(),
+      .default({})
+      .notNull(),
     ninjutsuMastery: double("ninjutsuMastery").default(10).notNull(),
     genjutsuMastery: double("genjutsuMastery").default(10).notNull(),
     taijutsuMastery: double("taijutsuMastery").default(10).notNull(),
@@ -3830,6 +3832,7 @@ export const quest = mysqlTable(
     requiredBloodlineId: varchar("requiredBloodlineId", { length: 191 }),
     requiredSageModeId: varchar("requiredSageModeId", { length: 191 }),
     requiredSageRank: mysqlEnum("requiredSageRank", consts.SAGE_MASTERY_RANKS),
+    /** Optional earned minima for quest eligibility, before equipment or bloodline bonuses. */
     requiredNinjutsuMastery: int("requiredNinjutsuMastery"),
     requiredGenjutsuMastery: int("requiredGenjutsuMastery"),
     requiredTaijutsuMastery: int("requiredTaijutsuMastery"),

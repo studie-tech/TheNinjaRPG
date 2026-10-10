@@ -3,7 +3,13 @@ import {
   MASTERY_EXPERIENCE_FIELDS,
   type ObjectiveRewardType,
 } from "@/validators/rewards";
-export const masteryRewardLabels = (reward: Partial<ObjectiveRewardType>) => [
+
+/**
+ * Display positive discipline XP grants and the final quest's mastery promotion.
+ * Sage discipline XP is separate from reward_sage_mastery_experience (sage-mode XP),
+ * which remains rendered by the existing sage-mode reward presentation.
+ */
+export const masteryRewardLabels = (reward: Partial<ObjectiveRewardType>): string[] => [
   ...MASTERY_EXPERIENCE_FIELDS.flatMap((field, index) =>
     (reward[field] ?? 0) > 0
       ? [`${reward[field]?.toLocaleString()} ${MasteryTypes[index]} Mastery XP`]

@@ -1,3 +1,4 @@
+import { MASTERY_RANK_CAPS } from "@/drizzle/constants";
 import { describe, expect, it } from "bun:test";
 import { getUserCaps, MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import {
@@ -12,7 +13,7 @@ import type { MasteryTrainingQueueEntry } from "@/validators/train";
 const MINUTE = 60_000;
 const start = new Date(Date.UTC(2026, 0, 1, 12, 0));
 const after = (minutes: number) => new Date(start.getTime() + minutes * MINUTE);
-const mastery_cap = 375000;
+const mastery_cap = MASTERY_RANK_CAPS.NONE;
 
 const trainee = (patch: Record<string, unknown> = {}) =>
   ({

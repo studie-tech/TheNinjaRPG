@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "bun:test";
-import { getUserCaps } from "@/drizzle/constants";
+import { getUserCaps, MAX_MASTERY_CAP } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { AchievementProgress, UserWithRelations } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -29,7 +29,7 @@ describe("progression-derived profile navigation", () => {
   it("removes Assign XP when the remaining points cannot be assigned under rank caps", async () => {
     const test = setup();
     const cap = getUserCaps("GENIN");
-    await updateUserCache(test.client, key, { offence: cap.stats_cap, defence: cap.stats_cap, intelligence: cap.gens_cap, speed: cap.gens_cap, strength: cap.gens_cap, willpower: cap.gens_cap, ninjutsuMastery: cap.mastery_cap, genjutsuMastery: cap.mastery_cap, taijutsuMastery: cap.mastery_cap, bukijutsuMastery: cap.mastery_cap }, { revision: prepareUserUpdate(test.client, key) });
+    await updateUserCache(test.client, key, { offence: cap.stats_cap, defence: cap.stats_cap, intelligence: cap.gens_cap, speed: cap.gens_cap, strength: cap.gens_cap, willpower: cap.gens_cap, ninjutsuMastery: MAX_MASTERY_CAP, genjutsuMastery: MAX_MASTERY_CAP, taijutsuMastery: MAX_MASTERY_CAP, bukijutsuMastery: MAX_MASTERY_CAP }, { revision: prepareUserUpdate(test.client, key) });
     expect(test.value().userData.earnedExperience).toBe(100);
     expect(test.value().notifications.some(entry => entry.name === "Assign XP")).toBe(false);
     test.close();

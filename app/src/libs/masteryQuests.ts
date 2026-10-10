@@ -7,7 +7,13 @@ import {
 import { MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
 import { QuestValidator } from "@/validators/objectives";
 
-/** Hidden starter exams for staff to customize and publish through the quest editor. */
+/**
+ * One hidden, editable exam per discipline and promotable rank, with stable content IDs.
+ * Default earned thresholds come from MASTERY_RANK_REQUIREMENTS; staff may customize
+ * them alongside objectives and scenes before publishing. Eligibility uses the stored
+ * previous rank rather than prerequisite quest history, so backfilled users can advance.
+ * QuestValidator supplies the same objective and reward defaults as the content editor.
+ */
 export const masteryQuestTemplates = () =>
   MasteryNames.flatMap((stat, index) =>
     MASTERY_RANKS.filter((rank) => rank !== "NONE").map((rank) => {
@@ -37,8 +43,6 @@ export const masteryQuestTemplates = () =>
           retryDelay: "none" as const,
           requiredVillage: null,
           requiredBloodlineId: null,
-          requiredJutsuId: null,
-          requiredItemId: null,
           medicalRank: null,
           huntingRank: null,
           gatheringRank: null,

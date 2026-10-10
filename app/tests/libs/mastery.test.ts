@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { MasteryName } from "@/drizzle/constants";
-import { getUserCaps, MasteryNames } from "@/drizzle/constants";
+import { MAX_MASTERY_CAP, MasteryNames } from "@/drizzle/constants";
 import type { MasteryBuffUser, MasteryGear } from "@/libs/mastery";
 import {
   effectiveMasteries,
@@ -198,14 +198,13 @@ describe("effectiveMasteries", () => {
   });
 
   it("caps stored masteries at the rank cap, as battle does, before adding buffs", () => {
-    const { mastery_cap } = getUserCaps("GENIN");
     const user = wearer({
-      ...emptyMasteries(mastery_cap + 5000),
+      ...emptyMasteries(MAX_MASTERY_CAP + 5000),
       rank: "GENIN",
       bloodline: { effects: [masteryTag({ power: 100 })] },
     });
-    expect(effectiveMasteries(user).ninjutsuMastery).toBe(mastery_cap + 100);
-    expect(effectiveMasteries(user).genjutsuMastery).toBe(mastery_cap);
+    expect(effectiveMasteries(user).ninjutsuMastery).toBe(MAX_MASTERY_CAP + 100);
+    expect(effectiveMasteries(user).genjutsuMastery).toBe(MAX_MASTERY_CAP);
   });
 
   it("adds static tags scaled by level and percentages of the stored value", () => {

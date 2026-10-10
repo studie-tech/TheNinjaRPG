@@ -54,30 +54,66 @@ describeWithDatabase("confirmed quest cache responses", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["event", "story", "mastery"] as const)("claims a %s mastery reward once despite history for a deleted achievement", async (questType) => {
-    const database = await getTestDatabase();
-    await database.update(userData).set({ ninjutsuMastery: 599999.85, masteryRanks: { ninjutsuMastery: "NOVICE" } }).where(eq(userData.userId, playerId));
-    const examId = "custom-adept";
-    await insertQuests([{ id: examId, name: "Adept exam", questType, requiredNinjutsuMastery: 500000, content: {
-      objectives: [SimpleObjective.parse({ id: "level", task: "user_level", value: 50 })],
-      reward: ObjectiveReward.parse({ reward_money: 100, reward_mastery_stat: "ninjutsuMastery", reward_mastery_rank: "ADEPT" }),
-      sceneBackground: "", sceneCharacters: [],
-    } }]);
-    await insertQuestHistory([
-      { userId: playerId, questId: examId, questType },
-      { userId: playerId, questId: "deleted-achievement", questType: "achievement", completed: 1, endAt: new Date() },
-    ]);
-    const api = await callerFor(questsRouter, playerId);
-    const result = await api.checkRewards({ questId: examId });
-    expect(result).toMatchObject({ success: true, resolved: true });
-    expect(result.userPatch).toBeUndefined();
-    const saved = await readPlayer();
-    expect(saved).toMatchObject({ money: 1100, ninjutsuMastery: 599999.85, masteryRanks: { ninjutsuMastery: "ADEPT" } });
-    expect((await api.checkRewards({ questId: examId })).success).toBe(true);
-    expect(await readPlayer()).toMatchObject({ money: 1100, masteryRanks: { ninjutsuMastery: "ADEPT" } });
-    const history = await database.query.questHistory.findFirst({ where: eq(questHistory.questId, examId) });
-    expect(history).toMatchObject({ completed: 1, previousCompletes: 1 });
-  });
+  it.each(["event", "story", "mastery"] as const)(
+    "claims a %s mastery reward once despite history for a deleted achievement",
+    async (questType) => {
+      const database = await getTestDatabase();
+      await database
+        .update(userData)
+        .set({ ninjutsuMastery: 599999.85, masteryRanks: { ninjutsuMastery: "NOVICE" } })
+        .where(eq(userData.userId, playerId));
+      const examId = "custom-adept";
+      await insertQuests([
+        {
+          id: examId,
+          name: "Adept exam",
+          questType,
+          requiredNinjutsuMastery: 500000,
+          content: {
+            objectives: [
+              SimpleObjective.parse({ id: "level", task: "user_level", value: 50 }),
+            ],
+            reward: ObjectiveReward.parse({
+              reward_money: 100,
+              reward_mastery_stat: "ninjutsuMastery",
+              reward_mastery_rank: "ADEPT",
+            }),
+            sceneBackground: "",
+            sceneCharacters: [],
+          },
+        },
+      ]);
+      await insertQuestHistory([
+        { userId: playerId, questId: examId, questType },
+        {
+          userId: playerId,
+          questId: "deleted-achievement",
+          questType: "achievement",
+          completed: 1,
+          endAt: new Date(),
+        },
+      ]);
+      const api = await callerFor(questsRouter, playerId);
+      const result = await api.checkRewards({ questId: examId });
+      expect(result).toMatchObject({ success: true, resolved: true });
+      expect(result.userPatch).toBeUndefined();
+      const saved = await readPlayer();
+      expect(saved).toMatchObject({
+        money: 1100,
+        ninjutsuMastery: 599999.85,
+        masteryRanks: { ninjutsuMastery: "ADEPT" },
+      });
+      expect((await api.checkRewards({ questId: examId })).success).toBe(true);
+      expect(await readPlayer()).toMatchObject({
+        money: 1100,
+        masteryRanks: { ninjutsuMastery: "ADEPT" },
+      });
+      const history = await database.query.questHistory.findFirst({
+        where: eq(questHistory.questId, examId),
+      });
+      expect(history).toMatchObject({ completed: 1, previousCompletes: 1 });
+    },
+  );
 
   it("returns the accepted specific mission, counter and trackers using its existing profile read", async () => {
     const reads = await countProfileReads();

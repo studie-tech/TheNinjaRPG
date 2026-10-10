@@ -25,13 +25,16 @@ const LEGACY_STARTER_VILLAGE_MAP: Record<
 };
 
 export const rewardFields = {
+  /** Final-quest-only promotion pair; QuestValidator rejects objective-level rank rewards. */
   reward_mastery_stat: z.enum(["None", ...MasteryNames]).optional(),
   reward_mastery_rank: z.enum(MASTERY_RANKS).optional(),
+  /** Earned discipline gains, capped when granted; these do not award combat-stat XP. */
   reward_ninjutsu_experience: z.coerce.number().min(0).optional(),
   reward_genjutsu_experience: z.coerce.number().min(0).optional(),
   reward_taijutsu_experience: z.coerce.number().min(0).optional(),
   reward_bukijutsu_experience: z.coerce.number().min(0).optional(),
   reward_bloodline_experience: z.coerce.number().min(0).optional(),
+  /** Sage discipline gain, separate from reward_sage_mastery_experience (sage-mode XP). */
   reward_sage_stat_experience: z.coerce.number().min(0).optional(),
   reward_hunter_items: z.boolean().prefault(false),
   reward_hunter_items_ids: z.array(z.string()).prefault([]),
@@ -142,7 +145,7 @@ export const questRewardModeFields = {
     .prefault(1),
 };
 
-/** Scalar reward fields that each become one pickable card in a "choose" quest. */
+/** Discipline XP fields in MasteryNames order; sage-mode XP uses its separate field. */
 export const MASTERY_EXPERIENCE_FIELDS = [
   "reward_ninjutsu_experience",
   "reward_genjutsu_experience",
@@ -152,6 +155,7 @@ export const MASTERY_EXPERIENCE_FIELDS = [
   "reward_sage_stat_experience",
 ] as const;
 
+/** Scalar reward fields that each become one pickable card in a "choose" quest. */
 export const REWARD_CHOICE_AMOUNT_FIELDS = [
   ...MASTERY_EXPERIENCE_FIELDS,
   "reward_money",

@@ -1,6 +1,6 @@
 import {eq} from "drizzle-orm";
 import {afterEach, beforeEach, expect, it, vi} from "bun:test";
-import {CombatStatNames, getUserCaps} from "@/drizzle/constants";
+import {CombatStatNames, getUserCaps, MAX_MASTERY_CAP} from "@/drizzle/constants";
 import {bloodline, gameSetting, item, userItem, quest, questHistory, trainingLog, userData, userQueue, userVote} from "@/drizzle/schema";
 import {getEnergyQueue} from "@/libs/queue";
 import {fetchUpdatedUser} from "@/server/api/routers/profile";
@@ -14,7 +14,6 @@ import type {EnergyTrainingQueueEntry} from "@/validators/train";
 const USER_ID = "trainee";
 const SESSION_GAIN = 100;
 const MINUTE = 60 * 1000;
-const { mastery_cap: GENIN_MASTERY_CAP } = getUserCaps("GENIN");
 
 const caller = () => callerFor(trainRouter, USER_ID);
 const masterySession = async () => ({
@@ -510,14 +509,14 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
 
 
   it("returns the guarded capped mastery gain without lowering an over-cap stored value", async () => {
-    await trainee({ ninjutsuMastery: GENIN_MASTERY_CAP + 10, currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: minutesAgo(30), regeneration: 0 });
+    await trainee({ ninjutsuMastery: MAX_MASTERY_CAP + 10, currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: minutesAgo(30), regeneration: 0 });
     const result = await (await caller()).stopMasteryTraining(await masterySession());
     expect(result.success).toBe(true);
-    expect(result.userPatch?.ninjutsuMastery).toBe(GENIN_MASTERY_CAP + 10);
-    expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(GENIN_MASTERY_CAP);
+    expect(result.userPatch?.ninjutsuMastery).toBe(MAX_MASTERY_CAP + 10);
+    expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(MAX_MASTERY_CAP);
     expect(result.userPatch?.dailyTrainings).toBe(0);
     expect(result.userPatch?.currentlyTrainingMastery).toBeNull();
-    expect((await readUser()).ninjutsuMastery).toBe(GENIN_MASTERY_CAP + 10);
+    expect((await readUser()).ninjutsuMastery).toBe(MAX_MASTERY_CAP + 10);
     expect(await readLogs()).toHaveLength(0);
   });
 
