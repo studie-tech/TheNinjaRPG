@@ -22,8 +22,8 @@ export const getJutsuReskinMechanics = (parent: Jutsu | ZodJutsuType) => {
     Partial<Jutsu>;
   return {
     ...mechanics,
-    statClassification: mechanics.statClassification ?? "None",
-    elementClassification: mechanics.elementClassification ?? "None",
+    statClassification: mechanics.statClassification || "None",
+    elementClassification: mechanics.elementClassification || "None",
   };
 };
 

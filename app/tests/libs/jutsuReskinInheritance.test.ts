@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { ElementNames, StatTypes } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import { getJutsuReskinMechanics, inheritJutsuReskinEffects } from "@/libs/jutsu/reskins";
-import { DamageTag, HealTag } from "@/validators/combat";
+import { setNullsToEmptyStrings } from "@/utils/typeutils";
+import { DamageTag, HealTag, JutsuValidatorRawSchema } from "@/validators/combat";
 
 describe("linked jutsu reskin inheritance", () => {
   it("inherits mechanics while excluding identity, cosmetics and entry-specific links", () => {
@@ -16,6 +18,34 @@ describe("linked jutsu reskin inheritance", () => {
       cooldown: 12, range: 3, requiredNinjutsuMastery: 300, chakraCost: 0.2,
       statClassification: "None", elementClassification: "None",
     });
+  });
+
+  it("normalizes classifications in a parent cached by the manual editor", () => {
+    const cachedParent = { statClassification: null, elementClassification: null };
+    setNullsToEmptyStrings(cachedParent);
+    const inherited = getJutsuReskinMechanics(cachedParent as unknown as Jutsu);
+    expect(cachedParent).toEqual({ statClassification: "", elementClassification: "" });
+    expect(inherited.statClassification).toBe("None");
+    expect(inherited.elementClassification).toBe("None");
+    expect(
+      JutsuValidatorRawSchema.shape.statClassification.parse(inherited.statClassification),
+    ).toBe("None");
+    expect(
+      JutsuValidatorRawSchema.shape.elementClassification.parse(inherited.elementClassification),
+    ).toBe("None");
+  });
+
+  it("preserves every nonempty parent classification", () => {
+    for (const statClassification of StatTypes) {
+      expect(
+        getJutsuReskinMechanics({ statClassification } as Jutsu).statClassification,
+      ).toBe(statClassification);
+    }
+    for (const elementClassification of ElementNames) {
+      expect(
+        getJutsuReskinMechanics({ elementClassification } as Jutsu).elementClassification,
+      ).toBe(elementClassification);
+    }
   });
 
   it("pairs reordered and repeated types, replaces power, and preserves all visual fields", () => {
