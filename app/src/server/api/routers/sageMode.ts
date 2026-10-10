@@ -8,6 +8,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { actionLog, sageMode, userData } from "@/drizzle/schema";
+import { hasEnergyQueue } from "@/libs/queue";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchUser } from "@/routers/profile";
 import {
@@ -292,7 +293,7 @@ export const sageModeRouter = createTRPCRouter({
       return {
         success: true,
         message: `Sage Mode removed for ${REMOVAL_COST} reps`,
-        userDelta: user.energyTrainingQueue?.length
+        userDelta: hasEnergyQueue(user)
           ? undefined
           : { reputationPoints: -REMOVAL_COST },
       };

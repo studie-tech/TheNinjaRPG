@@ -71,13 +71,21 @@ describe("raid list/join slim user fetches", () => {
           sector: true,
           status: true,
           isBanned: true,
-          energyTrainingQueue: true,
+          energyQueueHead: true,
+          energyQueueTail: true,
         },
       }),
     );
     const columns = findFirst.mock.calls[0]?.[0]?.columns as Record<string, boolean>;
     expect(Object.keys(columns).sort()).toEqual(
-      ["isBanned", "sector", "status", "villageId", "energyTrainingQueue"].sort(),
+      [
+        "isBanned",
+        "sector",
+        "status",
+        "villageId",
+        "energyQueueHead",
+        "energyQueueTail",
+      ].sort(),
     );
   });
 });

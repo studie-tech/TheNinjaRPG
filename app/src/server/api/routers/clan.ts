@@ -58,6 +58,7 @@ import {
 } from "@/drizzle/schema";
 import { checkIfSectorIsAvailable } from "@/libs/clan";
 import { getServerPusher } from "@/libs/pusher";
+import { hasEnergyQueue } from "@/libs/queue";
 import { hasRequiredRank } from "@/libs/train";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUser, updateNindo } from "@/routers/profile";
@@ -299,7 +300,7 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message: `${user.username} donated 0 reputation points to faction`,
-          userDelta: user.energyTrainingQueue?.length ? undefined : {},
+          userDelta: hasEnergyQueue(user) ? undefined : {},
           userPatch: { clan: { id: fetchedClan.id } },
         };
       }
@@ -348,7 +349,7 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message,
-          userDelta: user.energyTrainingQueue?.length
+          userDelta: hasEnergyQueue(user)
             ? undefined
             : {
                 reputationPoints: -repsCost,
@@ -789,7 +790,7 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         userDelta:
-          user.energyTrainingQueue?.length || colorResult.rowsAffected === 0
+          hasEnergyQueue(user) || colorResult.rowsAffected === 0
             ? undefined
             : { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST },
         userPatch: { village: { id: fetchedClan.villageId, hexColor: input.color } },
@@ -1100,7 +1101,7 @@ export const clanRouter = createTRPCRouter({
       if (user.isBanned) return errorResponse("You are banned");
       if (!user.clanId) return errorResponse("Not in a clan");
       if (fetchedClan?.id !== user.clanId) return errorResponse("Not in the clan");
-      const needsUserRefresh = !!user.energyTrainingQueue?.length;
+      const needsUserRefresh = hasEnergyQueue(user);
       if (input.amount === 0) {
         return {
           success: true,

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import type { ReactNode } from "react";
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getUserCaps } from "@/drizzle/constants";
-import { EnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
+import { EnergyTrainingQueue, useEnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
 import type { UserWithRelations } from "@/routers/profile";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { ensureDom } from "../setup-dom.mjs";
@@ -81,12 +81,39 @@ const user = {
   isOutlaw: true,
   federalStatus: "GOLD",
   staffAccount: false,
-  energyTrainingQueue: [],
+  energyQueueHead: 0,
+  masteryQueueHead: 0,
+  queue: [],
 } as unknown as NonNullable<UserWithRelations>;
+
+/** One queued offence entry, stored as a row the way the account refresh returns it. */
+const queuedOffence = [
+  { kind: "ENERGY", position: 1, stat: "offence", energy: 100 },
+] as unknown as NonNullable<UserWithRelations>["queue"];
+
+const QueueImageAction = ({
+  user,
+  getGuess,
+  refreshCaptcha,
+}: {
+  user: NonNullable<UserWithRelations>;
+  getGuess: () => string;
+  refreshCaptcha: () => Promise<void>;
+}) => {
+  const { saveQueue, error } = useEnergyTrainingQueue(refreshCaptcha);
+  return (
+    <>
+      <button type="button" onClick={() => saveQueue({ expectedEntries: [], entries: [{ stat: "offence", energy: user.maxEnergy }], guess: getGuess() })}>
+        Add to queue
+      </button>
+      {error && <p role="alert">{error}</p>}
+    </>
+  );
+};
 
 describe("Energy queue captcha recovery", () => {
   it.each([
-    { success: true, message: "Training queue saved", userPatch: { energyTrainingQueue: [{ stat: "offence" as const, energy: 100 }], curEnergy: 50 } },
+    { success: true, message: "Training queue saved", userPatch: { energyQueueTail: 1, queue: queuedOffence, curEnergy: 50 } },
     { success: false, message: "Invalid captcha" },
   ])(
     "refreshes a consumed captcha after $message so another edit can proceed",
@@ -96,9 +123,8 @@ describe("Energy queue captcha recovery", () => {
         guess = "next challenge";
       });
       const view = render(
-        <EnergyTrainingQueue
+        <QueueImageAction
           user={user}
-          availableEnergy={100}
           getGuess={() => guess}
           refreshCaptcha={refreshCaptcha}
         />,
@@ -126,9 +152,8 @@ describe("Energy queue captcha recovery", () => {
   it("recovers when the write throws after consuming the captcha", async () => {
     const refreshCaptcha = vi.fn(async () => undefined);
     const view = render(
-      <EnergyTrainingQueue
+      <QueueImageAction
         user={user}
-        availableEnergy={100}
         getGuess={() => "answer"}
         refreshCaptcha={refreshCaptcha}
       />,
@@ -151,7 +176,7 @@ describe("Energy queue captcha recovery", () => {
     const refreshCaptcha = vi.fn(async () => undefined);
     const view = render(
       <EnergyTrainingQueue
-        user={{ ...user, energyTrainingQueue: [{ stat: "offence", energy: 100 }] }}
+        user={{ ...user, queue: queuedOffence }}
         availableEnergy={0}
         getGuess={() => "answer"}
         refreshCaptcha={refreshCaptcha}
@@ -160,14 +185,14 @@ describe("Energy queue captcha recovery", () => {
     fireEvent.click(view.getByRole("button", { name: "Clear queue" }));
     await act(async () => {
       await mocks.callbacks?.onSettled(
-        { success: true, message: "Training queue cleared", userPatch: { energyTrainingQueue: [] } },
+        { success: true, message: "Training queue cleared", userPatch: { energyQueueHead: 1, energyQueueTail: 1, queue: [] } },
         null,
         mocks.mutate.mock.lastCall?.[0],
         mocks.callbacks?.onMutate(),
       );
     });
     expect(refreshCaptcha).not.toHaveBeenCalled();
-    expect(mocks.updateUser).toHaveBeenCalledWith({ energyTrainingQueue: [] }, expect.objectContaining({ revision: 7 }));
+    expect(mocks.updateUser).toHaveBeenCalledWith({ energyQueueHead: 1, energyQueueTail: 1, queue: [] }, expect.objectContaining({ revision: 7 }));
     expect(mocks.invalidate).not.toHaveBeenCalled();
   });
   it("refreshes when a successful save requires broader automatic reconciliation", async () => {
@@ -183,20 +208,9 @@ describe("Energy queue captcha recovery", () => {
 
 
 describe("Energy queue capped stats", () => {
-  it("falls back when the selected stat caps after an account refresh", () => {
-    const props = { availableEnergy: 100, getGuess: () => "answer", refreshCaptcha: async () => {} };
-    const view = render(<EnergyTrainingQueue {...props} user={user} />);
-    view.rerender(<EnergyTrainingQueue {...props} user={{ ...user, offence: getUserCaps(user.rank).stats_cap }} />);
-    fireEvent.click(view.getByRole("button", { name: "Add to queue" }));
-    expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ entries: [{ stat: "defence", energy: 100 }] }));
-  });
-
-  it("disables adding when all stats cap while keeping queue removal available", () => {
+  it("keeps queue removal available when all stats cap", () => {
     const { stats_cap, gens_cap } = getUserCaps(user.rank);
-    const view = render(<EnergyTrainingQueue user={{ ...user, offence: stats_cap, defence: stats_cap, strength: gens_cap, intelligence: gens_cap, speed: gens_cap, willpower: gens_cap, energyTrainingQueue: [{ stat: "offence", energy: 100 }] }} availableEnergy={0} getGuess={() => "answer"} refreshCaptcha={async () => {}} />);
-    expect((view.getByRole("combobox") as HTMLButtonElement).disabled).toBe(true);
-    expect((view.getByRole("button", { name: "Add to queue" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(view.getByText("All combat stats are capped for your rank.")).toBeTruthy();
+    const view = render(<EnergyTrainingQueue user={{ ...user, offence: stats_cap, defence: stats_cap, strength: gens_cap, intelligence: gens_cap, speed: gens_cap, willpower: gens_cap, queue: queuedOffence }} availableEnergy={0} getGuess={() => "answer"} refreshCaptcha={async () => {}} />);
     fireEvent.click(view.getByRole("button", { name: "Clear queue" }));
     expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ entries: [] }));
   });

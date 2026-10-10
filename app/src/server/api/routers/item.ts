@@ -109,6 +109,7 @@ import {
   objectiveContentIds,
   postProcessRewards,
 } from "@/libs/quest";
+import { hasEnergyQueue } from "@/libs/queue";
 import { calculateKitsToUse, getRepairKits, needsInventoryRepair } from "@/libs/repair";
 import { filterRollableSageModes } from "@/libs/sageMode";
 import { callDiscordContent } from "@/libs/socials";
@@ -1264,7 +1265,7 @@ export const itemRouter = createTRPCRouter({
         success: true,
         message: `Variant "${variant.name}" unlocked!`,
         userDelta:
-          user.energyTrainingQueue?.length ||
+          hasEnergyQueue(user) ||
           (variant.cost > 0 && variant.costType === "VILLAGE_PRESTIGE")
             ? undefined
             : variant.cost === 0
@@ -1772,15 +1773,15 @@ export const itemRouter = createTRPCRouter({
           return {
             success: true,
             message: "Cleared active loadout",
-            userPatch: user.energyTrainingQueue?.length ? undefined : {},
-            userDelta: user.energyTrainingQueue?.length ? undefined : {},
+            userPatch: hasEnergyQueue(user) ? undefined : {},
+            userDelta: hasEnergyQueue(user) ? undefined : {},
           };
         }
         return {
           success: true,
           message: "Nothing equipped",
-          userPatch: user.energyTrainingQueue?.length ? undefined : {},
-          userDelta: user.energyTrainingQueue?.length ? undefined : {},
+          userPatch: hasEnergyQueue(user) ? undefined : {},
+          userDelta: hasEnergyQueue(user) ? undefined : {},
         };
       }
 
@@ -1832,7 +1833,7 @@ export const itemRouter = createTRPCRouter({
           : undefined,
         userDelta:
           outcomes.every((outcome) => outcome.rowsAffected === 1) &&
-          !user.energyTrainingQueue?.length
+          !hasEnergyQueue(user)
             ? {}
             : undefined,
         message: `Unequipped ${equippedItems.length} item${equippedItems.length === 1 ? "" : "s"}${loadoutClearPromise ? " and cleared active loadout" : ""}`,
@@ -2915,7 +2916,7 @@ export const itemRouter = createTRPCRouter({
         message: `You bought ${info.name}`,
         // Quest purchases keep the full refresh so achievement and masked objective state agree.
         userDelta:
-          advancesBuyItemObjective || user.energyTrainingQueue?.length
+          advancesBuyItemObjective || hasEnergyQueue(user)
             ? undefined
             : {
                 money: -ryoCost,
@@ -4391,13 +4392,13 @@ const fetchUserEquipmentSnapshot = (client: DrizzleClient, userId: string) =>
   });
 
 type EquipmentSnapshot = Omit<MasteryBuffUser, "items"> &
-  Pick<UserData, "energyTrainingQueue" | "itemLoadout"> & {
+  Pick<UserData, "energyQueueHead" | "energyQueueTail" | "itemLoadout"> & {
     items: UserItemWithRelations[];
   };
 
 /** Derive only the gear fields affected by a confirmed write; balances remain deltas. */
 const getUserEquipmentPatch = (user: EquipmentSnapshot) => {
-  if (user.energyTrainingQueue?.length) return;
+  if (hasEnergyQueue(user)) return;
   return {
     items: user.items,
     itemLoadout: user.itemLoadout,

@@ -68,6 +68,7 @@ import {
 } from "@/server/utils/concurrency";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
 import { getUnique } from "@/utils/grouping";
@@ -1128,14 +1129,26 @@ export const updateBloodline = async (
   logMsg: string,
 ) => {
   // Get current bloodline jutsus
-  const bloodlineJutsus = user.bloodlineId
-    ? (
-        await client.query.jutsu.findMany({
-          columns: { id: true },
-          where: eq(jutsu.bloodlineId, user.bloodlineId),
-        })
-      ).map((j) => j.id)
-    : [];
+  const [bloodlineJutsus, queued] = user.bloodlineId
+    ? await Promise.all([
+        client.query.jutsu
+          .findMany({
+            columns: { id: true },
+            where: eq(jutsu.bloodlineId, user.bloodlineId),
+          })
+          .then((rows) => rows.map((j) => j.id)),
+        fetchQueuedJutsuIds(client, user.userId),
+      ])
+    : [[], new Set<string>()];
+  // Queued levels were bought for the current bloodline; the player cancels them for a
+  // refund first. A level queued after this check is refunded when its turn comes.
+  if (bloodlineJutsus.length > 0) {
+    if (bloodlineJutsus.some((id) => queued.has(id))) {
+      throw new BloodlineGrantRejectedError(
+        "Cancel queued training of your bloodline jutsu before changing bloodline",
+      );
+    }
+  }
   // Update user first, with a CAS on both reputation (atomic decrement, floor guard) and the
   // caller's pre-state bloodlineId (prevents a raced/duplicate grant from re-spending reputation
   // or clobbering a bloodline someone else already changed).

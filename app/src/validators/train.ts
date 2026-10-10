@@ -20,6 +20,67 @@ export const updateEnergyTrainingQueueInputSchema = z.object({
   guess: z.string().optional(),
 });
 
+export const masteryTrainingQueueEntrySchema = z.object({
+  stat: z.enum(MasteryNames),
+  speed: z.enum(TrainingSpeeds),
+});
+export type MasteryTrainingQueueEntry = z.infer<typeof masteryTrainingQueueEntrySchema>;
+
+export const updateMasteryTrainingQueueInputSchema = z.object({
+  entries: z.array(masteryTrainingQueueEntrySchema).max(QUEUE_WAITING_SLOTS.GOLD),
+  expectedEntries: z
+    .array(masteryTrainingQueueEntrySchema)
+    .max(QUEUE_WAITING_SLOTS.GOLD),
+});
+
+/** A material stack taken by a queued craft, returned to its stack on cancellation. */
+export const craftingQueueMaterialSchema = z.object({
+  userItemId: z.string(),
+  itemId: z.string(),
+  quantity: z.number().int().positive(),
+  storedAtHome: z.boolean(),
+  /** Display name, so the queue view needs no item lookup */
+  name: z.string().optional(),
+});
+export type CraftingQueueMaterial = z.infer<typeof craftingQueueMaterialSchema>;
+
+export const cancelQueuedJobInputSchema = z.object({ queueId: z.string() });
+
+const queuedJobSchema = z.object({
+  id: z.string(),
+  durationSeconds: z.number(),
+  startsAt: z.date(),
+  finishesAt: z.date(),
+});
+export type QueuedJob = z.infer<typeof queuedJobSchema>;
+
+export const jutsuTrainingQueueOutputSchema = z.object({
+  capacity: z.number(),
+  waiting: z.array(
+    queuedJobSchema.extend({
+      jutsuId: z.string(),
+      name: z.string(),
+      image: z.string().nullable(),
+      reservedRyo: z.number(),
+      /** The level this entry trains the jutsu to */
+      level: z.number(),
+    }),
+  ),
+});
+
+export const craftingQueueOutputSchema = z.object({
+  capacity: z.number(),
+  waiting: z.array(
+    queuedJobSchema.extend({
+      itemId: z.string(),
+      name: z.string(),
+      image: z.string().nullable(),
+      quantity: z.number(),
+      materials: z.array(z.object({ name: z.string(), quantity: z.number() })),
+    }),
+  ),
+});
+
 // Input schemas
 export const startTrainingInputSchema = z.object({
   stat: z.enum(CombatStatNames),
@@ -33,6 +94,8 @@ export const startMasteryTrainingInputSchema = z.object({
 });
 
 export const stopTrainingInputSchema = z.object({
+  stat: z.enum(MasteryNames),
+  startedAt: z.date(),
   guess: z.string().optional(),
 });
 

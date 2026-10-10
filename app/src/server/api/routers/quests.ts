@@ -100,6 +100,7 @@ import {
   rollObjectiveAttackers,
   verifyQuestContentForSave,
 } from "@/libs/quest";
+import { hasEnergyQueue } from "@/libs/queue";
 import {
   getUnavailableRewardCards,
   REWARD_CHOICE_AMOUNT_LABELS,
@@ -1290,7 +1291,7 @@ export const questsRouter = createTRPCRouter({
           message: `You already have every reward offered by ${questName}`,
           rewards,
           badges: [],
-          userDelta: user.energyTrainingQueue?.length ? undefined : {},
+          userDelta: hasEnergyQueue(user) ? undefined : {},
         };
       }
       // Picked profession experience advances other quests' objectives, as at completion.
@@ -1332,9 +1333,7 @@ export const questsRouter = createTRPCRouter({
         message: `Claimed rewards from ${questName}`,
         rewards,
         badges,
-        userDelta: user.energyTrainingQueue?.length
-          ? undefined
-          : getRewardUserDelta(rewards),
+        userDelta: hasEnergyQueue(user) ? undefined : getRewardUserDelta(rewards),
       };
     }),
   checkLocationQuest: protectedProcedure

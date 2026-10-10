@@ -2,7 +2,7 @@
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REMOVAL_COST } from "@/drizzle/constants";
-import { actionLog, userData } from "@/drizzle/schema";
+import { actionLog, userData, userQueue } from "@/drizzle/schema";
 import { sageModeRouter } from "@/server/api/routers/sageMode";
 import { insertUsers } from "../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
@@ -13,6 +13,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { queueEnergy } from "../../setup/queues";
 
 const userId = "sage-cache-player";
 const snapshot = {
@@ -29,7 +30,8 @@ describe("sage removal cache response", () => {
         .fn()
         .mockResolvedValue({
           ...snapshot,
-          energyTrainingQueue: pendingQueue ? [{ stat: "offence", energy: 10 }] : [],
+          energyQueueHead: 0,
+          energyQueueTail: pendingQueue ? 1 : 0,
         });
       const db = {
         query: { userData: { findFirst: read } },
@@ -63,7 +65,7 @@ describe("sage removal cache response", () => {
 
 describeWithDatabase("sage removal committed balances", () => {
   beforeEach(async () => {
-    await resetTables(actionLog, userData);
+    await resetTables(userQueue, actionLog, userData);
     await insertUsers([{ ...snapshot, status: "AWAKE" }]);
   });
   afterEach(() => resetServerModuleStubs());
@@ -89,10 +91,7 @@ describeWithDatabase("sage removal committed balances", () => {
   });
   it("keeps full reconciliation for a server-side pending queue", async () => {
     const db = await getTestDatabase();
-    await db
-      .update(userData)
-      .set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] })
-      .where(eq(userData.userId, userId));
+    await queueEnergy(userId, [{ stat: "offence", energy: 10 }]);
     const result = await (await callerFor(sageModeRouter, userId)).removeSageMode();
     expect(result.success).toBe(true);
     expect(result.userDelta).toBeUndefined();

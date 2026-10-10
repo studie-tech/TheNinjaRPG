@@ -8,6 +8,7 @@ import {
   quest,
   user2conversation,
   userData,
+  userQueue,
 } from "@/drizzle/schema";
 import { getRaidChatConversationId } from "@/libs/raids";
 import { Pusher } from "@/libs/pusher";
@@ -22,6 +23,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { queueEnergy } from "../../setup/queues";
 
 const stubRateLimitTransport = () => {
   const realFetch = globalThis.fetch;
@@ -51,7 +53,8 @@ describe("raid join cache reconciliation", () => {
       sector: 7,
       status: "AWAKE",
       isBanned: false,
-      energyTrainingQueue: pendingQueue ? [{ stat: "offence", energy: 10 }] : [],
+      energyQueueHead: 0,
+      energyQueueTail: pendingQueue ? 1 : 0,
     });
     const insert = vi.fn(() => ({
       values: () => ({ onDuplicateKeyUpdate: async () => ({ rowsAffected: 1 }) }),
@@ -120,6 +123,7 @@ describeWithDatabase("raid join committed queue", () => {
   beforeEach(stubRateLimitTransport);
   beforeEach(async () => {
     await resetTables(
+      userQueue,
       user2conversation,
       conversation,
       mpvpBattleUser,
@@ -164,11 +168,7 @@ describeWithDatabase("raid join committed queue", () => {
   for (const pendingQueue of [false, true]) {
     it(`commits queue and chat membership with the correct refresh fallback, training=${pendingQueue}`, async () => {
       const db = await getTestDatabase();
-      if (pendingQueue)
-        await db
-          .update(userData)
-          .set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] })
-          .where(eq(userData.userId, "queue-sql-user"));
+      if (pendingQueue) await queueEnergy("queue-sql-user", [{ stat: "offence", energy: 10 }]);
       const reads = vi.spyOn(db.query.userData, "findFirst");
       const result = await (
         await callerFor(raidsRouter, "queue-sql-user")

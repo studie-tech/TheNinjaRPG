@@ -11,6 +11,7 @@ import {
   userBadge,
   userData,
   userItem,
+  userQueue,
 } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
 import type { PendingRewardChoice } from "@/validators/rewards";
@@ -26,6 +27,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { queueEnergy } from "../../setup/queues";
 
 /**
  * The claim consumes the stored offer with a JSON_EXTRACT compare-and-swap. A mocked client would
@@ -64,6 +66,7 @@ const playerState = async () => {
 describeWithDatabase("quest reward choice against a real MySQL", () => {
   beforeEach(async () => {
     await resetTables(
+      userQueue,
       userData,
       quest,
       questHistory,
@@ -139,7 +142,7 @@ describeWithDatabase("quest reward choice against a real MySQL", () => {
 
   it("reconciles queued training when claiming a numeric reward choice", async () => {
     const database = await getTestDatabase();
-    await database.update(userData).set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] }).where(eq(userData.userId, PLAYER));
+    await queueEnergy(PLAYER, [{ stat: "offence", energy: 10 }]);
     const result = await (await caller()).claimRewardChoice({ questId: QUEST, choiceId: "offer-1", cardIds: ["reward_money", "reward_exp"] });
     expect(result.success).toBe(true);
     expect(result.userDelta).toBeUndefined();

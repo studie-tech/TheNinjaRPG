@@ -74,7 +74,10 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
-import { EnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
+import {
+  EnergyTrainingQueue,
+  useEnergyTrainingQueue,
+} from "@/layout/EnergyTrainingQueue";
 import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, {
@@ -84,15 +87,18 @@ import JutsuFiltering, {
 } from "@/layout/JutsuFiltering";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { MasteryTrainingQueue } from "@/layout/MasteryTrainingQueue";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
 import { calcCurrent } from "@/layout/StatusBar";
+import { TimedQueue } from "@/layout/TimedQueue";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showTrainingCapcha } from "@/libs/captcha";
 import { effectiveMasteries } from "@/libs/mastery";
 import { useInfinitePagination } from "@/libs/pagination";
+import { getEnergyQueue, getMasteryQueue } from "@/libs/queue";
 import { cn } from "@/libs/shadui";
 import { getStealthStatus } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
@@ -111,19 +117,16 @@ import {
   isJutsuTrainToLearnRestricted,
   isStatTrainingCapped,
   masteryTrainingBlockMessage,
+  queuedMasteryStartBlockMessage,
   statTrainingBlockMessage,
   trainEfficiency,
   trainingEnergyMessage,
-  trainingSpeedSeconds,
 } from "@/libs/train";
 import { isTutorialJutsuPickStep } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
+import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { capitalizeFirstLetter } from "@/utils/string";
-import {
-  getDaysHoursMinutesSeconds,
-  getTimeLeftStr,
-  secondsFromDate,
-} from "@/utils/time";
+import { getDaysHoursMinutesSeconds, getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { CaptchaVerifySchema } from "@/validators/misc";
 import { captchaVerifySchema } from "@/validators/misc";
@@ -140,6 +143,9 @@ export default function Training() {
   const focusJutsuTraining = isTutorialJutsuPickStep(currentStep);
   // Null until NavTabs restores the last visited section (or falls back to the first).
   const [section, setSection] = useState<string | null>(null);
+  const { data: sidebarTimers } = api.profile.getSidebarTimers.useQuery(undefined, {
+    enabled: !!userData && access,
+  });
 
   // While loading userdata
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -147,6 +153,7 @@ export default function Training() {
 
   // Show sensei component
   const showSenseiSystem = [...SENSEI_RANKS, "GENIN"].includes(userData.rank);
+  const energyQueueLength = getEnergyQueue(userData).length;
   const trainingSections = getTrainingSections(showSenseiSystem);
 
   // Tutorial steps select the panel containing their highlighted action.
@@ -182,6 +189,19 @@ export default function Training() {
               onChange={setSection}
               options={trainingSections.options}
               aliases={trainingSections.aliases}
+              counts={{
+                Stats: energyQueueLength,
+                Masteries:
+                  getMasteryQueue(userData).length +
+                  (userData.currentlyTrainingMastery ? 1 : 0),
+                Jutsu:
+                  (sidebarTimers?.jutsuQueue.count ?? 0) +
+                  (sidebarTimers?.jutsuTraining &&
+                  isJutsuInTraining(sidebarTimers.jutsuTraining, Date.now() - timeDiff)
+                    ? 1
+                    : 0),
+              }}
+              countLabel="in queue"
               icons={{
                 Stats: <Swords aria-hidden="true" className="h-4 w-4" />,
                 Masteries: <Medal aria-hidden="true" className="h-4 w-4" />,
@@ -194,29 +214,6 @@ export default function Training() {
             />
           </div>
         </div>
-        {(!!userData.currentlyTrainingMastery ||
-          !!userData.energyTrainingQueue?.length) && (
-          <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
-            {userData.currentlyTrainingMastery && (
-              <button
-                type="button"
-                className="hover:underline"
-                onClick={() => selectSection("Masteries")}
-              >
-                Training {getTrainingLabel(userData.currentlyTrainingMastery)}
-              </button>
-            )}
-            {!!userData.energyTrainingQueue?.length && (
-              <button
-                type="button"
-                className="hover:underline"
-                onClick={() => selectSection("Stats")}
-              >
-                {userData.energyTrainingQueue.length} queued
-              </button>
-            )}
-          </div>
-        )}
       </ContentBox>
       <TabsContent value={activeSection ?? ""} className="mt-0">
         {(activeSection === "Stats" || activeSection === "Masteries") && (
@@ -511,10 +508,21 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const efficiency = trainEfficiency(userData);
   const [energy, setEnergy] = useState<number | null>(null);
+  const [statTrainingMode, setStatTrainingMode] = useState<"Custom" | "Max" | "Queue">(
+    "Max",
+  );
+  const isQueueingStats = statTrainingMode === "Queue";
+  const [queuedMasterySpeed, setQueuedMasterySpeed] = useState<TrainingSpeed | null>(
+    null,
+  );
   const [availableEnergy, setAvailableEnergy] = useState(() =>
     currentTrainingEnergy(userData, timeDiff),
   );
-  const trainingEnergy = energy ?? availableEnergy;
+  const trainingEnergy =
+    statTrainingMode === "Max"
+      ? availableEnergy
+      : (energy ?? (isQueueingStats ? userData.maxEnergy : availableEnergy));
+  const energyQueueLength = getEnergyQueue(userData).length;
   useEffect(() => {
     const update = () => setAvailableEnergy(currentTrainingEnergy(userData, timeDiff));
     update();
@@ -564,6 +572,15 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
       },
     });
 
+  const {
+    saveQueue: queueStatTraining,
+    isPending: isQueueingEnergy,
+    error: energyQueueError,
+  } = useEnergyTrainingQueue(async () => {
+    await utils.misc.getCaptcha.invalidate();
+    captchaForm.reset();
+  });
+
   const { mutate: startMasteryTraining, isPending: isStartingMastery } =
     api.train.startMasteryTraining.useMutation({
       onMutate: () => ({ revision: prepareUserUpdate() }),
@@ -578,6 +595,17 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
         }
       },
       onError: () => utils.profile.getUser.invalidate(),
+    });
+
+  const { mutate: queueMasteryTraining, isPending: isQueueingMastery } =
+    api.train.updateMasteryTrainingQueue.useMutation({
+      onMutate: () => ({ revision: prepareUserUpdate() }),
+      onSuccess: (result) => showMutationToast(result),
+      onSettled: (result, _error, _variables, context) =>
+        updateUser(result?.success ? result.userPatch : undefined, {
+          revision: context?.revision,
+          achievementProgress: result?.achievementProgress,
+        }),
     });
 
   const { mutate: stopMasteryTraining, isPending: isStoppingMastery } =
@@ -617,33 +645,58 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
     defaultValues: { guess: "" },
   });
 
+  const collectMasteryTraining = (guess?: string) => {
+    const stat = userData.currentlyTrainingMastery;
+    const startedAt = userData.masteryTrainingStartedAt;
+    if (stat && startedAt) stopMasteryTraining({ stat, startedAt, guess });
+  };
+
   // Form handlers
   const onSubmit = captchaForm.handleSubmit((data) => {
-    stopMasteryTraining(data);
+    collectMasteryTraining(data.guess);
   });
 
-  const isPending = isStarting || isStartingMastery || isStoppingMastery || isChanging;
+  const isPending =
+    isStarting ||
+    isQueueingEnergy ||
+    isStartingMastery ||
+    isQueueingMastery ||
+    isStoppingMastery ||
+    isChanging;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   // Convenience definitions
   const trainItemClassName = "hover:opacity-50 hover:cursor-pointer relative";
   const iconClassName = "w-5 h-5 absolute top-1 right-1 text-blue-500";
   const { mastery_cap } = getUserCaps(userData.rank);
+  const masteryEntries = getMasteryQueue(userData);
+  const selectedMasterySpeed = userData.currentlyTrainingMastery
+    ? (queuedMasterySpeed ?? userData.trainingSpeed)
+    : userData.trainingSpeed;
 
   const renderCaptchaStop = () => {
     if (!showCaptcha) {
       return (
-        <XCircle
-          className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-          onClick={() => stopMasteryTraining({})}
-        />
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label="Collect and stop mastery training"
+          disabled={isPending}
+          onClick={() => collectMasteryTraining()}
+        >
+          <XCircle className="h-4 w-4 text-red-600" />
+        </Button>
       );
     }
     if (!captcha) return <Loader explanation="Loading captcha" />;
     return (
       <Popover>
-        <PopoverTrigger className="absolute top-4 right-4 z-30">
-          <XCircle className="h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500" />
+        <PopoverTrigger
+          aria-label="Collect and stop mastery training"
+          disabled={isPending}
+          className="flex h-9 w-9 items-center justify-center"
+        >
+          <XCircle className="h-4 w-4 text-red-600" />
         </PopoverTrigger>
         <PopoverContent>
           <p className="font-bold text-lg">Verify Humanity</p>
@@ -677,30 +730,6 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
     );
   };
 
-  const renderTrainingOverlay = (stat: MasteryName, startedAt: Date | null) => (
-    <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-95">
-      <div className="m-auto flex flex-col items-center text-center text-white">
-        <p className="p-5 text-2xl">Training {getTrainingLabel(stat)}</p>
-        <Image src={getTrainingImage(stat)} alt={stat} width={128} height={128} />
-        <div className="w-2/3">
-          {startedAt && (
-            <p className="text-2xl">
-              Time Left:{" "}
-              <Countdown
-                targetDate={secondsFromDate(
-                  trainingSpeedSeconds(userData.trainingSpeed),
-                  startedAt,
-                )}
-                timeDiff={timeDiff}
-              />
-            </p>
-          )}
-          {renderCaptchaStop()}
-        </div>
-      </div>
-    </div>
-  );
-
   // Overlay rather than replace each box, so the sections below keep their place
   const pendingOverlay = isPending && (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/10 backdrop-blur-sm">
@@ -710,10 +739,22 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
 
   return (
     <>
+      {props.section === "Stats" && energyQueueLength > 0 && (
+        <EnergyTrainingQueue
+          user={userData}
+          availableEnergy={availableEnergy}
+          getGuess={() => captchaForm.getValues("guess")}
+          refreshCaptcha={async () => {
+            await utils.misc.getCaptcha.invalidate();
+            captchaForm.reset();
+          }}
+        />
+      )}
       {props.section === "Stats" && (
         <ContentBox
           title="Combat stats"
-          subtitle="Instant training"
+          topRightCorntentBreakpoint="sm"
+          subtitle={isQueueingStats ? "Train as Energy recovers" : "Instant training"}
           initialBreak={props.initialBreak}
           topRightContent={
             <div className="my-2 ml-2 flex flex-col gap-1">
@@ -726,35 +767,51 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     <Zap className="h-5 w-5" />
                   </PopoverTrigger>
                   <PopoverContent className="max-w-64 text-sm">
-                    Choose how much Energy to spend, then select a stat to train it
-                    instantly. Each Energy gives {STATS_PER_ENERGY} stats before
-                    training bonuses. Max keeps the amount synced with available Energy
-                    as you spend and regenerate it. Enter an amount to turn Max off.
+                    Custom trains immediately with the entered Energy amount. Max keeps
+                    the amount synced with available Energy. Queue adds training for
+                    when the entered Energy threshold recovers, starting with your
+                    capacity. Select a stat image to train or add a queue entry. Each
+                    Energy gives {STATS_PER_ENERGY} stats before training bonuses.
                   </PopoverContent>
                 </Popover>
                 <div className="flex">
                   <Input
                     id="training-energy"
-                    aria-label="Energy to spend"
+                    aria-label={isQueueingStats ? "Queued Energy" : "Energy to spend"}
                     type="number"
                     min={1}
                     step={1}
                     value={trainingEnergy}
                     disabled={isPending}
-                    onChange={(event) => setEnergy(Number(event.target.value))}
+                    onChange={(event) => {
+                      setEnergy(Number(event.target.value));
+                      if (statTrainingMode === "Max") setStatTrainingMode("Custom");
+                    }}
                     className="w-20 rounded-r-none"
                   />
-                  <Button
-                    variant={energy === null ? "default" : "outline"}
-                    size="sm"
-                    className="h-9 rounded-l-none border-l-0"
-                    aria-label="Automatically use available Energy"
-                    aria-pressed={energy === null}
-                    disabled={isPending}
-                    onClick={() => setEnergy(energy === null ? availableEnergy : null)}
-                  >
-                    Max
-                  </Button>
+                  <fieldset aria-label="Energy training mode" className="flex">
+                    {(["Custom", "Max", "Queue"] as const).map((mode, index) => (
+                      <Button
+                        key={mode}
+                        variant={statTrainingMode === mode ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "h-9 rounded-none border-l-0 px-2 sm:px-3",
+                          index === 2 && "rounded-r-md",
+                        )}
+                        aria-pressed={statTrainingMode === mode}
+                        disabled={isPending}
+                        onClick={() => {
+                          if (statTrainingMode === mode) return;
+                          if (mode === "Custom") setEnergy(trainingEnergy);
+                          else if (mode === "Queue") setEnergy(userData.maxEnergy);
+                          setStatTrainingMode(mode);
+                        }}
+                      >
+                        {mode}
+                      </Button>
+                    ))}
+                  </fieldset>
                 </div>
               </div>
             </div>
@@ -791,11 +848,30 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     key={`${stat}-${i}`}
                     onClick={() => {
                       const block =
-                        statTrainingBlockMessage(userData) ??
+                        statTrainingBlockMessage(
+                          isQueueingStats && userData.status === "ASLEEP"
+                            ? { ...userData, status: "AWAKE" }
+                            : userData,
+                        ) ??
                         (overCap ? "Already capped" : null) ??
-                        trainingEnergyMessage(trainingEnergy, availableEnergy);
+                        (isQueueingStats
+                          ? energyQueueLength >= getQueueTotalCapacity(userData)
+                            ? "Energy queue is full"
+                            : !Number.isInteger(trainingEnergy) ||
+                                trainingEnergy <= 0 ||
+                                trainingEnergy > userData.maxEnergy
+                              ? "Enter a whole Energy amount between 1 and your capacity."
+                              : null
+                          : trainingEnergyMessage(trainingEnergy, availableEnergy));
                       if (block) showMutationToast({ success: false, message: block });
-                      else
+                      else if (isQueueingStats) {
+                        const entries = getEnergyQueue(userData);
+                        queueStatTraining({
+                          expectedEntries: entries,
+                          entries: [...entries, { stat, energy: trainingEnergy }],
+                          guess: captchaForm.getValues("guess"),
+                        });
+                      } else
                         startTraining({
                           stat,
                           energy: trainingEnergy,
@@ -827,18 +903,21 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
               })}
             </div>
           </div>
+          {energyQueueError && (
+            <p role="alert" className="mt-2 text-destructive text-sm">
+              {energyQueueError}
+            </p>
+          )}
           {pendingOverlay}
         </ContentBox>
       )}
-      {props.section === "Stats" && (
-        <EnergyTrainingQueue
+      {props.section === "Masteries" && (
+        <MasteryTrainingQueue
           user={userData}
-          availableEnergy={availableEnergy}
-          getGuess={() => captchaForm.getValues("guess")}
-          refreshCaptcha={async () => {
-            await utils.misc.getCaptcha.invalidate();
-            captchaForm.reset();
-          }}
+          timeDiff={timeDiff}
+          getLabel={getTrainingLabel}
+          stopControl={renderCaptchaStop()}
+          isProcessing={isPending}
         />
       )}
       {props.section === "Masteries" && (
@@ -846,29 +925,34 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
           title="Masteries"
           subtitle="Timed training · No Energy cost"
           initialBreak={true}
-        >
-          <div className="mb-3 space-y-2">
-            <p className="text-muted-foreground text-xs">
-              {efficiency}% efficiency · {userData.dailyTrainings} /{" "}
-              {MAX_DAILY_TRAININGS} daily sessions
-            </p>
-            <div className="overflow-x-auto overflow-y-hidden">
+          topRightCorntentBreakpoint="sm"
+          topRightContent={
+            <div className="my-2 ml-2 overflow-x-auto overflow-y-hidden">
               <NavTabs
-                current={userData.trainingSpeed}
+                current={selectedMasterySpeed}
                 options={TrainingSpeeds}
                 setValue={(value) => {
                   if (isPending) return;
                   if (userData.currentlyTrainingMastery) {
-                    showMutationToast({
-                      success: false,
-                      message: "Cannot change training speed while training",
-                    });
+                    setQueuedMasterySpeed(value as TrainingSpeed);
                     return;
                   }
                   changeSpeed({ speed: value as TrainingSpeed });
                 }}
               />
             </div>
+          }
+        >
+          <div className="mb-3 space-y-2">
+            <p className="text-muted-foreground text-xs">
+              {efficiency}% efficiency · {userData.dailyTrainings} /{" "}
+              {MAX_DAILY_TRAININGS} daily sessions
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {userData.currentlyTrainingMastery
+                ? "Choose an interval, then select a mastery image to add a session to the queue."
+                : "Choose an interval, then select a mastery image to start training."}
+            </p>
           </div>
           <div inert={isPending}>
             <div className="grid grid-cols-3 text-center font-bold">
@@ -881,12 +965,23 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                     id={`tutorial-traininggrounds-${stat.toLowerCase()}`}
                     key={`${stat}-${i}`}
                     onClick={() => {
-                      const block = masteryTrainingBlockMessage(userData);
+                      const entry = { stat, speed: selectedMasterySpeed };
+                      const block = userData.currentlyTrainingMastery
+                        ? (queuedMasteryStartBlockMessage(userData, entry) ??
+                          (masteryEntries.length >= getQueueWaitingSlots(userData)
+                            ? "Mastery queue is full"
+                            : null))
+                        : masteryTrainingBlockMessage(userData);
                       if (block) showMutationToast({ success: false, message: block });
                       else if (overCap)
                         showMutationToast({
                           success: false,
                           message: "Already capped",
+                        });
+                      else if (userData.currentlyTrainingMastery)
+                        queueMasteryTraining({
+                          expectedEntries: masteryEntries,
+                          entries: [...masteryEntries, entry],
                         });
                       else startMasteryTraining({ stat });
                     }}
@@ -914,11 +1009,6 @@ const StatsTraining: React.FC<TrainingProps & { section: "Stats" | "Masteries" }
                 );
               })}
             </div>
-            {userData.currentlyTrainingMastery &&
-              renderTrainingOverlay(
-                userData.currentlyTrainingMastery,
-                userData.masteryTrainingStartedAt,
-              )}
           </div>
           {pendingOverlay}
         </ContentBox>
@@ -938,6 +1028,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
+  // Successive levels of the selected jutsu to buy in one go
+  const [levelCount, setLevelCount] = useState(1);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   // Re-renders the box when the countdown ends: the refetch it triggers returns the
   // same rows, which alone would leave the finished training's overlay on screen.
@@ -1037,6 +1129,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             handleNextStep();
           }
         }
+        await utils.jutsu.getTrainingQueue.invalidate();
         await Promise.all([
           utils.jutsu.getUserJutsus.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
@@ -1053,6 +1146,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     api.jutsu.stopTraining.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
+        await utils.jutsu.getTrainingQueue.invalidate();
         await Promise.all([
           utils.jutsu.getUserJutsus.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
@@ -1065,8 +1159,28 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       },
     });
 
+  // Levels waiting behind the active training
+  const { data: trainingQueue } = api.jutsu.getTrainingQueue.useQuery(undefined, {
+    enabled: !!userData,
+  });
+  const { mutate: cancelQueued, isPending: isCancellingQueued } =
+    api.jutsu.cancelQueuedTraining.useMutation({
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        showMutationToast(data);
+        await utils.jutsu.getTrainingQueue.invalidate();
+        await Promise.all([
+          utils.jutsu.getUserJutsus.invalidate(),
+          utils.profile.getSidebarTimers.invalidate(),
+          ...(data.success
+            ? [updateUser(undefined, { revision, delta: data.userDelta })]
+            : []),
+        ]);
+      },
+    });
+
   // Mutation loading
-  const isPending = isStartingTrain || isStoppingTrain;
+  const isPending = isStartingTrain || isStoppingTrain || isCancellingQueued;
 
   // Selecting a jutsu restyles every tile of the grid and mounts or unmounts the confirm
   // modal; as a transition that render no longer blocks the tap's next paint.
@@ -1075,6 +1189,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     startTransition(() => {
       setIsOpen(next);
       if (!next) setJutsu(undefined);
+      setLevelCount(1);
     });
   };
 
@@ -1145,20 +1260,53 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Training time
   const finishTrainingAt = findJutsuInTraining(userJutsus, serverNow);
 
-  // Derived calculations
-  const level = userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
+  // Derived calculations. Behind an active training the level is queued: it builds on
+  // the stored level plus the levels of this jutsu already waiting.
+  const queuedJobs = trainingQueue?.waiting ?? [];
+  const isQueueing = !!finishTrainingAt?.finishTraining || queuedJobs.length > 0;
+  const isQueueFull =
+    isQueueing &&
+    (finishTrainingAt?.finishTraining ? 1 : 0) + queuedJobs.length >=
+      (trainingQueue?.capacity ?? 1);
+  const level = isQueueing
+    ? (queuedJobs.filter((job) => job.jutsuId === jutsu?.id).at(-1)?.level ??
+      userJutsus?.find((uj) => uj.jutsuId === jutsu?.id)?.level ??
+      0)
+    : userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
+  // The same jutsu can be bought several levels at once, up to the free queue slots
+  // (all of them, the active one included, when nothing is training) and the level cap.
+  const levelCap = jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP;
+  const freeSlots =
+    (trainingQueue?.capacity ?? 1) -
+    (finishTrainingAt?.finishTraining ? 1 : 0) -
+    queuedJobs.length;
+  const maxLevelCount = Math.max(1, Math.min(freeSlots, levelCap - level));
+  const count = Math.min(levelCount, maxLevelCount);
+  const countLevels = Array.from({ length: count }, (_, i) => level + i);
   const trainSeconds =
     jutsu &&
     getTimeLeftStr(
-      ...getDaysHoursMinutesSeconds(calcJutsuTrainTime(jutsu, level, userData)),
+      ...getDaysHoursMinutesSeconds(
+        countLevels.reduce(
+          (sum, lvl) => sum + calcJutsuTrainTime(jutsu, lvl, userData),
+          0,
+        ),
+      ),
     );
-  const cost = (jutsu && calcJutsuTrainCost(jutsu, level, userData, students)) || 0;
+  const cost =
+    (jutsu &&
+      countLevels.reduce(
+        (sum, lvl) => sum + calcJutsuTrainCost(jutsu, lvl, userData, students),
+        0,
+      )) ||
+    0;
   const okRank = checkJutsuRank(jutsu?.jutsuRank, userData.rank);
   const okVillage = checkJutsuVillage(jutsu, userData);
   const okBloodline = checkJutsuBloodline(jutsu, userData);
   const canAfford = userData && cost && userData.money >= cost;
   const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
-  const canTrain = okRank && okVillage && okBloodline && !isCapped && canAfford;
+  const canTrain =
+    okRank && okVillage && okBloodline && !isCapped && canAfford && !isQueueFull;
 
   // Label for proceed button
   let proceed_label: string | undefined;
@@ -1173,127 +1321,177 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
       proceed_label = `Wrong village`;
     } else if (!okBloodline) {
       proceed_label = `Wrong bloodline`;
+    } else if (isQueueFull) {
+      proceed_label = `Training queue full`;
     } else if (trainSeconds && cost) {
-      proceed_label = `Train [${trainSeconds}, ${cost} ryo]`;
+      proceed_label = `${isQueueing ? "Queue" : "Train"}${count > 1 ? ` ${count} levels` : ""} [${trainSeconds}, ${cost} ryo]`;
     }
   }
 
-  return (
-    <ContentBox
-      title="Techniques"
-      subtitle="Jutsu Techniques"
-      defaultBackHref={props.initialBreak ? undefined : "/village"}
-      initialBreak={props.initialBreak}
-      topRightContent={
-        <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
+  const activeTraining = finishTrainingAt?.finishTraining
+    ? {
+        title: finishTrainingAt.jutsu?.name ?? "Jutsu",
+        detail: `level ${finishTrainingAt.level}`,
+        finishesAt: finishTrainingAt.finishTraining,
+        stopLabel: "Stop training (no refund)",
+        onStop: isRefetchingUserJutsu ? undefined : () => cancel(),
       }
-    >
-      <JutsuStatQuickFilters state={state} />
-      {userData && (
-        // The grid grows with the page; a minimum height through the first load keeps
-        // the box from collapsing and jumping when the jutsu arrive.
-        <div className={cn("pt-3", !jutsus && "min-h-[320px]")}>
-          <ActionSelector
-            gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))]"
-            items={alljutsus}
-            counts={userJutsuCounts}
-            selectedId={jutsu?.id}
-            labelSingles={true}
-            emptyText="No jutsu available for your rank"
-            onClick={(id) => {
-              if (id === jutsu?.id) {
-                setJutsuConfirmOpen(false);
-              } else {
-                const selected = alljutsus?.find((jutsu) => jutsu.id === id);
-                startTransition(() => {
-                  setJutsu(selected);
-                  setIsOpen(true);
-                });
-              }
-            }}
-            showBgColor={false}
-            showLabels={true}
-            lastElement={lastElement}
-            setLastElement={setLastElement}
-          />
-          {isOpen && jutsu && (
-            <Modal
-              id="tutorial-traininggrounds-trainJutsu"
-              title="Confirm Purchase"
-              proceed_label={proceed_label}
-              isOpen={isOpen}
-              setIsOpen={setJutsuConfirmOpen}
-              isValid={false}
-              onClose={() => startTransition(() => setJutsu(undefined))}
-              onAccept={() => {
-                if (canTrain && !isPending) {
-                  train({ jutsuId: jutsu.id });
-                } else {
-                  setJutsuConfirmOpen(false);
-                }
-              }}
-              confirmClassName={
-                canTrain
-                  ? "bg-blue-600 text-white hover:bg-blue-700"
-                  : "bg-red-600 text-white hover:bg-red-700"
-              }
+    : null;
+
+  return (
+    <>
+      {(activeTraining || queuedJobs.length > 0) && (
+        <TimedQueue
+          title="Jutsu training queue"
+          subtitle="Levels that start when the active training ends"
+          capacity={trainingQueue?.capacity ?? 1}
+          help="Select a jutsu while another is training to queue its next level. Its ryo is paid when queued and refunded if you cancel it before it starts. Queued levels start one after another, also while you are offline; a level that became cheaper by then refunds the difference."
+          active={activeTraining}
+          waiting={queuedJobs.map((job) => ({
+            id: job.id,
+            title: job.name,
+            detail: `to level ${job.level}, ${job.reservedRyo.toLocaleString()} ryo`,
+            startsAt: job.startsAt,
+            finishesAt: job.finishesAt,
+          }))}
+          cancelLabel="Cancel and refund"
+          onCancel={(queueId) => cancelQueued({ queueId })}
+          isPending={isPending}
+          timeDiff={timeDiff}
+          emptyText="Nothing in training. Select a jutsu below to start."
+          onActiveFinish={async () => {
+            setTrainingFinishedAt(Date.now());
+            // serial-invalidation-ok: reading the queue starts the successor before ownership is read.
+            await utils.jutsu.getTrainingQueue.invalidate();
+            await Promise.all([
+              utils.jutsu.getUserJutsus.invalidate(),
+              utils.profile.getSidebarTimers.invalidate(),
+            ]);
+          }}
+        />
+      )}
+      <ContentBox
+        title="Techniques"
+        subtitle="Jutsu Techniques"
+        defaultBackHref={props.initialBreak ? undefined : "/village"}
+        initialBreak={props.initialBreak}
+        topRightContent={
+          <JutsuFiltering state={state} fixedBloodline={userData.bloodlineId} />
+        }
+      >
+        <JutsuStatQuickFilters state={state} />
+        {userData && (
+          // Bound the selector's scroll area; retain its height while jutsu load.
+          <div className={cn("pt-3", !jutsus && "min-h-[320px]")}>
+            <div
+              id="jutsu-training-picker"
+              className="max-h-[min(60vh,32rem)] overflow-y-auto overscroll-contain pr-1"
             >
-              <div className="relative">
-                <p className="pb-3">
-                  You have {userData.money.toLocaleString()} ryo in your pocket
-                </p>
-                {!isPending && (
-                  <ItemWithEffects
-                    item={jutsu}
-                    key={jutsu.id}
-                    showStatistic="jutsu"
-                    showEvolutions
-                  />
-                )}
-                {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
-              </div>
-            </Modal>
-          )}
-        </div>
-      )}
-      {/* Below the in-progress training overlay (z-20), so its countdown and cancel stay usable */}
-      {/* The list can be taller than the screen, so overlay content sticks in view */}
-      {isFetching && (
-        <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
-          <div className="sticky top-24 flex justify-center py-16">
-            <Loader explanation="Loading jutsu" />
+              <ActionSelector
+                gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))]"
+                items={alljutsus}
+                counts={userJutsuCounts}
+                selectedId={jutsu?.id}
+                labelSingles={true}
+                emptyText="No jutsu available for your rank"
+                onClick={(id) => {
+                  if (id === jutsu?.id) {
+                    setJutsuConfirmOpen(false);
+                  } else {
+                    const selected = alljutsus?.find((jutsu) => jutsu.id === id);
+                    startTransition(() => {
+                      setJutsu(selected);
+                      setLevelCount(1);
+                      setIsOpen(true);
+                    });
+                  }
+                }}
+                showBgColor={false}
+                showLabels={true}
+                lastElement={lastElement}
+                setLastElement={setLastElement}
+              />
+            </div>
+            {isOpen && jutsu && (
+              <Modal
+                id="tutorial-traininggrounds-trainJutsu"
+                title="Confirm Purchase"
+                proceed_label={proceed_label}
+                isOpen={isOpen}
+                setIsOpen={setJutsuConfirmOpen}
+                isValid={false}
+                onClose={() => startTransition(() => setJutsu(undefined))}
+                onAccept={() => {
+                  if (canTrain && !isPending) {
+                    train({ jutsuId: jutsu.id, levels: count });
+                  } else {
+                    setJutsuConfirmOpen(false);
+                  }
+                }}
+                confirmClassName={
+                  canTrain
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                }
+              >
+                <div className="relative">
+                  <p className="pb-3">
+                    You have {userData.money.toLocaleString()} ryo in your pocket
+                  </p>
+                  {!isPending && maxLevelCount > 1 && (
+                    <div className="mb-3 rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
+                      <label
+                        htmlFor="jutsu-level-count"
+                        className="mb-2 block font-medium text-sm"
+                      >
+                        Levels to {isQueueing ? "queue" : "train"} (Max: {maxLevelCount}
+                        )
+                      </label>
+                      <Input
+                        id="jutsu-level-count"
+                        type="number"
+                        min={1}
+                        max={maxLevelCount}
+                        value={count}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (!Number.isNaN(val) && val >= 1 && val <= maxLevelCount) {
+                            setLevelCount(val);
+                          }
+                        }}
+                        className="w-full"
+                      />
+                      <p className="mt-2 text-muted-foreground text-xs">
+                        {count > 1
+                          ? `Levels ${level + 1}-${level + count}, trained one after another. Each level is priced at the level it trains.`
+                          : `Level ${level + 1}. Raise this to queue further levels of the same jutsu.`}
+                      </p>
+                    </div>
+                  )}
+                  {!isPending && (
+                    <ItemWithEffects
+                      item={jutsu}
+                      key={jutsu.id}
+                      showStatistic="jutsu"
+                      showEvolutions
+                    />
+                  )}
+                  {isPending && <Loader explanation={`Training ${jutsu.name}`} />}
+                </div>
+              </Modal>
+            )}
           </div>
-        </div>
-      )}
-      {finishTrainingAt?.finishTraining && (
-        <div className="min-h-36">
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 bg-black opacity-90">
-            <div className="sticky top-24 py-10 text-center text-white">
-              <p className="p-5 text-3xl">Training</p>
-              <p className="text-2xl">
-                Time Left:{" "}
-                <Countdown
-                  targetDate={finishTrainingAt.finishTraining}
-                  timeDiff={timeDiff}
-                  onFinish={async () => {
-                    setTrainingFinishedAt(Date.now());
-                    await utils.jutsu.getUserJutsus.invalidate();
-                  }}
-                />
-              </p>
-              {!isRefetchingUserJutsu && (
-                <XCircle
-                  className="absolute top-4 right-4 z-30 h-10 w-10 cursor-pointer fill-red-500 hover:text-orange-500"
-                  onClick={() => {
-                    cancel();
-                  }}
-                />
-              )}
+        )}
+        {/* The list can be taller than the screen, so the loader sticks in view */}
+        {isFetching && (
+          <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
+            <div className="sticky top-24 flex justify-center py-16">
+              <Loader explanation="Loading jutsu" />
             </div>
           </div>
-        </div>
-      )}
-    </ContentBox>
+        )}
+      </ContentBox>
+    </>
   );
 };
 

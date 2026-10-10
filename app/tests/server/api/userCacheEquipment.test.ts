@@ -11,6 +11,7 @@ import {
   userItem,
   userItemImbuement,
   userSkill,
+  userQueue,
 } from "@/drizzle/schema";
 import { calcEnergy } from "@/libs/profile";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";
@@ -29,13 +30,14 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
+import { queueEnergy } from "../../setup/queues";
 
 const userId = "cache-equipment-player";
 
 describeWithDatabase("committed profile cache patches", () => {
   beforeEach(async () => {
     const db = await getTestDatabase();
-    await resetTables(userItemImbuement, userSkill, skillTree, itemLoadout, userItem, item, userData, bloodline);
+    await resetTables(userQueue, userItemImbuement, userSkill, skillTree, itemLoadout, userItem, item, userData, bloodline);
     await insertUsers([{
       userId,
       level: 10,
@@ -288,7 +290,8 @@ describeWithDatabase("committed profile cache patches", () => {
 
   it("keeps purchase refreshes when queued training makes equipment projection unsafe", async () => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ villageId: "cache-home", energyTrainingQueue: [{ stat: "offence", energy: 10 }] }).where(eq(userData.userId, userId));
+    await db.update(userData).set({ villageId: "cache-home" }).where(eq(userData.userId, userId));
+    await queueEnergy(userId, [{ stat: "offence", energy: 10 }]);
     await insertItems([{ id: "cache-purchased", name: "Cache purchased armor", itemType: "ARMOR", slot: "HEAD", inShop: true, cost: 40 }]);
     const result = await (await callerFor(itemRouter, userId)).buy({ itemId: "cache-purchased", villageId: "cache-home", stack: 1 });
     expect(result.success).toBe(true);
@@ -311,7 +314,7 @@ describeWithDatabase("committed profile cache patches", () => {
 
   it("keeps full refreshes for pending energy queue settlement", async () => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ energyTrainingQueue: [{ stat: "offence", energy: 10 }] }).where(eq(userData.userId, userId));
+    await queueEnergy(userId, [{ stat: "offence", energy: 10 }]);
     const caller = await callerFor(blackMarketRouter, userId);
     expect((await caller.buyItemSlot()).userDelta).toBeUndefined();
     const repaired = await (await callerFor(itemRouter, userId)).repair({ userItemId: "worn-armor" });

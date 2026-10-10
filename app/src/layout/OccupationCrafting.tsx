@@ -21,6 +21,7 @@ import Countdown from "@/layout/Countdown";
 import CraftingCatalog from "@/layout/CraftingCatalog";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Modal from "@/layout/Modal";
+import { TimedQueue } from "@/layout/TimedQueue";
 import {
   getCraftingRankProgress,
   getCurrentCraftingStatus,
@@ -44,6 +45,17 @@ export default function OccupationCrafting() {
   // API calls
   const { data: userItems } = api.item.getUserItems.useQuery();
   const { data: craftableItems } = api.occupation.getCraftableItems.useQuery();
+  const { data: craftingQueue } = api.occupation.getCraftingQueue.useQuery();
+  const { mutate: cancelQueuedCraft, isPending: isCancellingQueuedCraft } =
+    api.occupation.cancelQueuedCraft.useMutation({
+      onSuccess: async (data) => {
+        showMutationToast(data);
+        await Promise.all([
+          utils.occupation.getCraftingQueue.invalidate(),
+          utils.item.getUserItems.invalidate(),
+        ]);
+      },
+    });
 
   // Get currently imbuing items
   const activeImbuingItem = (userItems || []).find(
@@ -68,8 +80,10 @@ export default function OccupationCrafting() {
     api.occupation.finishCraftingImmediately.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
+        // Finishing early may have started the next queued craft.
         await Promise.all([
           utils.item.getUserItems.invalidate(),
+          utils.occupation.getCraftingQueue.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
         ]);
       },
@@ -432,10 +446,54 @@ export default function OccupationCrafting() {
               craftableItems={craftableItems}
               userItems={userItems}
               userData={userData}
-              isCurrentlyCrafting={craftingStatus?.isCurrentlyCrafting || false}
+              isBusy={
+                !!craftingStatus?.isCurrentlyCrafting || !!craftingQueue?.waiting.length
+              }
+              isQueueFull={
+                (!!craftingStatus?.isCurrentlyCrafting ||
+                  !!craftingQueue?.waiting.length) &&
+                (craftingStatus?.isCurrentlyCrafting ? 1 : 0) +
+                  (craftingQueue?.waiting.length ?? 0) >=
+                  (craftingQueue?.capacity ?? 1)
+              }
             />
           </CardContent>
         </Card>
+
+        <TimedQueue
+          title="Crafting queue"
+          subtitle="Crafts that start when the current one is ready"
+          initialBreak={false}
+          capacity={craftingQueue?.capacity ?? 1}
+          help="Choose a recipe while crafting to queue it. Its materials are set aside when queued and returned if you cancel before it starts. Crafting experience and quest progress are granted when a queued craft starts, also while you are offline."
+          active={
+            craftingStatus?.isCurrentlyCrafting &&
+            craftingStatus.craftingFinishedAt &&
+            craftingStatus.currentCraftingItem
+              ? {
+                  title: craftingStatus.currentCraftingItem.name,
+                  finishesAt: new Date(craftingStatus.craftingFinishedAt),
+                }
+              : null
+          }
+          waiting={(craftingQueue?.waiting ?? []).map((job) => ({
+            id: job.id,
+            title: `${job.quantity}x ${job.name}`,
+            detail: job.materials.map((m) => `${m.quantity} ${m.name}`).join(", "),
+            startsAt: job.startsAt,
+            finishesAt: job.finishesAt,
+          }))}
+          cancelLabel="Cancel and return materials"
+          onCancel={(queueId) => cancelQueuedCraft({ queueId })}
+          isPending={isCancellingQueuedCraft}
+          emptyText="Nothing crafting. Pick a recipe from the catalog to start."
+          onActiveFinish={() => {
+            // Reading the queue starts the next craft, so the inventory is read after it.
+            void utils.occupation.getCraftingQueue
+              .invalidate()
+              .then(() => utils.item.getUserItems.invalidate());
+          }}
+        />
 
         {/* Current Crafting */}
         {craftingStatus?.isCurrentlyCrafting && (
@@ -1115,9 +1173,15 @@ export default function OccupationCrafting() {
                 <h4 className="mb-2 font-medium">How Crafting Works</h4>
                 <ul className="space-y-1 text-muted-foreground text-sm">
                   <li>• Items need crafting requirements set by administrators</li>
-                  <li>• You can only craft one item at a time</li>
-                  <li>• Required materials are consumed when crafting starts</li>
-                  <li>• Experience is gained when starting and completing crafts</li>
+                  <li>
+                    • One item crafts at a time; more can wait in your crafting queue
+                  </li>
+                  <li>
+                    • Required materials are consumed when you start or queue a craft
+                  </li>
+                  <li>
+                    • Experience is gained when a craft starts, queued ones included
+                  </li>
                   <li>• Higher ranks unlock new rarities and faster crafting times</li>
                   <li>• Items are automatically finished when the timer expires</li>
                 </ul>

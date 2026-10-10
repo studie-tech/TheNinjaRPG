@@ -42,6 +42,7 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "train.startTraining",
   "train.updateEnergyTrainingQueue",
   "train.startMasteryTraining",
+  "train.updateMasteryTrainingQueue",
   "jutsu.startTraining",
   "stealth.trainCovert",
   "quests.startQuest",

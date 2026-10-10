@@ -75,14 +75,17 @@ interface CraftingCatalogProps {
   craftableItems: CraftableItem[] | undefined;
   userItems: UserItemWithRelations[] | undefined;
   userData: UserWithRelations | undefined;
-  isCurrentlyCrafting: boolean;
+  /** Something is crafting or queued, so a new craft joins the queue */
+  isBusy: boolean;
+  isQueueFull: boolean;
 }
 
 export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   craftableItems,
   userItems,
   userData,
-  isCurrentlyCrafting,
+  isBusy,
+  isQueueFull,
 }) => {
   // Utils
   const utils = api.useUtils();
@@ -96,8 +99,6 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   const [rarityFilter, setRarityFilter] = useState<string>("ALL");
   const [craftQuantity, setCraftQuantity] = useState(1);
   const [pendingCraftName, setPendingCraftName] = useState<string | null>(null);
-  const [locallyStartedCraft, setLocallyStartedCraft] = useState(false);
-  const [authoritativeCraftObserved, setAuthoritativeCraftObserved] = useState(false);
   const craftRequestInFlight = useRef(false);
 
   // Craft mutation
@@ -105,17 +106,13 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     onSuccess: (data) => {
       showMutationToast(data);
       if (data.success) {
-        // Keep the single-craft queue locally occupied until the refreshed inventory
-        // has first observed this craft and later proves it has finished. This closes
-        // the stale-cache window in which a second recipe could consume materials.
-        setLocallyStartedCraft(true);
-        setAuthoritativeCraftObserved(false);
         setSelectedItem(null);
         setCraftQuantity(1);
         void Promise.allSettled([
           utils.item.getUserItems.invalidate(),
           utils.profile.getSidebarTimers.invalidate(),
           utils.profile.getUser.invalidate(),
+          utils.occupation.getCraftingQueue.invalidate(),
         ]);
       }
     },
@@ -129,21 +126,6 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   });
 
   const isCraftPending = pendingCraftName !== null || craftItemMutation.isPending;
-
-  // Do not release the local success guard on the first stale `false`. Once an
-  // authoritative refresh has shown the active queue entry, a subsequent `false`
-  // proves capacity is available for another legitimate craft.
-  useEffect(() => {
-    if (!locallyStartedCraft) return;
-    if (isCurrentlyCrafting) {
-      setAuthoritativeCraftObserved(true);
-    } else if (authoritativeCraftObserved) {
-      setLocallyStartedCraft(false);
-      setAuthoritativeCraftObserved(false);
-    }
-  }, [authoritativeCraftObserved, isCurrentlyCrafting, locallyStartedCraft]);
-
-  const effectiveCurrentlyCrafting = isCurrentlyCrafting || locallyStartedCraft;
 
   // Filter items by category
   const categoryItems = useMemo(() => {
@@ -220,12 +202,12 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 
   // Check if user can craft the selected item
   const canCraft = useMemo(() => {
-    if (!selectedItem || !userItems || effectiveCurrentlyCrafting) return false;
+    if (!selectedItem || !userItems || isQueueFull) return false;
     return selectedItem.craftingRequirements.every((req) => {
       const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
       return totalQuantity >= req.quantity * craftQuantity;
     });
-  }, [selectedItem, userItems, craftQuantity, effectiveCurrentlyCrafting]);
+  }, [selectedItem, userItems, craftQuantity, isQueueFull]);
 
   // Handle craft
   const handleCraft = () => {
@@ -366,11 +348,13 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
           }
         }}
         proceed_label={
-          effectiveCurrentlyCrafting
-            ? "Currently Crafting"
-            : canCraft
-              ? "Start Crafting"
-              : "Missing Materials"
+          isQueueFull
+            ? "Crafting Queue Full"
+            : !canCraft
+              ? "Missing Materials"
+              : isBusy
+                ? "Add to Queue"
+                : "Start Crafting"
         }
         proceed_loading_label="Crafting"
         isLoading={isCraftPending}
@@ -378,7 +362,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
         proceedDisabled={!canCraft}
         onAccept={handleCraft}
         confirmClassName={
-          canCraft && !effectiveCurrentlyCrafting
+          canCraft
             ? "bg-blue-600 text-white hover:bg-blue-700"
             : "bg-red-600 text-white hover:bg-red-700"
         }
@@ -490,12 +474,13 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
               </div>
             )}
 
-            {/* Currently crafting warning */}
-            {effectiveCurrentlyCrafting && (
+            {/* Queue notice */}
+            {isBusy && (
               <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  You are currently crafting another item. Please wait for it to finish
-                  before starting a new craft.
+                  {isQueueFull
+                    ? "Your crafting queue is full. Wait for a craft to start or cancel a queued one."
+                    : "You are crafting another item. This craft joins your queue and starts when the crafts ahead of it are ready; its materials are set aside now."}
                 </p>
               </div>
             )}

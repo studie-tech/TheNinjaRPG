@@ -11,6 +11,8 @@ interface NavTabsProps {
   current: string | null;
   options: string[] | readonly string[];
   icons?: Partial<Record<string, React.ReactNode>>;
+  counts?: Partial<Record<string, number>>;
+  countLabel?: string;
   /** Render Radix tabs inside a controlled Tabs root with matching TabsContent. */
   accessibleTabs?: boolean;
   label?: string;
@@ -42,6 +44,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
   const fontSize = props.fontSize ? props.fontSize : "text-sm";
 
   const tabItems = options.map((option, i) => {
+    const count = props.counts?.[option] ?? 0;
     const button = (
       <button
         type="button"
@@ -50,6 +53,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
             ? "active inline-block rounded-t-lg border-foreground/50 border-b-2 pt-2 pr-1 pb-2 pl-1 text-foreground/50"
             : "inline-block rounded-t-lg border-gray-700 border-transparent border-b-2 pt-2 pr-1 pb-2 pl-1 hover:border-gray-300 hover:text-gray-600",
           props.className,
+          count > 0 && "relative pr-7",
         )}
         onClick={() => {
           if (id && remember) safeLocalStorageSetItem(id, option);
@@ -67,6 +71,17 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
           </span>
         ) : (
           option
+        )}
+        {count > 0 && (
+          <span
+            className="absolute top-0 right-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-orange-100 text-xs"
+            title={`${count} ${props.countLabel ?? "notifications"}`}
+          >
+            <span aria-hidden="true">{count}</span>
+            <span className="sr-only">
+              {count} {props.countLabel ?? "notifications"}
+            </span>
+          </span>
         )}
       </button>
     );

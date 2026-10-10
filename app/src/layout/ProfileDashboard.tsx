@@ -143,6 +143,12 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
         endsAt: sidebarTimers.data.jutsuTraining.finishTraining,
       }
     : null;
+  // Jutsu levels waiting behind the active training
+  const jutsuQueue = sidebarTimers.data?.jutsuQueue;
+  const jutsuQueueNote =
+    jutsuQueue?.next && jutsuQueue.count > 0
+      ? `Next: ${jutsuQueue.next.name} to level ${jutsuQueue.next.level}${jutsuQueue.count > 1 ? ` (+${jutsuQueue.count - 1} more queued)` : ""}`
+      : null;
   const masteryTrainingFinish = userData ? masteryTrainingEndsAt(userData) : null;
   const masteryTraining = userData?.currentlyTrainingMastery
     ? {
@@ -486,6 +492,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                     />
                   ) : null
                 }
+                note={jutsuQueueNote}
                 action={
                   <RowAction
                     restriction={isLoadingSector ? null : trainingAction.reason}

@@ -2,7 +2,7 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
-import { conceptImage, userData } from "@/drizzle/schema";
+import { conceptImage, userData, userQueue } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";
 import * as replicate from "@/libs/replicate";
 import { conceptartRouter } from "@/server/api/routers/conceptart";
@@ -10,6 +10,7 @@ import { insertUsers } from "../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
 import { beforeStatements } from "../../setup/statements";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { queueEnergy } from "../../setup/queues";
 
 const userId = "conceptart-delta-player";
 const imageInput = { prompt: "A ninja", seed: 1 };
@@ -18,7 +19,7 @@ const videoInput = { ...imageInput, negative_prompt: "", start_image: "https://e
 describeWithDatabase("concept art confirmed debits", () => {
   beforeEach(async () => {
     const db = await getTestDatabase();
-    await resetTables(conceptImage, userData);
+    await resetTables(userQueue, conceptImage, userData);
     await insertUsers([{ userId, reputationPoints: 1000 }]);
     stubProfile("fetchUser", async (_client: unknown, id: string) => db.query.userData.findFirst({ where: eq(userData.userId, id) }));
     vi.spyOn(moderator, "classifyNsfwPrompt").mockResolvedValue({ isNsfw: false, reason: "Safe" });
@@ -68,7 +69,7 @@ describeWithDatabase("concept art confirmed debits", () => {
 
   it("retains full reconciliation when an energy training queue is pending", async () => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ energyTrainingQueue: [{ stat: "offence", energy: 1 }] }).where(eq(userData.userId, userId));
+    await queueEnergy(userId, [{ stat: "offence", energy: 1 }]);
     const caller = callerForDatabase(conceptartRouter, userId, db);
     expect((await caller.create(imageInput)).userDelta).toBeUndefined();
     expect((await caller.createVideo(videoInput)).userDelta).toBeUndefined();

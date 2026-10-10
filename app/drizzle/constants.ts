@@ -1027,6 +1027,13 @@ export const SP_PER_LVL = 50;
 export const CP_PER_LVL = 50;
 export const ENERGY_PER_LVL = 50;
 export const STATS_PER_ENERGY = 1.3;
+/** Kinds of entries held in `UserQueue`. */
+export const QueueKinds = ["JUTSU", "CRAFT", "MASTERY", "ENERGY"] as const;
+export type QueueKind = (typeof QueueKinds)[number];
+/** Queue kinds started on a timer and settled in the database. */
+export const TimedQueueKinds = ["JUTSU", "CRAFT"] as const satisfies readonly QueueKind[];
+export type TimedQueueKind = (typeof TimedQueueKinds)[number];
+
 export const QUEUE_WAITING_SLOTS = { NONE: 1, NORMAL: 2, SILVER: 3, GOLD: 4 } as const;
 // Energy restored (up to capacity) when a quest of one of these types is completed.
 export const ENERGY_QUEST_REWARDS: Partial<Record<QuestType, number>> = {

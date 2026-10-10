@@ -6,12 +6,12 @@ import { miscRouter } from "@/server/api/routers/misc";
 import { profileRouter } from "@/server/api/routers/profile";
 import { callerForDatabase } from "../../setup/testDatabase";
 
-const actor = { userId: "confirmed-award-actor", role: "OWNER", username: "Actor", avatarLight: "", isBanned: false, earnedExperience: 1000, reputationPoints: 100, energyTrainingQueue: [] as unknown[] };
+const actor = { userId: "confirmed-award-actor", role: "OWNER", username: "Actor", avatarLight: "", isBanned: false, earnedExperience: 1000, reputationPoints: 100, energyQueueHead: 0, energyQueueTail: 0 };
 const databaseFor = (rowsAffected = 1, queue: unknown[] = []) => ({
   query: {
     userData: {
-      findFirst: vi.fn(async () => ({ ...actor, energyTrainingQueue: queue })),
-      findMany: vi.fn(async () => [{ ...actor, energyTrainingQueue: queue }]),
+      findFirst: vi.fn(async () => ({ ...actor, energyQueueTail: queue.length })),
+      findMany: vi.fn(async () => [{ ...actor, energyQueueTail: queue.length }]),
     },
   },
   update: vi.fn(() => ({ set: () => Object.assign(Promise.resolve({ rowsAffected }), {
@@ -54,7 +54,7 @@ describe("confirmed self awards", () => {
     { amount: 25, earnedExperience: 1000, queue: [{}], delta: undefined },
   ])("reconciles mass XP (amount=$amount before=$earnedExperience queue=$queue)", async ({ amount, earnedExperience, queue, delta }) => {
     const database = databaseFor(1, queue);
-    database.query.userData.findFirst.mockImplementation(async () => ({ ...actor, earnedExperience, energyTrainingQueue: queue }));
+    database.query.userData.findFirst.mockImplementation(async () => ({ ...actor, earnedExperience, energyQueueTail: queue.length }));
     const result = await callerForDatabase(profileRouter, actor.userId, database as never)
       .awardExperienceToAll({ amount });
     expect(result.success).toBe(true);
@@ -120,7 +120,7 @@ it.each([
       where: async () => ({ rowsAffected: changedRows }),
     }) };
   });
-  const findFirst = vi.fn(async () => ({ ...actor, isOutlaw: true, clanId: "color-clan", energyTrainingQueue: queued ? [{}] : [] }));
+  const findFirst = vi.fn(async () => ({ ...actor, isOutlaw: true, clanId: "color-clan", energyQueueTail: queued ? 1 : 0 }));
   const withClan = { ...database, update, query: { ...database.query, userData: { ...database.query.userData, findFirst }, clan: {
     findFirst: vi.fn(async () => ({ id: "color-clan", leaderId: actor.userId, villageId: "color-village", hasHideout: true })),
   } } };

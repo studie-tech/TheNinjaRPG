@@ -27,6 +27,7 @@ import {
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
 } from "@/libs/profile";
+import { hasEnergyQueue } from "@/libs/queue";
 import { filterValidElementsTypeguard } from "@/libs/train";
 import { fetchVillages } from "@/routers/village";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
@@ -191,9 +192,7 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: "Offer created",
-        userDelta: user.energyTrainingQueue?.length
-          ? undefined
-          : { reputationPoints: -input.reps },
+        userDelta: hasEnergyQueue(user) ? undefined : { reputationPoints: -input.reps },
       };
     }),
   delistOffer: protectedProcedure
@@ -231,7 +230,7 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: "Offer delisted",
-        userDelta: user.energyTrainingQueue?.length
+        userDelta: hasEnergyQueue(user)
           ? undefined
           : creatorId === ctx.userId
             ? { reputationPoints: offer.repsForSale }
@@ -385,7 +384,7 @@ export const blackMarketRouter = createTRPCRouter({
       return {
         success: true,
         message: `Bought ${offer.repsForSale} reputation points for ${offer.requestedRyo} ryo.`,
-        userDelta: user.energyTrainingQueue?.length
+        userDelta: hasEnergyQueue(user)
           ? undefined
           : { money: -offer.requestedRyo, reputationPoints: offer.repsForSale },
       };
@@ -533,7 +532,7 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: "Item slot purchased",
-          userDelta: user.energyTrainingQueue?.length
+          userDelta: hasEnergyQueue(user)
             ? undefined
             : { reputationPoints: -COST_EXTRA_ITEM_SLOT, extraItemSlots: 1 },
         };
@@ -581,7 +580,7 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: "Jutsu slot purchased",
-          userDelta: user.energyTrainingQueue?.length
+          userDelta: hasEnergyQueue(user)
             ? undefined
             : { reputationPoints: -COST_EXTRA_JUTSU_SLOT, extraJutsuSlots: 1 },
         };
@@ -706,7 +705,7 @@ export const blackMarketRouter = createTRPCRouter({
           secondaryElement:
             input.elementType === "secondary" ? result.element : user.secondaryElement,
         },
-        userDelta: user.energyTrainingQueue?.length
+        userDelta: hasEnergyQueue(user)
           ? undefined
           : { reputationPoints: -COST_REROLL_ELEMENT },
       };
@@ -787,9 +786,7 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: `User stats updated for ${cost} reputation points`,
-          userDelta: user.energyTrainingQueue?.length
-            ? undefined
-            : { reputationPoints: -cost },
+          userDelta: hasEnergyQueue(user) ? undefined : { reputationPoints: -cost },
         };
       }
     }),

@@ -47,6 +47,7 @@ import {
 import { placementToSectorUser } from "@/libs/overworldAi";
 import { calcActiveUserRegen, calcLevel, calcMaxEnergy } from "@/libs/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
+import { hasEnergyQueue } from "@/libs/queue";
 import {
   findNearestWalkableCoordinate,
   isReachableCoordinate,
@@ -534,7 +535,7 @@ export const travelRouter = createTRPCRouter({
       if (!targetSectorMap) {
         return errorResponse("The destination sector has no published map yet");
       }
-      if (user.energyTrainingQueue?.length) {
+      if (hasEnergyQueue(user)) {
         const updated = await fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -654,7 +655,7 @@ export const travelRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       let user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (user.energyTrainingQueue?.length) {
+      if (hasEnergyQueue(user)) {
         const updated = await fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -773,7 +774,7 @@ export const travelRouter = createTRPCRouter({
       ]);
       if (!originalUser) return errorResponse("User not found");
       let moveUser = originalUser;
-      if (moveUser.energyTrainingQueue?.length) {
+      if (hasEnergyQueue(moveUser)) {
         const updated = await fetchUpdatedUser({
           client: ctx.drizzle,
           userId,
@@ -1099,7 +1100,7 @@ const completeGlobalTravel = (client: DrizzleClient, user: UserData) => {
       set: {
         status: "AWAKE",
         travelFinishAt: null,
-        ...(user.energyTrainingQueue?.length
+        ...(hasEnergyQueue(user)
           ? {
               // Travel recovers Energy, but its elapsed ticks cannot train village-only queues.
               curEnergy: sql`LEAST(${user.maxEnergy}, ${userData.curEnergy} + ${user.regeneration} * ${recoveryTicks})`,
@@ -1121,7 +1122,8 @@ export const completeExpiredGlobalTravel = async (client: DrizzleClient) => {
     isNotNull(userData.travelFinishAt),
     lt(userData.travelFinishAt, new Date()),
   );
-  const hasQueue = sql`COALESCE(JSON_LENGTH(${userData.energyTrainingQueue}), 0) > 0`;
+  // Mirrors `hasEnergyQueue`.
+  const hasQueue = sql`${userData.energyQueueTail} > ${userData.energyQueueHead}`;
   const [users, settings] = await Promise.all([
     client.query.userData.findMany({
       where: and(expiredTravel, hasQueue),
