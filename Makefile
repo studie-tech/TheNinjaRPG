@@ -161,7 +161,7 @@ emptymigration: ensure-env # Create database migration file
 	
 ----------------Tests-------------------: # -------------------------------------------------------
 .PHONY: test
-test: # Run unit tests with Bun's Vitest-compatible API
+test: # Run unit tests with Bun
 	@echo "${YELLOW}Running unit tests ${RESET}"
 	cd app && bun run test
 

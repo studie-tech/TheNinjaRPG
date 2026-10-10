@@ -1,8 +1,7 @@
-// @vitest-environment node
 
 import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { HOSPITAL_BASE_HEAL_SECONDS, REGEN_SECONDS } from "@/drizzle/constants";
 import { userData, villageStructure } from "@/drizzle/schema";
 import { hospitalRouter } from "@/server/api/routers/hospital";

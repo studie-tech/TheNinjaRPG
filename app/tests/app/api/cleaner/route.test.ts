@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as contentReviewCleanup from "@/libs/contentReview/cleanup";
 import * as gamesettings from "@/libs/gamesettings";
 import * as travel from "@/routers/travel";
@@ -43,15 +43,15 @@ describe("account deletion in the existing cleaner", () => {
     mocks.lock.mockResolvedValueOnce({ isNewHour: true, prevTime: new Date(0) });
     expect((await GET(request())).status).toBe(200);
     expect(mocks.execute).toHaveBeenCalled();
-    expect(mocks.process).toHaveBeenCalledOnce();
-    expect(travel.completeExpiredGlobalTravel).toHaveBeenCalledOnce();
+    expect(mocks.process).toHaveBeenCalledTimes(1);
+    expect(travel.completeExpiredGlobalTravel).toHaveBeenCalledTimes(1);
     expect(mocks.reset).not.toHaveBeenCalled();
   });
   it("still processes deletions when content review cleanup fails", async () => {
     mocks.lock.mockResolvedValueOnce({ isNewHour: true, prevTime: new Date(0) });
     vi.spyOn(contentReviewCleanup, "cleanupContentProposals").mockRejectedValue(new Error("storage down"));
     expect((await GET(request())).status).toBe(200);
-    expect(mocks.process).toHaveBeenCalledOnce();
+    expect(mocks.process).toHaveBeenCalledTimes(1);
   });
   it("uses the standard cleaner failure and timer rollback for deletion failures", async () => {
     const previous = new Date(0);

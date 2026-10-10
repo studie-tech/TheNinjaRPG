@@ -2,7 +2,7 @@
 
 import { setSystemTime } from "bun:test";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { RYO_CAP } from "@/drizzle/constants";
 import { dailyBankInterest, userData } from "@/drizzle/schema";
 import { bankRouter, claimBankInterest } from "@/server/api/routers/bank";

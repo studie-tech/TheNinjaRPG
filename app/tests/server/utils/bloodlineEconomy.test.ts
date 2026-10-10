@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { updateBloodline } from "@/server/api/routers/bloodline";
 
 /**
@@ -44,6 +43,6 @@ describe("updateBloodline", () => {
   it("runs the actionLog side-effect write once the CAS succeeds", async () => {
     const { client, insert } = bloodlineClient(1);
     await updateBloodline(client, baseUser, null, 50, "Bloodline Removed");
-    expect(insert).toHaveBeenCalledOnce();
+    expect(insert).toHaveBeenCalledTimes(1);
   });
 });

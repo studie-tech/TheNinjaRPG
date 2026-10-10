@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { checkForBadWords, moderateUserText } from "@/utils/profanity";
 
 const expectFlagged = async (content: string, detail: string) => {

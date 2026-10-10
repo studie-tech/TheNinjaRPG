@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import {
   ElementNames,
   OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,
@@ -199,7 +199,7 @@ describe("potency configuration", () => {
 });
 
 describe("potency arithmetic", () => {
-  it.each(PotencyTagTypes)("adjusts %s in both directions and modes", (type) => {
+  it.each([...PotencyTagTypes])("adjusts %s in both directions and modes", (type) => {
     const action = makeAction([makeTag(type, { power: 40 })]);
     for (const [kind, calculation, expected] of [
       ["increasepotency", "static", 60],
@@ -440,7 +440,7 @@ describe("potency element matching", () => {
         [makePotency({ affectedTag, affectedElements: ["Fire", "Water"], power: 20 })],
         "attacker",
       );
-      expect(tags.map((tag) => tag.power)).toEqual(expected);
+      expect(tags.map((tag) => tag.power)).toEqual<typeof expected>(expected);
     }
   });
 

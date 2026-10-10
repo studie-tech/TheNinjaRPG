@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { MasteryName } from "@/drizzle/constants";
 import { getUserCaps, MasteryNames } from "@/drizzle/constants";
 import type { MasteryBuffUser, MasteryGear } from "@/libs/mastery";

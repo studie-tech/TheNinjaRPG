@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { filterByEffectConstraints } from "@/server/api/routers/jutsu";
 import { makeTag } from "../../libs/combat/helpers/battleScenario";
 

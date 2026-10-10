@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { MISSIONS_FULL_REWARD_COUNT } from "@/drizzle/constants";
 import { isReducedMissionReward } from "@/libs/quest";
 

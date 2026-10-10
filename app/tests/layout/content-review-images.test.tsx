@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render as renderInteractive } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import { sceneAssetIds } from "@/libs/contentReview/paths";
 import { ensureDom } from "../setup-dom.mjs";

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { lockWithDailyTimer, lockWithHourlyTimer } from "@/libs/gamesettings";
 import type { DrizzleClient } from "@/server/db";
 
@@ -27,7 +27,7 @@ describe("lockWithDailyTimer", () => {
     const result = await lockWithDailyTimer(client, "cleaner-daily");
 
     expect(result.isNewDay).toBe(true);
-    expect(update).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledTimes(1);
   });
 
   it("allows only one caller to claim the same daily timer", async () => {
@@ -104,6 +104,6 @@ describe("lockWithHourlyTimer", () => {
     const result = await lockWithHourlyTimer(client, "cleaner-hourly");
 
     expect(result.isNewHour).toBe(true);
-    expect(update).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledTimes(1);
   });
 });

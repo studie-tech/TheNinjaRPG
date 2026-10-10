@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { forumBoardIntro, forumThreadIntro, publicUserIntro } from "@/layout/seoTexts";
 import { htmlToPlainText } from "@/utils/sanitize";

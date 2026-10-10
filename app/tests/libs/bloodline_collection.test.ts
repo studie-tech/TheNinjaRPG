@@ -1,6 +1,6 @@
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import type { Bloodline } from "@/drizzle/schema";
 import { buildBloodlineCollectionProgress } from "@/libs/bloodline";
 import {

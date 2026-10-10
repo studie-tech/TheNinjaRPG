@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
 import { buildTiledProject } from "@/libs/sector-map/tiled-project";
 import { SECTOR_MAP_OBJECT_TYPES } from "@/libs/sector-map/types";

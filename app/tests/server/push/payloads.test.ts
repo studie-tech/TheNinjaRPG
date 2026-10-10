@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { apnsAlertPayload, fcmMessage } from "@/server/utils/push/payloads";
 import type { PushMessage } from "@/server/utils/push/types";
 

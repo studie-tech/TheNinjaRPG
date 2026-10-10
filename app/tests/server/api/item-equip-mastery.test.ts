@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { toggleEquipItem } from "@/server/api/routers/item";
 import type { DrizzleClient } from "@/server/db";

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { clone, summon } from "@/libs/combat/tags";
 import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import type { Battle } from "@/drizzle/schema";

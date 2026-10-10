@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { aggregateExperiments } from "@/libs/experimentAnalytics";
 import { WALLPAPER_EXPERIMENT, WALLPAPER_VARIANTS, WALLPAPER_IMAGES } from "@/libs/wallpaperExperiment";
 

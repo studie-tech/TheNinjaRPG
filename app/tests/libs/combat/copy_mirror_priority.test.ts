@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   COPYABLE_EFFECT_TYPES,
   COPY_MAX_TAGS,
@@ -265,7 +265,7 @@ describe("copy tag: ceiling + priority", () => {
       (e) => e.targetId === SELF && e.creatorId === SELF && e.fromEffectId,
     );
     expect(copied).toHaveLength(4);
-    expect(copied.map((e) => e.type).sort()).toEqual(
+    expect(copied.map((e) => e.type).sort()).toEqual<string[]>(
       ["absorb", "decreasedamagetaken", "increasedamagegiven", "lifesteal"].sort(),
     );
     // shield + increaseheal (lower tiers) were NOT copied
@@ -397,7 +397,7 @@ describe("mirror tag: ceiling + priority + wound", () => {
       (e) => e.targetId === OPP && e.creatorId === SELF && e.fromEffectId,
     );
     expect(mirrored).toHaveLength(4);
-    expect(mirrored.map((e) => e.type).sort()).toEqual(
+    expect(mirrored.map((e) => e.type).sort()).toEqual<string[]>(
       ["afterburn", "decreasedamagegiven", "increasedamagetaken", "poison"].sort(),
     );
     // increasepoolcost (loses tier-2 tie to poison) and wound (tier 3) dropped

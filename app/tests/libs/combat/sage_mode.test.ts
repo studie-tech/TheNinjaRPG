@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { applySageModeAfterRoundTransition, applySingleEffect } from "@/libs/combat/process";
 import { cleanse, getPower } from "@/libs/combat/tags";
 import { isEffectActive } from "@/libs/combat/util";

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { announcement, deliveryTest, toPlainText } from "@/server/utils/push/messages";
 import { shouldReportPushFailures, summarise } from "@/server/utils/push/types";
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 // Does using a GROUND-targeted item (e.g. Smoke Bomb) record it in `usedActions`? That array
 // is what buildCombatTrackerTasks reads for the use_specific_item_combat tracker. The reported

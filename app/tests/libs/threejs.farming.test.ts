@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import {
   Group,
   Mesh,
@@ -122,7 +122,7 @@ describe("syncPlotVisual", () => {
     const effect = startFarmEffect(effects, entry, "water");
 
     expect(effect?.userData.farmEffect).toBe("water");
-    expect(effects.children).toContain(effect);
+    expect(effects.children).toContain<Array<typeof effect>>(effect);
     animateFarmEffects(effects, 1);
     expect(effects.children).not.toContain(effect);
   });

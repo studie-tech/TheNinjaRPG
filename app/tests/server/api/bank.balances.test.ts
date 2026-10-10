@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
 import { userData } from "@/drizzle/schema";
 import { bankRouter, fetchUserBalances } from "@/server/api/routers/bank";
 import { insertUsers } from "../../setup/factories";

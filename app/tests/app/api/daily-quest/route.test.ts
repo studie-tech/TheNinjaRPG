@@ -1,4 +1,3 @@
-// @vitest-environment node
 
 import {
   resetServerModuleStubs,
@@ -7,7 +6,7 @@ import {
 } from "../../../setup/serverModules";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 
 type DailyQuestTestMocks = {
   lock: ReturnType<typeof vi.fn>;
@@ -144,7 +143,7 @@ describe("daily-quest cron", () => {
     const response = await GET(new Request("https://example.com/api/daily-quest", { headers: { authorization: "Bearer test-cron" } }));
 
     expect(await response.json()).toBe("OK");
-    expect(mocks.upsertQuestEntries).toHaveBeenCalledOnce();
+    expect(mocks.upsertQuestEntries).toHaveBeenCalledTimes(1);
     expect(mocks.upsertQuestEntries.mock.calls[0]?.[1]).toMatchObject({ id: daily.id });
     expect(mocks.updateSets.some((set) => "tutorialOn" in set)).toBe(false);
     expect(mocks.rollback).not.toHaveBeenCalled();
@@ -224,8 +223,8 @@ describe("daily-quest cron", () => {
 
     await GET(new Request("https://example.com/api/daily-quest", { headers: { authorization: "Bearer test-cron" } }));
 
-    expect(mocks.rollback).toHaveBeenCalledOnce();
+    expect(mocks.rollback).toHaveBeenCalledTimes(1);
     expect(mocks.rollback.mock.calls[0]?.[3]).toBe(1);
-    expect(mocks.handleError).toHaveBeenCalledOnce();
+    expect(mocks.handleError).toHaveBeenCalledTimes(1);
   });
 });

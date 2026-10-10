@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { questsRouter } from "@/routers/quests";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
 
@@ -32,7 +31,7 @@ describe("quests.getUserQuests", () => {
 
     const quests = await caller.getUserQuests({ userId: "target" });
 
-    expect(findMany).toHaveBeenCalledOnce();
+    expect(findMany).toHaveBeenCalledTimes(1);
     expect(quests.map((q) => q.id)).toEqual(["history-1"]);
   });
 });

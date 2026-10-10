@@ -1,6 +1,6 @@
 import { ensureDom } from "../setup-dom.mjs";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { nextUtcDayAt } from "@/utils/time";
 

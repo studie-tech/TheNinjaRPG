@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { combatMasteryGains, recordMasteryUsage } from "@/libs/combat/mastery";
 import { getEfficiencyRatio } from "@/libs/combat/tags";
 import { getTagSchema } from "@/validators/combat";

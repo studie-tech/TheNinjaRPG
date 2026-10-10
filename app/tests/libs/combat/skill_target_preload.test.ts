@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { AiProfile, SkillTree } from "@/drizzle/schema";
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { processUsersForBattle } from "@/server/api/routers/combat";

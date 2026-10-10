@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { ElementNames } from "@/drizzle/constants";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { JutsuValidatorRawSchema } from "@/validators/combat";
 
 describe("jutsu element classification", () => {
-  it.each(ElementNames)("accepts %s", (elementClassification) => {
+  it.each([...ElementNames])("accepts %s", (elementClassification) => {
     const parsed = JutsuValidatorRawSchema.parse({
       ...SAGE_MODE_ACTIVATION_JUTSU,
       effects: [],

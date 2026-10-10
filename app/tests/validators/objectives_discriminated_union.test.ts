@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { AllObjectives } from "@/validators/objectives";
 
 // One minimal valid raw input per discriminated-union member family.

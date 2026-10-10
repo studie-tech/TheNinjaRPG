@@ -1,7 +1,7 @@
 import { ensureDom } from "../setup-dom.mjs";
 import { render } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
 import Modal, {
   modalScrollableBodyClassName,
   modalViewportClassName,

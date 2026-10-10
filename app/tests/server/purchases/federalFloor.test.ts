@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { FederalStatus } from "@/drizzle/constants";
 import type { DrizzleClient } from "@/server/db";
 import { storeFederalFloor } from "@/server/utils/purchases/grant";

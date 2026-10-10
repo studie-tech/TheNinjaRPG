@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { deriveOverworldOpponents } from "@/libs/overworldAi";
 
 describe("deriveOverworldOpponents", () => {
@@ -10,7 +10,7 @@ describe("deriveOverworldOpponents", () => {
       aiByPlacement,
     );
     const [first] = objectives;
-    expect(first?.opponentAIs).toEqual([{ ids: ["ai-1"], number: 1 }]);
+    expect(first?.opponentAIs).toEqual<Array<{ ids: string[]; number: number }>>([{ ids: ["ai-1"], number: 1 }]);
     expect(missing).toEqual([]);
   });
 

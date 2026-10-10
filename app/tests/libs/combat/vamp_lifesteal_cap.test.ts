@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import { DAMAGE_LEECH_CAP_RATIO } from "@/libs/combat/constants";
 import type { CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";

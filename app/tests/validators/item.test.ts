@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { ItemVariantValidator } from "@/validators/item";
 import { MAX_ITEM_VARIANTS } from "@/drizzle/constants";
 

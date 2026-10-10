@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "bun:test";
 import {
   badge,
   item,

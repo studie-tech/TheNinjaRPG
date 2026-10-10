@@ -1,6 +1,5 @@
-// @vitest-environment node
 import {eq} from "drizzle-orm";
-import {afterEach, beforeEach, expect, it, vi} from "vitest";
+import {afterEach, beforeEach, expect, it, vi} from "bun:test";
 import {CombatStatNames, getUserCaps} from "@/drizzle/constants";
 import {bloodline, gameSetting, item, userItem, quest, questHistory, trainingLog, userData, userQueue, userVote} from "@/drizzle/schema";
 import {getEnergyQueue} from "@/libs/queue";
@@ -330,7 +329,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(
       await api.updateEnergyTrainingQueue({ entries: [entries[1]!], expectedEntries: entries }),
     ).toMatchObject({ success: true, message: "Training queue saved" });
-    expect(await readEnergyQueue(USER_ID)).toEqual([entries[1]]);
+    expect(await readEnergyQueue(USER_ID)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
     // Reordering is not a removal.
     expect(
       (
@@ -533,7 +532,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
     expect(await readLogs()).toHaveLength(1);
   });
 
-  it.each(CombatStatNames)("spends Energy only on %s and grants matching XP", async stat => {
+  it.each([...CombatStatNames])("spends Energy only on %s and grants matching XP", async stat => {
     await trainee({curEnergy: 100, regeneration: 0});
     const before = await readUser();
     const result = await (await caller()).startTraining({stat, energy: 10});
@@ -676,9 +675,9 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
       });
       const hydrated = await fetchUpdatedUser({client: database, userId: USER_ID, forceRegen: true});
       const after = await readUser();
-      expect(after.curEnergy).toBe(hydrated.user?.regeneration);
+      expect(after.curEnergy).toBe<number | undefined>(hydrated.user?.regeneration);
       expect(after.curEnergy).toBeGreaterThan(60);
-      expect(after.curHealth).toBe(hydrated.user?.regeneration);
+      expect(after.curHealth).toBe<number | undefined>(hydrated.user?.regeneration);
       expect(after.curHealth).toBe(after.curEnergy);
     },
   );
@@ -728,7 +727,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
       const fetch = () => fetchUpdatedUser({client: database, userId: USER_ID, forceRegen: true});
       const hydrated = await fetch();
       const first = await readUser();
-      expect(first.curEnergy).toBe(hydrated.user?.regeneration);
+      expect(first.curEnergy).toBe<number | undefined>(hydrated.user?.regeneration);
       expect(first.regenAt.getTime()).toBe(regenAt.getTime() + 60000);
       await fetch();
       const second = await readUser();

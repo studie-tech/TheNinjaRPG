@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { MAX_DAILY_TRAININGS } from "@/drizzle/constants";
 import type { Jutsu, UserData } from "@/drizzle/schema";
 import {

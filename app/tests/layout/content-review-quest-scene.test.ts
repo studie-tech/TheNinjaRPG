@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { IMG_SCENE_BACKGROUND } from "@/drizzle/constants";
 import { changedQuestScenes, questSceneOf } from "@/libs/contentReview/questScene";
 

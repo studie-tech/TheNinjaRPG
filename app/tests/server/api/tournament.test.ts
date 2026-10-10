@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
 

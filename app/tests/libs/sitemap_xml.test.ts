@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { SITE_URL } from "@/libs/seo";
 import {
   SITEMAP_SECTIONS,

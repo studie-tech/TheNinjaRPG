@@ -1,5 +1,5 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { updateUserCache, prepareUserUpdate } from "@/utils/userCache";
@@ -208,7 +208,7 @@ describe("user cache updates", () => {
     expect(client.getQueryState(key)?.fetchStatus).toBe("fetching");
     resolve(profile(100));
     await pending;
-    expect(client.getQueryData(key)).toEqual(profile(100));
+    expect(client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(100));
     client.clear();
   });
 
@@ -244,7 +244,7 @@ describe("user cache updates", () => {
     resolveInitial(profile(100));
     await Promise.resolve();
     expect(reads).toBe(2);
-    expect(client.getQueryData(key)).toEqual(profile(90));
+    expect(client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(90));
     expect(client.getQueryState(key)?.isInvalidated).toBe(false);
     unsubscribe();
     client.clear();
@@ -636,8 +636,8 @@ describe("notification effects during cache updates", () => {
       existing.name, unrelated.name, mail.name, "Shrine: +10% Training gains",
     ]);
     expect(updated[0]).toBe(existing);
-    expect(updated[1]).toBe(unrelated);
-    expect(updated[2]).toBe(mail);
+    expect(updated[1]).toBe<typeof unrelated>(unrelated);
+    expect(updated[2]).toBe<typeof mail>(mail);
     await updateUserCache(client, key, { money: 150 });
     expect(client.getQueryData<Notifications>(key)?.notifications).toBe(updated);
     client.clear();

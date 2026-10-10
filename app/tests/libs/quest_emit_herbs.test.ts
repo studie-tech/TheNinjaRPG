@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getNewTrackers } from "@/libs/quest";
 
 // Minimal fixtures following the pattern in quest_emit_craft.test.ts.

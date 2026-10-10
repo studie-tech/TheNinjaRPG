@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { attemptCapReached } from "@/libs/quest";
 
 const NOW = new Date("2026-06-24T12:00:00Z");

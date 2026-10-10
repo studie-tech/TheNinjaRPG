@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import {
   COOKING_BASE_SLOTS,
   FED_COOKING_GOLD_SLOTS,

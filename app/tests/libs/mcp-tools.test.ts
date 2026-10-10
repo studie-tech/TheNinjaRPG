@@ -1,5 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { buildToolRegistry, handleCallEndpoint } from "@/libs/mcp/meta-tools";
 import { extractToolsFromProcedures } from "@/libs/mcp/tools";
 import type { McpMeta } from "@/libs/mcp/types";

@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { isProfileIndexable, profileIndexCutoff } from "@/libs/profileIndexing";
 import { SITE_URL, buildMetadata, noindexMetadata, stripSiteName } from "@/libs/seo";
 

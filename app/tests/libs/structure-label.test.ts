@@ -1,5 +1,5 @@
 import { Group, Object3D } from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { sortSectorAssetsByGroundContact } from "@/libs/threejs/sector";
 
 describe("sortSectorAssetsByGroundContact", () => {

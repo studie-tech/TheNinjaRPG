@@ -1,5 +1,5 @@
 import { tryToParsePath } from "next/dist/lib/try-to-parse-path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { SHELL_PARAMS } from "@/libs/shell";
 import { config, isUnshelledPath } from "../../src/proxy";
 

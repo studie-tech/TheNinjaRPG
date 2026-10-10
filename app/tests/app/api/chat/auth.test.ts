@@ -1,10 +1,10 @@
 import * as clerk from "@clerk/nextjs/server";
 import * as ai from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { POST } from "@/app/api/chat/support/route";
 import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 
-const mocks = { auth: vi.fn(), streamText: vi.fn(), update: vi.fn(), claim: vi.fn() };
+const mocks = { auth: Object.assign(vi.fn(), { protect: vi.fn() }), streamText: vi.fn(), update: vi.fn(), claim: vi.fn() };
 
 const post = () =>
   POST(
@@ -73,8 +73,8 @@ describe("support chat", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/event-stream");
     expect(await response.text()).toContain('"type":"finish"');
-    expect(mocks.claim).toHaveBeenCalledOnce();
-    expect(mocks.streamText).toHaveBeenCalledOnce();
+    expect(mocks.claim).toHaveBeenCalledTimes(1);
+    expect(mocks.streamText).toHaveBeenCalledTimes(1);
     const options = mocks.streamText.mock.calls[0]?.[0];
     expect(options.instructions).not.toContain("Untrusted instructions");
     expect(options.messages).toEqual([

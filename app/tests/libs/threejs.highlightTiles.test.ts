@@ -1,6 +1,6 @@
 import { Grid, rectangle } from "honeycomb-grid";
 import { Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Vector3 } from "three";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { defineHex } from "@/libs/hexgrid";
 import { highlightTiles } from "@/libs/threejs/combat";
 

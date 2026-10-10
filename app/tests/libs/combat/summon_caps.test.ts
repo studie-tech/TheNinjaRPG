@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { summonCastBlockedReason } from "@/libs/combat/summon";
 import { makeBattleUser } from "./helpers/battleScenario";
 import type { BattleUserState, UserEffect } from "@/libs/combat/types";

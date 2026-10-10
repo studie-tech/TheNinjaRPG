@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import { parseHtml } from "@/utils/parse";
 import { getIframeProviderName, toPrivacyEnhancedEmbedUrl } from "@/utils/audio";
 import { ensureDom } from "../setup-dom.mjs";

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { NativeWidgetOperations } from "@/libs/native/widgetOperations";
 
 describe("native widget ownership queue", () => {
@@ -32,7 +32,7 @@ describe("native widget ownership queue", () => {
         () => confirmed(null),
       ),
     ).resolves.toBeUndefined();
-    expect(confirmed).toHaveBeenCalledOnce();
+    expect(confirmed).toHaveBeenCalledTimes(1);
     expect(confirmed).toHaveBeenCalledWith(null);
   });
 

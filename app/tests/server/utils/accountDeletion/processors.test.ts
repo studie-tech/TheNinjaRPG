@@ -1,17 +1,20 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as uploadthing from "uploadthing/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   resetServerModuleStubs,
   stubDatabase,
-} from "../../../../../tests/setup/serverModules";
-import { removeAccountProcessorData } from "../processors";
+} from "../../../setup/serverModules";
+import { removeAccountProcessorData } from "@/server/utils/accountDeletion/processors";
 
 const originalEnv = { ...process.env };
 const findMany = vi.fn();
 const deletion = vi.fn();
 beforeEach(() => {
   deletion.mockReset();
-  vi.spyOn(uploadthing, "UTApi").mockImplementation(
+  vi.spyOn(
+    uploadthing as unknown as { UTApi: () => uploadthing.UTApi },
+    "UTApi",
+  ).mockImplementation(
     () => ({ deleteFiles: deletion }) as unknown as uploadthing.UTApi,
   );
   vi.spyOn(globalThis, "fetch").mockRejectedValue(

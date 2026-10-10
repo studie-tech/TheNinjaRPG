@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
 import { sectorIdSchema, startGlobalMoveSchema, travelLocationSchema, travelPinsSchema } from "@/validators/travel";
 

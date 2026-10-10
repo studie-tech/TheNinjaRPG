@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import { eq, getTableName } from "drizzle-orm";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "bun:test";
 import {
   ELDER_MIN_VOTING_COUNT,
   WAR_DECLARATION_COST,

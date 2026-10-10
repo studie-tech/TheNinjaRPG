@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { runDeletionStep } from "../worker";
+import { describe, expect, it, vi } from "bun:test";
+import { runDeletionStep } from "@/server/utils/accountDeletion/worker";
 
 describe("permanent account deletion ordering", () => {
   const effects = () => ({
@@ -10,7 +10,7 @@ describe("permanent account deletion ordering", () => {
   it("revokes identity before allowing delayed game cleanup", async () => {
     const f = effects();
     await runDeletionStep({ phase: "QUEUED", ...f });
-    expect(f.removeIdentity).toHaveBeenCalledOnce();
+    expect(f.removeIdentity).toHaveBeenCalledTimes(1);
     expect(f.removeGameData).not.toHaveBeenCalled();
     expect(f.advance).toHaveBeenCalledWith("IDENTITY_DELETED", 300_000);
   });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { QuestType } from "@/drizzle/constants";
 import { getNewTrackers } from "@/libs/quest";
 

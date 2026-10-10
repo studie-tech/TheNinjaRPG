@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { userData } from "@/drizzle/schema";
 import type { GetPublicUsersSchema } from "@/validators/user";
 import { fetchPublicUsers } from "../../../src/server/api/routers/profile";

@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { refundPityCredit, reservePityCredit } from "@/server/utils/concurrency";
 import { bloodlineRolls } from "@/drizzle/schema";
 

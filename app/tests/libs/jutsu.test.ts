@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   JUTSU_MAX_BARRIER_EQUIPPED,
   JUTSU_MAX_EVENT_EQUIPPED,

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { MerchProductPage } from "@/components/merch/MerchProductPage";
 import { merchProductSchema } from "@/validators/merch";
 import { ensureDom } from "../setup-dom.mjs";

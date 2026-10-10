@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { purchaseErrorOutcome } from "@/libs/native/purchases";
 
 describe("native purchase errors", () => {

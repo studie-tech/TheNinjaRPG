@@ -1,6 +1,5 @@
-// @vitest-environment node
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   SHRINE_AI_UNLOCK_COST,
   SHRINE_BOOST_COST,
@@ -160,7 +159,7 @@ describeWithDatabase("committed shrine cache state", () => {
                       boostTemplateUpdatedAt: stored?.shrineSettings.boostTemplateUpdatedAt,
                     }
                   : undefined;
-        expect(result.userPatch?.village).toEqual(shrineSettings ? {
+        expect(result.userPatch?.village).toEqual<{ id: string; shrineSettings: typeof shrineSettings } | undefined>(shrineSettings ? {
           id: villageId, shrineSettings,
         } : undefined);
         expect(stored?.tokens).toBe(initialTokens + concurrentTokens - cost);
@@ -187,7 +186,7 @@ describeWithDatabase("committed shrine cache state", () => {
             maintenanceAt.getTime() + WAR_SHRINE_MAINTENANCE_DAYS * 24 * 60 * 60 * 1000,
           );
         } else {
-          expect(stored?.shrineSettings.boostTemplate).toEqual(template);
+          expect(stored?.shrineSettings.boostTemplate).toEqual<typeof template>(template);
           expect(stored?.shrineSettings.boostTemplateUpdatedBy).toBe("CacheKage");
           expect(stored?.shrineSettings.boostTemplateUpdatedAt).toEqual(
             expect.any(String),

@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "bun:test";
 import {
   actionLog,
   item,

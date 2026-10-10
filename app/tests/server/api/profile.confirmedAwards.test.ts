@@ -1,5 +1,4 @@
-// @vitest-environment node
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { CLAN_COLOR_CHANGE_REP_COST } from "@/drizzle/constants";
 import { clanRouter } from "@/server/api/routers/clan";
 import { miscRouter } from "@/server/api/routers/misc";
@@ -53,7 +52,7 @@ describe("confirmed self awards", () => {
     { amount: 1.5, earnedExperience: 1000, queue: [], delta: undefined },
     { amount: 25, earnedExperience: 1000, queue: [{}], delta: undefined },
   ])("reconciles mass XP (amount=$amount before=$earnedExperience queue=$queue)", async ({ amount, earnedExperience, queue, delta }) => {
-    const database = databaseFor(1, queue);
+    const database = databaseFor(1, [...queue]);
     database.query.userData.findFirst.mockImplementation(async () => ({ ...actor, earnedExperience, energyQueueTail: queue.length }));
     const result = await callerForDatabase(profileRouter, actor.userId, database as never)
       .awardExperienceToAll({ amount });

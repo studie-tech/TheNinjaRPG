@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { applyPoolAdjustmentsToBase, reconcileLobbyPools } from "@/libs/combat/util";
 import { makeBattleUser, makeEffect } from "./helpers/battleScenario";
 
@@ -57,11 +57,11 @@ describe("reconcileLobbyPools", () => {
     "keeps pools stable after an equivalent swap with $name",
     ({ effects, value, adjustment }) => {
       const original = makePoolUser();
-      applyPoolAdjustmentsToBase(original, effects);
+      applyPoolAdjustmentsToBase(original, [...effects]);
       expect(original.curHealth).toBe(value);
 
       const updated = makePoolUser();
-      reconcileLobbyPools(updated, original, effects);
+      reconcileLobbyPools(updated, original, [...effects]);
       expect([updated.curHealth, updated.curChakra, updated.curStamina]).toEqual([
         value,
         value,
@@ -73,7 +73,7 @@ describe("reconcileLobbyPools", () => {
         updated._prevStaminaAdj,
       ]).toEqual([adjustment, adjustment, adjustment]);
 
-      applyPoolAdjustmentsToBase(updated, effects);
+      applyPoolAdjustmentsToBase(updated, [...effects]);
       expect([updated.curHealth, updated.curChakra, updated.curStamina]).toEqual([
         value,
         value,
@@ -102,8 +102,8 @@ describe("reconcileLobbyPools", () => {
     original.curStamina = 0;
     const updated = makePoolUser();
     const effects = [poolEffect(100)];
-    reconcileLobbyPools(updated, original, effects);
-    applyPoolAdjustmentsToBase(updated, effects);
+    reconcileLobbyPools(updated, original, [...effects]);
+    applyPoolAdjustmentsToBase(updated, [...effects]);
     expect([updated.curHealth, updated.curChakra, updated.curStamina]).toEqual([
       0, 100, 0,
     ]);

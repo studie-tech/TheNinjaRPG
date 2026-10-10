@@ -1,6 +1,6 @@
 import { ensureDom } from "../setup-dom.mjs";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { usePageActive } from "@/hooks/usePageActive";
 import * as native from "@/libs/native";
 
@@ -58,7 +58,7 @@ it("reads initial visibility and removes lifecycle listeners on unmount", () => 
   const { result, unmount } = renderHook(usePageActive);
   expect(result.current).toBe(false);
   unmount();
-  expect(unsubscribe).toHaveBeenCalledOnce();
+  expect(unsubscribe).toHaveBeenCalledTimes(1);
   expect(removeListener).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
 });
 

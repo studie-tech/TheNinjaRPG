@@ -1,8 +1,7 @@
-// @vitest-environment node
 
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import {
   assignQuestToUser,
   upsertQuestEntries,
@@ -190,7 +189,7 @@ describe("assignQuestToUser compatibility", () => {
     });
 
     expect(result).toMatchObject({ success: true, message: "Quest started: A-rank mission" });
-    expect(insert).toHaveBeenCalledOnce();
+    expect(insert).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledTimes(2);
   });
 
@@ -271,9 +270,9 @@ describe("assignQuestToUser compatibility", () => {
     });
 
     expect(result).toMatchObject({ success: true, message: "Quest started: A-rank mission" });
-    expect(findFirst).toHaveBeenCalledOnce();
-    expect(insert).toHaveBeenCalledOnce();
-    expect(update).toHaveBeenCalledOnce();
+    expect(findFirst).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
   });
 
   it("rejects an overworld quest that is not assigned to the interacting NPC", async () => {
@@ -324,7 +323,7 @@ describe("assignQuestToUser compatibility", () => {
     await upsertQuestEntries(client, daily as never, undefined as never);
 
     // Both branches share the one LEFT JOIN pass; nobody is missing a history row here.
-    expect(select).toHaveBeenCalledOnce();
+    expect(select).toHaveBeenCalledTimes(1);
     expect(insert).not.toHaveBeenCalled();
 
     // The tracker must be gone before the quest reopens, or the window in between hands out a
@@ -451,8 +450,8 @@ describe("assignQuestToUser compatibility", () => {
 
     await upsertQuestEntries(client, daily as never, undefined as never);
 
-    expect(select).toHaveBeenCalledOnce();
-    expect(insert).toHaveBeenCalledOnce();
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledTimes(1);
     expect(values.mock.calls[0]?.[0]).toMatchObject([
       { userId: "user-2", questId: daily.id, questType: "daily" },
     ]);

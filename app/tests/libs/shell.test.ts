@@ -1,6 +1,6 @@
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import { WALLPAPER_EXPERIMENT, WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import {
   chooseShell,

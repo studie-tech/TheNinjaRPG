@@ -182,8 +182,7 @@
     "postcss": "8.5.26",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.12",
-    "typescript": "7.0.2",
-    "vitest": "^5.0.3"
+    "typescript": "7.0.2"
   },
   "ct3aMetadata": {
     "initVersion": "7.3.2"

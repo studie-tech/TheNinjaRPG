@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
 import { actionLog, jutsu, jutsuReskin, userData, userJutsu } from "@/drizzle/schema";
 import * as actualModerator from "@/libs/moderator";
 import { jutsuRouter } from "@/server/api/routers/jutsu";

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import {
   DMG_REDUCTION_CAP,
   OUT_OF_COMBAT_BASE_DAMAGE_INCREASE,

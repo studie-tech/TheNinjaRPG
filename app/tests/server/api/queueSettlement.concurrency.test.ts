@@ -1,5 +1,5 @@
 import { and, eq, gt } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { getUserCaps } from "@/drizzle/constants";
 import {
   item,
@@ -284,7 +284,7 @@ describeWithDatabase("Queue settlement concurrency and caps", () => {
     ]);
     const before = await fetchJutsuTrainingQueue(database, userId);
     expect(results.filter((result) => result.success)).toHaveLength(1);
-    expect(before.map((row) => row.reservedRyo)).toEqual([costs[0]]);
+    expect(before.map((row) => row.reservedRyo)).toEqual<Array<number | undefined>>([costs[0]]);
     expect((await readUser()).money).toBe(initialMoney - costs[0]!);
   });
 

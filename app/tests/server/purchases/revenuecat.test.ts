@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   STORE_FEDERAL_PRODUCTS,
   STORE_REP_PRODUCTS,
@@ -31,7 +31,7 @@ describe("store catalogue", () => {
     // absorbed rather than passed on. If this fails, either the pricing formula moved or
     // a tier was edited without recomputing its reputation.
     for (const product of STORE_REP_PRODUCTS) {
-      expect(product.reputationPoints).toBe(dollars2reps(product.usd));
+      expect(product.reputationPoints).toBe<number | null | undefined>(dollars2reps(product.usd));
     }
   });
 
@@ -169,7 +169,7 @@ describe("revenuecat webhook classification", () => {
       id: "e",
       expiration_at_ms: 1_701_000_000_000,
     } as Parameters<typeof expirationAt>[0];
-    expect(expirationAt(event)?.getTime()).toBe(event.expiration_at_ms);
+    expect(expirationAt(event)?.getTime()).toBe<typeof event.expiration_at_ms>(event.expiration_at_ms);
     expect(expirationAt({ ...event, expiration_at_ms: null })).toBeNull();
   });
 
@@ -180,12 +180,12 @@ describe("revenuecat webhook classification", () => {
       expiration_at_ms: 1_701_000_000_000,
       grace_period_expiration_at_ms: 1_702_000_000_000,
     } as Parameters<typeof paidThroughAt>[0];
-    expect(paidThroughAt(event)?.getTime()).toBe(
+    expect(paidThroughAt(event)?.getTime()).toBe<number | null | undefined>(
       event.grace_period_expiration_at_ms,
     );
     expect(
       paidThroughAt({ ...event, grace_period_expiration_at_ms: null })?.getTime(),
-    ).toBe(event.expiration_at_ms);
+    ).toBe<typeof event.expiration_at_ms>(event.expiration_at_ms);
     expect(
       paidThroughAt({
         ...event,
@@ -230,8 +230,8 @@ describe("revenuecat webhook classification", () => {
       purchased_at_ms: 1_699_000_000_000,
       expiration_at_ms: 1_701_000_000_000,
     } as Parameters<typeof occurredAt>[0];
-    expect(purchasedAt(event).getTime()).toBe(event.purchased_at_ms);
-    expect(occurredAt(event).getTime()).toBe(event.expiration_at_ms);
+    expect(purchasedAt(event).getTime()).toBe<typeof event.purchased_at_ms>(event.purchased_at_ms);
+    expect(occurredAt(event).getTime()).toBe<typeof event.expiration_at_ms>(event.expiration_at_ms);
   });
 
   it("tells a refund apart from an ordinary cancellation", () => {

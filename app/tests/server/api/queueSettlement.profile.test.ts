@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { jutsu, userData, userJutsu, userQueue, userVote } from "@/drizzle/schema";
 import { calcJutsuTrainCost } from "@/libs/train";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";

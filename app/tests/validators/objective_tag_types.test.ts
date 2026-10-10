@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { z } from "zod";
 import { effectFilters } from "@/validators/combat";
 import { OBJECTIVE_TAG_TYPES } from "@/validators/objectives";
@@ -32,7 +32,7 @@ describe("OBJECTIVE_TAG_TYPES", () => {
     const expected = [...effectFilters]
       .filter((t) => !EXCLUDED_TAG_TYPES.has(t))
       .sort();
-    expect([...OBJECTIVE_TAG_TYPES].sort()).toEqual(expected);
+    expect([...OBJECTIVE_TAG_TYPES].sort()).toEqual<typeof expected>(expected);
   });
 
   it("excludes every excluded tag type", () => {

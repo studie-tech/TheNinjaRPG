@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it } from "bun:test";
 import { describeWithDatabase, runRawSql } from "../../setup/testDatabase";
 import { sql } from "drizzle-orm";
 import { getTestDatabase } from "../../setup/testDatabase";

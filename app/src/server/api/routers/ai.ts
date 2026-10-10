@@ -14,7 +14,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent, canChangeDefaultAiProfile } from "@/utils/permissions";
-import { AiRule } from "@/validators/ai";
+import { createAiProfileSchema, updateAiProfileSchema } from "@/validators/ai";
 import { idSchema } from "@/validators/misc";
 
 export const aiRouter = createTRPCRouter({
@@ -41,7 +41,7 @@ export const aiRouter = createTRPCRouter({
       return profile;
     }),
   createAiProfile: protectedProcedure
-    .input(z.object({ userId: z.string(), rules: z.array(AiRule) }))
+    .input(createAiProfileSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
@@ -60,13 +60,7 @@ export const aiRouter = createTRPCRouter({
       return { success: true, message: "AiProfile created" };
     }),
   updateAiProfile: protectedProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        rules: z.array(AiRule),
-        includeDefaultRules: z.boolean(),
-      }),
-    )
+    .input(updateAiProfileSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch

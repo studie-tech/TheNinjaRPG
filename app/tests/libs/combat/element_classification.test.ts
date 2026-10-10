@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { ElementNames, type ElementName } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
 import {
@@ -115,7 +115,7 @@ describe("classification potency", () => {
     );
     expect(
       resolvePotencyTags(action, [effect], "caster").map((tag) => tag.power),
-    ).toEqual(expected);
+    ).toEqual<typeof expected>(expected);
   });
 
   it.each([null, "None"] as const)(

@@ -10,7 +10,7 @@
  * until a suite asks for something else. Suites opt in with `stubProfile` and hand the module
  * back with `resetServerModuleStubs`, so nothing leaks to the suites that never asked.
  */
-import { vi } from "vitest";
+import { vi } from "bun:test";
 import * as actualDb from "@/server/db";
 import * as actualProfile from "@/routers/profile";
 import * as actualCron from "@/server/utils/cron";

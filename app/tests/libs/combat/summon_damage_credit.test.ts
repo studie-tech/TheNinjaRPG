@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import { resolveDamageCreditUser } from "@/libs/combat/util";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";

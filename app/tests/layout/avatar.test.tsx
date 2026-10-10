@@ -1,6 +1,6 @@
 import { renderToString } from "react-dom/server";
 import type React from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   AVATAR_FULL_WIDTH,
   avatarRenditionWidth,

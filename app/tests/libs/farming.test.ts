@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { WORLD_CYCLE_SECONDS } from "@/drizzle/constants";
 import {
   canDropFarmSeed,

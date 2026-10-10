@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import { battle, overworldAiPlacement, sector, userData, village, war } from "@/drizzle/schema";
 import { SECTOR_BATTLE_STALE_SECONDS } from "@/libs/travel";
 import { travelRouter } from "@/server/api/routers/travel";

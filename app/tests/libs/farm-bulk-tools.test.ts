@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getFarmBulkToolAvailability } from "@/libs/farming";
 
 describe("farm bulk tool availability", () => {

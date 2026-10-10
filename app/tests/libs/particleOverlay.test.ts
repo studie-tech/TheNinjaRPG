@@ -1,5 +1,5 @@
 import { ensureDom } from "../setup-dom.mjs";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import {
   CONFETTI_OVERLAY_ID,
   applyParticleOverlayStyle,

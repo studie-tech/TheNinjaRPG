@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 
 // Exercise the query resolver directly; middleware and transport are not under test.

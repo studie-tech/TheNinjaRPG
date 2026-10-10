@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { buildCombatTrackerTasks, hydrateUserForQuests } from "@/libs/combat/util";
 import { getNewTrackers } from "@/libs/quest";
 import { makeBattleUser } from "./helpers/battleScenario";

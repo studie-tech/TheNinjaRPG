@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import {
   MAP_TOTAL_SECTORS,

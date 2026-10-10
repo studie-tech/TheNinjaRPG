@@ -1,11 +1,10 @@
-// @vitest-environment node
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { extractToolsFromProcedures } from "@/libs/mcp/tools";
 
 describe("main-game MCP registry", () => {
   it("can extract every registered game endpoint and its input schema", async () => {
-    // Both Bun and Vitest must configure the environment before loading the router.
+    // Configure the environment before loading the router.
     const testEnvironment = {
       NEXT_PUBLIC_PUSHER_APP_KEY: "test-key",
       NEXT_PUBLIC_PUSHER_APP_CLUSTER: "us2",

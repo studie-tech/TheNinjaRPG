@@ -1,9 +1,8 @@
-// @vitest-environment node
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { asc, eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import {
   actionLog,
   bloodline,

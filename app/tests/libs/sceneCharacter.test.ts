@@ -1,6 +1,5 @@
-// @vitest-environment node
 import sharp from "sharp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { validateSceneCharacterImage } from "@/libs/contentReview/sceneCharacter";
 
 const cutout = async (corner = false) => {

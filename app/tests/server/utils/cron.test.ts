@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import { authenticateCronRequest } from "@/server/utils/cron";
 
 const originalCronSecret = process.env.CRON_SECRET;

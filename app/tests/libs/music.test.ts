@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   BLUE_BLADE_EYES_BLOODLINE_ID,
   HEAVENLY_SONATA_BLOODLINE_ID,

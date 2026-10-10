@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { htmlToPlainText, stripBlockquotes } from "@/utils/sanitize";
 
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();

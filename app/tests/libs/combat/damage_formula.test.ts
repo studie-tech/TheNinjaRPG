@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 
 import { damageCalc } from "@/libs/combat/tags";
 import { dmgConfig } from "@/libs/combat/constants";

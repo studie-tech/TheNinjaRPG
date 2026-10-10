@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { getNewTrackers } from "@/libs/quest";
 
 const buyItemObjective = (id: string, ids: string[], value = 5) => ({

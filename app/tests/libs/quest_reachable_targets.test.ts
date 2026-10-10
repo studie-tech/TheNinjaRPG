@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import {
   MAP_TOTAL_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,

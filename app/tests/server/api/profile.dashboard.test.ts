@@ -1,6 +1,5 @@
-// @vitest-environment node
 
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it } from "bun:test";
 import {
   quest,
   questHistory,

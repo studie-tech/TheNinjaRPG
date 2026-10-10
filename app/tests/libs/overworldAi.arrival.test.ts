@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { arrivalPromptDecision, isArrivalPromptStale } from "@/libs/overworldAi";
 
 /** Creates the minimal positioned NPC shape required by the arrival-prompt helpers. */

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { unregisterDeviceSchema } from "@/validators/push";
 
 describe("unregisterDeviceSchema", () => {

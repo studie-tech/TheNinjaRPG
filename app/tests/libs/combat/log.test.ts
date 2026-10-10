@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { RouterInputs } from "@/app/_trpc/client";
 import type { BattleAction } from "@/drizzle/schema";
 import { mergeBattleEntries } from "@/libs/combat/log";

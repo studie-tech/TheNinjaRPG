@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { computeTemplateActivations } from "@/app/api/shrine-maintenance/route";
 
 // Helper: build a Date at a specific UTC time

@@ -1,5 +1,5 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { CombatStatNames, MasteryNames } from "@/drizzle/constants";
 import { battle } from "@/drizzle/schema";
 import { captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatCacheIntegerDelta, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate } from "@/libs/combat/userCache";
@@ -120,7 +120,7 @@ describe("confirmed combat profile reconciliation", () => {
     expect(typeof serialized).toBe("string");
     const restored = (JSON.parse(serialized as string) as { profileCacheSnapshots: { viewer: typeof snapshot } }).profileCacheSnapshots.viewer;
     const savedDate = restored.masterySources.items![0]!.imbuements![0]!.craftingFinishedAt;
-    expect(savedDate).toBe(craftingFinishedAt?.toISOString() ?? null);
+    expect(savedDate).toBe<string | null>(craftingFinishedAt?.toISOString() ?? null);
     const derived = combatCacheDerived(restored, restored.items, {});
     expect(derived.maxEnergy).toBe(calcMaxEnergy(raw));
     expect(derived.effectiveMasteries).toEqual(effectiveMasteries(raw));

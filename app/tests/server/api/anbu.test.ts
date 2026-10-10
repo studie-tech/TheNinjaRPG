@@ -1,7 +1,6 @@
-// @vitest-environment node
 
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
 
 type AnbuTestMocks = {
@@ -168,7 +167,7 @@ describe("ANBU request squad identity", () => {
     expect(describeSql(findFirst.mock.calls[0]?.[0]?.where)).toBe(
       expectedWhere,
     );
-    expect(result).toEqual(squad);
+    expect(result).toEqual<typeof squad>(squad);
     expect(result?.leaderId).toBe("new-leader");
     expect(result?.leaderId).not.toBe("old-leader");
   });
@@ -203,7 +202,7 @@ describe("ANBU request squad identity", () => {
     expect(describeSql(findFirst.mock.calls[0]?.[0]?.where)).toBe(
       expectedWhere,
     );
-    expect(result).toEqual(squad);
+    expect(result).toEqual<typeof squad>(squad);
   });
 
   it("reassigns pending requests to the new leader and sets relatedId on promotion", async () => {
@@ -386,7 +385,7 @@ describe("ANBU router request permissions and concurrency", () => {
           input: { squadId: "squad-1" },
         } as never,
       ),
-    ).resolves.toEqual([squadRequest]);
+    ).resolves.toEqual<Array<typeof squadRequest>>([squadRequest]);
     expect(fetchRequestsMock).toHaveBeenCalledTimes(1);
     expect(fetchRequestsMock).toHaveBeenLastCalledWith(
       client,
@@ -406,7 +405,7 @@ describe("ANBU router request permissions and concurrency", () => {
           input: { squadId: "squad-1" },
         } as never,
       ),
-    ).resolves.toEqual([ownForThisSquad]);
+    ).resolves.toEqual<Array<typeof ownForThisSquad>>([ownForThisSquad]);
     expect(fetchRequestsMock).toHaveBeenCalledTimes(2);
     expect(fetchRequestsMock).toHaveBeenLastCalledWith(
       client,

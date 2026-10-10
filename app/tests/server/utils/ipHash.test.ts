@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { hashIpWithKey } from "@/server/utils/ipHash";
 
 const KEY = "development-ip-hash-secret";

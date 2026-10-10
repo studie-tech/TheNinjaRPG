@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { alignBattle, hasNoAvailableActions, wantsHumanActionSet } from "@/libs/combat/util";
 import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
