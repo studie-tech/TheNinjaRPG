@@ -123,5 +123,6 @@ export const createLinkedJutsuSchema = z.object({
   parentId: z.string().min(1),
   bloodlineReskinId: z.string().min(1),
 });
+export type CreateLinkedJutsuSchema = z.infer<typeof createLinkedJutsuSchema>;
 
 export const updateJutsuSchema = z.object({ id: z.string(), data: JutsuValidator });

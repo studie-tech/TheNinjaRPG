@@ -1,23 +1,18 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { FilePlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { use, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
-import Link from "@/layout/Link";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent, canModerateReskin } from "@/utils/permissions";
@@ -26,6 +21,10 @@ import {
   type BloodlineReskinUpdateSchema,
   bloodlineReskinUpdateSchema,
 } from "@/validators/bloodline";
+import {
+  type CreateLinkedJutsuSchema,
+  createLinkedJutsuSchema,
+} from "@/validators/jutsu";
 
 export default function BloodlineReskinEdit(props: {
   params: Promise<{ reskinId: string }>;
@@ -48,7 +47,12 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
   } = api.bloodline.getReskin.useQuery({ reskinId }, { enabled: !!reskinId });
 
   const [createError, setCreateError] = useState<string | null>(null);
-  const [parentId, setParentId] = useState("");
+  const createForm = useForm<CreateLinkedJutsuSchema>({
+    mode: "all",
+    resolver: zodResolver(createLinkedJutsuSchema),
+    defaultValues: { parentId: "", bloodlineReskinId: reskinId },
+  });
+  const parentId = useWatch({ control: createForm.control, name: "parentId" });
   const reskinData = reskin && !("success" in reskin) ? reskin : null;
   const {
     data: parents,
@@ -64,6 +68,7 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
     api.jutsu.createLinkedReskin.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
+        setCreateError(data.success ? null : data.message);
         if (data.success) {
           await utils.jutsu.getLinkedReskins.invalidate({ id: reskinId });
           router.push(`/manual/jutsu/edit/${data.message}`);
@@ -191,6 +196,53 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
         title="Bloodline Jutsu Reskins"
         subtitle="Linked H-rank jutsu"
         initialBreak={true}
+        topRightContent={
+          canChangeContent(userData.role) && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  id="create-linked-jutsu-reskin"
+                  aria-label="Create Jutsu Reskin"
+                  disabled={!parents || parentsError || isCreating}
+                >
+                  <FilePlus className="h-6 w-6" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80">
+                {createError && (
+                  <p role="alert" className="mb-4 text-destructive">
+                    {createError}
+                  </p>
+                )}
+                <EditContent
+                  schema={createLinkedJutsuSchema}
+                  form={createForm}
+                  formData={[
+                    {
+                      id: "parentId",
+                      label: "Parent Jutsu",
+                      type: "db_values",
+                      values: parents?.filter(
+                        (j) => j.bloodlineId === reskinData.bloodlineId,
+                      ),
+                      searchable: true,
+                      fullWidth: true,
+                    },
+                  ]}
+                  showSubmit={true}
+                  buttonTxt="Create Jutsu Reskin"
+                  submitLoading={isCreating}
+                  submitLoadingText="Creating..."
+                  submitDisabled={!parentId}
+                  onAccept={createForm.handleSubmit((data) => {
+                    setCreateError(null);
+                    createLinked(data);
+                  })}
+                />
+              </PopoverContent>
+            </Popover>
+          )
+        }
       >
         <p className="mb-4">
           Create a reskin from a jutsu belonging to the original bloodline. Parent edits
@@ -203,36 +255,6 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
             <Button onClick={() => void refetchParents()}>Retry</Button>
           </p>
         )}
-        {canChangeContent(userData.role) && (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <Label htmlFor="reskin-parent">Parent Jutsu</Label>
-            <Select value={parentId} onValueChange={setParentId}>
-              <SelectTrigger id="reskin-parent" className="w-full sm:w-80">
-                <SelectValue placeholder="Select parent jutsu" />
-              </SelectTrigger>
-              <SelectContent>
-                {parents
-                  ?.filter((j) => j.bloodlineId === reskinData.bloodlineId)
-                  .map((j) => (
-                    <SelectItem key={j.id} value={j.id}>
-                      {j.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-            <Button
-              disabled={!parentId || isCreating}
-              onClick={() => createLinked({ parentId, bloodlineReskinId: reskinId })}
-            >
-              {isCreating ? "Creating..." : "Create Jutsu Reskin"}
-            </Button>
-          </div>
-        )}
-        {createError && (
-          <p role="alert" className="mb-4 text-destructive">
-            {createError}
-          </p>
-        )}
         {linkedError ? (
           <p role="alert">
             Could not load linked jutsu.{" "}
@@ -240,16 +262,7 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
           </p>
         ) : linked ? (
           linked.length ? (
-            <ul className="space-y-2">
-              {linked.map((j) => (
-                <li key={j.id}>
-                  <Link href={`/manual/jutsu/edit/${j.id}`} className="underline">
-                    {j.name}
-                  </Link>
-                  {j.hidden ? " (Hidden)" : ""}
-                </li>
-              ))}
-            </ul>
+            linked.map((j) => <ItemWithEffects key={j.id} item={j} showEdit="jutsu" />)
           ) : (
             <p>No linked jutsu reskins yet.</p>
           )

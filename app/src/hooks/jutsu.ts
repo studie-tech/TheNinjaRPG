@@ -163,6 +163,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     {
       id: "reskinParentJutsuId",
       label: "Reskin Parent Jutsu",
+      searchable: true,
       fullWidth: true,
       type: "db_values",
       values: reskinParents?.filter((j) => j.id !== data.id),
@@ -171,6 +172,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     {
       id: "bloodlineReskinId",
       label: "Bloodline Reskin",
+      searchable: true,
       fullWidth: true,
       type: "db_values",
       values: bloodlineReskins,
