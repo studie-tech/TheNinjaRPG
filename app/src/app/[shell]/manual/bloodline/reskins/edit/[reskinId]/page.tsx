@@ -83,15 +83,14 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
       image: undefined,
       reason: "",
     },
-    values:
-      reskin && !("success" in reskin)
-        ? {
-            name: reskin.name,
-            description: reskin.description,
-            image: reskin.image,
-            reason: "",
-          }
-        : undefined,
+    values: reskinData
+      ? {
+          name: reskinData.name,
+          description: reskinData.description,
+          image: reskinData.image,
+          reason: "",
+        }
+      : undefined,
   });
 
   // Mutation for updating reskin
@@ -135,7 +134,7 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
       id: "image",
       type: "avatar",
       label: "Image",
-      href: reskinData?.image || undefined,
+      href: reskinData.image || undefined,
     },
     { id: "name", type: "text", label: "Reskin Name" },
     {
@@ -168,9 +167,7 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
             <Label htmlFor="original-bloodline">Original Bloodline</Label>
             <Input
               id="original-bloodline"
-              value={
-                reskin && !("success" in reskin) ? reskin.bloodline?.name || "" : ""
-              }
+              value={reskinData.bloodline?.name || ""}
               disabled
               className="mt-1"
             />
@@ -183,7 +180,7 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
             showSubmit={true}
             buttonTxt="Save Changes"
             allowImageUpload={true}
-            relationId={reskinData?.id || reskinId}
+            relationId={reskinData.id || reskinId}
             type="bloodline_reskin"
             onAccept={onAccept}
             submitDisabled={!form.formState.isValid || isUpdating}

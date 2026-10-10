@@ -901,7 +901,7 @@ export const jutsuRouter = createTRPCRouter({
               where: isNotNull(jutsu.parentJutsuId),
             })
           : Promise.resolve([]),
-        input.data.requiredBloodlineItemId
+        input.data.requiredBloodlineItemId && !input.data.reskinParentJutsuId
           ? ctx.drizzle.query.item.findFirst({
               columns: { id: true, bloodlineId: true },
               where: eq(item.id, input.data.requiredBloodlineItemId),

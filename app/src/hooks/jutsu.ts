@@ -24,6 +24,7 @@ import {
 } from "@/libs/jutsu/reskins";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
+import { objectKeys } from "@/utils/typeutils";
 import type { ZodAllTags, ZodJutsuInput, ZodJutsuType } from "@/validators/combat";
 import { JutsuValidator } from "@/validators/combat";
 
@@ -78,7 +79,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
   useEffect(() => {
     if (!reskinParent) return;
     const inherited = getJutsuReskinMechanics(reskinParent);
-    for (const key of Object.keys(inherited) as (keyof typeof inherited)[]) {
+    for (const key of objectKeys(inherited)) {
       form.setValue(key, inherited[key], { shouldDirty: true });
     }
     form.setValue("jutsuRank", "H", { shouldDirty: true });

@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "vitest";
-import { actionLog, bloodlineReskin, contentProposal, contentProposalBasis, jutsu, userData, userJutsu } from "@/drizzle/schema";
+import { actionLog, bloodlineReskin, contentProposal, contentProposalBasis, item, jutsu, userData, userJutsu } from "@/drizzle/schema";
 import { loadEntities, entityKey } from "@/libs/contentReview/entities";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
 import { DamageTag, JutsuValidator } from "@/validators/combat";
-import { insertUsers } from "../../setup/factories";
+import { insertItems, insertUsers } from "../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const staff = () => callerFor(jutsuRouter, "staff");
@@ -45,7 +45,7 @@ const pauseBeforeTransaction = (database: DrizzleClient) => {
 
 describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
   beforeEach(async () => {
-    await resetTables(contentProposalBasis, contentProposal, actionLog, userJutsu, jutsu, bloodlineReskin, userData);
+    await resetTables(contentProposalBasis, contentProposal, actionLog, userJutsu, jutsu, bloodlineReskin, item, userData);
     await insertUsers([{ userId: "staff", username: "Staff", role: "CONTENT" }, { userId: "player", username: "Player" }] as never);
     const db = await getTestDatabase();
     await db.insert(jutsu).values({
@@ -95,6 +95,21 @@ describeWithDatabase("linked H-rank jutsu against real MySQL", () => {
       requiredBloodlineMastery: 500,
       effects: { 0: { power: 9 } },
     });
+  });
+
+  it("validates ordinary required items and inherits the linked parent's item", async () => {
+    expect(await save("parent", { requiredBloodlineItemId: "missing" })).toMatchObject({
+      success: false, message: "Required bloodline item not found",
+    });
+    await insertItems([{ id: "parent-item", bloodlineId: "blood" }, { id: "other-item", bloodlineId: "other" }]);
+    expect(await save("parent", { requiredBloodlineItemId: "other-item" })).toMatchObject({
+      success: false, message: "The required bloodline item must belong to the jutsu's bloodline",
+    });
+    expect((await save("parent", { requiredBloodlineItemId: "parent-item" })).success).toBe(true);
+    const id = await createChild();
+    expect((await read(id)).requiredBloodlineItemId).toBe("parent-item");
+    expect((await save(id, { requiredBloodlineItemId: "missing", description: "Custom cosmetics" })).success).toBe(true);
+    expect(await read(id)).toMatchObject({ requiredBloodlineItemId: "parent-item", description: "Custom cosmetics" });
   });
 
   it("unequips only the edited jutsu when it is saved as hidden", async () => {
