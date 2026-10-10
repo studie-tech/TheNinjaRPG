@@ -205,7 +205,7 @@ describeWithDatabase("Energy queue state transitions", () => {
       forceRegen: true,
     });
     const user = (await read())!;
-    expect(user.offence).toBe(140);
+    expect(user.offence).toBe(18.5);
     expect(user.defence).toBe(10);
     expect(user.curEnergy).toBe(0);
     expect(await readEnergyQueue(USER)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
@@ -263,7 +263,7 @@ describeWithDatabase("Energy queue state transitions", () => {
     if (queued) {
       await fetchUpdatedUser({ client: db, userId: USER, forceRegen: true });
       // The stored arrival Energy can train one entry, but travel ticks cannot replay.
-      expect((await read())!.offence).toBe(140);
+      expect((await read())!.offence).toBe(18.5);
       expect((await read())!.defence).toBe(10);
       expect(await readEnergyQueue(USER)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
     }
@@ -582,9 +582,9 @@ describeWithDatabase("Energy queue state transitions", () => {
         const user = (await read())!;
         expect(await readEnergyQueue(USER)).toEqual([]);
         expect(user.curEnergy).toBe(100);
-        expect(user.offence).toBe(270);
-        expect(user.defence).toBe(270);
-        expect(user.experience).toBe(520);
+        expect(user.offence).toBe(27);
+        expect(user.defence).toBe(27);
+        expect(user.experience).toBe(34);
         expect(user.curHealth).toBe(300);
         expect(user.curChakra).toBe(300);
         expect(user.curStamina).toBe(300);
@@ -595,7 +595,7 @@ describeWithDatabase("Energy queue state transitions", () => {
           expect(state!.extraState.energyRegeneration?.[USER]).toBe(100);
           expect(
             state!.usersState.find((fighter) => fighter.userId === USER)!.offence,
-          ).toBe(270);
+          ).toBe(27);
         } else {
           expect(user.status).toBe("AWAKE");
           expect(await db.select().from(battle)).toHaveLength(0);
