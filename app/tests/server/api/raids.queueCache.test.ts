@@ -23,7 +23,27 @@ import {
   resetTables,
 } from "../../setup/testDatabase";
 
+const stubRateLimitTransport = () => {
+  const realFetch = globalThis.fetch;
+  // The shared preload creates the limiter before this suite runs. Stub only its Redis
+  // transport, leaving the middleware active and restoring fetch after every test.
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    if (typeof init?.body !== "string" || !init.body.includes("trpc-ratelimit")) {
+      return realFetch(input, init);
+    }
+    const commands = JSON.parse(init.body) as unknown[];
+    const resultFor = (command: unknown[]) => ({
+      result: command[0] === "evalsha" || command[0] === "eval" ? [59, 60] : 1,
+    });
+    const response = Array.isArray(commands[0])
+      ? commands.map((command) => resultFor(command as unknown[]))
+      : resultFor(commands);
+    return Response.json(response);
+  });
+};
+
 describe("raid join cache reconciliation", () => {
+  beforeEach(stubRateLimitTransport);
   afterEach(() => vi.restoreAllMocks());
   const databaseFor = (pendingQueue: boolean, canClaim = true) => {
     const userRead = vi.fn().mockResolvedValue({
@@ -97,6 +117,7 @@ describe("raid join cache reconciliation", () => {
 });
 
 describeWithDatabase("raid join committed queue", () => {
+  beforeEach(stubRateLimitTransport);
   beforeEach(async () => {
     await resetTables(
       user2conversation,
