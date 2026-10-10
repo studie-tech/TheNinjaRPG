@@ -1,8 +1,10 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { CombatStatNames, MasteryNames } from "@/drizzle/constants";
+import { battle } from "@/drizzle/schema";
 import { captureCombatCacheSnapshot, combatCacheDerived, combatCacheEnergy, combatCacheItems, combatCacheIntegerDelta, combatProfilePatch, canCacheCombatCompletion, type CombatProfileUpdate } from "@/libs/combat/userCache";
 import { calcMaxEnergy } from "@/libs/profile";
+import { effectiveMasteries } from "@/libs/mastery";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { ZodAllTags } from "@/validators/combat";
@@ -102,6 +104,28 @@ describe("confirmed combat profile reconciliation", () => {
     const battle = makeCompleteBattle({ extraState: { profileCacheSnapshots: { viewer: snapshot } } });
     expect(maskBattle(battle, "viewer").extraState.profileCacheSnapshots).toEqual({});
     expect(maskBattle(battle, "opponent").extraState.profileCacheSnapshots).toEqual({});
+  });
+
+  it.each(["finished", "future", "null"] as const)("matches relational gear effects after battle JSON serialization (%s imbuement)", (completion) => {
+    const { raw } = fixture();
+    const gear = raw.items[0]!;
+    const effects = gear.item.effects;
+    gear.item = { ...gear.item, effects: [], canBeImbued: true };
+    const craftingFinishedAt = completion === "null"
+      ? null
+      : new Date(Date.now() + (completion === "finished" ? -86_400_000 : 86_400_000));
+    gear.imbuements = [{ craftingFinishedAt, item: { effects } }];
+    const snapshot = captureCombatCacheSnapshot(raw);
+    const serialized = battle.extraState.mapToDriverValue({ profileCacheSnapshots: { viewer: snapshot } });
+    expect(typeof serialized).toBe("string");
+    const restored = (JSON.parse(serialized as string) as { profileCacheSnapshots: { viewer: typeof snapshot } }).profileCacheSnapshots.viewer;
+    const savedDate = restored.masterySources.items![0]!.imbuements![0]!.craftingFinishedAt;
+    expect(savedDate).toBe(craftingFinishedAt?.toISOString() ?? null);
+    const derived = combatCacheDerived(restored, restored.items, {});
+    expect(derived.maxEnergy).toBe(calcMaxEnergy(raw));
+    expect(derived.effectiveMasteries).toEqual(effectiveMasteries(raw));
+    expect(derived.effectiveMasteries.ninjutsuMastery).toBe(completion === "finished" ? 110 : 100);
+    expect(restored.masterySources.items![0]!.imbuements![0]!.craftingFinishedAt).toBe(savedDate);
   });
 
   it("rounds integer rewards from their final balance rather than rounding negative deltas", () => {

@@ -210,7 +210,22 @@ export const combatCacheDerived = (
     ...snapshot.masterySources,
     items: snapshot.masterySources.items?.flatMap((item) => {
       const changed = items.find((row) => row.id === item.id);
-      return changed && changed.quantity > 0 ? [{ ...item, ...changed }] : [];
+      return changed && changed.quantity > 0
+        ? [
+            {
+              ...item,
+              ...changed,
+              // Battle JSON serializes the dates used by the shared gear-effect helpers.
+              imbuements: item.imbuements?.map((imbuement) => ({
+                ...imbuement,
+                craftingFinishedAt:
+                  imbuement.craftingFinishedAt === null
+                    ? null
+                    : new Date(imbuement.craftingFinishedAt),
+              })),
+            },
+          ]
+        : [];
     }),
   };
   for (const mastery of MasteryNames) user[mastery] += delta[mastery] ?? 0;

@@ -9,7 +9,10 @@ import {
   battleAction,
   battleHistory,
   logBattleLengths,
+  item,
   userData,
+  userItem,
+  userItemImbuement,
 } from "@/drizzle/schema";
 import { captureCombatCacheSnapshot, combatProfilePatch } from "@/libs/combat/userCache";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
@@ -18,12 +21,13 @@ import { applyEffects } from "@/libs/combat/process";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { alignBattle, calcBattleResult } from "@/libs/combat/util";
 import { Pusher, type PusherClient } from "@/libs/pusher";
-import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
+import { combatRouter, fetchBattle, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { insertUsers } from "../../setup/factories";
+import { getTagSchema } from "@/validators/combat";
+import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
@@ -127,6 +131,9 @@ describeWithDatabase("CAS combat settlement", () => {
       battleHistory,
       aiProfile,
       logBattleLengths,
+      userItemImbuement,
+      userItem,
+      item,
       userData,
     );
     trigger.mockClear();
@@ -158,6 +165,66 @@ describeWithDatabase("CAS combat settlement", () => {
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it("keeps finished imbuement effects in the accepted compact profile after persisted battle settlement", async () => {
+    const database = await getTestDatabase();
+    await insertUsers([
+      { userId: "imbue-player", username: "ImbuePlayer", rank: "JONIN", level: 10, status: "AWAKE", isOutlaw: true, pveFights: 10, curHealth: 100, curChakra: 100, curStamina: 100, curEnergy: 10, regeneration: 0, ninjutsuMastery: 100 },
+      { userId: "imbue-ai", username: "ImbueAI", isAi: true, isSummon: false, rank: "NONE", level: 1, curHealth: 100 },
+    ]);
+    await insertItems([
+      { id: "imbue-chest", itemType: "ARMOR", slot: "CHEST", canBeImbued: true, maxDurability: 100, effects: [] },
+      { id: "imbue-crystal", itemType: "CRYSTAL", effects: [
+        getTagSchema("increasemastery").parse({ masteryTypes: ["Ninjutsu"], power: 10, powerPerLevel: 0, calculation: "static" }),
+        getTagSchema("increasemaxpools").parse({ poolsAffected: ["Energy"], power: 100, powerPerLevel: 0, calculation: "static" }),
+      ] },
+    ]);
+    await insertUserItems([{ id: "imbue-stack", userId: "imbue-player", itemId: "imbue-chest", quantity: 1, equipped: "CHEST", durability: 100 }]);
+    await database.insert(userItemImbuement).values({ id: "imbue-row", userItemId: "imbue-stack", imbuementItemId: "imbue-crystal", craftingFinishedAt: new Date(Date.now() - 86_400_000) });
+    await database.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    const original = (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user!;
+    const started = await initiateBattle({ client: database, userIds: ["imbue-player"], targetIds: ["imbue-ai"] }, "ARENA");
+    expect(started.success).toBe(true);
+    const snapshot = (await fetchBattle(database, started.battleId!))!;
+    const serializedDate = snapshot.extraState.profileCacheSnapshots!["imbue-player"]!.masterySources.items![0]!.imbuements![0]!.craftingFinishedAt;
+    expect(typeof serializedDate).toBe("string");
+    snapshot.usersState.find((user) => !user.isAi)!.curHealth = 100;
+    const enemy = snapshot.usersState.find((user) => user.isAi)!;
+    enemy.curHealth = 0;
+    enemy.leftBattle = true;
+    const result = calcBattleResult(snapshot, "imbue-player", [])!;
+    // Relation rewards require profile reconciliation; isolate the eligible solo PvE outcome.
+    result.villagePrestige = 0; result.villageTokens = 0; result.anbuPoints = 0; result.clanPoints = 0;
+    await updateUser(database, pusher, snapshot, result, "imbue-player");
+    expect(result.profileUpdate).toBeDefined();
+
+    const key = [["profile", "getUser"], { type: "query" }];
+    const client = new QueryClient();
+    const current = { ...original, status: "BATTLE" as const, battleId: started.battleId! };
+    client.setQueryData(key, { userData: current, notifications: [] });
+    let reads = 0;
+    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity,
+      queryFn: async () => { reads++; return { userData: (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user }; } });
+    const close = observer.subscribe(() => {});
+    try {
+      await updateUserCache(client, key, (user) => combatProfilePatch(user, result.profileUpdate!), { revision: prepareUserUpdate(client, key), delta: result.profileUpdate!.userDelta });
+      const cached = client.getQueryData<{ userData: typeof current }>(key)!.userData;
+      const authoritative = (await fetchUpdatedUser({ client: database, userId: "imbue-player" })).user!;
+      expect(authoritative.maxEnergy).toBe(650);
+      expect(authoritative.effectiveMasteries.ninjutsuMastery).toBe(110);
+      expect(cached.maxEnergy).toBe(authoritative.maxEnergy);
+      expect(cached.effectiveMasteries).toEqual(authoritative.effectiveMasteries);
+      expect(cached.items[0]!.durability).toBe(authoritative.items[0]!.durability);
+      expect(authoritative.items[0]!.durability).toBe(100);
+      expect(cached.status).toBe("AWAKE");
+      expect(cached.battleId).toBeNull();
+      expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+      expect(reads).toBe(0);
+    } finally {
+      close();
+      client.clear();
+    }
+  });
 
   it.each([false, true])("reconciles the initiation PvE counter after arena settlement (refreshed start: %s)", async (refreshed) => {
     const database = await getTestDatabase();

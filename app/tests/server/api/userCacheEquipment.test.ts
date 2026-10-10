@@ -153,9 +153,13 @@ describeWithDatabase("committed profile cache patches", () => {
     const db = await getTestDatabase();
     await insertItems([{ id: "cache-second-armor", name: "Cache second armor", maxDurability: 100 }]);
     await insertUserItems([{ id: "second-armor", userId, itemId: "cache-second-armor", durability: 0 }]);
-    const interleaved = beforeStatements(db, userItem, [async () => {
-      await db.update(userItem).set({ storedAtHome: true, equipped: "NONE" }).where(eq(userItem.id, "worn-armor"));
-    }]);
+    let movePromise: Promise<void> | undefined;
+    const moveBeforeRepair = async () => {
+      movePromise ??= db.update(userItem).set({ storedAtHome: true, equipped: "NONE" }).where(eq(userItem.id, "worn-armor")).then(() => {});
+      await movePromise;
+    };
+    // Both parallel writes must await the inventory move, regardless of row order.
+    const interleaved = beforeStatements(db, userItem, [moveBeforeRepair, moveBeforeRepair]);
     const counted = countUserReads(interleaved);
     const result = await callerForDatabase(itemRouter, userId, counted.client).repairAll();
     expect(result.success).toBe(true);
