@@ -166,29 +166,43 @@ const mergeUserCache = (
   user: User,
   achievementProgress?: AchievementProgress[],
 ): UserCache => {
-  const notifications = old.notifications?.filter(
-    (entry) =>
-      entry.id !== "tutorial-unassigned-stats" &&
-      entry.name !== "Assign XP" &&
-      entry.name !== "In combat" &&
-      entry.name !== "In hospital",
-  );
-  if (notifications) {
+  const desired: NavBarDropdownLink[] = [];
+  if (
+    UserRanks.includes(user.rank) &&
+    user.earnedExperience > 0 &&
+    canAssignExperience(user)
+  )
+    desired.push({
+      id: "tutorial-unassigned-stats",
+      href: "/profile/experience",
+      name: "Assign XP",
+      color: "blue",
+    });
+  if (user.status === "BATTLE")
+    desired.push({ href: "/combat", name: "In combat", color: "red" });
+  if (user.status === "HOSPITALIZED")
+    desired.push({ href: "/hospital", name: "In hospital", color: "red" });
+  let notifications = old.notifications?.flatMap((entry) => {
     if (
-      UserRanks.includes(user.rank) &&
-      user.earnedExperience > 0 &&
-      canAssignExperience(user)
+      entry.id !== "tutorial-unassigned-stats" &&
+      !["Assign XP", "In combat", "In hospital"].includes(entry.name)
     )
-      notifications.push({
-        id: "tutorial-unassigned-stats",
-        href: "/profile/experience",
-        name: "Assign XP",
-        color: "blue",
-      });
-    if (user.status === "BATTLE")
-      notifications.push({ href: "/combat", name: "In combat", color: "red" });
-    if (user.status === "HOSPITALIZED")
-      notifications.push({ href: "/hospital", name: "In hospital", color: "red" });
+      return [entry];
+    const index = desired.findIndex((next) => next.name === entry.name);
+    if (index < 0) return [];
+    desired.splice(index, 1);
+    return [entry];
+  });
+  if (notifications) {
+    notifications.push(...desired);
+    if (
+      notifications.length === old.notifications?.length &&
+      notifications.every((entry, index) => entry === old.notifications?.[index])
+    )
+      notifications = old.notifications;
+    // Existing toast entries have already been displayed by UserContext. Changing
+    // navigation must not replay them through its notification effect.
+    else notifications = notifications.filter((entry) => entry.color !== "toast");
   }
   return {
     ...old,

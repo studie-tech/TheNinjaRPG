@@ -38,10 +38,6 @@ import { idSchema } from "@/validators/misc";
 import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
-const getDefaultRewards = (): ObjectiveRewardType => {
-  return ObjectiveReward.parse({});
-};
-
 export const activityStreakRouter = createTRPCRouter({
   // ===== Player Endpoints =====
 
@@ -585,7 +581,8 @@ export const activityStreakRouter = createTRPCRouter({
 
       // Get rewards for this day
       const dayReward = config.rewards.find((r) => r.dayNumber === newCurrentDay);
-      const rewards = dayReward?.rewards ?? getDefaultRewards();
+      // Stored rewards can predate added fields; apply their schema defaults before payout.
+      const rewards = ObjectiveReward.parse(dayReward?.rewards ?? {});
       // Check if this completes the streak
       const isComplete = newCurrentDay >= config.totalDays;
 

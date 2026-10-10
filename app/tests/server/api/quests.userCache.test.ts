@@ -68,11 +68,39 @@ describeWithDatabase("confirmed quest cache responses", () => {
     expect(result).toMatchObject({ success: true, resolved: true });
     const saved = await readPlayer();
     expect(result.userDelta?.money).toBe((saved?.money ?? 0) - (before?.money ?? 0));
-    expect(result.userDelta?.earnedExperience).toBe((saved?.earnedExperience ?? 0) - (before?.earnedExperience ?? 0));
+    expect(result.userPatch?.earnedExperience).toBe(saved?.earnedExperience);
+    expect(result.userDelta?.earnedExperience).toBeUndefined();
     expect(result.userPatch).toMatchObject({ missionsA: saved?.missionsA, curEnergy: saved?.curEnergy, questFinishAt: saved?.questFinishAt });
     expect(result.userPatch?.completedQuests?.some((entry) => entry.questId === missionId && entry.completed === 1)).toBe(true);
     expect(result.userPatch?.userQuests?.some((entry) => entry.questId === missionId)).toBe(false);
     expect(result.userPatch?.questData?.some((entry) => entry.id === missionId)).toBe(false);
+    expect(reads()).toBe(1);
+  });
+
+  it("returns settled queued training alongside completion without requiring another profile read", async () => {
+    const api = await callerFor(questsRouter, playerId);
+    expect((await api.startQuest({ questId: missionId, userSector: 0 })).success).toBe(true);
+    const database = await getTestDatabase();
+    await database.update(userData).set({
+      curEnergy: 100,
+      energyTrainingQueue: [{ stat: "offence", energy: 40 }],
+      questData: [{ id: missionId, startAt: new Date().toISOString(), goals: [{ id: "train", value: 10, done: true, collected: false, recentlyDied: false }] }],
+    }).where(eq(userData.userId, playerId));
+    const before = await readPlayer();
+    const reads = await countProfileReads();
+    const result = await api.checkRewards({ questId: missionId });
+    const saved = await readPlayer();
+    expect(result).toMatchObject({ success: true, resolved: true });
+    expect(saved?.offence).toBeGreaterThan(before?.offence ?? 0);
+    expect(saved?.experience).toBeGreaterThan(before?.experience ?? 0);
+    expect(result.userPatch).toMatchObject({
+      offence: saved?.offence,
+      experience: saved?.experience,
+      earnedExperience: saved?.earnedExperience,
+      curEnergy: saved?.curEnergy,
+      energyTrainingQueue: [],
+    });
+    expect(result.userDelta?.money).toBe((saved?.money ?? 0) - (before?.money ?? 0));
     expect(reads()).toBe(1);
   });
 });

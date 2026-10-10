@@ -1155,6 +1155,9 @@ export const questsRouter = createTRPCRouter({
 
       const refreshedTrackers = getNewTrackers(user, [{ task: "any" }]);
       user.questData = refreshedTrackers.trackers;
+      // XP is already included in the accepted progression snapshot.
+      const { earnedExperience: _earnedExperience, ...balanceDelta } =
+        claim.userDelta ?? {};
       const cacheUpdate =
         !requiresProgressionRefresh &&
         claim.userCacheEligible &&
@@ -1185,7 +1188,7 @@ export const questsRouter = createTRPCRouter({
               ...cacheUpdate,
               // Energy payouts advance the DB version in SQL; only the next read knows that stamp.
               userPatch: { ...cacheUpdate.userPatch, updatedAt: undefined },
-              userDelta: claim.userDelta,
+              userDelta: balanceDelta,
             }
           : {}),
       };

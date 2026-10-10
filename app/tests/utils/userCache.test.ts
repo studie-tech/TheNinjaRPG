@@ -460,3 +460,26 @@ describe("progression cache reconciliation", () => {
     client.clear();
   });
 });
+
+
+describe("notification effects during cache updates", () => {
+  it("preserves notification identity for unrelated balance changes", async () => {
+    const client = new QueryClient();
+    const notifications = [{ href: "/news", name: "Reward received", color: "toast" as const }];
+    client.setQueryData(key, { ...profile(100), notifications });
+    await updateUserCache(client, key, { money: 150 });
+    expect(client.getQueryData<{ notifications: unknown }>(key)?.notifications).toBe(notifications);
+    client.clear();
+  });
+  it("does not replay an already-displayed toast when a battle notification changes", async () => {
+    const client = new QueryClient();
+    client.setQueryData(key, { userData: { ...profile(100).userData, status: "BATTLE" }, notifications: [
+      { href: "/news", name: "Reward received", color: "toast" },
+      { href: "/combat", name: "In combat", color: "red" },
+      { href: "/inbox", name: "Mail", color: "blue" },
+    ] });
+    await updateUserCache(client, key, { status: "AWAKE" }, { revision: prepareUserUpdate(client, key) });
+    expect(client.getQueryData(key)).toMatchObject({ notifications: [{ name: "Mail" }] });
+    client.clear();
+  });
+});

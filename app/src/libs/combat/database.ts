@@ -1574,16 +1574,8 @@ export const updateUser = async (
               .set({ quantity: ui.quantity, durability: ui.durability })
               .where(and(eq(userItem.id, ui.id), gt(userItem.quantity, 0)))
               .then((saved) => {
-                const original = curBattle.extraState.profileCacheSnapshots?.[
-                  userId
-                ]?.items.find((row) => row.id === ui.id);
-                if (
-                  saved.rowsAffected !== 1 &&
-                  (!original ||
-                    original.quantity !== ui.quantity ||
-                    original.durability !== ui.durability)
-                )
-                  itemSettlementCommitted = false;
+                // A zero-row write can mean the stack was tombstoned concurrently.
+                if (saved.rowsAffected !== 1) itemSettlementCommitted = false;
               }),
           )
         : []),

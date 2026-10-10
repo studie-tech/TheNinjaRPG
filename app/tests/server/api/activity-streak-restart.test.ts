@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { setSystemTime } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import {
@@ -73,6 +73,17 @@ describeWithDatabase("recurring streak cycle timing", () => {
     const result = await (await callerFor(activityStreakRouter, "streak-user")).claimStreakDay({ configId: "recurring" });
     expect(result.success).toBe(true);
     expect(result.userDelta).toBeUndefined();
+  });
+
+  it("applies current defaults to legacy stored rewards before returning a payout delta", async () => {
+    const database = await getTestDatabase();
+    await database.update(activityStreakReward).set({
+      rewards: sql`JSON_REMOVE(${activityStreakReward.rewards}, '$.reward_sage_modes', '$.reward_sage_mastery_experience')`,
+    }).where(eq(activityStreakReward.id, "reward-2"));
+    const result = await (await callerFor(activityStreakRouter, "streak-user")).claimStreakDay({ configId: "recurring" });
+    expect(result).toMatchObject({ success: true, userDelta: { money: 200 } });
+    const user = await database.query.userData.findFirst({ where: eq(userData.userId, "streak-user") });
+    expect(user?.money).toBe(1200);
   });
 
   it.each(["2026-10-02T12:01:00Z", "2026-10-05T12:01:00Z"])(
