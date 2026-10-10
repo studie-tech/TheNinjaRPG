@@ -19,6 +19,7 @@ import {
 import type { AchievementProgress, UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import type { StructureRoute } from "@/drizzle/constants";
+import { useMasteryQueueRefresh } from "@/hooks/useMasteryQueueRefresh";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import { usePusherHandler } from "@/layout/PusherHandler";
 import type { ReturnedBattle } from "@/libs/combat/types";
@@ -128,11 +129,26 @@ export function UserContextProvider(props: {
   const utils = api.useUtils();
 
   // Get user data
-  const { data, status: userStatus } = api.profile.getUser.useQuery(undefined, {
+  const {
+    data,
+    status: userStatus,
+    refetch,
+  } = api.profile.getUser.useQuery(undefined, {
     enabled: !!userId && isSignedIn && isLoaded,
     retry: false,
     refetchInterval: 300000,
   });
+
+  // Profile reads collect completed sessions and start their queued successors.
+  // Keep this independent of the visible page and its countdown components.
+  useMasteryQueueRefresh(
+    data?.userData,
+    () => {
+      void refetch({ cancelRefetch: false });
+    },
+    timeDiff,
+    !!userId && !!isSignedIn && isLoaded,
+  );
 
   // Listen on user channel for live updates on things
   const pusher = usePusherHandler(userId, data?.userData);
