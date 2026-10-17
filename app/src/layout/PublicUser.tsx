@@ -15,6 +15,7 @@ import {
   CopyCheck,
   Droplets,
   Flag,
+  House,
   IdCard,
   Medal,
   MessageCircle,
@@ -1031,11 +1032,20 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
               </>
             )}
             {userData && !profile.isAi && (
-              <Button asChild variant="outline" size="sm" className="hover:text-black">
-                <Link href={`/home/visit/${encodeURIComponent(profile.userId)}`}>
-                  View home
-                </Link>
-              </Button>
+              <TooltipProvider delayDuration={50}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={`/home/visit/${encodeURIComponent(profile.userId)}`}
+                      aria-label="View home"
+                      className="rounded-sm hover:text-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <House className="h-6 w-6" aria-hidden="true" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>View home</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
             {userData && !userData.isBanned && !userData.isSilenced && (
               <NewConversationPrompt
