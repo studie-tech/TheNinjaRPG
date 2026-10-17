@@ -3,7 +3,7 @@ import { expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { HomeTypeDetails, HomeTypes } from "@/drizzle/constants";
 import { homeUpgradeInputSchema } from "@/validators/home";
-import { describeWithDatabase, getTestDatabase } from "../../setup/testDatabase";
+import { describeWithDatabase, getTestDatabase, runRawSql } from "../../setup/testDatabase";
 
 it("offers Mansion with the former Large Estate benefits and rejects retired tiers", () => {
   expect(HomeTypeDetails.MANSION).toEqual({ regen: 200, storage: 60, cost: 100000000, name: "Mansion" });
@@ -38,9 +38,7 @@ describeWithDatabase("Mansion housing migration", () => {
       }[]])[0];
       const before = await readRows();
       const migration = readFileSync(new URL("../../../drizzle/migrations/0092_mansion_housing.sql", import.meta.url), "utf8");
-      for (const statement of migration.replaceAll("`UserData`", "`HousingMigrationUser`").split(";").filter((part) => part.trim())) {
-        await db.execute(sql.raw(statement));
-      }
+      await runRawSql(migration.replaceAll("`UserData`", "`HousingMigrationUser`"));
       const after = await readRows();
       expect(after).toEqual(before.map((row) => ({
         ...row,
