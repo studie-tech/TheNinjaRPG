@@ -1,187 +1,141 @@
 ---
 name: tnr-dev-server
-description: Run a TheNinjaRPG dev server locally from any git worktree, provision disposable test users, and call tRPC endpoints as those users. Use whenever a task needs a running local server, a fresh test account, or impersonated API calls — "start the dev server", "give me a test user", "call an endpoint as a user", "reproduce this in the browser", "test this against a real stack".
+description: Run TheNinjaRPG dev servers in parallel worktrees, provision disposable users, call authenticated tRPC endpoints, and coordinate Chrome UI testing. Use for local server setup, test accounts, authenticated API calls, or browser reproduction.
 ---
 
-# TNR dev server + test-user provisioning
+# Local servers and test users
 
-Run a full local dev server from any git worktree, in parallel with other worktrees, and drive it
-headlessly (tRPC as a provisioned user) or in a browser (Clerk sign-in ticket).
+Run all `make` commands from the worktree root. Use these managed commands; they handle
+shared env linking, dependencies, Docker readiness, port allocation and cleanup. Never
+source `app/.env` or export secrets by hand to fix startup.
 
-Environment and service handling live in the Makefile. `make start` is the only entry point —
-never source `app/.env` into your own shell or export secrets by hand to "fix" a boot error.
-
-## 1. Start the server
-
-From the root of any worktree:
+## Servers
 
 ```bash
-PORT=3100  # pick a free port — check first; 3000 is usually the main worktree
-nohup make start PORT=$PORT > /tmp/tnr-dev-$PORT.log 2>&1 &
+make dev-up                 # start/reuse this worktree's server; wait for /login HTTP 200
+make dev-status             # JSON: url, phase, PID, logPath, browser lease
+make dev-doctor             # also show database target and whether broker/Clerk keys exist
+make dev-down               # stop only this worktree's supervisor and descendants
 ```
 
-`make start` is idempotent and safe to run from several worktrees at once. It links `app/.env`
-from a worktree that has one (`ensure-env`) and starts whatever part of the shared Docker stack is
-missing, leaving containers other worktrees are using alone (`ensure-services`). `make bun`, `make dbpush` and `make seed` run both
-guards too; `make makemigrations` only needs the env, since it diffs the schema without a database.
+`dev-up` reserves an available port in 3100–3999 across sibling worktrees and reuses a
+live server in this worktree. `make start` runs the same supervisor in the foreground.
+Pass `PORT=3123` to either command to request a port; an occupied port fails without
+killing its listener. A second invocation never starts another Next against the same
+`.next` directory. Caches are preserved. Restart after changing env/configuration.
 
-**Judge readiness by HTTP, never by the log.** `make start` pipes through `grep`, which
-block-buffers when redirected — the log looks empty until the server exits.
+Application Make commands select a Bun at least as new as `app/package.json`'s
+`packageManager`, checking PATH then `~/.bun/bin/bun`. Setup uses `--frozen-lockfile`:
+it must not re-resolve dependencies or rewrite the lockfile. If neither installed Bun
+is compatible, install a compatible version and retry; do not regenerate the lockfile
+with an older runtime. Use `make bun add <package>` for deliberate dependency changes,
+or `make bun install` to refresh the lockfile after intentionally editing the manifest.
+
+Background logs stream immediately to `logPath`. Preparation errors fail promptly;
+a five-minute readiness timeout leaves a slow server running. Inspect status/logs,
+then rerun `dev-up` to wait again. Status reports the managed process; verify individual
+routes by HTTP. Do not adopt or kill an unmanaged server just because its port answers.
+
+Worktrees share the database in `app/.env`; ports do **not** isolate data. Check
+`dev-doctor` before scenarios. Startup never runs migrations, schema pushes or seeds.
+Use a deliberately configured throwaway database for schema changes or destructive SQL
+tests. Do not stop/recreate shared Docker to repair a single worktree.
+
+`make dev-prepare` prepares without starting a server. Use it as a Codex local-environment
+setup script and `make start` as the Run action. No build is required.
+
+## Provision and call endpoints
+
+Write a broker request JSON file:
+
+```json
+{"users":[
+  {"key":"hero","level":50,"rank":"JONIN","villageName":"Akikaze"},
+  {"key":"foe","level":10,"rank":"GENIN","villageName":"Hyorin"}
+]}
+```
 
 ```bash
-for i in $(seq 1 60); do
-  curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT" | grep -q 200 && break
-  sleep 2
-done
-curl -s -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:$PORT"   # expect 200
+make dev-user REQUEST=/tmp/my-scenario.json
+make dev-call USER_KEY=hero ENDPOINT=profile.getUser
+# Write a procedure's input object to a JSON file when needed:
+make dev-call USER_KEY=hero ENDPOINT=<router.procedure> INPUT_FILE=/tmp/input.json
 ```
 
-Warm start (deps installed, services up) is ~30s. It can legitimately take far longer: a cold
-worktree adds a `bun install`, and `ensure-services` waits for a service that another worktree
-started but that is not ready yet. So a poll that runs out is not proof the server died — check
-`cat /tmp/tnr-dev-$PORT.log` (which flushes on exit, so content there means it exited) and
-`docker compose -f .devcontainer/docker-compose.yml ps` before restarting anything.
+Paths are absolute or relative to the worktree root. The helper uses dotenv-parsed
+`AI_TEST_USER_BROKER_TOKEN`, validates requests with the existing broker schemas and
+calls the existing broker/tRPC caller. A missing token must be configured in the real
+env file (`realpath app/.env`); do not paste secrets into command lines. A shared `.env`
+symlink affects every linked worktree; replace its link with a real file for a separate
+configuration/database.
 
-## 2. Get the broker token
+Credentials and `loginUrl` values are saved with mode 0600 in gitignored
+`app/scripts/.artifacts/dev-users.json`. Only IDs/names and that path are printed.
+Never post passwords, tickets, tokens or the credentials file on a PR. `dev-call` resolves
+`USER_KEY` from this file and prints the endpoint's JSON result. Shapes vary by procedure:
+`profile.getUser` returns `result.userData.username`. HTTP/broker errors and procedure
+results with `success:false` exit nonzero.
 
-Provisioning is gated by `AI_TEST_USER_BROKER_TOKEN`. It is a real secret that must be set in the
-env file — the checked-in `app/.env.example` ships it empty, and an unset token disables the broker
-with a 500 ("not configured"). `app/.env` is usually a symlink, so resolve it:
+An omitted `runId` generates a unique worktree-prefixed ID. Providing the same explicit
+`runId` reuses/reconfigures those users; choose deliberately to avoid resetting another
+chat's scenario. Provisioning replaces the saved credentials file. Up to four users per
+request; keys must stay unique after normalization. Ranks: `STUDENT`, `GENIN`, `CHUNIN`,
+`JONIN`, `ELITE JONIN`, `ELDER`, `NONE`; optional `role` supplies staff scenario permissions.
+Village names must match `village.name` exactly: `Akikaze`, `Wake Island`, `Hyorin`,
+`Tsukimori`, `Akasumi`, `Iron Shield`, `Shirohana`, `Syndicate`, `Freedom State`, `Horizon`.
+Supply `villageId` instead when known; map labels such as City of Mei do not match.
 
-```bash
-# tr strips surrounding quotes: dotenv accepts them, a curl header does not.
-TOKEN=$(grep '^AI_TEST_USER_BROKER_TOKEN=' "$(realpath app/.env)" | cut -d= -f2- | tr -d "\"'")
-: "${TOKEN:?set AI_TEST_USER_BROKER_TOKEN in the real app/.env}"
-```
+Prefer `dev-call` for tRPC verification: it runs alongside other chats without a browser.
+For plain API routes calling Clerk auth directly, read [HTTP auth](references/http-auth.md).
 
-This quote-stripping applies to EVERY value read out of `app/.env`, not just this one — several
-keys (e.g. `OPENAI_API_KEY`) are stored single-quoted. A key extracted with quotes attached
-authenticates as garbage and produces misleading 401s ("the key is dead") when the key is fine.
+## Chrome UI testing
 
-## 3. Provision test users
+Use the user's existing **Chrome**, following current tool documentation. Browser pages
+must use `http://localhost:<port>`; `127.0.0.1` can make Next dev chunks return 403 and
+leave Clerk loading forever. API requests are unaffected.
 
-Creates real users in the shared dev database, visible to every worktree's server at once.
+Separate windows, tabs, tab groups, session names and ports **share cookies**. Incognito
+windows in one profile also share an incognito cookie store. Do not ask the user to stop
+other chats or close their browser to resolve a collision.
 
-```bash
-curl -s -X POST "http://127.0.0.1:$PORT/api/ai-test-user" \
-  -H "Content-Type: application/json" \
-  -H "x-tnr-reviewer-token: $TOKEN" \
-  -d '{"runId":"<short-unique-id>","users":[
-    {"key":"hero","level":50,"rank":"JONIN","villageName":"Akikaze"},
-    {"key":"foe","level":10,"rank":"GENIN","villageName":"Hyorin"}
-  ]}'
-```
+- When the connected Chrome tool explicitly supports isolated contexts, use one unique
+  context per chat/worktree (and per simultaneous actor). Chrome DevTools `new_page`
+  exposes `isolatedContext`; use it only when connected to the intended Chrome. Retain
+  explicit page IDs for actions.
+- For the Chrome extension / `cua_repl`, acquire `make dev-browser` **before provisioning
+  tickets or signing in**. Hold this repository-wide login lease through authenticated
+  testing and screenshots. Another owner returns an actionable error: continue API/server
+  work, then retry after release. No user permission is needed to coordinate the lease.
+  It expires in 30 minutes; renew with `make dev-browser` for longer work. Release in
+  cleanup with `make dev-browser-release`.
+- Name the automation session with worktree/issue and create your own tab using
+  `cua.createBrowserTab("chrome", url, {sessionName: "🧪 Issue <number>"})`. Retain that
+  handle and interact only with your own tabs. Read the first-use documentation instead
+  of assuming APIs from older chats exist. Avoid global active-window keyboard shortcuts.
+- Read a user's `loginUrl` from the private artifact and navigate your tab there. Tickets
+  are single-use and last about 300 seconds. Warm the server before provisioning; provision
+  just before login and before setting up a scenario that re-provisioning would reset.
+  Check the visible username against the saved user. After a navigation timeout, inspect
+  the existing tab before reloading or consuming another ticket.
+- Close your temporary tabs, release the lease and stop your server when finished. Leave
+  other tabs, browser processes and shared services alone. Disposable users can stay.
 
-Returns `{success, users:[{key, userId, username, email, password, level, rank, villageId,
-villageName, signInToken, ...}]}`.
+If Chrome DevTools says its `chrome-profile` is already running, it is trying to launch
+a contended managed profile. Use the available existing-Chrome extension flow; do not
+kill Chrome, delete profile locks, edit global MCP settings or switch browsers. Respect
+actual browser security restrictions. A lease coordinates cooperating chats; it cannot
+prevent a user or an older chat from changing accounts. Recheck identity after unexpected
+account/control changes and discard invalid evidence.
 
-- `rank`: `STUDENT`, `GENIN`, `CHUNIN`, `JONIN`, `ELITE JONIN`, `ELDER`, `NONE`.
-- `villageName` must match a village's `name` exactly. The seeded names are `Akikaze`,
-  `Wake Island`, `Hyorin`, `Tsukimori`, `Akasumi`, `Iron Shield`, `Shirohana`, `Syndicate`,
-  `Freedom State`, `Horizon`. Pass `villageId` instead to skip the lookup.
-- Up to 4 users per request; keys must stay unique after normalisation (`Red Team` == `red_team`).
-- `signInToken` is a one-time Clerk ticket valid ~300s.
+## Recovery
 
-## 4. Call tRPC as a user
-
-```bash
-curl -s -X POST "http://127.0.0.1:$PORT/api/ai-test-user/call-endpoint" \
-  -H "Content-Type: application/json" \
-  -H "x-tnr-reviewer-token: $TOKEN" \
-  -d '{"userId":"<userId>","endpointName":"profile.getUser","input":{}}'
-```
-
-- `endpointName` is the exact `router.procedure` path from `app/src/server/api/root.ts`. It is
-  matched against the router's own procedure map, so anything else — a typo, a nested router on its
-  own, or a JS property like `toString` — is a 400, never a partial success.
-- Omit `input` for procedures that take none.
-- `result` is the procedure's own return value, so the shape varies: `profile.getUser` returns
-  `{userData, notifications, serverTime, ...}` (username is `result.userData.username`).
-- Any worktree's server can act on a user provisioned through any other — one shared database.
-
-## 5. Browser login
-
-Open `http://localhost:$PORT/login?__clerk_ticket=<signInToken>`. Clerk consumes the ticket and the
-session is signed in as that user. Single-use — provision a fresh user for another login.
-
-**Browser pages MUST use `localhost`, never `127.0.0.1`.** On a `127.0.0.1` origin the Next dev
-server 403s its own chunks ("Blocked cross-origin request to Next.js dev resource … from
-\"127.0.0.1\"" in the server log), so React never hydrates and clerk-js sits at
-`Clerk.status === "loading"` forever without ever calling its Frontend API — the login page stays
-blank and reloads just burn the single-use (~300 s) ticket. The symptom looks identical in the
-in-app pane, the Chrome extension, and headless drivers. Plain `curl` calls to API routes are
-unaffected (no hydration involved), which is why the earlier sections work with either host.
-
-## 5b. Headless auth for plain API routes (non-tRPC)
-
-The call-endpoint broker only reaches tRPC procedures. Next.js API routes that call Clerk's
-`auth()` directly (`/api/chat/*`, etc.) need a real Clerk session — which can be minted without a
-browser by doing what clerk-js does internally against the dev instance's Frontend API
-(`https://talented-kit-66.clerk.accounts.dev`):
-
-```js
-const FAPI = "https://talented-kit-66.clerk.accounts.dev";
-// 1. dev-browser token (dev instances only)
-const { token: dbJwt } = await (await fetch(`${FAPI}/v1/dev_browser`, { method: "POST" })).json();
-// 2. consume the broker's signInToken as a ticket sign-in
-const signIn = await (await fetch(`${FAPI}/v1/client/sign_ins?__clerk_db_jwt=${dbJwt}`, {
-  method: "POST",
-  headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  body: new URLSearchParams({ strategy: "ticket", ticket: signInToken }),
-})).json();
-const sessionId = signIn.client.last_active_session_id;
-// 3. mint a session JWT (~60 s validity — mint right before each burst of calls)
-const { jwt } = await (await fetch(`${FAPI}/v1/client/sessions/${sessionId}/tokens?__clerk_db_jwt=${dbJwt}`, {
-  method: "POST",
-})).json();
-// 4. the Next server accepts it as a Bearer token
-await fetch(`http://127.0.0.1:${PORT}/api/chat/support`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
-  body: JSON.stringify({ messages: [...] }),
-});
-```
-
-Chat routes expect the `useChat` wire shape: `{ messages: [{ id, role, parts: [{ type: "text",
-text }] }] }` — UIMessages with `parts`, not ModelMessages with `content`.
-
-## 6. Cleanup
-
-`next dev` is a descendant of `make`, so killing the make pid leaves the server running. Kill the
-listener:
-
-```bash
-# -sTCP:LISTEN excludes connected clients (a bare port match would kill the
-# browser too); the command check guards against the port having meanwhile been
-# taken by something unrelated.
-lsof -ti tcp:$PORT -sTCP:LISTEN | while read -r pid; do
-  ps -p "$pid" -o command= | grep -q "next dev" && kill "$pid"
-done
-lsof -i :$PORT -sTCP:LISTEN   # expect no output
-rm -f /tmp/tnr-dev-$PORT.log
-```
-
-Leave the Docker stack alone — every other worktree shares it. Test users are disposable and can
-stay; re-provisioning is always safe.
-
-## Pitfalls
-
-- **Port collisions** — check `lsof -i :$PORT` before choosing.
-- **Empty log with a live 200** — normal (buffering), not a failure.
-- **`Invalid environment variables` at boot** — either no `app/.env` exists anywhere (`ensure-env`
-  warns and continues rather than failing, so check its output for
-  `WARNING: no app/.env found`), or a key in the shared file is missing or invalid
-  (`app/src/env/schema.mjs` lists what is required). Fix the real file (`realpath app/.env`);
-  do not export vars by hand.
-- **`app/.env` is shared** — it is a symlink to one canonical file, so editing it repoints *every*
-  worktree. To give one worktree its own database, replace its link with a real file.
-- **A long-running stack predates the db healthcheck** — readiness gating only works for
-  containers created after it was added, so a `tnr_mysql` from before then reports no health and
-  counts as ready. Run `make docker-apply` once to pick it up.
-- **Docker config changes are not auto-applied** — `ensure-services` only starts services that are
-  missing, so it never restarts a container another worktree is using. After editing
-  `.devcontainer/docker-compose.yml`, apply it deliberately with `make docker-apply` (this does
-  recreate containers, so expect other worktrees' servers to reconnect).
-- **`Village not found`** — the name is matched against the `name` column only. Do not grep
-  `app/data/villages.sql` for the string: several villages also carry a different in-game
-  `mapName` (`Syndicate` is displayed as "City of Mei"), and matching one of those never resolves.
+- Missing env: preparation links from another worktree or fails with instructions when
+  no source exists. Fix the real file, never export secrets by hand.
+- Docker unreachable: start Docker and retry. Existing unhealthy services are waited on,
+  never recreated. Changed Docker config/healthchecks require explicit `make docker-apply`;
+  coordinate that shared-stack operation with affected work.
+- Registry lock: `registry.lock/owner.json` identifies its PID. Remove a stale lock only
+  after confirming that process exited. Orphan children are reported for inspection;
+  the manager never kills listeners by port.
+- `make test` exports `NODE_ENV=test`. SQL suites only run with explicit throwaway DB
+  configuration, and truncate every table in that database.

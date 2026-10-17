@@ -33,7 +33,9 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 | `make makemigrations` | Generate schema migrations |
 | `make bun add [package]` | Add dependency |
 | `make install` | Install with Bun |
-| `make start PORT=<free-port>` | Start local dev in any worktree; reuse shared Docker services and link missing `app/.env` from an existing worktree |
+| `make start` / `make dev-up` | Foreground / background dev server; allocate a port per worktree, reuse shared Docker and link missing env |
+| `make dev-status` / `make dev-down` | Inspect URL/logs / stop only this worktree's managed server |
+| `make dev-user REQUEST=<file>` / `make dev-call USER_KEY=<key> ENDPOINT=<path>` | Provision disposable users / call tRPC through the authenticated broker |
 
 SQL tests **truncate every table in the configured database**. Use only a throwaway DB; CI supplies one. Local dev-stack invocation:
 
@@ -46,6 +48,7 @@ PlanetScale organization: `nano-mathias`. Production: `tnr` / `main-1`; developm
 - `CDN_URL` points production at a pull zone (bunny.net) that fronts `/_next/static` only. `next.config.mjs` resolves it once through `cdnOrigin` in `app/src/libs/cdn.mjs`, which feeds `assetPrefix` and the CSP hosts; read the origin from there and never introduce a second source for it. It stays off outside production, whose assets are the only ones the zone holds, and it belongs to the `tnr` project's Production environment alone — another project building this repo would serve its own chunks from a zone that does not have them. The zone's own settings are part of the contract: origin over https, "respect origin Cache-Control", vary on the query string, strip response cookies, and an edge rule answering for `/_next/static/*` and nothing else, so no page or cookie-bearing response can be cached on its hostname.
 
 For local servers, disposable test users, authenticated tRPC calls and browser login, follow `.agents/skills/tnr-dev-server/SKILL.md`.
+Use `make dev-browser` / `make dev-browser-release` to coordinate authenticated Chrome extension tests across chats. Separate windows and ports share cookies; use isolated contexts only when supported by the connected Chrome tool. Continue API/server work while another chat owns the browser lease.
 
 Create/edit shared skills only in `.agents/skills/<name>/SKILL.md`. `make ensure-skills` (automatic with `make bun`) symlinks them into gitignored `.claude/skills/`; do not edit those copies.
 

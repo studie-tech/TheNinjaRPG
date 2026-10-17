@@ -17,11 +17,32 @@ make setup # Install bun locally
 make install # Run bun install
 make dbpush # Setup database tables
 make seed # Seed database tables
-make start # Start development server
+make start PORT=3000 # Start development server in the foreground
 ```
 
 - Go to `http://localhost:3000` to view the site (use `localhost`, not `127.0.0.1`, or Next.js chunks 403)
 - Go to `http://127.0.0.1:3001` to manage the database
+
+For parallel Git worktrees, use `make dev-up` to allocate a port and start or reuse a
+background server. `make dev-status` prints its URL and live log path; `make dev-down`
+stops only that worktree's server. Startup installs dependencies and reuses shared Docker
+services without recreating them or deleting `.next`. `make dev-doctor` shows the database
+target and broker configuration without exposing credentials. Worktrees still share
+the database in `app/.env`.
+
+Application Make commands select a compatible Bun from PATH or `~/.bun/bin/bun` using
+the minimum version in `app/package.json`. Installation uses the committed lockfile
+with `--frozen-lockfile`; dependency changes go through `make bun add <package>`.
+
+The [dev-server skill](.agents/skills/tnr-dev-server/SKILL.md) documents disposable users,
+authenticated endpoint calls and Chrome coordination. Tabs, windows and different ports
+share cookies: use supported isolated Chrome contexts, or acquire `make dev-browser`
+for authenticated UI work and release it with `make dev-browser-release` when done.
+Other chats can continue API and server checks while the lease is held.
+
+In [Codex local environments](https://developers.openai.com/codex/app/local-environments/),
+configure `make dev-prepare` as the worktree setup script and `make start` as the Run
+action. Preparation does not start a server or run migrations/seeds.
 
 # :books: Learning Guide
 

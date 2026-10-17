@@ -25,7 +25,8 @@ endif
 
 -include ./app/.env
 
-PORT ?= 3000
+PORT ?=
+export PORT REQUEST USER_KEY ENDPOINT INPUT_FILE
 
 ## List of available commands:
 ---------------General------------------: # -------------------------------------------------------
@@ -64,11 +65,11 @@ setup: ensure-services # Start required services and install bun locally
 .PHONY: install
 install: ensure-skills # Install application dependencies with bun locally
 	@echo "${GREEN}install${RESET}"
-	bun install --cwd ./app --save-text-lockfile
+	node scripts/dev-bun.mjs install --cwd ./app --frozen-lockfile
 
 .PHONY: ensure-env
 ensure-env: # Ensure app/.env exists in this worktree (links it from the main worktree if missing)
-	@bash scripts/dev-ensure-env.sh
+	@bash scripts/dev-ensure-env.sh >&2
 
 .PHONY: ensure-services
 ensure-services: # Ensure the shared local service stack is running (parallel-worktree safe)
@@ -89,25 +90,48 @@ clean: # Clean all local application installation folders
 reset: clean install # Clean and reinstall all dependencies
 
 .PHONY: bun
-bun: install ensure-env ensure-services ## Execute bun command in local development.
+bun: $(if $(filter install add remove update,$(firstword $(ARGS))),ensure-skills,install) ensure-env ensure-services ## Execute bun command in local development.
 	@echo "${GREEN}bun${RESET}"
-	cd app && bun $(ARGS)
+	cd app && node ../scripts/dev-bun.mjs $(ARGS)
 
 .PHONY: start
-start: ensure-env # Run Next.js server, access at http://localhost:PORT
-	@echo "${GREEN}start on port $(PORT)${RESET}"
-	rm -rf app/.next
-	@FORCE_COLOR=1 make bun -- dev -p $(PORT) 2>&1 | grep -v "Ignoring Unsecure message event"
+start: # Run this worktree's server in the foreground (PORT optional)
+	@node scripts/dev-server.mjs start
+
+.PHONY: dev-prepare
+dev-prepare: ensure-env # Prepare a worktree without starting a server
+	@test -f app/.env || { echo 'dev: app/.env missing; copy app/.env.example and configure it.' >&2; exit 1; }
+	@$(MAKE) install ensure-services
+
+.PHONY: dev-up dev-status dev-down dev-browser dev-browser-release
+dev-up: # Start/reuse this worktree's server, wait for HTTP readiness, print JSON
+	@node scripts/dev-server.mjs up
+dev-status: # Show this worktree's server, log, and browser lease as JSON
+	@node scripts/dev-server.mjs status
+dev-down: # Stop only this worktree's managed server; leave shared Docker alone
+	@node scripts/dev-server.mjs down
+dev-browser: # Acquire/renew the shared Chrome login lease for this chat
+	@node scripts/dev-server.mjs browser-acquire
+dev-browser-release: # Release this chat's Chrome login lease
+	@node scripts/dev-server.mjs browser-release
+
+.PHONY: dev-user dev-call dev-doctor
+dev-user: ensure-env # Provision REQUEST=<json file>, save private credentials
+	@cd app && node ../scripts/dev-bun.mjs run scripts/dev-user.ts provision
+dev-call: ensure-env # Call ENDPOINT as USER_KEY with optional INPUT_FILE
+	@cd app && node ../scripts/dev-bun.mjs run scripts/dev-user.ts call
+dev-doctor: ensure-env # Show env/broker/database configuration without secrets
+	@cd app && node ../scripts/dev-bun.mjs run scripts/dev-user.ts doctor
 
 .PHONY: build
 build: ensure-env # Build Next.js app
 	@echo "${GREEN}build${RESET}"
-	cd app && bun run build
+	cd app && node ../scripts/dev-bun.mjs run build
 
 .PHONY: bundleanalysis
 bundleanalysis: ensure-env # Build Next.js app with bundle analysis
 	@echo "${GREEN}bundleanalysis${RESET}"
-	cd app && bun run build-stats
+	cd app && node ../scripts/dev-bun.mjs run build-stats
 
 .PHONY: mcp-servers
 mcp-servers: # Start MCP servers
@@ -142,33 +166,34 @@ browser-tools-server: # Run browser-tools MCP server, allowing AI to see browser
 .PHONY: dbpush
 dbpush: ensure-env ensure-services # Push schema to db without creating migrations
 	@echo "${YELLOW}Pushing database schema to database${RESET}"
-	cd app && bun dbpush
+	cd app && node ../scripts/dev-bun.mjs dbpush
 
 .PHONY: seed
 seed: ensure-env ensure-services # Seed database
 	@echo "${YELLOW}Seed data into database ${RESET}"
-	cd app && bun seed
+	cd app && node ../scripts/dev-bun.mjs seed
 	
 .PHONY: makemigrations
 makemigrations: ensure-env # Create database migration file
 	@echo "${YELLOW}Create database migrations file ${RESET}"
-	cd app && bun makemigrations
+	cd app && node ../scripts/dev-bun.mjs makemigrations
 
 .PHONY: emptymigration
 emptymigration: ensure-env # Create database migration file
 	@echo "${YELLOW}Create empty migrations file ${RESET}"
-	cd app && bun emptymigration
+	cd app && node ../scripts/dev-bun.mjs emptymigration
 	
 ----------------Tests-------------------: # -------------------------------------------------------
 .PHONY: test
+test: export NODE_ENV = test
 test: # Run unit tests with Bun
 	@echo "${YELLOW}Running unit tests ${RESET}"
-	cd app && bun run test
+	cd app && node ../scripts/dev-bun.mjs run test
 
 .PHONY: lint
 lint: # Run linting of the project
 	@echo "${YELLOW}Running linting ${RESET}"
-	cd app && bun run lint
+	cd app && node ../scripts/dev-bun.mjs run lint
 
 .PHONY: format
 format: # Run biome formatter on the project
@@ -177,12 +202,12 @@ format: # Run biome formatter on the project
 
 .PHONY: check
 check: # Run Biome and TypeScript checks
-	cd app && bun run check
+	cd app && node ../scripts/dev-bun.mjs run check
 
 .PHONY: typecheck
 typecheck: # Run TypeScript type checking
 	@echo "${YELLOW}Running TypeScript type checking${RESET}"
-	cd app && bun run typecheck
+	cd app && node ../scripts/dev-bun.mjs run typecheck
 
 -------------DEPENDENCIES---------------: # -------------------------------------------------------
 .PHONY: deps-upgrade
