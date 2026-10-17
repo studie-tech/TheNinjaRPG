@@ -143,12 +143,25 @@ describeWithDatabase("Hunting lifecycle", () => {
     expect((await staff.save({ id: "forest", content: { ...content, sectors: [2], contracts: [] } })).success).toBe(false);
     expect((await staff.save({ id: "forest", content })).success).toBe(true);
   });
-  it("reports a missing habitat without claiming that hunters are fighting", async () => {
+  it("reports missing habitats on save or delete without logging a change", async () => {
     const staff = await callerFor(huntingRouter, "staff");
     const db = await getTestDatabase();
     await db.delete(huntingHabitat).where(eq(huntingHabitat.id, "forest"));
     expect(await staff.save({ id: "forest", content: huntingHabitatContent() })).toMatchObject({ success: false, message: "Habitat not found. Refresh the editor." });
+    expect(await staff.delete({ id: "forest" })).toMatchObject({ success: false, message: "Habitat not found. Refresh the editor." });
     expect(await db.query.actionLog.findMany()).toHaveLength(0);
+  });
+  it("preserves habitats with active sessions and logs only successful deletion", async () => {
+    const { hunter, session } = await accept();
+    const staff = await callerFor(huntingRouter, "staff");
+    const db = await getTestDatabase();
+    expect(await staff.delete({ id: "forest" })).toMatchObject({ success: false, message: "This habitat has active sessions. Disable it instead." });
+    expect(await db.query.huntingHabitat.findFirst()).toMatchObject({ id: "forest" });
+    expect(await db.query.actionLog.findMany()).toHaveLength(0);
+    expect((await hunter.sessionAction({ id: session.id, version: session.version, action: "finish" })).success).toBe(true);
+    expect(await staff.delete({ id: "forest" })).toMatchObject({ success: true, message: "Habitat deleted." });
+    expect(await db.query.huntingHabitat.findMany()).toHaveLength(0);
+    expect(await db.query.actionLog.findMany()).toMatchObject([{ relatedId: "forest", relatedMsg: "Deleted hunting habitat" }]);
   });
   it("reconciles staff-reduced allowances into cooldown and rejects edits during fights", async () => {
     await accept();

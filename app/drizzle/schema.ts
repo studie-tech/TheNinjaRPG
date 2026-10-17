@@ -90,7 +90,10 @@ export const huntingProgress = mysqlTable("HuntingProgress", {
   used: int("used").default(0).notNull(),
   cooldownUntil: datetime("cooldownUntil", { mode: "date", fsp: 3 }),
   version: int("version").default(0).notNull(),
-}, (t) => ({ pk: primaryKey({columns: [t.userId, t.contractId]}) }));
+}, (t) => ({
+  pk: primaryKey({ columns: [t.userId, t.contractId] }),
+  contract: index("HuntingProgress_contract_idx").on(t.contractId),
+}));
 /** Battle-keyed receipts commit with allowance consumption and material delivery. */
 export const huntingReceipt = mysqlTable("HuntingReceipt", {
   battleId: varchar("battleId", { length: 191 }).primaryKey().notNull(),

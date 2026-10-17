@@ -6086,7 +6086,15 @@
           "default": 0
         }
       },
-      "indexes": {},
+      "indexes": {
+        "HuntingProgress_contract_idx": {
+          "name": "HuntingProgress_contract_idx",
+          "columns": [
+            "contractId"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "HuntingProgress_userId_contractId_pk": {

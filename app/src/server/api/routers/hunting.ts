@@ -236,8 +236,17 @@ export const huntingRouter = createTRPCRouter({
           sql`NOT EXISTS (SELECT 1 FROM ${huntingSession} WHERE ${huntingSession.habitatId} = ${input.id})`,
         ),
       );
-    if (!removed.rowsAffected)
-      return errorResponse("This habitat has active sessions. Disable it instead.");
+    if (!removed.rowsAffected) {
+      const exists = await ctx.drizzle.query.huntingHabitat.findFirst({
+        where: eq(huntingHabitat.id, input.id),
+        columns: { id: true },
+      });
+      return errorResponse(
+        exists
+          ? "This habitat has active sessions. Disable it instead."
+          : "Habitat not found. Refresh the editor.",
+      );
+    }
     await ctx.drizzle.insert(actionLog).values({
       id: nanoid(),
       userId: ctx.userId,
