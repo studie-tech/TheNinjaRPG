@@ -5,7 +5,6 @@ import {
   huntingProgress,
   huntingReceipt,
   huntingSession,
-  userData,
   userItem,
 } from "@/drizzle/schema";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
@@ -72,17 +71,6 @@ export const settleHuntingBattle = async (
           );
         if (progress.rowsAffected !== 1)
           throw new Error("Hunting allowance changed during settlement");
-        const player = await tx
-          .update(userData)
-          .set({
-            huntingExperience: sql`${userData.huntingExperience} + ${meta.contract.experience}`,
-            // Zero-XP contracts must still acknowledge the guarded player write.
-            updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
-          })
-          .where(
-            and(eq(userData.userId, meta.userId), eq(userData.battleId, current.id)),
-          );
-        if (player.rowsAffected !== 1) throw new Error("Hunter left the active battle");
         if (receipt.materials.length)
           await tx.insert(userItem).values(
             receipt.materials.flatMap((m) =>

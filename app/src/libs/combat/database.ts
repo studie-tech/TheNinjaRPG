@@ -1933,6 +1933,11 @@ export const updateUser = async (
               Math.round(result.experience) + Math.round(result.earnedExperience),
               curBattle.extraState.petIdsByOwner?.[userId] ?? null,
             ),
+            ...(curBattle.extraState.hunting && result.outcome === "Won"
+              ? {
+                  huntingExperience: sql`${userData.huntingExperience} + ${curBattle.extraState.hunting.contract.experience}`,
+                }
+              : {}),
             pvpStreak: result.pvpStreak,
             ...(curBattle.battleType === "COMBAT" && hasHumanOpponent
               ? {

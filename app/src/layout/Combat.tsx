@@ -1660,15 +1660,7 @@ const Combat: React.FC<CombatProps> = (props) => {
               <div className="mx-auto max-w-3xl bg-background p-4 text-foreground">
                 <HuntingBoard
                   victory={result.hunting}
-                  onStarted={(id) => {
-                    setBattleAtom(undefined);
-                    void updateUser({
-                      status: "BATTLE",
-                      battleId: id,
-                      updatedAt: new Date(),
-                    });
-                    void utils.combat.getBattle.invalidate();
-                  }}
+                  onStarted={() => setBattleAtom(undefined)}
                 />
               </div>
             )}

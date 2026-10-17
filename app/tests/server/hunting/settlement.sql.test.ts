@@ -12,6 +12,8 @@ import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/
 
 describeWithDatabase("Atomic hunting settlement", () => {
   const pusher = { trigger: async () => {} } as unknown as PusherClient;
+  const settlePlayer: Parameters<typeof settleHuntingBattle>[4] = (tx, current, result) =>
+    updateUser(tx, pusher, current, result, "hunter", true);
   beforeEach(async () => {
     await resetTables(battle, huntingProgress, huntingReceipt, huntingSession, item, userData, userItem);
     await insertUsers([{ userId: "hunter", username: "Hunter", status: "BATTLE", battleId: "hunt", huntingExperience: 123 }]);
@@ -35,9 +37,9 @@ describeWithDatabase("Atomic hunting settlement", () => {
   };
   it("delivers exactly once when terminal callbacks race and on refresh", async () => {
     const { db, current, result, version } = await setup();
-    const outcomes = await Promise.all([1, 2].map(() => settleHuntingBattle(db, current, result, version, async () => {})));
+    const outcomes = await Promise.all([1, 2].map(() => settleHuntingBattle(db, current, result, version, settlePlayer)));
     expect(outcomes.filter(Boolean)).toHaveLength(1);
-    expect(await settleHuntingBattle(db, current, result, version, async () => {})).toBe(false);
+    expect(await settleHuntingBattle(db, current, result, version, settlePlayer)).toBe(false);
     expect(await db.query.huntingReceipt.findMany()).toHaveLength(1);
     expect((await db.query.userData.findFirst())?.huntingExperience).toBe(173);
     expect((await db.query.huntingProgress.findFirst())?.used).toBe(1);
@@ -46,7 +48,7 @@ describeWithDatabase("Atomic hunting settlement", () => {
   });
   it("commits final allowance consumption and cooldown with rewards", async () => {
     const { db, current, result, version } = await setup("Won", true);
-    await settleHuntingBattle(db, current, result, version, async () => {});
+    await settleHuntingBattle(db, current, result, version, settlePlayer);
     const progress = await db.query.huntingProgress.findFirst();
     expect(progress?.used).toBe(3);
     expect(progress?.cooldownUntil?.getTime()).toBeGreaterThan(Date.now());
@@ -56,13 +58,10 @@ describeWithDatabase("Atomic hunting settlement", () => {
     const updatedAt = new Date(Date.now() + 86400000);
     await db.update(userData).set({ updatedAt }).where(eq(userData.userId, "hunter"));
     current.extraState.hunting!.contract.experience = 0;
-    expect(await settleHuntingBattle(db, current, result, version, async (tx, playerBattle, playerResult) => {
-      // mysql2 counts matched rows; assert a real change before character recovery writes again.
-      const player = await tx.query.userData.findFirst({ where: eq(userData.userId, "hunter") });
-      expect(player?.updatedAt.getTime()).toBeGreaterThan(updatedAt.getTime());
-      await updateUser(tx, pusher, playerBattle, playerResult, "hunter", true);
-    })).toBe(true);
-    expect(await db.query.userData.findFirst()).toMatchObject({ status: "AWAKE", battleId: null, huntingExperience: 123 });
+    expect(await settleHuntingBattle(db, current, result, version, settlePlayer)).toBe(true);
+    const player = await db.query.userData.findFirst();
+    expect(player).toMatchObject({ status: "AWAKE", battleId: null, huntingExperience: 123 });
+    expect(player?.updatedAt.getTime()).toBeGreaterThan(updatedAt.getTime());
     expect(await db.query.huntingReceipt.findMany()).toHaveLength(1);
     expect((await db.query.huntingProgress.findFirst())?.used).toBe(1);
     expect((await db.query.userItem.findMany()).filter((i) => i.itemId === "hide").reduce((n, i) => n + i.quantity, 0)).toBe(2);
@@ -118,7 +117,7 @@ describeWithDatabase("Atomic hunting settlement", () => {
   });
   it.each(["Lost", "Fled"] as const)("keeps preparation and allowance after %s", async (outcome) => {
     const { db, current, result, version } = await setup(outcome);
-    await settleHuntingBattle(db, current, result, version, async () => {});
+    await settleHuntingBattle(db, current, result, version, settlePlayer);
     expect(await db.query.userItem.findMany()).toHaveLength(0);
     expect((await db.query.userData.findFirst())?.huntingExperience).toBe(123);
     expect((await db.query.huntingProgress.findFirst())?.used).toBe(0);
@@ -141,7 +140,7 @@ describeWithDatabase("Atomic hunting settlement", () => {
     if (!meta) throw Error("Missing hunting state");
     meta.contract.rewards = [{ itemId: "hide", quantity: 5, chance: 100 }, { itemId: "tusk", quantity: 2, chance: 100 }];
     meta.materialStacks = { hide: 2, tusk: 1 };
-    await settleHuntingBattle(db, current, result, version, async () => {});
+    await settleHuntingBattle(db, current, result, version, settlePlayer);
     const inventory = await db.query.userItem.findMany();
     expect(inventory.filter((i) => i.itemId === "hide").map((i) => i.quantity).sort()).toEqual([1, 2, 2]);
     expect(inventory.filter((i) => i.itemId === "tusk").map((i) => i.quantity)).toEqual([1, 1]);
@@ -150,13 +149,14 @@ describeWithDatabase("Atomic hunting settlement", () => {
     const { db, current, result, version } = await setup();
     const snapshots: number[] = [];
     let attempts = 0;
-    await settleHuntingBattle(db, current, result, version, async (_tx, playerBattle, playerResult) => {
+    await settleHuntingBattle(db, current, result, version, async (tx, playerBattle, playerResult) => {
       const state = playerBattle.extraState.hunting;
       if (!state) throw Error("Missing hunting state");
       snapshots.push(state.used);
       state.used += 1;
       playerResult.notifications.push("settled");
       if (++attempts === 1) throw Error("Deadlock found when trying to get lock");
+      await settlePlayer(tx, playerBattle, playerResult);
     });
     expect(snapshots).toEqual([0, 0]);
     expect(current.extraState.hunting?.used).toBe(0);

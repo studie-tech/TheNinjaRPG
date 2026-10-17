@@ -20,7 +20,7 @@ export function HuntingBoard({
   onStarted,
 }: {
   victory?: HuntingReceipt;
-  onStarted?: (battleId: string) => void;
+  onStarted?: () => void;
 }) {
   const router = useRouter();
   const utils = api.useUtils();
@@ -53,6 +53,7 @@ export function HuntingBoard({
     onSuccess: async (result) => {
       setMessage(result.message);
       if (result.success && "battleId" in result && result.battleId) {
+        onStarted?.();
         await updateUser({
           status: "BATTLE",
           battleId: result.battleId,
@@ -62,8 +63,7 @@ export function HuntingBoard({
           utils.hunting.getBoard.invalidate(),
           utils.combat.getBattle.invalidate(),
         ]);
-        if (onStarted) onStarted(result.battleId);
-        else router.push("/combat");
+        if (!onStarted) router.push("/combat");
       } else await board.refetch();
     },
     onError: (e) => setMessage(e.message),
