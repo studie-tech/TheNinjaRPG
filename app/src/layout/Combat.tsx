@@ -9,7 +9,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Clock, Group, OrthographicCamera, Vector2 } from "three";
 import { api, type RouterInputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { IMG_INITIATIVE_D20, PvpBattleTypes } from "@/drizzle/constants";
+import {
+  AutoBattleTypes,
+  IMG_INITIATIVE_D20,
+  PvpBattleTypes,
+} from "@/drizzle/constants";
 import {
   type CombatPreferences,
   shouldInvalidateEndedBattleCaches,
@@ -30,7 +34,11 @@ import { LogbookEntry } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
 import Modal from "@/layout/Modal";
 import WebGlError from "@/layout/WebGLError";
-import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
+import {
+  availableUserActions,
+  calcActiveUser,
+  stillInBattle,
+} from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { mergeBattleEntries } from "@/libs/combat/log";
@@ -830,9 +838,24 @@ const Combat: React.FC<CombatProps> = (props) => {
     void utils.combat.getBattle.invalidate();
   }, [isPageActive, utils]);
 
-  // If user has no actions left / round is over, propagate battle & potentially - perform AI actions
+  // Departed players and their summons can retain auto flags; only humans still
+  // fighting keep optional auto combat active, matching the server's batch gate.
+  const hasAutoCombat =
+    !!battleState.battle &&
+    (AutoBattleTypes.includes(battleState.battle.battleType) ||
+      battleState.battle.usersState.some(
+        (user) =>
+          !user.isAi &&
+          !user.isSummon &&
+          user.isAutoCombat &&
+          !user.leftBattle &&
+          stillInBattle(user, battleState.battle?.usersEffects),
+      ));
+
+  // Hidden manual battles catch up on resume; keep driving auto combat in the
+  // background so AI actions and idle opponent timeouts can still advance it.
   useEffect(() => {
-    if (!isPageActive) return;
+    if (!isPageActive && !hasAutoCombat) return;
     const interval = setInterval(() => {
       if (suid && battleRef.current && userIdRef.current && !isPending && !result) {
         const { actor, changedActor } = calcActiveUser(
@@ -880,7 +903,15 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [isPageActive, isPending, timeDiff, result, suid, controlledActorId]);
+  }, [
+    isPageActive,
+    hasAutoCombat,
+    isPending,
+    timeDiff,
+    result,
+    suid,
+    controlledActorId,
+  ]);
 
   useEffect(() => {
     actionRef.current = props.action;
