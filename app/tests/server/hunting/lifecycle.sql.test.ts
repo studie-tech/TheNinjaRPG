@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { actionLog, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, userData } from "@/drizzle/schema";
+import { actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, userData } from "@/drizzle/schema";
+import { Pusher } from "@/libs/pusher";
 import { huntingRouter } from "@/routers/hunting";
 import { insertItems, insertUsers } from "../../setup/factories";
 import { huntingContract, huntingHabitatContent, huntingMap } from "../../setup/hunting";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("Hunting lifecycle", () => {
   beforeEach(async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json([{ result: [59, 60] }]));
-    await resetTables(actionLog, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, userData);
+    await resetTables(actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, userData);
     await insertUsers([{ userId: "hunter", occupation: "HUNTER", status: "AWAKE", huntingExperience: 123, sector: 1 }, { userId: "staff", role: "CODING-ADMIN" }, { userId: "enemy", isAi: true }]);
     await insertItems([{ id: "hide", canBeHunted: true }, { id: "tusk", canBeHunted: true }]);
     const db = await getTestDatabase();
@@ -70,6 +71,38 @@ describeWithDatabase("Hunting lifecycle", () => {
     expect((await hunter.sessionAction({ id: session.id, version: session.version, action: "prepare" })).success).toBe(false);
     await db.update(userData).set({ occupation: "GATHERING", sector: 1 }).where(eq(userData.userId, "hunter"));
     expect((await hunter.accept({ habitatId: "forest", contractId: "second", version: session.version })).success).toBe(false);
+  });
+  it("rejects an exhausted stale preload and permits a fresh allowance after cooldown", async () => {
+    const { hunter, session } = await accept();
+    const db = await getTestDatabase();
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0 }).where(eq(userData.userId, "hunter"));
+    await db.update(huntingSession).set({ readyAt: new Date(0) });
+    await db.update(huntingProgress).set({ used: 2 });
+    const cooldownUntil = new Date(Date.now() + 60_000);
+    const query = new Proxy(db.query, { get(target, key, receiver) {
+      if (key === "huntingProgress") return {
+        findMany: async (...args: Parameters<typeof target.huntingProgress.findMany>) => {
+          const stale = await target.huntingProgress.findMany(...args);
+          // Advance the allowance after its parallel read, as a final victory does.
+          await db.update(huntingProgress).set({ used: 3, version: 1, cooldownUntil });
+          return stale;
+        },
+      };
+      return Reflect.get(target, key, receiver);
+    } });
+    const client = new Proxy(db, { get(target, key, receiver) {
+      return key === "query" ? query : Reflect.get(target, key, receiver);
+    } });
+    expect(await callerForDatabase(huntingRouter, "hunter", client).start({ id: session.id })).toMatchObject({ success: false, message: "Your hunting session changed. Refresh the board and try again." });
+    expect(await db.query.battle.findMany()).toHaveLength(0);
+    expect(await db.query.battleHistory.findMany()).toHaveLength(0);
+    expect(await db.query.huntingSession.findFirst()).toMatchObject({ id: session.id, version: session.version, battleId: null });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") })).toMatchObject({ status: "AWAKE", battleId: null });
+    expect(await db.query.huntingProgress.findFirst()).toMatchObject({ used: 3, version: 1, cooldownUntil });
+    await db.update(huntingProgress).set({ cooldownUntil: new Date(0) });
+    expect((await hunter.start({ id: session.id })).success).toBe(true);
   });
   it("enforces staff authorization and validates published reachable locations", async () => {
     const hunter = await callerFor(huntingRouter, "hunter");

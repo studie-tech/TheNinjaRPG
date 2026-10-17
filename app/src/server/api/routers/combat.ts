@@ -75,6 +75,7 @@ import {
   gameAsset,
   gameSetting,
   huntingHabitat,
+  huntingProgress,
   huntingSession,
   item,
   jutsu,
@@ -1986,7 +1987,7 @@ export const initiateBattle = async (
     client: DrizzleClient;
     /** Shared launch contract; each activity keeps its own progress and settlement policy. */
     coop?: CoopEncounter;
-    /** Current rules, guarded session versions and reward definitions preloaded for settlement. */
+    /** Current rules, guarded session/allowance versions and rewards preloaded for settlement. */
     hunting?: HuntingBattleState;
     userStatDistribution?: AssignableUserStats;
     targetStatDistribution?: AssignableUserStats;
@@ -3945,7 +3946,7 @@ export const initiateBattle = async (
     try {
       result = await retryOnDeadlock(() =>
         client.transaction(async (tx) => {
-          // Reserve the personal encounter and reject staff edits made during preload.
+          // Reserve the encounter only while its preloaded rules and allowance remain current.
           const session = await tx
             .update(huntingSession)
             .set({ battleId, version: sql`${huntingSession.version} + 1` })
@@ -3958,6 +3959,7 @@ export const initiateBattle = async (
                 eq(huntingSession.contractId, meta.contract.id),
                 eq(huntingSession.sector, sector ?? -1),
                 sql`EXISTS (SELECT 1 FROM ${huntingHabitat} WHERE ${huntingHabitat.id} = ${meta.habitatId} AND ${huntingHabitat.updatedAt} = ${new Date(meta.habitatUpdatedAt)})`,
+                sql`EXISTS (SELECT 1 FROM ${huntingProgress} WHERE ${huntingProgress.userId} = ${meta.userId} AND ${huntingProgress.contractId} = ${meta.contract.id} AND ${huntingProgress.version} = ${meta.progressVersion})`,
               ),
             );
           if (session.rowsAffected !== 1) throw rejected;
