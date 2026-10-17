@@ -253,7 +253,7 @@ export const huntingRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .input(acceptHuntingContractSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, habitat, session, progress, maps] = await Promise.all([
+      const [user, habitat, session, progress] = await Promise.all([
         ctx.drizzle.query.userData.findFirst({
           where: eq(userData.userId, ctx.userId),
         }),
@@ -268,9 +268,6 @@ export const huntingRouter = createTRPCRouter({
             eq(huntingProgress.userId, ctx.userId),
             eq(huntingProgress.contractId, input.contractId),
           ),
-        }),
-        ctx.drizzle.query.sectorMap.findMany({
-          where: eq(sectorMap.status, "PUBLISHED"),
         }),
       ]);
       const contract = habitat?.content.contracts.find(
@@ -294,6 +291,15 @@ export const huntingRouter = createTRPCRouter({
         return errorResponse("Your hunting session changed. Refresh the board.");
       if (session?.contractId === contract.id)
         return { success: true, message: "Your existing encounter is still assigned." };
+      // Maps carry large JSON payloads; load only the contract's sectors after
+      // eligibility and session guards pass.
+      const maps = await ctx.drizzle.query.sectorMap.findMany({
+        columns: { sector: true, normalizedJson: true },
+        where: and(
+          inArray(sectorMap.sector, contract.sectors),
+          eq(sectorMap.status, "PUBLISHED"),
+        ),
+      });
       const locations = contract.sectors.filter(
         (s) =>
           habitat.content.sectors.includes(s) &&
@@ -422,26 +428,22 @@ export const huntingRouter = createTRPCRouter({
     .use(ratelimitMiddleware)
     .input(huntingIdSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, session, habitats, progressRows, maps, materials] =
-        await Promise.all([
-          ctx.drizzle.query.userData.findFirst({
-            where: eq(userData.userId, ctx.userId),
-          }),
-          ctx.drizzle.query.huntingSession.findFirst({
-            where: eq(huntingSession.userId, ctx.userId),
-          }),
-          ctx.drizzle.query.huntingHabitat.findMany(),
-          ctx.drizzle.query.huntingProgress.findMany({
-            where: eq(huntingProgress.userId, ctx.userId),
-          }),
-          ctx.drizzle.query.sectorMap.findMany({
-            where: eq(sectorMap.status, "PUBLISHED"),
-          }),
-          ctx.drizzle.query.item.findMany({
-            where: eq(item.canBeHunted, true),
-            columns: { id: true, name: true, canStack: true, stackSize: true },
-          }),
-        ]);
+      const [user, session, habitats, progressRows, materials] = await Promise.all([
+        ctx.drizzle.query.userData.findFirst({
+          where: eq(userData.userId, ctx.userId),
+        }),
+        ctx.drizzle.query.huntingSession.findFirst({
+          where: eq(huntingSession.userId, ctx.userId),
+        }),
+        ctx.drizzle.query.huntingHabitat.findMany(),
+        ctx.drizzle.query.huntingProgress.findMany({
+          where: eq(huntingProgress.userId, ctx.userId),
+        }),
+        ctx.drizzle.query.item.findMany({
+          where: eq(item.canBeHunted, true),
+          columns: { id: true, name: true, canStack: true, stackSize: true },
+        }),
+      ]);
       const habitat = habitats.find((h) => h.id === session?.habitatId);
       const contract = habitat?.content.contracts.find(
         (c) => c.id === session?.contractId,
@@ -473,6 +475,15 @@ export const huntingRouter = createTRPCRouter({
         return errorResponse("Finish preparing before starting combat.");
       if (!progress || allowance.cooling || allowance.remaining < 1)
         return errorResponse("This contract is on cooldown.");
+      // Maps carry large JSON payloads; load only the assigned sector after
+      // eligibility and session guards pass.
+      const maps = await ctx.drizzle.query.sectorMap.findMany({
+        columns: { sector: true, normalizedJson: true },
+        where: and(
+          eq(sectorMap.sector, session.sector),
+          eq(sectorMap.status, "PUBLISHED"),
+        ),
+      });
       if (
         !contract.sectors.includes(session.sector) ||
         !habitat.content.sectors.includes(session.sector) ||

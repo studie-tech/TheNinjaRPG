@@ -35,6 +35,35 @@ describeWithDatabase("Hunting lifecycle", () => {
     expect((await hunter.getBoard()).session).toEqual(first);
     expect(await (await getTestDatabase()).query.huntingSession.findMany()).toHaveLength(1);
   });
+  it("limits acceptance map payloads to contract sectors and skips them for unchanged or rejected sessions", async () => {
+    const db = await getTestDatabase();
+    await db.insert(sectorMap).values({ id: "unrelated-map", sector: 2, name: "Other sector", width: 1, height: 1, status: "PUBLISHED", normalizedJson: { ...huntingMap(), sector: 2 } });
+    const mapReads = vi.spyOn(db.query.sectorMap, "findMany");
+    const hunter = await callerFor(huntingRouter, "hunter");
+    expect((await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).success).toBe(true);
+    expect(mapReads).toHaveBeenCalledTimes(1);
+    expect(await mapReads.mock.results[0]?.value).toEqual([{ sector: 1, normalizedJson: huntingMap() }]);
+    mapReads.mockClear();
+    const session = (await hunter.getBoard()).session!;
+    expect(await hunter.accept({ habitatId: "forest", contractId: "contract", version: session.version })).toMatchObject({ success: true, message: "Your existing encounter is still assigned." });
+    expect((await hunter.accept({ habitatId: "forest", contractId: "second", version: null })).success).toBe(false);
+    expect(await hunter.start({ id: session.id })).toMatchObject({ success: false, message: "Finish preparing before starting combat." });
+    expect(mapReads).not.toHaveBeenCalled();
+  });
+  it("rejects unpublished encounter maps without loading another sector's published map", async () => {
+    const { hunter, session } = await accept();
+    const db = await getTestDatabase();
+    await db.update(huntingSession).set({ readyAt: new Date(0) });
+    await db.insert(sectorMap).values({ id: "unrelated-map", sector: 2, name: "Other sector", width: 1, height: 1, status: "PUBLISHED", normalizedJson: { ...huntingMap(), sector: 2 } });
+    await db.update(sectorMap).set({ status: "DRAFT" }).where(eq(sectorMap.id, "map"));
+    const mapReads = vi.spyOn(db.query.sectorMap, "findMany");
+    expect(await hunter.accept({ habitatId: "forest", contractId: "second", version: session.version })).toMatchObject({ success: false, message: "There are no approved reachable locations for this contract." });
+    expect(await hunter.start({ id: session.id })).toMatchObject({ success: false, message: "The encounter location is no longer approved. Select another contract." });
+    expect(mapReads).toHaveBeenCalledTimes(2);
+    for (const read of mapReads.mock.results) expect(await read.value).toEqual([]);
+    expect(await db.query.battle.findMany()).toHaveLength(0);
+    expect(await db.query.huntingSession.findFirst()).toMatchObject({ id: session.id, battleId: null });
+  });
   it("returns only the creatures and materials referenced by visible contracts", async () => {
     await insertUsers([{ userId: "unlisted-ai", username: "unlisted-ai", isAi: true }]);
     await insertItems([{ id: "unlisted-material", name: "Unlisted material", canBeHunted: true }]);
@@ -102,7 +131,9 @@ describeWithDatabase("Hunting lifecycle", () => {
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") })).toMatchObject({ status: "AWAKE", battleId: null });
     expect(await db.query.huntingProgress.findFirst()).toMatchObject({ used: 3, version: 1, cooldownUntil });
     await db.update(huntingProgress).set({ cooldownUntil: new Date(0) });
+    const mapReads = vi.spyOn(db.query.sectorMap, "findMany");
     expect((await hunter.start({ id: session.id })).success).toBe(true);
+    expect(await mapReads.mock.results[0]?.value).toEqual([{ sector: 1, normalizedJson: huntingMap() }]);
   });
   it("enforces staff authorization and validates published reachable locations", async () => {
     const hunter = await callerFor(huntingRouter, "hunter");
