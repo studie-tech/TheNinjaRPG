@@ -21,6 +21,10 @@ describeWithDatabase("staff Pyramid recovery", () => {
     await runRawSql("DROP TRIGGER IF EXISTS staff_hunt_cleanup_failure");
     await resetTables(huntingHabitat, huntingSession, huntingProgress, huntingReceipt, userItem, questHistory, quest, userData, actionLog, mpvpBattleUser, rankedPvpQueue, battle);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    // Recovery checks exercise combat callers without depending on an external rate limiter.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
+      String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
+    ));
     await insertUsers([
       { userId: "hero", status: "BATTLE", battleId: null, regeneration: 10, curHealth: 100, maxHealth: 1000, updatedAt: new Date(Date.now() - 350_000), regenAt: new Date(Date.now() - 125_000) },
       { userId: "staff", role: "OWNER" },
