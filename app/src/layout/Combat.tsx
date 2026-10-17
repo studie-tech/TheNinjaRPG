@@ -9,7 +9,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Clock, Group, OrthographicCamera, Vector2 } from "three";
 import { api, type RouterInputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { IMG_INITIATIVE_D20, PvpBattleTypes } from "@/drizzle/constants";
+import {
+  AutoBattleTypes,
+  IMG_INITIATIVE_D20,
+  PvpBattleTypes,
+} from "@/drizzle/constants";
 import {
   type CombatPreferences,
   shouldInvalidateEndedBattleCaches,
@@ -830,9 +834,15 @@ const Combat: React.FC<CombatProps> = (props) => {
     void utils.combat.getBattle.invalidate();
   }, [isPageActive, utils]);
 
-  // Keep turn timeouts and AI actions running in hidden tabs. Only visual work
-  // should pause with page visibility; this interval also advances shared battles.
+  const hasAutoCombat =
+    !!battleState.battle &&
+    (AutoBattleTypes.includes(battleState.battle.battleType) ||
+      battleState.battle.usersState.some((user) => user.isAutoCombat));
+
+  // Hidden manual battles catch up on resume; keep driving auto combat in the
+  // background so AI actions and idle opponent timeouts can still advance it.
   useEffect(() => {
+    if (!isPageActive && !hasAutoCombat) return;
     const interval = setInterval(() => {
       if (suid && battleRef.current && userIdRef.current && !isPending && !result) {
         const { actor, changedActor } = calcActiveUser(
@@ -880,7 +890,15 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [isPending, timeDiff, result, suid, controlledActorId]);
+  }, [
+    isPageActive,
+    hasAutoCombat,
+    isPending,
+    timeDiff,
+    result,
+    suid,
+    controlledActorId,
+  ]);
 
   useEffect(() => {
     actionRef.current = props.action;
