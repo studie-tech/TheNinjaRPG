@@ -1357,7 +1357,7 @@ export const questsRouter = createTRPCRouter({
           client: ctx.drizzle,
           user,
           quest: contract,
-          source: "ui",
+          source: "pet_task",
           prevAttempt: previous,
         });
         if (!assigned.success) return assigned;
@@ -3087,7 +3087,7 @@ export const ASSIGNABLE_QUEST_TYPES: QuestType[] = [
  * Quest types an overworld NPC must NOT grant. Their UI start path enforces an
  * occupation / squad-membership / structure-location prerequisite (HUNTER, GATHERING, anbuId,
  * Global Anbu HQ, adminbuilding) via {@link questUiAccessBlockMessage}, which
- * {@link assignQuestToUser} only runs for `source === "ui"`. A player interacting with a friendly
+ * {@link assignQuestToUser} only runs for UI and companion sources. A player interacting with a friendly
  * NPC in the field can satisfy none of these, so pooling such a quest would hand its content to a
  * player who fails the gate the mission-hall path enforces.
  */
@@ -3106,6 +3106,7 @@ export const OVERWORLD_ASSIGNABLE_QUEST_TYPES: QuestType[] =
 /** Every path that creates or restarts a quest history row must declare its origin. */
 export type QuestAcquisitionSource =
   | "ui"
+  | "pet_task"
   | "overworld_npc"
   | "random_assignment"
   | "system"
@@ -3115,14 +3116,14 @@ export type QuestAcquisitionSource =
  * Core quest-assignment orchestration shared by the UI (`startQuest`) and overworld
  * NPC interactions. Runs all source-agnostic guards (rank, availability, date window,
  * retry delay, already-on-quest, per-type concurrent limit, war daily-CAS), applies
- * UI-only structure/occupation guards when `source === "ui"`, then writes the quest
+ * structure/occupation guards for UI and companion sources, then writes the quest
  * entry and increments the daily counter.
  */
 export const assignQuestToUser = async (args: {
   client: DrizzleClient;
   user: NonNullable<UserWithRelations>;
   quest: Quest;
-  source: "ui" | "overworld_npc";
+  source: "ui" | "pet_task" | "overworld_npc";
   /** Required for NPC-only quests so their placement assignment can be verified server-side. */
   overworldPlacementId?: string;
   sectorVillage?: Awaited<ReturnType<typeof fetchSectorVillage>>;
@@ -3145,7 +3146,7 @@ export const assignQuestToUser = async (args: {
       "Your companion is completing this contract. Return it before restarting.",
     );
 
-  if (questData.questType === "hunting")
+  if (questData.questType === "hunting" && source !== "pet_task")
     return errorResponse(
       "New hunts are available on the Hunter contract board. Existing hunting quests can still be completed.",
     );
@@ -3202,8 +3203,8 @@ export const assignQuestToUser = async (args: {
   const activeBlock = questAlreadyActiveBlockMessage(questData, user);
   if (activeBlock) return errorResponse(activeBlock);
 
-  // UI-only structure/occupation/rank guards
-  if (source === "ui") {
+  // Companion assignments keep the same structure/occupation/rank guards as the UI.
+  if (source === "ui" || source === "pet_task") {
     const guard = questUiAccessBlockMessage(questData, user, sectorVillage ?? null);
     if (guard) return errorResponse(guard);
   }

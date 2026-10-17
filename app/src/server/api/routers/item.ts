@@ -49,7 +49,6 @@ import {
   actionLog,
   bloodlineRolls,
   craftingRequirement,
-  huntingSession,
   item,
   itemLoadout,
   itemPurchaseCounter,
@@ -163,6 +162,7 @@ import {
 import {
   consumeUserItemAtomically,
   getNextUserSnapshotAt,
+  hasNoHuntingBattle,
   MERGE_STACK_CLAIM_TIMEOUT_MS,
   refundUserItemQuantityAtomically,
   restoreStaleUserItemMergeClaims,
@@ -1657,10 +1657,7 @@ export const itemRouter = createTRPCRouter({
             userId: ctx.userId,
             userItemId: input.tokenUserItemId,
             expectedQuantity: tokenItem.quantity,
-            where: [
-              eq(userItem.isInAuction, false),
-              hasNoHuntingBattle(ctx.drizzle, ctx.userId),
-            ],
+            where: [eq(userItem.isInAuction, false), hasNoHuntingBattle(ctx.userId)],
           }),
         );
       } catch {
@@ -1883,7 +1880,7 @@ export const itemRouter = createTRPCRouter({
               eq(userItem.quantity, useritem.quantity),
               gt(userItem.quantity, 0),
               eq(userItem.isInAuction, false),
-              hasNoHuntingBattle(ctx.drizzle, ctx.userId),
+              hasNoHuntingBattle(ctx.userId),
             ),
           ),
       );
@@ -1962,7 +1959,7 @@ export const itemRouter = createTRPCRouter({
                 .where(
                   and(
                     eq(itemLoadout.id, currentLoadout.id),
-                    hasNoHuntingBattle(ctx.drizzle, ctx.userId),
+                    hasNoHuntingBattle(ctx.userId),
                   ),
                 ),
             );
@@ -2037,7 +2034,7 @@ export const itemRouter = createTRPCRouter({
                 eq(userItem.userId, ctx.userId),
                 eq(userItem.isInAuction, false),
                 gt(userItem.quantity, 0),
-                hasNoHuntingBattle(ctx.drizzle, ctx.userId),
+                hasNoHuntingBattle(ctx.userId),
               ),
             ),
         );
@@ -2053,7 +2050,7 @@ export const itemRouter = createTRPCRouter({
                 and(
                   eq(itemLoadout.id, currentLoadout.id),
                   eq(itemLoadout.userId, ctx.userId),
-                  hasNoHuntingBattle(ctx.drizzle, ctx.userId),
+                  hasNoHuntingBattle(ctx.userId),
                 ),
               )
           : undefined;
@@ -2993,7 +2990,7 @@ export const itemRouter = createTRPCRouter({
             userItemId: input.repairItemId,
             expectedQuantity: repairUserItem.quantity,
             where: [
-              hasNoHuntingBattle(ctx.drizzle, ctx.userId),
+              hasNoHuntingBattle(ctx.userId),
               eq(userItem.equipped, repairUserItem.equipped),
               eq(userItem.level, repairUserItem.level),
               eq(userItem.experience, repairUserItem.experience),
@@ -3138,7 +3135,7 @@ export const itemRouter = createTRPCRouter({
               expectedQuantity: repairKitRow.quantity,
               nextQuantity: repairKitRow.quantity - quantityUsed,
               where: [
-                hasNoHuntingBattle(ctx.drizzle, ctx.userId),
+                hasNoHuntingBattle(ctx.userId),
                 eq(userItem.equipped, repairKitRow.equipped),
                 eq(userItem.level, repairKitRow.level),
                 eq(userItem.experience, repairKitRow.experience),
@@ -3809,7 +3806,7 @@ export const selectItemLoadout = async (
         and(
           eq(userItem.userId, user.userId),
           gt(userItem.quantity, 0),
-          hasNoHuntingBattle(client, user.userId),
+          hasNoHuntingBattle(user.userId),
         ),
       ),
   );
@@ -4275,7 +4272,7 @@ export const toggleEquipItem = async (
             eq(userItem.id, useritem.id),
             eq(userItem.userId, user.userId),
             gt(userItem.quantity, 0),
-            hasNoHuntingBattle(client, user.userId),
+            hasNoHuntingBattle(user.userId),
           ),
         ),
       ...(userItemInSlot
@@ -4291,7 +4288,7 @@ export const toggleEquipItem = async (
                   eq(userItem.id, userItemInSlot.id),
                   eq(userItem.userId, user.userId),
                   gt(userItem.quantity, 0),
-                  hasNoHuntingBattle(client, user.userId),
+                  hasNoHuntingBattle(user.userId),
                 ),
               ),
           ]
@@ -4312,7 +4309,7 @@ export const toggleEquipItem = async (
             eq(userItem.id, useritem.id),
             eq(userItem.userId, user.userId),
             gt(userItem.quantity, 0),
-            hasNoHuntingBattle(client, user.userId),
+            hasNoHuntingBattle(user.userId),
           ),
         ),
     ];
@@ -4338,21 +4335,6 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
 
 const HUNTING_INVENTORY_UNAVAILABLE_MESSAGE =
   "Inventory changed or is in use by a hunting battle. Finish any hunt, refresh and try again.";
-
-/**
- * Keep item mutations from changing hunting's preloaded inventory.
- * Evaluate at each write so encounter admission also blocks stale requests;
- * other combat lobbies can still apply their loadouts.
- */
-const hasNoHuntingBattle = (client: DrizzleClient, userId: string) =>
-  notExists(
-    client
-      .select({ one: sql`1` })
-      .from(huntingSession)
-      .where(
-        and(eq(huntingSession.userId, userId), isNotNull(huntingSession.battleId)),
-      ),
-  );
 
 /**
  * Build database filters for item queries based on filtering schema
@@ -4652,7 +4634,7 @@ const tryRepairUserItemDurability = async (
           eq(userItem.level, target.level),
           eq(userItem.experience, target.experience),
           eq(userItem.durability, target.durability),
-          hasNoHuntingBattle(drizzle, userId),
+          hasNoHuntingBattle(userId),
         ),
       ),
   );

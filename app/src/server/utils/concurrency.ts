@@ -13,7 +13,13 @@ import { and, eq, exists, gt, gte, isNull, lt, lte, ne, sql } from "drizzle-orm"
 import { nanoid } from "nanoid";
 import type { BattleType } from "@/drizzle/constants";
 import type { UserItem } from "@/drizzle/schema";
-import { bloodlineRolls, rankedPvpQueue, userData, userItem } from "@/drizzle/schema";
+import {
+  bloodlineRolls,
+  huntingSession,
+  rankedPvpQueue,
+  userData,
+  userItem,
+} from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import type { QueryCondition } from "@/utils/typeutils";
 
@@ -67,9 +73,16 @@ type UpdateUserItemQuantityAtomicallyParams = {
   where?: QueryCondition[];
 };
 
+/** Evaluate at each inventory write so hunting admission also blocks stale requests. */
+export const hasNoHuntingBattle = (userId: string) =>
+  sql`NOT EXISTS (SELECT 1 FROM ${huntingSession}
+    WHERE ${huntingSession.userId} = ${userId}
+      AND ${huntingSession.battleId} IS NOT NULL)`;
+
 /**
  * Sets quantity when the row still matches `expectedQuantity`, or deletes the row when
- * `nextQuantity` is 0. Returns false if the row changed concurrently.
+ * `nextQuantity` is 0. Hunting owns its preloaded inventory until settlement; other battle
+ * types can still consume entry items. Returns false if the row changed or a hunt owns it.
  */
 export const updateUserItemQuantityAtomically = async ({
   client,
@@ -87,6 +100,7 @@ export const updateUserItemQuantityAtomically = async ({
     eq(userItem.id, userItemId),
     eq(userItem.userId, userId),
     eq(userItem.quantity, expectedQuantity),
+    hasNoHuntingBattle(userId),
     ...conditions,
   );
 

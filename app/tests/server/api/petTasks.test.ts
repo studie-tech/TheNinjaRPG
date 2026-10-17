@@ -44,6 +44,8 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
   it("accepts a normal attempt and reserves its exact identity without paying objective rewards", async () => {
     const database = await getTestDatabase();
     const before = Date.now();
+    expect(await callerForDatabase(questsRouter, ownerId, database).startQuest({ questId: contractId, userSector: 0 })).toMatchObject({ success: false, message: expect.stringContaining("Hunter contract board") });
+    expect(await readHistory(database)).toBeUndefined();
     expect((await dispatch(database)).success).toBe(true);
     const task = (await readOwner(database))!.petTask!;
     const history = await readHistory(database);
@@ -230,6 +232,7 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
 
   it("does not let a stale ordinary abandonment close an attempt after companion dispatch", async () => {
     const database = await getTestDatabase();
+    await useGatheringContract(database);
     const caller = callerForDatabase(questsRouter, ownerId, database);
     expect((await caller.startQuest({ questId: contractId, userSector: 0 })).success).toBe(true);
     const raced = beforeStatements(database, questHistory, [async () => {
@@ -242,6 +245,7 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
 
   it.each(["existing", "missing"] as const)("does not let a stale ordinary %s upsert restart an accepted companion attempt", async (state) => {
     const database = await getTestDatabase();
+    await useGatheringContract(database);
     const caller = callerForDatabase(questsRouter, ownerId, database);
     if (state === "existing") {
       expect((await caller.startQuest({ questId: contractId, userSector: 0 })).success).toBe(true);
@@ -259,6 +263,7 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
 
   it("consumes normal entry items once, including dispatch retry of an already accepted contract", async () => {
     const database = await getTestDatabase();
+    await useGatheringContract(database);
     await insertItems([{ id: "ticket" }]);
     await insertUserItems([{ id: "tickets", userId: ownerId, itemId: "ticket", quantity: 2 }]);
     await database.update(quest).set({ content: { ...content, entryItems: [{ ids: ["ticket"], number: 1 }] } }).where(eq(quest.id, contractId));
@@ -276,6 +281,11 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
 const dispatch = (database: DrizzleClient, questId = contractId) => callerForDatabase(questsRouter, ownerId, database).startPetTask({ petId, questId });
 const readOwner = (database: DrizzleClient) => database.query.userData.findFirst({ where: eq(userData.userId, ownerId) });
 const readHistory = (database: DrizzleClient) => database.query.questHistory.findFirst({ where: eq(questHistory.questId, contractId) });
+/** Gathering supports both ordinary player starts and companion dispatch. */
+const useGatheringContract = (database: DrizzleClient) => Promise.all([
+  database.update(userData).set({ occupation: "GATHERING" }).where(eq(userData.userId, ownerId)),
+  database.update(quest).set({ questType: "gathering" }).where(eq(quest.id, contractId)),
+]);
 /** Move only the test clock; the saved deadline remains the one accepted by the dispatch. */
 const dueTask = async (database: DrizzleClient) => {
   expect((await dispatch(database)).success).toBe(true);

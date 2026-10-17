@@ -6,6 +6,7 @@ import {
   auctionListing,
   battle,
   battleHistory,
+  farmPlot,
   huntingHabitat,
   huntingProgress,
   huntingReceipt,
@@ -23,10 +24,11 @@ import type { CompleteBattle } from "@/libs/combat/types";
 import { calcBattleResult } from "@/libs/combat/util";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { auctionRouter } from "@/routers/auction";
+import { farmingRouter } from "@/routers/farming";
 import { huntingRouter } from "@/routers/hunting";
 import { itemRouter } from "@/routers/item";
 import type { DrizzleClient } from "@/server/db";
-import { getTagSchema, IncreaseReskinSlots, RepairTag, UnlockItemVariantTag } from "@/validators/combat";
+import { getTagSchema, IncreaseReskinSlots, ItemValidator, RepairTag, UnlockItemVariantTag } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import { huntingHabitatContent, huntingMap } from "../../setup/hunting";
 import { beforeStatements } from "../../setup/statements";
@@ -147,7 +149,7 @@ describeWithDatabase("Hunting inventory admission", () => {
     );
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
-      aiProfile, auctionBid, auctionListing, battle, battleHistory, huntingHabitat, huntingProgress,
+      aiProfile, auctionBid, auctionListing, battle, battleHistory, farmPlot, huntingHabitat, huntingProgress,
       huntingReceipt, huntingSession, item, itemLoadout, itemVariant, sectorMap,
       userData, userItem, userItemVariant,
     );
@@ -362,6 +364,30 @@ describeWithDatabase("Hunting inventory admission", () => {
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") })).toMatchObject({ status: "AWAKE", huntingExperience: 173 });
     expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "worn") })).toMatchObject({ quantity: 3, equipped: "ITEM_1" });
     expect((await changeInventory(db, action)).success).toBe(true);
+  });
+
+  it.each([1, 3])("rejects planting an equipped seed after hunting admission (quantity: %s)", async (quantity) => {
+    await insertItems([
+      { id: "seed", name: "Seed", itemType: "CONSUMABLE", slot: "ITEM", isFarmSeed: true, farmYieldItemId: "crop", farmGrowTimeSeconds: 60, canStack: true, stackSize: 10, destroyOnUse: true, preventBattleUsage: true, cost: 1 },
+      { id: "crop", name: "Crop", itemType: "MATERIAL" },
+    ]);
+    await insertUserItems([{ id: "seed-stack", userId: "hunter", itemId: "seed", quantity }]);
+    const { db, hunter, id } = await prepare();
+    expect(ItemValidator.safeParse(await db.query.item.findFirst({ where: eq(item.id, "seed") })).success).toBe(true);
+    await db.insert(farmPlot).values({ id: "plot", userId: "hunter", slotIndex: 0 });
+    expect((await callerForDatabase(itemRouter, "hunter", db).toggleEquip({ userItemId: "seed-stack", slot: "ITEM_1" })).success).toBe(true);
+    const client = beforeStatements(db, userItem, [async () => {
+      expect((await hunter.start({ id })).success).toBe(true);
+    }]);
+    expect(await callerForDatabase(farmingRouter, "hunter", client).plantSeed({ plotId: "plot", seedItemId: "seed" })).toMatchObject({ success: false, message: "Could not consume seed — please try again" });
+    expect(await db.query.farmPlot.findFirst()).toMatchObject({ seedItemId: null, plantedAt: null, finishAt: null });
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "seed-stack") })).toMatchObject({ quantity, equipped: "ITEM_1" });
+    await settle(db);
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "seed-stack") })).toMatchObject({ quantity, equipped: "ITEM_1" });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") })).toMatchObject({ status: "AWAKE", farmingExperience: 0 });
+    expect((await callerForDatabase(farmingRouter, "hunter", db).plantSeed({ plotId: "plot", seedItemId: "seed" })).success).toBe(true);
+    expect(await db.query.farmPlot.findFirst()).toMatchObject({ seedItemId: "seed" });
+    expect((await db.query.userItem.findFirst({ where: eq(userItem.id, "seed-stack") }))?.quantity ?? 0).toBe(quantity - 1);
   });
 
   it("rejects ordinary item consumption after hunting wins admission", async () => {

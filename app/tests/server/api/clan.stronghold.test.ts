@@ -7,6 +7,7 @@ import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";
 import { clanRouter } from "@/server/api/routers/clan";
 import { profileRouter } from "@/server/api/routers/profile";
+import type { DrizzleClient } from "@/server/db";
 import { syncStrongholdMembership } from "@/server/utils/faction";
 import { insertUsers } from "../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../../setup/testDatabase";
@@ -125,12 +126,32 @@ describeWithDatabase("Stronghold membership and restoration", () => {
 
   it("uses the same pricing for faction boosts and rejects stale duplicate purchases", async () => {
     await seedFaction("HIDEOUT");
-    const caller = await callerFor(clanRouter, "leader");
+    const db = await getTestDatabase();
+    const caller = callerForDatabase(clanRouter, "leader", holdClanSnapshots(db, 2));
     const results = await Promise.all([caller.purchaseBoost({ clanId: "faction", boostType: "trainingBoost" }), caller.purchaseBoost({ clanId: "faction", boostType: "trainingBoost" })]);
     expect(results.filter((result) => result.success)).toHaveLength(1);
-    const db = await getTestDatabase();
     const [faction] = await db.select().from(clan);
     expect(faction?.trainingBoost).toBe(2);
     expect(faction?.bank).toBe(STRONGHOLD_REESTABLISH_COST * 2 - 100000);
   });
 });
+
+/** Competing purchases must read the same boost level before their guarded writes race. */
+const holdClanSnapshots = (database: DrizzleClient, count: number): DrizzleClient => {
+  let pending = 0;
+  let release = () => {};
+  const barrier = new Promise<void>((resolve) => { release = resolve; });
+  const clanQueries = new Proxy(database.query.clan, {
+    get(target, property, receiver) {
+      if (property !== "findFirst") return Reflect.get(target, property, receiver);
+      return async (...args: Parameters<typeof target.findFirst>) => {
+        const result = await target.findFirst(...args);
+        pending += 1;
+        if (pending >= count) release();
+        await barrier;
+        return result;
+      };
+    },
+  });
+  return new Proxy(database, { get(target, property, receiver) { return property === "query" ? { ...target.query, clan: clanQueries } : Reflect.get(target, property, receiver); } });
+};
