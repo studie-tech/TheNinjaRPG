@@ -6,6 +6,7 @@ import type { ZodAllTags } from "@/validators/combat";
 
 // The equip path only builds its writes; nothing here awaits them.
 const client = {
+  select: () => ({ from: () => ({ where: () => ({}) }) }),
   update: () => ({ set: () => ({ where: () => Promise.resolve({ rowsAffected: 1 }) }) }),
 } as unknown as DrizzleClient;
 

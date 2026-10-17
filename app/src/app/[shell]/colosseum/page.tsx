@@ -19,6 +19,7 @@ import type { ArrayElement } from "@/utils/typeutils";
 
 const battleTypeLabels: Record<BattleType, string> = {
   ARENA: "Arena",
+  HUNTING: "Hunting",
   COMBAT: "Open World PvP",
   SPARRING: "Sparring",
   KAGE_AI: "Kage AI",

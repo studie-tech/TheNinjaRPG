@@ -22,6 +22,7 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import { usePageActive } from "@/hooks/usePageActive";
 import { CombatAggro } from "@/layout/CombatAggro";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
+import { HuntingBoard } from "@/layout/HuntingBoard";
 import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
@@ -1500,7 +1501,7 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   return (
     <>
-      <div id="tutorial-combat-field" ref={mountRef}></div>
+      <div id="tutorial-combat-field" ref={mountRef} hidden={!!result?.hunting}></div>
 
       {!result && !isInLobby && !webglError && battleState.battle && (
         <CombatResourceBars
@@ -1538,7 +1539,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       {isInLobby &&
         battleRef.current &&
         PvpBattleTypes.includes(battleRef.current.battleType) && (
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-90">
+          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto overflow-y-auto bg-black/90">
             <div className="flex h-full flex-col items-center justify-center text-white">
               <p className="text-3xl">Waiting for opponent</p>
               <p className="text-xl">
@@ -1646,9 +1647,23 @@ const Combat: React.FC<CombatProps> = (props) => {
         )}
       {/* FINAL DONE SCREEN */}
       {result && (
-        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto bg-black opacity-90">
+        <div
+          className={
+            result.hunting
+              ? "relative z-20 bg-black/90"
+              : "absolute top-0 right-0 bottom-0 left-0 z-20 m-auto overflow-y-auto bg-black/90"
+          }
+        >
           <div className="text-center text-white">
             <p className="p-5 pb-2 text-3xl">You {result.outcome}</p>
+            {result.hunting && (
+              <div className="mx-auto max-w-3xl bg-background p-4 text-foreground">
+                <HuntingBoard
+                  victory={result.hunting}
+                  onStarted={() => setBattleAtom(undefined)}
+                />
+              </div>
+            )}
             {battleType === "QUEST" && (
               <p>
                 Quest Energy is restored when you claim the completed quest's rewards.

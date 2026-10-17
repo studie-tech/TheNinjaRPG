@@ -435,7 +435,8 @@ export const auctionRouter = createTRPCRouter({
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + durationHours);
 
-      // Write-time guard: set isInAuction only if item still has no active imbuement (atomic).
+      // Reserve only unequipped items; combat can have captured an item equipped since preload.
+      // Also require no active imbuement at write time.
       // Pin the reservation to the priced quantity, including the actual split result.
       // This also excludes negative merge claims and zero-quantity merge tombstones.
       const markInAuctionResult = await ctx.drizzle
@@ -450,6 +451,7 @@ export const auctionRouter = createTRPCRouter({
             eq(userItem.userId, ctx.userId),
             eq(userItem.quantity, listingQuantity),
             gt(userItem.quantity, 0),
+            eq(userItem.equipped, "NONE"),
             eq(userItem.isInAuction, false),
             sql`NOT EXISTS (SELECT 1 FROM UserItemImbuement WHERE UserItemImbuement.userItemId = ${auctionUserItemId} AND UserItemImbuement.craftingFinishedAt > NOW())`,
           ),

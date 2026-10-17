@@ -162,6 +162,7 @@ import {
 import {
   consumeUserItemAtomically,
   getNextUserSnapshotAt,
+  hasNoHuntingBattle,
   MERGE_STACK_CLAIM_TIMEOUT_MS,
   refundUserItemQuantityAtomically,
   restoreStaleUserItemMergeClaims,
@@ -505,18 +506,28 @@ export const itemRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [user, entry, childEvolutions, variants] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchItem(ctx.drizzle, input.id),
-        ctx.drizzle.query.item.findMany({
-          columns: { id: true, name: true },
-          where: eq(item.parentItemId, input.id),
-        }),
-        ctx.drizzle.query.itemVariant.findMany({
-          where: eq(itemVariant.itemId, input.id),
-          columns: { id: true },
-        }),
-      ]);
+      const [user, entry, childEvolutions, variants, huntingReferences] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          fetchItem(ctx.drizzle, input.id),
+          ctx.drizzle.query.item.findMany({
+            columns: { id: true, name: true },
+            where: eq(item.parentItemId, input.id),
+          }),
+          ctx.drizzle.query.itemVariant.findMany({
+            where: eq(itemVariant.itemId, input.id),
+            columns: { id: true },
+          }),
+          ctx.drizzle.query.huntingHabitat.findMany(),
+        ]);
+      if (
+        huntingReferences.some((h) =>
+          h.content.contracts.some((c) => c.rewards.some((r) => r.itemId === input.id)),
+        )
+      )
+        return errorResponse(
+          "This material is used by a hunting contract. Remove that reward first.",
+        );
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Item not found");
@@ -1597,7 +1608,7 @@ export const itemRouter = createTRPCRouter({
       // Guards — mirror the consume mutation's state checks so a token cannot be
       // spent while the user is not AWAKE (covers TRAVEL/BATTLE/ASLEEP/etc.), while
       // the token stack is still crafting, or while it is tied to an active auction.
-      // The atomic consumption below also rechecks auction availability.
+      // The atomic consumption below also rechecks auction and hunting availability.
       if (!user) return errorResponse("User not found");
       if (user.isBanned) return errorResponse("You are banned");
       if (user.status !== "AWAKE") {
@@ -1640,13 +1651,15 @@ export const itemRouter = createTRPCRouter({
       // the canonical atomic helper (CAS on quantity, deletes the stack at zero).
       let consumed: boolean;
       try {
-        consumed = await consumeUserItemAtomically({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          userItemId: input.tokenUserItemId,
-          expectedQuantity: tokenItem.quantity,
-          where: [eq(userItem.isInAuction, false)],
-        });
+        consumed = await retryOnDeadlock(() =>
+          consumeUserItemAtomically({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            userItemId: input.tokenUserItemId,
+            expectedQuantity: tokenItem.quantity,
+            where: [eq(userItem.isInAuction, false), hasNoHuntingBattle(ctx.userId)],
+          }),
+        );
       } catch {
         return errorResponse("Could not consume Variant Token — please try again");
       }
@@ -1857,19 +1870,22 @@ export const itemRouter = createTRPCRouter({
       const cost = calcItemSellingPrice(user, useritem, structures);
       // Claim the positive stack before granting proceeds. A merge claim negates quantity, so the
       // CAS cannot delete or pay for a row while it belongs to an in-flight merge.
-      const deleteResult = await ctx.drizzle
-        .delete(userItem)
-        .where(
-          and(
-            eq(userItem.id, input.userItemId),
-            eq(userItem.userId, ctx.userId),
-            eq(userItem.quantity, useritem.quantity),
-            gt(userItem.quantity, 0),
-            eq(userItem.isInAuction, false),
+      const deleteResult = await retryOnDeadlock(async () =>
+        ctx.drizzle
+          .delete(userItem)
+          .where(
+            and(
+              eq(userItem.id, input.userItemId),
+              eq(userItem.userId, ctx.userId),
+              eq(userItem.quantity, useritem.quantity),
+              gt(userItem.quantity, 0),
+              eq(userItem.isInAuction, false),
+              hasNoHuntingBattle(ctx.userId),
+            ),
           ),
-        );
+      );
       if (deleteResult.rowsAffected !== 1) {
-        return errorResponse("Inventory changed, please refresh and try again");
+        return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
       }
 
       // Mutate dependent state only after the inventory CAS succeeds.
@@ -1926,21 +1942,29 @@ export const itemRouter = createTRPCRouter({
       );
       // If anything happened
       if (result.success && "promises" in result && result.promises.length > 0) {
-        // Update current loadout with new equipment state
+        const outcomes = await Promise.all(
+          result.promises.map((write) => retryOnDeadlock(async () => write)),
+        );
+        if (outcomes.some((saved) => saved.rowsAffected !== 1))
+          return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
+        // A rejected equipment write must not overwrite the saved loadout.
         if (user.itemLoadout) {
           const currentLoadout = loadouts.find((l) => l.id === user.itemLoadout);
           if (currentLoadout) {
             const newItemData = buildItemLoadoutData(result.newUserItems);
-            result.promises.push(
+            await retryOnDeadlock(async () =>
               ctx.drizzle
                 .update(itemLoadout)
                 .set({ itemData: newItemData })
-                .where(eq(itemLoadout.id, currentLoadout.id)),
+                .where(
+                  and(
+                    eq(itemLoadout.id, currentLoadout.id),
+                    hasNoHuntingBattle(ctx.userId),
+                  ),
+                ),
             );
           }
         }
-        // Execute all promises in parallel
-        await Promise.all(result.promises);
         // Return
         return { success: true, message: result.message };
       }
@@ -2000,20 +2024,23 @@ export const itemRouter = createTRPCRouter({
         equippedItems.map((ui) =>
           ctx.drizzle
             .update(userItem)
-            .set({ equipped: "NONE" })
+            .set({
+              equipped: "NONE",
+              updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+            })
             .where(
               and(
                 eq(userItem.id, ui.id),
                 eq(userItem.userId, ctx.userId),
-                ne(userItem.equipped, "NONE"),
                 eq(userItem.isInAuction, false),
                 gt(userItem.quantity, 0),
+                hasNoHuntingBattle(ctx.userId),
               ),
             ),
         );
 
-      // rowsAffected may be 0 if another request already unequipped (same WHERE); still success.
-      // Best-effort loadout clear runs in parallel; another request may have cleared it first.
+      // The timestamp acknowledges an already-unequipped row, while the hunting
+      // guard rejects a stale request after encounter admission.
       const loadoutClearPromise =
         shouldClearLoadout && currentLoadout
           ? ctx.drizzle
@@ -2023,14 +2050,18 @@ export const itemRouter = createTRPCRouter({
                 and(
                   eq(itemLoadout.id, currentLoadout.id),
                   eq(itemLoadout.userId, ctx.userId),
+                  hasNoHuntingBattle(ctx.userId),
                 ),
               )
           : undefined;
 
-      const outcomes = await Promise.all([
-        ...itemUnequipPromises,
-        ...(loadoutClearPromise ? [loadoutClearPromise] : []),
-      ]);
+      const outcomes = await Promise.all(
+        itemUnequipPromises.map((write) => retryOnDeadlock(async () => write)),
+      );
+      if (outcomes.some((saved) => saved.rowsAffected !== 1))
+        return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
+      if (loadoutClearPromise)
+        outcomes.push(await retryOnDeadlock(async () => loadoutClearPromise));
 
       return {
         success: true,
@@ -2952,27 +2983,32 @@ export const itemRouter = createTRPCRouter({
       }
       // Consume repair item if it's consumable
       if (repairUserItem.item.destroyOnUse) {
-        const consumed = await consumeUserItemAtomically({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          userItemId: input.repairItemId,
-          expectedQuantity: repairUserItem.quantity,
-          where: [
-            eq(userItem.equipped, repairUserItem.equipped),
-            eq(userItem.level, repairUserItem.level),
-            eq(userItem.experience, repairUserItem.experience),
-            eq(
-              userItem.durability,
-              repairUserItem.id === targetUserItem.id
-                ? newDurability
-                : repairUserItem.durability,
-            ),
-            eq(userItem.storedAtHome, false),
-            eq(userItem.isInAuction, false),
-          ],
-        });
+        const consumed = await retryOnDeadlock(() =>
+          consumeUserItemAtomically({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            userItemId: input.repairItemId,
+            expectedQuantity: repairUserItem.quantity,
+            where: [
+              hasNoHuntingBattle(ctx.userId),
+              eq(userItem.equipped, repairUserItem.equipped),
+              eq(userItem.level, repairUserItem.level),
+              eq(userItem.experience, repairUserItem.experience),
+              eq(
+                userItem.durability,
+                repairUserItem.id === targetUserItem.id
+                  ? newDurability
+                  : repairUserItem.durability,
+              ),
+              eq(userItem.storedAtHome, false),
+              eq(userItem.isInAuction, false),
+            ],
+          }),
+        );
         if (!consumed) {
-          // Roll back durability so a kit race does not grant a free repair
+          // Restore live durability after a lost kit claim. Admission may already
+          // hold the repaired snapshot, so settlement can retain the player's
+          // repaired durability; the guarded kit quantity remains available.
           await ctx.drizzle
             .update(userItem)
             .set({ durability: targetUserItem.durability })
@@ -3058,6 +3094,8 @@ export const itemRouter = createTRPCRouter({
         }),
       );
       const failedRepairs = repairOutcomes.filter((o) => !o.repaired);
+      // A hunt may have captured a completed target write before compensation.
+      // Its snapshot can retain the player's repaired durability; kit claims stay guarded.
       if (failedRepairs.length > 0) {
         await Promise.all(
           repairOutcomes
@@ -3089,26 +3127,29 @@ export const itemRouter = createTRPCRouter({
           if (!repairKitRow || quantityUsed <= 0 || !repairKitRow.item.destroyOnUse) {
             return null;
           }
-          const consumed = await updateUserItemQuantityAtomically({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-            userItemId: repairItemId,
-            expectedQuantity: repairKitRow.quantity,
-            nextQuantity: repairKitRow.quantity - quantityUsed,
-            where: [
-              eq(userItem.equipped, repairKitRow.equipped),
-              eq(userItem.level, repairKitRow.level),
-              eq(userItem.experience, repairKitRow.experience),
-              eq(
-                userItem.durability,
-                itemsNeedingRepair.some((row) => row.id === repairKitRow.id)
-                  ? repairKitRow.item.maxDurability
-                  : repairKitRow.durability,
-              ),
-              eq(userItem.storedAtHome, false),
-              eq(userItem.isInAuction, false),
-            ],
-          });
+          const consumed = await retryOnDeadlock(() =>
+            updateUserItemQuantityAtomically({
+              client: ctx.drizzle,
+              userId: ctx.userId,
+              userItemId: repairItemId,
+              expectedQuantity: repairKitRow.quantity,
+              nextQuantity: repairKitRow.quantity - quantityUsed,
+              where: [
+                hasNoHuntingBattle(ctx.userId),
+                eq(userItem.equipped, repairKitRow.equipped),
+                eq(userItem.level, repairKitRow.level),
+                eq(userItem.experience, repairKitRow.experience),
+                eq(
+                  userItem.durability,
+                  itemsNeedingRepair.some((row) => row.id === repairKitRow.id)
+                    ? repairKitRow.item.maxDurability
+                    : repairKitRow.durability,
+                ),
+                eq(userItem.storedAtHome, false),
+                eq(userItem.isInAuction, false),
+              ],
+            }),
+          );
           return consumed ? { repairKitRow, quantityConsumed: quantityUsed } : false;
         }),
       );
@@ -3131,7 +3172,15 @@ export const itemRouter = createTRPCRouter({
               ? [
                   refundUserItemQuantityAtomically({
                     client: ctx.drizzle,
-                    itemSnapshot: result.repairKitRow,
+                    // Admission may have captured the decremented stack. Refund separately
+                    // so settlement cannot overwrite it or recreate an occupied equipped slot.
+                    itemSnapshot: {
+                      ...result.repairKitRow,
+                      id: nanoid(),
+                      equipped: "NONE",
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    },
                     quantity: result.quantityConsumed,
                   }),
                 ]
@@ -3727,12 +3776,8 @@ export const selectItemLoadout = async (
 
   // Apply atomically: a single statement equips the loadout and unequips
   // everything else, so there is no wipe-then-partial-fail window.
-  if (assignments.length === 0) {
-    await client
-      .update(userItem)
-      .set({ equipped: "NONE" })
-      .where(eq(userItem.userId, user.userId));
-  } else {
+  let equipped: ItemSlot = "NONE";
+  if (assignments.length > 0) {
     const sqlChunks: SQL[] = [sql`(case`];
     for (const a of assignments) {
       // Re-check availability inside the atomic update (mirrors
@@ -3747,12 +3792,26 @@ export const selectItemLoadout = async (
     sqlChunks.push(sql`else 'NONE' end)`);
     // Drizzle narrows `equipped` to the enum union in set(); cast the raw CASE
     // expression to that type so it is accepted as the column value.
-    const equippedCase = sql.join(sqlChunks, sql.raw(" ")) as unknown as ItemSlot;
-    await client
-      .update(userItem)
-      .set({ equipped: equippedCase })
-      .where(eq(userItem.userId, user.userId));
+    equipped = sql.join(sqlChunks, sql.raw(" ")) as unknown as ItemSlot;
   }
+  const equippedRows = await retryOnDeadlock(async () =>
+    client
+      .update(userItem)
+      .set({
+        equipped,
+        // Even an unchanged loadout must acknowledge the hunting guard.
+        updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+      })
+      .where(
+        and(
+          eq(userItem.userId, user.userId),
+          gt(userItem.quantity, 0),
+          hasNoHuntingBattle(user.userId),
+        ),
+      ),
+  );
+  if (useritems.length > 0 && equippedRows.rowsAffected === 0)
+    return errorResponse(HUNTING_INVENTORY_UNAVAILABLE_MESSAGE);
 
   // The equip above is one atomic statement, so it never half-applies. Advance
   // the active-loadout pointer only AFTER it succeeds (one extra round-trip, not
@@ -4204,24 +4263,32 @@ export const toggleEquipItem = async (
     promises = [
       client
         .update(userItem)
-        .set({ equipped: newEquipSlot })
+        .set({
+          equipped: newEquipSlot,
+          updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+        })
         .where(
           and(
             eq(userItem.id, useritem.id),
             eq(userItem.userId, user.userId),
             gt(userItem.quantity, 0),
+            hasNoHuntingBattle(user.userId),
           ),
         ),
       ...(userItemInSlot
         ? [
             client
               .update(userItem)
-              .set({ equipped: "NONE" })
+              .set({
+                equipped: "NONE",
+                updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+              })
               .where(
                 and(
                   eq(userItem.id, userItemInSlot.id),
                   eq(userItem.userId, user.userId),
                   gt(userItem.quantity, 0),
+                  hasNoHuntingBattle(user.userId),
                 ),
               ),
           ]
@@ -4233,12 +4300,16 @@ export const toggleEquipItem = async (
     promises = [
       client
         .update(userItem)
-        .set({ equipped: "NONE" })
+        .set({
+          equipped: "NONE",
+          updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+        })
         .where(
           and(
             eq(userItem.id, useritem.id),
             eq(userItem.userId, user.userId),
             gt(userItem.quantity, 0),
+            hasNoHuntingBattle(user.userId),
           ),
         ),
     ];
@@ -4261,6 +4332,9 @@ export const fetchItemLoadouts = async (client: DrizzleClient, userId: string) =
     orderBy: (table) => [asc(table.createdAt), asc(table.id)],
   });
 };
+
+const HUNTING_INVENTORY_UNAVAILABLE_MESSAGE =
+  "Inventory changed or is in use by a hunting battle. Finish any hunt, refresh and try again.";
 
 /**
  * Build database filters for item queries based on filtering schema
@@ -4533,7 +4607,8 @@ export const splitItemStack = async (
 
 /**
  * CAS durability write for inventory repair: only succeeds while the item is still
- * owned, carried (not home), not auctioned, and at the expected durability.
+ * owned, carried (not home), not auctioned, outside a hunting battle, and at the
+ * expected durability.
  */
 const tryRepairUserItemDurability = async (
   drizzle: DrizzleClient,
@@ -4544,22 +4619,25 @@ const tryRepairUserItemDurability = async (
   >,
   newDurability: number,
 ) => {
-  const result = await drizzle
-    .update(userItem)
-    .set({ durability: newDurability })
-    .where(
-      and(
-        eq(userItem.id, target.id),
-        eq(userItem.userId, userId),
-        eq(userItem.storedAtHome, false),
-        eq(userItem.isInAuction, false),
-        eq(userItem.quantity, target.quantity),
-        eq(userItem.equipped, target.equipped),
-        eq(userItem.level, target.level),
-        eq(userItem.experience, target.experience),
-        eq(userItem.durability, target.durability),
+  const result = await retryOnDeadlock(async () =>
+    drizzle
+      .update(userItem)
+      .set({ durability: newDurability })
+      .where(
+        and(
+          eq(userItem.id, target.id),
+          eq(userItem.userId, userId),
+          eq(userItem.storedAtHome, false),
+          eq(userItem.isInAuction, false),
+          eq(userItem.quantity, target.quantity),
+          eq(userItem.equipped, target.equipped),
+          eq(userItem.level, target.level),
+          eq(userItem.experience, target.experience),
+          eq(userItem.durability, target.durability),
+          hasNoHuntingBattle(userId),
+        ),
       ),
-    );
+  );
   return result.rowsAffected === 1;
 };
 
@@ -4677,6 +4755,14 @@ async function executeMergeStacksForItemBucket(
     id: item.id,
     quantity: index < targetStacks ? targetQuantityForKeepIndex(index) : 0,
   }));
+  // Admission can change status after the endpoint's initial read. Both phases
+  // must stop at combat entry; restoring our claims preserves the original stacks.
+  const awakeOwner = exists(
+    drizzle
+      .select({ one: sql`1` })
+      .from(userData)
+      .where(and(eq(userData.userId, userId), eq(userData.status, "AWAKE"))),
+  );
 
   // Restores every row this attempt touched back to its original quantity in one UPDATE. The
   // `updatedAt = claimedAt` stamp scopes the write to our own claims/publishes, and the per-row
@@ -4723,8 +4809,13 @@ async function executeMergeStacksForItemBucket(
         updatedAt: claimedAt,
       })
       .where(
-        or(
-          ...sortedItems.map((item) => mergeStackRowGuard(userId, item, item.quantity)),
+        and(
+          awakeOwner,
+          or(
+            ...sortedItems.map((item) =>
+              mergeStackRowGuard(userId, item, item.quantity),
+            ),
+          ),
         ),
       );
 
@@ -4739,9 +4830,12 @@ async function executeMergeStacksForItemBucket(
       .update(userItem)
       .set({ quantity: userItemMergeQuantityCase(publishTargets) })
       .where(
-        or(
-          ...sortedItems.map((item) =>
-            mergeStackRowGuard(userId, item, -item.quantity),
+        and(
+          awakeOwner,
+          or(
+            ...sortedItems.map((item) =>
+              mergeStackRowGuard(userId, item, -item.quantity),
+            ),
           ),
         ),
       );

@@ -15,6 +15,7 @@ import {
   auctionOffer,
   automatedModeration,
   bankTransfers,
+  battle,
   bloodlineRolls,
   captcha,
   conceptImage,
@@ -29,6 +30,9 @@ import {
   forumThread,
   historicalAvatar,
   historicalIp,
+  huntingProgress,
+  huntingReceipt,
+  huntingSession,
   itemLoadout,
   jutsuLoadout,
   kageDefendedChallenges,
@@ -102,7 +106,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { isMysqlDeadlockError } from "@/server/utils/mysqlErrors";
+import { isMysqlDeadlockError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { renameParentalContact } from "@/server/utils/parentalControls";
 import {
@@ -388,11 +392,14 @@ export const staffRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query - fetch users and queue entry in parallel
-      const [user, targetUser, queueEntry] = await Promise.all([
+      const [user, targetUser, queueEntry, hunt] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.userId),
         ctx.drizzle.query.mpvpBattleUser.findFirst({
           where: eq(mpvpBattleUser.userId, input.userId),
+        }),
+        ctx.drizzle.query.huntingSession.findFirst({
+          where: eq(huntingSession.userId, input.userId),
         }),
       ]);
       // Guard
@@ -400,6 +407,32 @@ export const staffRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canUnstuckVillage(user.role)) return errorResponse("Not allowed for you");
+      const recoverySql = sql`
+          UPDATE ${userData}
+          LEFT JOIN ${questHistory} ON ${and(
+            eq(questHistory.userId, userData.userId),
+            eq(questHistory.questType, "battlepyramid"),
+            eq(questHistory.completed, 0),
+            isNull(questHistory.endAt),
+          )}
+          LEFT JOIN ${huntingSession} ON ${huntingSession.userId} = ${userData.userId}
+          SET ${userData.status} = 'AWAKE', ${userData.travelFinishAt} = NULL,
+              ${huntingSession.battleId} = NULL, ${huntingSession.version} = COALESCE(${huntingSession.version}, 0) + 1,
+              ${userData.bracketImmunityLiftedUntil} = ${resumeBracketImmunitySql()}, ${userData.bracketImmunityPausedAt} = NULL, ${userData.battleId} = NULL, ${questHistory.completed} = 0,
+              ${questHistory.endAt} = ${new Date()},
+              ${userData.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))
+          WHERE ${userData.userId} = ${targetUser.userId}
+            AND ${userData.battleId} <=> ${targetUser.battleId}
+            AND ${huntingSession.id} <=> ${hunt?.id ?? null}
+            AND ${huntingSession.battleId} <=> ${hunt?.battleId ?? null}
+            AND ${huntingSession.version} <=> ${hunt?.version ?? null}
+        `;
+      // Drizzle has no joined UPDATE builder. Cancel the captured run and release its
+      // status together, only while neither the character nor its hunt has changed.
+      // LEFT JOIN also recovers players without any Pyramid history or hunting session.
+      const recovered = await retryOnDeadlock(() => ctx.drizzle.execute(recoverySql));
+      if (recovered.rowsAffected === 0)
+        return errorResponse("The character's battle changed. Refresh and try again.");
       // Mutate - update status and clean up all queue entries
       await Promise.all([
         ctx.drizzle.insert(actionLog).values({
@@ -414,23 +447,12 @@ export const staffRouter = createTRPCRouter({
             `Cleared queue entries: mpvpBattleUser=${queueEntry ? "yes" : "no"}`,
           ],
         }),
-        // Drizzle has no joined UPDATE builder. Cancel the run and release its status
-        // together; LEFT JOIN also recovers players without any Pyramid history.
-        // Advance the live snapshot so in-flight objectives cannot restart the cancelled run.
-        ctx.drizzle.execute(sql`
-          UPDATE ${userData}
-          LEFT JOIN ${questHistory} ON ${and(
-            eq(questHistory.userId, userData.userId),
-            eq(questHistory.questType, "battlepyramid"),
-            eq(questHistory.completed, 0),
-            isNull(questHistory.endAt),
-          )}
-          SET ${userData.status} = 'AWAKE', ${userData.travelFinishAt} = NULL,
-              ${userData.bracketImmunityLiftedUntil} = ${resumeBracketImmunitySql()}, ${userData.bracketImmunityPausedAt} = NULL, ${userData.battleId} = NULL, ${questHistory.completed} = 0,
-              ${questHistory.endAt} = ${new Date()},
-              ${userData.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))
-          WHERE ${userData.userId} = ${targetUser.userId}
-        `),
+        // Delete only the fight captured before recovery; a newly admitted fight must survive.
+        // Cleanup failure leaves a support-removable orphan. Old tabs may advance it, but
+        // its cancelled session/version guard rejects terminal settlement before any payout.
+        ...(hunt?.battleId
+          ? [ctx.drizzle.delete(battle).where(eq(battle.id, hunt.battleId))]
+          : []),
         // Clean up raid/clan/shrine battle queue
         ctx.drizzle
           .delete(mpvpBattleUser)
@@ -871,14 +893,18 @@ export const staffRouter = createTRPCRouter({
       if (fromUser && fromUser.role !== "USER") {
         return { success: false, message: "Cannot change staff member's userId " };
       }
+      // Battles carry immutable participant identities and settlement ownership.
+      if (fromUser?.status === "BATTLE" || fromUser?.battleId)
+        return errorResponse(
+          "Finish the active battle before changing this character's userId.",
+        );
       // Mutate. The alias goes first, as durable intent: from here a store event naming the
       // old id resolves to the new one, and a rename that fails part-way is finished by
       // running it again. Whoever writes that row first owns the identity, and it is read
       // back rather than assumed: a deletion that got in between the check above and this
       // write keeps its tombstone, and the rename stops here before moving anything.
-      // Everything else then moves in parallel, as it always has. A receipt that lands
-      // under the old id in between is re-homed by the ledger's own owner reconciliation,
-      // so nothing here holds a lock.
+      // A receipt that lands under the old id in between is re-homed by the ledger's
+      // own owner reconciliation, so nothing here holds a lock.
       await ctx.drizzle
         .insert(storeUserIdAlias)
         .values({
@@ -899,6 +925,27 @@ export const staffRouter = createTRPCRouter({
       }
       if (claim?.newUserId !== input.newUserId) {
         return { success: false, message: "UserId was already renamed to another id" };
+      }
+      if (!movedAlready) {
+        // Move the character first: admission either claimed its battle already, or
+        // can no longer claim the retired ID. Related ownership moves start only after
+        // this succeeds; the alias lets a retry finish any later partial failure.
+        const renamed = await retryOnDeadlock(() =>
+          ctx.drizzle
+            .update(userData)
+            .set({ userId: input.newUserId })
+            .where(
+              and(
+                eq(userData.userId, input.userId),
+                ne(userData.status, "BATTLE"),
+                isNull(userData.battleId),
+              ),
+            ),
+        );
+        if (renamed.rowsAffected !== 1)
+          return errorResponse(
+            "The character's battle changed. Finish any active battle and retry the userId change.",
+          );
       }
       const moves = await Promise.allSettled([
         renameParentalContact(ctx.drizzle, input.userId, input.newUserId),
@@ -1062,6 +1109,12 @@ export const staffRouter = createTRPCRouter({
           .update(userHome)
           .set({ userId: input.newUserId })
           .where(eq(userHome.userId, input.userId)),
+        ...[huntingSession, huntingProgress, huntingReceipt].map((table) =>
+          ctx.drizzle
+            .update(table)
+            .set({ userId: input.newUserId })
+            .where(eq(table.userId, input.userId)),
+        ),
         ctx.drizzle
           .update(userJutsu)
           .set({ userId: input.newUserId })
@@ -1216,10 +1269,6 @@ export const staffRouter = createTRPCRouter({
             id: sql`CASE WHEN ${userRaidBuff.itemId} IS NOT NULL THEN ${`meal-${input.newUserId}`} ELSE ${userRaidBuff.id} END`,
           })
           .where(eq(userRaidBuff.userId, input.userId)),
-        ctx.drizzle
-          .update(userData)
-          .set({ userId: input.newUserId })
-          .where(eq(userData.userId, input.userId)),
       ]);
       // Answer only once every move has settled, so the retry a failure invites never
       // races moves still in flight.
@@ -1392,6 +1441,9 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
 
   // Batch 4: Game progress & items
   await Promise.all([
+    ...[huntingSession, huntingProgress, huntingReceipt].map((table) =>
+      client.delete(table).where(eq(table.userId, userId)),
+    ),
     client.delete(userItem).where(eq(userItem.userId, userId)),
     client.delete(farmPlot).where(eq(farmPlot.userId, userId)),
     client.delete(farmExtraction).where(eq(farmExtraction.userId, userId)),
