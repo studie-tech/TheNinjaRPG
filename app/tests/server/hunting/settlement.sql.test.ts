@@ -51,6 +51,22 @@ describeWithDatabase("Atomic hunting settlement", () => {
     expect(progress?.used).toBe(3);
     expect(progress?.cooldownUntil?.getTime()).toBeGreaterThan(Date.now());
   });
+  it("settles zero-experience victories with an acknowledged player write", async () => {
+    const { db, current, result, version } = await setup();
+    const updatedAt = new Date(Date.now() + 86400000);
+    await db.update(userData).set({ updatedAt }).where(eq(userData.userId, "hunter"));
+    current.extraState.hunting!.contract.experience = 0;
+    expect(await settleHuntingBattle(db, current, result, version, async (tx, playerBattle, playerResult) => {
+      // mysql2 counts matched rows; assert a real change before character recovery writes again.
+      const player = await tx.query.userData.findFirst({ where: eq(userData.userId, "hunter") });
+      expect(player?.updatedAt.getTime()).toBeGreaterThan(updatedAt.getTime());
+      await updateUser(tx, pusher, playerBattle, playerResult, "hunter", true);
+    })).toBe(true);
+    expect(await db.query.userData.findFirst()).toMatchObject({ status: "AWAKE", battleId: null, huntingExperience: 123 });
+    expect(await db.query.huntingReceipt.findMany()).toHaveLength(1);
+    expect((await db.query.huntingProgress.findFirst())?.used).toBe(1);
+    expect((await db.query.userItem.findMany()).filter((i) => i.itemId === "hide").reduce((n, i) => n + i.quantity, 0)).toBe(2);
+  });
   it("recovers the character and grants only authored hunting rewards even with ordinary reward scaling", async () => {
     const { db, current, version } = await setup();
     const before = await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") });

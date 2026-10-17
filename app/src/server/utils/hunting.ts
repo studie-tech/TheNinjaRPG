@@ -76,6 +76,8 @@ export const settleHuntingBattle = async (
           .update(userData)
           .set({
             huntingExperience: sql`${userData.huntingExperience} + ${meta.contract.experience}`,
+            // Zero-XP contracts must still acknowledge the guarded player write.
+            updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
           })
           .where(
             and(eq(userData.userId, meta.userId), eq(userData.battleId, current.id)),
