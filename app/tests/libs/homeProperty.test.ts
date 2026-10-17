@@ -66,6 +66,27 @@ describe("painted home properties", () => {
     }
   });
 
+  it("finishes Mansion Room 2 to its wall joins without foreground restoring the floor", () => {
+    const plan = HOME_ART_PLANS.MANSION;
+    const contains = (polygons: readonly (readonly (readonly [number, number])[])[], [x, y]: readonly [number, number]) => {
+      const point = { x: x * 100 / 1536, y: y * 100 / 1024 };
+      return polygons.some((polygon) => {
+        const contour = polygon.map(([x, y]) => new Vector2(x, y));
+        return ShapeUtils.triangulateShape(contour, []).some((indices) => isPointInHomePolygon(point, indices.map((index) => contour[index]!)));
+      });
+    };
+    // Source-art landmarks beside the back, side and front wall joins, including both sides of the door.
+    for (const point of [[275, 363], [255, 480], [446, 380], [432, 430], [440, 480], [400, 495]] as const) {
+      expect(contains(plan.floorSurfaces[1]!, point)).toBe(true);
+      expect(contains(plan.foreground.map(({ polygon }) => polygon), point)).toBe(false);
+    }
+    // Preserve the open door leaf, timber frame, baseboard and front wall.
+    for (const point of [[445, 433], [456, 405], [455, 480], [250, 420], [350, 351], [350, 506]] as const) {
+      expect(contains(plan.floorSurfaces[1]!, point)).toBe(false);
+    }
+    expect(contains(plan.foreground.map(({ polygon }) => polygon), [350, 506])).toBe(true);
+  });
+
   it.each([
     { homeType: "MANSION", point: { x: 44.75, y: 32.25 } },
     { homeType: "MANSION", point: { x: 75, y: 66 } },
