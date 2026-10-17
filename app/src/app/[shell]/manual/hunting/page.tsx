@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { HUNTING_CONTRACT_DEFAULTS, HUNTING_RANKS } from "@/drizzle/constants";
@@ -377,10 +378,10 @@ export default function HuntingEditor() {
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <fieldset className="space-y-1">
-      <legend className="font-medium text-sm">{label}</legend>
+    <Label className="block space-y-1">
+      <span className="block">{label}</span>
       {children}
-    </fieldset>
+    </Label>
   );
 }
 function SectorInput({
@@ -390,21 +391,19 @@ function SectorInput({
   values: number[];
   onChange: (values: number[]) => void;
 }) {
-  const [draft, setDraft] = useState(values.join(", "));
-  // Keep the draft's commas while editing; the parent key resets it when a habitat changes.
+  const [draft, setDraft] = useState({ source: values, text: values.join(", ") });
+  // Preserve commas when the parent echoes an edit; external values replace the draft.
   return (
     <Input
-      aria-label="Sector numbers"
-      value={draft}
+      value={draft.source === values ? draft.text : values.join(", ")}
       onChange={(e) => {
-        setDraft(e.target.value);
-        onChange(
-          e.target.value
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .map(Number),
-        );
+        const sectors = e.target.value
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map(Number);
+        setDraft({ source: sectors, text: e.target.value });
+        onChange(sectors);
       }}
     />
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ export function HuntingBoard({
   const [rank, setRank] = useState("");
   const [material, setMaterial] = useState("");
   const [showSelector, setShowSelector] = useState(!victory);
+  const selector = useRef<HTMLSelectElement>(null);
   const [message, setMessage] = useState("");
   const board = api.hunting.getBoard.useQuery(undefined, {
     refetchInterval: 5000,
@@ -193,7 +194,20 @@ export function HuntingBoard({
                   <Button
                     variant="secondary"
                     disabled={pending}
-                    onClick={() => setShowSelector(true)}
+                    onClick={() => {
+                      setShowSelector(true);
+                      requestAnimationFrame(() => {
+                        selector.current?.focus({ preventScroll: true });
+                        selector.current?.scrollIntoView({
+                          behavior: window.matchMedia(
+                            "(prefers-reduced-motion: reduce)",
+                          ).matches
+                            ? "auto"
+                            : "smooth",
+                          block: "start",
+                        });
+                      });
+                    }}
                   >
                     Select New Contract
                   </Button>
@@ -230,6 +244,7 @@ export function HuntingBoard({
           <>
             <div className="grid gap-2 sm:grid-cols-2">
               <select
+                ref={selector}
                 aria-label="Habitat filter"
                 className="rounded border bg-background p-2"
                 value={habitatId}

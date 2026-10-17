@@ -1501,7 +1501,7 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   return (
     <>
-      <div id="tutorial-combat-field" ref={mountRef}></div>
+      <div id="tutorial-combat-field" ref={mountRef} hidden={!!result?.hunting}></div>
 
       {!result && !isInLobby && !webglError && battleState.battle && (
         <CombatResourceBars
@@ -1647,7 +1647,13 @@ const Combat: React.FC<CombatProps> = (props) => {
         )}
       {/* FINAL DONE SCREEN */}
       {result && (
-        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto overflow-y-auto bg-black/90">
+        <div
+          className={
+            result.hunting
+              ? "relative z-20 bg-black/90"
+              : "absolute top-0 right-0 bottom-0 left-0 z-20 m-auto overflow-y-auto bg-black/90"
+          }
+        >
           <div className="text-center text-white">
             <p className="p-5 pb-2 text-3xl">You {result.outcome}</p>
             {result.hunting && (

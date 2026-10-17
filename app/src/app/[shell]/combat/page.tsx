@@ -269,7 +269,7 @@ export default function CombatPage() {
       <div
         className="relative box-content overflow-hidden rounded-lg border bg-card text-card-foreground shadow-lg"
         style={
-          battle
+          battle && !results?.hunting
             ? {
                 aspectRatio: `1 / ${getBattlefieldHeightRatio(battle.width, battle.height)}`,
               }
