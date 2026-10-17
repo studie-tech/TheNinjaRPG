@@ -830,9 +830,9 @@ const Combat: React.FC<CombatProps> = (props) => {
     void utils.combat.getBattle.invalidate();
   }, [isPageActive, utils]);
 
-  // If user has no actions left / round is over, propagate battle & potentially - perform AI actions
+  // Keep turn timeouts and AI actions running in hidden tabs. Only visual work
+  // should pause with page visibility; this interval also advances shared battles.
   useEffect(() => {
-    if (!isPageActive) return;
     const interval = setInterval(() => {
       if (suid && battleRef.current && userIdRef.current && !isPending && !result) {
         const { actor, changedActor } = calcActiveUser(
@@ -880,7 +880,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [isPageActive, isPending, timeDiff, result, suid, controlledActorId]);
+  }, [isPending, timeDiff, result, suid, controlledActorId]);
 
   useEffect(() => {
     actionRef.current = props.action;
