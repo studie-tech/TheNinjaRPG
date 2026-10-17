@@ -66,6 +66,17 @@ describe("painted home properties", () => {
     }
   });
 
+  it.each([
+    { homeType: "MANSION", point: { x: 44.75, y: 32.25 } },
+    { homeType: "MANSION", point: { x: 75, y: 66 } },
+    { homeType: "PALACE", point: { x: 44.5, y: 25.25 } },
+    { homeType: "PALACE", point: { x: 14.75, y: 35.25 } },
+    { homeType: "MARSHMALLOWOPOLIS", point: { x: 26, y: 28.75 } },
+  ] as const)("keeps $homeType window and timber landmarks out of wall paint", ({ homeType, point }) => {
+    const masks = HOME_ART_PLANS[homeType].paint.flat();
+    expect(masks.some((polygon) => isPointInHomePolygon(point, polygon.map(([x, y]) => ({ x, y }))))).toBe(false);
+  });
+
   it("preserves furniture proportions across differently sized authored rooms", () => {
     for (const homeType of HomeTypes) {
       for (const room of getHomeRooms(homeType)) {
