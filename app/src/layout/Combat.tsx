@@ -34,7 +34,11 @@ import { LogbookEntry } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
 import Modal from "@/layout/Modal";
 import WebGlError from "@/layout/WebGLError";
-import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
+import {
+  availableUserActions,
+  calcActiveUser,
+  stillInBattle,
+} from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { mergeBattleEntries } from "@/libs/combat/log";
@@ -834,10 +838,19 @@ const Combat: React.FC<CombatProps> = (props) => {
     void utils.combat.getBattle.invalidate();
   }, [isPageActive, utils]);
 
+  // Departed players and their summons can retain auto flags; only humans still
+  // fighting keep optional auto combat active, matching the server's batch gate.
   const hasAutoCombat =
     !!battleState.battle &&
     (AutoBattleTypes.includes(battleState.battle.battleType) ||
-      battleState.battle.usersState.some((user) => user.isAutoCombat));
+      battleState.battle.usersState.some(
+        (user) =>
+          !user.isAi &&
+          !user.isSummon &&
+          user.isAutoCombat &&
+          !user.leftBattle &&
+          stillInBattle(user, battleState.battle?.usersEffects),
+      ));
 
   // Hidden manual battles catch up on resume; keep driving auto combat in the
   // background so AI actions and idle opponent timeouts can still advance it.
