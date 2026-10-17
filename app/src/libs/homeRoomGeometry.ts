@@ -20,7 +20,7 @@ export type HomePoint = { x: number; y: number };
 
 /** Placement floors are convex; finish masks trace the full floor without covering door leaves. */
 export type HomeArtPlan = {
-  /** Older paintings use 4:3; the mansion and palace artwork uses 3:2. */
+  /** Paintings without an override use 4:3; mansion and palace artwork uses 3:2. */
   aspectRatio?: number;
   /** World extent at 100% camera scale; larger properties retain useful furniture proportions. */
   size: number;
@@ -312,7 +312,10 @@ export const homeArtRectPolygon = ([
   { x: left, y: bottom },
 ];
 
-/** Shared palace artwork retains each tier's room identities and furniture scale. */
+/**
+ * Share the palace painting while retaining saved room IDs and each tier's furniture scale.
+ * The tenth entry assigns a separate hall decorating area to Marshmallowopolis.
+ */
 // biome-ignore format: Keep measured coordinate pairs together for comparison with the painting.
 function palaceArtPlan(size: number, roomCount: number): HomeArtPlan {
   const floors: HomeArtRect[] = [

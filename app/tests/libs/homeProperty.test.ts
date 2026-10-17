@@ -171,6 +171,7 @@ describe("painted home properties", () => {
   });
 });
 
+/** Check a 1536x1024 artwork pixel against percentage contours, including concave masks. */
 const containsSourceLandmark = (polygons: readonly (readonly (readonly [number, number])[])[], [x, y]: readonly [number, number]) => {
   const point = { x: x * 100 / 1536, y: y * 100 / 1024 };
   return polygons.some((polygon) => {

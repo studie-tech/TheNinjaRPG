@@ -382,6 +382,7 @@ describeWithDatabase("owned furniture persistence", () => {
     expect(after.owner.homeFurnitureRevision).toBe(0);
   });
 
+  // Build crafting deadlines per case so time spent in earlier tests cannot expire the lock.
   it.each([
     { state: "available", patch: () => ({}) },
     { state: "auction", patch: () => ({ isInAuction: true }) },
