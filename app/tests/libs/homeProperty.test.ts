@@ -10,10 +10,10 @@ const piece: HomeFurniture = { id: "chair", itemId: "chair", name: "Chair", imag
 const placement = { id: piece.id, x: 50, y: 50, rotation: 0 as const };
 
 describe("painted home properties", () => {
-  it("maps progressively more floors and a decorative and cultivation garden on every tier", () => {
+  it("retains each tier's room capacity and separates decoration from cultivation", () => {
     for (const [tier, homeType] of HomeTypes.entries()) {
       const rooms = getHomeRooms(homeType);
-      expect(rooms.filter(({isYard}) => !isYard)).toHaveLength(tier === 0 ? 1 : tier + 1);
+      expect(rooms.filter(({isYard}) => !isYard)).toHaveLength([1, 2, 3, 4, 5, 8, 9, 10][tier]!);
       const yard = rooms.find(({isYard})=>isYard)!;
       expect(yard.interior).toHaveLength(4);
       expect(yard.outdoor).toHaveLength(4);
@@ -46,29 +46,19 @@ describe("painted home properties", () => {
     { homeType: "TOWN_HOUSE", room: 2, wall: [225, 525], floor: [255, 525] },
     { homeType: "TOWN_HOUSE", room: 1, wall: [514, 310], floor: [507, 310] },
     { homeType: "TOWN_HOUSE", room: 4, wall: [1230, 550], floor: [1200, 550] },
-    { homeType: "SMALL_MANSION", room: 1, wall: [530, 270], floor: [510, 270] },
-    { homeType: "SMALL_MANSION", room: 1, wall: [255, 219], floor: [280, 230] },
-    { homeType: "SMALL_MANSION", room: 2, wall: [350, 386], floor: [350, 410] },
-    { homeType: "SMALL_MANSION", room: 2, wall: [254, 397], floor: [280, 420] },
-    { homeType: "SMALL_MANSION", room: 3, wall: [240, 561], floor: [270, 570] },
-    { homeType: "SMALL_MANSION", room: 4, wall: [1238, 350], floor: [1200, 350] },
-    { homeType: "SMALL_MANSION", room: 5, wall: [915, 600], floor: [950, 600] },
-    { homeType: "SMALL_MANSION", room: 5, wall: [910, 530], floor: [920, 532] },
-    { homeType: "SMALL_ESTATE", room: 0, wall: [568, 500], floor: [580, 500] },
-    { homeType: "SMALL_ESTATE", room: 2, wall: [240, 380], floor: [256, 384] },
-    { homeType: "SMALL_ESTATE", room: 4, wall: [1233, 290], floor: [1215, 290] },
-    { homeType: "LARGE_ESTATE", room: 1, wall: [198, 325], floor: [216, 325] },
-    { homeType: "LARGE_ESTATE", room: 2, wall: [706, 270], floor: [693, 270] },
-    { homeType: "LARGE_ESTATE", room: 7, wall: [1262, 535], floor: [1240, 535] },
-    { homeType: "PALACE", room: 1, wall: [495, 190], floor: [484, 190] },
-    { homeType: "PALACE", room: 8, wall: [1290, 600], floor: [1275, 600] },
-    { homeType: "MARSHMALLOWOPOLIS", room: 1, wall: [363, 310], floor: [350, 310] },
-    { homeType: "MARSHMALLOWOPOLIS", room: 0, wall: [829, 420], floor: [816, 420] },
-    { homeType: "MARSHMALLOWOPOLIS", room: 9, wall: [1300, 490], floor: [1280, 490] },
-  ] as const)("keeps $homeType room $room finishes off measured walls and fixtures", ({ homeType, room, wall, floor }) => {
+    { homeType: "MANSION", room: 1, wall: [15, 40], floor: [20, 40], normalized: true },
+    { homeType: "MANSION", room: 3, wall: [40, 42], floor: [45, 40], normalized: true },
+    { homeType: "MANSION", room: 7, wall: [71, 55], floor: [77, 55], normalized: true },
+    { homeType: "PALACE", room: 2, wall: [36, 35], floor: [30, 35], normalized: true },
+    { homeType: "PALACE", room: 8, wall: [74, 48], floor: [65, 48], normalized: true },
+    { homeType: "MARSHMALLOWOPOLIS", room: 0, wall: [42, 33], floor: [50, 33], normalized: true },
+    { homeType: "MARSHMALLOWOPOLIS", room: 9, wall: [61, 45], floor: [58, 45], normalized: true },
+  ] as const)("keeps $homeType room $room finishes off measured walls and fixtures", (sample) => {
+    const { homeType, room, wall, floor } = sample;
+    const normalized = "normalized" in sample;
     // Finish contours can be concave; triangulate them before using the convex placement helper.
     const triangles = HOME_ART_PLANS[homeType].floorSurfaces[room]!.flatMap((polygon) => {
-      const contour = polygon.map(([x, y]) => new Vector2(x * 1448 / 100, y * 1086 / 100));
+      const contour = polygon.map(([x, y]) => new Vector2(x * (normalized ? 1 : 1448 / 100), y * (normalized ? 1 : 1086 / 100)));
       return ShapeUtils.triangulateShape(contour, []).map((indices) => indices.map((index) => contour[index]!));
     });
     for (const [point, expected] of [[wall, false], [floor, true]] as const) {
@@ -76,12 +66,53 @@ describe("painted home properties", () => {
     }
   });
 
+  it("finishes Mansion Room 2 to its wall joins without foreground restoring the floor", () => {
+    const plan = HOME_ART_PLANS.MANSION;
+    // Source-art landmarks beside the back, side and front wall joins, including both sides of the door.
+    for (const point of [[275, 363], [255, 480], [446, 380], [432, 430], [440, 480], [400, 495]] as const) {
+      expect(containsSourceLandmark(plan.floorSurfaces[1]!, point)).toBe(true);
+      expect(containsSourceLandmark(plan.foreground.map(({ polygon }) => polygon), point)).toBe(false);
+    }
+    // Preserve the open door leaf, timber frame, baseboard and front wall.
+    for (const point of [[445, 433], [456, 405], [455, 480], [250, 420], [350, 351], [350, 506]] as const) {
+      expect(containsSourceLandmark(plan.floorSurfaces[1]!, point)).toBe(false);
+    }
+    expect(containsSourceLandmark(plan.foreground.map(({ polygon }) => polygon), [350, 506])).toBe(true);
+  });
+
+  it.each([
+    { homeType: "MANSION", room: 2, floor: [[255, 565], [350, 562], [486, 620], [490, 650]], architecture: [[350, 543], [256, 541], [480, 575], [510, 614], [350, 664]] },
+    { homeType: "MANSION", room: 7, floor: [[1085, 612], [1100, 605], [1110, 532], [1250, 620]], architecture: [[1085, 563], [1070, 604], [1090, 640], [1248, 515]] },
+    { homeType: "PALACE", room: 0, floor: [[735, 398], [800, 398], [710, 390], [824, 390]], architecture: [[710, 398], [824, 398]] },
+    { homeType: "MARSHMALLOWOPOLIS", room: 0, floor: [[735, 398], [800, 398], [710, 390], [824, 390]], architecture: [[710, 398], [824, 398]] },
+  ] as const)("traces $homeType room $room finishes around source-art doors, lamps and post caps", ({ homeType, room, floor, architecture }) => {
+    const plan = HOME_ART_PLANS[homeType];
+    for (const point of floor) {
+      expect(containsSourceLandmark(plan.floorSurfaces[room]!, point)).toBe(true);
+      expect(containsSourceLandmark(plan.foreground.map(({ polygon }) => polygon), point)).toBe(false);
+    }
+    for (const point of architecture) {
+      expect(containsSourceLandmark(plan.floorSurfaces[room]!, point)).toBe(false);
+    }
+  });
+
+  it.each([
+    { homeType: "MANSION", point: { x: 44.75, y: 32.25 } },
+    { homeType: "MANSION", point: { x: 75, y: 66 } },
+    { homeType: "PALACE", point: { x: 44.5, y: 25.25 } },
+    { homeType: "PALACE", point: { x: 14.75, y: 35.25 } },
+    { homeType: "MARSHMALLOWOPOLIS", point: { x: 26, y: 28.75 } },
+  ] as const)("keeps $homeType window and timber landmarks out of wall paint", ({ homeType, point }) => {
+    const masks = HOME_ART_PLANS[homeType].paint.flat();
+    expect(masks.some((polygon) => isPointInHomePolygon(point, polygon.map(([x, y]) => ({ x, y }))))).toBe(false);
+  });
+
   it("preserves furniture proportions across differently sized authored rooms", () => {
     for (const homeType of HomeTypes) {
       for (const room of getHomeRooms(homeType)) {
         const image = getHomeFurnitureGeometry(piece,{...placement,room:room.id},homeType).image;
         expect(image.width * room.width / 100).toBeCloseTo(piece.width);
-        expect(image.height * room.height / 100).toBeCloseTo(piece.width);
+        expect(image.height * room.height / 100).toBeCloseTo(piece.width * (HOME_ART_PLANS[homeType].aspectRatio ?? 4 / 3) / (4 / 3));
       }
     }
   });
@@ -139,3 +170,12 @@ describe("painted home properties", () => {
     }
   });
 });
+
+/** Check a 1536x1024 artwork pixel against percentage contours, including concave masks. */
+const containsSourceLandmark = (polygons: readonly (readonly (readonly [number, number])[])[], [x, y]: readonly [number, number]) => {
+  const point = { x: x * 100 / 1536, y: y * 100 / 1024 };
+  return polygons.some((polygon) => {
+    const contour = polygon.map(([x, y]) => new Vector2(x, y));
+    return ShapeUtils.triangulateShape(contour, []).some((indices) => isPointInHomePolygon(point, indices.map((index) => contour[index]!)));
+  });
+};

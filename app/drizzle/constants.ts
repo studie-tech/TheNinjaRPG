@@ -3151,9 +3151,7 @@ export const HomeTypes = [
   "ONE_BED_APARTMENT",
   "TWO_BED_HOUSE",
   "TOWN_HOUSE",
-  "SMALL_MANSION",
-  "SMALL_ESTATE",
-  "LARGE_ESTATE",
+  "MANSION",
   "PALACE",
   "MARSHMALLOWOPOLIS",
 ] as const;
@@ -3170,9 +3168,7 @@ export const HomeTypeDetails = {
   },
   TWO_BED_HOUSE: { regen: 70, storage: 35, cost: 20000000, name: "Two Bedroom House" },
   TOWN_HOUSE: { regen: 100, storage: 40, cost: 35000000, name: "Town House" },
-  SMALL_MANSION: { regen: 130, storage: 45, cost: 45000000, name: "Small Mansion" },
-  SMALL_ESTATE: { regen: 150, storage: 50, cost: 60000000, name: "Small Estate" },
-  LARGE_ESTATE: { regen: 200, storage: 60, cost: 100000000, name: "Large Estate" },
+  MANSION: { regen: 200, storage: 60, cost: 100000000, name: "Mansion" },
   PALACE: { regen: 300, storage: 80, cost: 300000000, name: "Palace" },
   MARSHMALLOWOPOLIS: {
     regen: 400,
@@ -3241,30 +3237,20 @@ export const IMG_HOME_PROPERTIES = {
     dessert: "https://ui0arpl8sm.ufs.sh/f/G4fWN1hShhXwwjr4iifNc.webp",
     snow: "https://ui0arpl8sm.ufs.sh/f/yB-Q_45IMvxLjRM_G4Xzl.webp",
   },
-  SMALL_MANSION: {
-    ground: "https://ui0arpl8sm.ufs.sh/f/IzzdPoXFWbhr5Kwg2MWCo.webp",
-    dessert: "https://ui0arpl8sm.ufs.sh/f/zbCwVuibq8VPxINCVYWlY.webp",
-    snow: "https://ui0arpl8sm.ufs.sh/f/kmHN7Jt5YV-emX-0E6uC_.webp",
-  },
-  SMALL_ESTATE: {
-    ground: "https://ui0arpl8sm.ufs.sh/f/ruVUTcpbZKHMdIwUIhGk8.webp",
-    dessert: "https://ui0arpl8sm.ufs.sh/f/rBSqH3cgAVK1IA0vAq-Su.webp",
-    snow: "https://ui0arpl8sm.ufs.sh/f/Ro4zck4yoK7raUfQRDgBs.webp",
-  },
-  LARGE_ESTATE: {
-    ground: "https://ui0arpl8sm.ufs.sh/f/xeRcJI_5_jV_o5HPq2pMM.webp",
-    dessert: "https://ui0arpl8sm.ufs.sh/f/dQVI9UEdFTQisptYrVkOU.webp",
-    snow: "https://ui0arpl8sm.ufs.sh/f/d6twNfrmQTkVgrimWiixL.webp",
+  MANSION: {
+    ground: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHezDBLQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    dessert: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHezDBLQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    snow: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHezDBLQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
   },
   PALACE: {
-    ground: "https://ui0arpl8sm.ufs.sh/f/NCwEPLcUquXAl9I7UsCw9.webp",
-    dessert: "https://ui0arpl8sm.ufs.sh/f/18xWm4l4TnfWF3DdCfzRt.webp",
-    snow: "https://ui0arpl8sm.ufs.sh/f/DwwMWzYaDMSaEl7pJ1a54.webp",
+    ground: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    dessert: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    snow: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
   },
   MARSHMALLOWOPOLIS: {
-    ground: "https://ui0arpl8sm.ufs.sh/f/mHgkezr9HvQYRaB6ozWT8.webp",
-    dessert: "https://ui0arpl8sm.ufs.sh/f/6pPTckK4b4V386uNILYEW.webp",
-    snow: "https://ui0arpl8sm.ufs.sh/f/mrRYdYfkt8sfPbOv17xa0.webp",
+    ground: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    dessert: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    snow: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
   },
 } as const satisfies Record<HomeType, Record<"ground" | "dessert" | "snow", string>>;
 /** Original retains the authored floor; other finishes use measured room surface masks. */

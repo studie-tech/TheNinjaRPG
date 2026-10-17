@@ -45,6 +45,7 @@ import {
   type HomeRoomId,
   zoomHomeCamera,
 } from "@/libs/homeProperty";
+import { HOME_ART_PLANS } from "@/libs/homeRoomGeometry";
 import { cn } from "@/libs/shadui";
 import { bunnyImageUrl } from "@/utils/image";
 import { clamp } from "@/utils/math";
@@ -414,10 +415,11 @@ export const HomeScene = ({
       <fieldset
         ref={sceneRef}
         aria-label="Home scene"
+        style={{ aspectRatio: HOME_ART_PLANS[homeType].aspectRatio ?? 4 / 3 }}
         // biome-ignore lint/a11y/noNoninteractiveTabindex: The scene supports keyboard camera panning.
         tabIndex={0}
         className={cn(
-          "relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-stone-700/40 bg-[#24211c] shadow-md",
+          "relative w-full overflow-hidden rounded-lg border border-stone-700/40 bg-[#24211c] shadow-md",
           "touch-none outline-none focus-visible:ring-2 focus-visible:ring-primary",
         )}
         onKeyDown={(event) => {

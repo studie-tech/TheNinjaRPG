@@ -126,14 +126,14 @@ describeWithDatabase("owned furniture persistence", () => {
   });
 
   it.each([
-    { homeType: "LARGE_ESTATE", room: "room-7" },
+    { homeType: "MANSION", room: "room-7" },
     { homeType: "PALACE", room: "room-8" },
     { homeType: "MARSHMALLOWOPOLIS", room: "room-9" },
   ] as const)("persists furniture in the highest room of $homeType", async ({ homeType, room }) => {
     const db = await getTestDatabase();
     await db.update(userData).set({ homeType }).where(eq(userData.userId, userId));
     const api = await callerFor(homeRouter, userId);
-    const placements: HomePlacement[] = [...essentialLayout, { id: "cabinet-a", x: 50, y: 50, rotation: 0, room }];
+    const placements: HomePlacement[] = [...essentialLayout, { id: "cabinet-a", x: 50, y: 50, rotation: 2, room }];
     expect((await api.saveFurnitureLayout({ homeType, revision: 0, placements })).success).toBe(true);
     expectLayout((await api.getUserHome())?.layout, placements);
     expect((await snapshot()).inventory.find(({ id }) => id === "cabinet-a")).toMatchObject({ homeRoom: room, homeX: 50, homeY: 50 });
@@ -382,10 +382,15 @@ describeWithDatabase("owned furniture persistence", () => {
     expect(after.owner.homeFurnitureRevision).toBe(0);
   });
 
-  it.each([{}, { isInAuction: true }, { craftingFinishedAt: new Date(Date.now() + 60_000) }])("counts stored unavailable furniture against capacity without storing a carried piece %j", async (unavailable) => {
+  // Build crafting deadlines per case so time spent in earlier tests cannot expire the lock.
+  it.each([
+    { state: "available", patch: () => ({}) },
+    { state: "auction", patch: () => ({ isInAuction: true }) },
+    { state: "crafting", patch: () => ({ craftingFinishedAt: new Date(Date.now() + 60_000) }) },
+  ])("counts stored $state furniture against capacity without storing a carried piece", async ({ patch }) => {
     const db = await getTestDatabase();
     await db.update(userData).set({ homeType: "TOWN_HOUSE" }).where(eq(userData.userId, userId));
-    await insertUserItems(Array.from({ length: HOME_FURNITURE_STORAGE_CAPACITY - 6 }, (_, i) => ({ id: `stored-${i}`, userId, itemId: "rug", storedAtHome: true, ...(i === 0 ? unavailable : {}) })));
+    await insertUserItems(Array.from({ length: HOME_FURNITURE_STORAGE_CAPACITY - 6 }, (_, i) => ({ id: `stored-${i}`, userId, itemId: "rug", storedAtHome: true, ...(i === 0 ? patch() : {}) })));
     await insertUserItems([{ id: "carried-extra", userId, itemId: "rug", storedAtHome: false, homeRoom: "room-1", homeX: 50, homeY: 50 }]);
     const before = await snapshot();
     const api = await callerFor(homeRouter, userId);
@@ -426,10 +431,12 @@ describeWithDatabase("owned furniture persistence", () => {
   });
 
   it.each([
-    { isInAuction: true }, { craftingFinishedAt: new Date(Date.now() + 60_000) }, { quantity: 0 },
-  ])("does not replace an unavailable action with free furniture %j", async (patch) => {
+    { state: "auction", patch: () => ({ isInAuction: true }) },
+    { state: "crafting", patch: () => ({ craftingFinishedAt: new Date(Date.now() + 60_000) }) },
+    { state: "empty stack", patch: () => ({ quantity: 0 }) },
+  ])("does not replace an unavailable $state action with free furniture", async ({ patch }) => {
     const database = await getTestDatabase();
-    await database.update(userItem).set(patch).where(eq(userItem.id, "kitchen-row"));
+    await database.update(userItem).set(patch()).where(eq(userItem.id, "kitchen-row"));
     const before = await snapshot();
     const api = await callerFor(homeRouter, userId);
     const read = await recordQueries(() => api.getUserHome());
@@ -741,10 +748,12 @@ describeWithDatabase("owned furniture persistence", () => {
   });
 
   it.each([
-    { isInAuction: true }, { craftingFinishedAt: new Date(Date.now() + 60_000) }, { quantity: 0 },
-  ])("excludes inaccessible ownership %j from reads and saves", async (patch) => {
+    { state: "auction", patch: () => ({ isInAuction: true }) },
+    { state: "crafting", patch: () => ({ craftingFinishedAt: new Date(Date.now() + 60_000) }) },
+    { state: "empty stack", patch: () => ({ quantity: 0 }) },
+  ])("excludes inaccessible $state ownership from reads and saves", async ({ patch }) => {
     const database = await getTestDatabase();
-    await database.update(userItem).set(patch).where(eq(userItem.id, "cabinet-a"));
+    await database.update(userItem).set(patch()).where(eq(userItem.id, "cabinet-a"));
     const api = await callerFor(homeRouter, userId);
     const home = await api.getUserHome();
     expect(home?.furniture.some(({ id }) => id === "cabinet-a")).toBe(false);
