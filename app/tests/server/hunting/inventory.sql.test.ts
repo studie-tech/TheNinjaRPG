@@ -9,9 +9,12 @@ import {
   huntingReceipt,
   huntingSession,
   item,
+  itemLoadout,
+  itemVariant,
   sectorMap,
   userData,
   userItem,
+  userItemVariant,
 } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
@@ -20,8 +23,10 @@ import { Pusher, type PusherClient } from "@/libs/pusher";
 import { huntingRouter } from "@/routers/hunting";
 import { itemRouter } from "@/routers/item";
 import type { DrizzleClient } from "@/server/db";
+import { getTagSchema, IncreaseReskinSlots, UnlockItemVariantTag } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
 import { huntingHabitatContent, huntingMap } from "../../setup/hunting";
+import { beforeStatements } from "../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -140,7 +145,8 @@ describeWithDatabase("Hunting inventory admission", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await resetTables(
       aiProfile, battle, battleHistory, huntingHabitat, huntingProgress,
-      huntingReceipt, huntingSession, item, sectorMap, userData, userItem,
+      huntingReceipt, huntingSession, item, itemLoadout, itemVariant, sectorMap,
+      userData, userItem, userItemVariant,
     );
     await insertUsers([
       { userId: "hunter", username: "Hunter", occupation: "HUNTER", status: "AWAKE", huntingExperience: 123, sector: 1, rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0 },
@@ -150,6 +156,7 @@ describeWithDatabase("Hunting inventory admission", () => {
       { id: "hide", canBeHunted: true },
       { id: "tusk", canBeHunted: true },
       { id: "potion", itemType: "CONSUMABLE", canStack: true, stackSize: 10, slot: "ITEM" },
+      { id: "spare", itemType: "CONSUMABLE", canStack: true, stackSize: 10, slot: "ITEM" },
     ]);
     const db = await getTestDatabase();
     await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
@@ -290,5 +297,125 @@ describeWithDatabase("Hunting inventory admission", () => {
     expect((await hunter.start({ id })).success).toBe(true);
     await settle(db);
     expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "worn") })).toMatchObject({ quantity: 3, durability: 80 });
+  });
+
+  const inventoryActions = [
+    "sell", "unequip", "toggle", "replace",
+    "empty-loadout", "replacement-loadout", "same-loadout",
+  ] as const;
+  const changeInventory = (db: DrizzleClient, action: (typeof inventoryActions)[number]) => {
+    const inventory = callerForDatabase(itemRouter, "hunter", db);
+    switch (action) {
+      case "sell": return inventory.sellUserItem({ userItemId: "worn" });
+      case "unequip": return inventory.unequipAllItems();
+      case "toggle": return inventory.toggleEquip({ userItemId: "worn" });
+      case "replace": return inventory.toggleEquip({ userItemId: "spare", slot: "ITEM_1" });
+      case "empty-loadout": return inventory.selectItemLoadout({ id: "empty" });
+      case "replacement-loadout": return inventory.selectItemLoadout({ id: "replacement" });
+      case "same-loadout": return inventory.selectItemLoadout({ id: "current" });
+    }
+  };
+
+  it.each(
+    inventoryActions.flatMap((action) =>
+      [false, true].map((stale) => [action, stale] as const),
+    ),
+  )("preserves hunting inventory for %s (admission during deadlock retry: %s)", async (action, staleRequest) => {
+    await insertUserItems([
+      { id: "worn", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1" },
+      { id: "spare", itemId: "spare", userId: "hunter", quantity: 2 },
+    ]);
+    const { db, hunter, id } = await prepare();
+    await db.insert(itemLoadout).values([
+      { id: "current", userId: "hunter", itemData: [{ userItemId: "worn", itemId: "potion", slot: "ITEM_1" }] },
+      { id: "empty", userId: "hunter", itemData: [] },
+      { id: "replacement", userId: "hunter", itemData: [{ userItemId: "spare", itemId: "spare", slot: "ITEM_1" }] },
+    ]);
+    await db.update(userData).set({ itemLoadout: "current", staffAccount: true }).where(eq(userData.userId, "hunter"));
+    const before = await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") });
+    if (!before) throw Error("Missing hunter");
+    let admission: Promise<unknown> | undefined;
+    const start = () => admission ??= hunter.start({ id }).then((saved) => {
+      expect(saved.success).toBe(true);
+    });
+    if (!staleRequest) await start();
+    const client = staleRequest
+      ? beforeStatements(db, userItem, [
+          async () => { throw Error("Deadlock found when trying to get lock"); },
+          start,
+          start,
+        ])
+      : db;
+    expect(await changeInventory(client, action)).toMatchObject({
+      success: false,
+      message: expect.stringContaining("hunting battle"),
+    });
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "worn") })).toMatchObject({ quantity: 3, equipped: "ITEM_1" });
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "spare") })).toMatchObject({ quantity: 2, equipped: "NONE" });
+    expect(await db.query.itemLoadout.findFirst({ where: eq(itemLoadout.id, "current") })).toMatchObject({ itemData: [{ userItemId: "worn", itemId: "potion", slot: "ITEM_1" }] });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") })).toMatchObject({ money: before.money, itemLoadout: "current" });
+    expect((await callerForDatabase(itemRouter, "hunter", db).splitStack({ userItemId: "worn", quantityToKeep: 1 })).success).toBe(false);
+    await settle(db);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") })).toMatchObject({ status: "AWAKE", huntingExperience: 173 });
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "worn") })).toMatchObject({ quantity: 3, equipped: "ITEM_1" });
+    expect((await changeInventory(db, action)).success).toBe(true);
+  });
+
+  it("rejects ordinary item consumption after hunting wins admission", async () => {
+    const { db, hunter, id } = await prepare();
+    const before = await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") });
+    await db.update(item).set({ effects: [IncreaseReskinSlots.parse({ power: 1 })] }).where(eq(item.id, "potion"));
+    await insertUserItems([{ id: "worn", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1" }]);
+    const client = beforeStatements(db, userItem, [async () => {
+      expect((await hunter.start({ id })).success).toBe(true);
+    }]);
+    expect(await callerForDatabase(itemRouter, "hunter", client).consume({ userItemId: "worn" })).toMatchObject({ success: false, message: "Item no longer available — please refresh and try again" });
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "worn") })).toMatchObject({ quantity: 3 });
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") }))?.extraReskinSlots).toBe(before?.extraReskinSlots);
+    await settle(db);
+  });
+
+  it.each([1, 3])("rejects stale variant consumption after admission (quantity: %s)", async (quantity) => {
+    const { db, hunter, id } = await prepare();
+    await db.update(item).set({ effects: [UnlockItemVariantTag.parse({})] }).where(eq(item.id, "potion"));
+    await insertUserItems([
+      { id: "worn", itemId: "potion", userId: "hunter", quantity, equipped: "ITEM_1" },
+      { id: "owned-spare", itemId: "spare", userId: "hunter" },
+    ]);
+    await db.insert(itemVariant).values({ id: "variant", itemId: "spare", name: "Variant", image: "/variant.png", costType: "VARIANT_TOKEN" });
+    const client = beforeStatements(db, userItem, [async () => {
+      expect((await hunter.start({ id })).success).toBe(true);
+    }]);
+    expect((await callerForDatabase(itemRouter, "hunter", client).consumeVariantToken({ tokenUserItemId: "worn", variantId: "variant" })).success).toBe(false);
+    expect(await db.query.userItemVariant.findMany()).toHaveLength(0);
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "worn") })).toMatchObject({ quantity });
+    await settle(db);
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "worn") })).toMatchObject({ quantity });
+    expect((await callerForDatabase(itemRouter, "hunter", db).consumeVariantToken({ tokenUserItemId: "worn", variantId: "variant" })).success).toBe(true);
+  });
+
+  it.each([
+    ["single", "target"], ["single", "kit"],
+    ["all", "target"], ["all", "kit"],
+  ] as const)("rejects stale %s repair after admission before the %s write", async (method, phase) => {
+    const { db, hunter, id } = await prepare();
+    await insertItems([{ id: "kit", name: "Repair kit", itemType: "CONSUMABLE", slot: "ITEM", destroyOnUse: true, maxDurability: 100, effects: [getTagSchema("repair").parse({ power: 100 })] }]);
+    await db.update(item).set({ maxDurability: 100 }).where(eq(item.id, "potion"));
+    await insertUserItems([
+      { id: "worn", itemId: "potion", userId: "hunter", quantity: 3, equipped: "ITEM_1", durability: 20 },
+      { id: "kit", itemId: "kit", userId: "hunter", equipped: "ITEM_2" },
+    ]);
+    const start = async () => { expect((await hunter.start({ id })).success).toBe(true); };
+    const client = beforeStatements(db, userItem, phase === "target" ? [start] : [async () => {}, start]);
+    const inventory = callerForDatabase(itemRouter, "hunter", client);
+    const repaired = method === "single"
+      ? await inventory.useRepairItem({ repairItemId: "kit", targetItemId: "worn" })
+      : await inventory.useRepairAll();
+    expect(repaired.success).toBe(false);
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "kit") })).toMatchObject({ quantity: 1 });
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "worn") })).toMatchObject({ durability: 20 });
+    await settle(db);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") }))?.status).toBe("AWAKE");
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "kit") })).toMatchObject({ quantity: 1 });
   });
 });
