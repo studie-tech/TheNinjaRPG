@@ -3175,7 +3175,15 @@ export const itemRouter = createTRPCRouter({
               ? [
                   refundUserItemQuantityAtomically({
                     client: ctx.drizzle,
-                    itemSnapshot: result.repairKitRow,
+                    // Admission may have captured the decremented stack. Refund separately
+                    // so settlement cannot overwrite it or recreate an occupied equipped slot.
+                    itemSnapshot: {
+                      ...result.repairKitRow,
+                      id: nanoid(),
+                      equipped: "NONE",
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    },
                     quantity: result.quantityConsumed,
                   }),
                 ]

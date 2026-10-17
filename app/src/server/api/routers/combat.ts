@@ -3641,6 +3641,7 @@ export const initiateBattle = async (
                           and(
                             eq(userItem.id, snapshot.id),
                             eq(userItem.userId, userData.userId),
+                            eq(userItem.isInAuction, false),
                             eq(userItem.equipped, snapshot.equipped),
                             eq(userItem.quantity, snapshot.quantity),
                             eq(userItem.durability, snapshot.durability),
