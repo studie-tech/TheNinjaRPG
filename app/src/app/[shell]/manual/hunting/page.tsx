@@ -19,6 +19,7 @@ import {
   huntingHabitatSchema,
 } from "@/validators/hunting";
 
+/** Author habitats and contract rules through permission-checked hunting procedures. */
 export default function HuntingEditor() {
   const { data: user } = useUserData();
   const allowed = !!user && canChangeContent(user.role);
@@ -52,8 +53,10 @@ export default function HuntingEditor() {
     onError: (e) => setMessage(e.message),
   });
   const pending = save.isPending || remove.isPending;
+  /** Merge into the latest draft so rapid field edits preserve each other's values. */
   const patch = (values: Partial<HuntingHabitatContent>) =>
     setContent((c) => ({ ...c, ...values }));
+  /** Edit one contract without replacing sibling drafts or their stable IDs. */
   const edit = (index: number, values: Partial<HuntingContract>) =>
     setContent((c) => ({
       ...c,
@@ -61,6 +64,7 @@ export default function HuntingEditor() {
         i === index ? { ...contract, ...values } : contract,
       ),
     }));
+  /** Validate unfinished numeric input and cross-field rules before sending a staff mutation. */
   const submit = () => {
     if (!validateNumberInputs(form.current)) return;
     const parsed = huntingHabitatSchema.safeParse(content);
@@ -376,6 +380,7 @@ export default function HuntingEditor() {
     </ContentBox>
   );
 }
+/** Associate each visible field caption with its nested control. */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <Label className="block space-y-1">
@@ -384,6 +389,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </Label>
   );
 }
+/** Preserve comma-separated edits while replacing the draft on selection or reset. */
 function SectorInput({
   values,
   onChange,
@@ -408,9 +414,11 @@ function SectorInput({
     />
   );
 }
+/** Begin an empty, disabled habitat draft for staff to populate. */
 function newHabitat(): HuntingHabitatContent {
   return { name: "", description: "", enabled: false, sectors: [], contracts: [] };
 }
+/** Give a draft a stable ID and the habitat's sectors; require staff to choose its AI/material. */
 function newContract(sectors: number[]): HuntingContract {
   return {
     id: nanoid(),

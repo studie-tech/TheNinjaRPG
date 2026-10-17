@@ -125,6 +125,7 @@ const isRaidBossDefeated = (battle: CompleteBattle) =>
 /**
  * Claim the battle version; return cleanup to run alongside independent reward writes.
  * A terminal event claim also commits its match outcome before recovery can observe deletion.
+ * Personal hunts settle rewards and recovery inside their version claim; ordinary callers skip them.
  * Battle-length analytics select an opposing non-summon combatant.
  */
 export const updateBattle = async (
@@ -1460,8 +1461,8 @@ export const updateRaidProgress = async (
 /**
  * Single-statement battle XP grant shared by jutsu and item ownership leveling:
  * rows at/over the level-up threshold gain a level and reset XP to 0, all other
- * rows gain `gain` XP. One atomic UPDATE per table — PlanetScale has no
- * transactions, and two separate guarded statements would race each other.
+ * rows gain `gain` XP. One atomic UPDATE per table prevents separate level and
+ * XP writes from racing each other.
  * MySQL applies SET assignments left to right, so `level` must be assigned
  * before `experience` to read the pre-update XP value.
  */
@@ -1478,7 +1479,9 @@ const xpGainOrLevelUpSet = (
 };
 
 /**
- * Update the user with battle result using raw queries for speed
+ * Persist player recovery and progression from the preloaded combat result.
+ * Hunting calls may set settlingHunt only inside settleHuntingBattle's transaction;
+ * ordinary action/poll callbacks skip those rewards to prevent a second settlement.
  */
 export const updateUser = async (
   client: DrizzleClient,
@@ -2047,6 +2050,7 @@ export const updateUser = async (
         : []),
     ];
     if (settlingHunt) {
+      // The HTTP driver shares one transaction session; await each factory before starting the next.
       for (const write of settlementWrites) await write();
       if (!userSettlementCommitted || !itemSettlementCommitted)
         throw new Error("Hunting character or inventory changed during settlement");

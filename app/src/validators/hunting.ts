@@ -5,12 +5,15 @@ import {
   MAP_SECTOR_ID_MIN,
 } from "@/drizzle/constants";
 
+/** Sector IDs stay within the world map; published-map reachability is checked server-side. */
 const sectorSchema = z.number().int().min(MAP_SECTOR_ID_MIN).max(MAP_SECTOR_ID_MAX);
+/** A 100% drop is guaranteed; lower chances are rolled once per victorious encounter. */
 export const huntingRewardSchema = z.object({
   itemId: z.string().min(1),
   quantity: z.number().int().min(1).max(1000),
   chance: z.number().min(0.01).max(100),
 });
+/** Authored target, allowance and rewards; every contract guarantees at least one material. */
 export const huntingContractSchema = z
   .object({
     id: z.string().min(1).max(191),
@@ -30,6 +33,7 @@ export const huntingContractSchema = z
     message: "Every contract needs at least one guaranteed material.",
     path: ["rewards"],
   });
+/** Keep contract IDs unique within a habitat and encounter sectors inside its region. */
 export const huntingHabitatSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -56,16 +60,20 @@ export const huntingHabitatSchema = z
         });
     });
   });
+/** An omitted ID creates a habitat; an existing ID updates the same authored definition. */
 export const saveHuntingHabitatSchema = z.object({
   id: z.string().optional(),
   content: huntingHabitatSchema,
 });
+/** Identify the habitat or personal session addressed by its procedure. */
 export const huntingIdSchema = z.object({ id: z.string().min(1) });
+/** A null version creates a session; an existing version guards contract switching. */
 export const acceptHuntingContractSchema = z.object({
   habitatId: z.string().min(1),
   contractId: z.string().min(1),
   version: z.number().int().nullable(),
 });
+/** Both preparation and finish must claim the exact session version displayed to the player. */
 export const huntingSessionActionSchema = z.object({
   id: z.string().min(1),
   version: z.number().int(),
@@ -73,6 +81,7 @@ export const huntingSessionActionSchema = z.object({
 });
 export type HuntingHabitatContent = z.infer<typeof huntingHabitatSchema>;
 export type HuntingContract = z.infer<typeof huntingContractSchema>;
+/** Committed encounter outcome shared by the persisted session and combat result screen. */
 export type HuntingReceipt = {
   battleId: string;
   outcome: "Won" | "Lost" | "Draw" | "Fled";

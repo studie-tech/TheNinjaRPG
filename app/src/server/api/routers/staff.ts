@@ -440,17 +440,13 @@ export const staffRouter = createTRPCRouter({
         // Drizzle has no joined UPDATE builder. Cancel the run and release its status
         // together; LEFT JOIN also recovers players without any Pyramid history.
         // Advance live snapshots so in-flight objectives or hunts cannot settle a cancelled battle.
-        hunt
-          ? retryOnDeadlock(() =>
-              ctx.drizzle.transaction(async (tx) => {
-                // Delete the bound fight and release its session together; old tabs then see no battle.
-                await tx.execute(
-                  sql`DELETE ${battle} FROM ${battle} INNER JOIN ${huntingSession} ON ${huntingSession.battleId} = ${battle.id} WHERE ${huntingSession.userId} = ${targetUser.userId}`,
-                );
-                await tx.execute(recoverySql);
-              }),
-            )
-          : ctx.drizzle.execute(recoverySql),
+        retryOnDeadlock(() => ctx.drizzle.execute(recoverySql)).then(async () => {
+          // Delete only the fight captured before recovery; a newly admitted fight must survive.
+          // Cleanup failure leaves a support-removable orphan. Old tabs may advance it, but
+          // its cancelled session/version guard rejects terminal settlement before any payout.
+          if (hunt?.battleId)
+            await ctx.drizzle.delete(battle).where(eq(battle.id, hunt.battleId));
+        }),
         // Clean up raid/clan/shrine battle queue
         ctx.drizzle
           .delete(mpvpBattleUser)

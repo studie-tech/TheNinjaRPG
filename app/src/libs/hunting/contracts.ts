@@ -5,6 +5,7 @@ import type {
   HuntingReceipt,
 } from "@/validators/hunting";
 
+/** Read the remaining allowance; an expired cooldown replenishes it without a write. */
 export const huntingAllowance = (
   contract: HuntingContract,
   progress?: { used: number; cooldownUntil: Date | null },
@@ -14,13 +15,17 @@ export const huntingAllowance = (
   const used = progress?.cooldownUntil && !cooling ? 0 : (progress?.used ?? 0);
   return { used, cooling, remaining: Math.max(0, contract.hunts - used) };
 };
+/** Contracts use the Hunter occupation and hunting XP, independently of character rank. */
 export const huntingEligibility = (
   occupation: string | null,
   experience: number,
   contract: HuntingContract,
 ) => occupation === "HUNTER" && experience >= HUNTING_REQUIRED_EXP[contract.rank];
 
-/** Roll once before entering the retryable transaction so deadlock retries keep the same drops. */
+/**
+ * Build the persisted result from preloaded rules, preserving allowance on non-victories.
+ * Roll once before settlement so deadlock retries keep the same drops and cooldown.
+ */
 export const huntingVictoryReceipt = (
   meta: HuntingBattleState,
   battleId: string,

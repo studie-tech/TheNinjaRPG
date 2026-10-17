@@ -5,6 +5,7 @@ import ContentBox from "@/layout/ContentBox";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+/** Show the contract board and existing hunting progression only to Hunters. */
 export default function OccupationHunter() {
   const { data: user } = useRequiredUserData();
   if (user?.occupation !== "HUNTER") return null;

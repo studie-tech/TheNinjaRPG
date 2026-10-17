@@ -1673,6 +1673,7 @@ export const MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT = 0.01; // 0.01 reduction p
 export const MEDNIN_MIN_CHAKRA_FACTOR = 0.05; // Minimum chakra factor
 
 // Hunting config
+/** Staff-editor starting values; each saved contract supplies its own encounter rules. */
 export const HUNTING_CONTRACT_DEFAULTS = { preparationSeconds: 30, hunts: 3, cooldownSeconds: 3600, experience: 100 } as const;
 export const HUNTING_RANKS = [
   "NONE",

@@ -12,7 +12,12 @@ import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
-/** The battle claim, allowance, receipt, character recovery and all rewards commit together. */
+/**
+ * Claim and settle a personal encounter exactly once using only preloaded battle data.
+ * Inventory inserts, allowance, receipt and character recovery span different rows, so
+ * they must share a transaction: a single CAS cannot roll back a partial reward grant.
+ * The callback must run guarded player recovery on the supplied transaction client.
+ */
 export const settleHuntingBattle = async (
   client: DrizzleClient,
   current: CompleteBattle,
@@ -29,6 +34,7 @@ export const settleHuntingBattle = async (
   const receipt = huntingVictoryReceipt(meta, current.id, result.outcome);
   const committed = await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
+      // Recovery mutates trackers/results; each deadlock retry must start from the same snapshot.
       const playerBattle = structuredClone(current);
       const playerResult = structuredClone(result);
       const claim = await tx
@@ -102,6 +108,7 @@ export const settleHuntingBattle = async (
       return playerResult;
     }),
   );
+  // Publish recovery changes only after every guarded write has committed.
   if (committed) Object.assign(result, committed, { hunting: receipt });
   return !!committed;
 };

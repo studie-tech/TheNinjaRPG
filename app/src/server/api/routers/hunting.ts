@@ -27,7 +27,9 @@ import {
   saveHuntingHabitatSchema,
 } from "@/validators/hunting";
 
+/** Staff-authored definitions and version-guarded, personal hunting sessions. */
 export const huntingRouter = createTRPCRouter({
+  /** Load the visible board and session together; filter independent catalogs after parallel reads. */
   getBoard: protectedProcedure.query(async ({ ctx }) => {
     const [user, habitats, session, progress, materials, creatures] = await Promise.all(
       [
@@ -82,6 +84,7 @@ export const huntingRouter = createTRPCRouter({
       serverTime: new Date(),
     };
   }),
+  /** Return disabled and enabled definitions only to staff with content-edit permission. */
   getAll: protectedProcedure.query(async ({ ctx }) => {
     const user = await ctx.drizzle.query.userData.findFirst({
       where: eq(userData.userId, ctx.userId),
@@ -91,6 +94,7 @@ export const huntingRouter = createTRPCRouter({
       ? ctx.drizzle.query.huntingHabitat.findMany()
       : [];
   }),
+  /** Validate authored references and locations before publishing rules to future encounter starts. */
   save: protectedProcedure
     .use(ratelimitMiddleware)
     .input(saveHuntingHabitatSchema)
@@ -156,7 +160,9 @@ export const huntingRouter = createTRPCRouter({
         "Hunters are fighting in this habitat. Wait for those battles to finish before editing.",
       );
       const missing = new Error("Habitat not found. Refresh the editor.");
-      // Content and its audit log must describe the same successful edit.
+      // Rules and affected allowances must commit together: a reduced limit can exhaust
+      // progress with no cooldown, and an interleaved save must not apply superseded rules.
+      // One guarded UPDATE cannot also reconcile the separate progress rows.
       try {
         await retryOnDeadlock(() =>
           ctx.drizzle.transaction(async (tx) => {
@@ -197,14 +203,6 @@ export const huntingRouter = createTRPCRouter({
                   ),
                 );
             }
-            await tx.insert(actionLog).values({
-              id: nanoid(),
-              userId: ctx.userId,
-              relatedId: id,
-              tableName: "huntingHabitat",
-              relatedMsg: "Updated hunting habitat",
-              changes: [JSON.stringify(input.content)],
-            });
           }),
         );
       } catch (error) {
@@ -212,8 +210,17 @@ export const huntingRouter = createTRPCRouter({
         if (error === missing) return errorResponse(missing.message);
         throw error;
       }
+      await ctx.drizzle.insert(actionLog).values({
+        id: nanoid(),
+        userId: ctx.userId,
+        relatedId: id,
+        tableName: "huntingHabitat",
+        relatedMsg: "Updated hunting habitat",
+        changes: [JSON.stringify(input.content)],
+      });
       return { success: true, message: "Habitat saved.", id };
     }),
+  /** Active sessions retain their habitat; staff can disable it instead of deleting it. */
   delete: protectedProcedure.input(huntingIdSchema).mutation(async ({ ctx, input }) => {
     const user = await ctx.drizzle.query.userData.findFirst({
       where: eq(userData.userId, ctx.userId),
@@ -241,6 +248,7 @@ export const huntingRouter = createTRPCRouter({
     });
     return { success: true, message: "Habitat deleted." };
   }),
+  /** Assign a reachable sector once; switching uses a session CAS and preserves per-contract usage. */
   accept: protectedProcedure
     .use(ratelimitMiddleware)
     .input(acceptHuntingContractSchema)
@@ -342,6 +350,7 @@ export const huntingRouter = createTRPCRouter({
         message: `Contract accepted. Travel to sector ${sector}.`,
       };
     }),
+  /** Prepare once or finish the exact displayed session, leaving its partial allowance intact. */
   sessionAction: protectedProcedure
     .input(huntingSessionActionSchema)
     .mutation(async ({ ctx, input }) => {
@@ -408,6 +417,7 @@ export const huntingRouter = createTRPCRouter({
         ? { success: true, message: "Preparation started." }
         : errorResponse("Your session changed.");
     }),
+  /** Revalidate current rules and preload combat data before the guarded encounter admission. */
   start: protectedProcedure
     .use(ratelimitMiddleware)
     .input(huntingIdSchema)

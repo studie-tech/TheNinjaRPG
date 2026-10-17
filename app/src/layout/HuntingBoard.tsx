@@ -14,7 +14,10 @@ import { huntingAllowance, huntingEligibility } from "@/libs/hunting/contracts";
 import { useUserData } from "@/utils/UserContext";
 import type { HuntingReceipt } from "@/validators/hunting";
 
-/** Shared board keeps switching contracts available directly on the combat result screen. */
+/**
+ * Browse and manage the same personal session from the occupation or combat result.
+ * Successful starts own profile/cache updates; onStarted clears an existing combat result.
+ */
 export function HuntingBoard({
   victory,
   onStarted,
@@ -36,6 +39,7 @@ export function HuntingBoard({
     refetchInterval: 5000,
     refetchOnMount: "always",
   });
+  /** Keep expected rejections beside the action and refetch authoritative state after success. */
   const refresh = async (result: { success: boolean; message: string }) => {
     setMessage(result.message);
     if (result.success)
@@ -53,6 +57,7 @@ export function HuntingBoard({
     onSuccess: async (result) => {
       setMessage(result.message);
       if (result.success && "battleId" in result && result.battleId) {
+        // Clear the previous result before publishing the new battle, as arena starts do.
         onStarted?.();
         await updateUser({
           status: "BATTLE",
@@ -408,6 +413,7 @@ export function HuntingBoard({
   );
 }
 
+/** Display already-settled rewards; rendering or refreshing never claims them again. */
 export function HuntingRewards({ receipt }: { receipt: HuntingReceipt }) {
   return (
     <section className="space-y-1 rounded border p-3" aria-label="Hunting result">

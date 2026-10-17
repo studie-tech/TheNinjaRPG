@@ -1986,6 +1986,7 @@ export const initiateBattle = async (
     client: DrizzleClient;
     /** Shared launch contract; each activity keeps its own progress and settlement policy. */
     coop?: CoopEncounter;
+    /** Current rules, guarded session versions and reward definitions preloaded for settlement. */
     hunting?: HuntingBattleState;
     userStatDistribution?: AssignableUserStats;
     targetStatDistribution?: AssignableUserStats;
@@ -3476,7 +3477,7 @@ export const initiateBattle = async (
   }
   /**
    * Persist the preloaded battle and return the participant claim and any settled failure.
-   * First payments and event launches share a transaction session, so await their writes in order.
+   * First payments, event launches and personal hunts await writes within their transaction session.
    * Other battles dispatch independent writes together and settle all siblings before cleanup.
    */
   const createBattle = async (client: DrizzleClient) => {
@@ -3936,6 +3937,9 @@ export const initiateBattle = async (
       throw error;
     }
   } else if (info.hunting) {
+    // The session reservation, battle/history inserts and guarded character claim must
+    // commit together. The character claim also settles queued training and recovery;
+    // a single CAS cannot cover those rows or undo them after a partial admission.
     const meta = info.hunting;
     const rejected = new Error("Hunting admission changed");
     try {

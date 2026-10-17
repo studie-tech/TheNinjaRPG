@@ -12,6 +12,7 @@ import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/
 
 describeWithDatabase("Atomic hunting settlement", () => {
   const pusher = { trigger: async () => {} } as unknown as PusherClient;
+  /** Exercise the production recovery callback inside the claimed settlement transaction. */
   const settlePlayer: Parameters<typeof settleHuntingBattle>[4] = (tx, current, result) =>
     updateUser(tx, pusher, current, result, "hunter", true);
   beforeEach(async () => {
