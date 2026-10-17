@@ -213,6 +213,30 @@ describeWithDatabase("staff user-id rename", () => {
     expect(await database.query.userPet.findMany({ where: eq(userPet.userId, OLD_USER_ID) })).toEqual([]);
   });
 
+  it("retains rename intent without moving ownership when the character claim fails, then retries", async () => {
+    const database = await getTestDatabase();
+    await database.insert(userPet).values({ id: "claim-companion", userId: OLD_USER_ID, name: "Companion", speciesId: "pet-species-0", paletteIndex: 0, characteristicIndex: 0, auraIndex: 0 });
+    await database.insert(title).values({ id: "claim-title", name: "Private title", legacyOwnerId: OLD_USER_ID });
+    await database.insert(userTitle).values({ userId: OLD_USER_ID, titleId: "claim-title" });
+    await database.insert(huntingSession).values({ userId: OLD_USER_ID, id: "hunt-session", habitatId: "forest", contractId: "boar", sector: 1, startedAt: new Date() });
+    await database.insert(huntingProgress).values({ userId: OLD_USER_ID, contractId: "boar", used: 1 });
+    await database.insert(huntingReceipt).values({ userId: OLD_USER_ID, battleId: "hunt", contractId: "boar", createdAt: new Date(), result: huntingVictoryReceipt(huntingBattleState(), "hunt", "Won") });
+    await expect(callerForDatabase(staffRouter, STAFF, failStatements(database, userData)).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).rejects.toThrow("Statement failed on purpose");
+    expect(await database.query.storeUserIdAlias.findFirst()).toMatchObject({ oldUserId: OLD_USER_ID, newUserId: NEW_USER_ID });
+    const ownership = [userData, userPet, userTitle, huntingSession, huntingProgress, huntingReceipt];
+    for (const table of ownership) {
+      expect(await database.select().from(table).where(eq(table.userId, OLD_USER_ID))).toHaveLength(1);
+      expect(await database.select().from(table).where(eq(table.userId, NEW_USER_ID))).toHaveLength(0);
+    }
+    expect((await database.query.title.findFirst())?.legacyOwnerId).toBe(OLD_USER_ID);
+    expect((await (await callerFor(staffRouter, STAFF)).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
+    for (const table of ownership) {
+      expect(await database.select().from(table).where(eq(table.userId, OLD_USER_ID))).toHaveLength(0);
+      expect(await database.select().from(table).where(eq(table.userId, NEW_USER_ID))).toHaveLength(1);
+    }
+    expect((await database.query.title.findFirst())?.legacyOwnerId).toBe(NEW_USER_ID);
+  });
+
   it("closes permanent offers before deleting their owner's inventory", async () => {
     const database = await getTestDatabase();
     await database.insert(auctionOffer).values({ id: "deleted-offer", ownerId: OLD_USER_ID, offerType: "REQUEST", requestedItemId: "ore", requestedQuantity: 10, ryo: 300 });

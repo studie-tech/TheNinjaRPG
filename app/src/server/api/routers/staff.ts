@@ -422,7 +422,17 @@ export const staffRouter = createTRPCRouter({
               ${questHistory.endAt} = ${new Date()},
               ${userData.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))
           WHERE ${userData.userId} = ${targetUser.userId}
+            AND ${userData.battleId} <=> ${targetUser.battleId}
+            AND ${huntingSession.id} <=> ${hunt?.id ?? null}
+            AND ${huntingSession.battleId} <=> ${hunt?.battleId ?? null}
+            AND ${huntingSession.version} <=> ${hunt?.version ?? null}
         `;
+      // Drizzle has no joined UPDATE builder. Cancel the captured run and release its
+      // status together, only while neither the character nor its hunt has changed.
+      // LEFT JOIN also recovers players without any Pyramid history or hunting session.
+      const recovered = await retryOnDeadlock(() => ctx.drizzle.execute(recoverySql));
+      if (recovered.rowsAffected === 0)
+        return errorResponse("The character's battle changed. Refresh and try again.");
       // Mutate - update status and clean up all queue entries
       await Promise.all([
         ctx.drizzle.insert(actionLog).values({
@@ -437,16 +447,12 @@ export const staffRouter = createTRPCRouter({
             `Cleared queue entries: mpvpBattleUser=${queueEntry ? "yes" : "no"}`,
           ],
         }),
-        // Drizzle has no joined UPDATE builder. Cancel the run and release its status
-        // together; LEFT JOIN also recovers players without any Pyramid history.
-        // Advance live snapshots so in-flight objectives or hunts cannot settle a cancelled battle.
-        retryOnDeadlock(() => ctx.drizzle.execute(recoverySql)).then(async () => {
-          // Delete only the fight captured before recovery; a newly admitted fight must survive.
-          // Cleanup failure leaves a support-removable orphan. Old tabs may advance it, but
-          // its cancelled session/version guard rejects terminal settlement before any payout.
-          if (hunt?.battleId)
-            await ctx.drizzle.delete(battle).where(eq(battle.id, hunt.battleId));
-        }),
+        // Delete only the fight captured before recovery; a newly admitted fight must survive.
+        // Cleanup failure leaves a support-removable orphan. Old tabs may advance it, but
+        // its cancelled session/version guard rejects terminal settlement before any payout.
+        ...(hunt?.battleId
+          ? [ctx.drizzle.delete(battle).where(eq(battle.id, hunt.battleId))]
+          : []),
         // Clean up raid/clan/shrine battle queue
         ctx.drizzle
           .delete(mpvpBattleUser)
@@ -897,9 +903,8 @@ export const staffRouter = createTRPCRouter({
       // running it again. Whoever writes that row first owns the identity, and it is read
       // back rather than assumed: a deletion that got in between the check above and this
       // write keeps its tombstone, and the rename stops here before moving anything.
-      // Everything else then moves in parallel, as it always has. A receipt that lands
-      // under the old id in between is re-homed by the ledger's own owner reconciliation,
-      // so nothing here holds a lock.
+      // A receipt that lands under the old id in between is re-homed by the ledger's
+      // own owner reconciliation, so nothing here holds a lock.
       await ctx.drizzle
         .insert(storeUserIdAlias)
         .values({
@@ -920,6 +925,27 @@ export const staffRouter = createTRPCRouter({
       }
       if (claim?.newUserId !== input.newUserId) {
         return { success: false, message: "UserId was already renamed to another id" };
+      }
+      if (!movedAlready) {
+        // Move the character first: admission either claimed its battle already, or
+        // can no longer claim the retired ID. Related ownership moves start only after
+        // this succeeds; the alias lets a retry finish any later partial failure.
+        const renamed = await retryOnDeadlock(() =>
+          ctx.drizzle
+            .update(userData)
+            .set({ userId: input.newUserId })
+            .where(
+              and(
+                eq(userData.userId, input.userId),
+                ne(userData.status, "BATTLE"),
+                isNull(userData.battleId),
+              ),
+            ),
+        );
+        if (renamed.rowsAffected !== 1)
+          return errorResponse(
+            "The character's battle changed. Finish any active battle and retry the userId change.",
+          );
       }
       const moves = await Promise.allSettled([
         renameParentalContact(ctx.drizzle, input.userId, input.newUserId),
@@ -1243,10 +1269,6 @@ export const staffRouter = createTRPCRouter({
             id: sql`CASE WHEN ${userRaidBuff.itemId} IS NOT NULL THEN ${`meal-${input.newUserId}`} ELSE ${userRaidBuff.id} END`,
           })
           .where(eq(userRaidBuff.userId, input.userId)),
-        ctx.drizzle
-          .update(userData)
-          .set({ userId: input.newUserId })
-          .where(eq(userData.userId, input.userId)),
       ]);
       // Answer only once every move has settled, so the retry a failure invites never
       // races moves still in flight.
