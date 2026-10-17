@@ -1,3 +1,4 @@
+import { huntingSession, huntingProgress } from "@/drizzle/schema";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, getTableName } from "drizzle-orm";
 import { actionLog, battle, mpvpBattleUser, quest, questHistory, rankedPvpQueue, userData } from "@/drizzle/schema";
@@ -14,7 +15,7 @@ import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, re
 describeWithDatabase("staff Pyramid recovery", () => {
   beforeEach(async () => {
     await runRawSql("DROP TRIGGER IF EXISTS staff_recovery_failure");
-    await resetTables(questHistory, quest, userData, actionLog, mpvpBattleUser, rankedPvpQueue, battle);
+    await resetTables(huntingSession, huntingProgress, questHistory, quest, userData, actionLog, mpvpBattleUser, rankedPvpQueue, battle);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await insertUsers([
       { userId: "hero", status: "BATTLE", battleId: null, regeneration: 10, curHealth: 100, maxHealth: 1000, updatedAt: new Date(Date.now() - 350_000), regenAt: new Date(Date.now() - 125_000) },
@@ -30,6 +31,15 @@ describeWithDatabase("staff Pyramid recovery", () => {
     await runRawSql("DROP TRIGGER IF EXISTS staff_recovery_failure");
     vi.restoreAllMocks();
     await resetTables(questHistory);
+  });
+
+  it("releases a hunting encounter while preserving preparation and partial allowance", async () => {
+    const database = await getTestDatabase();
+    await database.insert(huntingSession).values({ userId: "hero", id: "session", habitatId: "forest", contractId: "boar", sector: 1, battleId: "hunt", readyAt: new Date(0), startedAt: new Date() });
+    await database.insert(huntingProgress).values({ userId: "hero", contractId: "boar", used: 1 });
+    expect((await (await callerFor(staffRouter, "staff")).forceAwake({ userId: "hero", reason: "Recover a stranded hunter" })).success).toBe(true);
+    expect(await database.query.huntingSession.findFirst()).toMatchObject({ battleId: null, readyAt: new Date(0), version: 1 });
+    expect((await database.query.huntingProgress.findFirst())?.used).toBe(1);
   });
 
   for (const table of [userData, questHistory]) {

@@ -103,6 +103,16 @@ describeWithDatabase("staff user-id rename", () => {
     }
   });
 
+  it("rejects a character ID change during hunting combat", async () => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ status: "BATTLE", battleId: "hunt" }).where(eq(userData.userId, OLD_USER_ID));
+    await database.insert(huntingSession).values({ userId: OLD_USER_ID, id: "hunt-session", habitatId: "forest", contractId: "boar", sector: 1, battleId: "hunt", startedAt: new Date() });
+    const caller = await callerFor(staffRouter, STAFF);
+    expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(false);
+    expect((await database.query.huntingSession.findFirst())?.userId).toBe(OLD_USER_ID);
+    expect(await database.query.storeUserIdAlias.findFirst()).toBeUndefined();
+  });
+
   it("moves fixed-term offer ownership and acceptance when an account ID changes", async () => {
     const database = await getTestDatabase();
     await database.insert(auctionOffer).values({ id: "rename-offer", ownerId: OLD_USER_ID, accepterId: OLD_USER_ID, offerType: "REQUEST", requestedItemId: "ore", requestedQuantity: 10, ryo: 300 });

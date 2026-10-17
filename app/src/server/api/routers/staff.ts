@@ -419,7 +419,7 @@ export const staffRouter = createTRPCRouter({
         }),
         // Drizzle has no joined UPDATE builder. Cancel the run and release its status
         // together; LEFT JOIN also recovers players without any Pyramid history.
-        // Advance the live snapshot so in-flight objectives cannot restart the cancelled run.
+        // Advance live snapshots so in-flight objectives or hunts cannot settle a cancelled battle.
         ctx.drizzle.execute(sql`
           UPDATE ${userData}
           LEFT JOIN ${questHistory} ON ${and(
@@ -428,7 +428,9 @@ export const staffRouter = createTRPCRouter({
             eq(questHistory.completed, 0),
             isNull(questHistory.endAt),
           )}
+          LEFT JOIN ${huntingSession} ON ${huntingSession.userId} = ${userData.userId}
           SET ${userData.status} = 'AWAKE', ${userData.travelFinishAt} = NULL,
+              ${huntingSession.battleId} = NULL, ${huntingSession.version} = COALESCE(${huntingSession.version}, 0) + 1,
               ${userData.bracketImmunityLiftedUntil} = ${resumeBracketImmunitySql()}, ${userData.bracketImmunityPausedAt} = NULL, ${userData.battleId} = NULL, ${questHistory.completed} = 0,
               ${questHistory.endAt} = ${new Date()},
               ${userData.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))
@@ -874,6 +876,11 @@ export const staffRouter = createTRPCRouter({
       if (fromUser && fromUser.role !== "USER") {
         return { success: false, message: "Cannot change staff member's userId " };
       }
+      // Battles carry immutable participant identities and settlement ownership.
+      if (fromUser?.status === "BATTLE" || fromUser?.battleId)
+        return errorResponse(
+          "Finish the active battle before changing this character's userId.",
+        );
       // Mutate. The alias goes first, as durable intent: from here a store event naming the
       // old id resolves to the new one, and a rename that fails part-way is finished by
       // running it again. Whoever writes that row first owns the identity, and it is read
