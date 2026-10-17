@@ -68,23 +68,32 @@ describe("painted home properties", () => {
 
   it("finishes Mansion Room 2 to its wall joins without foreground restoring the floor", () => {
     const plan = HOME_ART_PLANS.MANSION;
-    const contains = (polygons: readonly (readonly (readonly [number, number])[])[], [x, y]: readonly [number, number]) => {
-      const point = { x: x * 100 / 1536, y: y * 100 / 1024 };
-      return polygons.some((polygon) => {
-        const contour = polygon.map(([x, y]) => new Vector2(x, y));
-        return ShapeUtils.triangulateShape(contour, []).some((indices) => isPointInHomePolygon(point, indices.map((index) => contour[index]!)));
-      });
-    };
     // Source-art landmarks beside the back, side and front wall joins, including both sides of the door.
     for (const point of [[275, 363], [255, 480], [446, 380], [432, 430], [440, 480], [400, 495]] as const) {
-      expect(contains(plan.floorSurfaces[1]!, point)).toBe(true);
-      expect(contains(plan.foreground.map(({ polygon }) => polygon), point)).toBe(false);
+      expect(containsSourceLandmark(plan.floorSurfaces[1]!, point)).toBe(true);
+      expect(containsSourceLandmark(plan.foreground.map(({ polygon }) => polygon), point)).toBe(false);
     }
     // Preserve the open door leaf, timber frame, baseboard and front wall.
     for (const point of [[445, 433], [456, 405], [455, 480], [250, 420], [350, 351], [350, 506]] as const) {
-      expect(contains(plan.floorSurfaces[1]!, point)).toBe(false);
+      expect(containsSourceLandmark(plan.floorSurfaces[1]!, point)).toBe(false);
     }
-    expect(contains(plan.foreground.map(({ polygon }) => polygon), [350, 506])).toBe(true);
+    expect(containsSourceLandmark(plan.foreground.map(({ polygon }) => polygon), [350, 506])).toBe(true);
+  });
+
+  it.each([
+    { homeType: "MANSION", room: 2, floor: [[255, 565], [350, 562], [486, 620], [490, 650]], architecture: [[350, 543], [256, 541], [480, 575], [510, 614], [350, 664]] },
+    { homeType: "MANSION", room: 7, floor: [[1085, 612], [1100, 605], [1110, 532], [1250, 620]], architecture: [[1085, 563], [1070, 604], [1090, 640], [1248, 515]] },
+    { homeType: "PALACE", room: 0, floor: [[735, 398], [800, 398], [710, 390], [824, 390]], architecture: [[710, 398], [824, 398]] },
+    { homeType: "MARSHMALLOWOPOLIS", room: 0, floor: [[735, 398], [800, 398], [710, 390], [824, 390]], architecture: [[710, 398], [824, 398]] },
+  ] as const)("traces $homeType room $room finishes around source-art doors, lamps and post caps", ({ homeType, room, floor, architecture }) => {
+    const plan = HOME_ART_PLANS[homeType];
+    for (const point of floor) {
+      expect(containsSourceLandmark(plan.floorSurfaces[room]!, point)).toBe(true);
+      expect(containsSourceLandmark(plan.foreground.map(({ polygon }) => polygon), point)).toBe(false);
+    }
+    for (const point of architecture) {
+      expect(containsSourceLandmark(plan.floorSurfaces[room]!, point)).toBe(false);
+    }
   });
 
   it.each([
@@ -161,3 +170,11 @@ describe("painted home properties", () => {
     }
   });
 });
+
+const containsSourceLandmark = (polygons: readonly (readonly (readonly [number, number])[])[], [x, y]: readonly [number, number]) => {
+  const point = { x: x * 100 / 1536, y: y * 100 / 1024 };
+  return polygons.some((polygon) => {
+    const contour = polygon.map(([x, y]) => new Vector2(x, y));
+    return ShapeUtils.triangulateShape(contour, []).some((indices) => isPointInHomePolygon(point, indices.map((index) => contour[index]!)));
+  });
+};
