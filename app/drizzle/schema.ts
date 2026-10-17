@@ -62,6 +62,44 @@ import type { ObjectiveWarState, WarRules, WarMissionAttempt, WarSettlement } fr
 import type { DungeonContent, DungeonRunState, DungeonRewardReceipt } from "@/validators/dungeon";
 import type { PetTask } from "@/validators/petTasks";
 
+import type { HuntingHabitatContent, HuntingReceipt } from "@/validators/hunting";
+
+/** Editable habitats and their creature contracts; sessions resolve the current rules at launch. */
+export const huntingHabitat = mysqlTable("HuntingHabitat", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  content: json("content").$type<HuntingHabitatContent>().notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull(),
+});
+/** One personal location and preparation timer per hunter, independent of contract allowances. */
+export const huntingSession = mysqlTable("HuntingSession", {
+  userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+  id: varchar("id", { length: 191 }).notNull(),
+  habitatId: varchar("habitatId", { length: 191 }).notNull(),
+  contractId: varchar("contractId", { length: 191 }).notNull(),
+  sector: smallint("sector").notNull(),
+  readyAt: datetime("readyAt", { mode: "date", fsp: 3 }),
+  battleId: varchar("battleId", { length: 191 }),
+  version: int("version").default(0).notNull(),
+  startedAt: datetime("startedAt", { mode: "date", fsp: 3 }).notNull(),
+  lastResult: json("lastResult").$type<HuntingReceipt>(),
+}, (t) => ({ habitat: index("HuntingSession_habitat_idx").on(t.habitatId) }));
+/** Partial allowances survive finishing, changing contracts and changing occupations. */
+export const huntingProgress = mysqlTable("HuntingProgress", {
+  userId: varchar("userId", { length: 191 }).notNull(),
+  contractId: varchar("contractId", { length: 191 }).notNull(),
+  used: int("used").default(0).notNull(),
+  cooldownUntil: datetime("cooldownUntil", { mode: "date", fsp: 3 }),
+  version: int("version").default(0).notNull(),
+}, (t) => ({ pk: primaryKey({columns: [t.userId, t.contractId]}) }));
+/** Battle-keyed receipts commit with allowance consumption and material delivery. */
+export const huntingReceipt = mysqlTable("HuntingReceipt", {
+  battleId: varchar("battleId", { length: 191 }).primaryKey().notNull(),
+  userId: varchar("userId", { length: 191 }).notNull(),
+  contractId: varchar("contractId", { length: 191 }).notNull(),
+  result: json("result").$type<HuntingReceipt>().notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
+}, (t) => ({ user: index("HuntingReceipt_user_idx").on(t.userId) }));
+
 /** Staff-authored definitions; each lobby captures its own immutable content snapshot. */
 export const dungeon = mysqlTable("Dungeon", {
   id: varchar("id", { length: 191 }).primaryKey().notNull(),

@@ -37,6 +37,7 @@ import {
   CombatStatNames,
   DUNGEON_PARTY_SIZE,
   ELEMENTAL_MASTERY_BOOST,
+  HUNTING_REQUIRED_EXP,
   KAGE_DEFENSE_GRACE_MINUTES,
   KAGE_MIN_DAYS_IN_VILLAGE,
   KAGE_PRESTIGE_REQUIREMENT,
@@ -73,6 +74,8 @@ import {
   dungeonRun,
   gameAsset,
   gameSetting,
+  huntingHabitat,
+  huntingSession,
   item,
   jutsu,
   kageDefendedChallenges,
@@ -287,6 +290,7 @@ import {
   performActionSchema,
   statSchema,
 } from "@/validators/combat";
+import type { HuntingBattleState } from "@/validators/hunting";
 import { sectorIdSchema } from "@/validators/travel";
 import { fetchUpdatedUser, fetchUser, type UserWithRelations } from "./profile";
 
@@ -437,7 +441,9 @@ export const combatRouter = createTRPCRouter({
               ...(history.length
                 ? [createAction(ctx.drizzle, settledBattle, history)]
                 : []),
-              ...(result && !settledBattle.extraState.dungeon
+              ...(result &&
+              !settledBattle.extraState.dungeon &&
+              !settledBattle.extraState.hunting
                 ? [
                     updateUser(ctx.drizzle, pusher, settledBattle, result, ctx.userId),
                     // Polling settlement pays the same faction counters as an action.
@@ -949,7 +955,7 @@ export const combatRouter = createTRPCRouter({
             const [logEntries, { updatedQuestIds }] = await Promise.all([
               createAction(db, newBattle, history),
               updateUser(db, pusher, newBattle, result, suid),
-              ...(!newBattle.extraState.dungeon
+              ...(!newBattle.extraState.dungeon && !newBattle.extraState.hunting
                 ? [
                     saveUsage(db, newBattle, result, suid),
                     updateKage(db, newBattle, result),
@@ -1980,6 +1986,7 @@ export const initiateBattle = async (
     client: DrizzleClient;
     /** Shared launch contract; each activity keeps its own progress and settlement policy. */
     coop?: CoopEncounter;
+    hunting?: HuntingBattleState;
     userStatDistribution?: AssignableUserStats;
     targetStatDistribution?: AssignableUserStats;
     scaleTarget?: boolean;
@@ -3499,6 +3506,7 @@ export const initiateBattle = async (
           dmgConfig: dmgConfig,
           settings: settings,
           initialDurability: initialDurability,
+          hunting: info.hunting,
           questBattleSource: info.questBattleSource,
           warCamp: info.warCamp,
           raidQuestId: info.raidQuestId,
@@ -3598,6 +3606,18 @@ export const initiateBattle = async (
                       ),
                     ),
                   )
+              : []),
+            ...(info.hunting
+              ? [
+                  eq(userData.status, "AWAKE"),
+                  isNull(userData.battleId),
+                  eq(userData.occupation, "HUNTER"),
+                  eq(userData.sector, sector ?? -1),
+                  gte(
+                    userData.huntingExperience,
+                    HUNTING_REQUIRED_EXP[info.hunting.contract.rank],
+                  ),
+                ]
               : []),
             ...(info.tournamentGame
               ? [
@@ -3803,7 +3823,7 @@ export const initiateBattle = async (
           ]
         : []),
     ] as const;
-    if (hasEntryCharges || info.tournamentGame || info.kageMatch) {
+    if (hasEntryCharges || info.tournamentGame || info.kageMatch || info.hunting) {
       await writes[0];
       await writes[1];
       const claimedUsers = await writes[2];
@@ -3912,6 +3932,41 @@ export const initiateBattle = async (
         return {
           success: false,
           message: "Match admission changed. Refresh the schedule and try again.",
+        };
+      throw error;
+    }
+  } else if (info.hunting) {
+    const meta = info.hunting;
+    const rejected = new Error("Hunting admission changed");
+    try {
+      result = await retryOnDeadlock(() =>
+        client.transaction(async (tx) => {
+          // Reserve the personal encounter and reject staff edits made during preload.
+          const session = await tx
+            .update(huntingSession)
+            .set({ battleId, version: sql`${huntingSession.version} + 1` })
+            .where(
+              and(
+                eq(huntingSession.userId, meta.userId),
+                eq(huntingSession.id, meta.sessionId),
+                eq(huntingSession.version, meta.sessionVersion),
+                isNull(huntingSession.battleId),
+                eq(huntingSession.contractId, meta.contract.id),
+                eq(huntingSession.sector, sector ?? -1),
+                sql`EXISTS (SELECT 1 FROM ${huntingHabitat} WHERE ${huntingHabitat.id} = ${meta.habitatId} AND ${huntingHabitat.updatedAt} = ${new Date(meta.habitatUpdatedAt)})`,
+              ),
+            );
+          if (session.rowsAffected !== 1) throw rejected;
+          const created = await createBattle(tx as unknown as DrizzleClient);
+          if (created.claimedUsers?.rowsAffected !== expectedRows) throw rejected;
+          return created;
+        }),
+      );
+    } catch (error) {
+      if (error === rejected)
+        return {
+          success: false,
+          message: "Your hunting session changed. Refresh the board and try again.",
         };
       throw error;
     }

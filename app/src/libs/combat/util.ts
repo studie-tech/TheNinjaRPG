@@ -1001,6 +1001,7 @@ export const getBattlefieldHeightRatio = (width: number, height: number) =>
  */
 export const getDefaultBattleSizes = (battleType: BattleType, userLevel: number) => {
   switch (battleType) {
+    case "HUNTING":
     case "RANDOM_ENCOUNTER":
     case "ARENA":
     case "TRAINING":
@@ -2871,7 +2872,8 @@ export const calcBattleResult = (
           : 0;
 
       // Keep the result summary consistent with exhibition settlement's progression bypass.
-      if (battle.extraState.tournamentGameId) {
+      if (battle.extraState.tournamentGameId || battle.extraState.hunting) {
+        result.droppedItems = [];
         result.experience = 0;
         result.earnedExperience = 0;
         result.clanPoints = 0;

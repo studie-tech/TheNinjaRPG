@@ -505,18 +505,28 @@ export const itemRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [user, entry, childEvolutions, variants] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchItem(ctx.drizzle, input.id),
-        ctx.drizzle.query.item.findMany({
-          columns: { id: true, name: true },
-          where: eq(item.parentItemId, input.id),
-        }),
-        ctx.drizzle.query.itemVariant.findMany({
-          where: eq(itemVariant.itemId, input.id),
-          columns: { id: true },
-        }),
-      ]);
+      const [user, entry, childEvolutions, variants, huntingReferences] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          fetchItem(ctx.drizzle, input.id),
+          ctx.drizzle.query.item.findMany({
+            columns: { id: true, name: true },
+            where: eq(item.parentItemId, input.id),
+          }),
+          ctx.drizzle.query.itemVariant.findMany({
+            where: eq(itemVariant.itemId, input.id),
+            columns: { id: true },
+          }),
+          ctx.drizzle.query.huntingHabitat.findMany(),
+        ]);
+      if (
+        huntingReferences.some((h) =>
+          h.content.contracts.some((c) => c.rewards.some((r) => r.itemId === input.id)),
+        )
+      )
+        return errorResponse(
+          "This material is used by a hunting contract. Remove that reward first.",
+        );
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!entry) return errorResponse("Item not found");

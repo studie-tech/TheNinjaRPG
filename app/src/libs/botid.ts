@@ -55,6 +55,7 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "coop.quest.create",
   "coop.quest.join",
   "combat.startArenaBattle",
+  "hunting.start",
   "farming.harvestPlot",
   "farming.harvestAll",
   // Daily and once-per-period rewards

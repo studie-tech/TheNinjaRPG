@@ -231,7 +231,7 @@ describe("assignQuestToUser compatibility", () => {
 
     expect(result).toEqual({
       success: false,
-      message: "This quest type cannot be granted by an overworld NPC.",
+      message: "New hunts are available on the Hunter contract board. Existing hunting quests can still be completed.",
     });
     expect(insert).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();

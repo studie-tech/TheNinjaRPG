@@ -406,6 +406,7 @@ export type PreBattleGearModifiers = {
  * Static data is stored once at battle initiation and looked up by ID.
  */
 export type ExtraState = {
+  hunting?: import("@/validators/hunting").HuntingBattleState;
   /** Durable scheduled defense and tenure; settlement never needs another fetch. */
   kageMatch?: {
     id: string;
@@ -542,6 +543,7 @@ export type DroppedItem = {
  * Result type for users when battle is ended
  */
 export type CombatResult = {
+  hunting?: import("@/validators/hunting").HuntingReceipt;
   pvpExperience?: number;
   weeklyPvpKills?: number;
   profileUpdate?: CombatProfileUpdate;

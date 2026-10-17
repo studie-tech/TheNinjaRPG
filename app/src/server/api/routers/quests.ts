@@ -3145,6 +3145,11 @@ export const assignQuestToUser = async (args: {
       "Your companion is completing this contract. Return it before restarting.",
     );
 
+  if (questData.questType === "hunting")
+    return errorResponse(
+      "New hunts are available on the Hunter contract board. Existing hunting quests can still be completed.",
+    );
+
   // NPC-only quests can never be acquired through the generic UI start endpoint.
   if (isNpcOnlyQuestType(questData.questType) && source !== "overworld_npc") {
     return errorResponse(
@@ -3715,7 +3720,7 @@ export const insertNextQuest = async (
 ) => {
   const history = await fetchUncompletedQuests(client, user, type);
   const nextQuest = history?.[0];
-  if (nextQuest) {
+  if (nextQuest && nextQuest.questType !== "hunting") {
     const logEntry = await upsertQuestEntry(client, user, nextQuest, "system");
     return { ...logEntry.entry, quest: nextQuest };
   }
@@ -4536,6 +4541,7 @@ const executeClaimedQuestConsequences = async ({
                       !entry.endAt &&
                       entry.id !== `party-${user.questPartyId}`,
                   )) &&
+                q.questType !== "hunting" &&
                 !isNpcOnlyQuestType(q.questType) &&
                 q.questType !== "village_mission" &&
                 !(q.questType === "mission" && q.questRank === "S"),

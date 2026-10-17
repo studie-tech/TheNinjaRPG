@@ -90,6 +90,7 @@ import type { DrizzleClient } from "@/server/db";
 import { rewardClanBattleVictory } from "@/server/utils/clanBattle";
 import { settleDungeonBattle } from "@/server/utils/dungeon";
 import { reduceActiveFarmPlotTimers } from "@/server/utils/farming";
+import { settleHuntingBattle } from "@/server/utils/hunting";
 import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
@@ -134,6 +135,18 @@ export const updateBattle = async (
   fetchedVersion: number,
   pusher?: PusherClient,
 ) => {
+  if (newBattle.extraState.hunting && result) {
+    if (!pusher) throw new Error("Hunting settlement requires combat transport");
+    const settled = await settleHuntingBattle(
+      client,
+      newBattle,
+      result,
+      fetchedVersion,
+      (tx, playerBattle, playerResult) =>
+        updateUser(tx, pusher, playerBattle, playerResult, userId, true),
+    );
+    return settled ? { battleOver: true, finishBattle: async () => {} } : null;
+  }
   // A dungeon result transitions and restores the entire party before any ordinary combat payout.
   if (newBattle.extraState.dungeon && result) {
     const settled = await settleDungeonBattle(client, newBattle, fetchedVersion);
@@ -1473,8 +1486,10 @@ export const updateUser = async (
   curBattle: CompleteBattle,
   result: CombatResult | null,
   userId: string,
+  settlingHunt = false,
 ) => {
   const updatedQuestIds: string[] = [];
+  if (curBattle.extraState.hunting && !settlingHunt) return { updatedQuestIds };
   // Party settlement restores every member together, bypassing single-player combat rewards.
   if (curBattle.extraState.dungeon) return { updatedQuestIds };
   const user = curBattle.usersState.find((u) => u.userId === userId);
@@ -1594,6 +1609,11 @@ export const updateUser = async (
     // damage dealt — all derived from pre-loaded battle state (no extra fetch), folded into
     // the single getNewTrackers call below.
     trackerTasks.push(...buildCombatTrackerTasks(curBattle, user, result));
+    if (curBattle.extraState.hunting && result.outcome === "Won")
+      trackerTasks.push({
+        task: "hunting_experience_gained",
+        increment: curBattle.extraState.hunting.contract.experience,
+      });
 
     // Single call to getNewTrackers with all tasks
     const hydratedUser = hydrateUserForQuests(curBattle, user);

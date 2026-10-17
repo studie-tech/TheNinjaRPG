@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "c0c3a8f8-1ca5-4e10-baa2-53a8dd462989",
+  "id": "5ca9d2ae-11db-497c-8179-4b7bf19b27d5",
   "prevId": "d0491e2f-9437-47ee-a9dd-4de095523806",
   "tables": {
     "AbEvent": {
@@ -1544,7 +1544,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD','HUNTING')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -1805,7 +1805,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD','HUNTING')",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -4244,7 +4244,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD','HUNTING')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -6007,6 +6007,255 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
+    "HuntingHabitat": {
+      "name": "HuntingHabitat",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "HuntingHabitat_id": {
+          "name": "HuntingHabitat_id",
+          "columns": [
+            "id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "HuntingProgress": {
+      "name": "HuntingProgress",
+      "columns": {
+        "userId": {
+          "name": "userId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "contractId": {
+          "name": "contractId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "used": {
+          "name": "used",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "cooldownUntil": {
+          "name": "cooldownUntil",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "HuntingProgress_userId_contractId_pk": {
+          "name": "HuntingProgress_userId_contractId_pk",
+          "columns": [
+            "userId",
+            "contractId"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "HuntingReceipt": {
+      "name": "HuntingReceipt",
+      "columns": {
+        "battleId": {
+          "name": "battleId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "contractId": {
+          "name": "contractId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "result": {
+          "name": "result",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "HuntingReceipt_user_idx": {
+          "name": "HuntingReceipt_user_idx",
+          "columns": [
+            "userId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "HuntingReceipt_battleId": {
+          "name": "HuntingReceipt_battleId",
+          "columns": [
+            "battleId"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "HuntingSession": {
+      "name": "HuntingSession",
+      "columns": {
+        "userId": {
+          "name": "userId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id": {
+          "name": "id",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "habitatId": {
+          "name": "habitatId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "contractId": {
+          "name": "contractId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sector": {
+          "name": "sector",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "readyAt": {
+          "name": "readyAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "battleId": {
+          "name": "battleId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "startedAt": {
+          "name": "startedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lastResult": {
+          "name": "lastResult",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "HuntingSession_habitat_idx": {
+          "name": "HuntingSession_habitat_idx",
+          "columns": [
+            "habitatId"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "HuntingSession_userId": {
+          "name": "HuntingSession_userId",
+          "columns": [
+            "userId"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
     "Item": {
       "name": "Item",
       "columns": {
@@ -7112,7 +7361,7 @@
         },
         "jutsuType": {
           "name": "jutsuType",
-          "type": "enum('NORMAL','SPECIAL','BLOODLINE','FORBIDDEN','LOYALTY','CLAN','EVENT','AI','PETS')",
+          "type": "enum('NORMAL','SPECIAL','BLOODLINE','FORBIDDEN','LOYALTY','CLAN','EVENT','AI')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -7974,7 +8223,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD','HUNTING')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -8118,7 +8367,7 @@
         },
         "battleType": {
           "name": "battleType",
-          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD')",
+          "type": "enum('ARENA','COMBAT','SPARRING','KAGE_AI','KAGE_PVP','CLAN_CHALLENGE','CLAN_BATTLE','SHRINE_WAR','TOURNAMENT','QUEST','RANDOM_ENCOUNTER','VILLAGE_PROTECTOR','TRAINING','RANKED_PVP','RANKED_SPARRING','RAID','OVERWORLD','HUNTING')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -9472,132 +9721,6 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "PetSpecies": {
-      "name": "PetSpecies",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "varchar(1000)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "rarity": {
-          "name": "rarity",
-          "type": "enum('COMMON','UNCOMMON','RARE','EPIC','LEGENDARY')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'COMMON'"
-        },
-        "role": {
-          "name": "role",
-          "type": "enum('SUPPORT','HEALER','ASSAULT')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'ASSAULT'"
-        },
-        "defaultJutsuIds": {
-          "name": "defaultJutsuIds",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "('[]')"
-        },
-        "aiRules": {
-          "name": "aiRules",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "('[]')"
-        },
-        "includeDefaultRules": {
-          "name": "includeDefaultRules",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
-        "effects": {
-          "name": "effects",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "('[]')"
-        },
-        "skillTarget": {
-          "name": "skillTarget",
-          "type": "enum('SELF','ENEMIES')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'SELF'"
-        },
-        "isActive": {
-          "name": "isActive",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "PetSpecies_name_key": {
-          "name": "PetSpecies_name_key",
-          "columns": [
-            "name"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "PetSpecies_id": {
-          "name": "PetSpecies_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
     "Poll": {
       "name": "Poll",
       "columns": {
@@ -9871,13 +9994,6 @@
           "notNull": false,
           "autoincrement": false,
           "default": "'NONE'"
-        },
-        "petTaskMinutes": {
-          "name": "petTaskMinutes",
-          "type": "int unsigned",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "requiredLevel": {
           "name": "requiredLevel",
@@ -14971,44 +15087,6 @@
           "autoincrement": false,
           "default": 2000
         },
-        "petExperience": {
-          "name": "petExperience",
-          "type": "double",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "petAcquisitions": {
-          "name": "petAcquisitions",
-          "type": "int unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "activePetId": {
-          "name": "activePetId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "petSlots": {
-          "name": "petSlots",
-          "type": "tinyint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "petTask": {
-          "name": "petTask",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "rank": {
           "name": "rank",
           "type": "enum('STUDENT','GENIN','CHUNIN','JONIN','ELITE JONIN','ELDER','NONE')",
@@ -17428,291 +17506,6 @@
       "compositePrimaryKeys": {
         "UserNindo_id": {
           "name": "UserNindo_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "UserPet": {
-      "name": "UserPet",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "userId": {
-          "name": "userId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(40)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "speciesId": {
-          "name": "speciesId",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "paletteIndex": {
-          "name": "paletteIndex",
-          "type": "tinyint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "characteristicIndex": {
-          "name": "characteristicIndex",
-          "type": "tinyint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "auraIndex": {
-          "name": "auraIndex",
-          "type": "tinyint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "rank": {
-          "name": "rank",
-          "type": "tinyint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "experience": {
-          "name": "experience",
-          "type": "double",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "storedExperience": {
-          "name": "storedExperience",
-          "type": "double",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "lastFedAt": {
-          "name": "lastFedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "jutsuIds": {
-          "name": "jutsuIds",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "('[]')"
-        },
-        "skillIds": {
-          "name": "skillIds",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "('[]')"
-        },
-        "offence": {
-          "name": "offence",
-          "type": "double",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 10
-        },
-        "defence": {
-          "name": "defence",
-          "type": "double",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 10
-        },
-        "strength": {
-          "name": "strength",
-          "type": "double",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 10
-        },
-        "speed": {
-          "name": "speed",
-          "type": "double",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 10
-        },
-        "intelligence": {
-          "name": "intelligence",
-          "type": "double",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 10
-        },
-        "willpower": {
-          "name": "willpower",
-          "type": "double",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 10
-        },
-        "avatar": {
-          "name": "avatar",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "avatarFacing": {
-          "name": "avatarFacing",
-          "type": "enum('left','right')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'left'"
-        },
-        "battleEnabled": {
-          "name": "battleEnabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
-        "spawnPosition": {
-          "name": "spawnPosition",
-          "type": "enum('BEHIND','LEFT','RIGHT','FRONT')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'BEHIND'"
-        },
-        "aiRules": {
-          "name": "aiRules",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "('[]')"
-        },
-        "includeDefaultRules": {
-          "name": "includeDefaultRules",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
-        },
-        "generationStatus": {
-          "name": "generationStatus",
-          "type": "enum('PENDING','GENERATING','READY','FAILED')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'PENDING'"
-        },
-        "generationToken": {
-          "name": "generationToken",
-          "type": "varchar(191)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "generationStartedAt": {
-          "name": "generationStartedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "generationAttempts": {
-          "name": "generationAttempts",
-          "type": "tinyint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "generationDay": {
-          "name": "generationDay",
-          "type": "varchar(10)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "artRank": {
-          "name": "artRank",
-          "type": "tinyint unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "revision": {
-          "name": "revision",
-          "type": "int unsigned",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "datetime(3)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP(3))"
-        }
-      },
-      "indexes": {
-        "UserPet_userId_idx": {
-          "name": "UserPet_userId_idx",
-          "columns": [
-            "userId"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "UserPet_id": {
-          "name": "UserPet_id",
           "columns": [
             "id"
           ]

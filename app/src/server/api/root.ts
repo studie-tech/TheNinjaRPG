@@ -26,6 +26,7 @@ import { forumRouter } from "./routers/forum";
 import { guideRouter } from "./routers/guide";
 import { homeRouter } from "./routers/home";
 import { hospitalRouter } from "./routers/hospital";
+import { huntingRouter } from "./routers/hunting";
 import { itemRouter } from "./routers/item";
 import { jutsuRouter } from "./routers/jutsu";
 import { kageRouter } from "./routers/kage";
@@ -100,6 +101,7 @@ export const appRouter = createTRPCRouter({
   gameAsset: gameAssetRouter,
   guide: guideRouter,
   home: homeRouter,
+  hunting: huntingRouter,
   hospital: hospitalRouter,
   item: itemRouter,
   jutsu: jutsuRouter,
