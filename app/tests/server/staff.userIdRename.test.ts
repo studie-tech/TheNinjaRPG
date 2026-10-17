@@ -1,3 +1,7 @@
+import { huntingSession, huntingProgress, huntingReceipt } from "@/drizzle/schema";
+import { huntingBattleState } from "../setup/hunting";
+import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
+
 import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { beforeEach, expect, it } from "bun:test";
@@ -55,6 +59,7 @@ describeWithDatabase("staff user-id rename", () => {
   beforeEach(async () => {
     await resetTables(
       petSpecies,
+      huntingSession, huntingProgress, huntingReceipt,
       auctionOffer,
       bloodline,
       notification,
@@ -81,6 +86,21 @@ describeWithDatabase("staff user-id rename", () => {
       { userId: STAFF, username: "Terriator", role: "CODING-ADMIN" },
       { userId: OLD_USER_ID, username: "rename-target", role: "USER" },
     ]);
+  });
+
+  it.each(["rename", "delete"] as const)("keeps hunting state aligned with character %s", async (operation) => {
+    const database = await getTestDatabase();
+    await database.insert(huntingSession).values({ userId: OLD_USER_ID, id: "hunt-session", habitatId: "forest", contractId: "boar", sector: 1, startedAt: new Date() });
+    await database.insert(huntingProgress).values({ userId: OLD_USER_ID, contractId: "boar", used: 1 });
+    await database.insert(huntingReceipt).values({ userId: OLD_USER_ID, battleId: "hunt", contractId: "boar", createdAt: new Date(), result: huntingVictoryReceipt(huntingBattleState(), "hunt", "Won") });
+    if (operation === "rename") {
+      const caller = await callerFor(staffRouter, STAFF);
+      expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
+    } else await deleteUser(database, OLD_USER_ID);
+    for (const table of [huntingSession, huntingProgress, huntingReceipt]) {
+      expect(await database.select().from(table).where(eq(table.userId, OLD_USER_ID))).toHaveLength(0);
+      expect(await database.select().from(table).where(eq(table.userId, NEW_USER_ID))).toHaveLength(operation === "rename" ? 1 : 0);
+    }
   });
 
   it("moves fixed-term offer ownership and acceptance when an account ID changes", async () => {

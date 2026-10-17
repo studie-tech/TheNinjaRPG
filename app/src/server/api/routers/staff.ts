@@ -29,6 +29,9 @@ import {
   forumThread,
   historicalAvatar,
   historicalIp,
+  huntingProgress,
+  huntingReceipt,
+  huntingSession,
   itemLoadout,
   jutsuLoadout,
   kageDefendedChallenges,
@@ -1062,6 +1065,12 @@ export const staffRouter = createTRPCRouter({
           .update(userHome)
           .set({ userId: input.newUserId })
           .where(eq(userHome.userId, input.userId)),
+        ...[huntingSession, huntingProgress, huntingReceipt].map((table) =>
+          ctx.drizzle
+            .update(table)
+            .set({ userId: input.newUserId })
+            .where(eq(table.userId, input.userId)),
+        ),
         ctx.drizzle
           .update(userJutsu)
           .set({ userId: input.newUserId })
@@ -1392,6 +1401,9 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
 
   // Batch 4: Game progress & items
   await Promise.all([
+    ...[huntingSession, huntingProgress, huntingReceipt].map((table) =>
+      client.delete(table).where(eq(table.userId, userId)),
+    ),
     client.delete(userItem).where(eq(userItem.userId, userId)),
     client.delete(farmPlot).where(eq(farmPlot.userId, userId)),
     client.delete(farmExtraction).where(eq(farmExtraction.userId, userId)),
