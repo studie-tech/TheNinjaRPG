@@ -101,7 +101,9 @@ export function HuntingBoard({
           <p>
             Hunting rank: <strong>{getHuntingRank(experience)}</strong> ·{" "}
             {experience.toLocaleString()} experience ·{" "}
-            {rankProgress.progress.toFixed(1)}% to next rank
+            {rankProgress.nextRank
+              ? `${rankProgress.progress.toFixed(1)}% to next rank`
+              : "Maximum rank reached"}
           </p>
         )}
         {user?.occupation !== "HUNTER" && (
