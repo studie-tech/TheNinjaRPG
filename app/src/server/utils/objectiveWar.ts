@@ -17,6 +17,7 @@ import {
   warActionReceipt,
   warCamp,
   warContribution,
+  warKill,
 } from "@/drizzle/schema";
 import { isObjectiveWarActive } from "@/libs/objectiveWar";
 import type { DrizzleClient } from "@/server/db";
@@ -72,6 +73,8 @@ export const applyObjectiveWarAction = async (
     objectiveIndex?: number;
     shrineDamage?: number;
     camp?: WarCamp;
+    /** Persist PvP outcomes with the same receipt as their strategic contribution. */
+    kills?: (typeof warKill.$inferInsert)[];
     /** Consume a mission with its own CAS on the same transaction as strategic delivery. */
     claim?: (tx: DrizzleClient) => Promise<boolean>;
   },
@@ -153,6 +156,7 @@ export const applyObjectiveWarAction = async (
           ${action.camp ? sql`, ${isAttacker ? warCamp.attackerScore : warCamp.defenderScore} = ${isAttacker ? warCamp.attackerScore : warCamp.defenderScore} + ${WAR_CAMP_SCORE_PER_WIN}` : sql``}
       WHERE ${war.id} = ${activeWar.id} AND ${warActionReceipt.applied} = TRUE
     `);
+      if (action.kills?.length) await tx.insert(warKill).values(action.kills);
       // A concurrent espionage completion can already have saturated the counter.
       // The guarded receipt still proves this attempt completed successfully.
       return true;

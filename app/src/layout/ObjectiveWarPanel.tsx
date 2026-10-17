@@ -570,6 +570,9 @@ export const ObjectiveWarPanel = ({
               </p>
             )}
             <h3 className="font-bold">Kills/Losses</h3>
+            <p className="text-muted-foreground text-sm">
+              Only PvP wins and losses against opposing war participants count.
+            </p>
             {data.combatContributions.length ? (
               <Table
                 data={data.combatContributions}

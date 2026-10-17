@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { WAR_PVP_ESPIONAGE_POINTS } from "@/drizzle/constants";
 import { areBattleAllies } from "@/libs/combat/participants";
 import type {
@@ -47,6 +48,7 @@ export const settleObjectiveWarCombat = async (
     !user.villageId
   )
     return;
+  const userVillageId = user.villageId;
   const opponents = battle.usersState.filter(
     (target) =>
       !target.isSummon &&
@@ -117,6 +119,17 @@ export const settleObjectiveWarCombat = async (
           damage: rules[`${role}Damage`] * defeated.length,
           recovery: rules[`${role}Recovery`] * defeated.length,
           espionage: WAR_PVP_ESPIONAGE_POINTS * defeated.length,
+          kills: defeated.map((target) => ({
+            id: nanoid(),
+            warId: w.id,
+            killerId: user.userId,
+            victimId: target.userId,
+            killerVillageId: userVillageId,
+            victimVillageId: target.villageId ?? "unknown",
+            sector: user.sector,
+            shrineHpChange: 0,
+            townhallHpChange: 0,
+          })),
           ...(objectiveIndex >= 0
             ? { objectiveIndex, shrineDamage: rules.guardianDamage }
             : {}),

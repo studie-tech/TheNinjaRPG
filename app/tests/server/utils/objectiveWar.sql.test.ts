@@ -1,5 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
+import { warKill } from "@/drizzle/schema";
 import { questHistory, sector, userData, village, war, warAlly, warActionReceipt, warCamp, warContribution } from "@/drizzle/schema";
 import { applyObjectiveWarAction, applyObjectiveWarDecay, expireWarPoints, syncWarCamps, resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
@@ -25,7 +26,25 @@ const seed = async () => {
 const readWar = async () => (await (await getTestDatabase()).query.war.findFirst({ where: eq(war.id, "w") }))!;
 
 describeWithDatabase("objective war atomic strategic actions", () => {
-  beforeEach(async () => { await resetTables(questHistory, warActionReceipt, warCamp, warContribution, warAlly, war, sector, userData, village); await seed(); });
+  beforeEach(async () => { await resetTables(warKill, questHistory, warActionReceipt, warCamp, warContribution, warAlly, war, sector, userData, village); await seed(); });
+  it("records PvP outcomes once with strategic credit and exposes both contribution counters", async () => {
+    const db = await getTestDatabase();
+    const w = await readWar();
+    const action = {
+      id: "battle:hero:w", userId: "hero", sideVillageId: "a", damage: 10,
+      kills: [{ id: "kill", warId: "w", killerId: "hero", victimId: "foe", killerVillageId: "a", victimVillageId: "b", sector: 100, shrineHpChange: 0, townhallHpChange: 0 }],
+    };
+    await Promise.all(Array.from({ length: 3 }, () => applyObjectiveWarAction(db, w, action)));
+    expect(await db.query.warKill.findMany()).toHaveLength(1);
+    const info = await callerForDatabase(warRouter, "hero", db).getObjectiveWarInfo({ warId: "w" });
+    expect(info?.combatContributions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: "hero", kills: 1, losses: 0 }),
+      expect.objectContaining({ userId: "foe", kills: 0, losses: 1 }),
+    ]));
+    await db.update(war).set({ endedAt: new Date(), status: "DRAW" }).where(eq(war.id, "w"));
+    expect(await applyObjectiveWarAction(db, w, { ...action, id: "late", kills: [{ ...action.kills[0]!, id: "late-kill" }] })).toBe(false);
+    expect(await db.query.warKill.findMany()).toHaveLength(1);
+  });
   it("deduplicates replay and credits enemy damage separately from actual recovery", async () => {
     const db = await getTestDatabase();
     await db.update(war).set({ attackerWarHealth: 9998, defenderWarHealth: 8 }).where(eq(war.id, "w"));
