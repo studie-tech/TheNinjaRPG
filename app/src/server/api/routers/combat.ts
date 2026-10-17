@@ -2405,6 +2405,19 @@ export const initiateBattle = async (
       .map((user) => [user.userId, captureCombatCacheSnapshot(user)]),
   );
 
+  // Hunting settlement writes the battle's item quantities and durability back.
+  // Preserve the real equipment before combat processing mutates its snapshot.
+  const huntingEquipment = info.hunting
+    ? (
+        fetchedUsers.find((user) => user.userId === info.hunting?.userId)?.items ?? []
+      ).map(({ id, quantity, equipped, durability }) => ({
+        id,
+        quantity,
+        equipped,
+        durability,
+      }))
+    : [];
+
   // Personal team receipts and solo detachment must survive until the battle claim.
   // Capture before projection/training mutates the preloaded trackers in memory.
   const partyQuestSnapshots = fetchedUsers
@@ -3618,6 +3631,45 @@ export const initiateBattle = async (
                   gte(
                     userData.huntingExperience,
                     HUNTING_REQUIRED_EXP[info.hunting.contract.rank],
+                  ),
+                  ...huntingEquipment.map((snapshot) =>
+                    exists(
+                      client
+                        .select({ one: sql`1` })
+                        .from(userItem)
+                        .where(
+                          and(
+                            eq(userItem.id, snapshot.id),
+                            eq(userItem.userId, userData.userId),
+                            eq(userItem.equipped, snapshot.equipped),
+                            eq(userItem.quantity, snapshot.quantity),
+                            eq(userItem.durability, snapshot.durability),
+                          ),
+                        ),
+                    ),
+                  ),
+                  // A merge can hide equipment during the positive-only preload. Reject
+                  // unpreloaded rows even if the merge has published before admission.
+                  notExists(
+                    client
+                      .select({ one: sql`1` })
+                      .from(userItem)
+                      .where(
+                        and(
+                          eq(userItem.userId, userData.userId),
+                          ne(userItem.equipped, "NONE"),
+                          ne(userItem.quantity, 0),
+                          eq(userItem.isInAuction, false),
+                          or(
+                            isNull(userItem.craftingFinishedAt),
+                            lt(userItem.craftingFinishedAt, new Date()),
+                          ),
+                          notInArray(
+                            userItem.id,
+                            huntingEquipment.map((snapshot) => snapshot.id),
+                          ),
+                        ),
+                      ),
                   ),
                 ]
               : []),

@@ -4687,6 +4687,14 @@ async function executeMergeStacksForItemBucket(
     id: item.id,
     quantity: index < targetStacks ? targetQuantityForKeepIndex(index) : 0,
   }));
+  // Admission can change status after the endpoint's initial read. Both phases
+  // must stop at combat entry; restoring our claims preserves the original stacks.
+  const awakeOwner = exists(
+    drizzle
+      .select({ one: sql`1` })
+      .from(userData)
+      .where(and(eq(userData.userId, userId), eq(userData.status, "AWAKE"))),
+  );
 
   // Restores every row this attempt touched back to its original quantity in one UPDATE. The
   // `updatedAt = claimedAt` stamp scopes the write to our own claims/publishes, and the per-row
@@ -4733,8 +4741,13 @@ async function executeMergeStacksForItemBucket(
         updatedAt: claimedAt,
       })
       .where(
-        or(
-          ...sortedItems.map((item) => mergeStackRowGuard(userId, item, item.quantity)),
+        and(
+          awakeOwner,
+          or(
+            ...sortedItems.map((item) =>
+              mergeStackRowGuard(userId, item, item.quantity),
+            ),
+          ),
         ),
       );
 
@@ -4749,9 +4762,12 @@ async function executeMergeStacksForItemBucket(
       .update(userItem)
       .set({ quantity: userItemMergeQuantityCase(publishTargets) })
       .where(
-        or(
-          ...sortedItems.map((item) =>
-            mergeStackRowGuard(userId, item, -item.quantity),
+        and(
+          awakeOwner,
+          or(
+            ...sortedItems.map((item) =>
+              mergeStackRowGuard(userId, item, -item.quantity),
+            ),
           ),
         ),
       );
