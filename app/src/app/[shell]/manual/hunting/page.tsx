@@ -174,8 +174,8 @@ export default function HuntingEditor() {
           </label>
           <p className="text-muted-foreground text-sm">
             Use published, reachable sectors. Each contract assigns one personal sector.
-            Staff edits apply to accepted sessions when the next fight starts. Disable
-            content to retire it while hunters finish their current battles.
+            Staff edits apply to accepted sessions when the next fight starts. Wait for
+            current battles to finish before editing or disabling content.
           </p>
           {content.contracts.map((c, ci) => (
             <section key={c.id} className="space-y-3 rounded border p-4">
