@@ -12,7 +12,7 @@ import {
   getHomeRooms,
   homeRoomLayoutError,
 } from "@/libs/homeProperty";
-import { HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
+import { HOME_ART_PLANS, HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
 import { clamp } from "@/utils/math";
 import type { HomePlacement } from "@/validators/home";
 import type {
@@ -94,9 +94,11 @@ export const getHomeFurnitureGeometry = (
     ({ id }) => id === getHomePlacementRoom(placement),
   );
   const width = (view.width * 100) / (room?.width ?? 100);
-  // Scale against the 4:3 world canvas before converting into room-local vertical percentages.
+  // Scale against the painted world canvas before converting into room-local vertical percentages.
   const height =
-    (view.width * (4 / 3) * 100) / view.geometry.aspectRatio / (room?.height ?? 100);
+    (view.width * (HOME_ART_PLANS[homeType].aspectRatio ?? 4 / 3) * 100) /
+    view.geometry.aspectRatio /
+    (room?.height ?? 100);
   const image = {
     x: anchor.x - width / 2,
     y: anchor.y - (height * view.groundAnchor) / 100,

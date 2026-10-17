@@ -164,22 +164,22 @@ describe("painted furniture geometry", () => {
     const data = catalogue.match(/\('home-bed', 'Bed',.*?'FURNITURE', '(\{.*?\})'/)?.[1];
     expect(data).toBeDefined();
     const bed = fixture("home-bed", furnitureDataSchema.parse(JSON.parse(data!)));
-    const saved = [{ id: bed.id, room: "room-1" as const, x: 50, y: 50.515778311884056, rotation: 1 as const }];
+    const saved = [{ id: bed.id, room: "room-3" as const, x: 50, y: 50.515778311884056, rotation: 1 as const }];
     const original = structuredClone({ saved, bed });
 
     expect(homeLayoutPlacementError(saved, [bed], "TOWN_HOUSE")).toBeNull();
     expect(recoverHomeLayout(saved, [bed], "TOWN_HOUSE")).toEqual(saved);
-    expect(fitHomeFurniturePlacement(saved[0]!, bed, [], [bed], "SMALL_MANSION")).toBeNull();
+    expect(fitHomeFurniturePlacement(saved[0]!, bed, [], [bed], "MANSION")).toBeNull();
 
-    const recovered = recoverHomeLayout(saved, [bed], "SMALL_MANSION");
+    const recovered = recoverHomeLayout(saved, [bed], "MANSION");
     expect(recovered).toHaveLength(1);
-    expect(recovered[0]).toMatchObject({ id: bed.id, room: "room-1", rotation: 0 });
-    expect(homeLayoutPlacementError(recovered, [bed], "SMALL_MANSION")).toBeNull();
+    expect(recovered[0]).toMatchObject({ id: bed.id, room: "room-3", rotation: 0 });
+    expect(homeLayoutPlacementError(recovered, [bed], "MANSION")).toBeNull();
     expect(homeLayoutOrientationError(recovered, [bed])).toBeNull();
     expect({ saved, bed }).toEqual(original);
 
     // A removed room or a piece with no fitting published view stays unplaced.
     expect(recoverHomeLayout(saved, [bed], "NONE")).toEqual([]);
-    expect(recoverHomeLayout(saved, [{ ...bed, width: 100, views: {} }], "SMALL_MANSION")).toEqual([]);
+    expect(recoverHomeLayout(saved, [{ ...bed, width: 100, views: {} }], "MANSION")).toEqual([]);
   });
 });

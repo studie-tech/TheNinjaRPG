@@ -126,7 +126,7 @@ describeWithDatabase("owned furniture persistence", () => {
   });
 
   it.each([
-    { homeType: "LARGE_ESTATE", room: "room-7" },
+    { homeType: "MANSION", room: "room-7" },
     { homeType: "PALACE", room: "room-8" },
     { homeType: "MARSHMALLOWOPOLIS", room: "room-9" },
   ] as const)("persists furniture in the highest room of $homeType", async ({ homeType, room }) => {

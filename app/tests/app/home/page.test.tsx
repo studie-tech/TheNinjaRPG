@@ -751,15 +751,15 @@ it("preserves a draft across a tier refresh and requires recovery before saving"
     };
     const position = normalizedPosition("TOWN_HOUSE");
     await act(async () => {
-      queryClient.setQueryData(homeKey, { ...home, homeType: "SMALL_MANSION", furnitureRevision: 4 });
+      queryClient.setQueryData(homeKey, { ...home, homeType: "MANSION", furnitureRevision: 4 });
     });
     await view.findByRole("button", { name: "Decorate Room 6" });
     expect((view.getByLabelText("Furniture room") as HTMLSelectElement).value).toBe("room-1");
-    expect(normalizedPosition("SMALL_MANSION").x).toBeCloseTo(position.x, 8);
-    expect(normalizedPosition("SMALL_MANSION").y).toBeCloseTo(position.y, 8);
+    expect(normalizedPosition("MANSION").x).toBeCloseTo(position.x, 8);
+    expect(normalizedPosition("MANSION").y).toBeCloseTo(position.y, 8);
     fireEvent.keyDown(bed, { key: "ArrowRight" });
-    expect(normalizedPosition("SMALL_MANSION").x).toBeCloseTo(position.x, 8);
-    expect(normalizedPosition("SMALL_MANSION").y).toBeCloseTo(position.y, 8);
+    expect(normalizedPosition("MANSION").x).toBeCloseTo(position.x, 8);
+    expect(normalizedPosition("MANSION").y).toBeCloseTo(position.y, 8);
     expect(view.getByRole("alert").textContent).toContain("Your home tier changed. Cancel and reopen");
     expect((view.getByRole("button", { name: "Save layout" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(view.getByRole("button", { name: "Decorate Room 2" }));
@@ -775,7 +775,7 @@ it("preserves a draft across a tier refresh and requires recovery before saving"
     expect((view.getByLabelText("Wall paint") as HTMLSelectElement).value).toBe("ivory");
     fireEvent.click(view.getByRole("button", { name: "Save layout" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]![0]).toMatchObject({ homeType: "SMALL_MANSION", revision: 4, styles: [] });
+    expect(save.mock.calls[0]![0]).toMatchObject({ homeType: "MANSION", revision: 4, styles: [] });
   } finally {
     queryClient.clear();
   }
