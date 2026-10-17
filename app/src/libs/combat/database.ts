@@ -1787,238 +1787,265 @@ export const updateUser = async (
     const settledAt = new Date();
     let userSettlementCommitted = false;
     let itemSettlementCommitted = true;
-    // Update user & user items
-    await Promise.all([
+    // Defer execution so a hunting transaction never overlaps requests on its session.
+    const settlementWrites: (() => PromiseLike<unknown>)[] = [
       ...(!user.isAi
         ? [
-            recordVillageMissionProgress(client, user.villageId, userId, {
-              pvp_kills: result.villageMissionPvpKills ?? 0,
-            }),
+            () =>
+              recordVillageMissionProgress(client, user.villageId, userId, {
+                pvp_kills: result.villageMissionPvpKills ?? 0,
+              }),
           ]
         : []),
       ...(farmActivityReductionSeconds > 0
         ? [
-            reduceActiveFarmPlotTimers(
-              client,
-              userId,
-              farmActivityReductionSeconds,
-              farmActivityAt,
-            ).then((farmResult) => {
-              if (farmResult.rowsAffected > 0) {
-                const reductionLabel = result.didWin
-                  ? "1 minute 30 seconds"
-                  : "1 minute";
-                result.notifications.push(
-                  `PvP activity reduced active crop growth times by ${reductionLabel}.`,
-                );
-              }
-            }),
+            () =>
+              reduceActiveFarmPlotTimers(
+                client,
+                userId,
+                farmActivityReductionSeconds,
+                farmActivityAt,
+              ).then((farmResult) => {
+                if (farmResult.rowsAffected > 0) {
+                  const reductionLabel = result.didWin
+                    ? "1 minute 30 seconds"
+                    : "1 minute";
+                  result.notifications.push(
+                    `PvP activity reduced active crop growth times by ${reductionLabel}.`,
+                  );
+                }
+              }),
           ]
         : []),
       // Update bounties
       ...(result.bountiesClaimed.length > 0
         ? [
-            client
-              .update(bounty)
-              .set({
-                status: "CLAIMED",
-                claimedAt: new Date(),
-                claimedByUserId: userId,
-              })
-              .where(
-                and(
-                  inArray(
-                    bounty.id,
-                    result.bountiesClaimed.map((b) => b.bountyId),
+            () =>
+              client
+                .update(bounty)
+                .set({
+                  status: "CLAIMED",
+                  claimedAt: new Date(),
+                  claimedByUserId: userId,
+                })
+                .where(
+                  and(
+                    inArray(
+                      bounty.id,
+                      result.bountiesClaimed.map((b) => b.bountyId),
+                    ),
+                    eq(bounty.status, "OPEN"),
                   ),
-                  eq(bounty.status, "OPEN"),
                 ),
-              ),
           ]
         : []),
       // Delete items
       ...(deleteItems.length > 0
         ? [
-            client
-              .delete(userItem)
-              .where(and(inArray(userItem.id, deleteItems), gt(userItem.quantity, 0)))
-              .then((saved) => {
-                if (saved.rowsAffected !== deleteItems.length)
-                  itemSettlementCommitted = false;
-              }),
-            client
-              .delete(userItemImbuement)
-              .where(inArray(userItemImbuement.userItemId, deleteItems)),
+            () =>
+              client
+                .delete(userItem)
+                .where(and(inArray(userItem.id, deleteItems), gt(userItem.quantity, 0)))
+                .then((saved) => {
+                  if (saved.rowsAffected !== deleteItems.length)
+                    itemSettlementCommitted = false;
+                }),
+            () =>
+              client
+                .delete(userItemImbuement)
+                .where(inArray(userItemImbuement.userItemId, deleteItems)),
           ]
         : []),
       // Update items quantity. The quantity guard skips rows a stack merge has claimed or
       // already folded away, so this absolute snapshot write can never resurrect a merge
       // tombstone or stomp a claim.
       ...(updateItems.length > 0
-        ? updateItems.map((ui) =>
-            client
-              .update(userItem)
-              .set({ quantity: ui.quantity, durability: ui.durability })
-              .where(and(eq(userItem.id, ui.id), gt(userItem.quantity, 0)))
-              .then((saved) => {
-                // A zero-row write can mean the stack was tombstoned concurrently.
-                if (saved.rowsAffected !== 1) itemSettlementCommitted = false;
-              }),
+        ? updateItems.map(
+            (ui) => () =>
+              client
+                .update(userItem)
+                .set({
+                  quantity: ui.quantity,
+                  durability: ui.durability,
+                  // Hunting requires a changed-row acknowledgement even for unchanged carried items.
+                  ...(settlingHunt
+                    ? {
+                        updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userItem.updatedAt}))`,
+                      }
+                    : {}),
+                })
+                .where(and(eq(userItem.id, ui.id), gt(userItem.quantity, 0)))
+                .then((saved) => {
+                  // A zero-row write can mean the stack was tombstoned concurrently.
+                  if (saved.rowsAffected !== 1) itemSettlementCommitted = false;
+                }),
           )
         : []),
       // Jutsu experience & level from experience
       ...(jUnique.length > 0 && jExp > 0
         ? [
-            client
-              .update(userJutsu)
-              .set(xpGainOrLevelUpSet(userJutsu, JUTSU_XP_TO_LEVEL, jExp))
-              .where(
-                and(
-                  eq(userJutsu.userId, user.userId),
-                  lt(userJutsu.level, JUTSU_TRAIN_LEVEL_CAP),
-                  inArray(userJutsu.jutsuId, jUnique),
+            () =>
+              client
+                .update(userJutsu)
+                .set(xpGainOrLevelUpSet(userJutsu, JUTSU_XP_TO_LEVEL, jExp))
+                .where(
+                  and(
+                    eq(userJutsu.userId, user.userId),
+                    lt(userJutsu.level, JUTSU_TRAIN_LEVEL_CAP),
+                    inArray(userJutsu.jutsuId, jUnique),
+                  ),
                 ),
-              ),
           ]
         : []),
       // Item experience & level from PvP (equipped items only; per-item xpToLevel)
       ...(iExp > 0
-        ? [...equippedXpGroups.entries()].map(([xpToLevel, ids]) =>
-            client
-              .update(userItem)
-              .set(xpGainOrLevelUpSet(userItem, xpToLevel, iExp))
-              .where(
-                and(
-                  eq(userItem.userId, user.userId),
-                  lt(userItem.level, ITEM_LEVEL_CAP),
-                  inArray(userItem.id, [...ids]),
-                ),
-              ),
+        ? [...equippedXpGroups.entries()].map(
+            ([xpToLevel, ids]) =>
+              () =>
+                client
+                  .update(userItem)
+                  .set(xpGainOrLevelUpSet(userItem, xpToLevel, iExp))
+                  .where(
+                    and(
+                      eq(userItem.userId, user.userId),
+                      lt(userItem.level, ITEM_LEVEL_CAP),
+                      inArray(userItem.id, [...ids]),
+                    ),
+                  ),
           )
         : []),
       // Update user data
-      client
-        .update(userData)
-        .set({
-          // Settlement invalidates delayed passive-regeneration snapshots.
-          updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
-          curEnergy: combatEnergyRecoverySql(
-            curBattle,
-            userId,
-            result.energyReward,
-            settledAt,
-          ),
-          experience: sql`experience + ${result.experience}`,
-          earnedExperience: sql`earnedExperience + ${result.earnedExperience}`,
-          petExperience: petExperienceGainSql(
-            Math.round(result.experience) + Math.round(result.earnedExperience),
-            curBattle.extraState.petIdsByOwner?.[userId] ?? null,
-          ),
-          pvpStreak: result.pvpStreak,
-          ...(curBattle.battleType === "COMBAT" && hasHumanOpponent
-            ? {
-                pvpWins: sql`${userData.pvpWins} + ${result.outcome === "Won" ? 1 : 0}`,
-                pvpLosses: sql`${userData.pvpLosses} + ${result.outcome === "Lost" || result.outcome === "Fled" ? 1 : 0}`,
-              }
-            : {}),
-          pvpExperience: sql`${userData.pvpExperience} + ${result.pvpExperience ?? 0}`,
-          ...((result.weeklyPvpKills ?? 0) > 0
-            ? {
-                weeklyPvpKills: sql`CASE WHEN ${userData.weeklyPvpKillsAt} >= ${periodStart("weekly", settledAt)} THEN ${userData.weeklyPvpKills} ELSE 0 END + ${result.weeklyPvpKills ?? 0}`,
-                weeklyPvpKillsAt: settledAt,
-              }
-            : {}),
-          ...(curBattle.battleType !== "RANKED_PVP" &&
-          curBattle.battleType !== "SPARRING" &&
-          curBattle.battleType !== "RANKED_SPARRING"
-            ? {
-                curHealth: result.curHealth,
-                curStamina: result.curStamina,
-                curChakra: result.curChakra,
-              }
-            : {}),
-          strength: sql`strength + ${result.strength}`,
-          intelligence: sql`intelligence + ${result.intelligence}`,
-          willpower: sql`willpower + ${result.willpower}`,
-          speed: sql`speed + ${result.speed}`,
-          money: result.money ? sql`money + ${result.money}` : sql`money`,
-          seichiSilver: result.seichiSilver
-            ? sql`seichiSilver + ${result.seichiSilver}`
-            : sql`seichiSilver`,
-          // Preserve stored over-cap entitlement; concurrent gains cannot exceed the cap.
-          ...masteryGainUpdates(result.masteryGains ?? {}),
-          offence: sql`offence + ${result.offence}`,
-          defence: sql`defence + ${result.defence}`,
-          villagePrestige: sql`villagePrestige + ${result.villagePrestige}`,
-          dailyArenaFights: sql`dailyArenaFights + ${curBattle.battleType === "ARENA" ? 1 : 0}`,
-          dailySageActivations: sql`dailySageActivations + ${user.sageModeUsedThisBattle ? 1 : 0}`,
-          questData: updatedQuestData,
-          bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
-          bracketImmunityPausedAt: null,
-          battleId: null,
-          // Only Energy recovers in combat; reset the shared clock for other pools.
-          regenAt: settledAt,
-          // Stamp the winning war participant in the same row update (no extra roundtrip).
-          // GREATEST() inside extendWarParticipantSql never shortens a longer existing stamp.
-          ...(isWinningWarParticipant
-            ? { warParticipantUntil: extendWarParticipantSql() }
-            : {}),
-          ...(curBattle.battleType === "RANKED_PVP"
-            ? {
-                rankedLp: sql`GREATEST(rankedLp + ${result.lpDiff}, 0)`,
-                rankedStreak: result.didWin ? sql`${userData.rankedStreak} + 1` : 0,
-                rankedWins: sql`rankedWins + ${result.didWin ? 1 : 0}`,
-                rankedBattles: sql`rankedBattles + 1`,
-              }
-            : {}),
-          ...(tookKageSeat
-            ? {
-                rank: sql`CASE WHEN ${userData.rank} = 'ELDER' THEN 'JONIN' ELSE ${userData.rank} END`,
-              }
-            : {}),
-          ...(!getIsolatedPyramid(hydratedUser) &&
-          !curBattle.forceKeepPools &&
-          result.curHealth <= 0 &&
-          !["SPARRING", "RANKED_PVP", "RANKED_SPARRING"].includes(curBattle.battleType)
-            ? {
-                status: "HOSPITALIZED",
-                longitude: HOSPITAL_LONG,
-                latitude: HOSPITAL_LAT,
-                sector: user.allyVillage
-                  ? user.sector
-                  : getVillage(curBattle, user.villageId)?.sector,
-                immunityUntil:
-                  curBattle.battleType === "COMBAT"
-                    ? sql`NOW() + INTERVAL 1 MINUTE`
-                    : sql`immunityUntil`,
-              }
-            : { status: getIsolatedPyramid(hydratedUser) ? "BATTLE" : "AWAKE" }),
-          // Deactivate stealth and set cooldown after leaving combat (20 seconds)
-          stealthActive: false,
-          stealthActivatedAt: null,
-          stealthCooldownAt: new Date(
-            Math.floor(settledAt.getTime() / 1000) * 1000 +
-              STEALTH_POST_COMBAT_COOLDOWN_SECONDS * 1000,
-          ),
-        })
-        .where(and(eq(userData.userId, userId), eq(userData.battleId, curBattle.id)))
-        .then((saved) => {
-          userSettlementCommitted = saved.rowsAffected === 1;
-        }),
+      () =>
+        client
+          .update(userData)
+          .set({
+            // Settlement invalidates delayed passive-regeneration snapshots.
+            updatedAt: sql`GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))`,
+            curEnergy: combatEnergyRecoverySql(
+              curBattle,
+              userId,
+              result.energyReward,
+              settledAt,
+            ),
+            experience: sql`experience + ${result.experience}`,
+            earnedExperience: sql`earnedExperience + ${result.earnedExperience}`,
+            petExperience: petExperienceGainSql(
+              Math.round(result.experience) + Math.round(result.earnedExperience),
+              curBattle.extraState.petIdsByOwner?.[userId] ?? null,
+            ),
+            pvpStreak: result.pvpStreak,
+            ...(curBattle.battleType === "COMBAT" && hasHumanOpponent
+              ? {
+                  pvpWins: sql`${userData.pvpWins} + ${result.outcome === "Won" ? 1 : 0}`,
+                  pvpLosses: sql`${userData.pvpLosses} + ${result.outcome === "Lost" || result.outcome === "Fled" ? 1 : 0}`,
+                }
+              : {}),
+            pvpExperience: sql`${userData.pvpExperience} + ${result.pvpExperience ?? 0}`,
+            ...((result.weeklyPvpKills ?? 0) > 0
+              ? {
+                  weeklyPvpKills: sql`CASE WHEN ${userData.weeklyPvpKillsAt} >= ${periodStart("weekly", settledAt)} THEN ${userData.weeklyPvpKills} ELSE 0 END + ${result.weeklyPvpKills ?? 0}`,
+                  weeklyPvpKillsAt: settledAt,
+                }
+              : {}),
+            ...(curBattle.battleType !== "RANKED_PVP" &&
+            curBattle.battleType !== "SPARRING" &&
+            curBattle.battleType !== "RANKED_SPARRING"
+              ? {
+                  curHealth: result.curHealth,
+                  curStamina: result.curStamina,
+                  curChakra: result.curChakra,
+                }
+              : {}),
+            strength: sql`strength + ${result.strength}`,
+            intelligence: sql`intelligence + ${result.intelligence}`,
+            willpower: sql`willpower + ${result.willpower}`,
+            speed: sql`speed + ${result.speed}`,
+            money: result.money ? sql`money + ${result.money}` : sql`money`,
+            seichiSilver: result.seichiSilver
+              ? sql`seichiSilver + ${result.seichiSilver}`
+              : sql`seichiSilver`,
+            // Preserve stored over-cap entitlement; concurrent gains cannot exceed the cap.
+            ...masteryGainUpdates(result.masteryGains ?? {}),
+            offence: sql`offence + ${result.offence}`,
+            defence: sql`defence + ${result.defence}`,
+            villagePrestige: sql`villagePrestige + ${result.villagePrestige}`,
+            dailyArenaFights: sql`dailyArenaFights + ${curBattle.battleType === "ARENA" ? 1 : 0}`,
+            dailySageActivations: sql`dailySageActivations + ${user.sageModeUsedThisBattle ? 1 : 0}`,
+            questData: updatedQuestData,
+            bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
+            bracketImmunityPausedAt: null,
+            battleId: null,
+            // Only Energy recovers in combat; reset the shared clock for other pools.
+            regenAt: settledAt,
+            // Stamp the winning war participant in the same row update (no extra roundtrip).
+            // GREATEST() inside extendWarParticipantSql never shortens a longer existing stamp.
+            ...(isWinningWarParticipant
+              ? { warParticipantUntil: extendWarParticipantSql() }
+              : {}),
+            ...(curBattle.battleType === "RANKED_PVP"
+              ? {
+                  rankedLp: sql`GREATEST(rankedLp + ${result.lpDiff}, 0)`,
+                  rankedStreak: result.didWin ? sql`${userData.rankedStreak} + 1` : 0,
+                  rankedWins: sql`rankedWins + ${result.didWin ? 1 : 0}`,
+                  rankedBattles: sql`rankedBattles + 1`,
+                }
+              : {}),
+            ...(tookKageSeat
+              ? {
+                  rank: sql`CASE WHEN ${userData.rank} = 'ELDER' THEN 'JONIN' ELSE ${userData.rank} END`,
+                }
+              : {}),
+            ...(!getIsolatedPyramid(hydratedUser) &&
+            !curBattle.forceKeepPools &&
+            result.curHealth <= 0 &&
+            !["SPARRING", "RANKED_PVP", "RANKED_SPARRING"].includes(
+              curBattle.battleType,
+            )
+              ? {
+                  status: "HOSPITALIZED",
+                  longitude: HOSPITAL_LONG,
+                  latitude: HOSPITAL_LAT,
+                  sector: user.allyVillage
+                    ? user.sector
+                    : getVillage(curBattle, user.villageId)?.sector,
+                  immunityUntil:
+                    curBattle.battleType === "COMBAT"
+                      ? sql`NOW() + INTERVAL 1 MINUTE`
+                      : sql`immunityUntil`,
+                }
+              : { status: getIsolatedPyramid(hydratedUser) ? "BATTLE" : "AWAKE" }),
+            // Deactivate stealth and set cooldown after leaving combat (20 seconds)
+            stealthActive: false,
+            stealthActivatedAt: null,
+            stealthCooldownAt: new Date(
+              Math.floor(settledAt.getTime() / 1000) * 1000 +
+                STEALTH_POST_COMBAT_COOLDOWN_SECONDS * 1000,
+            ),
+          })
+          .where(and(eq(userData.userId, userId), eq(userData.battleId, curBattle.id)))
+          .then((saved) => {
+            userSettlementCommitted = saved.rowsAffected === 1;
+          }),
       // Handle dropped items transfer if present on result. Currently only AI have droppable items, so no need to delete from loser
       ...(result.droppedItems.length > 0
         ? [
-            client.insert(userItem).values(
-              result.droppedItems.map((d) => ({
-                id: nanoid(),
-                userId: user.userId,
-                itemId: d.itemId,
-                equipped: "NONE" as const,
-              })),
-            ),
+            () =>
+              client.insert(userItem).values(
+                result.droppedItems.map((d) => ({
+                  id: nanoid(),
+                  userId: user.userId,
+                  itemId: d.itemId,
+                  equipped: "NONE" as const,
+                })),
+              ),
           ]
         : []),
-    ]);
+    ];
+    if (settlingHunt) {
+      for (const write of settlementWrites) await write();
+      if (!userSettlementCommitted || !itemSettlementCommitted)
+        throw new Error("Hunting character or inventory changed during settlement");
+    } else await Promise.all(settlementWrites.map((write) => write()));
     const baseline = curBattle.extraState.profileCacheSnapshots?.[userId];
     const capacity = curBattle.extraState.energyCapacity?.[userId];
     const regeneration = curBattle.extraState.energyRegeneration?.[userId];

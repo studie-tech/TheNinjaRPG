@@ -57,24 +57,28 @@ export const huntingRouter = createTRPCRouter({
         }),
       ],
     );
+    const visibleHabitats =
+      user?.occupation === "HUNTER"
+        ? habitats
+            .filter((h) => h.content.enabled)
+            .map((h) => ({
+              ...h,
+              content: {
+                ...h.content,
+                contracts: h.content.contracts.filter((c) => c.enabled),
+              },
+            }))
+        : [];
+    const contracts = visibleHabitats.flatMap((h) => h.content.contracts);
+    const aiIds = new Set(contracts.map((c) => c.aiId));
+    const itemIds = new Set(contracts.flatMap((c) => c.rewards.map((r) => r.itemId)));
     return {
       user,
-      habitats:
-        user?.occupation === "HUNTER"
-          ? habitats
-              .filter((h) => h.content.enabled)
-              .map((h) => ({
-                ...h,
-                content: {
-                  ...h.content,
-                  contracts: h.content.contracts.filter((c) => c.enabled),
-                },
-              }))
-          : [],
+      habitats: visibleHabitats,
       session,
       progress,
-      materials,
-      creatures,
+      materials: materials.filter((m) => itemIds.has(m.id)),
+      creatures: creatures.filter((c) => aiIds.has(c.userId)),
       serverTime: new Date(),
     };
   }),
@@ -151,6 +155,7 @@ export const huntingRouter = createTRPCRouter({
       const inCombat = new Error(
         "Hunters are fighting in this habitat. Wait for those battles to finish before editing.",
       );
+      const missing = new Error("Habitat not found. Refresh the editor.");
       // Content and its audit log must describe the same successful edit.
       try {
         await retryOnDeadlock(() =>
@@ -165,7 +170,13 @@ export const huntingRouter = createTRPCRouter({
                     sql`NOT EXISTS (SELECT 1 FROM ${huntingSession} WHERE ${huntingSession.habitatId} = ${id} AND ${huntingSession.battleId} IS NOT NULL)`,
                   ),
                 );
-              if (saved.rowsAffected !== 1) throw inCombat;
+              if (saved.rowsAffected !== 1) {
+                const exists = await tx.query.huntingHabitat.findFirst({
+                  where: eq(huntingHabitat.id, id),
+                  columns: { id: true },
+                });
+                throw exists ? inCombat : missing;
+              }
             } else
               await tx
                 .insert(huntingHabitat)
@@ -198,6 +209,7 @@ export const huntingRouter = createTRPCRouter({
         );
       } catch (error) {
         if (error === inCombat) return errorResponse(inCombat.message);
+        if (error === missing) return errorResponse(missing.message);
         throw error;
       }
       return { success: true, message: "Habitat saved.", id };

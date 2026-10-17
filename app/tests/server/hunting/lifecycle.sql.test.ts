@@ -34,6 +34,16 @@ describeWithDatabase("Hunting lifecycle", () => {
     expect((await hunter.getBoard()).session).toEqual(first);
     expect(await (await getTestDatabase()).query.huntingSession.findMany()).toHaveLength(1);
   });
+  it("returns only the creatures and materials referenced by visible contracts", async () => {
+    await insertUsers([{ userId: "unlisted-ai", username: "unlisted-ai", isAi: true }]);
+    await insertItems([{ id: "unlisted-material", name: "Unlisted material", canBeHunted: true }]);
+    const hunter = await callerFor(huntingRouter, "hunter");
+    const board = await hunter.getBoard();
+    expect(board.creatures.map((c) => c.userId)).toEqual(["enemy"]);
+    expect(board.materials.map((m) => m.id).sort()).toEqual(["hide", "tusk"]);
+    const staff = await callerFor(huntingRouter, "staff");
+    expect(await staff.getBoard()).toMatchObject({ habitats: [], creatures: [], materials: [] });
+  });
   it("preserves partial allowances when switching or finishing, and prepares each new session once", async () => {
     const { hunter, session } = await accept();
     const db = await getTestDatabase();
@@ -68,6 +78,13 @@ describeWithDatabase("Hunting lifecycle", () => {
     const staff = await callerFor(huntingRouter, "staff");
     expect((await staff.save({ id: "forest", content: { ...content, sectors: [2], contracts: [] } })).success).toBe(false);
     expect((await staff.save({ id: "forest", content })).success).toBe(true);
+  });
+  it("reports a missing habitat without claiming that hunters are fighting", async () => {
+    const staff = await callerFor(huntingRouter, "staff");
+    const db = await getTestDatabase();
+    await db.delete(huntingHabitat).where(eq(huntingHabitat.id, "forest"));
+    expect(await staff.save({ id: "forest", content: huntingHabitatContent() })).toMatchObject({ success: false, message: "Habitat not found. Refresh the editor." });
+    expect(await db.query.actionLog.findMany()).toHaveLength(0);
   });
   it("reconciles staff-reduced allowances into cooldown and rejects edits during fights", async () => {
     await accept();
