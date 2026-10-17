@@ -35,11 +35,23 @@ describeWithDatabase("staff Pyramid recovery", () => {
 
   it("releases a hunting encounter while preserving preparation and partial allowance", async () => {
     const database = await getTestDatabase();
+    await database.insert(battle).values({ id: "hunt", battleType: "HUNTING", background: "default", usersState: [], usersEffects: [], groundEffects: [], extraState: {} as never, createdAt: new Date(), updatedAt: new Date(), roundStartAt: new Date() });
     await database.insert(huntingSession).values({ userId: "hero", id: "session", habitatId: "forest", contractId: "boar", sector: 1, battleId: "hunt", readyAt: new Date(0), startedAt: new Date() });
     await database.insert(huntingProgress).values({ userId: "hero", contractId: "boar", used: 1 });
     expect((await (await callerFor(staffRouter, "staff")).forceAwake({ userId: "hero", reason: "Recover a stranded hunter" })).success).toBe(true);
     expect(await database.query.huntingSession.findFirst()).toMatchObject({ battleId: null, readyAt: new Date(0), version: 1 });
     expect((await database.query.huntingProgress.findFirst())?.used).toBe(1);
+    expect(await database.query.battle.findFirst({ where: eq(battle.id, "hunt") })).toBeUndefined();
+  });
+
+  it("keeps the hunting battle recoverable when waking the character fails", async () => {
+    const database = await getTestDatabase();
+    await database.insert(battle).values({ id: "hunt", battleType: "HUNTING", background: "default", usersState: [], usersEffects: [], groundEffects: [], extraState: {} as never, createdAt: new Date(), updatedAt: new Date(), roundStartAt: new Date() });
+    await database.insert(huntingSession).values({ userId: "hero", id: "session", habitatId: "forest", contractId: "boar", sector: 1, battleId: "hunt", readyAt: new Date(0), startedAt: new Date() });
+    await runRawSql("CREATE TRIGGER staff_recovery_failure BEFORE UPDATE ON UserData FOR EACH ROW BEGIN IF OLD.userId = 'hero' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Recovery write failed'; END IF; END");
+    await expect((await callerFor(staffRouter, "staff")).forceAwake({ userId: "hero", reason: "Recover a stranded hunter" })).rejects.toThrow("Failed query");
+    expect(await database.query.battle.findFirst({ where: eq(battle.id, "hunt") })).toBeDefined();
+    expect(await database.query.huntingSession.findFirst()).toMatchObject({ battleId: "hunt", version: 0 });
   });
 
   for (const table of [userData, questHistory]) {

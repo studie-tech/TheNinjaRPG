@@ -15,6 +15,7 @@ import {
   auctionOffer,
   automatedModeration,
   bankTransfers,
+  battle,
   bloodlineRolls,
   captcha,
   conceptImage,
@@ -105,7 +106,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { isMysqlDeadlockError } from "@/server/utils/mysqlErrors";
+import { isMysqlDeadlockError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { renameParentalContact } from "@/server/utils/parentalControls";
 import {
@@ -391,11 +392,14 @@ export const staffRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query - fetch users and queue entry in parallel
-      const [user, targetUser, queueEntry] = await Promise.all([
+      const [user, targetUser, queueEntry, hunt] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchUser(ctx.drizzle, input.userId),
         ctx.drizzle.query.mpvpBattleUser.findFirst({
           where: eq(mpvpBattleUser.userId, input.userId),
+        }),
+        ctx.drizzle.query.huntingSession.findFirst({
+          where: eq(huntingSession.userId, input.userId),
         }),
       ]);
       // Guard
@@ -403,6 +407,22 @@ export const staffRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canUnstuckVillage(user.role)) return errorResponse("Not allowed for you");
+      const recoverySql = sql`
+          UPDATE ${userData}
+          LEFT JOIN ${questHistory} ON ${and(
+            eq(questHistory.userId, userData.userId),
+            eq(questHistory.questType, "battlepyramid"),
+            eq(questHistory.completed, 0),
+            isNull(questHistory.endAt),
+          )}
+          LEFT JOIN ${huntingSession} ON ${huntingSession.userId} = ${userData.userId}
+          SET ${userData.status} = 'AWAKE', ${userData.travelFinishAt} = NULL,
+              ${huntingSession.battleId} = NULL, ${huntingSession.version} = COALESCE(${huntingSession.version}, 0) + 1,
+              ${userData.bracketImmunityLiftedUntil} = ${resumeBracketImmunitySql()}, ${userData.bracketImmunityPausedAt} = NULL, ${userData.battleId} = NULL, ${questHistory.completed} = 0,
+              ${questHistory.endAt} = ${new Date()},
+              ${userData.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))
+          WHERE ${userData.userId} = ${targetUser.userId}
+        `;
       // Mutate - update status and clean up all queue entries
       await Promise.all([
         ctx.drizzle.insert(actionLog).values({
@@ -420,22 +440,17 @@ export const staffRouter = createTRPCRouter({
         // Drizzle has no joined UPDATE builder. Cancel the run and release its status
         // together; LEFT JOIN also recovers players without any Pyramid history.
         // Advance live snapshots so in-flight objectives or hunts cannot settle a cancelled battle.
-        ctx.drizzle.execute(sql`
-          UPDATE ${userData}
-          LEFT JOIN ${questHistory} ON ${and(
-            eq(questHistory.userId, userData.userId),
-            eq(questHistory.questType, "battlepyramid"),
-            eq(questHistory.completed, 0),
-            isNull(questHistory.endAt),
-          )}
-          LEFT JOIN ${huntingSession} ON ${huntingSession.userId} = ${userData.userId}
-          SET ${userData.status} = 'AWAKE', ${userData.travelFinishAt} = NULL,
-              ${huntingSession.battleId} = NULL, ${huntingSession.version} = COALESCE(${huntingSession.version}, 0) + 1,
-              ${userData.bracketImmunityLiftedUntil} = ${resumeBracketImmunitySql()}, ${userData.bracketImmunityPausedAt} = NULL, ${userData.battleId} = NULL, ${questHistory.completed} = 0,
-              ${questHistory.endAt} = ${new Date()},
-              ${userData.updatedAt} = GREATEST(NOW(3), TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt}))
-          WHERE ${userData.userId} = ${targetUser.userId}
-        `),
+        hunt
+          ? retryOnDeadlock(() =>
+              ctx.drizzle.transaction(async (tx) => {
+                // Delete the bound fight and release its session together; old tabs then see no battle.
+                await tx.execute(
+                  sql`DELETE ${battle} FROM ${battle} INNER JOIN ${huntingSession} ON ${huntingSession.battleId} = ${battle.id} WHERE ${huntingSession.userId} = ${targetUser.userId}`,
+                );
+                await tx.execute(recoverySql);
+              }),
+            )
+          : ctx.drizzle.execute(recoverySql),
         // Clean up raid/clan/shrine battle queue
         ctx.drizzle
           .delete(mpvpBattleUser)
