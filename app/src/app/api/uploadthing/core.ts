@@ -106,7 +106,7 @@ export const ourFileRouter = {
     .onUploadComplete(({ file }) => {
       return { fileUrl: servedUfsUrl(file) };
     }),
-  tavernUploader: f({ image: { maxFileSize: "64KB" } })
+  tavernUploader: f({ image: { maxFileSize: "4MB" } })
     .middleware(async ({ files }) => ({
       ...(await avatarMiddleware()),
       ...withExtensionIds(files),

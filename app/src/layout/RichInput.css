@@ -1,0 +1,24 @@
+.rich-input-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  border-radius: 0.25rem;
+}
+.rich-input-toolbar button:hover,
+.rich-input-toolbar [aria-pressed="true"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+.rich-input-toolbar button:disabled { opacity: 0.5; cursor: not-allowed; }
+.rich-input-editor .ql-container { font: inherit; border: 0; min-height: inherit; }
+.rich-input-editor .ql-editor { min-height: inherit; font: inherit; padding: 0.75rem; overflow-wrap: anywhere; }
+.rich-input-editor .ql-editor.ql-blank::before { color: hsl(var(--muted-foreground)); font-style: normal; }
+.rich-input-editor .ql-editor img { max-width: 100%; height: auto; }
+.rich-input-editor .ql-editor a { text-decoration: underline; }
+@media (max-width: 767px) { .rich-input-editor .ql-editor { font-size: max(16px, 1em); } }
+
+.rich-input-editor .ql-editor h2 { font-size: 1.25em; font-weight: 700; margin: 0.75rem 0; }
+.rich-input-editor .ql-editor h3 { font-size: 1.125em; font-weight: 600; margin: 0.5rem 0; }
+.rich-input-editor .ql-editor blockquote { border-left: 4px solid hsl(var(--primary)); padding-left: 0.75rem; margin: 0.75rem 0; font-style: italic; }

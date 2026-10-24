@@ -130,6 +130,7 @@
     "openai": "^7.42.0",
     "polygon-clipping": "^0.15.7",
     "pusher-js": "8.6.0",
+    "quill": "2.0.3",
     "react": "19.3.1",
     "react-colorful": "^5.8.1",
     "react-country-flag": "^3.1.0",

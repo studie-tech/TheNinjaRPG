@@ -317,6 +317,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                   >
                     <div className="min-h-0 flex-1">
                       <RichInput
+                        plainText
                         id="systemPrompt"
                         label="System Prompt (AI Instructions)"
                         height="250px"
@@ -328,6 +329,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
 
                     <div className="min-h-0 flex-1">
                       <RichInput
+                        plainText
                         id="userPrompt"
                         label="User Prompt (Content Description)"
                         height="150px"
@@ -360,6 +362,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                   <TabsContent value="edit" className="mt-4 flex flex-1 flex-col gap-4">
                     <div className="min-h-0 flex-1">
                       <RichInput
+                        plainText
                         id="editPrompt"
                         label="Edit Instructions"
                         height="300px"

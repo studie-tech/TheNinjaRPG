@@ -207,6 +207,8 @@ export const EditContent = <
     submitLoading,
     submitLoadingText,
   } = props;
+  const [uploadingFields, setUploadingFields] = useState<string[]>([]);
+  const isImageUploading = uploadingFields.length > 0;
   const currentValues = form.getValues();
   const [targetingMethod, targetingRange] = useWatch({
     control: form.control,
@@ -307,7 +309,7 @@ export const EditContent = <
 
   // Event listener for submitting on enter click
   const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (props.onEnter) {
+    if (props.onEnter && !isImageUploading) {
       switch (event.key) {
         case "Enter":
           void props.onEnter();
@@ -320,7 +322,7 @@ export const EditContent = <
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-  }, []);
+  }, [props.onEnter, isImageUploading]);
 
   // Picker controls are rendered in a portal, outside the disabled fieldset below.
   // Close the picker when a caller opts into an in-flight submit lock so every
@@ -399,7 +401,13 @@ export const EditContent = <
   return (
     <Form {...form}>
       <FormTag
-        onSubmit={props.onAccept}
+        onSubmit={(event) => {
+          if (isImageUploading) {
+            event.preventDefault();
+            return;
+          }
+          void props.onAccept?.(event);
+        }}
         className={
           formClassName ?? "grid grid-cols-1 items-center gap-1 md:grid-cols-2"
         }
@@ -818,6 +826,7 @@ export const EditContent = <
                                 isDirty={fieldState.isDirty}
                                 error={form.formState.errors[id]?.message as string}
                                 allowClipboardPaste={true}
+                                onUploadPendingChange={(pending) => setUploadingFields((fields) => pending ? [...new Set([...fields, id])] : fields.filter((fieldId) => fieldId !== id))}
                               />
                             </FormControl>
                             <FormMessage />
@@ -1631,7 +1640,7 @@ export const EditContent = <
                   void props.onAccept(e);
                 }
               }}
-              disabled={submitDisabled || submitLoading}
+              disabled={submitDisabled || submitLoading || isImageUploading}
               aria-busy={submitLoading}
             >
               {submitLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

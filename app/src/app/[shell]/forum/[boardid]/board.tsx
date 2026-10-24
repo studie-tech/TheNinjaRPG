@@ -59,6 +59,7 @@ function Board({ boardId, initialThreads }: BoardProps) {
   const { data: userData } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const boardIdentifier = boardId;
+  const [imageUploading, setImageUploading] = useState(false);
 
   const {
     data: threads,
@@ -150,6 +151,7 @@ function Board({ boardId, initialThreads }: BoardProps) {
     });
 
   const onSubmit = form.handleSubmit((data) => {
+    if (imageUploading) return;
     createThread({
       ...data,
       image: data.image || null,
@@ -189,6 +191,7 @@ function Board({ boardId, initialThreads }: BoardProps) {
                   </Button>
                 }
                 isValid={form.formState.isValid}
+                confirmDisabled={imageUploading}
                 onAccept={onSubmit}
               >
                 <Form {...form}>
@@ -221,6 +224,8 @@ function Board({ boardId, initialThreads }: BoardProps) {
                     />
                     <RichInput
                       id="content"
+                      allowClipboardPaste
+                      onUploadPendingChange={setImageUploading}
                       label="Contents of your thread"
                       height="300"
                       placeholder=""

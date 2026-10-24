@@ -9,7 +9,7 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
   ]),
   allowedAttributes: {
     ...sanitizeHtml.defaults.allowedAttributes,
-    img: ["src"],
+    img: ["src", "alt", "width", "height"],
     p: ["style"],
     div: ["style"],
     span: ["style"],
