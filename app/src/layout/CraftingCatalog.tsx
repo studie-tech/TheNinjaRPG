@@ -31,6 +31,7 @@ import {
   getMissingCraftingRank,
   getTotalItemQuantity,
 } from "@/libs/crafting";
+import { boostPvpGain } from "@/libs/pvpExperience";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
@@ -106,6 +107,16 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   const [rarityFilter, setRarityFilter] = useState<string>("ALL");
   const [craftQuantityInput, setCraftQuantity] = useState<number>(1);
   const craftQuantity = craftQuantityInput || 1;
+  const craftingExperienceGain = Math.floor(
+    boostPvpGain(
+      (selectedItem?.craftingExperience ?? 0) *
+        craftQuantity *
+        (1 +
+          (userData?.isOutlaw ? 0 : (userData?.clan?.craftingExpBoost ?? 0) / 100) +
+          (userData ? getTerritoryWarBoost(userData) : 0)),
+      userData?.pvpBoost?.totalPercent ?? 0,
+    ),
+  );
   const [pendingCraftName, setPendingCraftName] = useState<string | null>(null);
   const craftRequestInFlight = useRef(false);
 
@@ -462,7 +473,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm">Total Experience Gain:</span>
                     <span className="font-semibold text-green-600 text-sm">
-                      +{(selectedItem.craftingExperience ?? 0) * craftQuantity} EXP
+                      +{craftingExperienceGain} EXP
                     </span>
                   </div>
                 )}

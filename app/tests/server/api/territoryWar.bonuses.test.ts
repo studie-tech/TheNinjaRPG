@@ -1,8 +1,9 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { CRAFTING_TIMES_MINS } from "@/drizzle/constants";
+import { CRAFTING_TIMES_MINS, MEDNIN_EXP_CAP, MEDNIN_REQUIRED_EXP } from "@/drizzle/constants";
 import { craftingRequirement, farmCollectionLog, farmPlot, item, quest, questHistory, territoryWar, territoryWarScore, userCookingJob, userData, userItem, userQueue, userVote, village } from "@/drizzle/schema";
 import { farmingRouter } from "@/server/api/routers/farming";
+import { hospitalRouter } from "@/server/api/routers/hospital";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { settleCraftingQueue } from "@/server/utils/userQueue";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
@@ -40,6 +41,20 @@ describeWithDatabase("Territory War activity bonus consumers", () => {
     const expected = CRAFTING_TIMES_MINS.NOVICE.COMMON * 60000 * 0.85;
     expect(output.craftingFinishedAt!.getTime() - startedAt).toBeGreaterThanOrEqual(expected);
     expect(output.craftingFinishedAt!.getTime() - startedAt).toBeLessThan(expected + 5000);
+  });
+
+  it.each([
+    [MEDNIN_REQUIRED_EXP.LEGENDARY, 51],
+    [MEDNIN_EXP_CAP - 10, 10],
+    [MEDNIN_EXP_CAP + 10, 0],
+  ])("boosts medical XP from %s while respecting the cap", async (medicalExperience, expectedGain) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ medicalExperience, curHealth: 100, maxHealth: 1000, curChakra: 8000, maxChakra: 8000, curStamina: 100, maxStamina: 100, regeneration: 0 }).where(eq(userData.userId, userId));
+    const result = await (await callerFor(hospitalRouter, userId)).userHeal({ userId, healPercentage: 100 });
+    expect(result.success, result.message).toBe(true);
+    expect(result.expGain).toBe(expectedGain);
+    const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
+    expect(saved.medicalExperience).toBe(Math.min(MEDNIN_EXP_CAP, medicalExperience + expectedGain));
   });
 
   it("stores boosted cooking XP and shortens both direct and queued cooking at the actual start", async () => {

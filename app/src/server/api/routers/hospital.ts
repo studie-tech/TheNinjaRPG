@@ -145,7 +145,7 @@ export const hospitalRouter = createTRPCRouter({
         medicalExperience: u.medicalExperience,
       });
       const expGain = Math.min(
-        MEDNIN_EXP_CAP - u.medicalExperience,
+        Math.max(0, MEDNIN_EXP_CAP - u.medicalExperience),
         Math.floor(baseExpGain * (1 + getTerritoryWarBoost(u))),
       );
       // Guard
