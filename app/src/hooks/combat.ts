@@ -270,7 +270,8 @@ export const useCombatPreferences = () => {
     true,
   );
   const [showAggro, setShowAggro] = useLocalStorage<boolean>("combatShowAggro", true);
-  const [animateCharacters, setAnimateCharacters] = useLocalStorage<boolean>(
+  // Keep the persisted key stable for existing combat animation preferences.
+  const [animateBattlefield, setAnimateBattlefield] = useLocalStorage<boolean>(
     "combatAnimateCharacters",
     true,
   );
@@ -331,8 +332,8 @@ export const useCombatPreferences = () => {
       setShowTimeline,
       toggleTimeline,
       showAggro,
-      animateCharacters,
-      setAnimateCharacters,
+      animateBattlefield,
+      setAnimateBattlefield,
       setShowAggro,
       toggleAggro,
       showBasicActions,
@@ -361,8 +362,8 @@ export const useCombatPreferences = () => {
       setShowTimeline,
       toggleTimeline,
       showAggro,
-      animateCharacters,
-      setAnimateCharacters,
+      animateBattlefield,
+      setAnimateBattlefield,
       setShowAggro,
       toggleAggro,
       showBasicActions,

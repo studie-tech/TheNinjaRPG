@@ -34,7 +34,7 @@ afterEach(() => {
   resetCombatCaches();
 });
 
-const fixture = (animated = true) => {
+const fixture = (animated = true, animateBattlefield = true) => {
   const id = `walking-${sequence++}`;
   const animations: CharacterAnimations = Object.fromEntries(["idle", "move"].map((action) => [action, {
     id: action, name: action, url: `https://example.com/${id}-${action}.png`,
@@ -58,20 +58,44 @@ const fixture = (animated = true) => {
   const group = new Group();
   group.add(actor);
   const battle = { usersState: [user], usersEffects: [] } as unknown as ReturnedBattle;
-  const draw = (ms: number, users = [user], animateCharacters = true) => {
+  const draw = (ms: number, users = [user], animateBattlefield = true) => {
     now = ms;
     return drawCombatUsers({ group_users: group, users, usersEffects: [], grid,
-      playerId: "viewer", userData: { userId: "viewer" } as UserData, battle, sfxEnabled: false, animateCharacters });
+      playerId: "viewer", userData: { userId: "viewer" } as UserData, battle, sfxEnabled: false, animateBattlefield });
   };
-  draw(0);
+  draw(0, [user], animateBattlefield);
   const start = actor.position.clone();
   user.longitude = 1;
-  draw(0);
+  draw(0, [user], animateBattlefield);
   const target = grid.getHex({ col: 1, row: 0 })!;
   return { actor, sprite, user, group, grid, draw, start, target };
 };
 
 describe("combat walking playback", () => {
+  it("snaps to destination without loading character sheets when animations are disabled", () => {
+    const { actor, sprite, target, user } = fixture(true, false);
+    expect(actor.position.x).toBe(-target.center.x);
+    expect(actor.position.y).toBe(-target.center.y);
+    expect(sprite.userData.characterAnimation).toBeUndefined();
+    const animationUrls = Object.values(user.spriteAnimations!).map((animation) => animation.url);
+    expect(load.mock.calls.some(([url]) => animationUrls.includes(url))).toBe(false);
+  });
+
+  it("finishes an interrupted walk immediately and resumes from that tile when re-enabled", () => {
+    const { actor, user, grid, target, draw } = fixture();
+    draw(100);
+    expect(actor.position.x).not.toBe(-target.center.x);
+    expect(draw(150, [user], false)).toBe(false);
+    expect(actor.position.x).toBe(-target.center.x);
+    expect(actor.position.y).toBe(-target.center.y);
+    user.longitude = 2;
+    expect(draw(200)).toBe(true);
+    for (let time = 250; time <= 1200; time += 50) draw(time);
+    const destination = grid.getHex({ col: 2, row: 0 })!;
+    expect(actor.position.x).toBe(-destination.center.x);
+    expect(actor.position.y).toBe(-destination.center.y);
+  });
+
   it.each([30, 60, 170])("plays the walk throughout one tile at %i FPS, then returns to idle", (fps) => {
     const { actor, sprite, draw, start, target } = fixture();
     const frames = new Set<string>();

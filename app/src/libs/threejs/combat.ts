@@ -86,6 +86,7 @@ import {
   createSpriteMaterial,
   createTexture,
   disposeAnimatedGroup,
+  disposeSpriteAnimations,
   drawStatusBar,
   isObjectChainVisible,
   loadTexture,
@@ -494,6 +495,7 @@ export const drawCombatEffects = (info: {
   sfxEnabled?: boolean;
   sfxVolume?: number;
   isAnyUserMoving?: boolean;
+  animateBattlefield?: boolean;
 }) => {
   const endMark = profiler.mark("drawCombatEffects");
 
@@ -501,6 +503,15 @@ export const drawCombatEffects = (info: {
   const { battle, groupEffects, spriteMixer, animationId, gameAssets } = info;
   const { groundEffects, usersEffects, usersState } = battle;
   const isMoving = info.isAnyUserMoving ?? false;
+  // Also retire hidden effects when disabling motion mid-battle. Static markers
+  // and sound transitions remain independent of the animation preference.
+  if (
+    info.animateBattlefield === false &&
+    groupEffects.userData.animationsEnabled !== false
+  ) {
+    disposeSpriteAnimations(groupEffects, spriteMixer);
+  }
+  groupEffects.userData.animationsEnabled = info.animateBattlefield !== false;
 
   // If movement just completed, play all queued SFX
   if (wasMovingLastFrame && !isMoving && pendingSfxQueue.length > 0) {
@@ -534,6 +545,7 @@ export const drawCombatEffects = (info: {
       sfxEnabled: info.sfxEnabled,
       sfxVolume: info.sfxVolume,
       isAnyUserMoving: isMoving,
+      animateBattlefield: info.animateBattlefield,
     });
   });
   // Draw all user effects
@@ -555,6 +567,7 @@ export const drawCombatEffects = (info: {
         sfxEnabled: info.sfxEnabled,
         sfxVolume: info.sfxVolume,
         isAnyUserMoving: isMoving,
+        animateBattlefield: info.animateBattlefield,
       });
     }
   });
@@ -593,6 +606,7 @@ export const drawCombatEffect = (info: {
   sfxEnabled?: boolean;
   sfxVolume?: number;
   isAnyUserMoving?: boolean;
+  animateBattlefield?: boolean;
 }) => {
   // Destructure
   const { effect, groupEffects, animationId, hex, drawnIds } = info;
@@ -645,7 +659,11 @@ export const drawCombatEffect = (info: {
         }
         // If there is an appear animation, show it. Mark it for hiding,
         // which we catch and use to remove it
-        if (effect.appearAnimation && animationId !== 0) {
+        if (
+          info.animateBattlefield !== false &&
+          effect.appearAnimation &&
+          animationId !== 0
+        ) {
           const obj = gameAssets.find((a) => a.id === effect.appearAnimation);
           if (obj) {
             const actionSprite = showAnimation({
@@ -667,21 +685,6 @@ export const drawCombatEffect = (info: {
               playOrQueueSfx(url, info.sfxVolume ?? 0.8);
             }
           } catch {}
-        }
-        // If there is a static animation, show it.
-        if (effect.staticAnimation) {
-          const obj = gameAssets.find((a) => a.id === effect.staticAnimation);
-          if (obj) {
-            const actionSprite = showAnimation({
-              gameAsset: obj,
-              spriteMixer,
-              playInfinite: true,
-              scale: EFFECT_ANIMATION_SIZE,
-              position: { x: w / 2, y: h / 2 },
-              layer: 5,
-            });
-            if (actionSprite) asset.add(actionSprite);
-          }
         }
         // Status bar
         if (effect.type === "barrier") {
@@ -713,6 +716,30 @@ export const drawCombatEffect = (info: {
         // Add to group and cache
         groupEffects.add(asset);
         effectMeshCache.set(effect.id, asset);
+      }
+
+      // Re-enabling motion restores persistent loops without replaying appearance
+      // animations or sounds for effects that were already present.
+      if (
+        info.animateBattlefield !== false &&
+        effect.staticAnimation &&
+        !asset.getObjectByName("staticAnimation")
+      ) {
+        const obj = gameAssets.find((a) => a.id === effect.staticAnimation);
+        if (obj) {
+          const actionSprite = showAnimation({
+            gameAsset: obj,
+            spriteMixer,
+            playInfinite: true,
+            scale: EFFECT_ANIMATION_SIZE,
+            position: { x: w / 2, y: h / 2 },
+            layer: 5,
+          });
+          if (actionSprite) {
+            actionSprite.name = "staticAnimation";
+            asset.add(actionSprite);
+          }
+        }
       }
 
       // Set visibility
@@ -1239,7 +1266,7 @@ export const drawCombatUsers = (info: {
   sfxVolume?: number;
   gameAssets?: GameAsset[];
   aggro?: AggroDisplay;
-  animateCharacters?: boolean;
+  animateBattlefield?: boolean;
   animationPixelRatio?: number;
   animationRenderer?: WebGLRenderer;
 }): boolean => {
@@ -1337,10 +1364,6 @@ export const drawCombatUsers = (info: {
 
         const targetTile: TerrainHex = hex;
         const meshData = getOrInitUserMeshData(userMesh, targetTile);
-        computePathIfNeeded(meshData, pathFinder, targetTile);
-        const durationMs = getTileTravelMs(
-          info.animateCharacters === false ? undefined : user.spriteAnimations?.move,
-        );
         const onTileStep = () => {
           if (info.sfxEnabled) {
             try {
@@ -1351,15 +1374,30 @@ export const drawCombatUsers = (info: {
             } catch {}
           }
         };
-        stepAlongPath(
-          userMesh,
-          meshData,
-          targetTile,
-          durationMs,
-          deltaMs,
-          group_users,
-          onTileStep,
-        );
+        if (info.animateBattlefield === false) {
+          // Snap to authoritative positions, including an interrupted walk, so
+          // disabling animations never leaves actors between tiles.
+          const { x, y } = targetTile.center;
+          if (userMesh.position.x !== -x || userMesh.position.y !== -y) {
+            userMesh.position.set(-x, -y, 0);
+            markGroupNeedsSort(group_users);
+            onTileStep();
+          }
+          meshData.hex = targetTile;
+          meshData.targetHex = targetTile;
+          meshData.movement = { index: 0 };
+        } else {
+          computePathIfNeeded(meshData, pathFinder, targetTile);
+          stepAlongPath(
+            userMesh,
+            meshData,
+            targetTile,
+            getTileTravelMs(user.spriteAnimations?.move),
+            deltaMs,
+            group_users,
+            onTileStep,
+          );
+        }
         userMesh.userData = meshData;
 
         // Only check if not at target to determine if user is still moving
@@ -1384,7 +1422,7 @@ export const drawCombatUsers = (info: {
               : avatarData.avatarFacing,
             staticMap: loadTexture(avatarData.avatarPath, 128, avatarData.mirrored),
             enabled:
-              info.animateCharacters !== false && stillInBattle(user, usersEffects),
+              info.animateBattlefield !== false && stillInBattle(user, usersEffects),
             // 128 px covers typical mobile sprites; allow modest upsampling before
             // upgrading for a large field/zoom, capped at 256 px on retina screens.
             cellSize:
@@ -1449,7 +1487,7 @@ export const drawCombatUsers = (info: {
   });
 
   // Release decoded sheets only after every actor has left animation mode.
-  if (info.animateCharacters === false) clearUnusedAnimationTextures();
+  if (info.animateBattlefield === false) clearUnusedAnimationTextures();
 
   // Store current positions for next frame comparison
   userGroupData.lastUserPositions = currentPositions;
