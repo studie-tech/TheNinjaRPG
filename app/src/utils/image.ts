@@ -186,7 +186,10 @@ export const resizeImage = async (
   });
 };
 
-/** Read original dimensions without recompressing uploads. */
+/**
+ * Read original dimensions in the browser without recompressing uploads. Unreadable
+ * files reject with user-facing feedback; both outcomes release the temporary object URL.
+ */
 export const getImageDimensions = (
   file: File,
 ): Promise<{ width: number; height: number }> =>

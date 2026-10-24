@@ -2,7 +2,10 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { TAVERN_IMAGE_UPLOAD_DAILY_LIMIT } from "@/drizzle/constants";
 
-/** Reserve a post-image attempt independently of avatars and generated pet art. */
+/**
+ * Return false for an exhausted allowance; backend errors fail closed outside development.
+ * Post-image attempts remain independent of avatar and generated-pet allowances.
+ */
 export const createTavernUploadGuard =
   (limit: (userId: string) => Promise<{ success: boolean; reason?: string }>) =>
   async (userId: string) => {
@@ -26,6 +29,7 @@ const tavernUploadLimiter = new Ratelimit({
   prefix: "tavern-image-upload",
 });
 
+/** Reserve a daily post-image attempt through the shared Redis limiter. */
 export const claimTavernImageUpload = createTavernUploadGuard((userId) =>
   tavernUploadLimiter.limit(userId),
 );

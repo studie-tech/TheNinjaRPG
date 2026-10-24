@@ -45,7 +45,7 @@ export const getNewReactions = (
  * @returns The content with processed mentions and an array of mentioned usernames
  */
 export const processMentions = (content: string) => {
-  // Extract all mentioned usernames
+  // Stop usernames at HTML tags and entities emitted by the rich-text editor.
   const mentionedUserNames =
     content.match(/@([^\s<&]+)/g)?.map((mention) => mention.slice(1)) || [];
 

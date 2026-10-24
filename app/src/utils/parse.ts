@@ -89,9 +89,8 @@ const parseStyleAttribute = (styleJson?: string): React.CSSProperties | undefine
 };
 
 /**
- * Placeholder ratio for legacy post images stored without dimensions. Uploads are capped
- * at 512x512 by resizeImage and are predominantly landscape screenshots, so 4:3 is the
- * closest single guess; it only has to hold until the image itself loads.
+ * Post images without authored dimensions reserve a 4:3 placeholder until their
+ * intrinsic aspect ratio loads. Original-size uploads use their recorded dimensions.
  */
 const LEGACY_IMAGE_RESERVE = { width: 512, height: 384 };
 

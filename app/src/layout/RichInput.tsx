@@ -39,7 +39,7 @@ import { getSearchValidator } from "@/validators/register";
 import "quill/dist/quill.core.css";
 import "./RichInput.css";
 
-/** Shared HTML composer. Plain text consumers explicitly opt out of formatting. */
+/** Shared HTML composer with source preservation and an explicit plain-text opt-out. */
 export const RichInput = (props: RichInputProps) => {
   const { field } = useController({ name: props.id, control: props.control });
   const value = (field.value as string) || "";
@@ -59,9 +59,12 @@ export const RichInput = (props: RichInputProps) => {
   const toolbarRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Distinguish external draft resets from the editor's own serialized updates.
   const lastValueRef = useRef(value);
+  // Reject rapid duplicate events before React renders the pending state.
   const uploadInFlightRef = useRef(false);
   const uploadErrorRef = useRef<string | null>(null);
+  // Release the containing form's upload lock exactly once, including on unmount.
   const uploadPendingRef = useRef(false);
   const generationRef = useRef(0);
   const blocked = !!props.disabled || uploading;
@@ -82,6 +85,7 @@ export const RichInput = (props: RichInputProps) => {
     },
   });
 
+  /** Search plain text while keeping replacement offsets in Quill's embed-aware coordinates. */
   const checkMention = (text: string, end: number, position = end) => {
     if (!props.enableMentions) return;
     const match = /(?:^|\s)@([^\s@]+)$/.exec(text.slice(0, end));
@@ -90,6 +94,7 @@ export const RichInput = (props: RichInputProps) => {
     if (query) mentionForm.setValue("username", query);
   };
 
+  /** Publish semantic HTML without clearing drafts that contain only an image. */
   const onEditorChange = useEffectEvent(() => {
     const editor = quillRef.current;
     if (!editor) return;
@@ -113,6 +118,7 @@ export const RichInput = (props: RichInputProps) => {
       checkMention(before, before.length, range.index);
     }
   });
+  /** Read current options after lazy loading without restarting the editor on each edit. */
   const initialOptions = useEffectEvent(() => ({
     value,
     disabled: blocked,
@@ -153,6 +159,7 @@ export const RichInput = (props: RichInputProps) => {
             toolbar: {
               container: toolbarRef.current,
               handlers: {
+                // Keep block-format clearing at a collapsed caret.
                 clean: () => {
                   const target = quillRef.current;
                   const range = target?.getSelection(true);
@@ -161,6 +168,7 @@ export const RichInput = (props: RichInputProps) => {
                 },
               },
             },
+            // Files must use the moderated upload path, never Quill's data URLs.
             uploader: false,
             history: { userOnly: true },
           },
@@ -188,6 +196,7 @@ export const RichInput = (props: RichInputProps) => {
         editor.history.clear();
         lastValueRef.current = options.value;
         editor.on("text-change", onEditorChange);
+        // editor-change also reports silent selection updates used by mentions.
         editor.on("editor-change", onSelectionChange);
         editor.root.addEventListener("blur", field.onBlur);
         setReady(true);
@@ -251,6 +260,7 @@ export const RichInput = (props: RichInputProps) => {
     mentionForm.setValue("username", "");
   }, [selectedUsers]);
 
+  /** Insert at the current or saved selection; background uploads preserve the author's focus. */
   const insertImage = (
     url: string,
     dimensions?: { width: number; height: number },
@@ -265,6 +275,7 @@ export const RichInput = (props: RichInputProps) => {
     if (!target || target.restoreSelection) editor.setSelection(index + 1, 0, "silent");
   };
 
+  /** Upload original bytes and insert the result only into the same draft generation. */
   const uploadImage = async (file: File) => {
     if (
       blocked ||
@@ -387,6 +398,7 @@ export const RichInput = (props: RichInputProps) => {
   const submit = () => {
     if (!blocked && !uploadInFlightRef.current) props.onSubmit?.();
   };
+  /** Share send policy across textarea bubbling and Quill capture without blocking other newlines. */
   const submitOnEnter = (event: React.KeyboardEvent) => {
     if (
       event.key === "Enter" &&
@@ -406,6 +418,7 @@ export const RichInput = (props: RichInputProps) => {
   const canEdit = !blocked && (isSource || ready);
   const height = /^\d+$/.test(props.height) ? `${props.height}px` : props.height;
   const isUrlValid = !!urlEntry && isCompleteWebUrl(urlEntry.value);
+  /** Preserve the selected range while the URL popover temporarily owns focus. */
   const openUrlEntry = (kind: "link" | "image") => {
     const editor = quillRef.current;
     if (!editor || !canEdit) return;
@@ -465,6 +478,7 @@ export const RichInput = (props: RichInputProps) => {
           </div>
         )}
         {!isSource && (
+          // Quill's native toolbar listeners require new controls when the editor is recreated.
           <div
             key={`${props.id}:${props.refreshKey}`}
             ref={toolbarRef}
@@ -779,6 +793,7 @@ export const RichInput = (props: RichInputProps) => {
 const isComposingKey = (event: KeyboardEvent) =>
   event.isComposing || event.keyCode === 229;
 
+/** Require a complete HTTP(S) destination before closing the URL-entry popover. */
 const isCompleteWebUrl = (value: string) => {
   if (!/^https?:\/\//i.test(value.trim())) return false;
   try {
@@ -811,9 +826,12 @@ interface RichInputProps {
   onSubmit?: (event?: any) => void;
   isDirty?: boolean;
   enableMentions?: boolean;
+  /** Opt into moderated image paste, drop and file uploads. */
   allowClipboardPaste?: boolean;
   autoFocus?: boolean;
+  /** Retain literal text for consumers that do not accept HTML. */
   plainText?: boolean;
+  /** Let containing forms block submission until image insertion finishes. */
   onUploadPendingChange?: (pending: boolean) => void;
 }
 
