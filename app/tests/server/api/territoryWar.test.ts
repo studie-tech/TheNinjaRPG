@@ -145,4 +145,55 @@ describeWithDatabase("Territory War participation", () => {
     expect((await leader.createTeam({ eventId: "event" })).success).toBe(false);
     expect((await leader.startBattle({ teamId: id })).success).toBe(false);
   });
+
+  it.each([false, true])("retries leave deadlocks while preserving a started reservation: %s", async (started) => {
+    const db = await getTestDatabase();
+    const leader = await caller();
+    expect((await leader.createTeam({ eventId: "event" })).success).toBe(true);
+    const id = (await team())!.id;
+    if (started) await db.update(mpvpBattleQueue).set({ battleId: "reserved" }).where(eq(mpvpBattleQueue.id, id));
+    let attempts = 0;
+    const delayed = beforeStatements(db, mpvpBattleQueue, [
+      async () => { attempts++; throw new Error("Deadlock found when trying to get lock; try restarting transaction"); },
+      async () => { attempts++; },
+    ]);
+    const result = await callerForDatabase(territoryWarRouter, "leader", delayed).leaveTeam({ teamId: id });
+    expect(attempts).toBe(2);
+    expect(result.success).toBe(!started);
+    expect((await db.query.mpvpBattleUser.findMany()).length).toBe(started ? 1 : 0);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "leader") }))?.status).toBe(started ? "QUEUED" : "AWAKE");
+    expect((await leader.leaveTeam({ teamId: id })).success).toBe(false);
+  });
+
+  it.each(["failed", "started", "replaced"] as const)("retries reservation cleanup deadlocks after a %s launch", async (state) => {
+    const db = await getTestDatabase();
+    const leader = await caller();
+    expect((await leader.createTeam({ eventId: "event" })).success).toBe(true);
+    const id = (await team())!.id;
+    let cleanupAttempts = 0;
+    const delayed = beforeStatements(db, mpvpBattleQueue, [
+      async () => {
+        if (state !== "started") await db.update(userData).set({ isBanned: true }).where(eq(userData.userId, "leader"));
+      },
+      async () => {
+        cleanupAttempts++;
+        if (state === "replaced") await db.update(mpvpBattleQueue).set({ battleId: "replacement" }).where(eq(mpvpBattleQueue.id, id));
+        throw new Error("Deadlock found when trying to get lock; try restarting transaction");
+      },
+      async () => { cleanupAttempts++; },
+    ]);
+    const result = await callerForDatabase(territoryWarRouter, "leader", delayed).startBattle({ teamId: id });
+    expect(cleanupAttempts).toBe(2);
+    expect(result.success).toBe(state === "started");
+    const saved = (await team())!;
+    const battles = await db.query.battle.findMany();
+    expect(battles.length).toBe(state === "started" ? 1 : 0);
+    expect(saved.battleId).toBe(state === "started" ? battles[0]!.id : state === "replaced" ? "replacement" : null);
+    if (state === "failed") {
+      expect(result.message).toContain("All teammates must represent");
+      await db.update(userData).set({ isBanned: false }).where(eq(userData.userId, "leader"));
+      const retry = await leader.startBattle({ teamId: id });
+      expect(retry.success, retry.message).toBe(true);
+    }
+  });
 });

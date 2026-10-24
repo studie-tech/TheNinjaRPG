@@ -122,10 +122,12 @@ export const territoryWarRouter = createTRPCRouter({
   leaveTeam: protectedProcedure
     .input(z.object({ teamId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const removed = await ctx.drizzle.execute(sql`
+      const removed = await retryOnDeadlock(() =>
+        ctx.drizzle.execute(sql`
       DELETE ${mpvpBattleUser} FROM ${mpvpBattleUser} INNER JOIN ${mpvpBattleQueue} ON ${mpvpBattleQueue.id} = ${mpvpBattleUser.clanBattleId}
       WHERE ${mpvpBattleUser.userId} = ${ctx.userId} AND ${mpvpBattleQueue.id} = ${input.teamId} AND ${mpvpBattleQueue.battleType} = 'TERRITORY_WAR' AND ${mpvpBattleQueue.battleId} IS NULL
-    `);
+    `),
+      );
       if (!removed.rowsAffected)
         return errorResponse("This team has already started or you have left it");
       await ctx.drizzle
@@ -204,8 +206,10 @@ export const territoryWarRouter = createTRPCRouter({
         return result;
       } finally {
         // Failed launches restore the lobby; a real battle keeps its membership until settlement.
-        await ctx.drizzle.execute(
-          sql`UPDATE ${mpvpBattleQueue} SET ${mpvpBattleQueue.battleId} = NULL WHERE ${mpvpBattleQueue.id} = ${team.id} AND ${mpvpBattleQueue.battleId} = ${battleId} AND NOT EXISTS (SELECT 1 FROM Battle WHERE Battle.id = ${battleId})`,
+        await retryOnDeadlock(() =>
+          ctx.drizzle.execute(
+            sql`UPDATE ${mpvpBattleQueue} SET ${mpvpBattleQueue.battleId} = NULL WHERE ${mpvpBattleQueue.id} = ${team.id} AND ${mpvpBattleQueue.battleId} = ${battleId} AND NOT EXISTS (SELECT 1 FROM Battle WHERE Battle.id = ${battleId})`,
+          ),
         );
       }
     }),
