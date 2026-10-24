@@ -82,6 +82,17 @@ describe("rich input composer", () => {
     expect(submit.mock.calls[0]?.[0]).toEqual({ comment: "<p><strong>Source draft</strong></p>" });
   });
 
+  it("preserves guide heading anchors while editing the body", async () => {
+    const initial = '<a href="#custom">Jump to combat</a><h2 id="custom">Combat</h2><p>Details</p>';
+    const view = render(<Composer initial={initial} />);
+    const editor = view.getByRole("textbox", { name: "Message" });
+    expect((editor as HTMLTextAreaElement).value).toBe(initial);
+    const edited = initial.replace("Details", "Updated details");
+    fireEvent.change(editor, { target: { value: edited } });
+    fireEvent.click(view.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(submit.mock.calls[0]?.[0]).toEqual({ comment: edited }));
+  });
+
   it("keeps legacy embeds editable as source and leaves plain-text consumers unformatted", () => {
     const legacy = '<iframe src="https://www.youtube.com/embed/test"></iframe>';
     const view = render(<Composer initial={legacy} />);

@@ -47,7 +47,7 @@ export const getNewReactions = (
 export const processMentions = (content: string) => {
   // Extract all mentioned usernames
   const mentionedUserNames =
-    content.match(/@([^\s]+)/g)?.map((mention) => mention.slice(1)) || [];
+    content.match(/@([^\s<&]+)/g)?.map((mention) => mention.slice(1)) || [];
 
   // Process each mention to be bold and linked
   let processedContent = content;

@@ -14,7 +14,7 @@ describe("rich-text HTML compatibility", () => {
   });
 
   it("opens advanced existing documents in source mode", () => {
-    for (const html of ['<iframe src="https://www.youtube.com/embed/id"></iframe>', '<table><tr><td>Cell</td></tr></table>', '<p style="color:red">Color</p>', '<blockquote author="Alice">Quote</blockquote>', '[conceptart:some-id]']) {
+    for (const html of ['<iframe src="https://www.youtube.com/embed/id"></iframe>', '<table><tr><td>Cell</td></tr></table>', '<p style="color:red">Color</p>', '<blockquote author="Alice">Quote</blockquote>', '<h2 id="custom">Combat</h2>', '<h3 id="custom">Details</h3>', '[conceptart:some-id]']) {
       expect(needsHtmlSource(html)).toBe(true);
     }
   });
