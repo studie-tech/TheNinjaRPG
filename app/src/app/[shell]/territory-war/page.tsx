@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -28,40 +29,27 @@ export default function TerritoryWarPage() {
   const { data: user, timeDiff, updateUser } = useRequiredUserData();
   const router = useRouter();
   const utils = api.useUtils();
-  const [feedback, setFeedback] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
+  const ownTeamRef = useRef<HTMLDivElement>(null);
   const current = api.territoryWar.getCurrent.useQuery(undefined, {
     refetchInterval: 10000,
   });
   const onSuccess = async (result: { success: boolean; message?: string }) => {
-    setFeedback({ success: result.success, message: result.message ?? "Updated team" });
+    showMutationToast({ ...result, message: result.message ?? "Updated team" });
     await Promise.all([
       utils.territoryWar.invalidate(),
       utils.profile.getUser.invalidate(),
     ]);
   };
-  const onError = (error: { message: string }) =>
-    setFeedback({ success: false, message: error.message });
   const create = api.territoryWar.createTeam.useMutation({
-    onMutate: () => setFeedback(null),
     onSuccess,
-    onError,
   });
   const join = api.territoryWar.joinTeam.useMutation({
-    onMutate: () => setFeedback(null),
     onSuccess,
-    onError,
   });
   const leave = api.territoryWar.leaveTeam.useMutation({
-    onMutate: () => setFeedback(null),
     onSuccess,
-    onError,
   });
   const start = api.territoryWar.startBattle.useMutation({
-    onMutate: () => setFeedback(null),
-    onError,
     onSuccess: async (result) => {
       if (result.success && result.battleId) {
         await updateUser({
@@ -93,6 +81,16 @@ export default function TerritoryWarPage() {
   const ownTeam = teams.find((team) =>
     team.queue.some((member) => member.userId === user?.userId),
   );
+  const ownTeamId = ownTeam?.id;
+  useEffect(() => {
+    // Removing earlier lobbies after a join can leave the retained team above the viewport.
+    const row = ownTeamRef.current;
+    if (!ownTeamId || !row) return;
+    const bounds = row.getBoundingClientRect();
+    if (bounds.top < 0 || bounds.bottom > window.innerHeight) {
+      row.scrollIntoView({ block: "center" });
+    }
+  }, [ownTeamId]);
   const inSector = user?.sector === event?.sector;
   return (
     <ContentBox
@@ -110,11 +108,6 @@ export default function TerritoryWarPage() {
                 Try again
               </Button>
             </AlertDescription>
-          </Alert>
-        )}
-        {feedback && (
-          <Alert variant={feedback.success ? "default" : "destructive"}>
-            <AlertDescription>{feedback.message}</AlertDescription>
           </Alert>
         )}
         {boostUntil && boostUntil.getTime() > Date.now() - timeDiff && (
@@ -179,12 +172,16 @@ export default function TerritoryWarPage() {
             <fieldset className="min-w-0 space-y-3">
               <legend className="sr-only">Guardian teams</legend>
               {teams
-                .filter((team) => team.queue.length > 0)
+                .filter(
+                  (team) =>
+                    team.queue.length > 0 && (!ownTeam || team.id === ownTeam.id),
+                )
                 .map((team) => {
                   const joined = team.id === ownTeam?.id;
                   return (
                     <div
                       key={team.id}
+                      ref={joined ? ownTeamRef : undefined}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
                     >
                       <div>
