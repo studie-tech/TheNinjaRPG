@@ -56,7 +56,7 @@ export const RichInput = (props: RichInputProps) => {
   const [mention, setMention] = useState<{ start: number; end: number } | null>(null);
   const quillRef = useRef<Quill | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
-  const [formats, setFormats] = useState<Record<string, unknown>>({});
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const lastValueRef = useRef(value);
@@ -104,9 +104,6 @@ export const RichInput = (props: RichInputProps) => {
         : "";
     lastValueRef.current = html;
     field.onChange(html);
-    // A range-less getFormat() focuses Quill, even for a background upload.
-    const range = editor.getSelection();
-    if (range) setFormats(editor.getFormat(range));
   });
   const onSelectionChange = useEffectEvent(() => {
     const editor = quillRef.current;
@@ -114,7 +111,6 @@ export const RichInput = (props: RichInputProps) => {
     if (range && editor) {
       const before = editor.getText(0, range.index);
       checkMention(before, before.length, range.index);
-      setFormats(editor.getFormat(range));
     }
   });
   const initialOptions = useEffectEvent(() => ({
@@ -153,7 +149,21 @@ export const RichInput = (props: RichInputProps) => {
             "link",
             "image",
           ],
-          modules: { toolbar: false, uploader: false, history: { userOnly: true } },
+          modules: {
+            toolbar: {
+              container: toolbarRef.current,
+              handlers: {
+                clean: () => {
+                  const target = quillRef.current;
+                  const range = target?.getSelection(true);
+                  if (target && range)
+                    target.removeFormat(range.index, range.length, "user");
+                },
+              },
+            },
+            uploader: false,
+            history: { userOnly: true },
+          },
           readOnly: options.disabled,
         });
         quillRef.current = editor;
@@ -250,13 +260,8 @@ export const RichInput = (props: RichInputProps) => {
     if (!editor || isSource || props.disabled) return;
     const index = target?.index ?? editor.getSelection(true).index;
     editor.insertEmbed(index, "image", url, "user");
-    const [leaf] = editor.getLeaf(index + 1);
-    if (dimensions && leaf?.domNode instanceof HTMLImageElement) {
-      leaf.domNode.alt = "Uploaded image";
-      leaf.domNode.width = dimensions.width;
-      leaf.domNode.height = dimensions.height;
-      editor.update("user");
-    }
+    if (dimensions)
+      editor.formatText(index, 1, { alt: "Uploaded image", ...dimensions }, "user");
     if (!target || target.restoreSelection) editor.setSelection(index + 1, 0, "silent");
   };
 
@@ -444,6 +449,8 @@ export const RichInput = (props: RichInputProps) => {
         )}
         {!isSource && (
           <div
+            key={`${props.id}:${props.refreshKey}`}
+            ref={toolbarRef}
             className="rich-input-toolbar flex flex-wrap gap-1 border-b p-1"
             role="toolbar"
             aria-label="Text formatting"
@@ -452,14 +459,9 @@ export const RichInput = (props: RichInputProps) => {
               className="ql-header bg-background rounded text-sm"
               aria-label="Paragraph style"
               disabled={!canEdit}
-              value={String(formats.header || "")}
+              defaultValue=""
               onKeyDown={(event) => {
                 if (event.key === "Enter") event.stopPropagation();
-              }}
-              onChange={(event) => {
-                const editor = quillRef.current;
-                editor?.format("header", Number(event.target.value) || false, "user");
-                if (editor) setFormats(editor.getFormat());
               }}
             >
               <option value="">Paragraph</option>
@@ -475,32 +477,7 @@ export const RichInput = (props: RichInputProps) => {
                 title={label}
                 aria-label={label}
                 disabled={!canEdit}
-                aria-pressed={
-                  format !== "clean"
-                    ? Boolean(
-                        buttonValue ? formats[format] === buttonValue : formats[format],
-                      )
-                    : undefined
-                }
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  const editor = quillRef.current;
-                  if (!editor) return;
-                  const range = editor.getSelection(true);
-                  if (format === "clean")
-                    editor.removeFormat(range.index, range.length, "user");
-                  else
-                    editor.format(
-                      format,
-                      buttonValue
-                        ? formats[format] === buttonValue
-                          ? false
-                          : buttonValue
-                        : !formats[format],
-                      "user",
-                    );
-                  setFormats(editor.getFormat());
-                }}
               >
                 <Icon className="h-4 w-4" />
               </button>

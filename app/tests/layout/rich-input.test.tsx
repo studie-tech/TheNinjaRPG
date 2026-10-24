@@ -173,6 +173,43 @@ describe("rich input composer", () => {
     expect(view.getByRole("button", { name: "Bold" }).getAttribute("aria-pressed")).toBe("false");
   });
 
+  it.each(["refresh", "id"])("binds toolbar controls only to the current editor after %s changes", async (kind) => {
+    const SwitchingComposer = ({ refreshKey = 0, id = "first" }) => {
+      const form = useForm({ defaultValues: { first: "Draft", second: "Second" } });
+      return <RichInput id={id} refreshKey={refreshKey} label="Message" height="120" control={form.control} autoFocus={false} />;
+    };
+    const view = render(<SwitchingComposer />);
+    const before = await editorFor(view);
+    const { default: Quill } = await import("quill");
+    const previous = Quill.find(before.parentElement!) as InstanceType<typeof Quill>;
+    const previousFormat = vi.spyOn(previous, "format");
+    spies.push(previousFormat);
+    view.rerender(<SwitchingComposer refreshKey={kind === "refresh" ? 1 : 0} id={kind === "id" ? "second" : "first"} />);
+    await waitFor(() => expect(view.getByRole("textbox", { name: "Message" })).not.toBe(before));
+    const editor = await editorFor(view);
+    const current = Quill.find(editor.parentElement!) as InstanceType<typeof Quill>;
+    const currentFormat = vi.spyOn(current, "format");
+    spies.push(currentFormat);
+    editor.focus();
+    const bold = view.getByRole("button", { name: "Bold" });
+    fireEvent.click(bold);
+    expect(bold.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(bold);
+    expect(bold.getAttribute("aria-pressed")).toBe("false");
+    expect(previousFormat).not.toHaveBeenCalled();
+    expect(currentFormat).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears block formatting at a collapsed caret", async () => {
+    const view = render(<Composer initial="<blockquote>Draft</blockquote>" />);
+    const editor = await editorFor(view);
+    editor.focus();
+    fireEvent.click(view.getByRole("button", { name: "Clear formatting" }));
+    expect(editor.querySelector("blockquote")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(submit.mock.calls[0]?.[0]).toEqual({ comment: "<p>Draft</p>" }));
+  });
+
   it("keeps formatting and image-URL Enter keys out of parent dialogs", async () => {
     const view = render(<Composer initial="Draft" />);
     const editor = await editorFor(view);
