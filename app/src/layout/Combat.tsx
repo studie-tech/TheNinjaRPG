@@ -955,7 +955,10 @@ const Combat: React.FC<CombatProps> = (props) => {
     void Promise.all([
       reconcileProfile(),
       utils.travel.getSectorData.invalidate(),
-      ...(props.battleState.battle?.extraState?.territoryWar
+      // Both scoring battle types are public; their frozen competitors stay private.
+      ...(["TERRITORY_WAR", "COMBAT"].includes(
+        props.battleState.battle?.battleType ?? "",
+      )
         ? [
             utils.territoryWar.invalidate(),
             utils.village.invalidate(),
