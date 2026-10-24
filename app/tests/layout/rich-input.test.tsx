@@ -1,17 +1,23 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import * as image from "@/utils/image";
 import * as uploadthing from "@/utils/uploadthing";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
-import { actualRichInput as RichInput } from "../setup/preload";
+import { actualDialog, actualRichInput as RichInput } from "../setup/preload";
 import { ensureDom } from "../setup-dom.mjs";
 
 const startUpload = vi.fn();
 const submit = vi.fn();
 let spies: { mockRestore: () => void }[];
+const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 beforeEach(() => {
   ensureDom();
+  Object.defineProperties(globalThis, {
+    Event: { configurable: true, value: window.Event },
+    CustomEvent: { configurable: true, value: window.CustomEvent },
+  });
   vi.clearAllMocks();
   spies = [
     vi.spyOn(uploadthing, "useUploadThing").mockReturnValue({ startUpload } as never),
@@ -20,7 +26,16 @@ beforeEach(() => {
   if (!Range.prototype.getBoundingClientRect) Range.prototype.getBoundingClientRect = () => ({ x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0, toJSON: () => ({}) });
   if (!Range.prototype.getClientRects) Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 });
-afterEach(() => { cleanup(); for (const spy of spies) spy.mockRestore(); });
+afterEach(async () => {
+  cleanup();
+  // Radix restores focus on a deferred turn, using the DOM's Event constructor.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  for (const spy of spies) spy.mockRestore();
+  for (const [key, descriptor] of eventDescriptors) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  }
+});
 
 const Composer = ({ initial = "", resetValue = "", disabled = false, plainText = false, autoFocus = false }: { initial?: string; resetValue?: string; disabled?: boolean; plainText?: boolean; autoFocus?: boolean }) => {
   const form = useForm({ defaultValues: { comment: initial } });
@@ -29,6 +44,10 @@ const Composer = ({ initial = "", resetValue = "", disabled = false, plainText =
 const editorFor = async (view: ReturnType<typeof render>) => {
   await waitFor(() => expect(view.getByRole("button", { name: "Bold" }).hasAttribute("disabled")).toBe(false));
   return view.getByRole("textbox", { name: "Message" });
+};
+const DialogComposer = () => {
+  const [open, setOpen] = useState(true);
+  return <actualDialog.Dialog open={open} onOpenChange={setOpen}><actualDialog.DialogContent><actualDialog.DialogTitle>Compose message</actualDialog.DialogTitle><Composer initial="Draft" /></actualDialog.DialogContent></actualDialog.Dialog>;
 };
 
 describe("rich input composer", () => {
@@ -176,6 +195,101 @@ describe("rich input composer", () => {
     } finally {
       document.removeEventListener("keydown", documentKey);
     }
+  });
+
+  it.each(["image", "link"] as const)("retains invalid %s URLs and lets the author correct them", async (kind) => {
+    const view = render(<Composer initial="Draft" />);
+    const editor = await editorFor(view);
+    fireEvent.click(view.getByRole("button", { name: kind === "image" ? "Insert image URL" : "Link" }));
+    const input = view.getByRole("textbox", { name: kind === "image" ? "Image URL" : "Link URL" });
+    const insert = view.getByRole("button", { name: `Insert ${kind}` });
+    expect(insert.hasAttribute("disabled")).toBe(true);
+    for (const value of ["https://", "https://?", "not a url", "ftp://example.com/file"]) {
+      fireEvent.change(input, { target: { value } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect((input as HTMLInputElement).value).toBe(value);
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      expect(view.getByRole("alert").textContent).toContain("Enter a complete URL");
+      expect(insert.hasAttribute("disabled")).toBe(true);
+      expect(editor.querySelector("a, img")).toBeNull();
+      expect(submit).not.toHaveBeenCalled();
+    }
+    const url = "http://localhost:3341/favicon.ico";
+    fireEvent.change(input, { target: { value: url } });
+    expect(view.queryByRole("alert")).toBeNull();
+    expect(insert.hasAttribute("disabled")).toBe(false);
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+    expect(editor.querySelector("a, img")).toBeNull();
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(editor.querySelector("a, img")).toBeNull();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(editor.querySelector(kind === "image" ? "img" : "a")?.getAttribute(kind === "image" ? "src" : "href")).toBe(url);
+    expect(view.queryByRole("textbox", { name: /^(Image|Link) URL$/ })).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("keeps selected link text through URL correction and returns focus after insertion", async () => {
+    const view = render(<Composer initial="Before selected after" />);
+    const editor = await editorFor(view);
+    editor.focus();
+    const range = document.createRange();
+    range.setStart(editor.querySelector("p")!.firstChild!, 7);
+    range.setEnd(editor.querySelector("p")!.firstChild!, 15);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    fireEvent.click(view.getByRole("button", { name: "Link" }));
+    const input = view.getByRole("textbox", { name: "Link URL" });
+    fireEvent.change(input, { target: { value: "https://" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.change(input, { target: { value: "https://example.com/guide" } });
+    fireEvent.click(view.getByRole("button", { name: "Insert link" }));
+    expect(editor.textContent).toBe("Before selected after");
+    expect(editor.querySelector("a")?.textContent).toBe("selected");
+    expect(document.activeElement).toBe(editor);
+  });
+
+  it("dismisses URL entry when the author returns to the document", async () => {
+    const view = render(<Composer initial="Before selected after" />);
+    const editor = await editorFor(view);
+    editor.focus();
+    fireEvent.click(view.getByRole("button", { name: "Insert image URL" }));
+    const input = view.getByRole("textbox", { name: "Image URL" });
+    fireEvent.change(input, { target: { value: "https://example.com/image.png" } });
+    act(() => editor.focus());
+    await waitFor(() => expect(view.queryByRole("textbox", { name: "Image URL" })).toBeNull());
+    expect(editor.textContent).toBe("Before selected after");
+    expect(editor.querySelector("img")).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it.each(["Cancel", "Escape"])("preserves the draft and selection when a URL is cancelled with %s", async (method) => {
+    const view = render(<Composer initial="Draft" />);
+    const editor = await editorFor(view);
+    editor.focus();
+    const before = editor.innerHTML;
+    fireEvent.click(view.getByRole("button", { name: "Link" }));
+    const input = view.getByRole("textbox", { name: "Link URL" });
+    fireEvent.change(input, { target: { value: "https://" } });
+    if (method === "Cancel") fireEvent.click(view.getByRole("button", { name: "Cancel" }));
+    else fireEvent.keyDown(input, { key: "Escape" });
+    expect(view.queryByRole("textbox", { name: "Link URL" })).toBeNull();
+    expect(editor.innerHTML).toBe(before);
+    expect(document.activeElement).toBe(editor);
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("closes only URL entry when Escape is pressed inside a draft dialog", async () => {
+    const view = render(<DialogComposer />);
+    const editor = await editorFor(view);
+    fireEvent.click(view.getByRole("button", { name: "Link" }));
+    const input = view.getByRole("textbox", { name: "Link URL" });
+    fireEvent.change(input, { target: { value: "https://" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    await waitFor(() => expect(view.queryByRole("textbox", { name: "Link URL" })).toBeNull());
+    expect(view.getByRole("dialog", { name: "Compose message" })).toBeDefined();
+    expect(editor.textContent).toBe("Draft");
+    expect(document.activeElement).toBe(editor);
+    expect(submit).not.toHaveBeenCalled();
   });
 
   it.each([false, true])("does not send on a legacy IME confirmation (plain text: %s)", async (plainText) => {

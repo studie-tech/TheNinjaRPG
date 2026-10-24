@@ -819,7 +819,7 @@ export const EditContent = <
                                 height={
                                   "height" in formEntry && formEntry.height
                                     ? formEntry.height
-                                    : "200"
+                                    : "60"
                                 }
                                 placeholder={currentValues[id] as string}
                                 label={formEntry.label ? formEntry.label : id}

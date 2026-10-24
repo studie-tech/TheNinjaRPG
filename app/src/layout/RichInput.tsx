@@ -21,6 +21,12 @@ import { useController, useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { TAVERN_IMAGE_MAX_SIZE_MB } from "@/drizzle/constants";
 import EmojiPicker from "@/layout/EmojiPicker";
@@ -42,8 +48,11 @@ export const RichInput = (props: RichInputProps) => {
   const [loadError, setLoadError] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [imageUrlOpen, setImageUrlOpen] = useState(false);
-  const [imageUrl, setImageUrl] = useState("");
+  const [urlEntry, setUrlEntry] = useState<{
+    kind: "link" | "image";
+    value: string;
+    range: { index: number; length: number };
+  } | null>(null);
   const [mention, setMention] = useState<{ start: number; end: number } | null>(null);
   const quillRef = useRef<Quill | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -320,11 +329,32 @@ export const RichInput = (props: RichInputProps) => {
   };
   const canEdit = !blocked && (isSource || ready);
   const height = /^\d+$/.test(props.height) ? `${props.height}px` : props.height;
-  const addImageUrl = () => {
-    if (!canEdit || !/^https?:\/\//i.test(imageUrl)) return;
-    insertImage(imageUrl);
-    setImageUrl("");
-    setImageUrlOpen(false);
+  const isUrlValid = !!urlEntry && isCompleteWebUrl(urlEntry.value);
+  const openUrlEntry = (kind: "link" | "image") => {
+    const editor = quillRef.current;
+    if (!editor || !canEdit) return;
+    setUrlEntry({ kind, value: "", range: editor.getSelection(true) });
+  };
+  const closeUrlEntry = () => {
+    if (urlEntry) {
+      quillRef.current?.setSelection(urlEntry.range, "silent");
+    }
+    setUrlEntry(null);
+  };
+  const insertUrl = () => {
+    const editor = quillRef.current;
+    if (!canEdit || !editor || !urlEntry || !isUrlValid) return;
+    const { kind, range } = urlEntry;
+    const url = urlEntry.value.trim();
+    editor.setSelection(range, "silent");
+    if (kind === "image") insertImage(url);
+    else {
+      if (range.length)
+        editor.formatText(range.index, range.length, "link", url, "user");
+      else editor.insertText(range.index, url, { link: url }, "user");
+      editor.setSelection(range.index + (range.length || url.length), 0, "silent");
+    }
+    setUrlEntry(null);
   };
 
   return (
@@ -351,7 +381,7 @@ export const RichInput = (props: RichInputProps) => {
               onClick={() => {
                 setSourceMode(!sourceMode);
                 setMention(null);
-                setImageUrlOpen(false);
+                setUrlEntry(null);
               }}
             >
               {sourceMode ? "Visual editor" : "HTML"}
@@ -427,17 +457,8 @@ export const RichInput = (props: RichInputProps) => {
               title="Link"
               aria-label="Link"
               disabled={!canEdit}
-              onClick={() => {
-                const editor = quillRef.current;
-                if (!editor) return;
-                const range = editor.getSelection(true);
-                const url = window.prompt("Link URL (https://…)", "https://");
-                if (url && /^https?:\/\//i.test(url)) {
-                  if (range.length)
-                    editor.formatText(range.index, range.length, "link", url, "user");
-                  else editor.insertText(range.index, url, { link: url }, "user");
-                }
-              }}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => openUrlEntry("link")}
             >
               <Link2 className="h-4 w-4" />
             </button>
@@ -448,7 +469,8 @@ export const RichInput = (props: RichInputProps) => {
               title="Insert image URL"
               aria-label="Insert image URL"
               disabled={!canEdit}
-              onClick={() => setImageUrlOpen(!imageUrlOpen)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => openUrlEntry("image")}
             >
               <ImagePlus className="h-4 w-4" />
             </Button>
@@ -465,34 +487,68 @@ export const RichInput = (props: RichInputProps) => {
             )}
           </div>
         )}
-        {imageUrlOpen && !isSource && (
-          <div className="flex flex-wrap gap-2 border-b p-2">
-            <Input
-              aria-label="Image URL"
-              placeholder="https://…"
-              value={imageUrl}
-              disabled={!canEdit}
-              onChange={(event) => setImageUrl(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.stopPropagation();
-                  if (!isComposingKey(event.nativeEvent)) {
-                    event.preventDefault();
-                    addImageUrl();
-                  }
-                }
-              }}
-            />
-            <Button
-              type="button"
-              size="sm"
-              disabled={!canEdit || !/^https?:\/\//i.test(imageUrl)}
-              onClick={addImageUrl}
+        <Popover
+          open={!!urlEntry && !isSource}
+          onOpenChange={(open) => {
+            if (!open) closeUrlEntry();
+          }}
+        >
+          <PopoverAnchor asChild>
+            <div />
+          </PopoverAnchor>
+          {urlEntry && !isSource && (
+            <PopoverContent
+              align="start"
+              aria-label={urlEntry.kind === "image" ? "Image URL" : "Link URL"}
+              className="flex w-80 max-w-[calc(100vw-2rem)] flex-wrap gap-2 p-2"
+              onCloseAutoFocus={(event) => event.preventDefault()}
             >
-              Insert image
-            </Button>
-          </div>
-        )}
+              <Input
+                autoFocus
+                aria-label={urlEntry.kind === "image" ? "Image URL" : "Link URL"}
+                aria-invalid={!!urlEntry.value && !isUrlValid}
+                aria-describedby={
+                  urlEntry.value && !isUrlValid ? `${props.id}-url-error` : undefined
+                }
+                placeholder="https://…"
+                value={urlEntry.value}
+                disabled={!canEdit}
+                onChange={(event) =>
+                  setUrlEntry({ ...urlEntry, value: event.target.value })
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.stopPropagation();
+                    if (!isComposingKey(event.nativeEvent)) {
+                      event.preventDefault();
+                      insertUrl();
+                    }
+                  }
+                }}
+              />
+              {urlEntry.value && !isUrlValid && (
+                <p
+                  id={`${props.id}-url-error`}
+                  role="alert"
+                  className="text-destructive w-full text-sm"
+                >
+                  Enter a complete URL beginning with http:// or https://.
+                </p>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                disabled={!canEdit || !isUrlValid}
+                onClick={insertUrl}
+              >
+                {urlEntry.kind === "image" ? "Insert image" : "Insert link"}
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={closeUrlEntry}>
+                Cancel
+              </Button>
+            </PopoverContent>
+          )}
+        </Popover>
         {isSource ? (
           <Textarea
             ref={textareaRef}
@@ -590,16 +646,42 @@ export const RichInput = (props: RichInputProps) => {
               Uploading image…
             </span>
           )}
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label="Insert emoji"
-            disabled={!canEdit}
-            onClick={() => setEmojiOpen(!emojiOpen)}
-          >
-            <SmilePlus className="h-5 w-5" />
-          </Button>
+          <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="Insert emoji"
+                disabled={!canEdit}
+              >
+                <SmilePlus className="h-5 w-5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="end"
+              collisionPadding={8}
+              className="max-h-[var(--radix-popover-content-available-height)] w-[300px] overflow-y-auto border-0 p-0"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                if (isSource) textareaRef.current?.focus();
+                else quillRef.current?.focus({ preventScroll: true });
+              }}
+            >
+              <EmojiPicker
+                onSelect={(emoji) => {
+                  const editor = quillRef.current;
+                  if (editor && !isSource) {
+                    const range = editor.getSelection(true);
+                    editor.insertText(range.index, emoji, "user");
+                    editor.setSelection(range.index + emoji.length, 0, "silent");
+                  } else field.onChange(value + emoji);
+                  setEmojiOpen(false);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
           {props.onSubmit && (
             <Button
               type="button"
@@ -611,22 +693,6 @@ export const RichInput = (props: RichInputProps) => {
             >
               <SendHorizontal className="h-5 w-5" />
             </Button>
-          )}
-          {emojiOpen && (
-            <div className="absolute right-0 bottom-full z-50">
-              <EmojiPicker
-                onClickOutside={() => setEmojiOpen(false)}
-                onSelect={(emoji) => {
-                  const editor = quillRef.current;
-                  if (editor && !isSource) {
-                    const range = editor.getSelection(true);
-                    editor.insertText(range.index, emoji, "user");
-                    editor.setSelection(range.index + emoji.length, 0, "silent");
-                  } else field.onChange(value + emoji);
-                  setEmojiOpen(false);
-                }}
-              />
-            </div>
           )}
         </div>
       </div>
@@ -670,6 +736,15 @@ export const RichInput = (props: RichInputProps) => {
 /** Older WebKit can clear isComposing before the IME-confirming Enter. */
 const isComposingKey = (event: KeyboardEvent) =>
   event.isComposing || event.keyCode === 229;
+
+const isCompleteWebUrl = (value: string) => {
+  if (!/^https?:\/\//i.test(value.trim())) return false;
+  try {
+    return !!new URL(value.trim()).hostname;
+  } catch {
+    return false;
+  }
+};
 
 const formatButtons = [
   { format: "bold", label: "Bold", icon: Bold },

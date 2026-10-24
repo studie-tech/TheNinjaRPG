@@ -315,7 +315,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                     value="create"
                     className="mt-4 flex flex-1 flex-col gap-4"
                   >
-                    <div className="min-h-0 flex-1">
+                    <div className="shrink-0">
                       <RichInput
                         plainText
                         id="systemPrompt"
@@ -327,7 +327,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                       />
                     </div>
 
-                    <div className="min-h-0 flex-1">
+                    <div className="shrink-0">
                       <RichInput
                         plainText
                         id="userPrompt"
@@ -360,7 +360,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
                   </TabsContent>
 
                   <TabsContent value="edit" className="mt-4 flex flex-1 flex-col gap-4">
-                    <div className="min-h-0 flex-1">
+                    <div className="shrink-0">
                       <RichInput
                         plainText
                         id="editPrompt"
