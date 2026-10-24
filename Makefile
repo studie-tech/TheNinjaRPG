@@ -167,6 +167,11 @@ dbpush: ensure-env ensure-services # Push schema to db without creating migratio
 	@echo "${YELLOW}Pushing database schema to database${RESET}"
 	cd app && node ../scripts/dev-bun.mjs dbpush
 
+.PHONY: discord-register-metadata
+discord-register-metadata: ensure-env # Register the Discord Linked Roles metadata schema
+	@echo "${YELLOW}Register Discord Linked Roles metadata ${RESET}"
+	cd app && node ../scripts/dev-bun.mjs run discord:register-metadata
+
 .PHONY: seed
 seed: ensure-env ensure-services # Seed database
 	@echo "${YELLOW}Seed data into database ${RESET}"

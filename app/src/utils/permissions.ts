@@ -321,6 +321,20 @@ export const canModerate = (role: UserRole) => {
   return canModerateRoles.includes(role);
 };
 
+/** Look up Discord links, their history and abuse flags. */
+export const canViewDiscordLinks = (role: UserRole) => canModerate(role);
+
+/** Remove another character's Discord link and resync its Discord state. */
+export const canManageDiscordLinks = (role: UserRole) => {
+  return [
+    "MODERATOR",
+    "HEAD_MODERATOR",
+    "MODERATOR-ADMIN",
+    "OWNER",
+    "CODING-ADMIN",
+  ].includes(role);
+};
+
 export const canCreateNews = (role: UserRole) => {
   return isStaffRole(role);
 };

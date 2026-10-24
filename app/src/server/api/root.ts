@@ -21,6 +21,7 @@ import { conceptartRouter } from "./routers/conceptart";
 import { contentReviewRouter } from "./routers/contentReview";
 import { coopRouter } from "./routers/coop";
 import { dataRouter } from "./routers/data";
+import { discordRouter } from "./routers/discord";
 import { farmingRouter } from "./routers/farming";
 import { forumRouter } from "./routers/forum";
 import { guideRouter } from "./routers/guide";
@@ -98,6 +99,7 @@ export const appRouter = createTRPCRouter({
   contentReview: contentReviewRouter,
   clan: clanRouter,
   data: dataRouter,
+  discord: discordRouter,
   coop: coopRouter,
   forum: forumRouter,
   gameAsset: gameAssetRouter,

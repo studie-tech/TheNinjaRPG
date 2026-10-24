@@ -209,6 +209,7 @@ import {
   claimUserSnapshot,
 } from "@/server/utils/concurrency";
 import { settleCookingExperience } from "@/server/utils/cooking";
+import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { hashIp } from "@/server/utils/ipHash";
 import {
@@ -1865,6 +1866,8 @@ export const profileRouter = createTRPCRouter({
           rank: input.data.rank,
         });
       }
+      if (usernameChanged || villageChanged)
+        scheduleDiscordSync(ctx.drizzle, target.userId);
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   // Update a AI
@@ -2059,6 +2062,7 @@ export const profileRouter = createTRPCRouter({
           relatedMsg: `Update: ${user.username} -> ${input.username}`,
           relatedImage: user.avatarLight,
         });
+        scheduleDiscordSync(ctx.drizzle, ctx.userId);
         return {
           success: true,
           message: "Username updated",

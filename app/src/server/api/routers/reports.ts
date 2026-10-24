@@ -49,6 +49,7 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
+import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { updateSanctionReport } from "@/server/utils/sanctionTombstone";
 import {
   canBanUsers,
@@ -625,6 +626,8 @@ export const reportsRouter = createTRPCRouter({
           decision: "BAN_ACTIVATED",
         }),
       ]);
+      // An indefinite ban or silence also bans the linked Discord account.
+      scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
       return { success: true, message: "User banned" };
     }),
   // Silence a user. If no escalation: moderator-only. If escalated: admin-only
@@ -676,6 +679,8 @@ export const reportsRouter = createTRPCRouter({
           decision: "SILENCE_ACTIVATED",
         }),
       ]);
+      // An indefinite ban or silence also bans the linked Discord account.
+      scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
       return { success: true, message: "User silenced" };
     }),
   // Timeout: 1-hour silence. CONTENT-ADMIN and EVENT-ADMIN only.
@@ -926,6 +931,8 @@ export const reportsRouter = createTRPCRouter({
         }),
       );
       await Promise.all(mutations);
+      // Lifts the Discord ban once no other indefinite sanction remains.
+      scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
       return { success: true, message: "Report cleared" };
     }),
   updateUserAvatar: protectedProcedure

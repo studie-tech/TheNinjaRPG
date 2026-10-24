@@ -36,6 +36,22 @@ export const serverSchema = z.object({
   DISCORD_CONTENT_UPDATES: z.url().optional(),
   DISCORD_NEWS_UPDATES: z.url().optional(),
   DISCORD_TICKETS: z.url().optional(),
+  /**
+   * Discord account linking with Linked Roles (docs/DiscordLinking.md). Stays off unless
+   * DISCORD_LINKING_ENABLED is "true" and the application, bot, guild and encryption key
+   * below are all configured.
+   */
+  DISCORD_LINKING_ENABLED: z.enum(["true", "false"]).optional(),
+  DISCORD_CLIENT_ID: z.string().optional(),
+  DISCORD_CLIENT_SECRET: z.string().optional(),
+  DISCORD_BOT_TOKEN: z.string().optional(),
+  DISCORD_GUILD_ID: z.string().optional(),
+  // Role the bot grants to every linked member; leave unset when Linked Roles grants it.
+  DISCORD_VERIFIED_ROLE_ID: z.string().optional(),
+  // JSON object of TNR village id to Discord role id, e.g. {"<villageId>":"<roleId>"}
+  DISCORD_VILLAGE_ROLE_IDS: z.string().optional(),
+  // Key for the stored OAuth tokens: 32 bytes as base64 or 64 hex characters
+  DISCORD_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   FACEBOOK_PAGE_ID: z.string().optional(),
   FACEBOOK_PAGE_ACCESS_TOKEN: z.string().optional(),
   INSTAGRAM_BUSINESS_ACCOUNT_ID: z.string().optional(),
@@ -120,6 +136,16 @@ export const serverEnv = {
   DISCORD_CONTENT_UPDATES: process.env.DISCORD_CONTENT_UPDATES,
   DISCORD_NEWS_UPDATES: process.env.DISCORD_NEWS_UPDATES,
   DISCORD_TICKETS: process.env.DISCORD_TICKETS,
+  DISCORD_LINKING_ENABLED: /** @type {"true" | "false" | undefined} */ (
+    process.env.DISCORD_LINKING_ENABLED
+  ),
+  DISCORD_CLIENT_ID: process.env.DISCORD_CLIENT_ID,
+  DISCORD_CLIENT_SECRET: process.env.DISCORD_CLIENT_SECRET,
+  DISCORD_BOT_TOKEN: process.env.DISCORD_BOT_TOKEN,
+  DISCORD_GUILD_ID: process.env.DISCORD_GUILD_ID,
+  DISCORD_VERIFIED_ROLE_ID: process.env.DISCORD_VERIFIED_ROLE_ID,
+  DISCORD_VILLAGE_ROLE_IDS: process.env.DISCORD_VILLAGE_ROLE_IDS,
+  DISCORD_TOKEN_ENCRYPTION_KEY: process.env.DISCORD_TOKEN_ENCRYPTION_KEY,
   FACEBOOK_PAGE_ID: process.env.FACEBOOK_PAGE_ID,
   FACEBOOK_PAGE_ACCESS_TOKEN: process.env.FACEBOOK_PAGE_ACCESS_TOKEN,
   INSTAGRAM_BUSINESS_ACCOUNT_ID: process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID,

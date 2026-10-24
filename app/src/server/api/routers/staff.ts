@@ -23,6 +23,8 @@ import {
   conversation,
   conversationComment,
   damageSimulation,
+  discordLink,
+  discordLinkHistory,
   farmCollectionLog,
   farmExtraction,
   farmPlot,
@@ -109,6 +111,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { removeDiscordLink } from "@/server/utils/discord/linking";
 import { isMysqlDeadlockError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { renameParentalContact } from "@/server/utils/parentalControls";
@@ -968,6 +971,14 @@ export const staffRouter = createTRPCRouter({
           .set({ userId: input.newUserId })
           .where(eq(aiProfile.userId, input.userId)),
         ctx.drizzle
+          .update(discordLink)
+          .set({ userId: input.newUserId })
+          .where(eq(discordLink.userId, input.userId)),
+        ctx.drizzle
+          .update(discordLinkHistory)
+          .set({ userId: input.newUserId })
+          .where(eq(discordLinkHistory.userId, input.userId)),
+        ctx.drizzle
           .update(userBlackList)
           .set({ creatorUserId: input.newUserId })
           .where(eq(userBlackList.creatorUserId, input.userId)),
@@ -1425,6 +1436,14 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
     await lockedClient
       .delete(userPushPreference)
       .where(eq(userPushPreference.userId, userId));
+  });
+
+  // After the tombstone captured it: release and archive the Discord link. A Discord ban
+  // mirroring an indefinite sanction stays in place.
+  await removeDiscordLink(client, {
+    userId,
+    reason: "ACCOUNT_DELETED",
+    actorUserId: userId,
   });
 
   // Keep paid snapshots for support and retire recipients before inventory cleanup.

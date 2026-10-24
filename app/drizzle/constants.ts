@@ -4052,3 +4052,26 @@ export const STORE_BUNDLE_MAX_PRICE_CENTS = 100000;
 /** Upper bound for staff-configured lifetime purchase limits; zero is unlimited. */
 export const STORE_BUNDLE_MAX_PURCHASE_LIMIT = 1000000;
 export const STORE_ORDER_RESERVATION_MINUTES = 30;
+
+/**
+ * Discord account linking (see docs/DiscordLinking.md). A Discord account must be at least
+ * this old, measured from its snowflake id, before it can be linked.
+ */
+export const DISCORD_MIN_ACCOUNT_AGE_DAYS = 30;
+/** After an unlink, neither side can link to a different partner until this passes. */
+export const DISCORD_UNLINK_COOLDOWN_DAYS = 30;
+/**
+ * A ban or silence imposed for at least this long counts as indefinite and bans the linked
+ * Discord account from the server until it ends. Staff impose indefinite sanctions as the
+ * longest available duration, so anything of a year or more is treated as one.
+ */
+export const DISCORD_INDEFINITE_SANCTION_DAYS = 365;
+/** Discord rejects guild nicknames longer than this. */
+export const DISCORD_NICKNAME_MAX_LENGTH = 32;
+/** Linked accounts reconciled per run of the Discord sync cron. */
+export const DISCORD_SYNC_BATCH_SIZE = 100;
+/** Linked accounts are fully re-applied at least this often, even without changes. */
+export const DISCORD_SYNC_REFRESH_DAYS = 7;
+/** Why a Discord link ended; kept in DiscordLinkHistory for cooldowns and staff review. */
+export const DiscordUnlinkReasons = ["USER", "STAFF", "ACCOUNT_DELETED"] as const;
+export type DiscordUnlinkReason = (typeof DiscordUnlinkReasons)[number];

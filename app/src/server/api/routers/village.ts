@@ -52,6 +52,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { activeWarAllyWhere } from "@/server/utils/warAlly";
 import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
@@ -311,6 +312,7 @@ export const villageRouter = createTRPCRouter({
         })
         .where(and(eq(userData.userId, ctx.userId), eq(userData.status, "AWAKE")));
 
+      scheduleDiscordSync(ctx.drizzle, ctx.userId);
       return { success: true, message: "You have left the village" };
     }),
   joinVillage: protectedProcedure
@@ -361,6 +363,7 @@ export const villageRouter = createTRPCRouter({
           .set({ senseiId: null })
           .where(and(eq(userData.senseiId, ctx.userId), eq(userData.rank, "GENIN"))),
       ]);
+      scheduleDiscordSync(ctx.drizzle, ctx.userId);
       return { success: true, message: "You have joined the village" };
     }),
   swapVillage: protectedProcedure
@@ -425,6 +428,7 @@ export const villageRouter = createTRPCRouter({
           .where(and(eq(userData.senseiId, ctx.userId), eq(userData.rank, "GENIN"))),
       ]);
 
+      scheduleDiscordSync(ctx.drizzle, ctx.userId);
       return { success: true, message: "You have swapped villages" };
     }),
   getAlliances: publicProcedure

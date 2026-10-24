@@ -12,6 +12,7 @@ import {
   History,
   Loader2,
   Mail,
+  MessageCircle,
   Palette,
   PenLine,
   RotateCcw,
@@ -93,6 +94,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { DiscordLinkSettings } from "@/layout/DiscordLinkSettings";
 import { ElementalMastery } from "@/layout/ElementalMastery";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
@@ -178,6 +180,7 @@ export function ProfileEdit() {
   const { data: userData } = useRequiredUserData();
   const [activeElement, setActiveElement] = useState("AI Avatar");
   const { data: emailReminder } = api.misc.getPersonalEmailReminder.useQuery();
+  const { data: discordStatus } = api.discord.getStatus.useQuery();
 
   // Loaders
   if (!userData) return <Loader explanation="Loading profile page..." />;
@@ -356,6 +359,21 @@ export function ProfileEdit() {
             onClick={setActiveElement}
           >
             <EmailReminderSettings emailReminder={emailReminder} />
+          </Accordion>
+        )}
+        {discordStatus?.enabled && (
+          <Accordion
+            title="Discord"
+            selectedTitle={activeElement}
+            unselectedSubtitle={
+              discordStatus.link
+                ? `Linked to ${discordStatus.link.discordUsername}`
+                : "Link your Discord account to join the server"
+            }
+            icon={MessageCircle}
+            onClick={setActiveElement}
+          >
+            <DiscordLinkSettings />
           </Accordion>
         )}
         <Accordion

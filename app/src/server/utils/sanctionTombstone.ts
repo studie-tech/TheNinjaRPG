@@ -24,6 +24,7 @@ import {
 import {
   accountDeletion,
   actionLog,
+  discordLink,
   historicalIp,
   type SanctionTombstone,
   sanctionTombstone,
@@ -44,8 +45,8 @@ import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/grant";
  * registering again.
  *
  * Deleting an account while a ban or silence still runs stores one row per active report:
- * the Clerk user id, keyed hashes of the primary email, linked OAuth accounts and recorded
- * IP addresses, the end date and the report id that imposed it. No plain addresses or
+ * the Clerk user id, keyed hashes of the primary email, linked OAuth accounts (including a
+ * linked Discord account) and recorded IP addresses, the end date and the report id that imposed it. No plain addresses or
  * character content are kept, and the hourly cleaner removes the row once the sanction ends.
  *
  * The web character deletion keeps the Clerk user, so the same Clerk id returns on the next
@@ -215,7 +216,7 @@ export const recordSanctionTombstone = async (
   userId: string,
   identity?: SanctionIdentity | null,
 ) => {
-  const [activeReport, user] = await Promise.all([
+  const [activeReport, user, linkedDiscord] = await Promise.all([
     client.query.userReport.findFirst({
       columns: { id: true },
       where: activeSanctionReportsWhere(userId),
@@ -224,6 +225,10 @@ export const recordSanctionTombstone = async (
       columns: { lastIp: true },
       where: eq(userData.userId, userId),
     }),
+    client.query.discordLink.findFirst({
+      columns: { discordId: true },
+      where: eq(discordLink.userId, userId),
+    }),
   ]);
   const clerkUser = activeReport
     ? identity === undefined
@@ -231,9 +236,19 @@ export const recordSanctionTombstone = async (
       : identity
     : null;
   if (clerkUser) {
+    // A Discord account linked to the character counts like a Discord login, so it cannot
+    // be linked to the next character while the sanction runs.
     const hashes = {
       emailHash: primaryEmailHashOf(clerkUser),
-      accountHashes: accountHashesOf(clerkUser),
+      accountHashes: accountHashesOf({
+        ...clerkUser,
+        externalAccounts: [
+          ...clerkUser.externalAccounts,
+          ...(linkedDiscord
+            ? [{ provider: "discord", providerUserId: linkedDiscord.discordId }]
+            : []),
+        ],
+      }),
     };
     const sanction = sql<SanctionTombstoneType>`CASE WHEN ${userReport.status} = 'BAN_ACTIVATED' THEN 'BAN' ELSE 'SILENCE' END`;
     // Select eligibility and the decision in the same write, so a completed staff revision

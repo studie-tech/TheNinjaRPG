@@ -771,6 +771,13 @@
       "when": 1792830436371,
       "tag": "0110_perpetual_phil_sheldon",
       "breakpoints": false
+    },
+    {
+      "idx": 111,
+      "version": "5",
+      "when": 1792863054181,
+      "tag": "0111_soft_ghost_rider",
+      "breakpoints": false
     }
   ]
 }

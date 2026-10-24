@@ -6747,6 +6747,92 @@ export const sanctionTombstone = mysqlTable(
 export type SanctionTombstone = InferSelectModel<typeof sanctionTombstone>;
 
 /**
+ * The one Discord account linked to a character (see `server/utils/discord/`). The unique
+ * keys on both `userId` and `discordId` guarantee at most one active link per character and
+ * per Discord account. OAuth tokens are AES-256-GCM encrypted at rest and only used to push
+ * Linked Roles metadata and to add the member to the server.
+ *
+ * The `synced*` columns record what was last applied on Discord. The sync cron compares them
+ * with the character's current state, so a failed or skipped update is retried until both
+ * agree.
+ */
+export const discordLink = mysqlTable(
+  "DiscordLink",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    /** Discord snowflake id. */
+    discordId: varchar("discordId", { length: 32 }).notNull(),
+    discordUsername: varchar("discordUsername", { length: 191 }).notNull(),
+    /** Creation time encoded in the Discord snowflake. */
+    discordCreatedAt: datetime("discordCreatedAt", { mode: "date", fsp: 3 }).notNull(),
+    /** Discord id the character signs in with through Clerk, when it has one. */
+    clerkDiscordId: varchar("clerkDiscordId", { length: 32 }),
+    linkedAt: datetime("linkedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    accessToken: text("accessToken").notNull(),
+    refreshToken: text("refreshToken").notNull(),
+    tokenExpiresAt: datetime("tokenExpiresAt", { mode: "date", fsp: 3 }).notNull(),
+    scopes: varchar("scopes", { length: 191 }).notNull(),
+    syncedAt: datetime("syncedAt", { mode: "date", fsp: 3 }),
+    syncedUsername: varchar("syncedUsername", { length: 191 }),
+    syncedVillageId: varchar("syncedVillageId", { length: 191 }),
+    syncedLevel: int("syncedLevel"),
+    syncedBanned: boolean("syncedBanned").default(false).notNull(),
+    syncError: varchar("syncError", { length: 500 }),
+  },
+  (table) => ({
+    userIdKey: uniqueIndex("DiscordLink_userId_key").on(table.userId),
+    discordIdKey: uniqueIndex("DiscordLink_discordId_key").on(table.discordId),
+    clerkDiscordIdIdx: index("DiscordLink_clerkDiscordId_idx").on(table.clerkDiscordId),
+    syncedAtIdx: index("DiscordLink_syncedAt_idx").on(table.syncedAt),
+  }),
+);
+export type DiscordLink = InferSelectModel<typeof discordLink>;
+
+export const discordLinkRelations = relations(discordLink, ({ one }) => ({
+  user: one(userData, {
+    fields: [discordLink.userId],
+    references: [userData.userId],
+  }),
+}));
+
+/**
+ * Ended Discord links, keyed by the link id so archiving the same link twice is a no-op.
+ * Unlink cooldowns and staff abuse reviews read it.
+ */
+export const discordLinkHistory = mysqlTable(
+  "DiscordLinkHistory",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    discordId: varchar("discordId", { length: 32 }).notNull(),
+    discordUsername: varchar("discordUsername", { length: 191 }).notNull(),
+    linkedAt: datetime("linkedAt", { mode: "date", fsp: 3 }).notNull(),
+    unlinkedAt: datetime("unlinkedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    reason: mysqlEnum("reason", consts.DiscordUnlinkReasons).notNull(),
+    /** Staff member who removed the link, for staff unlinks. */
+    unlinkedByUserId: varchar("unlinkedByUserId", { length: 191 }),
+    /** Staff can lift the unlink cooldown, e.g. when correcting a mistaken link. */
+    cooldownWaived: boolean("cooldownWaived").default(false).notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("DiscordLinkHistory_userId_unlinkedAt_idx").on(
+      table.userId,
+      table.unlinkedAt,
+    ),
+    discordIdIdx: index("DiscordLinkHistory_discordId_unlinkedAt_idx").on(
+      table.discordId,
+      table.unlinkedAt,
+    ),
+  }),
+);
+export type DiscordLinkHistory = InferSelectModel<typeof discordLinkHistory>;
+
+/**
  * A suggested content change, decided in /manual/review. `statusChangedAt` marks the last
  * status change so rejected and outdated rows can be removed after the retention window;
  * `expiresAt` is set when the suggestion rests on usage statistics, which go stale.

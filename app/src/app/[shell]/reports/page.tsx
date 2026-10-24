@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, Eraser, Presentation } from "lucide-react";
+import { Bot, Eraser, MessageCircle, Presentation } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import ReportFiltering, { getFilter, useFiltering } from "@/layout/ReportFilteri
 import ParsedReportJson from "@/layout/ReportReason";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
-import { isStaffRole } from "@/utils/permissions";
+import { canViewDiscordLinks, isStaffRole } from "@/utils/permissions";
 import { reportCommentColor, reportCommentExplain } from "@/utils/reports";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -53,6 +53,9 @@ export default function Reports() {
     },
   );
   const allReports = reports?.pages.flatMap((page) => page.data);
+  const { data: discordStatus } = api.discord.getStatus.useQuery(undefined, {
+    enabled: !!userData && canViewDiscordLinks(userData.role),
+  });
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
   // Mutation
@@ -126,6 +129,13 @@ export default function Reports() {
                     <Bot className="h-6 w-6" />
                   </Button>
                 </Link>
+                {discordStatus?.enabled && canViewDiscordLinks(userData.role) && (
+                  <Link href="/reports/discord">
+                    <Button id="discord-links" hoverText="Discord Links">
+                      <MessageCircle className="h-6 w-6" />
+                    </Button>
+                  </Link>
+                )}
                 <ReportFiltering state={state} />
               </div>
             )}

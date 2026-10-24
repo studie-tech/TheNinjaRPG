@@ -26,6 +26,7 @@
     "start": "next start",
     "test": "bun test",
     "seed": "bun run drizzle/seed.ts",
+    "discord:register-metadata": "bun run scripts/discord-register-metadata.ts",
     "dbpush": "drizzle-kit push",
     "makemigrations": "drizzle-kit generate",
     "emptymigration": "drizzle-kit generate --custom",
