@@ -1,3 +1,4 @@
+.rich-input-toolbar { scrollbar-width: thin; }
 .rich-input-toolbar button {
   display: inline-flex;
   align-items: center;

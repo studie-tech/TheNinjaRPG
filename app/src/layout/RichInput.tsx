@@ -3,17 +3,20 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Bold,
+  Code2,
   Eraser,
   ImagePlus,
   Italic,
   Link2,
   List,
   ListOrdered,
+  LoaderCircle,
   Quote,
   SendHorizontal,
   SmilePlus,
   Strikethrough,
   Underline,
+  Upload,
 } from "lucide-react";
 import type Quill from "quill";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
@@ -446,6 +449,103 @@ export const RichInput = (props: RichInputProps) => {
     setUrlEntry(null);
   };
 
+  // Keep common actions visible while formatting controls scroll within narrow fields.
+  const editorActions = (
+    <>
+      {uploading && (
+        <span role="status" className="px-2">
+          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+          <span className="sr-only">Uploading image…</span>
+        </span>
+      )}
+      {!props.plainText && props.allowClipboardPaste && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          aria-label="Upload image"
+          title="Upload image"
+          disabled={!canEdit}
+          onClick={() => fileRef.current?.click()}
+        >
+          <Upload className="h-4 w-4" />
+        </Button>
+      )}
+      {!props.plainText && (
+        <Button
+          type="button"
+          size="icon"
+          variant={sourceMode ? "secondary" : "ghost"}
+          className="h-8 w-8"
+          aria-label={sourceMode ? "Visual editor" : "HTML"}
+          aria-pressed={sourceMode}
+          title={sourceMode ? "Visual editor" : "HTML source"}
+          disabled={blocked}
+          onClick={() => {
+            setSourceMode(!sourceMode);
+            setMention(null);
+            setUrlEntry(null);
+          }}
+        >
+          <Code2 className="h-4 w-4" />
+        </Button>
+      )}
+      <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            title="Insert emoji"
+            aria-label="Insert emoji"
+            disabled={!canEdit}
+          >
+            <SmilePlus className="h-5 w-5" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="top"
+          align="end"
+          collisionPadding={8}
+          className="max-h-[var(--radix-popover-content-available-height)] w-[300px] overflow-y-auto border-0 p-0"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (isSource) textareaRef.current?.focus();
+            else quillRef.current?.focus({ preventScroll: true });
+          }}
+        >
+          <EmojiPicker
+            onSelect={(emoji) => {
+              const editor = quillRef.current;
+              if (editor && !isSource) {
+                const range = editor.getSelection(true);
+                editor.insertText(range.index, emoji, "user");
+                editor.setSelection(range.index + emoji.length, 0, "silent");
+              } else field.onChange(value + emoji);
+              setEmojiOpen(false);
+            }}
+          />
+        </PopoverContent>
+      </Popover>
+      {props.onSubmit && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          title="Send message"
+          aria-label="Send message"
+          disabled={!canEdit}
+          onClick={submit}
+        >
+          <SendHorizontal className="h-5 w-5" />
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <div aria-disabled={blocked} className="min-w-0">
       {props.label && (
@@ -458,95 +558,74 @@ export const RichInput = (props: RichInputProps) => {
         data-rich-input
       >
         {!props.plainText && (
-          <div className="flex flex-wrap items-center justify-between gap-1 border-b px-2 py-1">
-            <span className="text-muted-foreground text-xs">
-              {sourceMode ? "HTML source" : "Rich text"}
-            </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={blocked}
-              onClick={() => {
-                setSourceMode(!sourceMode);
-                setMention(null);
-                setUrlEntry(null);
-              }}
-            >
-              {sourceMode ? "Visual editor" : "HTML"}
-            </Button>
-          </div>
-        )}
-        {!isSource && (
-          // Quill's native toolbar listeners require new controls when the editor is recreated.
-          <div
-            key={`${props.id}:${props.refreshKey}`}
-            ref={toolbarRef}
-            className="rich-input-toolbar flex flex-wrap gap-1 border-b p-1"
-            role="toolbar"
-            aria-label="Text formatting"
-          >
-            <select
-              className="ql-header bg-background rounded text-sm"
-              aria-label="Paragraph style"
-              disabled={!canEdit}
-              defaultValue=""
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.stopPropagation();
-              }}
-            >
-              <option value="">Paragraph</option>
-              <option value="2">Heading</option>
-              <option value="3">Subheading</option>
-            </select>
-            {formatButtons.map(({ format, label, icon: Icon, value: buttonValue }) => (
-              <button
-                key={label}
-                className={`ql-${format}`}
-                type="button"
-                value={buttonValue}
-                title={label}
-                aria-label={label}
-                disabled={!canEdit}
-                onMouseDown={(event) => event.preventDefault()}
+          <div className="flex min-w-0 items-center border-b">
+            {!isSource && (
+              // Quill's native toolbar listeners require new controls when the editor is recreated.
+              <div
+                key={`${props.id}:${props.refreshKey}`}
+                ref={toolbarRef}
+                className="rich-input-toolbar flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto p-1 [&>*]:shrink-0"
+                role="toolbar"
+                aria-label="Text formatting"
               >
-                <Icon className="h-4 w-4" />
-              </button>
-            ))}
-            <button
-              className="rich-input-link"
-              type="button"
-              title="Link"
-              aria-label="Link"
-              disabled={!canEdit}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => openUrlEntry("link")}
-            >
-              <Link2 className="h-4 w-4" />
-            </button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              title="Insert image URL"
-              aria-label="Insert image URL"
-              disabled={!canEdit}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => openUrlEntry("image")}
-            >
-              <ImagePlus className="h-4 w-4" />
-            </Button>
-            {props.allowClipboardPaste && (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                disabled={!canEdit}
-                onClick={() => fileRef.current?.click()}
-              >
-                Upload image
-              </Button>
+                <select
+                  className="ql-header bg-background rounded text-sm"
+                  aria-label="Paragraph style"
+                  disabled={!canEdit}
+                  defaultValue=""
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.stopPropagation();
+                  }}
+                >
+                  <option value="">Paragraph</option>
+                  <option value="2">Heading</option>
+                  <option value="3">Subheading</option>
+                </select>
+                {formatButtons.map(
+                  ({ format, label, icon: Icon, value: buttonValue }) => (
+                    <button
+                      key={label}
+                      className={`ql-${format}`}
+                      type="button"
+                      value={buttonValue}
+                      title={label}
+                      aria-label={label}
+                      disabled={!canEdit}
+                      onMouseDown={(event) => event.preventDefault()}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </button>
+                  ),
+                )}
+                <button
+                  className="rich-input-link"
+                  type="button"
+                  title="Link"
+                  aria-label="Link"
+                  disabled={!canEdit}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => openUrlEntry("link")}
+                >
+                  <Link2 className="h-4 w-4" />
+                </button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  title="Insert image URL"
+                  aria-label="Insert image URL"
+                  className="h-8 w-8"
+                  disabled={!canEdit}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => openUrlEntry("image")}
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
+              </div>
             )}
+            <div className="ml-auto flex shrink-0 items-center gap-1 p-1">
+              {editorActions}
+            </div>
           </div>
         )}
         <Popover
@@ -685,72 +764,11 @@ export const RichInput = (props: RichInputProps) => {
               : "Loading editor…"}
           </p>
         )}
-        <div className="relative flex items-center justify-end gap-1 border-t p-1">
-          {uploading && (
-            <span role="status" className="mr-auto text-sm">
-              Uploading image…
-            </span>
-          )}
-          {sourceMode && !props.plainText && props.allowClipboardPaste && (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={!canEdit}
-              onClick={() => fileRef.current?.click()}
-            >
-              Upload image
-            </Button>
-          )}
-          <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                aria-label="Insert emoji"
-                disabled={!canEdit}
-              >
-                <SmilePlus className="h-5 w-5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="top"
-              align="end"
-              collisionPadding={8}
-              className="max-h-[var(--radix-popover-content-available-height)] w-[300px] overflow-y-auto border-0 p-0"
-              onCloseAutoFocus={(event) => {
-                event.preventDefault();
-                if (isSource) textareaRef.current?.focus();
-                else quillRef.current?.focus({ preventScroll: true });
-              }}
-            >
-              <EmojiPicker
-                onSelect={(emoji) => {
-                  const editor = quillRef.current;
-                  if (editor && !isSource) {
-                    const range = editor.getSelection(true);
-                    editor.insertText(range.index, emoji, "user");
-                    editor.setSelection(range.index + emoji.length, 0, "silent");
-                  } else field.onChange(value + emoji);
-                  setEmojiOpen(false);
-                }}
-              />
-            </PopoverContent>
-          </Popover>
-          {props.onSubmit && (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label="Send message"
-              disabled={!canEdit}
-              onClick={submit}
-            >
-              <SendHorizontal className="h-5 w-5" />
-            </Button>
-          )}
-        </div>
+        {props.plainText && (
+          <div className="flex items-center justify-end gap-1 border-t p-1">
+            {editorActions}
+          </div>
+        )}
       </div>
       <input
         ref={fileRef}
