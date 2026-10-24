@@ -8,6 +8,7 @@ import { TERRITORY_WAR_BOOST_PERCENT, TERRITORY_WAR_TARGET_POINTS, VILLAGE_SYNDI
 import * as schema from "@/drizzle/schema";
 import { clan, notification, territoryWar, territoryWarScore, userData, village } from "@/drizzle/schema";
 import { getTerritoryWarBoost, getTerritoryWarPeriodBoost } from "@/libs/territoryWar";
+import type { DrizzleClient } from "@/server/db";
 import { resolveTerritoryWar, territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { insertUsers } from "../../setup/factories";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
@@ -59,7 +60,7 @@ describeWithDatabase("Territory War bonus history competitor scope", () => {
       : { competitorId: `village:${kind === "syndicate" ? VILLAGE_SYNDICATE_ID : "winning-village"}`, clanId: null, villageId: kind === "syndicate" ? VILLAGE_SYNDICATE_ID : "winning-village" };
     await db.insert(territoryWar).values({ id: "scope-event", predecessorId: "initial", sector: 100, guardianId: "guardian", startsAt: activityStart, endsAt: checkAt });
     await db.insert(territoryWarScore).values({ warId: "scope-event", name: "Winner", points: TERRITORY_WAR_TARGET_POINTS, ...scope });
-    await resolveTerritoryWar(db, "scope-event", victory);
+    await db.transaction(tx => resolveTerritoryWar(tx as unknown as DrizzleClient, "scope-event", victory));
     expect((await db.query.territoryWarScore.findFirst())?.rewarded).toBe(true);
   };
   const readSubject = async (userId: string, since?: Date) => {

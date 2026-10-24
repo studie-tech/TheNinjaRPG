@@ -62,6 +62,30 @@ describeWithDatabase("Territory War participation", () => {
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, "ally") }))?.status).toBe("BATTLE");
   });
 
+  it("keeps leader-first contested admissions recoverable and consistent with queued status", async () => {
+    const db = await getTestDatabase();
+    const ids = Array.from({ length: 7 }, (_, index) => `contender-${index}`);
+    await insertUsers(ids.map(userId => ({ userId, villageId: "home", status: "AWAKE" as const, sector: 100 })));
+    const contenders = ids.map(id => callerForDatabase(territoryWarRouter, id, db));
+    const leader = await caller();
+    for (let round = 0; round < 6; round += 1) {
+      const created = await leader.createTeam({ eventId: "event" });
+      expect(created.success).toBe(true);
+      const id = (await team())!.id;
+      const admissions = await Promise.allSettled(contenders.map(contender => contender.joinTeam({ teamId: id })));
+      expect(admissions.every(result => result.status === "fulfilled")).toBe(true);
+      const members = await db.query.mpvpBattleUser.findMany();
+      expect(members.length).toBeGreaterThanOrEqual(2);
+      expect(members.length).toBeLessThanOrEqual(3);
+      expect(members.some(member => member.userId === "leader")).toBe(true);
+      const queued = (await db.query.userData.findMany()).filter(user => user.status === "QUEUED");
+      expect(queued.map(user => user.userId).sort()).toEqual(members.map(member => member.userId).sort());
+      expect(new Set(members.map(member => member.slot)).size).toBe(members.length);
+      await resetTables(mpvpBattleUser, mpvpBattleQueue);
+      await db.update(userData).set({ status: "AWAKE" });
+    }
+  });
+
   it("resolves any outlaw clan and displays that competitor's active bonus", async () => {
     const db = await getTestDatabase();
     const until = new Date(Date.now() + 3600000);

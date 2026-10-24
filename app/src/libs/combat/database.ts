@@ -205,6 +205,7 @@ export const updateBattle = async (
   const territoryGuardianEnded =
     !!result &&
     newBattle.battleType === "TERRITORY_WAR" &&
+    // A guardian encounter ends for the whole roster on either side's defeat.
     (newBattle.usersState
       .filter((u) => u.isAi && !u.isSummon)
       .every((u) => !stillInBattle(u, newBattle.usersEffects)) ||
@@ -242,16 +243,17 @@ export const updateBattle = async (
     const deleted = await retryOnDeadlock(() =>
       newBattle.extraState.tournamentGameId ||
       newBattle.extraState.kageMatch ||
-      newBattle.extraState.territoryWar
+      territoryWarAwards(newBattle).length > 0
         ? client.transaction(async (tx) => {
             const database = tx as unknown as DrizzleClient;
             const deleted = await deleteBattle(database);
             // The version DELETE and match UPDATE must commit together: a single-row CAS
             // cannot prevent recovery treating a deleted battle as an interrupted launch.
             if (deleted.rowsAffected === 1) {
-              // DELETE and event receipt/score must commit together: a multi-table UPDATE
-              // cannot delete the battle and upsert competitor scores. Otherwise a failed
-              // reward write would permanently lose a terminal fight's strategic credit.
+              // MySQL cannot DELETE Battle while INSERTing a missing receipt/score and
+              // UPDATEing the event/rewards. Only eligible awards need that transaction;
+              // scoreless encounters use a single guarded DELETE. Retrying the
+              // claim after rollback preserves credit without delivering it twice.
               if (newBattle.extraState.territoryWar)
                 await settleTerritoryWarCombat(database, newBattle);
               if (newBattle.extraState.tournamentGameId)
@@ -297,7 +299,8 @@ export const updateBattle = async (
             const database = tx as unknown as DrizzleClient;
             const updated = await updateBattleState(database);
             // A decided PvP win must score before the opponent collects their result.
-            // The version UPDATE and receipt/score upserts cannot share one statement.
+            // MySQL cannot UPDATE Battle and INSERT missing receipt/score rows in one
+            // statement. The version claim and receipt make whole-transaction retries safe.
             if (updated.rowsAffected === 1)
               await settleTerritoryWarCombat(database, newBattle);
             return updated;

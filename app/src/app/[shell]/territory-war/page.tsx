@@ -25,6 +25,7 @@ import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+/** Live standings/lobbies, with server-clock deadline refresh and recoverable action feedback. */
 export default function TerritoryWarPage() {
   const { data: user, timeDiff, updateUser } = useRequiredUserData();
   const router = useRouter();

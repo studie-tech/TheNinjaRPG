@@ -15,8 +15,8 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
 /**
  * Claim and settle a personal encounter exactly once using only preloaded battle data.
- * Inventory inserts, allowance, receipt and character recovery span different rows, so
- * they must share a transaction: a single CAS cannot roll back a partial reward grant.
+ * MySQL cannot DELETE Battle, INSERT inventory/receipt rows and UPDATE allowance
+ * and character recovery in one statement; the transaction prevents partial grants.
  * The callback must run guarded player recovery on the supplied transaction client.
  */
 export const settleHuntingBattle = async (
@@ -32,6 +32,7 @@ export const settleHuntingBattle = async (
 ) => {
   const meta = current.extraState.hunting;
   if (!meta) return false;
+  // Reuse initiation's history and political metadata; combat settlement cannot fetch again.
   const hunter = current.usersState.find((user) => user.userId === meta.userId);
   const boost = hunter
     ? getTerritoryWarBoost({

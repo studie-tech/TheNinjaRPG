@@ -248,9 +248,9 @@ export function UserContextProvider(props: {
     }
   }, [data?.userData, user?.primaryEmailAddress?.emailAddress]);
 
-  // Keep this object identity stable so useUserData consumers do not re-render
-  // when the provider re-renders without user/auth changes (parent updates,
-  // getUser background refetch with structural sharing, etc.).
+  // Keep identity stable for unchanged data, but include notifications: bonus expiry
+  // removes a notification even when structural sharing preserves userData/timeDiff.
+  // Consumers must rerender then to drop the expired bonus from activity previews.
   const value = useMemo<UserContextValue>(
     () => ({
       data: data?.userData,

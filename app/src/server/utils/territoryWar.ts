@@ -28,8 +28,10 @@ import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
+/** Latest scheduled event, including closed/expired results; does not advance its lifecycle. */
 export const fetchLatestTerritoryWar = (client: DrizzleClient) =>
   client.query.territoryWar.findFirst({ orderBy: desc(territoryWar.startsAt) });
+/** Read-only, start-inclusive/end-exclusive admission window, optionally limited to a sector. */
 export const fetchActiveTerritoryWar = (client: DrizzleClient, sectorNumber?: number) =>
   client.query.territoryWar.findFirst({
     where: and(
@@ -40,6 +42,12 @@ export const fetchActiveTerritoryWar = (client: DrizzleClient, sectorNumber?: nu
     ),
   });
 
+/**
+ * Aggregate frozen competitors' credit from surviving, non-fled humans only.
+ * Guardian points are per winning member; PvP points are per defeated opposing human.
+ * Summons/allies never count. A winner who already collected still counts: the receipt,
+ * rather than leftBattle, deduplicates a later opponent's result collection.
+ */
 export const territoryWarAwards = (battle: CompleteBattle) => {
   const snapshot = battle.extraState.territoryWar;
   if (!snapshot || !["COMBAT", "TERRITORY_WAR"].includes(battle.battleType)) return [];
@@ -81,7 +89,12 @@ export const territoryWarAwards = (battle: CompleteBattle) => {
   return [...awards.values()];
 };
 
-/** Called inside the decided result's battle-version transaction; no reads during combat settlement. */
+/**
+ * Write-only delivery inside the successful battle-version claim's transaction.
+ * The event guard serializes finishers with expiry, and the receipt makes repeated
+ * result collections harmless. Always resolve before committing a score increment:
+ * the scheduler relies on no qualifying score remaining unresolved after commit.
+ */
 export const settleTerritoryWarCombat = async (
   client: DrizzleClient,
   battle: CompleteBattle,
@@ -125,7 +138,12 @@ export const settleTerritoryWarCombat = async (
   await resolveTerritoryWar(client, snapshot.id, now);
 };
 
-/** One guarded multi-table write closes the event, pays treasuries and activates every tied winner's boost. */
+/**
+ * Atomically close/pay all unrewarded target competitors, including ties. Villages and
+ * clan hideouts receive tokens; clans without hideouts receive clan points instead.
+ * The caller owns the transaction so the guarded reward, announcement INSERT and
+ * recipient counters commit together; this helper never starts its own transaction.
+ */
 export const resolveTerritoryWar = async (
   client: DrizzleClient,
   id: string,
@@ -146,7 +164,7 @@ export const resolveTerritoryWar = async (
   `);
   if (result.rowsAffected) {
     await client.execute(
-      sql`INSERT INTO Notification (userId, content) SELECT guardianId, ${`Territory War victory! Winners receive ${TERRITORY_WAR_TOKEN_REWARD.toLocaleString()} tokens (or clan points) and a one-hour Territory War boost. See [the standings](/territory-war).`} FROM TerritoryWar WHERE id = ${id}`,
+      sql`INSERT INTO Notification (userId, content) SELECT guardianId, ${`Territory War victory! Winners receive ${TERRITORY_WAR_TOKEN_REWARD.toLocaleString()} tokens (or clan points) and a ${TERRITORY_WAR_BOOST_HOURS}-hour Territory War boost. See [the standings](/territory-war).`} FROM TerritoryWar WHERE id = ${id}`,
     );
     await client
       .update(userData)
@@ -156,7 +174,11 @@ export const resolveTerritoryWar = async (
   return result;
 };
 
-/** Minute scheduler uses actual previous end, never catches up by opening stale events. */
+/**
+ * Expire or create the global event, spacing openings from the actual previous end.
+ * Scoring resolves in its own battle transaction, so active events need no repair.
+ * Delayed ticks open one fresh window rather than catching up with stale events.
+ */
 export const syncTerritoryWars = async (client: DrizzleClient, now = new Date()) => {
   const [latest, owned, homes, guardians] = await Promise.all([
     fetchLatestTerritoryWar(client),
@@ -169,24 +191,20 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
   ]);
   await cleanupTerritoryWarTeams(client, now);
   if (latest && !latest.resolvedAt) {
-    await retryOnDeadlock(() =>
-      client.transaction(async (tx) => {
-        const db = tx as unknown as DrizzleClient;
-        await resolveTerritoryWar(db, latest.id, now);
-        await db
-          .update(territoryWar)
-          .set({ resolvedAt: latest.endsAt })
-          .where(
-            and(
-              eq(territoryWar.id, latest.id),
-              isNull(territoryWar.resolvedAt),
-              lte(territoryWar.endsAt, now),
-            ),
-          );
-      }),
-    );
-    // A subsequent tick reloads the actual terminal timestamp after a concurrent score.
     if (latest.endsAt > now) return;
+    await retryOnDeadlock(() =>
+      client
+        .update(territoryWar)
+        .set({ resolvedAt: latest.endsAt })
+        .where(
+          and(
+            eq(territoryWar.id, latest.id),
+            isNull(territoryWar.resolvedAt),
+            lte(territoryWar.endsAt, now),
+          ),
+        ),
+    );
+    // A concurrent scorer may have closed earlier; the next tick reloads that end.
   }
   const endedAt = latest?.resolvedAt ?? latest?.endsAt;
   if (
@@ -202,7 +220,10 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
   const sectorNumber = eligible[randomInt(eligible.length)]!;
   const guardianId = guardians[randomInt(guardians.length)]!.userId;
   const id = nanoid();
-  // Notification and insertion must commit together; a unique predecessor makes retries harmless.
+  // MySQL cannot INSERT the event and notification and UPDATE unread counters in one
+  // statement. A committed event without its announcement cannot be replayed because
+  // its predecessor is unique, so only creation uses this short mixed-DML transaction.
+  // Deadlocks roll back all three writes; the same id/predecessor makes retries safe.
   await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
       const db = tx as unknown as DrizzleClient;
@@ -238,7 +259,7 @@ export const cleanupTerritoryWarTeams = async (
   );
 };
 
-/** Lightweight activity snapshot including the competitor's temporary bonus. */
+/** Shared farming/lobby user snapshot with the village/clan needed for competitor and bonus rules. */
 export const fetchTerritoryWarUser = async (client: DrizzleClient, userId: string) => {
   const user = await client.query.userData.findFirst({
     where: eq(userData.userId, userId),
@@ -248,7 +269,12 @@ export const fetchTerritoryWarUser = async (client: DrizzleClient, userId: strin
   return user;
 };
 
-/** Correlated activity history stays in the existing user query, bounded by its oldest unsettled work. */
+/**
+ * Correlated ISO bonus windows in the existing user query, bounded by its oldest
+ * unsettled work. `since` additionally includes a queued job's logical start even
+ * when collection occurs after its bonus expired. Qualified outer identifiers are
+ * required because production relational extras otherwise strip column qualifiers.
+ */
 export const territoryWarBoostWindowsSql = (
   user: Pick<
     typeof userData,

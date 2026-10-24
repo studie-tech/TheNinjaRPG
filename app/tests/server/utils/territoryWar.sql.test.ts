@@ -84,16 +84,77 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect((await db.query.village.findFirst({ where: eq(village.id, "hideout") }))?.tokens).toBe(hasHideout ? 300000 : 0);
   });
 
-  it("grants both tied target competitors while never rewarding a sub-target timeout", async () => {
+  it("grants both tied target competitors in the atomic resolver", async () => {
     const db = await getTestDatabase();
     await db.insert(territoryWar).values(eventRow());
     await db.insert(territoryWarScore).values(["home", "enemy"].map(id => ({ warId: "event", competitorId: `village:${id}`, name: id, villageId: id, points: 400 })));
     await db.transaction(tx => resolveTerritoryWar(tx as unknown as DrizzleClient, "event"));
     expect((await db.query.territoryWarScore.findMany()).every(row => row.rewarded)).toBe(true);
-    await db.update(territoryWar).set({ resolvedAt: null, endsAt: new Date(Date.now() - 1000) });
-    await db.update(territoryWarScore).set({ points: 399, rewarded: false });
-    await syncTerritoryWars(db);
-    expect((await db.query.territoryWarScore.findMany()).every(row => !row.rewarded)).toBe(true);
+  });
+
+  it.each(["active", "expired"] as const)("keeps %s scheduler work outside a transaction and never rewards sub-target scores", async state => {
+    const db = await getTestDatabase();
+    const event = { ...eventRow(), endsAt: new Date(Date.now() + (state === "active" ? 60000 : -1000)) };
+    await db.insert(territoryWar).values(event);
+    await db.insert(territoryWarScore).values({ warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: 399 });
+    const noTransaction = new Proxy(db, {
+      get(target, key, receiver) {
+        if (key === "transaction") return () => { throw new Error("Expiry needs only its guarded UPDATE"); };
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    await syncTerritoryWars(noTransaction);
+    expect((await db.query.territoryWar.findFirst())?.resolvedAt).toEqual(state === "expired" ? event.endsAt : null);
+    expect((await db.query.territoryWarScore.findFirst())?.rewarded).toBe(false);
+    expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(10);
+    expect(await db.query.notification.findMany()).toHaveLength(0);
+  });
+
+  it.each(["score-first", "expiry-first", "concurrent"] as const)("preserves the winning event claim when scoring races expiry: %s", async order => {
+    const db = await getTestDatabase();
+    const event = eventRow();
+    await db.insert(territoryWar).values(event);
+    await db.insert(territoryWarScore).values({ warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: 395 });
+    const scoreAt = new Date(event.endsAt.getTime() - 1);
+    const score = () => db.transaction(tx => settleTerritoryWarCombat(tx as unknown as DrizzleClient, guardianVictory(), scoreAt));
+    const expire = () => syncTerritoryWars(db, event.endsAt);
+    if (order === "score-first") { await score(); await expire(); }
+    else if (order === "expiry-first") { await expire(); await score(); }
+    else await Promise.all([score(), expire()]);
+    const saved = (await db.query.territoryWar.findFirst())!;
+    const awarded = saved.resolvedAt?.getTime() === scoreAt.getTime();
+    if (order !== "concurrent") expect(awarded).toBe(order === "score-first");
+    expect(saved.resolvedAt).toEqual(awarded ? scoreAt : event.endsAt);
+    expect((await db.query.territoryWarScore.findFirst())?.points).toBe(awarded ? 400 : 395);
+    expect((await db.query.territoryWarScore.findFirst())?.rewarded).toBe(awarded);
+    expect(await db.query.territoryWarReceipt.findMany()).toHaveLength(awarded ? 1 : 0);
+    expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(awarded ? 300010 : 10);
+    expect(await db.query.notification.findMany()).toHaveLength(awarded ? 1 : 0);
+  });
+
+  it.each(["wipe", "flee", "mutual knockout"] as const)("claims scoreless guardian %s with one DELETE and no transaction", async outcome => {
+    const db = await getTestDatabase();
+    await db.insert(territoryWar).values(eventRow());
+    const fight = guardianVictory();
+    fight.usersState[0]!.curHealth = outcome === "flee" ? 100 : 0;
+    fight.usersState[0]!.fledBattle = outcome === "flee";
+    fight.usersState[1]!.curHealth = outcome === "mutual knockout" ? 0 : 100;
+    await db.insert(battle).values(fight);
+    const noTransaction = new Proxy(db, {
+      get(target, key, receiver) {
+        if (key === "transaction") return () => { throw new Error("Scoreless claim needs only its guarded DELETE"); };
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const result = calcBattleResult(fight, "player-0", []);
+    expect(result).not.toBeNull();
+    const claimed = await recordQueries(() => updateBattle(noTransaction, result, "player-0", fight, fight.version));
+    expect(claimed.result?.battleOver).toBe(true);
+    expect(claimed.statements).toHaveLength(1);
+    expect(claimed.statements[0]).toMatch(/^delete\b/i);
+    expect(await db.query.battle.findFirst()).toBeUndefined();
+    expect(await db.query.territoryWarReceipt.findMany()).toHaveLength(0);
+    expect(await db.query.territoryWarScore.findMany()).toHaveLength(0);
   });
 
   it("commits the terminal battle claim and team scoring together and releases unattended teammates", async () => {

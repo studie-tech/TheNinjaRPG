@@ -7028,6 +7028,7 @@ export const territoryWar = mysqlTable("TerritoryWar", {
 }, table => [uniqueIndex("TerritoryWar_predecessor_key").on(table.predecessorId), index("TerritoryWar_startsAt_idx").on(table.startsAt)]);
 export type TerritoryWar = InferSelectModel<typeof territoryWar>;
 
+/** Stable village:/clan: identity per event; rewarded is claimed with treasury/boost delivery. */
 export const territoryWarScore = mysqlTable("TerritoryWarScore", {
   warId: varchar("warId", { length: 191 }).notNull(),
   competitorId: varchar("competitorId", { length: 191 }).notNull(),
@@ -7038,7 +7039,7 @@ export const territoryWarScore = mysqlTable("TerritoryWarScore", {
   rewarded: boolean("rewarded").default(false).notNull(),
 }, table => [primaryKey({ columns: [table.warId, table.competitorId] }), index("TerritoryWarScore_competitor_rewarded_idx").on(table.competitorId, table.rewarded)]);
 
-/** Immutable terminal-combat receipt, committed with battle deletion and score delivery. */
+/** Immutable decided-combat receipt, committed with the battle version claim and score delivery. */
 export const territoryWarReceipt = mysqlTable("TerritoryWarReceipt", {
   battleId: varchar("battleId", { length: 191 }).primaryKey().notNull(),
   warId: varchar("warId", { length: 191 }).notNull(),

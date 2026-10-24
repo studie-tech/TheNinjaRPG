@@ -12,11 +12,17 @@ export type TerritoryCompetitor = {
   clanId: string | null;
   villageId: string | null;
 };
+/** Private initiation snapshot; settlement needs no fresh identity/event reads. */
 export type TerritoryBattleState = {
   id: string;
   competitors: Record<string, TerritoryCompetitor>;
 };
 
+/**
+ * Citizens represent their village; any outlaw clan takes precedence over Syndicate.
+ * Clanless outlaws (and missing village IDs) use Syndicate. Freeze this result at
+ * admission so a later political change cannot redirect an encounter's credit.
+ */
 export const getTerritoryCompetitor = (user: {
   isOutlaw: boolean;
   villageId: string | null;
@@ -43,8 +49,10 @@ export const getTerritoryCompetitor = (user: {
   };
 };
 
+/** UTC ISO timestamps for one awarded interval; retain expired windows for unsettled work. */
 export type TerritoryBoostWindow = { startsAt: string; endsAt: string };
 
+/** Preloaded history and current competitor deadline shared by activity/UI calculations. */
 export type TerritoryBoostUser = {
   territoryWarBoostWindows?: TerritoryBoostWindow[];
   isOutlaw?: boolean;
@@ -53,6 +61,7 @@ export type TerritoryBoostUser = {
   village?: { territoryWarBoostUntil?: Date | string | null } | null;
 };
 
+/** Current competitor's deadline: outlaw clan first, otherwise the player's village. */
 export const getTerritoryWarBoostUntil = (user: TerritoryBoostUser) => {
   const value =
     user.isOutlaw && user.clanId
@@ -61,7 +70,7 @@ export const getTerritoryWarBoostUntil = (user: TerritoryBoostUser) => {
   return value ? new Date(value) : null;
 };
 
-/** Percentage fraction, additive alongside the other activity's percentage bonuses. */
+/** Start-inclusive/end-exclusive bonus fraction; callers apply their activity's stacking rules. */
 export const getTerritoryWarBoost = (user: TerritoryBoostUser, now = new Date()) => {
   return territoryWarBoostWindows(user).some(
     (window) => new Date(window.startsAt) <= now && now < new Date(window.endsAt),
@@ -70,7 +79,10 @@ export const getTerritoryWarBoost = (user: TerritoryBoostUser, now = new Date())
     : 0;
 };
 
-/** Average bonus over work performed, preventing late collection from boosting unworked time. */
+/**
+ * Time-weighted bonus fraction over [startsAt, endsAt), clipping history to actual
+ * work. Empty/reversed periods grant zero; late collection never extends eligibility.
+ */
 export const getTerritoryWarPeriodBoost = (
   user: TerritoryBoostUser,
   startsAt: Date,
@@ -92,6 +104,10 @@ export const getTerritoryWarPeriodBoost = (
   return ((TERRITORY_WAR_BOOST_PERCENT / 100) * Math.min(duration, overlap)) / duration;
 };
 
+/**
+ * Use preloaded history plus a missing current deadline's fixed-duration fallback.
+ * All calculations stay in memory, including after the current bonus has expired.
+ */
 export const territoryWarBoostWindows = (user: TerritoryBoostUser) => {
   const windows = [...(user.territoryWarBoostWindows ?? [])];
   const until = getTerritoryWarBoostUntil(user);

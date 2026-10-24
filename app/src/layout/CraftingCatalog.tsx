@@ -215,7 +215,8 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     ? `Requires ${formatCraftingRank(missingCraftingRank)} rank`
     : null;
 
-  // Calculate crafting time
+  // The numeric bonus dependency refreshes duration when expiry changes notifications
+  // while the profile object itself is structurally shared.
   const craftingTimeDisplay = useMemo(() => {
     if (!selectedItem || !userData) return "";
     const craftingTime =

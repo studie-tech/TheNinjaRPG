@@ -726,8 +726,8 @@ const settleWaitingJobs = async <
   }
   // Different queue rows must not start in parallel. Lock the existing owner row,
   // then read the active deadline: the upfront reads can come from different snapshots.
-  // Claim, rewards and active job span different tables and must commit together:
-  // a failed output/reward write must retain the prepaid receipt for a retry.
+  // MySQL cannot DELETE a queue receipt, INSERT outputs and UPDATE its owner/job
+  // in one statement. A failed reward write must retain the prepaid receipt for retry.
   return retryOnDeadlock(() =>
     client.transaction(async (tx) => {
       await tx
@@ -827,6 +827,7 @@ const startQueuedJutsu = async (
   students: Awaited<ReturnType<typeof fetchStudents>>,
 ): Promise<JobOutcome> => {
   if (!(await claimQueueRow(client, entry.id))) return "conflict";
+  // Delayed collection must use the bonus at the queue's historical start.
   const user = await fetchQuestUser(client, entry.userId, entry.jutsuId, startsAt);
   const owned = user.jutsus[0];
   const info = entry.jutsu;
@@ -915,6 +916,7 @@ const startQueuedCraft = async (
     await returnMaterials(client, entry.userId, entry.materials, true);
     return "dropped";
   }
+  // Waiting durations are unboosted; eligibility is fixed when this job actually starts.
   const user = await fetchQuestUser(client, entry.userId, undefined, startsAt);
   const territoryBoost = getTerritoryWarBoost(user, startsAt);
   const finishesAt = new Date(
@@ -1131,6 +1133,7 @@ export const returnCraftMaterials = returnMaterials;
 /**
  * Quest context of a job's owner. Unlike a session refresh, settling a queue must not
  * regenerate pools, assign quests or mark the user online.
+ * Include bonus history back to the queued job's logical start in the same read.
  */
 const fetchQuestUser = async (
   client: QueueClient,

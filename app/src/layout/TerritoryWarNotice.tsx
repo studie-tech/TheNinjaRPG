@@ -6,6 +6,7 @@ import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import { useUserData } from "@/utils/UserContext";
 
+/** Poll globally and hide at the server-clock deadline, including between query refreshes. */
 export const TerritoryWarNotice = () => {
   const { data: user, timeDiff } = useUserData();
   const current = api.territoryWar.getNotice.useQuery(undefined, {

@@ -16,16 +16,20 @@ import { getServerPusher } from "@/libs/pusher";
 import { getTerritoryCompetitor, getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
   fetchActiveTerritoryWar,
   fetchLatestTerritoryWar,
   fetchTerritoryWarUser as fetchUser,
 } from "@/server/utils/territoryWar";
 
+/** Read the global competition and manage same-competitor guardian lobbies. */
 export const territoryWarRouter = createTRPCRouter({
+  /** Read-only notice polling; synchronization belongs to the minute scheduler. */
   getNotice: protectedProcedure.query(
     async ({ ctx }) => (await fetchActiveTerritoryWar(ctx.drizzle)) ?? null,
   ),
+  /** Include the latest result, standings, own competitor's lobbies and next opening. */
   getCurrent: protectedProcedure.query(async ({ ctx }) => {
     const [event, user] = await Promise.all([
       fetchLatestTerritoryWar(ctx.drizzle),
@@ -74,6 +78,7 @@ export const territoryWarRouter = createTRPCRouter({
     };
   }),
 
+  /** Create an empty lobby, then remove it if its creator cannot claim membership. */
   createTeam: protectedProcedure
     .input(z.object({ eventId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -103,6 +108,7 @@ export const territoryWarRouter = createTRPCRouter({
       return result;
     }),
 
+  /** Changed eligibility/capacity returns recoverable feedback without reserving a place. */
   joinTeam: protectedProcedure
     .input(z.object({ teamId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -112,6 +118,7 @@ export const territoryWarRouter = createTRPCRouter({
       return joinTeam(ctx.drizzle, user, input.teamId, getTerritoryCompetitor(user).id);
     }),
 
+  /** Membership may be removed only before the launch reservation is claimed. */
   leaveTeam: protectedProcedure
     .input(z.object({ teamId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -128,6 +135,7 @@ export const territoryWarRouter = createTRPCRouter({
       return { success: true, message: "Left the team" };
     }),
 
+  /** Reserve once before reloading the roster; combat initiation validates its final members. */
   startBattle: protectedProcedure
     .input(z.object({ teamId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -203,7 +211,11 @@ export const territoryWarRouter = createTRPCRouter({
     }),
 });
 
-/** Membership precedes the guarded queued-status claim; a concurrent launch can only fail and retry. */
+/**
+ * Insert a unique slot before claiming queued status against the launch reservation.
+ * Failed claims remove only this attempt's reversible membership; no transaction or
+ * locking read is needed. Each guarded statement can restart after a deadlock rollback.
+ */
 const joinTeam = async (
   client: import("@/server/db").DrizzleClient,
   user: Awaited<ReturnType<typeof fetchUser>>,
@@ -213,7 +225,8 @@ const joinTeam = async (
   const memberId = nanoid();
   let joined = false;
   try {
-    const inserted = await client.execute(sql`
+    const inserted = await retryOnDeadlock(() =>
+      client.execute(sql`
       INSERT IGNORE INTO MpvpBattleUser (id, clanBattleId, userId, side, slot)
       SELECT ${memberId}, q.id, ${user.userId}, 'ATTACKER', slots.slot
       FROM MpvpBattleQueue q INNER JOIN TerritoryWar w ON w.id = q.territoryWarId
@@ -223,14 +236,16 @@ const joinTeam = async (
         AND w.resolvedAt IS NULL AND w.startsAt <= NOW(3) AND w.endsAt > NOW(3)
         AND NOT EXISTS (SELECT 1 FROM MpvpBattleUser m WHERE m.clanBattleId = q.id AND m.slot = slots.slot AND m.side = 'ATTACKER')
       ORDER BY slots.slot LIMIT 1
-    `);
+    `),
+    );
     if (!inserted.rowsAffected)
       return errorResponse(
         "The team is full, has started, or belongs to another competitor",
       );
     // Updating q in the same statement serializes this admission against startBattle's reservation.
     // A missing-row/slot race is reversible, so no transaction or locking read is needed.
-    const claimed = await client.execute(sql`
+    const claimed = await retryOnDeadlock(() =>
+      client.execute(sql`
       UPDATE UserData u INNER JOIN MpvpBattleUser m ON m.userId = u.userId
       INNER JOIN MpvpBattleQueue q ON q.id = m.clanBattleId
       INNER JOIN TerritoryWar w ON w.id = q.territoryWarId
@@ -239,7 +254,8 @@ const joinTeam = async (
         AND u.status = 'AWAKE' AND u.isBanned = false AND u.sector = ${user.sector}
         AND u.isOutlaw = ${user.isOutlaw} AND u.clanId <=> ${user.clanId} AND u.villageId <=> ${user.villageId}
         AND w.resolvedAt IS NULL AND w.endsAt > NOW(3)
-    `);
+    `),
+    );
     joined = claimed.rowsAffected > 0;
     return joined
       ? { success: true, message: "Joined the team. Start solo or wait for teammates" }

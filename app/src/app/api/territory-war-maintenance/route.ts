@@ -4,6 +4,7 @@ import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { syncTerritoryWars } from "@/server/utils/territoryWar";
 
+/** Authenticate before touching timers/data, then retain the shared once-per-minute lock. */
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;

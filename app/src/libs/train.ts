@@ -503,6 +503,7 @@ export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5;
  * Milliseconds to train from the current level to the next level.
  * Apply the required-rank multiplier after capping the base duration so it raises
  * both training time and its cap; the sensei discount applies to that final duration.
+ * `now` is the logical start, so queued work uses the bonus active when it actually begins.
  */
 export const calcJutsuTrainTime = (
   jutsu: Pick<Jutsu, "jutsuRank" | "requiredRank">,
@@ -1037,6 +1038,8 @@ export const applyMasteryTrainingGains = (
 /**
  * Shared training modifiers; `kind` selects stat or timed-mastery loyalty bonuses.
  * `now` evaluates loyalty at settlement, so offline sessions use their completion time.
+ * `territoryBoost` is an additive fraction; timed sessions override the instantaneous
+ * default with their period average, while Energy spending uses its actual tick.
  */
 export const trainingBoost = (
   user: NonNullable<UserWithRelations>,
@@ -1226,6 +1229,8 @@ export const settleMasteryTrainingQueue = (
  * Settle one-time entries (`queue`, oldest first) chronologically, so offline spending
  * frees capacity for later ticks.
  * regenerationGain measures recovery over (fromTick, toTick] on the original clock.
+ * Bonus boundaries change the Energy needed to fill a stat cap, so affordability
+ * must be reevaluated at those ticks before advancing to a later affordable spend.
  */
 export const settleEnergyTrainingQueue = (
   user: NonNullable<UserWithRelations>,

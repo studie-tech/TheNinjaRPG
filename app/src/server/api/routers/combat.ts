@@ -2062,6 +2062,7 @@ export const initiateBattle = async (
     questBattleSource?: { questId: string; objectiveId: string };
     /** Camp identity and guardian snapshot used by combat's final strategic mutation phase. */
     warCamp?: import("@/drizzle/schema").WarCamp;
+    /** Guardian lobby's event; preload political identities and guard its live window at admission. */
     territoryWar?: import("@/drizzle/schema").TerritoryWar;
     raidQuestId?: string;
     topPlayersLP?: number[];
@@ -2796,6 +2797,7 @@ export const initiateBattle = async (
     }
   }
 
+  // Political identity is independent of battle teams and stays fixed through result collection.
   const territoryCompetitors = Object.fromEntries(
     users
       .filter((user) => !user.isAi)
