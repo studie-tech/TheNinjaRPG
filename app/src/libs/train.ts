@@ -69,6 +69,7 @@ import {
   getTerritoryWarBoost,
   getTerritoryWarPeriodBoost,
   type TerritoryBoostUser,
+  territoryWarBoostWindows,
 } from "@/libs/territoryWar";
 import { calcIsInVillage } from "@/libs/travel";
 import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
@@ -1239,13 +1240,21 @@ export const settleEnergyTrainingQueue = (
   const completed: { stat: CombatStatName; amount: number }[] = [];
   let energy = Math.min(user.curEnergy, user.maxEnergy);
   let remainingTicks = ticks;
+  const regenAt = user.regenAt?.getTime() ?? Date.now();
+  const rateChangeTicks = territoryWarBoostWindows(user)
+    .flatMap(({ startsAt, endsAt }) => [startsAt, endsAt])
+    .map((date) =>
+      Math.ceil((new Date(date).getTime() - regenAt) / (REGEN_SECONDS * 1000)),
+    )
+    .filter((tick) => tick > 0 && tick <= ticks)
+    .sort((a, b) => a - b);
   const rateAtTick = (tick: number) =>
     STATS_PER_ENERGY *
     trainingBoost(
       user,
       settings,
       "STATS",
-      new Date((user.regenAt?.getTime() ?? Date.now()) + tick * REGEN_SECONDS * 1000),
+      new Date(regenAt + tick * REGEN_SECONDS * 1000),
     ) *
     getTrainingMultiplierBoost(user);
   let rate = rateAtTick(0);
@@ -1269,10 +1278,14 @@ export const settleEnergyTrainingQueue = (
     if (spent <= 0) break;
     if (energy < spent) {
       const fromTick = ticks - remainingTicks;
-      if (energy + regenerationGain(fromTick, ticks) < spent) break;
-      // Recovery is monotone; find the first affordable tick without scanning offline time.
+      const nextRateChangeTick = rateChangeTicks.find((tick) => tick > fromTick);
+      // Recovery is monotone until the next bonus boundary, where the cost must be reevaluated.
       let low = 1;
-      let high = remainingTicks;
+      let high = (nextRateChangeTick ?? ticks) - fromTick;
+      if (energy + regenerationGain(fromTick, fromTick + high) < spent) {
+        if (nextRateChangeTick === undefined) break;
+        low = high;
+      }
       while (low < high) {
         const middle = Math.floor((low + high) / 2);
         if (energy + regenerationGain(fromTick, fromTick + middle) >= spent)

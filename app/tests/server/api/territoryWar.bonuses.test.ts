@@ -1,13 +1,15 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { CRAFTING_TIMES_MINS, MEDNIN_EXP_CAP, MEDNIN_REQUIRED_EXP } from "@/drizzle/constants";
+import { CRAFTING_TIMES_MINS, getUserCaps, MEDNIN_EXP_CAP, MEDNIN_REQUIRED_EXP, STATS_PER_ENERGY, TERRITORY_WAR_BOOST_PERCENT, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { craftingRequirement, farmCollectionLog, farmPlot, item, quest, questHistory, territoryWar, territoryWarScore, userCookingJob, userData, userItem, userQueue, userVote, village } from "@/drizzle/schema";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { occupationRouter } from "@/server/api/routers/occupation";
+import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { settleCraftingQueue } from "@/server/utils/userQueue";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
 import { insertItems, insertUsers, insertUserItems } from "../../setup/factories";
+import { queueEnergy, readEnergyQueue } from "../../setup/queues";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const userId = "bonus-user";
@@ -41,6 +43,42 @@ describeWithDatabase("Territory War activity bonus consumers", () => {
     const expected = CRAFTING_TIMES_MINS.NOVICE.COMMON * 60000 * 0.85;
     expect(output.craftingFinishedAt!.getTime() - startedAt).toBeGreaterThanOrEqual(expected);
     expect(output.craftingFinishedAt!.getTime() - startedAt).toBeLessThan(expected + 5000);
+  });
+
+  it("settles near-cap Energy training equally offline and after a victory refresh", async () => {
+    const db = await getTestDatabase();
+    const start = new Date(Date.now() - 9 * 60000 - 1000);
+    const victory = new Date(start.getTime() + 60000);
+    const cap = getUserCaps("JONIN").gens_cap;
+    await db.insert(village).values({ id: VILLAGE_SYNDICATE_ID, name: "Syndicate", sector: 100, kageId: userId, territoryWarBoostUntil: new Date(victory.getTime() + 3600000) });
+    await db.insert(territoryWar).values({ id: "training-victory", predecessorId: "initial", sector: 100, guardianId: "guardian", startsAt: new Date(start.getTime() - 1000), endsAt: victory, resolvedAt: victory });
+    await db.insert(territoryWarScore).values({ warId: "training-victory", competitorId: `village:${VILLAGE_SYNDICATE_ID}`, villageId: VILLAGE_SYNDICATE_ID, name: "Syndicate", points: 400, rewarded: true });
+    await insertUsers(["offline", "refreshed"].map(id => ({
+      userId: id,
+      username: id,
+      status: "AWAKE" as const,
+      isOutlaw: true,
+      rank: "JONIN" as const,
+      level: 50,
+      villageId: VILLAGE_SYNDICATE_ID,
+      sector: 100,
+      curEnergy: id === "offline" ? 0 : 10,
+      regeneration: 10,
+      strength: cap - 100 * STATS_PER_ENERGY,
+      regenAt: id === "offline" ? start : victory,
+      updatedAt: new Date(),
+      joinedVillageAt: new Date(0),
+    })));
+    await db.insert(userVote).values(["offline", "refreshed"].map(id => ({ id: `vote-${id}`, userId: id, secret: `secret-${id}`, lastVoteAt: new Date() })));
+    for (const id of ["offline", "refreshed"]) {
+      await queueEnergy(id, [{ stat: "strength", energy: 100 }]);
+      const result = await fetchUpdatedUser({ client: db, userId: id, forceRegen: true });
+      const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, id) }))!;
+      expect(result.user?.strength).toBe(cap);
+      expect(saved.strength).toBe(cap);
+      expect(saved.curEnergy).toBeCloseTo(90 - 100 / (1 + TERRITORY_WAR_BOOST_PERCENT / 100));
+      expect(await readEnergyQueue(id)).toEqual([]);
+    }
   });
 
   it.each([

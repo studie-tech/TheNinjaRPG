@@ -94,7 +94,7 @@ export const getTerritoryWarPeriodBoost = (
   return ((TERRITORY_WAR_BOOST_PERCENT / 100) * Math.min(duration, overlap)) / duration;
 };
 
-const territoryWarBoostWindows = (user: TerritoryBoostUser) => {
+export const territoryWarBoostWindows = (user: TerritoryBoostUser) => {
   const windows = [...(user.territoryWarBoostWindows ?? [])];
   const until = getTerritoryWarBoostUntil(user);
   if (
