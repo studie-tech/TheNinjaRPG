@@ -126,6 +126,9 @@ describe("rich input composer", () => {
       fireEvent.keyDown(url, { key: "Enter", isComposing: true });
       expect(view.getByRole("textbox", { name: "Image URL" })).toBe(url);
       expect(editor.querySelector("img")).toBeNull();
+      fireEvent.keyDown(url, { key: "Enter", keyCode: 229, isComposing: false });
+      expect(view.getByRole("textbox", { name: "Image URL" })).toBe(url);
+      expect(editor.querySelector("img")).toBeNull();
       fireEvent.keyDown(url, { key: "Enter" });
       expect(editor.querySelector("img")?.getAttribute("src")).toBe("https://example.com/image.png");
       expect(view.queryByRole("textbox", { name: "Image URL" })).toBeNull();
@@ -134,6 +137,15 @@ describe("rich input composer", () => {
     } finally {
       document.removeEventListener("keydown", documentKey);
     }
+  });
+
+  it.each([false, true])("does not send on a legacy IME confirmation (plain text: %s)", async (plainText) => {
+    const view = render(<Composer initial="Draft" plainText={plainText} />);
+    const editor = plainText ? view.getByRole("textbox", { name: "Message" }) : await editorFor(view);
+    fireEvent.keyDown(editor, { key: "Enter", keyCode: 229, isComposing: false });
+    expect(submit).not.toHaveBeenCalled();
+    fireEvent.keyDown(editor, { key: "Enter" });
+    await waitFor(() => expect(submit).toHaveBeenCalled());
   });
 
   it("blocks a parent form during upload and preserves original file bytes", async () => {

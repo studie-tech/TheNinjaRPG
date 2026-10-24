@@ -474,7 +474,7 @@ export const RichInput = (props: RichInputProps) => {
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.stopPropagation();
-                  if (!event.nativeEvent.isComposing) {
+                  if (!isComposingKey(event.nativeEvent)) {
                     event.preventDefault();
                     addImageUrl();
                   }
@@ -517,7 +517,7 @@ export const RichInput = (props: RichInputProps) => {
                 !event.ctrlKey &&
                 !event.altKey &&
                 !event.metaKey &&
-                !event.nativeEvent.isComposing &&
+                !isComposingKey(event.nativeEvent) &&
                 !mention
               ) {
                 event.preventDefault();
@@ -543,7 +543,7 @@ export const RichInput = (props: RichInputProps) => {
                 !event.ctrlKey &&
                 !event.altKey &&
                 !event.metaKey &&
-                !event.nativeEvent.isComposing &&
+                !isComposingKey(event.nativeEvent) &&
                 !mention
               ) {
                 event.preventDefault();
@@ -664,6 +664,10 @@ export const RichInput = (props: RichInputProps) => {
     </div>
   );
 };
+
+/** Older WebKit can clear isComposing before the IME-confirming Enter. */
+const isComposingKey = (event: KeyboardEvent) =>
+  event.isComposing || event.keyCode === 229;
 
 const formatButtons = [
   { format: "bold", label: "Bold", icon: Bold },
