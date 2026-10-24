@@ -22,9 +22,9 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); for (const spy of spies) spy.mockRestore(); });
 
-const Composer = ({ initial = "", disabled = false, plainText = false }: { initial?: string; disabled?: boolean; plainText?: boolean }) => {
+const Composer = ({ initial = "", disabled = false, plainText = false, autoFocus = false }: { initial?: string; disabled?: boolean; plainText?: boolean; autoFocus?: boolean }) => {
   const form = useForm({ defaultValues: { comment: initial } });
-  return <form onSubmit={form.handleSubmit(submit)}><RichInput id="comment" label="Message" height="120" control={form.control} autoFocus={false} disabled={disabled} plainText={plainText} enableMentions allowClipboardPaste onSubmit={form.handleSubmit(submit)} /><button type="button" onClick={() => form.reset({ comment: "" })}>Reset draft</button><button type="submit">Save</button></form>;
+  return <form onSubmit={form.handleSubmit(submit)}><RichInput id="comment" label="Message" height="120" control={form.control} autoFocus={autoFocus} disabled={disabled} plainText={plainText} enableMentions allowClipboardPaste onSubmit={form.handleSubmit(submit)} /><button type="button" onClick={() => form.reset({ comment: "" })}>Reset draft</button><button type="submit">Save</button></form>;
 };
 const editorFor = async (view: ReturnType<typeof render>) => {
   await waitFor(() => expect(view.getByRole("button", { name: "Bold" }).hasAttribute("disabled")).toBe(false));
@@ -32,6 +32,14 @@ const editorFor = async (view: ReturnType<typeof render>) => {
 };
 
 describe("rich input composer", () => {
+  it("does not steal focus chosen while the editor loads", async () => {
+    const view = render(<Composer autoFocus />);
+    const chosen = view.getByRole("button", { name: "Reset draft" });
+    chosen.focus();
+    await editorFor(view);
+    expect(document.activeElement).toBe(chosen);
+  });
+
   it("preserves existing HTML until an explicit edit and honors form reset", async () => {
     const initial = '<p><strong>Saved</strong> text</p>';
     const view = render(<Composer initial={initial} />);

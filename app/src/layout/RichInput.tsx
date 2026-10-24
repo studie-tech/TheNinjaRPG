@@ -117,6 +117,7 @@ export const RichInput = (props: RichInputProps) => {
     const host = hostRef.current;
     if (!host) return;
     let disposed = false;
+    const focusedBeforeLoad = document.activeElement;
     setReady(false);
     setLoadError(false);
     void import("quill")
@@ -165,7 +166,12 @@ export const RichInput = (props: RichInputProps) => {
         editor.on("editor-change", onSelectionChange);
         editor.root.addEventListener("blur", field.onBlur);
         setReady(true);
-        if (options.autoFocus && !options.disabled)
+        // Lazy loading must not steal focus from a control chosen in the meantime.
+        if (
+          options.autoFocus &&
+          !options.disabled &&
+          document.activeElement === focusedBeforeLoad
+        )
           editor.focus({ preventScroll: true });
       })
       .catch(() => {
