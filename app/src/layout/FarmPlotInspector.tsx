@@ -36,6 +36,7 @@ const formatDuration = (seconds: number) => {
   return `${Math.max(1, minutes)}m`;
 };
 
+/** Shows plot actions and base XP estimates with explicit harvest controls. */
 export function FarmPlotInspector({
   plot,
   farmState,

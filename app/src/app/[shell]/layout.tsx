@@ -94,6 +94,7 @@ const LIGHT_LAYOUT_SCRIPT = `(function(){try{if(localStorage.getItem(${JSON.stri
  */
 const SWAP_SIDEBARS_SCRIPT = `(function(){try{if(localStorage.getItem(${JSON.stringify(SWAP_SIDEBARS_STORAGE_KEY)})==="true")document.documentElement.setAttribute(${JSON.stringify(SWAP_SIDEBARS_ATTRIBUTE)},"")}catch(e){}})()`;
 
+/** Renders app chrome, shared providers and notices for each shell variant. */
 export default async function RootLayout({
   children,
   params,

@@ -35,6 +35,7 @@ import { canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+/** Manages recipes, the crafting queue, item imbuements and repairs. */
 export default function OccupationCrafting() {
   // Utils
   const utils = api.useUtils();
