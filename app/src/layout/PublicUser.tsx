@@ -1250,6 +1250,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                       />
 
                       <RichInput
+                        plainText
                         id="reason"
                         height="100px"
                         placeholder="Enter reason for awarding"

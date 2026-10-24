@@ -815,6 +815,7 @@ export const EditContent = <
                             <FormControl>
                               <RichInput
                                 id={id}
+                                disabled={submitLoading}
                                 height={
                                   "height" in formEntry && formEntry.height
                                     ? formEntry.height
