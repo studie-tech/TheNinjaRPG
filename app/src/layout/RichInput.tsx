@@ -134,6 +134,7 @@ export const RichInput = (props: RichInputProps) => {
             "strike",
             "header",
             "list",
+            "indent",
             "blockquote",
             "link",
             "image",
@@ -190,13 +191,14 @@ export const RichInput = (props: RichInputProps) => {
   }, [isSource, props.refreshKey, props.id]);
 
   useEffect(() => {
+    if (value === lastValueRef.current) return;
+    if (needsHtmlSource(value)) setSourceMode(true);
     const editor = quillRef.current;
-    if (!editor || value === lastValueRef.current) return;
+    if (!editor) return;
     generationRef.current++;
     editor.setContents(editor.clipboard.convert(richTextInput(value)), "silent");
     editor.history.clear();
     lastValueRef.current = value;
-    if (needsHtmlSource(value)) setSourceMode(true);
   }, [value]);
 
   useEffect(() => {

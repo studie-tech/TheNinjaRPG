@@ -22,9 +22,9 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); for (const spy of spies) spy.mockRestore(); });
 
-const Composer = ({ initial = "", disabled = false, plainText = false, autoFocus = false }: { initial?: string; disabled?: boolean; plainText?: boolean; autoFocus?: boolean }) => {
+const Composer = ({ initial = "", resetValue = "", disabled = false, plainText = false, autoFocus = false }: { initial?: string; resetValue?: string; disabled?: boolean; plainText?: boolean; autoFocus?: boolean }) => {
   const form = useForm({ defaultValues: { comment: initial } });
-  return <form onSubmit={form.handleSubmit(submit)}><RichInput id="comment" label="Message" height="120" control={form.control} autoFocus={autoFocus} disabled={disabled} plainText={plainText} enableMentions allowClipboardPaste onSubmit={form.handleSubmit(submit)} /><button type="button" onClick={() => form.reset({ comment: "" })}>Reset draft</button><button type="submit">Save</button></form>;
+  return <form onSubmit={form.handleSubmit(submit)}><RichInput id="comment" label="Message" height="120" control={form.control} autoFocus={autoFocus} disabled={disabled} plainText={plainText} enableMentions allowClipboardPaste onSubmit={form.handleSubmit(submit)} /><button type="button" onClick={() => form.reset({ comment: resetValue })}>Reset draft</button><button type="submit">Save</button></form>;
 };
 const editorFor = async (view: ReturnType<typeof render>) => {
   await waitFor(() => expect(view.getByRole("button", { name: "Bold" }).hasAttribute("disabled")).toBe(false));
@@ -32,6 +32,20 @@ const editorFor = async (view: ReturnType<typeof render>) => {
 };
 
 describe("rich input composer", () => {
+  it("preserves advanced HTML loaded by form reset while the editor is loading", async () => {
+    const initial = '<p>Before</p><iframe src="https://www.youtube.com/embed/test"></iframe><p>After</p>';
+    const view = render(<Composer resetValue={initial} />);
+    expect(view.getByRole("status").textContent).toBe("Loading editor…");
+    fireEvent.click(view.getByRole("button", { name: "Reset draft" }));
+    await waitFor(() => expect(view.getByRole("textbox", { name: "Message" }).tagName).toBe("TEXTAREA"));
+    const editor = view.getByRole("textbox", { name: "Message" });
+    expect((editor as HTMLTextAreaElement).value).toBe(initial);
+    const edited = initial.replace("After", "Updated after");
+    fireEvent.change(editor, { target: { value: edited } });
+    fireEvent.click(view.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(submit.mock.calls[0]?.[0]).toEqual({ comment: edited }));
+  });
+
   it("does not steal focus chosen while the editor loads", async () => {
     const view = render(<Composer autoFocus />);
     const chosen = view.getByRole("button", { name: "Reset draft" });
@@ -67,6 +81,20 @@ describe("rich input composer", () => {
     fireEvent.click(view.getByRole("button", { name: "Send message" }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
     expect(submit.mock.calls[0]?.[0]).toEqual({ comment: `<p><strong>${text === "two words" ? "two words" : "two&nbsp; words"}</strong></p>` });
+  });
+
+  it.each(["ul", "ol"])("preserves nested %s lists after a visual formatting edit", async (list) => {
+    const view = render(<Composer initial={`<${list}><li>Parent<${list}><li>Child</li></${list}></li><li>Sibling</li></${list}>`} />);
+    const editor = await editorFor(view);
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    fireEvent.click(view.getByRole("button", { name: "Bold" }));
+    fireEvent.click(view.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    expect(submit.mock.calls[0]?.[0]).toEqual({ comment: `<${list}><li><strong>Parent</strong><${list}><li><strong>Child</strong></li></${list}></li><li><strong>Sibling</strong></li></${list}>` });
   });
 
   it("keeps source edits when switching back to visual mode", async () => {
