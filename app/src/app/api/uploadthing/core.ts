@@ -113,13 +113,13 @@ export const ourFileRouter = {
     }),
   tavernUploader: f({ image: { maxFileSize: `${TAVERN_IMAGE_MAX_SIZE_MB}MB` } })
     .middleware(async ({ files }) => {
-      const metadata = await avatarMiddleware();
-      if (!(await claimTavernImageUpload(metadata.userId))) {
+      const user = await fetchUploadUser();
+      if (!(await claimTavernImageUpload(user.userId))) {
         throw new UploadThingError(
-          `Can only upload ${TAVERN_IMAGE_UPLOAD_DAILY_LIMIT} tavern image upload attempts per day`,
+          `Can only make ${TAVERN_IMAGE_UPLOAD_DAILY_LIMIT} tavern image upload attempts per day`,
         );
       }
-      return { ...metadata, ...withExtensionIds(files) };
+      return { userId: user.userId, ...withExtensionIds(files) };
     })
     .onUploadComplete(async ({ metadata, file }) => {
       const moderation = await moderateUploadedImage(file);
@@ -282,12 +282,8 @@ export const ourFileRouter = {
 
 export type OurFileRouter = typeof ourFileRouter;
 
-/**
- * Limits number of created avatars / day
- * @param req
- * @returns
- */
-const avatarMiddleware = async (fedRequirement?: (typeof FederalStatuses)[number]) => {
+/** Shared identity and ban checks; each upload route owns its own allowance. */
+const fetchUploadUser = async () => {
   // Fetch & Guard
   const sessionUser = await currentUser();
   if (!sessionUser) throw new UploadThingError("Unauthorized");
@@ -296,13 +292,19 @@ const avatarMiddleware = async (fedRequirement?: (typeof FederalStatuses)[number
   });
   if (!user) throw new UploadThingError("User not found");
   if (user.isBanned) throw new UploadThingError("You are banned");
+  return user;
+};
+
+/** Checks the avatar creation allowance and optional federal requirement. */
+const avatarMiddleware = async (fedRequirement?: (typeof FederalStatuses)[number]) => {
+  const user = await fetchUploadUser();
   // Limit
   const avatars = await drizzleDB
     .select({ count: sql`count(*)`.mapWith(Number) })
     .from(historicalAvatar)
     .where(
       and(
-        eq(historicalAvatar.userId, sessionUser.id),
+        eq(historicalAvatar.userId, user.userId),
         isNotNull(historicalAvatar.avatar),
         gt(historicalAvatar.createdAt, sql`NOW() - INTERVAL 1 DAY`),
       ),
@@ -316,7 +318,7 @@ const avatarMiddleware = async (fedRequirement?: (typeof FederalStatuses)[number
       throw new UploadThingError(`You must be ${fedRequirement} to upload this avatar`);
     }
   }
-  return { userId: sessionUser.id };
+  return { userId: user.userId };
 };
 
 /**

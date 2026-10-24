@@ -83,6 +83,19 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     expect(claim).not.toHaveBeenCalled();
   });
 
+  it("does not charge tavern uploads against the avatar allowance", async () => {
+    const database = await getTestDatabase();
+    stubDatabase(database);
+    await database.insert(historicalAvatar).values(Array.from({ length: 51 }, (_, index) => ({
+      userId, avatar: `https://example.com/avatar-${index}.png`, done: true, status: "succeeded",
+    })));
+    const claim = vi.spyOn(tavernUploads, "claimTavernImageUpload").mockResolvedValue(true);
+    const args = { files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }] } as Parameters<typeof ourFileRouter.tavernUploader.middleware>[0];
+    expect(await ourFileRouter.tavernUploader.middleware(args)).toMatchObject({ userId });
+    expect(claim).toHaveBeenCalledWith(userId);
+    await expect(ourFileRouter.avatarNormalUploader.middleware(args)).rejects.toThrow("Can only upload 50 files per day");
+  });
+
   it.each([
     "avatarNormalUploader",
     "avatarSilverUploader",
