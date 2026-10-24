@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, notExists, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -78,7 +78,7 @@ export const territoryWarRouter = createTRPCRouter({
     };
   }),
 
-  /** Create an empty lobby, then remove it if its creator cannot claim membership. */
+  /** Create a lobby; failed creator admission removes only an unused, unreserved lobby. */
   createTeam: protectedProcedure
     .input(z.object({ eventId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -104,7 +104,23 @@ export const territoryWarRouter = createTRPCRouter({
       });
       const result = await joinTeam(ctx.drizzle, user, id, competitor.id);
       if (!result.success)
-        await ctx.drizzle.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, id));
+        // Another member may have joined or reserved launch while the creator lost eligibility.
+        await retryOnDeadlock(() =>
+          ctx.drizzle
+            .delete(mpvpBattleQueue)
+            .where(
+              and(
+                eq(mpvpBattleQueue.id, id),
+                isNull(mpvpBattleQueue.battleId),
+                notExists(
+                  ctx.drizzle
+                    .select({ id: mpvpBattleUser.id })
+                    .from(mpvpBattleUser)
+                    .where(eq(mpvpBattleUser.clanBattleId, id)),
+                ),
+              ),
+            ),
+        );
       return result;
     }),
 

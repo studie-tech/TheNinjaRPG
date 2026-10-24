@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { aiProfile, battle, battleHistory, clan, mpvpBattleQueue, mpvpBattleUser, territoryWar, userData, village } from "@/drizzle/schema";
+import { aiProfile, battle, battleHistory, clan, mpvpBattleQueue, mpvpBattleUser, territoryWar, userData, userVote, village } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { fetchBattle } from "@/server/api/routers/combat";
 import { clanRouter } from "@/server/api/routers/clan";
+import { homeRouter } from "@/server/api/routers/home";
 import { territoryWarRouter } from "@/server/api/routers/territoryWar";
+import { cleanupTerritoryWarTeams } from "@/server/utils/territoryWar";
 import { insertUsers } from "../../setup/factories";
 import { beforeStatements } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
@@ -15,7 +17,7 @@ const team = async () => (await getTestDatabase()).query.mpvpBattleQueue.findFir
 
 describeWithDatabase("Territory War participation", () => {
   beforeEach(async () => {
-    await resetTables(battleHistory, battle, mpvpBattleUser, mpvpBattleQueue, territoryWar, clan, village, userData, aiProfile);
+    await resetTables(battleHistory, battle, mpvpBattleUser, mpvpBattleQueue, territoryWar, clan, village, userVote, userData, aiProfile);
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "home", name: "Home", sector: 1, kageId: "leader" },
@@ -45,6 +47,53 @@ describeWithDatabase("Territory War participation", () => {
     expect(snapshot.usersState.filter(user => !user.isAi && !user.isSummon)).toHaveLength(3);
     expect(snapshot.usersState.filter(user => user.isAi && !user.isSummon)).toHaveLength(1);
     expect(new Set(Object.values(snapshot.extraState.territoryWar!.competitors).map(comp => comp.id))).toEqual(new Set(["village:home"]));
+  });
+
+  it.each(["leave", "start", "expire"] as const)("preserves an admitted teammate after creator rejection so they can %s", async (recovery) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ isOutlaw: true, villageId: VILLAGE_SYNDICATE_ID, latitude: 0, longitude: 0 });
+    const ally = await caller("ally");
+    let statements = 0;
+    let id = "";
+    const delayed = new Proxy(db, {
+      get(target, key, receiver) {
+        if (key === "execute") return async (query: Parameters<typeof db.execute>[0]) => {
+          // The creator's membership is public before their separate status claim.
+          if (++statements === 2) {
+            const visible = await ally.getCurrent();
+            expect(visible.teams).toHaveLength(1);
+            id = visible.teams[0]!.id;
+            expect((await ally.joinTeam({ teamId: id })).success).toBe(true);
+            expect((await (await callerFor(homeRouter, "leader")).toggleSleep()).success).toBe(true);
+          }
+          return target.execute(query);
+        };
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const created = await callerForDatabase(territoryWarRouter, "leader", delayed).createTeam({ eventId: "event" });
+    expect(created.success).toBe(false);
+    expect((await team())?.id).toBe(id);
+    expect((await ally.getCurrent()).teams[0]?.queue.map(member => member.userId)).toEqual(["ally"]);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "leader") }))?.status).toBe("ASLEEP");
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "ally") }))?.status).toBe("QUEUED");
+    if (recovery === "expire") await cleanupTerritoryWarTeams(db, new Date(Date.now() + 3600000));
+    else expect((await ally[recovery === "start" ? "startBattle" : "leaveTeam"]({ teamId: id })).success).toBe(true);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "ally") }))?.status).toBe(recovery === "start" ? "BATTLE" : "AWAKE");
+    expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(recovery === "start" ? 1 : 0);
+  });
+
+  it.each([false, true])("cleans a failed creator's empty lobby only without a reservation: %s", async (reserved) => {
+    const db = await getTestDatabase();
+    const delayed = beforeStatements(db, mpvpBattleQueue, [
+      async () => { await db.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, "leader")); },
+      async () => { if (reserved) await db.update(mpvpBattleQueue).set({ battleId: "reserved" }); },
+    ]);
+    const created = await callerForDatabase(territoryWarRouter, "leader", delayed).createTeam({ eventId: "event" });
+    expect(created.success).toBe(false);
+    expect(await db.query.mpvpBattleUser.findMany()).toEqual([]);
+    expect((await team())?.battleId).toBe(reserved ? "reserved" : undefined);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "leader") }))?.status).toBe("ASLEEP");
   });
 
   it("includes a member admitted just before the launch reservation", async () => {
