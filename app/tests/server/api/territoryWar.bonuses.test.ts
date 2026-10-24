@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { CRAFTING_TIMES_MINS } from "@/drizzle/constants";
-import { craftingRequirement, farmCollectionLog, farmPlot, item, quest, questHistory, userCookingJob, userData, userItem, userQueue, userVote, village } from "@/drizzle/schema";
+import { craftingRequirement, farmCollectionLog, farmPlot, item, quest, questHistory, territoryWar, territoryWarScore, userCookingJob, userData, userItem, userQueue, userVote, village } from "@/drizzle/schema";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { settleCraftingQueue } from "@/server/utils/userQueue";
@@ -13,7 +13,7 @@ const userId = "bonus-user";
 
 describeWithDatabase("Territory War activity bonus consumers", () => {
   beforeEach(async () => {
-    await resetTables(craftingRequirement, farmCollectionLog, farmPlot, userCookingJob, userItem, userQueue, userVote, questHistory, quest, item, userData, village);
+    await resetTables(territoryWarScore, territoryWar, craftingRequirement, farmCollectionLog, farmPlot, userCookingJob, userItem, userQueue, userVote, questHistory, quest, item, userData, village);
     const db = await getTestDatabase();
     await db.insert(village).values({ id: "bonus-home", name: "Bonus Home", sector: 1, kageId: userId, territoryWarBoostUntil: new Date(Date.now() + 3500000) });
     await insertUsers([{ userId, username: "bonus-user", gender: "Male", status: "AWAKE", occupation: "CRAFTING", rank: "JONIN", level: 50, villageId: "bonus-home", sector: 1, federalStatus: "GOLD", regenAt: new Date(), updatedAt: new Date() }]);
@@ -63,6 +63,21 @@ describeWithDatabase("Territory War activity bonus consumers", () => {
     const queued = jobs.find(job => job.id !== firstJobId)!;
     expect(queued.experience).toBe(1150);
     expect(queued.finishesAt.getTime()).toBe(startsAt.getTime() + 85000);
+  });
+
+  it("uses an older victory window when a queued cook settles after a second victory", async () => {
+    const db = await getTestDatabase();
+    const earlier = new Date(Date.now() - 6 * 3600000);
+    const recent = new Date(Date.now() - 10 * 60000);
+    await db.insert(territoryWar).values([earlier, recent].map((resolvedAt, index) => ({ id: `bonus-event-${index}`, predecessorId: index ? "bonus-event-0" : "initial", sector: 100, guardianId: "guardian", startsAt: new Date(resolvedAt.getTime() - 1000), endsAt: resolvedAt, resolvedAt })));
+    await db.insert(territoryWarScore).values([0,1].map(index => ({ warId: `bonus-event-${index}`, competitorId: "village:bonus-home", villageId: "bonus-home", name: "Bonus Home", points: 400, rewarded: true })));
+    await db.update(village).set({ territoryWarBoostUntil: new Date(recent.getTime() + 3600000) }).where(eq(village.id, "bonus-home"));
+    const startsAt = new Date(earlier.getTime() + 60000);
+    await db.insert(userQueue).values({ id: "offline-cook", userId, kind: "CRAFT", position: 1, itemId: "meal", quantity: 1, materials: [], durationSeconds: 100, startsAt, finishesAt: new Date(startsAt.getTime() + 100000) });
+    await settleCraftingQueue(db, userId);
+    const job = (await db.query.userCookingJob.findFirst())!;
+    expect(job.experience).toBe(1150);
+    expect(job.finishesAt.getTime()).toBe(startsAt.getTime() + 85000);
   });
 
   it("grants the farming bonus through the real harvest endpoint", async () => {

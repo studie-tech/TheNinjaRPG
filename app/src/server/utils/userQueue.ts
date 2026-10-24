@@ -64,6 +64,7 @@ import { completedQuestHistoryRelation } from "@/server/utils/achievementObjecti
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { getQueueTotalCapacity } from "@/utils/paypal";
 import type {
   CraftingQueueMaterial,
@@ -826,7 +827,7 @@ const startQueuedJutsu = async (
   students: Awaited<ReturnType<typeof fetchStudents>>,
 ): Promise<JobOutcome> => {
   if (!(await claimQueueRow(client, entry.id))) return "conflict";
-  const user = await fetchQuestUser(client, entry.userId, entry.jutsuId);
+  const user = await fetchQuestUser(client, entry.userId, entry.jutsuId, startsAt);
   const owned = user.jutsus[0];
   const info = entry.jutsu;
   const level = owned?.level ?? 0;
@@ -909,7 +910,7 @@ const startQueuedCraft = async (
     await returnMaterials(client, entry.userId, entry.materials, true);
     return "dropped";
   }
-  const user = await fetchQuestUser(client, entry.userId);
+  const user = await fetchQuestUser(client, entry.userId, undefined, startsAt);
   const territoryBoost = getTerritoryWarBoost(user, startsAt);
   const finishesAt = new Date(
     startsAt.getTime() +
@@ -1130,9 +1131,15 @@ const fetchQuestUser = async (
   client: QueueClient,
   userId: string,
   jutsuId?: string,
+  startsAt?: Date,
 ) => {
   const user = await client.query.userData.findFirst({
     where: eq(userData.userId, userId),
+    extras: (table) => ({
+      territoryWarBoostWindows: territoryWarBoostWindowsSql(table, startsAt).as(
+        "territoryWarBoostWindows",
+      ),
+    }),
     with: {
       // The owned copy of the jutsu a queued level trains, in the same read.
       jutsus: { where: eq(userJutsu.jutsuId, jutsuId ?? "") },

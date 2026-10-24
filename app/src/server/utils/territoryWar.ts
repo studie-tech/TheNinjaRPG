@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { and, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import map from "@/data/hexasphere.json";
@@ -196,8 +197,8 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
     .map((_, index) => index)
     .filter((index) => !excluded.has(index));
   if (!eligible.length || !guardians.length) return;
-  const sectorNumber = eligible[Math.floor(Math.random() * eligible.length)]!;
-  const guardianId = guardians[Math.floor(Math.random() * guardians.length)]!.userId;
+  const sectorNumber = eligible[randomInt(eligible.length)]!;
+  const guardianId = guardians[randomInt(guardians.length)]!.userId;
   const id = nanoid();
   // Notification and insertion must commit together; a unique predecessor makes retries harmless.
   await retryOnDeadlock(() =>
@@ -259,6 +260,7 @@ export const territoryWarBoostWindowsSql = (
     | "elementalTrainingStartedAt"
     | "covertTrainingStartedAt"
   >,
+  since?: Date,
 ) =>
   sql<import("@/libs/territoryWar").TerritoryBoostWindow[]>`
   COALESCE((SELECT JSON_ARRAYAGG(JSON_OBJECT(
@@ -267,7 +269,7 @@ export const territoryWarBoostWindowsSql = (
     FROM TerritoryWarScore ts INNER JOIN TerritoryWar tw ON tw.id = ts.warId
     WHERE ts.rewarded = true AND tw.resolvedAt IS NOT NULL
       AND ts.competitorId = CASE WHEN ${user.isOutlaw} AND ${user.clanId} IS NOT NULL THEN CONCAT('clan:', ${user.clanId}) ELSE CONCAT('village:', IF(${user.isOutlaw}, ${VILLAGE_SYNDICATE_ID}, COALESCE(${user.villageId}, ${VILLAGE_SYNDICATE_ID}))) END
-      AND DATE_ADD(tw.resolvedAt, INTERVAL ${TERRITORY_WAR_BOOST_HOURS} HOUR) > LEAST(${user.regenAt}, COALESCE(${user.masteryTrainingStartedAt}, ${user.regenAt}), COALESCE(${user.elementalTrainingStartedAt}, ${user.regenAt}), COALESCE(${user.covertTrainingStartedAt}, ${user.regenAt})))
+      AND DATE_ADD(tw.resolvedAt, INTERVAL ${TERRITORY_WAR_BOOST_HOURS} HOUR) > LEAST(${since ?? sql`${user.regenAt}`}, ${user.regenAt}, COALESCE(${user.masteryTrainingStartedAt}, ${user.regenAt}), COALESCE(${user.elementalTrainingStartedAt}, ${user.regenAt}), COALESCE(${user.covertTrainingStartedAt}, ${user.regenAt})))
   , JSON_ARRAY())
 `.mapWith(
     (value: unknown) =>
