@@ -110,8 +110,8 @@ describe("rich input composer", () => {
     expect(submit.mock.calls[0]?.[0]).toEqual({ comment: "<p><strong>Source draft</strong></p>" });
   });
 
-  it("preserves guide heading anchors while editing the body", async () => {
-    const initial = '<a href="#custom">Jump to combat</a><h2 id="custom">Combat</h2><p>Details</p>';
+  it.each(['<h2 id="custom">Combat</h2>', '<a name="custom"></a><h2>Combat</h2>'])("preserves guide anchors while editing the body (%s)", async (anchor) => {
+    const initial = `<a href="#custom">Jump to combat</a>${anchor}<p>Details</p>`;
     const view = render(<Composer initial={initial} />);
     const editor = view.getByRole("textbox", { name: "Message" });
     expect((editor as HTMLTextAreaElement).value).toBe(initial);

@@ -11,10 +11,11 @@ describe("rich-text HTML compatibility", () => {
     expect(richTextInput("Hello < 3 & goodbye")).toEqual({ text: "Hello < 3 & goodbye" });
     expect(richTextInput('<p onclick="alert(1)"><strong>Hello</strong><script>alert(1)</script></p>')).toEqual({ html: "<p><strong>Hello</strong></p>" });
     expect(needsHtmlSource('<h2>Title</h2><p><strong>Hello</strong></p><ul><li>One</li></ul>')).toBe(false);
+    expect(needsHtmlSource('<a href="#custom">Jump to combat</a>')).toBe(false);
   });
 
   it("opens advanced existing documents in source mode", () => {
-    for (const html of ['<iframe src="https://www.youtube.com/embed/id"></iframe>', '<table><tr><td>Cell</td></tr></table>', '<p style="color:red">Color</p>', '<blockquote author="Alice">Quote</blockquote>', '<h2 id="custom">Combat</h2>', '<h3 id="custom">Details</h3>', '[conceptart:some-id]']) {
+    for (const html of ['<iframe src="https://www.youtube.com/embed/id"></iframe>', '<table><tr><td>Cell</td></tr></table>', '<p style="color:red">Color</p>', '<blockquote author="Alice">Quote</blockquote>', '<h2 id="custom">Combat</h2>', '<h3 id="custom">Details</h3>', '<a name="custom"></a>', '<A href="#custom" NAME = "custom">Combat</A>', '[conceptart:some-id]']) {
       expect(needsHtmlSource(html)).toBe(true);
     }
   });
