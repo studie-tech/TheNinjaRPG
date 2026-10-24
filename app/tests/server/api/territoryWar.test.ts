@@ -4,6 +4,7 @@ import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { aiProfile, battle, battleHistory, clan, mpvpBattleQueue, mpvpBattleUser, territoryWar, userData, village } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { fetchBattle } from "@/server/api/routers/combat";
+import { clanRouter } from "@/server/api/routers/clan";
 import { territoryWarRouter } from "@/server/api/routers/territoryWar";
 import { insertUsers } from "../../setup/factories";
 import { beforeStatements } from "../../setup/statements";
@@ -73,6 +74,40 @@ describeWithDatabase("Territory War participation", () => {
     expect((await team())!.attackerEntityId).toBe("clan:faction");
     await db.update(userData).set({ clanId: null }).where(eq(userData.userId, "leader"));
     expect((await (await caller()).getCurrent()).competitor.id).toBe(`village:${VILLAGE_SYNDICATE_ID}`);
+  });
+
+  it.each(["active", "missing membership", "missing lobby", "missing event", "expired event"] as const)("rolls back a partially launched team with %s", async (ownership) => {
+    const db = await getTestDatabase();
+    await db.insert(clan).values({ id: "citizen-clan", name: "Citizens", image: "image", founderId: "leader", leaderId: "leader", leaderOrderId: "leader", villageId: "home" });
+    await db.update(userData).set({ clanId: "citizen-clan" });
+    const leader = await caller();
+    expect((await leader.createTeam({ eventId: "event" })).success).toBe(true);
+    const id = (await team())!.id;
+    expect((await (await caller("ally")).joinTeam({ teamId: id })).success).toBe(true);
+    const delayed = beforeStatements(db, userData, [
+      async () => {
+        const kicked = await (await callerFor(clanRouter, "leader")).kickMember({ clanId: "citizen-clan", memberId: "ally" });
+        expect(kicked.success, kicked.message).toBe(true);
+      },
+      async () => {
+        if (ownership === "missing membership") await db.delete(mpvpBattleUser).where(eq(mpvpBattleUser.userId, "leader"));
+        if (ownership === "missing lobby") await db.delete(mpvpBattleQueue).where(eq(mpvpBattleQueue.id, id));
+        if (ownership === "missing event") await db.delete(territoryWar).where(eq(territoryWar.id, "event"));
+        if (ownership === "expired event") await db.update(territoryWar).set({ endsAt: new Date(Date.now() - 1000) }).where(eq(territoryWar.id, "event"));
+      },
+    ]);
+    const failed = await callerForDatabase(territoryWarRouter, "leader", delayed).startBattle({ teamId: id });
+    expect(failed.success).toBe(false);
+    expect(await db.query.battle.findMany()).toEqual([]);
+    const restored = (await db.query.userData.findFirst({ where: eq(userData.userId, "leader") }))!;
+    expect(restored.battleId).toBeNull();
+    expect(restored.status).toBe(ownership === "active" ? "QUEUED" : "AWAKE");
+    if (ownership === "active") {
+      expect((await team())!.battleId).toBeNull();
+      expect((await db.query.mpvpBattleUser.findMany()).map(member => member.userId)).toEqual(["leader"]);
+      const retry = await leader.startBattle({ teamId: id });
+      expect(retry.success, retry.message).toBe(true);
+    }
   });
 
   it("allows leaving a waiting team and rejects a stale event", async () => {

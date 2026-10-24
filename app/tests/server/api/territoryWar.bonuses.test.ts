@@ -1,8 +1,9 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { CRAFTING_TIMES_MINS, getUserCaps, MEDNIN_EXP_CAP, MEDNIN_REQUIRED_EXP, STATS_PER_ENERGY, TERRITORY_WAR_BOOST_PERCENT, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { CRAFTING_TIMES_MINS, FARM_STARTING_PLOTS, FARM_WATER_EXPERIENCE, getUserCaps, MEDNIN_EXP_CAP, MEDNIN_REQUIRED_EXP, STATS_PER_ENERGY, TERRITORY_WAR_BOOST_PERCENT, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { craftingRequirement, farmCollectionLog, farmPlot, item, quest, questHistory, territoryWar, territoryWarScore, userCookingJob, userData, userItem, userQueue, userVote, village } from "@/drizzle/schema";
 import { farmingRouter } from "@/server/api/routers/farming";
+import { applyFarmMutationPatch } from "@/libs/farm-state";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
@@ -133,11 +134,42 @@ describeWithDatabase("Territory War activity bonus consumers", () => {
     expect(job.finishesAt.getTime()).toBe(startsAt.getTime() + 85000);
   });
 
-  it("grants the farming bonus through the real harvest endpoint", async () => {
+  it.each([
+    ["plantSeed", 40], ["plantAllEmpty", 40],
+    ["waterPlot", FARM_WATER_EXPERIENCE], ["waterAll", FARM_WATER_EXPERIENCE],
+    ["applyFertilizer", 60], ["fertilizeAll", 60],
+    ["harvestPlot", 1000], ["harvestAll", 1000],
+    ["plantSeed", 0], ["plantAllEmpty", 0],
+  ] as const)("returns and patches the awarded XP for %s with %s base XP", async (action, baseXp) => {
     const db = await getTestDatabase();
-    await db.insert(farmPlot).values({ id: "plot", userId, slotIndex: 0, seedItemId: "seed", plantedAt: new Date(Date.now() - 120000), finishAt: new Date(Date.now() - 60000) });
-    const result = await (await callerFor(farmingRouter, userId)).harvestPlot({ plotId: "plot" });
+    const planting = action === "plantSeed" || action === "plantAllEmpty";
+    const harvesting = action === "harvestPlot" || action === "harvestAll";
+    const bulk = ["plantAllEmpty", "waterAll", "fertilizeAll", "harvestAll"].includes(action);
+    await db.update(item).set({ farmPlantExperience: baseXp }).where(eq(item.id, "seed"));
+    await insertItems([{ id: "fertilizer", name: "Fertilizer", isFarmFertilizer: true, farmFertilizerExperience: baseXp, farmTimeReductionSeconds: 60 }]);
+    await insertUserItems([{ id: "seed-stack", userId, itemId: "seed", quantity: FARM_STARTING_PLOTS }, { id: "fertilizer-stack", userId, itemId: "fertilizer", quantity: FARM_STARTING_PLOTS }]);
+    await db.insert(farmPlot).values(Array.from({ length: FARM_STARTING_PLOTS }, (_, slotIndex) => ({ id: `plot-${slotIndex}`, userId, slotIndex, ...(planting ? {} : { seedItemId: "seed", plantedAt: new Date(Date.now() - 120000), finishAt: new Date(Date.now() + (harvesting ? -60000 : 3600000)) }) })));
+    const api = await callerFor(farmingRouter, userId);
+    const before = await api.getFarmState();
+    if ("success" in before) throw new Error(before.message);
+    const actions = {
+      plantSeed: () => api.plantSeed({ plotId: "plot-0", seedItemId: "seed" }),
+      plantAllEmpty: () => api.plantAllEmpty({ seedItemId: "seed" }),
+      waterPlot: () => api.waterPlot({ plotId: "plot-0" }),
+      waterAll: () => api.waterAll(),
+      applyFertilizer: () => api.applyFertilizer({ plotId: "plot-0", userItemId: "fertilizer-stack" }),
+      fertilizeAll: () => api.fertilizeAll({ userItemId: "fertilizer-stack" }),
+      harvestPlot: () => api.harvestPlot({ plotId: "plot-0" }),
+      harvestAll: () => api.harvestAll(),
+    };
+    const result = await actions[action]();
     expect(result.success, result.message).toBe(true);
-    expect((await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))?.farmingExperience).toBe(1150);
+    const awardedXp = Math.floor(baseXp * (bulk ? FARM_STARTING_PLOTS : 1) * (1 + TERRITORY_WAR_BOOST_PERCENT / 100));
+    const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
+    expect(saved.farmingExperience - before.farmingExperience).toBe(awardedXp);
+    expect(result.farmingExperienceDelta).toBe(awardedXp);
+    expect(applyFarmMutationPatch(before, result).farmingExperience).toBe(saved.farmingExperience);
+    if (awardedXp > 0) expect(result.message).toContain(`(+${awardedXp} farming XP)`);
+    else expect(result.message).not.toContain("farming XP");
   });
 });
