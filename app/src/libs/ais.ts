@@ -62,7 +62,13 @@ export const useAiEditForm = (
   const { mutate: updateAi, isPending: l4 } = api.profile.updateAi.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await utils.profile.getAi.invalidate();
+      if (data.success) {
+        // Equipment edits also change which jutsu/item actions can receive animations.
+        await Promise.all([
+          utils.profile.getAi.invalidate(),
+          utils.spriteAnimation.getAiConfig.invalidate({ userId: user.userId }),
+        ]);
+      }
     },
   });
 

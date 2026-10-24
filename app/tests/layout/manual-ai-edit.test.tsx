@@ -9,6 +9,7 @@ import { Suspense, type ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import ManualAisEdit from "@/app/[shell]/manual/ai/edit/[aiid]/page";
 import * as AiProfileEdit from "@/layout/AiProfileEdit";
+import * as AiSpriteAnimations from "@/layout/AiSpriteAnimations";
 import * as ContentBox from "@/layout/ContentBox";
 import * as ContentHelp from "@/layout/ContentHelp";
 import * as EditContent from "@/layout/EditContent";
@@ -91,6 +92,7 @@ beforeEach(() => {
   vi.spyOn(EditContent, "EditContent").mockImplementation(() => <></>);
   vi.spyOn(ContentHelp, "AiHelper").mockImplementation(() => null);
   vi.spyOn(AiProfileEdit, "default").mockImplementation(() => null);
+  vi.spyOn(AiSpriteAnimations, "AiSpriteAnimations").mockImplementation(() => <></>);
   vi.spyOn(NindoChange, "default").mockImplementation(() => null);
   vi.spyOn(StatusBar, "default").mockImplementation(() => null);
   vi.spyOn(SuggestChange, "SuggestChange").mockImplementation(() => null);

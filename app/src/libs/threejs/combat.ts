@@ -1,7 +1,7 @@
 import type { Grid } from "honeycomb-grid";
 import { ring } from "honeycomb-grid";
 import { createNoise2D } from "simplex-noise";
-import type { Object3D } from "three";
+import type { Object3D, WebGLRenderer } from "three";
 import {
   type BufferGeometry,
   Color,
@@ -63,8 +63,11 @@ import {
   getVillage,
 } from "@/libs/combat/util";
 import { builtinTerrainDepression } from "@/libs/sector-map/terrains";
+import type { CharacterAnimation } from "@/libs/spriteAnimations";
 import { createAggroHalo, updateAggroHalo } from "@/libs/threejs/aggroHalo";
+import { clearUnusedAnimationTextures } from "@/libs/threejs/animationTextures";
 import { getTileInfo } from "@/libs/threejs/biome";
+import { updateCharacterAnimation } from "@/libs/threejs/characterAnimation";
 import { createCombatMaxPoolCache } from "@/libs/threejs/combatMaxPools";
 import {
   calculateHexUVCoordinates,
@@ -83,6 +86,7 @@ import {
   createSpriteMaterial,
   createTexture,
   disposeAnimatedGroup,
+  disposeSpriteAnimations,
   drawStatusBar,
   isObjectChainVisible,
   loadTexture,
@@ -491,6 +495,7 @@ export const drawCombatEffects = (info: {
   sfxEnabled?: boolean;
   sfxVolume?: number;
   isAnyUserMoving?: boolean;
+  animateBattlefield?: boolean;
 }) => {
   const endMark = profiler.mark("drawCombatEffects");
 
@@ -498,6 +503,15 @@ export const drawCombatEffects = (info: {
   const { battle, groupEffects, spriteMixer, animationId, gameAssets } = info;
   const { groundEffects, usersEffects, usersState } = battle;
   const isMoving = info.isAnyUserMoving ?? false;
+  // Also retire hidden effects when disabling motion mid-battle. Static markers
+  // and sound transitions remain independent of the animation preference.
+  if (
+    info.animateBattlefield === false &&
+    groupEffects.userData.animationsEnabled !== false
+  ) {
+    disposeSpriteAnimations(groupEffects, spriteMixer);
+  }
+  groupEffects.userData.animationsEnabled = info.animateBattlefield !== false;
 
   // If movement just completed, play all queued SFX
   if (wasMovingLastFrame && !isMoving && pendingSfxQueue.length > 0) {
@@ -531,6 +545,7 @@ export const drawCombatEffects = (info: {
       sfxEnabled: info.sfxEnabled,
       sfxVolume: info.sfxVolume,
       isAnyUserMoving: isMoving,
+      animateBattlefield: info.animateBattlefield,
     });
   });
   // Draw all user effects
@@ -552,6 +567,7 @@ export const drawCombatEffects = (info: {
         sfxEnabled: info.sfxEnabled,
         sfxVolume: info.sfxVolume,
         isAnyUserMoving: isMoving,
+        animateBattlefield: info.animateBattlefield,
       });
     }
   });
@@ -590,6 +606,7 @@ export const drawCombatEffect = (info: {
   sfxEnabled?: boolean;
   sfxVolume?: number;
   isAnyUserMoving?: boolean;
+  animateBattlefield?: boolean;
 }) => {
   // Destructure
   const { effect, groupEffects, animationId, hex, drawnIds } = info;
@@ -642,7 +659,11 @@ export const drawCombatEffect = (info: {
         }
         // If there is an appear animation, show it. Mark it for hiding,
         // which we catch and use to remove it
-        if (effect.appearAnimation && animationId !== 0) {
+        if (
+          info.animateBattlefield !== false &&
+          effect.appearAnimation &&
+          animationId !== 0
+        ) {
           const obj = gameAssets.find((a) => a.id === effect.appearAnimation);
           if (obj) {
             const actionSprite = showAnimation({
@@ -664,21 +685,6 @@ export const drawCombatEffect = (info: {
               playOrQueueSfx(url, info.sfxVolume ?? 0.8);
             }
           } catch {}
-        }
-        // If there is a static animation, show it.
-        if (effect.staticAnimation) {
-          const obj = gameAssets.find((a) => a.id === effect.staticAnimation);
-          if (obj) {
-            const actionSprite = showAnimation({
-              gameAsset: obj,
-              spriteMixer,
-              playInfinite: true,
-              scale: EFFECT_ANIMATION_SIZE,
-              position: { x: w / 2, y: h / 2 },
-              layer: 5,
-            });
-            if (actionSprite) asset.add(actionSprite);
-          }
         }
         // Status bar
         if (effect.type === "barrier") {
@@ -710,6 +716,30 @@ export const drawCombatEffect = (info: {
         // Add to group and cache
         groupEffects.add(asset);
         effectMeshCache.set(effect.id, asset);
+      }
+
+      // Re-enabling motion restores persistent loops without replaying appearance
+      // animations or sounds for effects that were already present.
+      if (
+        info.animateBattlefield !== false &&
+        effect.staticAnimation &&
+        !asset.getObjectByName("staticAnimation")
+      ) {
+        const obj = gameAssets.find((a) => a.id === effect.staticAnimation);
+        if (obj) {
+          const actionSprite = showAnimation({
+            gameAsset: obj,
+            spriteMixer,
+            playInfinite: true,
+            scale: EFFECT_ANIMATION_SIZE,
+            position: { x: w / 2, y: h / 2 },
+            layer: 5,
+          });
+          if (actionSprite) {
+            actionSprite.name = "staticAnimation";
+            asset.add(actionSprite);
+          }
+        }
       }
 
       // Set visibility
@@ -762,7 +792,7 @@ type AiAvatarData = {
  * columns, so a negative `scale.x` on a Sprite is silently ignored.
  */
 const aiAvatarMaterial = (avatarPath: string, mirrored: boolean) => {
-  const map = loadTexture(avatarPath, 50, mirrored);
+  const map = loadTexture(avatarPath, 128, mirrored);
   map.generateMipmaps = false;
   map.minFilter = LinearFilter;
   const material = createSpriteMaterial(map);
@@ -779,7 +809,10 @@ export const setAiAvatarFacing = (sprite: Sprite, facing: AvatarFacing) => {
   const mirrored = data.avatarFacing !== facing;
   if (data.mirrored === mirrored) return;
   data.mirrored = mirrored;
-  sprite.material = aiAvatarMaterial(data.avatarPath, mirrored);
+  // Animated actors own their material and mirror UVs within the active atlas cell.
+  if (!sprite.userData.characterAnimation) {
+    sprite.material = aiAvatarMaterial(data.avatarPath, mirrored);
+  }
 };
 
 /**
@@ -813,7 +846,10 @@ export const createUserSprite = (
   group.add(shadow_sprite);
 
   // User marker background or raw image
-  const noMarker = userData.isAi && userData.isOriginal;
+  // Animated bodies use unframed artwork, including AIs that normally use avatar markers.
+  const noMarker =
+    userData.isAi &&
+    (userData.isOriginal || Object.keys(userData.spriteAnimations ?? {}).length > 0);
   if (noMarker) {
     const avatarPath = userData.avatar ? `${userData.avatar}?1=1` : IMG_AVATAR_DEFAULT;
     const sprite = new Sprite(aiAvatarMaterial(avatarPath, false));
@@ -1030,7 +1066,12 @@ export const setVisible = (obj: Object3D | Group | Sprite, visible: boolean) => 
 };
 
 // Track current tile (visual) and target tile (logical)
-type MovementState = { path?: TerrainHex[]; index: number };
+type MovementState = {
+  path?: TerrainHex[];
+  index: number;
+  elapsedMs?: number;
+  from?: { x: number; y: number };
+};
 type UserMeshData = {
   hex?: TerrainHex;
   targetHex?: TerrainHex;
@@ -1040,6 +1081,7 @@ type UserMeshData = {
 type GroupUsersData = {
   pathFinder?: PathCalculator;
   needsSort?: boolean;
+  lastRenderAt?: number;
 };
 
 /** Returns a cached PathCalculator on the users group, creating it if missing */
@@ -1080,7 +1122,7 @@ const getOrInitUserMeshData = (
   return meshData;
 };
 
-/** Computes a new path if target changed or path exhausted; updates meshData.targetHex */
+/** A new logical destination starts a path; rendered frames retain its segment clock. */
 const computePathIfNeeded = (
   meshData: UserMeshData,
   pathFinder: PathCalculator,
@@ -1091,11 +1133,7 @@ const computePathIfNeeded = (
     !prevTarget ||
     prevTarget.col !== targetTile.col ||
     prevTarget.row !== targetTile.row;
-  const needNewPath =
-    targetChanged ||
-    !meshData.movement?.path ||
-    (meshData.movement?.index ?? 0) >= (meshData.movement?.path?.length ?? 0);
-  if (needNewPath) {
+  if (targetChanged) {
     const start: TerrainHex = meshData.hex ?? targetTile;
     const path = pathFinder.getShortestPath(start, targetTile) || [];
     const trimmed =
@@ -1110,85 +1148,54 @@ const computePathIfNeeded = (
   meshData.targetHex = targetTile;
 };
 
-/** Returns the per-frame movement speed for a tile */
-const getTileSpeed = (tile: TerrainHex): number => {
-  return (tile.width / 50) * 5; // tripled speed
-};
+/** Give a walking sheet time to play even on high-refresh displays. */
+const getTileTravelMs = (animation: CharacterAnimation | undefined): number =>
+  animation
+    ? Math.min(1000, Math.max(350, (animation.frameCount / animation.fps) * 1000))
+    : 250;
 
-/** Steps the mesh along its path or directly to target with clamped constant speed */
+/** Interpolate in elapsed time, carrying unused time across tile boundaries. */
 const stepAlongPath = (
   userMesh: Group,
   meshData: UserMeshData,
   targetTile: TerrainHex,
-  speed: number,
+  durationMs: number,
+  deltaMs: number,
   parentGroup: Group,
   onTileStep?: () => void,
 ) => {
-  const { x: curX, y: curY } = userMesh.position;
-  const moveTowards = (tx: number, ty: number, maxStep: number) => {
-    const dx = tx - curX;
-    const dy = ty - curY;
-    const dist = Math.hypot(dx, dy);
-    if (dist <= maxStep || dist === 0) {
-      userMesh.position.set(tx, ty, 0);
-      return true;
-    } else {
-      const nx = dx / dist;
-      const ny = dy / dist;
-      userMesh.position.set(curX + nx * maxStep, curY + ny * maxStep, 0);
-      return false;
-    }
-  };
-
-  // Easing function for speed multiplier: 0 at ends, 1 in middle. Clamp to a minimum to avoid stall
-  const easedMultiplier = (progress: number, min = 0.35) => {
-    const p = Math.max(0, Math.min(1, progress));
-    const s = Math.sin(Math.PI * p);
-    return Math.max(min, s);
-  };
-
-  const path = meshData.movement?.path;
-  let index = meshData.movement?.index ?? 0;
-  if (path && index < path.length) {
-    const nextTile = path[index];
-    if (!nextTile) return;
+  const movement = meshData.movement;
+  if (!movement) return;
+  let remainingMs = deltaMs;
+  do {
+    const nextTile = movement.path?.[movement.index] ?? targetTile;
     const { x, y } = nextTile.center;
-    // Compute progress along current segment for easing
-    const startCenter = meshData.hex?.center ?? nextTile.center;
-    const totalDist = Math.hypot((startCenter?.x ?? 0) - x, (startCenter?.y ?? 0) - y);
-    const remaining = Math.hypot(-x - curX, -y - curY);
-    const progress = totalDist > 0 ? 1 - remaining / totalDist : 1;
-    const step = speed * easedMultiplier(progress);
-    const reached = moveTowards(-x, -y, step);
-    if (reached) {
-      meshData.hex = nextTile;
-      index += 1;
-      meshData.movement = { path, index };
-      if (onTileStep) onTileStep();
-      markGroupNeedsSort(parentGroup);
-      if (!path || index >= path.length) {
-        const { x: tx, y: ty } = targetTile.center;
-        userMesh.position.set(-tx, -ty, 0);
-        meshData.hex = targetTile;
-        meshData.movement = { path: undefined, index: 0 };
-      }
+    if (userMesh.position.x === -x && userMesh.position.y === -y) return;
+    movement.from ??= { x: userMesh.position.x, y: userMesh.position.y };
+    const elapsed = movement.elapsedMs ?? 0;
+    const stepMs = Math.min(remainingMs, durationMs - elapsed);
+    movement.elapsedMs = elapsed + stepMs;
+    remainingMs -= stepMs;
+    const progress = movement.elapsedMs / durationMs;
+    const eased = progress * progress * (3 - 2 * progress);
+    userMesh.position.set(
+      movement.from.x + (-x - movement.from.x) * eased,
+      movement.from.y + (-y - movement.from.y) * eased,
+      0,
+    );
+    if (progress < 1) return;
+    userMesh.position.set(-x, -y, 0);
+    meshData.hex = nextTile;
+    movement.index += 1;
+    movement.elapsedMs = 0;
+    movement.from = undefined;
+    onTileStep?.();
+    markGroupNeedsSort(parentGroup);
+    if (!movement.path || movement.index >= movement.path.length) {
+      meshData.movement = { index: 0 };
+      return;
     }
-  } else {
-    const { x, y } = targetTile.center;
-    const startCenter = meshData.hex?.center ?? targetTile.center;
-    const totalDist = Math.hypot((startCenter?.x ?? 0) - x, (startCenter?.y ?? 0) - y);
-    const remaining = Math.hypot(-x - curX, -y - curY);
-    const progress = totalDist > 0 ? 1 - remaining / totalDist : 1;
-    const step = speed * easedMultiplier(progress);
-    const reached = moveTowards(-x, -y, step);
-    if (reached) {
-      const previousHex = meshData.hex;
-      meshData.hex = targetTile;
-      if (parentGroup && previousHex !== targetTile) {
-        markGroupNeedsSort(parentGroup);
-      }
-    }
-  }
+  } while (remainingMs > 0);
 };
 
 /**
@@ -1259,6 +1266,9 @@ export const drawCombatUsers = (info: {
   sfxVolume?: number;
   gameAssets?: GameAsset[];
   aggro?: AggroDisplay;
+  animateBattlefield?: boolean;
+  animationPixelRatio?: number;
+  animationRenderer?: WebGLRenderer;
 }): boolean => {
   const endMark = profiler.mark("drawCombatUsers");
 
@@ -1291,6 +1301,10 @@ export const drawCombatUsers = (info: {
   const userGroupData = group_users.userData as GroupUsersData & {
     lastUserPositions?: Map<string, string>;
   };
+  const now = performance.now();
+  // Tab suspension must not skip the entire walking sequence on the first frame back.
+  const deltaMs = Math.min(100, Math.max(0, now - (userGroupData.lastRenderAt ?? now)));
+  userGroupData.lastRenderAt = now;
   const lastPositions = userGroupData.lastUserPositions || new Map<string, string>();
   const currentPositions = new Map<string, string>();
 
@@ -1350,8 +1364,6 @@ export const drawCombatUsers = (info: {
 
         const targetTile: TerrainHex = hex;
         const meshData = getOrInitUserMeshData(userMesh, targetTile);
-        computePathIfNeeded(meshData, pathFinder, targetTile);
-        const speed = getTileSpeed(meshData.hex ?? targetTile);
         const onTileStep = () => {
           if (info.sfxEnabled) {
             try {
@@ -1362,7 +1374,30 @@ export const drawCombatUsers = (info: {
             } catch {}
           }
         };
-        stepAlongPath(userMesh, meshData, targetTile, speed, group_users, onTileStep);
+        if (info.animateBattlefield === false) {
+          // Snap to authoritative positions, including an interrupted walk, so
+          // disabling animations never leaves actors between tiles.
+          const { x, y } = targetTile.center;
+          if (userMesh.position.x !== -x || userMesh.position.y !== -y) {
+            userMesh.position.set(-x, -y, 0);
+            markGroupNeedsSort(group_users);
+            onTileStep();
+          }
+          meshData.hex = targetTile;
+          meshData.targetHex = targetTile;
+          meshData.movement = { index: 0 };
+        } else {
+          computePathIfNeeded(meshData, pathFinder, targetTile);
+          stepAlongPath(
+            userMesh,
+            meshData,
+            targetTile,
+            getTileTravelMs(user.spriteAnimations?.move),
+            deltaMs,
+            group_users,
+            onTileStep,
+          );
+        }
         userMesh.userData = meshData;
 
         // Only check if not at target to determine if user is still moving
@@ -1373,6 +1408,30 @@ export const drawCombatUsers = (info: {
         if (notAtTarget) {
           anyUserMoving = true;
         }
+        if (avatarSprite) {
+          const avatarData = avatarSprite.userData as AiAvatarData;
+          updateCharacterAnimation({
+            sprite: avatarSprite,
+            animations: user.spriteAnimations,
+            event: user.spriteAnimationEvent,
+            moving: notAtTarget,
+            facing: avatarData.mirrored
+              ? avatarData.avatarFacing === "left"
+                ? "right"
+                : "left"
+              : avatarData.avatarFacing,
+            staticMap: loadTexture(avatarData.avatarPath, 128, avatarData.mirrored),
+            enabled:
+              info.animateBattlefield !== false && stillInBattle(user, usersEffects),
+            // 128 px covers typical mobile sprites; allow modest upsampling before
+            // upgrading for a large field/zoom, capped at 256 px on retina screens.
+            cellSize:
+              1.6 * hex.height * (info.animationPixelRatio ?? 1) > 192 ? 256 : 128,
+            renderer: info.animationRenderer,
+            now,
+          });
+        }
+
         // Handle remove users from combat.
         if (!stillInBattle(user, usersEffects) && user.hidden === undefined) {
           setVisible(userMesh, false);
@@ -1420,10 +1479,15 @@ export const drawCombatUsers = (info: {
   group_users.children.forEach((object) => {
     if (!drawnIds.has(object.name)) {
       object.visible = false;
+      // Unsummoned actors must release their pinned sheets before another spawn.
+      object.traverse((child) => child.userData.disposeCharacterAnimation?.());
       // PERFORMANCE: Remove from cache when hidden
       userMeshCache.delete(object.name);
     }
   });
+
+  // Release decoded sheets only after every actor has left animation mode.
+  if (info.animateBattlefield === false) clearUnusedAnimationTextures();
 
   // Store current positions for next frame comparison
   userGroupData.lastUserPositions = currentPositions;

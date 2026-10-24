@@ -30,7 +30,7 @@ function createScene(initialResult: { outcome: string } | null = null) {
   const dependencies: unknown[][] = [];
   let nextId = 0;
   let effectIndex = 0;
-  const counts = { renders: 0, scheduled: 0, cancelled: 0, clockStarts: 0, clockStops: 0, refreshes: 0 };
+  const counts = { renders: 0, scheduled: 0, cancelled: 0, clockStarts: 0, clockStops: 0, refreshes: 0, mixerUpdates: 0, windUpdates: 0, waveUpdates: 0 };
   const scope = {
     animationId: null as number | null,
     isMountedRef: { current: true },
@@ -56,7 +56,8 @@ function createScene(initialResult: { outcome: string } | null = null) {
       },
       cancelFrame(id: number) { counts.cancelled++; callbacks.delete(id); },
     },
-    spriteMixer: { update() {} },
+    animateBattlefieldRef: { current: true },
+    spriteMixer: { update() { counts.mixerUpdates++; } },
     clock: { getDelta: () => 0.016, start() { counts.clockStarts++; }, stop() { counts.clockStops++; } },
     raycaster: { setFromCamera() {} }, mouse: {}, camera: {},
     // Skip drawing fixtures; the renderer and scheduler must stop independently
@@ -64,6 +65,9 @@ function createScene(initialResult: { outcome: string } | null = null) {
     userData: null, battleRef: { current: null }, gridRef: { current: null },
     cameraRef: { current: null }, controlsRef: { current: null },
     controls: { update() {} }, lightLayout: true, isContextLost: false,
+    group_assets: {}, group_tiles: {},
+    updateWindAnimation() { counts.windUpdates++; },
+    updateWaveAnimation() { counts.waveUpdates++; },
     renderer: { render() { counts.renders++; }, info: {} }, scene: {}, hasRenderedFrame: false,
   };
   const render = initialize(scope);
@@ -85,6 +89,26 @@ function createScene(initialResult: { outcome: string } | null = null) {
     },
   };
 }
+
+it("stops effect playback and scenery motion while continuing to render a live battlefield", () => {
+  const scene = createScene();
+  scene.scope.lightLayout = false;
+  scene.step();
+  expect(scene.counts.mixerUpdates).toBe(2);
+  expect(scene.counts.windUpdates).toBe(1);
+  expect(scene.counts.waveUpdates).toBe(1);
+  scene.scope.animateBattlefieldRef.current = false;
+  scene.step();
+  expect(scene.counts.renders).toBe(3);
+  expect(scene.counts.mixerUpdates).toBe(2);
+  expect(scene.counts.windUpdates).toBe(1);
+  expect(scene.counts.waveUpdates).toBe(1);
+  scene.scope.animateBattlefieldRef.current = true;
+  scene.step();
+  expect(scene.counts.mixerUpdates).toBe(3);
+  expect(scene.counts.windUpdates).toBe(2);
+  expect(scene.counts.waveUpdates).toBe(2);
+});
 
 it.each(["Won", "Lost", "Fled", "Draw"])("cancels rendering while %s rewards remain held, including page resume", (outcome) => {
   const scene = createScene();

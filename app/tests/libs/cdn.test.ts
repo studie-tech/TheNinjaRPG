@@ -56,6 +56,10 @@ describe("contentSecurityPolicy", () => {
   it("is a single header line", () => {
     expect(contentSecurityPolicy("https://x.b-cdn.net")).not.toContain("\n");
   });
+
+  it("permits the compressed animation decoder's embedded WASM fetch", () => {
+    expect(directive(contentSecurityPolicy(undefined), "connect-src")).toBe("connect-src * data:");
+  });
 });
 
 describe("CDN_URL validation", () => {

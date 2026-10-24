@@ -7,6 +7,7 @@ import type { UseFormReturn } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import AiProfileEdit from "@/layout/AiProfileEdit";
+import { AiSpriteAnimations } from "@/layout/AiSpriteAnimations";
 import ContentBox from "@/layout/ContentBox";
 import { AiHelper } from "@/layout/ContentHelp";
 import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
@@ -235,6 +236,7 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
       {props.canSave && (
         <>
           <AiProfileEdit userData={props.user} />
+          <AiSpriteAnimations userId={processedUser.userId} />
           <ContentBox title="Nindo" subtitle="Edit the AI Nindo" initialBreak>
             {isUpdating && <Loader explanation="Updating..." />}
             {!isUpdating && (

@@ -69,6 +69,8 @@ export const publicState = [
   "actionPoints",
   "avatar",
   "avatarFacing",
+  "spriteAnimations",
+  "spriteAnimationEvent",
   "bloodlineId",
   "keystoneName",
   "keystoneItemId",
