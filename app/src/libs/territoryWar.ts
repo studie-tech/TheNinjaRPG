@@ -14,8 +14,6 @@ export type TerritoryCompetitor = {
 };
 export type TerritoryBattleState = {
   id: string;
-  sector: number;
-  endsAt: string;
   competitors: Record<string, TerritoryCompetitor>;
 };
 

@@ -3680,8 +3680,6 @@ export const initiateBattle = async (
           territoryWar: territoryWarEvent
             ? {
                 id: territoryWarEvent.id,
-                sector: territoryWarEvent.sector,
-                endsAt: territoryWarEvent.endsAt.toISOString(),
                 competitors: territoryCompetitors,
               }
             : undefined,
