@@ -254,7 +254,7 @@ export default function Kitchen({ image }: { image?: string }) {
                       recipe.cookingOutputQuantity *
                       (1 + (user ? getTerritoryWarBoost(user) : 0)),
                   )}{" "}
-                  XP
+                  XP (current bonuses)
                 </p>
                 <p className="mt-1 text-xs">
                   {locked
@@ -346,7 +346,9 @@ export default function Kitchen({ image }: { image?: string }) {
                     selected.cookingExperience *
                     (1 + (user ? getTerritoryWarBoost(user) : 0)),
                 )}{" "}
-                XP on completion
+                XP on completion (current bonuses).
+                {(active || waiting.length > 0) &&
+                  " Queued meals use the time and XP bonuses active when they start."}
               </p>
             )}
             {blocked && <p className="text-muted-foreground text-sm">{blocked}</p>}

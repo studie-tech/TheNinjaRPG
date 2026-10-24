@@ -462,7 +462,9 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">Total Crafting Time:</span>
+                  <span className="font-medium text-sm">
+                    {isBusy ? "Estimated Crafting Time:" : "Total Crafting Time:"}
+                  </span>
                   <span
                     className={`font-semibold text-sm ${requiredRankLabel ? "text-red-600" : ""}`}
                   >
@@ -471,7 +473,9 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                 </div>
                 {(selectedItem.craftingExperience ?? 0) > 0 && (
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">Total Experience Gain:</span>
+                    <span className="font-medium text-sm">
+                      {isBusy ? "Estimated Experience Gain:" : "Total Experience Gain:"}
+                    </span>
                     <span className="font-semibold text-green-600 text-sm">
                       +{craftingExperienceGain} EXP
                     </span>
@@ -527,7 +531,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                   {isQueueFull
                     ? "Your crafting queue is full. Wait for a craft to start or cancel a queued one."
-                    : "You are crafting another item. This craft joins your queue and starts when the crafts ahead of it are ready; its materials are set aside now."}
+                    : "Materials are reserved now. This craft starts after earlier jobs; time and XP use the bonuses active then. Estimates use current bonuses."}
                 </p>
               </div>
             )}
