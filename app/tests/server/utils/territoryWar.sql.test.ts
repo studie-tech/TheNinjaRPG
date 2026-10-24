@@ -4,6 +4,7 @@ import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { battle, clan, mpvpBattleQueue, mpvpBattleUser, notification, sector, territoryWar, territoryWarReceipt, territoryWarScore, userData, village } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
 import type { CombatResult } from "@/libs/combat/types";
+import { calcBattleResult } from "@/libs/combat/util";
 import type { DrizzleClient } from "@/server/db";
 import { cleanupTerritoryWarTeams, resolveTerritoryWar, settleTerritoryWarCombat, syncTerritoryWars, territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { guardianVictory } from "../../setup/territoryWar";
@@ -15,6 +16,15 @@ const eventRow = () => ({ id: "event", predecessorId: "initial", sector: 100, gu
 const apply = async (fight: ReturnType<typeof guardianVictory>) => {
   const db = await getTestDatabase();
   return db.transaction(tx => settleTerritoryWarCombat(tx as unknown as DrizzleClient, fight));
+};
+const pvpVictory = () => {
+  const fight = guardianVictory();
+  fight.battleType = "COMBAT";
+  const victim = fight.usersState[1]!;
+  victim.isAi = false;
+  victim.villageId = "enemy";
+  fight.extraState.territoryWar!.competitors[victim.userId] = { id: "village:enemy", name: "Enemy", villageId: "enemy", clanId: null };
+  return fight;
 };
 
 describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
@@ -98,6 +108,50 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect((await db.query.territoryWarScore.findFirst())?.points).toBe(15);
     expect((await db.query.userData.findMany()).filter(user => user.userId !== "guardian" && user.userId !== "player-0").every(user => user.status === "AWAKE" && user.battleId === null)).toBe(true);
     expect(await updateBattle(db, result, "player-0", fight, fight.version)).toBeNull();
+  });
+
+  it.each([false, true])("credits a PvP win before the opponent collects, including late collection=%s", async late => {
+    const db = await getTestDatabase();
+    await db.insert(territoryWar).values(eventRow());
+    const fight = pvpVictory();
+    await db.insert(battle).values(fight);
+    const win = calcBattleResult(fight, "player-0", []);
+    expect(win?.outcome).toBe("Won");
+    expect(win?.targetsLeft).toBe(1);
+    const claimed = await recordQueries(() => updateBattle(db, win, "player-0", fight, 0));
+    expect(claimed.result?.battleOver).toBe(false);
+    expect(claimed.statements.some(statement => /^select\b/i.test(statement))).toBe(false);
+    const saved = (await db.query.battle.findFirst())!;
+    expect(saved.usersState.map(user => user.leftBattle)).toEqual([true, false]);
+    expect((await db.query.territoryWarScore.findFirst())?.points).toBe(3);
+    expect(await db.query.territoryWarReceipt.findMany()).toHaveLength(1);
+    expect(await updateBattle(db, win, "player-0", fight, 0)).toBeNull();
+    if (late) await db.update(territoryWar).set({ endsAt: new Date(Date.now() - 1) }).where(eq(territoryWar.id, "event"));
+    const loss = calcBattleResult(saved, "guardian", []);
+    expect(loss?.outcome).toBe("Lost");
+    const collected = await updateBattle(db, loss, "guardian", saved, saved.version);
+    expect(collected?.battleOver).toBe(true);
+    expect(await db.query.battle.findFirst()).toBeUndefined();
+    expect((await db.query.territoryWarScore.findFirst())?.points).toBe(3);
+    expect(await db.query.territoryWarReceipt.findMany()).toHaveLength(1);
+  });
+
+  it("rejects a stale PvP claim and resolves first-to-target on the successful winner claim", async () => {
+    const db = await getTestDatabase();
+    await db.insert(territoryWar).values(eventRow());
+    await db.insert(territoryWarScore).values({ warId: "event", competitorId: "village:home", name: "Home", villageId: "home", points: 397 });
+    const fight = pvpVictory();
+    await db.insert(battle).values(fight);
+    const win = calcBattleResult(fight, "player-0", []);
+    expect(await updateBattle(db, win, "player-0", fight, -1)).toBeNull();
+    expect((await db.query.territoryWarScore.findFirst())?.points).toBe(397);
+    expect(await db.query.territoryWarReceipt.findMany()).toHaveLength(0);
+    const claimed = await updateBattle(db, win, "player-0", fight, 0);
+    expect(claimed?.battleOver).toBe(false);
+    expect((await db.query.territoryWarScore.findFirst())?.points).toBe(400);
+    expect((await db.query.territoryWarScore.findFirst())?.rewarded).toBe(true);
+    expect((await db.query.territoryWar.findFirst())?.resolvedAt).not.toBeNull();
+    expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(300010);
   });
 
   it("rolls score, receipts and rewards back together after a failed write", async () => {

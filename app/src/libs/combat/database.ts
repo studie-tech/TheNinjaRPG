@@ -105,7 +105,10 @@ import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
-import { settleTerritoryWarCombat } from "@/server/utils/territoryWar";
+import {
+  settleTerritoryWarCombat,
+  territoryWarAwards,
+} from "@/server/utils/territoryWar";
 import {
   applyVillageMissionShrineDamage,
   recordVillageMissionProgress,
@@ -265,8 +268,8 @@ export const updateBattle = async (
     }
   } else {
     newBattle.version = Math.max(newBattle.version, fetchedVersion + 1);
-    const result = await retryOnDeadlock(() =>
-      client
+    const updateBattleState = (database: DrizzleClient) =>
+      database
         .update(battle)
         .set({
           version: newBattle.version,
@@ -287,9 +290,21 @@ export const updateBattle = async (
           roundStartAt: newBattle.roundStartAt,
           round: newBattle.round,
         })
-        .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion))),
+        .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion)));
+    const updated = await retryOnDeadlock(() =>
+      result && territoryWarAwards(newBattle).length > 0
+        ? client.transaction(async (tx) => {
+            const database = tx as unknown as DrizzleClient;
+            const updated = await updateBattleState(database);
+            // A decided PvP win must score before the opponent collects their result.
+            // The version UPDATE and receipt/score upserts cannot share one statement.
+            if (updated.rowsAffected === 1)
+              await settleTerritoryWarCombat(database, newBattle);
+            return updated;
+          })
+        : updateBattleState(client),
     );
-    if (result.rowsAffected === 0) {
+    if (updated.rowsAffected === 0) {
       return null;
     }
   }

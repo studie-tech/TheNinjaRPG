@@ -80,7 +80,7 @@ export const territoryWarAwards = (battle: CompleteBattle) => {
   return [...awards.values()];
 };
 
-/** Called inside the terminal battle-version transaction; no reads during combat settlement. */
+/** Called inside the decided result's battle-version transaction; no reads during combat settlement. */
 export const settleTerritoryWarCombat = async (
   client: DrizzleClient,
   battle: CompleteBattle,
