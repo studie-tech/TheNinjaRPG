@@ -1444,6 +1444,7 @@ export const combatRouter = createTRPCRouter({
               userId: user.controllerId,
               createdAt: now,
               updatedAt: now,
+              trainingStartedAt: null,
               finishTraining: null,
             };
           })
@@ -2729,6 +2730,7 @@ export const initiateBattle = async (
             level: 25,
             experience: 0,
             equipped: true,
+            trainingStartedAt: null,
             finishTraining: null,
             jutsu: jutsu,
             reskinId: null,

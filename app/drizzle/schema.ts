@@ -3441,6 +3441,8 @@ export const userJutsu = mysqlTable(
     level: int("level").default(1).notNull(),
     experience: int("experience").default(0).notNull(),
     equipped: boolean("equipped").default(false).notNull(),
+    // Preserve the level's actual interval across bonus expiry and later equip writes.
+    trainingStartedAt: datetime("trainingStartedAt", { mode: "date", fsp: 3 }),
     finishTraining: datetime("finishTraining", { mode: "date", fsp: 3 }),
     reskinId: varchar("reskinId", { length: 191 }),
   },

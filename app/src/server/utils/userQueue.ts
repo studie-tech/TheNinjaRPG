@@ -853,7 +853,11 @@ const startQueuedJutsu = async (
     ? (
         await client
           .update(userJutsu)
-          .set({ level: sql`${userJutsu.level} + 1`, finishTraining: finishesAt })
+          .set({
+            level: sql`${userJutsu.level} + 1`,
+            trainingStartedAt: startsAt,
+            finishTraining: finishesAt,
+          })
           .where(and(eq(userJutsu.id, owned.id), eq(userJutsu.level, owned.level)))
       ).rowsAffected === 1
     : await client
@@ -862,6 +866,7 @@ const startQueuedJutsu = async (
           id: nanoid(),
           userId: entry.userId,
           jutsuId: entry.jutsuId,
+          trainingStartedAt: startsAt,
           finishTraining: finishesAt,
         })
         .then(

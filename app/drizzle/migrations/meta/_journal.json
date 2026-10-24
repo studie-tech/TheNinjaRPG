@@ -771,6 +771,13 @@
       "when": 1792830436371,
       "tag": "0110_perpetual_phil_sheldon",
       "breakpoints": false
+    },
+    {
+      "idx": 112,
+      "version": "5",
+      "when": 1792837011975,
+      "tag": "0112_bright_red_wolf",
+      "breakpoints": false
     }
   ]
 }

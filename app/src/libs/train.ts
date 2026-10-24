@@ -553,9 +553,9 @@ export const findJutsuInTraining = <T extends { finishTraining: Date | null }>(
 ) => userJutsus?.find((userJutsu) => isJutsuInTraining(userJutsu, serverNow));
 
 /**
- * Training stores the target level and finish time. Later actions such as equip
- * rewrite updatedAt without changing finishTraining, so the start is the finish
- * minus the duration of the level training began at.
+ * Fallback for training rows without a saved start. The stored level is the target
+ * level; updatedAt cannot identify the start because equip rewrites it. New starts
+ * persist trainingStartedAt to retain the duration even after a bonus expires.
  */
 export const inferJutsuTrainingStartedAt = (
   finishTraining: Date,

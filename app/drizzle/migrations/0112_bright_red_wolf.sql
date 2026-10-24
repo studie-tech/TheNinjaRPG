@@ -1,0 +1,1 @@
+ALTER TABLE `UserJutsu` ADD `trainingStartedAt` datetime(3);
