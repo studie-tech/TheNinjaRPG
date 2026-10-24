@@ -12,6 +12,7 @@ ensureDom();
 const capacitorWindow = window as typeof window & {
   Capacitor?: {
     isNativePlatform: () => boolean;
+    getPlatform: () => string;
     Plugins: Record<string, Record<string, unknown>>;
   };
 };
@@ -26,6 +27,7 @@ describe("RevenueCat identity queue", () => {
     const syncPurchases = vi.fn();
     capacitorWindow.Capacitor = {
       isNativePlatform: () => true,
+      getPlatform: () => "ios",
       Plugins: {
         Purchases: {
           invalidateCustomerInfoCache: async () => {
@@ -132,6 +134,7 @@ describe("RevenueCat identity queue", () => {
     const isConfigured = vi.fn().mockResolvedValue({ isConfigured: false });
     capacitorWindow.Capacitor = {
       isNativePlatform: () => true,
+      getPlatform: () => "ios",
       Plugins: {
         Purchases: {
           isConfigured,

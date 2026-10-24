@@ -8,7 +8,7 @@
  * trivially exploitable.
  */
 
-import { hasPlugin, invoke, invokeSafe, isNative } from "./bridge";
+import { getPlatform, hasPlugin, invoke, invokeSafe, isNative } from "./bridge";
 import type { NativePurchaseHistory } from "./purchaseSettlement";
 
 const PLUGIN = "Purchases";
@@ -430,30 +430,58 @@ const toCustomerInfo = (raw: unknown): CustomerInfo | undefined => {
           : [];
       })
     : [];
-  const subscriptions =
+  const subscriptionEntries =
     info.subscriptionsByProductIdentifier &&
     typeof info.subscriptionsByProductIdentifier === "object"
-      ? Object.entries(info.subscriptionsByProductIdentifier).flatMap(
-          ([productId, value]) => {
-            const subscription = value as { storeTransactionId?: unknown };
-            return typeof subscription.storeTransactionId === "string"
-              ? [
-                  {
-                    transactionId: subscription.storeTransactionId,
-                    productId,
-                    transactionIdSource: "store" as const,
-                  },
-                ]
-              : [];
-          },
-        )
+      ? Object.entries(info.subscriptionsByProductIdentifier)
       : [];
+  // Cross-store customer history can leave a Play plan suffix in Apple's active list.
+  // Resolve only aliases proved by the App Store subscription metadata; Android needs
+  // its base-plan suffix for replacement purchases.
+  const appleProductAliases = new Map<string, string>();
+  if (getPlatform() === "ios") {
+    for (const [productId, value] of subscriptionEntries) {
+      const subscription = value as {
+        store?: unknown;
+        productPlanIdentifier?: unknown;
+      } | null;
+      if (
+        subscription?.store === "APP_STORE" &&
+        typeof subscription.productPlanIdentifier === "string" &&
+        subscription.productPlanIdentifier.length > 0
+      ) {
+        appleProductAliases.set(
+          `${productId}:${subscription.productPlanIdentifier}`,
+          productId,
+        );
+      }
+    }
+  }
+  const subscriptions = subscriptionEntries.flatMap(([productId, value]) => {
+    const subscription = value as { storeTransactionId?: unknown } | null;
+    return typeof subscription?.storeTransactionId === "string"
+      ? [
+          {
+            transactionId: subscription.storeTransactionId,
+            productId,
+            transactionIdSource: "store" as const,
+          },
+        ]
+      : [];
+  });
   return {
     activeEntitlements: Object.keys(info.entitlements?.active ?? {}),
     activeSubscriptions: Array.isArray(info.activeSubscriptions)
-      ? info.activeSubscriptions.filter(
-          (subscription): subscription is string => typeof subscription === "string",
-        )
+      ? [
+          ...new Set(
+            info.activeSubscriptions
+              .filter(
+                (subscription): subscription is string =>
+                  typeof subscription === "string",
+              )
+              .map((productId) => appleProductAliases.get(productId) ?? productId),
+          ),
+        ]
       : [],
     originalAppUserId: info.originalAppUserId ?? "",
     transactions: [...nonSubscriptions, ...subscriptions],

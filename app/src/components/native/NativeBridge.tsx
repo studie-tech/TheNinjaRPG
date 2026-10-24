@@ -1,5 +1,6 @@
 "use client";
 
+import { useSetAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
@@ -27,6 +28,7 @@ import {
   nativeWidgetAccountAction,
   shouldClearNativeAccountState,
 } from "@/libs/native/accountCleanup";
+import { nativeHomeRedirectAtom } from "@/libs/native/homeRedirect";
 import { NativeWidgetOperations } from "@/libs/native/widgetOperations";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
@@ -49,6 +51,7 @@ export default function NativeBridge() {
   } = useUserData();
   const router = useRouter();
   const pathname = usePublicPathname();
+  const setNativeHomeRedirect = useSetAtom(nativeHomeRedirectAtom);
   const [isOutdated, setIsOutdated] = useState(false);
   const [snapshotOwnerUserId, setSnapshotOwnerUserId] = useState<string | null>(() =>
     safeLocalStorageGetItem(NATIVE_WIDGET_SNAPSHOT_OWNER_KEY),
@@ -158,9 +161,18 @@ export default function NativeBridge() {
     if (!isNative()) return;
     return appEvents.onUrlOpen((url) => {
       const path = toInternalPath(url);
-      if (path) router.push(path);
+      if (path) {
+        if (pathnameRef.current === "/") {
+          setNativeHomeRedirect(path.split(/[?#]/, 1)[0] === "/" ? null : path);
+        }
+        router.push(path);
+      }
     });
-  }, [router]);
+  }, [router, setNativeHomeRedirect]);
+
+  useEffect(() => {
+    if (pathname !== "/") setNativeHomeRedirect(null);
+  }, [pathname, setNativeHomeRedirect]);
 
   // The WebSocket is dropped while the app is backgrounded and the client does not always
   // notice, which leaves the player looking at a world that has stopped updating.
