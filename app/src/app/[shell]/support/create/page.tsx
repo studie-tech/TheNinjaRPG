@@ -162,7 +162,7 @@ export default function CreateSupportTicket() {
                 id="description"
                 control={control}
                 label="Description *"
-                height="min-h-[120px]"
+                height="120"
                 placeholder="Detailed description of your issue or question. Include steps to reproduce if reporting a bug."
                 error={errors.description?.message}
                 allowClipboardPaste={true}

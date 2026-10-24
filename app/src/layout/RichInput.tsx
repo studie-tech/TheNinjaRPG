@@ -318,6 +318,12 @@ export const RichInput = (props: RichInputProps) => {
   };
   const canEdit = !blocked && (isSource || ready);
   const height = /^\d+$/.test(props.height) ? `${props.height}px` : props.height;
+  const addImageUrl = () => {
+    if (!canEdit || !/^https?:\/\//i.test(imageUrl)) return;
+    insertImage(imageUrl);
+    setImageUrl("");
+    setImageUrlOpen(false);
+  };
 
   return (
     <div aria-disabled={blocked} className="min-w-0">
@@ -361,6 +367,9 @@ export const RichInput = (props: RichInputProps) => {
               aria-label="Paragraph style"
               disabled={!canEdit}
               value={String(formats.header || "")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.stopPropagation();
+              }}
               onChange={(event) => {
                 const editor = quillRef.current;
                 editor?.format("header", Number(event.target.value) || false, "user");
@@ -462,16 +471,21 @@ export const RichInput = (props: RichInputProps) => {
               value={imageUrl}
               disabled={!canEdit}
               onChange={(event) => setImageUrl(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.stopPropagation();
+                  if (!event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    addImageUrl();
+                  }
+                }
+              }}
             />
             <Button
               type="button"
               size="sm"
               disabled={!canEdit || !/^https?:\/\//i.test(imageUrl)}
-              onClick={() => {
-                insertImage(imageUrl);
-                setImageUrl("");
-                setImageUrlOpen(false);
-              }}
+              onClick={addImageUrl}
             >
               Insert image
             </Button>

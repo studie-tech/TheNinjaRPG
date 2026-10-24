@@ -112,6 +112,30 @@ describe("rich input composer", () => {
     expect(view.getByRole("button", { name: "Bold" }).getAttribute("aria-pressed")).toBe("false");
   });
 
+  it("keeps formatting and image-URL Enter keys out of parent dialogs", async () => {
+    const view = render(<Composer initial="Draft" />);
+    const editor = await editorFor(view);
+    const documentKey = vi.fn();
+    document.addEventListener("keydown", documentKey);
+    try {
+      fireEvent.keyDown(view.getByRole("combobox", { name: "Paragraph style" }), { key: "Enter" });
+      expect(documentKey).not.toHaveBeenCalled();
+      fireEvent.click(view.getByRole("button", { name: "Insert image URL" }));
+      const url = view.getByRole("textbox", { name: "Image URL" });
+      fireEvent.change(url, { target: { value: "https://example.com/image.png" } });
+      fireEvent.keyDown(url, { key: "Enter", isComposing: true });
+      expect(view.getByRole("textbox", { name: "Image URL" })).toBe(url);
+      expect(editor.querySelector("img")).toBeNull();
+      fireEvent.keyDown(url, { key: "Enter" });
+      expect(editor.querySelector("img")?.getAttribute("src")).toBe("https://example.com/image.png");
+      expect(view.queryByRole("textbox", { name: "Image URL" })).toBeNull();
+      expect(documentKey).not.toHaveBeenCalled();
+      expect(submit).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener("keydown", documentKey);
+    }
+  });
+
   it("blocks a parent form during upload and preserves original file bytes", async () => {
     let finish: (result: unknown) => void = () => {};
     startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
