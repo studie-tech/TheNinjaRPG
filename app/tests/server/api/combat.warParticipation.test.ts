@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { WAR_ESPIONAGE_TARGET } from "@/drizzle/constants";
-import { aiProfile, battle, battleAction, battleHistory, quest, userData, village, war, warAlly, warMercenary } from "@/drizzle/schema";
+import { MAP_WAR_TORN_BATTLEGROUND_SECTOR, WAR_ESPIONAGE_TARGET } from "@/drizzle/constants";
+import { aiProfile, battle, battleAction, battleHistory, mpvpBattleQueue, mpvpBattleUser, quest, questHistory, territoryWar, userData, village, war, warAlly, warMercenary } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/util";
 import { Pusher, type PusherClient } from "@/libs/pusher";
@@ -11,7 +11,7 @@ import { warRouter } from "@/server/api/routers/war";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { defaultWarRules } from "@/validators/war";
-import { insertQuests, insertUsers } from "../../setup/factories";
+import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 const pusher = { trigger: vi.fn(async () => {}) } as unknown as PusherClient;
@@ -21,7 +21,7 @@ const readUser = async (id = attackerId) => (await getTestDatabase()).query.user
 
 describeWithDatabase("war participation requires deliberate war activity", () => {
   beforeEach(async () => {
-    await resetTables(battleAction, battleHistory, battle, aiProfile, quest, warMercenary, warAlly, war, village, userData);
+    await resetTables(battleAction, battleHistory, battle, aiProfile, questHistory, quest, mpvpBattleUser, mpvpBattleQueue, territoryWar, warMercenary, warAlly, war, village, userData);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     const db = await getTestDatabase();
     await db.insert(village).values([
@@ -37,6 +37,40 @@ describeWithDatabase("war participation requires deliberate war activity", () =>
     await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    { label: "Territory War PvP", sector: 100, event: true, guardian: false, expected: 1 },
+    { label: "ordinary neutral PvP", sector: 100, event: false, guardian: false, expected: 0 },
+    { label: "Wartorn PvP", sector: MAP_WAR_TORN_BATTLEGROUND_SECTOR, event: false, guardian: false, expected: 1 },
+    { label: "Territory War guardian", sector: 100, event: true, guardian: true, expected: 0 },
+  ])("credits PvP missions for $label: $expected", async ({ sector, event, guardian, expected }) => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "pvp-mission", name: "PvP mission", questType: "pvp", content: {
+      objectives: [SimpleObjective.parse({ id: "kills", task: "pvp_kills", value: 3 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    await insertQuestHistory([{ userId: attackerId, questId: "pvp-mission", questType: "pvp" }]);
+    await db.update(userData).set({ sector });
+    if (event) {
+      await insertUsers([{ userId: "quest-guardian", isAi: true, isWarCamp: true, sector, level: 100, curHealth: 100, maxHealth: 100 }]);
+      await db.insert(territoryWar).values({ id: "quest-event", predecessorId: "initial", guardianId: "quest-guardian", sector, startsAt: new Date(Date.now() - 1000), endsAt: new Date(Date.now() + 3600000) });
+    }
+    if (guardian) {
+      await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, attackerId));
+      await db.insert(mpvpBattleQueue).values({ id: "quest-team", battleId: "quest-battle", battleType: "TERRITORY_WAR", territoryWarId: "quest-event", attackerEntityId: "village:home", defenderEntityId: "quest-guardian", sector });
+      await db.insert(mpvpBattleUser).values({ id: "quest-member", clanBattleId: "quest-team", userId: attackerId, side: "ATTACKER", slot: 0 });
+    }
+    const started = await initiateBattle({
+      client: db, userIds: [attackerId], targetIds: [guardian ? "quest-guardian" : defenderId], sector,
+      ...(guardian ? { territoryWar: (await db.query.territoryWar.findFirst())!, clanBattle: { queueId: "quest-team", battleId: "quest-battle" } } : {}),
+    }, guardian ? "TERRITORY_WAR" : "COMBAT");
+    expect(started.success, started.message).toBe(true);
+    const snapshot = (await fetchBattle(db, started.battleId!))!;
+    expect(snapshot.extraState.territoryWar !== undefined).toBe(event);
+    snapshot.usersState.find((user) => user.userId !== attackerId)!.curHealth = 0;
+    await updateUser(db, pusher, snapshot, calcBattleResult(snapshot, attackerId)!, attackerId);
+    expect((await readUser())!.questData?.find((tracker) => tracker.id === "pvp-mission")?.goals.find((goal) => goal.id === "kills")?.value ?? 0).toBe(expected);
+  });
 
   it.each(["ARENA", "QUEST", "TRAINING", "COMBAT"] as const)("winning %s against an enemy-village NPC preserves immunity and the participation timer", async (battleType) => {
     const db = await getTestDatabase();

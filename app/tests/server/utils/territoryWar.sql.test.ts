@@ -9,6 +9,7 @@ import type { DrizzleClient } from "@/server/db";
 import { cleanupTerritoryWarTeams, resolveTerritoryWar, settleTerritoryWarCombat, syncTerritoryWars, territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { guardianVictory } from "../../setup/territoryWar";
 import { insertUsers } from "../../setup/factories";
+import { failStatements } from "../../setup/statements";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 
 const now = () => new Date();
@@ -70,14 +71,18 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect((await db.select({ unread: userData.unreadNotifications }).from(userData).orderBy(userData.userId)).map(user => user.unread)).toEqual([7, 8, 8, 8]);
   });
 
-  it.each([false, true])("pays an outlaw clan with hasHideout=%s to the proper destination", async hasHideout => {
+  it.each([
+    { hasHideout: false, timeout: false }, { hasHideout: true, timeout: false },
+    { hasHideout: false, timeout: true }, { hasHideout: true, timeout: true },
+  ])("pays an outlaw clan with hasHideout=$hasHideout at timeout=$timeout to the proper destination", async ({ hasHideout, timeout }) => {
     const db = await getTestDatabase();
     await db.insert(clan).values({ id: "faction", name: "Faction", image: "image", villageId: hasHideout ? "hideout" : VILLAGE_SYNDICATE_ID, founderId: "founder", leaderId: "founder", leaderOrderId: "founder", hasHideout, points: 17 });
-    await db.insert(territoryWar).values(eventRow());
-    await db.insert(territoryWarScore).values({ warId: "event", competitorId: "clan:faction", name: "Faction", clanId: "faction", points: 395 });
+    await db.insert(territoryWar).values({ ...eventRow(), ...(timeout ? { endsAt: new Date(Date.now() - 1) } : {}) });
+    await db.insert(territoryWarScore).values({ warId: "event", competitorId: "clan:faction", name: "Faction", clanId: "faction", points: timeout ? 25 : 395 });
     const fight = guardianVictory();
     fight.extraState.territoryWar!.competitors["player-0"] = { id: "clan:faction", name: "Faction", clanId: "faction", villageId: null };
-    await apply(fight);
+    if (timeout) await syncTerritoryWars(db);
+    else await apply(fight);
     const faction = (await db.query.clan.findFirst())!;
     expect(faction.points).toBe(hasHideout ? 17 : 300017);
     expect(faction.territoryWarBoostUntil).not.toBeNull();
@@ -92,11 +97,11 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect((await db.query.territoryWarScore.findMany()).every(row => row.rewarded)).toBe(true);
   });
 
-  it.each(["active", "expired"] as const)("keeps %s scheduler work outside a transaction and never rewards sub-target scores", async state => {
+  it.each(["active", "expired"] as const)("keeps active or unscored %s scheduler work outside a transaction", async state => {
     const db = await getTestDatabase();
     const event = { ...eventRow(), endsAt: new Date(Date.now() + (state === "active" ? 60000 : -1000)) };
     await db.insert(territoryWar).values(event);
-    await db.insert(territoryWarScore).values({ warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: 399 });
+    if (state === "active") await db.insert(territoryWarScore).values({ warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: 399 });
     const noTransaction = new Proxy(db, {
       get(target, key, receiver) {
         if (key === "transaction") return () => { throw new Error("Expiry needs only its guarded UPDATE"); };
@@ -105,16 +110,59 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     });
     await syncTerritoryWars(noTransaction);
     expect((await db.query.territoryWar.findFirst())?.resolvedAt).toEqual(state === "expired" ? event.endsAt : null);
-    expect((await db.query.territoryWarScore.findFirst())?.rewarded).toBe(false);
+    expect((await db.query.territoryWarScore.findFirst())?.rewarded ?? false).toBe(false);
     expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(10);
     expect(await db.query.notification.findMany()).toHaveLength(0);
   });
 
-  it.each(["score-first", "expiry-first", "concurrent"] as const)("preserves the winning event claim when scoring races expiry: %s", async order => {
+  it.each([false, true])("rewards only the positive timeout leaders, including tied=%s", async tied => {
+    const db = await getTestDatabase();
+    const event = { ...eventRow(), endsAt: new Date(Date.now() - 1000) };
+    await db.insert(territoryWar).values(event);
+    await db.insert(territoryWarScore).values([
+      { warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: 12 },
+      { warId: event.id, competitorId: "village:enemy", name: "Enemy", villageId: "enemy", points: tied ? 12 : 7 },
+    ]);
+    await Promise.all([syncTerritoryWars(db), syncTerritoryWars(db)]);
+    await syncTerritoryWars(db);
+    expect((await db.query.territoryWar.findFirst())?.resolvedAt).toEqual(event.endsAt);
+    const scores = await db.query.territoryWarScore.findMany();
+    expect(scores.filter(row => row.rewarded)).toHaveLength(tied ? 2 : 1);
+    expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(300010);
+    expect((await db.query.village.findFirst({ where: eq(village.id, "enemy") }))?.tokens).toBe(tied ? 300020 : 20);
+    expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.territoryWarBoostUntil).toEqual(new Date(event.endsAt.getTime() + 3600000));
+    expect(await db.query.notification.findMany()).toHaveLength(1);
+  });
+
+  it.each([{ label: "announcement", table: notification }, { label: "recipient counters", table: userData }])("rolls timeout rewards back when $label fails and allows retry", async ({ table }) => {
+    const db = await getTestDatabase();
+    const event = { ...eventRow(), endsAt: new Date(Date.now() - 1000) };
+    await db.insert(territoryWar).values(event);
+    await db.insert(territoryWarScore).values({ warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: 12 });
+    const failing = new Proxy(db, {
+      get(target, key, receiver) {
+        if (key === "transaction") return (run: (tx: DrizzleClient) => Promise<unknown>) => target.transaction(tx => run(failStatements(tx as unknown as DrizzleClient, table)));
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    await expect(syncTerritoryWars(failing)).rejects.toThrow("Statement failed on purpose");
+    expect((await db.query.territoryWar.findFirst())?.resolvedAt).toBeNull();
+    expect((await db.query.territoryWarScore.findFirst())?.rewarded).toBe(false);
+    expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(10);
+    expect(await db.query.notification.findMany()).toHaveLength(0);
+    await syncTerritoryWars(db);
+    expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(300010);
+    expect(await db.query.notification.findMany()).toHaveLength(1);
+  });
+
+  it.each([
+    { initial: 0, order: "score-first" }, { initial: 0, order: "expiry-first" }, { initial: 0, order: "concurrent" },
+    { initial: 395, order: "score-first" }, { initial: 395, order: "expiry-first" }, { initial: 395, order: "concurrent" },
+  ])("preserves the event claim when scoring races expiry: $order from $initial points", async ({ initial, order }) => {
     const db = await getTestDatabase();
     const event = eventRow();
     await db.insert(territoryWar).values(event);
-    await db.insert(territoryWarScore).values({ warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: 395 });
+    if (initial) await db.insert(territoryWarScore).values({ warId: event.id, competitorId: "village:home", name: "Home", villageId: "home", points: initial });
     const scoreAt = new Date(event.endsAt.getTime() - 1);
     const score = () => db.transaction(tx => settleTerritoryWarCombat(tx as unknown as DrizzleClient, guardianVictory(), scoreAt));
     const expire = () => syncTerritoryWars(db, event.endsAt);
@@ -122,14 +170,16 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     else if (order === "expiry-first") { await expire(); await score(); }
     else await Promise.all([score(), expire()]);
     const saved = (await db.query.territoryWar.findFirst())!;
-    const awarded = saved.resolvedAt?.getTime() === scoreAt.getTime();
-    if (order !== "concurrent") expect(awarded).toBe(order === "score-first");
-    expect(saved.resolvedAt).toEqual(awarded ? scoreAt : event.endsAt);
-    expect((await db.query.territoryWarScore.findFirst())?.points).toBe(awarded ? 400 : 395);
-    expect((await db.query.territoryWarScore.findFirst())?.rewarded).toBe(awarded);
-    expect(await db.query.territoryWarReceipt.findMany()).toHaveLength(awarded ? 1 : 0);
-    expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(awarded ? 300010 : 10);
-    expect(await db.query.notification.findMany()).toHaveLength(awarded ? 1 : 0);
+    const points = (await db.query.territoryWarScore.findFirst())?.points ?? 0;
+    const scored = points === initial + 5;
+    const finishedEarly = scored && initial > 0;
+    if (order !== "concurrent") expect(scored).toBe(order === "score-first");
+    expect(saved.resolvedAt).toEqual(finishedEarly ? scoreAt : event.endsAt);
+    expect(points).toBe(scored ? initial + 5 : initial);
+    expect((await db.query.territoryWarScore.findFirst())?.rewarded ?? false).toBe(points > 0);
+    expect(await db.query.territoryWarReceipt.findMany()).toHaveLength(scored ? 1 : 0);
+    expect((await db.query.village.findFirst({ where: eq(village.id, "home") }))?.tokens).toBe(points > 0 ? 300010 : 10);
+    expect(await db.query.notification.findMany()).toHaveLength(points > 0 ? 1 : 0);
   });
 
   it.each(["wipe", "flee", "mutual knockout"] as const)("claims scoreless guardian %s with one DELETE and no transaction", async outcome => {
@@ -243,6 +293,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect(await db.query.notification.findMany()).toHaveLength(1);
     expect((await db.select({ unread: userData.unreadNotifications }).from(userData).orderBy(userData.userId)).map(user => user.unread)).toEqual([7, 8, 8, 8]);
     const endsAt = events[0]!.endsAt;
+    expect(endsAt.getTime() - startsAt.getTime()).toBe(3600000);
     await syncTerritoryWars(db, new Date(endsAt.getTime() + 1));
     expect((await db.query.territoryWar.findFirst())?.resolvedAt).toEqual(endsAt);
     await syncTerritoryWars(db, new Date(endsAt.getTime() + 5 * 3600000 - 1));

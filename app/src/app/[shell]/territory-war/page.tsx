@@ -150,7 +150,8 @@ export default function TerritoryWarPage() {
             <p>
               You represent <b>{competitor?.name}</b>. Defeat the War Camp guardian for{" "}
               {TERRITORY_WAR_AI_POINTS} points per winning teammate, or win PvP here for{" "}
-              {TERRITORY_WAR_PVP_POINTS} points per opponent.
+              {TERRITORY_WAR_PVP_POINTS} points per opponent. These PvP wins also
+              advance PvP missions.
             </p>
             {!inSector && (
               <p className="text-muted-foreground">
@@ -260,8 +261,9 @@ export default function TerritoryWarPage() {
               )}
               {event && !scores.some((score) => score.rewarded) && (
                 <p>
-                  No competitor reached {TERRITORY_WAR_TARGET_POINTS} points. No rewards
-                  were awarded.
+                  {event.resolvedAt
+                    ? "No rewards were awarded."
+                    : "Results are being finalized."}
                 </p>
               )}
             </section>
@@ -293,7 +295,13 @@ export default function TerritoryWarPage() {
                         {score.points}
                       </td>
                       <td className="p-2">
-                        {score.rewarded ? "Winner" : active ? "Competing" : "Finished"}
+                        {score.rewarded
+                          ? "Winner"
+                          : active
+                            ? "Competing"
+                            : event?.resolvedAt
+                              ? "Finished"
+                              : "Finalizing"}
                       </td>
                     </tr>
                   ))}
@@ -319,10 +327,11 @@ export default function TerritoryWarPage() {
           </p>
           <p className="text-muted-foreground text-sm">
             Events last up to {TERRITORY_WAR_DURATION_MINUTES} minutes and end as soon
-            as a competitor reaches {TERRITORY_WAR_TARGET_POINTS} points. A tie at the
-            target grants both competitors the bonus. No rewards below the target. The
-            next event starts {TERRITORY_WAR_INTERVAL_HOURS} hours after the previous
-            one ends. Unaffiliated outlaws represent Syndicate.
+            as a competitor reaches {TERRITORY_WAR_TARGET_POINTS} points. At the
+            deadline, the highest positive score wins. Tied winners share rewards; no
+            points means no rewards. The next event starts{" "}
+            {TERRITORY_WAR_INTERVAL_HOURS} hours after the previous one ends.
+            Unaffiliated outlaws represent Syndicate.
           </p>
         </section>
       </div>

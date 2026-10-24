@@ -902,6 +902,8 @@ export type CombatQuestContext = {
   battleId?: string;
   questTeamStillFighting?: boolean;
   inWarTornSector: boolean;
+  /** Human PvP in a Territory War captured at initiation; excludes guardian fights. */
+  inTerritoryWar?: boolean;
   isWarParticipant: boolean;
   /** Prevent unrelated fights from advancing ticketed or versioned run objectives. */
   questBattleSource?: { questId: string; objectiveId: string };
@@ -910,7 +912,7 @@ export type CombatQuestContext = {
 /**
  * Decide whether a war-context kill objective (`pvp_kills` / `defeat_opponents`) should advance
  * for a given quest type and battle context:
- * - `pvp` quests count only inside the war-torn sector.
+ * - `pvp` quests count in the war-torn sector or human PvP in a Territory War.
  * - `war` quests count only active-war kills: a per-opponent `warFoe` flag when available (e.g.
  *   `defeat_opponents`), otherwise the battle-global war-participant flag (e.g. the `pvp_kills`
  *   counter, which is only emitted on a win).
@@ -923,7 +925,8 @@ export const killObjectiveCountsForQuest = (
   context: CombatQuestContext | undefined,
   warFoe: boolean | undefined,
 ): boolean => {
-  if (questType === "pvp") return context?.inWarTornSector === true;
+  if (questType === "pvp")
+    return context?.inWarTornSector === true || context?.inTerritoryWar === true;
   if (questType === "war") {
     return warFoe !== undefined ? warFoe : context?.isWarParticipant === true;
   }

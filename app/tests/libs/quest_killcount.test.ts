@@ -111,7 +111,7 @@ const goalDone = (
 // ---------------------------------------------------------------------------
 
 describe("killObjectiveCountsForQuest", () => {
-  it("pvp quests count only inside the war-torn sector", () => {
+  it("pvp quests count in the war-torn sector without requiring war participation", () => {
     expect(
       killObjectiveCountsForQuest(
         "pvp",
@@ -130,6 +130,13 @@ describe("killObjectiveCountsForQuest", () => {
 
   it("pvp quests do not count without battle context", () => {
     expect(killObjectiveCountsForQuest("pvp", undefined, undefined)).toBe(false);
+  });
+
+  it("Territory War PvP counts without granting active-war quest eligibility", () => {
+    const context = { inWarTornSector: false, inTerritoryWar: true, isWarParticipant: false };
+    expect(killObjectiveCountsForQuest("pvp", context, undefined)).toBe(true);
+    expect(killObjectiveCountsForQuest("war", context, undefined)).toBe(false);
+    expect(killObjectiveCountsForQuest("pvp", { ...context, inTerritoryWar: false }, undefined)).toBe(false);
   });
 
   it("war quests count a per-opponent war foe regardless of the battle-global flag", () => {
@@ -179,6 +186,15 @@ describe("killObjectiveCountsForQuest", () => {
 // ---------------------------------------------------------------------------
 
 describe("getNewTrackers pvp_kills gating", () => {
+  it("credits Territory War PvP to pvp missions without advancing unrelated war missions", () => {
+    const pvp = makeQuest("pvp-1", "pvp", [pvpKillsObjective("p-obj")]);
+    const war = makeQuest("war-1", "war", [pvpKillsObjective("w-obj")]);
+    const result = getNewTrackers(makeUser([pvp, war]), [{ task: "pvp_kills", increment: 1 }], {
+      inWarTornSector: false, inTerritoryWar: true, isWarParticipant: false,
+    });
+    expect(goalValue(result, "pvp-1", "p-obj")).toBe(1);
+    expect(goalValue(result, "war-1", "w-obj")).toBe(0);
+  });
   it("a daily quest does not leak pvp_kills into a pvp quest outside the war-torn sector", () => {
     const daily = makeQuest("daily-1", "daily", [pvpKillsObjective("d-obj")]);
     const pvp = makeQuest("pvp-1", "pvp", [pvpKillsObjective("p-obj")]);
@@ -224,6 +240,13 @@ describe("getNewTrackers pvp_kills gating", () => {
 });
 
 describe("getNewTrackers defeat_opponents gating", () => {
+  it("credits a Territory War opponent to a pvp mission", () => {
+    const pvp = makeQuest("pvp-1", "pvp", [defeatOpponentsObjective("p-obj", "player-2")]);
+    const result = getNewTrackers(makeUser([pvp]), [{ task: "defeat_opponents", contentId: "player-2", text: "Won" }], {
+      inWarTornSector: false, inTerritoryWar: true, isWarParticipant: false,
+    });
+    expect(goalDone(result, "pvp-1", "p-obj")).toBe(true);
+  });
   it("a war quest completes defeat_opponents only against a per-opponent war foe", () => {
     const war = makeQuest("war-1", "war", [defeatOpponentsObjective("w-obj", "ai-1")]);
 

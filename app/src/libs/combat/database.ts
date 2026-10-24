@@ -1560,7 +1560,7 @@ export const updateUser = async (
     const trackerTasks: Parameters<typeof getNewTrackers>[1] = [];
 
     // Update quest tracker with battle result. pvp_kills is emitted on every COMBAT win; the
-    // war-torn (pvp quests) / active-war (war quests) gating is applied per quest in getNewTrackers.
+    // War-torn/Territory War (pvp quests) and active-war gating is applied per quest in getNewTrackers.
     if (result.didWin > 0) {
       if (curBattle.battleType === "COMBAT") {
         trackerTasks.push({ task: "pvp_kills", increment: 1 });
@@ -1581,7 +1581,7 @@ export const updateUser = async (
       ...curBattle.usersState
         .filter((u) => !u.isSummon && !areBattleAllies(u, user))
         .flatMap((u) => [
-          // Defeat opponent with outcome; gated per quest type in getNewTrackers (pvp → war-torn
+          // Defeat opponent with outcome; gated per quest type in getNewTrackers (pvp → war-torn/Territory War
           // sector, war → this opponent being an active-war foe).
           {
             task: "defeat_opponents" as const,
@@ -1637,6 +1637,10 @@ export const updateUser = async (
       {
         battleId: curBattle.id,
         inWarTornSector: isInWarTornSector,
+        inTerritoryWar:
+          curBattle.battleType === "COMBAT" &&
+          hasHumanOpponent &&
+          curBattle.extraState.territoryWar !== undefined,
         isWarParticipant: isWarBattleParticipant,
         questBattleSource: curBattle.extraState.questBattleSource,
         questTeamStillFighting: curBattle.usersState.some(
