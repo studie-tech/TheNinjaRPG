@@ -952,6 +952,7 @@ export const clan = mysqlTable(
     craftingTimeBoost: double("craftingTimeBoost").default(0).notNull(),
     craftingExpBoost: double("craftingExpBoost").default(0).notNull(),
     hunterExpBoost: double("hunterExpBoost").default(0).notNull(),
+    territoryWarBoostUntil: datetime("territoryWarBoostUntil", { mode: "date", fsp: 3 }),
     gathererExpBoost: double("gathererExpBoost").default(0).notNull(),
     elderNomineeId: varchar("elderNomineeId", { length: 191 }),
     elderCutoffMonth: tinyint("elderCutoffMonth"),
@@ -1008,6 +1009,7 @@ export const mpvpBattleQueue = mysqlTable(
   {
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     winnerId: varchar("winnerId", { length: 191 }),
+    territoryWarId: varchar("territoryWarId", { length: 191 }),
     battleId: varchar("battleId", { length: 191 }),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
@@ -1027,6 +1029,7 @@ export const mpvpBattleQueue = mysqlTable(
       battleIdIdx: index("MpvpBattleQueue_battleId_idx").on(table.battleId),
       winnerIdIdx: index("MpvpBattleQueue_winnerId_idx").on(table.winnerId),
       battleTypeIdx: index("MpvpBattleQueue_battleType_idx").on(table.battleType),
+      territoryWarIdx: index("MpvpBattleQueue_territoryWar_idx").on(table.territoryWarId),
       sectorIdx: index("MpvpBattleQueue_sector_idx").on(table.sector),
       attackerEntityIdIdx: index("MpvpBattleQueue_attackerEntityId_idx").on(
         table.attackerEntityId,
@@ -3887,6 +3890,7 @@ export const village = mysqlTable(
     description: varchar("description", { length: 512 }).default("").notNull(),
     kageId: varchar("kageId", { length: 191 }).notNull(),
     tokens: int("tokens").default(0).notNull(),
+    territoryWarBoostUntil: datetime("territoryWarBoostUntil", { mode: "date", fsp: 3 }),
     structureMaintenanceDue: int("structureMaintenanceDue").default(0).notNull(),
     structureMaintenanceMonth: varchar("structureMaintenanceMonth", { length: 7 }),
     activeMission: json("activeMission").$type<import("@/validators/villageMission").VillageMission>(),
@@ -7008,3 +7012,32 @@ export const webStoreOrder = mysqlTable("WebStoreOrder", {
   grantedAt: datetime("grantedAt", { mode: "date", fsp: 3 }),
   captureId: varchar("captureId", { length: 191 }),
 }, table => [index("WebStoreOrder_buyerId_idx").on(table.buyerId), index("WebStoreOrder_recipientId_idx").on(table.recipientId), index("WebStoreOrder_buyer_bundle_idx").on(table.buyerId, table.bundleId), uniqueIndex("WebStoreOrder_captureId_key").on(table.captureId)]);
+
+/** A unique predecessor prevents concurrent scheduler ticks from opening two global events. */
+export const territoryWar = mysqlTable("TerritoryWar", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  predecessorId: varchar("predecessorId", { length: 191 }).notNull(),
+  sector: smallint("sector").notNull(),
+  guardianId: varchar("guardianId", { length: 191 }).notNull(),
+  startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
+  endsAt: datetime("endsAt", { mode: "date", fsp: 3 }).notNull(),
+  resolvedAt: datetime("resolvedAt", { mode: "date", fsp: 3 }),
+  version: int("version").default(0).notNull(),
+}, table => [uniqueIndex("TerritoryWar_predecessor_key").on(table.predecessorId), index("TerritoryWar_startsAt_idx").on(table.startsAt)]);
+export type TerritoryWar = InferSelectModel<typeof territoryWar>;
+
+export const territoryWarScore = mysqlTable("TerritoryWarScore", {
+  warId: varchar("warId", { length: 191 }).notNull(),
+  competitorId: varchar("competitorId", { length: 191 }).notNull(),
+  name: varchar("name", { length: 191 }).notNull(),
+  clanId: varchar("clanId", { length: 191 }),
+  villageId: varchar("villageId", { length: 191 }),
+  points: int("points").default(0).notNull(),
+  rewarded: boolean("rewarded").default(false).notNull(),
+}, table => [primaryKey({ columns: [table.warId, table.competitorId] }), index("TerritoryWarScore_competitor_rewarded_idx").on(table.competitorId, table.rewarded)]);
+
+/** Immutable terminal-combat receipt, committed with battle deletion and score delivery. */
+export const territoryWarReceipt = mysqlTable("TerritoryWarReceipt", {
+  battleId: varchar("battleId", { length: 191 }).primaryKey().notNull(),
+  warId: varchar("warId", { length: 191 }).notNull(),
+}, table => [index("TerritoryWarReceipt_warId_idx").on(table.warId)]);

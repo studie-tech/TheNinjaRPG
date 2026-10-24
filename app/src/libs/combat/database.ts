@@ -105,6 +105,7 @@ import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
+import { settleTerritoryWarCombat } from "@/server/utils/territoryWar";
 import {
   applyVillageMissionShrineDamage,
   recordVillageMissionProgress,
@@ -198,12 +199,21 @@ export const updateBattle = async (
     newBattle.battleType === "RAID" &&
     humanFighters.length > 0 &&
     humanFighters.every((u) => !stillInBattle(u, newBattle.usersEffects));
+  const territoryGuardianEnded =
+    !!result &&
+    newBattle.battleType === "TERRITORY_WAR" &&
+    (newBattle.usersState
+      .filter((u) => u.isAi && !u.isSummon)
+      .every((u) => !stillInBattle(u, newBattle.usersEffects)) ||
+      humanFighters.every((u) => !stillInBattle(u, newBattle.usersEffects)));
   const battleOver =
     !!result &&
     (result.friendsLeft + result.targetsLeft === 0 ||
       raidBossDefeated ||
-      raidTeamWiped);
-  const raidEnded = battleOver && newBattle.battleType === "RAID";
+      raidTeamWiped ||
+      territoryGuardianEnded);
+  const raidEnded =
+    battleOver && ["RAID", "TERRITORY_WAR"].includes(newBattle.battleType);
 
   // Get user and other user
   const user = newBattle.usersState.find((u) => u.userId === userId && !u.isSummon);
@@ -227,13 +237,20 @@ export const updateBattle = async (
         .delete(battle)
         .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion)));
     const deleted = await retryOnDeadlock(() =>
-      newBattle.extraState.tournamentGameId || newBattle.extraState.kageMatch
+      newBattle.extraState.tournamentGameId ||
+      newBattle.extraState.kageMatch ||
+      newBattle.extraState.territoryWar
         ? client.transaction(async (tx) => {
             const database = tx as unknown as DrizzleClient;
             const deleted = await deleteBattle(database);
             // The version DELETE and match UPDATE must commit together: a single-row CAS
             // cannot prevent recovery treating a deleted battle as an interrupted launch.
             if (deleted.rowsAffected === 1) {
+              // DELETE and event receipt/score must commit together: a multi-table UPDATE
+              // cannot delete the battle and upsert competitor scores. Otherwise a failed
+              // reward write would permanently lose a terminal fight's strategic credit.
+              if (newBattle.extraState.territoryWar)
+                await settleTerritoryWarCombat(database, newBattle);
               if (newBattle.extraState.tournamentGameId)
                 await updateTournament(database, newBattle, result, userId);
               if (newBattle.extraState.kageMatch)
@@ -297,7 +314,7 @@ export const updateBattle = async (
             ]
           : []),
         // Clean up battle users in parallel - safe since they only read from mpvpBattleQueue
-        ...(["RAID", "SHRINE_WAR"].includes(newBattle.battleType)
+        ...(["RAID", "SHRINE_WAR", "TERRITORY_WAR"].includes(newBattle.battleType)
           ? [
               client
                 .delete(mpvpBattleUser)
@@ -333,7 +350,10 @@ export const updateBattle = async (
         // teammates who took damage don't revert to pre-battle pool values on release.
         // Mirror the HOSPITALIZED handling from updateUser: teammates whose curHealth
         // dropped to 0 from boss AoE must be sent to the hospital, not released as AWAKE.
-        ...(raidBossDefeated || raidTeamWiped ? humanTeammates : [])
+        ...(raidBossDefeated || raidTeamWiped || territoryGuardianEnded
+          ? humanTeammates
+          : []
+        )
           .filter((u) => u.userId !== userId)
           .map(async (teammate) => {
             const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
@@ -391,7 +411,7 @@ export const updateBattle = async (
 
       // Delete queue entries AFTER the Promise.all to ensure mpvpBattleUser
       // subquery has completed (it references mpvpBattleQueue)
-      if (["RAID", "SHRINE_WAR"].includes(newBattle.battleType)) {
+      if (["RAID", "SHRINE_WAR", "TERRITORY_WAR"].includes(newBattle.battleType)) {
         await client
           .delete(mpvpBattleQueue)
           .where(eq(mpvpBattleQueue.battleId, newBattle.id));
@@ -403,7 +423,7 @@ export const updateBattle = async (
       // Skip teammates who already fled: their DB UPDATE above no-ops via the
       // battleId guard, so broadcasting here would overwrite their actual
       // sector/coords in other clients' map views with stale battle data.
-      if (pusher && raidBossDefeated) {
+      if (pusher && (raidBossDefeated || territoryGuardianEnded)) {
         humanTeammates
           .filter((u) => u.userId !== userId && !u.fledBattle)
           .forEach((teammate) => {

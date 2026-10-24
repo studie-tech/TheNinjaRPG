@@ -9,6 +9,7 @@
     }
   },
   "crons": [
+    { "path": "/api/territory-war-maintenance", "schedule": "* * * * *" },
     { "path": "/api/push-timers", "schedule": "* * * * *" },
     { "path": "/api/tournament-maintenance", "schedule": "* * * * *" },
     {

@@ -43,6 +43,7 @@ export const getCookingSeconds = (
   meal: Pick<Item, "cookingTimeSeconds" | "cookingOutputQuantity">,
   batches: number,
   shrineBoost: number,
+  territoryBoost = 0,
 ) =>
   Math.max(
     1,
@@ -50,7 +51,8 @@ export const getCookingSeconds = (
       meal.cookingTimeSeconds *
         meal.cookingOutputQuantity *
         batches *
-        (1 + shrineBoost),
+        (1 + shrineBoost) *
+        (1 - territoryBoost),
     ),
   );
 

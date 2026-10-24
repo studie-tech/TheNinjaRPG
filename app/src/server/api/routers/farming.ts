@@ -50,7 +50,7 @@ import {
   type ObjectiveTrackerTaskInput,
 } from "@/libs/quest";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
-import { fetchUser } from "@/routers/profile";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { fetchUserSkills } from "@/routers/skillTree";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
@@ -66,6 +66,7 @@ import {
   getFarmCollectionState,
   recordFirstFarmHarvests,
 } from "@/server/utils/farming";
+import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
 import {
   type FarmShopEntryState,
   type FarmStateResponse,
@@ -2358,6 +2359,7 @@ const awardFarmingProgress = async (
   increment = 1,
   farmingCollectionCount?: number,
 ) => {
+  xpGain = Math.floor(xpGain * (1 + getTerritoryWarBoost(user)));
   const emittedTasks = new Set<AllObjectiveTask>([
     task,
     ...(xpGain > 0 ? (["farming_level"] as const) : []),

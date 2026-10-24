@@ -1,3 +1,7 @@
+import {
+  getTerritoryWarPeriodBoost,
+  type TerritoryBoostUser,
+} from "@/libs/territoryWar";
 /**
  * Stealth and Sensory System
  *
@@ -251,8 +255,12 @@ export const calcCovertTrainingGain = (
   cap: number,
   gainPerMinute: number,
   pvpBoostPercent: number = 0,
+  territoryBoost = 0,
 ): number => {
-  const rawGain = boostPvpGain(minutes * gainPerMinute, pvpBoostPercent);
+  const rawGain = boostPvpGain(
+    minutes * gainPerMinute * (1 + territoryBoost),
+    pvpBoostPercent,
+  );
   return Math.max(0, Math.min(rawGain, cap - currentStat));
 };
 
@@ -263,7 +271,7 @@ export const calcCovertTrainingGain = (
  */
 export const getStealthStatus = (
   userData:
-    | {
+    | (TerritoryBoostUser & {
         stealth: number;
         sensory: number;
         stealthActive: boolean;
@@ -274,7 +282,7 @@ export const getStealthStatus = (
         covertTrainingStartedAt: Date | null;
         covertTrainingMinutes: number | null;
         pvpBoost?: { totalPercent: number };
-      }
+      })
     | undefined
     | null,
   cap: number,
@@ -298,6 +306,13 @@ export const getStealthStatus = (
           cap,
           gainPerMinute,
           userData.pvpBoost?.totalPercent ?? 0,
+          userData.covertTrainingStartedAt && covertTrainingFinishAt
+            ? getTerritoryWarPeriodBoost(
+                userData,
+                userData.covertTrainingStartedAt,
+                covertTrainingFinishAt,
+              )
+            : 0,
         )
       : null;
 

@@ -47,6 +47,7 @@ import {
   SKILL_POINT_MIN_LEVEL,
   STRONGEST_USERS_COUNT,
   shrineLobbyFreshAfter,
+  TERRITORY_WAR_BOOST_PERCENT,
   TUTORIAL_STEPS_COUNT,
   UserRanks,
   UserRolesWithSkillTreeAccess,
@@ -170,6 +171,7 @@ import {
 } from "@/libs/raids";
 import { createThumbnail } from "@/libs/replicate";
 import { callDiscordContent } from "@/libs/socials";
+import { getTerritoryWarBoost, getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import {
   getTimedRegeneration,
   getTimedRegenerationGain,
@@ -237,6 +239,7 @@ import {
 } from "@/server/utils/regeneration";
 import { retainSanctionIps } from "@/server/utils/sanctionTombstone";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
+import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
 import {
   fetchJutsuQueueSummary,
@@ -1264,6 +1267,14 @@ export const profileRouter = createTRPCRouter({
             time: new Date(),
           });
         }
+
+        if (getTerritoryWarBoost(user) > 0)
+          notifications.push({
+            href: "/territory-war",
+            name: `Territory War: +${TERRITORY_WAR_BOOST_PERCENT}% training/profession XP; faster crafting and cooking until ${getTerritoryWarBoostUntil(user)?.toISOString()}`,
+            color: "green",
+            group: "Active boosts",
+          });
 
         // Shrine boosts
         const shrineBoosts = user.village?.shrineSettings?.activeBoosts;
@@ -3367,6 +3378,9 @@ const fetchUpdatedUserOnce = async (
     client.query.userData.findFirst({
       where: eq(userData.userId, userId),
       extras: (table) => ({
+        territoryWarBoostWindows: territoryWarBoostWindowsSql(table).as(
+          "territoryWarBoostWindows",
+        ),
         ...activityCompletionExtras(table.userId),
         displayTitle: displayTitleSql(table).as("displayTitle"),
       }),
@@ -4805,6 +4819,7 @@ export const scaleEditedAi = (stored: UserData, edited: UserData) => {
 
 export type UserWithRelations =
   | (UserData & {
+      territoryWarBoostWindows?: import("@/libs/territoryWar").TerritoryBoostWindow[];
       /** Derived regeneration before timed bonuses, retained for pending recovery ticks. */
       regenerationWithoutTimedBuffs?: number;
       displayTitle?: string;

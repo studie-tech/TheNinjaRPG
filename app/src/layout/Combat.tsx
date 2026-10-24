@@ -955,6 +955,13 @@ const Combat: React.FC<CombatProps> = (props) => {
     void Promise.all([
       reconcileProfile(),
       utils.travel.getSectorData.invalidate(),
+      ...(props.battleState.battle?.extraState?.territoryWar
+        ? [
+            utils.territoryWar.invalidate(),
+            utils.village.invalidate(),
+            utils.clan.invalidate(),
+          ]
+        : []),
       // Battles consume items and can drop loot
       utils.item.getUserItems.invalidate(),
       utils.item.getUserItemsWithVariants.invalidate(),

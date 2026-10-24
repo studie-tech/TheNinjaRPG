@@ -9,6 +9,7 @@ import {
 } from "@/drizzle/schema";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
@@ -31,11 +32,29 @@ export const settleHuntingBattle = async (
 ) => {
   const meta = current.extraState.hunting;
   if (!meta) return false;
-  const receipt = huntingVictoryReceipt(meta, current.id, result.outcome);
+  const hunter = current.usersState.find((user) => user.userId === meta.userId);
+  const boost = hunter
+    ? getTerritoryWarBoost({
+        ...hunter,
+        village: hunter.villageId
+          ? current.extraState.villages[hunter.villageId]
+          : null,
+        clan: hunter.clanId ? current.extraState.clans[hunter.clanId] : null,
+      })
+    : 0;
+  const boostedMeta = {
+    ...meta,
+    contract: {
+      ...meta.contract,
+      experience: Math.floor(meta.contract.experience * (1 + boost)),
+    },
+  };
+  const receipt = huntingVictoryReceipt(boostedMeta, current.id, result.outcome);
   const committed = await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
       // Recovery mutates trackers/results; each deadlock retry must start from the same snapshot.
       const playerBattle = structuredClone(current);
+      playerBattle.extraState.hunting = structuredClone(boostedMeta);
       const playerResult = structuredClone(result);
       const claim = await tx
         .delete(battle)

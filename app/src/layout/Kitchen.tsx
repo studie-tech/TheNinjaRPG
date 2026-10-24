@@ -20,6 +20,7 @@ import {
   getCookingSeconds,
 } from "@/libs/cooking";
 import { getTotalItemQuantity } from "@/libs/crafting";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -239,9 +240,20 @@ export default function Kitchen({ image }: { image?: string }) {
                 <p className="mt-1 text-xs">
                   {recipe.cookingOutputQuantity} meals ·{" "}
                   {formatSecondsToTimeDisplay(
-                    getCookingSeconds(recipe, 1, shrineBoost),
+                    getCookingSeconds(
+                      recipe,
+                      1,
+                      shrineBoost,
+                      user ? getTerritoryWarBoost(user) : 0,
+                    ),
                   )}{" "}
-                  · {recipe.cookingExperience * recipe.cookingOutputQuantity} XP
+                  ·{" "}
+                  {Math.floor(
+                    recipe.cookingExperience *
+                      recipe.cookingOutputQuantity *
+                      (1 + (user ? getTerritoryWarBoost(user) : 0)),
+                  )}{" "}
+                  XP
                 </p>
                 <p className="mt-1 text-xs">
                   {locked
@@ -319,10 +331,20 @@ export default function Kitchen({ image }: { image?: string }) {
               <p className="text-sm">
                 Output: {batches * selected.cookingOutputQuantity} meals ·{" "}
                 {formatSecondsToTimeDisplay(
-                  getCookingSeconds(selected, batches, shrineBoost),
+                  getCookingSeconds(
+                    selected,
+                    batches,
+                    shrineBoost,
+                    user ? getTerritoryWarBoost(user) : 0,
+                  ),
                 )}{" "}
                 ·{" "}
-                {batches * selected.cookingOutputQuantity * selected.cookingExperience}{" "}
+                {Math.floor(
+                  batches *
+                    selected.cookingOutputQuantity *
+                    selected.cookingExperience *
+                    (1 + (user ? getTerritoryWarBoost(user) : 0)),
+                )}{" "}
                 XP on completion
               </p>
             )}

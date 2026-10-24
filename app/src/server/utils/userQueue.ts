@@ -49,6 +49,7 @@ import {
   latestDate,
   rescheduleQueue,
 } from "@/libs/queue";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import {
   calcJutsuTrainCost,
   calcJutsuTrainTime,
@@ -845,7 +846,7 @@ const startQueuedJutsu = async (
     calcJutsuTrainCost(info, level, user, students),
   );
   const finishesAt = new Date(
-    startsAt.getTime() + calcJutsuTrainTime(info, level, user),
+    startsAt.getTime() + calcJutsuTrainTime(info, level, user, startsAt),
   );
   const started = owned
     ? (
@@ -909,7 +910,11 @@ const startQueuedCraft = async (
     return "dropped";
   }
   const user = await fetchQuestUser(client, entry.userId);
-  const finishesAt = new Date(startsAt.getTime() + entry.durationSeconds * 1000);
+  const territoryBoost = getTerritoryWarBoost(user, startsAt);
+  const finishesAt = new Date(
+    startsAt.getTime() +
+      Math.max(1, Math.round(entry.durationSeconds * (1 - territoryBoost))) * 1000,
+  );
   const outputs: (typeof userItem.$inferInsert)[] = [];
   const stackSize = Math.max(1, entry.item.stackSize);
   for (let remaining = entry.quantity; remaining > 0; remaining -= stackSize) {
@@ -941,7 +946,9 @@ const startQueuedCraft = async (
     await client.insert(userCookingJob).values({
       id: nanoid(),
       userId: entry.userId,
-      experience: entry.item.cookingExperience * entry.quantity,
+      experience: Math.floor(
+        entry.item.cookingExperience * entry.quantity * (1 + territoryBoost),
+      ),
       finishesAt,
     });
     return { finishesAt };
@@ -950,7 +957,9 @@ const startQueuedCraft = async (
   const clanBoost = user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100;
   const expGain = Math.floor(
     boostPvpGain(
-      (entry.item.craftingExperience ?? 0) * entry.quantity * (1 + clanBoost),
+      (entry.item.craftingExperience ?? 0) *
+        entry.quantity *
+        (1 + clanBoost + territoryBoost),
       getPvpBoost(user, [average]).totalPercent,
     ),
   );

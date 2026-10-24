@@ -86,6 +86,7 @@ import { collapseRewards } from "@/libs/rewards";
 import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { availableQuestLetterRanks, hasRequiredRank } from "@/libs/train";
 import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
@@ -600,15 +601,16 @@ export const getReward = (
 
       // Apply clan experience boosts (percentages stored in clan object)
       // Only apply for real clans, not outlaw factions/strongholds
-      const clanHunterExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.hunterExpBoost ?? 0) / 100;
-      const clanGathererExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.gathererExpBoost ?? 0) / 100;
-      const clanCraftingExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.craftingExpBoost ?? 0) / 100;
+      const territoryBoost = getTerritoryWarBoost(user);
+      target.reward_medical_experience = Math.floor(
+        target.reward_medical_experience * (1 + territoryBoost),
+      );
+      const clanHunterExpBoost =
+        (user.isOutlaw ? 0 : (user.clan?.hunterExpBoost ?? 0) / 100) + territoryBoost;
+      const clanGathererExpBoost =
+        (user.isOutlaw ? 0 : (user.clan?.gathererExpBoost ?? 0) / 100) + territoryBoost;
+      const clanCraftingExpBoost =
+        (user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100) + territoryBoost;
       if (clanHunterExpBoost > 0 && target.reward_hunting_experience > 0) {
         target.reward_hunting_experience = Math.floor(
           target.reward_hunting_experience * (1 + clanHunterExpBoost),

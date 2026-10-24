@@ -31,6 +31,7 @@ import {
   getMissingCraftingRank,
   getTotalItemQuantity,
 } from "@/libs/crafting";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
@@ -211,7 +212,11 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
 
     const totalSeconds = Math.round(
-      craftingTime * 60 * shrineBoostFactor * craftQuantity,
+      craftingTime *
+        60 *
+        shrineBoostFactor *
+        craftQuantity *
+        (1 - getTerritoryWarBoost(userData)),
     );
     return formatSecondsToTimeDisplay(totalSeconds);
   }, [selectedItem, userData, userCraftingRank, craftQuantity]);

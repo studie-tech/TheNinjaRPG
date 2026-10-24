@@ -60,6 +60,7 @@ import {
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
+  TERRITORY_WAR_TEAM_SIZE,
   VILLAGE_SYNDICATE_ID,
   WAKE_ISLAND_PVP_PROTECTION,
 } from "@/drizzle/constants";
@@ -94,6 +95,7 @@ import {
   rankedPvpQueue,
   sageMode,
   sector,
+  territoryWar,
   tournament,
   tournamentMatch,
   trainingLog,
@@ -222,6 +224,7 @@ import { getIsolatedPyramid, isBetweenPyramidBattles } from "@/libs/questRun";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { rollStealthKeep } from "@/libs/stealth";
+import { getTerritoryCompetitor } from "@/libs/territoryWar";
 import type { GlobalMapData } from "@/libs/threejs/types";
 import {
   getTimedRegenerationGain,
@@ -281,6 +284,10 @@ import {
   questAttemptIsActive,
 } from "@/server/utils/questEntry";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
+import {
+  fetchActiveTerritoryWar,
+  territoryWarBoostWindowsSql,
+} from "@/server/utils/territoryWar";
 import { hasDueTimedJob, settleDueTimedQueues } from "@/server/utils/userQueue";
 import { extendWarParticipantSql, liftBracketImmunitySql } from "@/server/utils/war";
 import { activeWarAllyWhere } from "@/server/utils/warAlly";
@@ -2054,6 +2061,7 @@ export const initiateBattle = async (
     questBattleSource?: { questId: string; objectiveId: string };
     /** Camp identity and guardian snapshot used by combat's final strategic mutation phase. */
     warCamp?: import("@/drizzle/schema").WarCamp;
+    territoryWar?: import("@/drizzle/schema").TerritoryWar;
     raidQuestId?: string;
     topPlayersLP?: number[];
     /** Reserved lobby/combat IDs used to reject participants after lobby deletion. */
@@ -2113,7 +2121,12 @@ export const initiateBattle = async (
 
   const queryBattleUsers = () =>
     client.query.userData.findMany({
-      extras: (table) => activityCompletionExtras(table.userId),
+      extras: (table) => ({
+        ...activityCompletionExtras(table.userId),
+        territoryWarBoostWindows: territoryWarBoostWindowsSql(table).as(
+          "territoryWarBoostWindows",
+        ),
+      }),
       with: {
         raidBuffs: true,
         titles: true,
@@ -2187,6 +2200,7 @@ export const initiateBattle = async (
 
   // Use Promise.all to fetch all independent data in parallel
   const [
+    territoryWarEvent,
     { defaultProfile, activeWars, settings, villages, relations, dmgConfig },
     assets,
     achievements,
@@ -2205,6 +2219,10 @@ export const initiateBattle = async (
     pets,
     petJutsus,
   ] = await Promise.all([
+    info.territoryWar ??
+      (battleType === "COMBAT" && sector !== undefined
+        ? fetchActiveTerritoryWar(client, sector)
+        : null),
     // Essentials
     fetchBattleEssentials(client),
     // Fetch game assets (only battlefield ones to avoid row limit)
@@ -2776,6 +2794,39 @@ export const initiateBattle = async (
     }
   }
 
+  const territoryCompetitors = Object.fromEntries(
+    users
+      .filter((user) => !user.isAi)
+      .map((user) => [user.userId, getTerritoryCompetitor(user)]),
+  );
+  if (battleType === "TERRITORY_WAR") {
+    if (
+      !territoryWarEvent ||
+      territoryWarEvent.resolvedAt ||
+      territoryWarEvent.endsAt <= new Date() ||
+      userIds.length < 1 ||
+      userIds.length > TERRITORY_WAR_TEAM_SIZE ||
+      targetIds.length !== 1 ||
+      targetIds[0] !== territoryWarEvent.guardianId ||
+      !info.clanBattle
+    )
+      return errorResponse("This Territory War is no longer available");
+    const competitors = userIds.map((id) => territoryCompetitors[id]?.id);
+    if (
+      competitors.some((id) => !id || id !== competitors[0]) ||
+      users.some(
+        (user) =>
+          !user.isAi &&
+          (user.sector !== territoryWarEvent.sector ||
+            user.status !== "QUEUED" ||
+            user.isBanned),
+      )
+    )
+      return errorResponse(
+        "All teammates must represent the same village or faction and be queued in the event sector",
+      );
+  }
+
   // Hide some information from quests
   users.forEach((user) => {
     user.userQuests?.forEach((q) => {
@@ -2929,7 +2980,13 @@ export const initiateBattle = async (
     }
 
     // Check if user is asleep
-    const QUEUED_BATTLES = ["RANKED_PVP", "CLAN_BATTLE", "KAGE_PVP", "RAID"];
+    const QUEUED_BATTLES = [
+      "TERRITORY_WAR",
+      "RANKED_PVP",
+      "CLAN_BATTLE",
+      "KAGE_PVP",
+      "RAID",
+    ];
     const isQueuedBattle = QUEUED_BATTLES.includes(battleType);
     const isAutoBattle = AutoBattleTypes.includes(battleType);
     const isShrineBattle = battleType === "SHRINE_WAR";
@@ -3618,6 +3675,14 @@ export const initiateBattle = async (
           hunting: info.hunting,
           questBattleSource: info.questBattleSource,
           warCamp: info.warCamp,
+          territoryWar: territoryWarEvent
+            ? {
+                id: territoryWarEvent.id,
+                sector: territoryWarEvent.sector,
+                endsAt: territoryWarEvent.endsAt.toISOString(),
+                competitors: territoryCompetitors,
+              }
+            : undefined,
           raidQuestId: info.raidQuestId,
           raidInitialBossHp: raidInitialBossHp,
           raidStartBattleCount: Object.fromEntries(
@@ -3865,11 +3930,45 @@ export const initiateBattle = async (
                     ),
                 ]
               : []),
+            ...(info.territoryWar
+              ? [
+                  eq(userData.sector, info.territoryWar.sector),
+                  eq(userData.isBanned, false),
+                  exists(
+                    client
+                      .select({ one: sql`1` })
+                      .from(territoryWar)
+                      .where(
+                        and(
+                          eq(territoryWar.id, info.territoryWar.id),
+                          isNull(territoryWar.resolvedAt),
+                          gt(territoryWar.endsAt, new Date()),
+                        ),
+                      ),
+                  ),
+                  ...users
+                    .filter((user) => !user.isAi)
+                    .map((user) =>
+                      or(
+                        ne(userData.userId, user.userId),
+                        and(
+                          eq(userData.isOutlaw, user.isOutlaw),
+                          user.clanId
+                            ? eq(userData.clanId, user.clanId)
+                            : isNull(userData.clanId),
+                          user.villageId
+                            ? eq(userData.villageId, user.villageId)
+                            : isNull(userData.villageId),
+                        ),
+                      ),
+                    ),
+                ]
+              : []),
             // Ranked participants are claimed straight from the queue, so require
             // QUEUED specifically: a player who just left the queue (now AWAKE)
             // must not be pulled into a ranked battle by a poll whose snapshot
             // predated their leave.
-            battleType === "CLAN_BATTLE" && info.clanBattle
+            ["CLAN_BATTLE", "TERRITORY_WAR"].includes(battleType) && info.clanBattle
               ? and(
                   eq(userData.status, "QUEUED"),
                   exists(

@@ -27,6 +27,7 @@ import {
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
   MasteryQueueKinds,
+  REGEN_SECONDS,
   SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
   SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC,
   SENSEI_MAX_STUDENT_LEVEL,
@@ -64,6 +65,11 @@ import {
   toMasteryEntries,
 } from "@/libs/queue";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
+import {
+  getTerritoryWarBoost,
+  getTerritoryWarPeriodBoost,
+  type TerritoryBoostUser,
+} from "@/libs/territoryWar";
 import { calcIsInVillage } from "@/libs/travel";
 import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
@@ -500,7 +506,8 @@ export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5;
 export const calcJutsuTrainTime = (
   jutsu: Pick<Jutsu, "jutsuRank" | "requiredRank">,
   level: number,
-  userdata: Pick<UserData, "senseiId" | "rank">,
+  userdata: Pick<UserData, "senseiId" | "rank"> & TerritoryBoostUser,
+  now = new Date(),
 ) => {
   let lvlIncrement = 7;
   if (jutsu.jutsuRank === "C") {
@@ -516,7 +523,9 @@ export const calcJutsuTrainTime = (
 
   const multiplier =
     jutsu.requiredRank === "ELITE JONIN" ? ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER : 1;
-  const cappedTrainTime = Math.min(trainTime, MAX_JUTSU_TRAIN_TIME_MS) * multiplier;
+  const cappedTrainTime =
+    (Math.min(trainTime, MAX_JUTSU_TRAIN_TIME_MS) * multiplier) /
+    (1 + getTerritoryWarBoost(userdata, now));
 
   if (userdata.senseiId && userdata.rank === "GENIN") {
     return cappedTrainTime * (1 - SENSEI_JUTSU_TRAINING_BOOST_PERC / 100);
@@ -551,7 +560,7 @@ export const inferJutsuTrainingStartedAt = (
   finishTraining: Date,
   jutsu: Pick<Jutsu, "jutsuRank" | "requiredRank">,
   storedLevel: number,
-  userdata: Pick<UserData, "senseiId" | "rank">,
+  userdata: Pick<UserData, "senseiId" | "rank"> & TerritoryBoostUser,
 ) =>
   new Date(
     finishTraining.getTime() -
@@ -1033,6 +1042,7 @@ export const trainingBoost = (
   settings: GameSetting[],
   kind: "STATS" | "MASTERY" = "STATS",
   now = new Date(),
+  territoryBoost = getTerritoryWarBoost(user, now),
 ) => {
   const sectors = countBoostingShrines(user.village?.sectors);
   const shrineBoost = getShrineBoost(sectors, "Training", user.village);
@@ -1043,7 +1053,7 @@ export const trainingBoost = (
   const loyalty = getVillageLoyaltyBonuses(user, now);
   return (
     ((trainSetting?.value ?? 1) *
-      (1 + boost + clanBoost + shrineBoost) *
+      (1 + boost + clanBoost + shrineBoost + territoryBoost) *
       (1 + getPvpBoost(user, settings).totalPercent / 100) *
       percentageMultiplier(
         kind === "STATS" ? loyalty.statGains : loyalty.masteryTraining,
@@ -1060,7 +1070,17 @@ export const calcMasteryTrainingAmount = (
   elapsedSeconds: number,
   now = new Date(),
 ) =>
-  trainingBoost(user, settings, "MASTERY", now) *
+  trainingBoost(
+    user,
+    settings,
+    "MASTERY",
+    now,
+    getTerritoryWarPeriodBoost(
+      user,
+      new Date(now.getTime() - elapsedSeconds * 1000),
+      now,
+    ),
+  ) *
   Math.min(Math.floor(energyPerSecond(user.trainingSpeed) * elapsedSeconds), 100) *
   trainEfficiency(user) *
   trainingMultiplier(user);
@@ -1219,8 +1239,16 @@ export const settleEnergyTrainingQueue = (
   const completed: { stat: CombatStatName; amount: number }[] = [];
   let energy = Math.min(user.curEnergy, user.maxEnergy);
   let remainingTicks = ticks;
-  const rate =
-    STATS_PER_ENERGY * trainingBoost(user, settings) * getTrainingMultiplierBoost(user);
+  const rateAtTick = (tick: number) =>
+    STATS_PER_ENERGY *
+    trainingBoost(
+      user,
+      settings,
+      "STATS",
+      new Date((user.regenAt?.getTime() ?? Date.now()) + tick * REGEN_SECONDS * 1000),
+    ) *
+    getTrainingMultiplierBoost(user);
+  let rate = rateAtTick(0);
   // Sleeping is permitted for a previously authorized queue; all other training guards apply.
   const canTrain = !statTrainingBlockMessage({
     ...user,
@@ -1237,7 +1265,7 @@ export const settleEnergyTrainingQueue = (
       continue;
     }
     // A capacity reduction must not leave an entry waiting for an unreachable amount.
-    const spent = Math.min(entry.energy, user.maxEnergy, room / rate);
+    let spent = Math.min(entry.energy, user.maxEnergy, room / rate);
     if (spent <= 0) break;
     if (energy < spent) {
       const fromTick = ticks - remainingTicks;
@@ -1257,6 +1285,9 @@ export const settleEnergyTrainingQueue = (
       );
       remainingTicks -= low;
     }
+    rate = rateAtTick(ticks - remainingTicks);
+    spent = Math.min(entry.energy, user.maxEnergy, room / rate);
+    if (energy < spent) continue;
     if (energy - spent === energy) break;
     energy -= spent;
     const amount = Math.min(room, spent * rate);
