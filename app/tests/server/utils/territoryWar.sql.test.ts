@@ -52,6 +52,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
 
   it("serializes simultaneous finishers and grants the treasury and boost exactly once", async () => {
     const db = await getTestDatabase();
+    await db.update(userData).set({ unreadNotifications: 7 });
     await db.insert(territoryWar).values(eventRow());
     await db.insert(territoryWarScore).values(["home", "enemy"].map(id => ({ warId: "event", competitorId: `village:${id}`, name: id, villageId: id, points: 395 })));
     const enemy = guardianVictory(1, "enemy-battle");
@@ -66,6 +67,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     await db.transaction(tx => resolveTerritoryWar(tx as unknown as DrizzleClient, "event"));
     expect((await db.query.village.findMany()).reduce((total, row) => total + row.tokens, 0)).toBe(300030);
     expect(await db.query.notification.findMany()).toHaveLength(1);
+    expect((await db.select({ unread: userData.unreadNotifications }).from(userData).orderBy(userData.userId)).map(user => user.unread)).toEqual([7, 8, 8, 8]);
   });
 
   it.each([false, true])("pays an outlaw clan with hasHideout=%s to the proper destination", async hasHideout => {
@@ -169,6 +171,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
 
   it("schedules one event on a neutral sector, expires it without rewards, and waits five hours after its end", async () => {
     const db = await getTestDatabase();
+    await db.update(userData).set({ unreadNotifications: 7 });
     await db.insert(sector).values({ sector: 10, villageId: "home" });
     const startsAt = now();
     await Promise.all([syncTerritoryWars(db, startsAt), syncTerritoryWars(db, startsAt)]);
@@ -177,6 +180,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect([1, 2, 3, 4, 10]).not.toContain(events[0]!.sector);
     expect(events[0]!.guardianId).toBe("guardian");
     expect(await db.query.notification.findMany()).toHaveLength(1);
+    expect((await db.select({ unread: userData.unreadNotifications }).from(userData).orderBy(userData.userId)).map(user => user.unread)).toEqual([7, 8, 8, 8]);
     const endsAt = events[0]!.endsAt;
     await syncTerritoryWars(db, new Date(endsAt.getTime() + 1));
     expect((await db.query.territoryWar.findFirst())?.resolvedAt).toEqual(endsAt);
@@ -184,6 +188,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect(await db.query.territoryWar.findMany()).toHaveLength(1);
     await syncTerritoryWars(db, new Date(endsAt.getTime() + 5 * 3600000));
     expect(await db.query.territoryWar.findMany()).toHaveLength(2);
+    expect((await db.select({ unread: userData.unreadNotifications }).from(userData).orderBy(userData.userId)).map(user => user.unread)).toEqual([7, 9, 9, 9]);
   });
 
   it("preloads both historical victory windows in the existing activity query", async () => {

@@ -150,7 +150,8 @@ export const resolveTerritoryWar = async (
     );
     await client
       .update(userData)
-      .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` });
+      .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` })
+      .where(eq(userData.isAi, false));
   }
   return result;
 };
@@ -217,7 +218,8 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
       });
       await db
         .update(userData)
-        .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` });
+        .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` })
+        .where(eq(userData.isAi, false));
     }),
   );
 };
