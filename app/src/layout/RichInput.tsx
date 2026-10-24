@@ -122,7 +122,10 @@ export const RichInput = (props: RichInputProps) => {
   }));
 
   useEffect(() => {
-    if (isSource) return;
+    if (isSource)
+      return () => {
+        generationRef.current++;
+      };
     const host = hostRef.current;
     if (!host) return;
     let disposed = false;
@@ -201,13 +204,13 @@ export const RichInput = (props: RichInputProps) => {
 
   useEffect(() => {
     if (value === lastValueRef.current) return;
+    generationRef.current++;
+    lastValueRef.current = value;
     if (needsHtmlSource(value)) setSourceMode(true);
     const editor = quillRef.current;
     if (!editor) return;
-    generationRef.current++;
     editor.setContents(editor.clipboard.convert(richTextInput(value)), "silent");
     editor.history.clear();
-    lastValueRef.current = value;
   }, [value]);
 
   useEffect(() => {
@@ -252,7 +255,13 @@ export const RichInput = (props: RichInputProps) => {
   };
 
   const uploadImage = async (file: File) => {
-    if (blocked || uploadInFlightRef.current || !props.allowClipboardPaste) return;
+    if (
+      blocked ||
+      uploadInFlightRef.current ||
+      !props.allowClipboardPaste ||
+      props.plainText
+    )
+      return;
     if (
       !file.type.startsWith("image/") ||
       file.size > TAVERN_IMAGE_MAX_SIZE_MB * 1024 * 1024
@@ -270,6 +279,11 @@ export const RichInput = (props: RichInputProps) => {
     props.onUploadPendingChange?.(true);
     const generation = generationRef.current;
     const editor = quillRef.current;
+    const source = isSource ? textareaRef.current : null;
+    const selection = source
+      ? { start: source.selectionStart, end: source.selectionEnd, value }
+      : null;
+    const focusedBeforeUpload = document.activeElement;
     try {
       const dimensions = await getImageDimensions(file);
       const result = (await startUpload([file]))?.[0]?.serverData;
@@ -281,8 +295,36 @@ export const RichInput = (props: RichInputProps) => {
         );
       // A reset, closed composer or account change must not receive an old upload.
       if (generation === generationRef.current && editor === quillRef.current) {
-        editor?.enable(true);
-        insertImage(result.fileUrl, dimensions);
+        if (source && selection && source === textareaRef.current) {
+          const image = document.createElement("img");
+          image.src = result.fileUrl;
+          image.alt = "Uploaded image";
+          image.width = dimensions.width;
+          image.height = dimensions.height;
+          const html = image.outerHTML;
+          const nextValue =
+            selection.value.slice(0, selection.start) +
+            html +
+            selection.value.slice(selection.end);
+          lastValueRef.current = nextValue;
+          field.onChange(nextValue);
+          // Restore the caret after React enables the textarea, without taking
+          // focus from another control chosen while the upload was pending.
+          requestAnimationFrame(() => {
+            if (generation !== generationRef.current || source !== textareaRef.current)
+              return;
+            const caret = selection.start + html.length;
+            source.setSelectionRange(caret, caret);
+            if (
+              document.activeElement === document.body ||
+              document.activeElement === focusedBeforeUpload
+            )
+              source.focus({ preventScroll: true });
+          });
+        } else {
+          editor?.enable(true);
+          insertImage(result.fileUrl, dimensions);
+        }
       }
     } catch (error) {
       showMutationToast({
@@ -562,6 +604,16 @@ export const RichInput = (props: RichInputProps) => {
             placeholder={props.placeholder}
             isDirty={props.isDirty}
             style={{ minHeight: height }}
+            onPaste={(event) => {
+              if (props.plainText || !props.allowClipboardPaste) return;
+              const file = Array.from(event.clipboardData.files).find((item) =>
+                item.type.startsWith("image/"),
+              );
+              if (file) {
+                event.preventDefault();
+                void uploadImage(file);
+              }
+            }}
             onChange={(event) => {
               field.onChange(event);
               checkMention(event.target.value, event.target.selectionStart);
@@ -646,6 +698,17 @@ export const RichInput = (props: RichInputProps) => {
               Uploading image…
             </span>
           )}
+          {sourceMode && !props.plainText && props.allowClipboardPaste && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={!canEdit}
+              onClick={() => fileRef.current?.click()}
+            >
+              Upload image
+            </Button>
+          )}
           <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -702,7 +765,7 @@ export const RichInput = (props: RichInputProps) => {
         accept="image/*"
         className="hidden"
         aria-label="Upload image file"
-        disabled={!canEdit}
+        disabled={!canEdit || props.plainText || !props.allowClipboardPaste}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) void uploadImage(file);
