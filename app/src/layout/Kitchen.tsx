@@ -28,7 +28,10 @@ import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 
 /** Recipe selection, batch production, Cooking progression, and active meal effects. */
 export default function Kitchen({ image }: { image?: string }) {
-  const { data: user } = useRequiredUserData();
+  const { data: user, timeDiff = 0 } = useRequiredUserData();
+  const territoryWarBoost = user
+    ? getTerritoryWarBoost(user, new Date(Date.now() - timeDiff))
+    : 0;
   const utils = api.useUtils();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -241,18 +244,13 @@ export default function Kitchen({ image }: { image?: string }) {
                 <p className="mt-1 text-xs">
                   {recipe.cookingOutputQuantity} meals ·{" "}
                   {formatSecondsToTimeDisplay(
-                    getCookingSeconds(
-                      recipe,
-                      1,
-                      shrineBoost,
-                      user ? getTerritoryWarBoost(user) : 0,
-                    ),
+                    getCookingSeconds(recipe, 1, shrineBoost, territoryWarBoost),
                   )}{" "}
                   ·{" "}
                   {Math.floor(
                     recipe.cookingExperience *
                       recipe.cookingOutputQuantity *
-                      (1 + (user ? getTerritoryWarBoost(user) : 0)),
+                      (1 + territoryWarBoost),
                   )}{" "}
                   XP (current bonuses)
                 </p>
@@ -332,19 +330,14 @@ export default function Kitchen({ image }: { image?: string }) {
               <p className="text-sm">
                 Output: {batches * selected.cookingOutputQuantity} meals ·{" "}
                 {formatSecondsToTimeDisplay(
-                  getCookingSeconds(
-                    selected,
-                    batches,
-                    shrineBoost,
-                    user ? getTerritoryWarBoost(user) : 0,
-                  ),
+                  getCookingSeconds(selected, batches, shrineBoost, territoryWarBoost),
                 )}{" "}
                 ·{" "}
                 {Math.floor(
                   batches *
                     selected.cookingOutputQuantity *
                     selected.cookingExperience *
-                    (1 + (user ? getTerritoryWarBoost(user) : 0)),
+                    (1 + territoryWarBoost),
                 )}{" "}
                 XP on completion (current bonuses).
                 {(active || waiting.length > 0) &&

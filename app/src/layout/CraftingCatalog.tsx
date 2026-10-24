@@ -36,6 +36,7 @@ import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
+import { useUserData } from "@/utils/UserContext";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 
 type CraftableItem = Item & {
@@ -97,6 +98,10 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 }) => {
   // Utils
   const utils = api.useUtils();
+  const { timeDiff = 0 } = useUserData();
+  const territoryWarBoost = userData
+    ? getTerritoryWarBoost(userData, new Date(Date.now() - timeDiff))
+    : 0;
 
   // State
   const [selectedCategory, setSelectedCategory] = useState<CatalogCategory | null>(
@@ -113,7 +118,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
         craftQuantity *
         (1 +
           (userData?.isOutlaw ? 0 : (userData?.clan?.craftingExpBoost ?? 0) / 100) +
-          (userData ? getTerritoryWarBoost(userData) : 0)),
+          territoryWarBoost),
       userData?.pvpBoost?.totalPercent ?? 0,
     ),
   );
@@ -223,14 +228,10 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
 
     const totalSeconds = Math.round(
-      craftingTime *
-        60 *
-        shrineBoostFactor *
-        craftQuantity *
-        (1 - getTerritoryWarBoost(userData)),
+      craftingTime * 60 * shrineBoostFactor * craftQuantity * (1 - territoryWarBoost),
     );
     return formatSecondsToTimeDisplay(totalSeconds);
-  }, [selectedItem, userData, userCraftingRank, craftQuantity]);
+  }, [selectedItem, userData, userCraftingRank, craftQuantity, territoryWarBoost]);
 
   // Check if user can craft the selected item
   const canCraft = useMemo(() => {

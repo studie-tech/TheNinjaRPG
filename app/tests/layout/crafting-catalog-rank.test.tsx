@@ -12,6 +12,7 @@ import { CraftingCatalog } from "@/layout/CraftingCatalog";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
 import * as modal from "@/layout/Modal";
 import type { UserWithRelations } from "@/routers/profile";
+import * as userContext from "@/utils/UserContext";
 
 type CatalogProps = ComponentProps<typeof CraftingCatalog>;
 type CraftableItem = NonNullable<CatalogProps["craftableItems"]>[number];
@@ -135,5 +136,41 @@ describe("CraftingCatalog crafting rank gate", () => {
     ).not.toContain("Requires");
     const craftButton = view.getByRole("button", { name: "Start Crafting" });
     expect((craftButton as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("updates an open recipe across server-time bonus expiry with unchanged profile data", () => {
+    const serverNow = Date.UTC(2026, 9, 24, 12);
+    const timeDiff = 3_600_000;
+    let now = serverNow + timeDiff;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff } as never);
+    const user = {
+      craftingExperience: 0,
+      village: { territoryWarBoostUntil: new Date(serverNow + 5000) },
+    } as unknown as UserWithRelations;
+    const props = {
+      craftableItems: [{ ...makeItem("COMMON"), craftingExperience: 1000 }],
+      userItems,
+      userData: user,
+      isBusy: false,
+      isQueueFull: false,
+    };
+    const view = render(<CraftingCatalog {...props} />);
+    fireEvent.click(view.getByText("Weapons"));
+    fireEvent.click(view.getByRole("button", { name: "COMMON blade" }));
+    expect(view.getByText("Total Crafting Time:").parentElement?.textContent).toBe(
+      "Total Crafting Time:51m",
+    );
+    expect(view.getByText("+1150 EXP")).toBeTruthy();
+    now += 6000;
+    view.rerender(<CraftingCatalog {...props} />);
+    expect(view.getByText("Total Crafting Time:").parentElement?.textContent).toBe(
+      "Total Crafting Time:60m",
+    );
+    expect(view.getByText("+1000 EXP")).toBeTruthy();
+    expect(
+      (view.getByRole("button", { name: "Start Crafting" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
   });
 });
