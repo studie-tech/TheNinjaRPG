@@ -801,7 +801,7 @@ export const commentsRouter = createTRPCRouter({
         content = `${quoteContent}\n\n${content}`;
       }
 
-      // Extract all mentioned usernames before sanitizing
+      // Link visible mentions and collect notification recipients.
       const { processedContent, mentionedUserNames } = processMentions(content);
       const sanitized = sanitize(processedContent);
 

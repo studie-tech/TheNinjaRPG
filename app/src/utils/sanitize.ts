@@ -42,7 +42,11 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
   },
 };
 
-const sanitize = (html: string) => sanitizeHtml(html, sanitizeOptions);
+/** Sanitize with the shared allowlist, optionally transforming parsed text. */
+const sanitize = (
+  html: string,
+  hooks?: Pick<sanitizeHtml.IOptions, "textFilter" | "onOpenTag" | "onCloseTag">,
+) => sanitizeHtml(html, { ...sanitizeOptions, ...hooks });
 
 export default sanitize;
 
