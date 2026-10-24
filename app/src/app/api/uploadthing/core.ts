@@ -16,6 +16,7 @@ import { createThumbnail } from "@/libs/replicate";
 import { extensionCustomId, servedUfsUrl } from "@/libs/uploadthing";
 import { insertHistoricalSoundEffect } from "@/server/api/routers/audio";
 import { drizzleDB } from "@/server/db";
+import { claimTavernImageUpload } from "@/server/utils/tavernUploads";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
 
@@ -113,20 +114,9 @@ export const ourFileRouter = {
   tavernUploader: f({ image: { maxFileSize: `${TAVERN_IMAGE_MAX_SIZE_MB}MB` } })
     .middleware(async ({ files }) => {
       const metadata = await avatarMiddleware();
-      const recentUploads = await drizzleDB
-        .select({ count: sql`count(*)`.mapWith(Number) })
-        .from(userUpload)
-        .where(
-          and(
-            eq(userUpload.userId, metadata.userId),
-            gt(userUpload.createdAt, sql`NOW() - INTERVAL 1 DAY`),
-          ),
-        );
-      // Concurrent uploads may slightly exceed this abuse limit; each file still
-      // passes authentication and moderation before it can be shared.
-      if ((recentUploads[0]?.count ?? 0) >= TAVERN_IMAGE_UPLOAD_DAILY_LIMIT) {
+      if (!(await claimTavernImageUpload(metadata.userId))) {
         throw new UploadThingError(
-          `Can only upload ${TAVERN_IMAGE_UPLOAD_DAILY_LIMIT} tavern images per day`,
+          `Can only upload ${TAVERN_IMAGE_UPLOAD_DAILY_LIMIT} tavern image upload attempts per day`,
         );
       }
       return { ...metadata, ...withExtensionIds(files) };

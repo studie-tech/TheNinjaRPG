@@ -46,8 +46,8 @@ describe("rich input composer", () => {
     await waitFor(() => expect(submit.mock.calls.at(-1)?.[0]).toEqual({ comment: "" }));
   });
 
-  it("submits breakable spaces after editing visual text", async () => {
-    const view = render(<Composer initial="two words" />);
+  it.each(["two words", "two  words"])("submits breakable spaces after editing visual text (%s)", async (text) => {
+    const view = render(<Composer initial={text} />);
     const editor = await editorFor(view);
     editor.focus();
     const range = document.createRange();
@@ -58,7 +58,7 @@ describe("rich input composer", () => {
     fireEvent.click(view.getByRole("button", { name: "Bold" }));
     fireEvent.click(view.getByRole("button", { name: "Send message" }));
     await waitFor(() => expect(submit).toHaveBeenCalled());
-    expect(submit.mock.calls[0]?.[0]).toEqual({ comment: "<p><strong>two words</strong></p>" });
+    expect(submit.mock.calls[0]?.[0]).toEqual({ comment: `<p><strong>${text === "two words" ? "two words" : "two&nbsp; words"}</strong></p>` });
   });
 
   it("keeps source edits when switching back to visual mode", async () => {

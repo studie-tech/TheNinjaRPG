@@ -2,8 +2,8 @@ import * as clerk from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
-import { historicalAvatar, userData, userUpload } from "@/drizzle/schema";
-import { TAVERN_IMAGE_UPLOAD_DAILY_LIMIT } from "@/drizzle/constants";
+import { historicalAvatar, userData } from "@/drizzle/schema";
+import * as tavernUploads from "@/server/utils/tavernUploads";
 import * as moderator from "@/libs/moderator";
 import * as replicate from "@/libs/replicate";
 import { servedUfsUrl } from "@/libs/uploadthing";
@@ -46,7 +46,7 @@ describeWithDatabase("uploaded avatar cache responses", () => {
         regions: ["fra1"],
       }),
     ).toString("base64");
-    await resetTables(userUpload, historicalAvatar, userData);
+    await resetTables(historicalAvatar, userData);
     await insertUsers([{ userId, username: "UploadAvatarCache" }]);
     vi.spyOn(clerk, "currentUser").mockResolvedValue({ id: userId } as never);
     vi.spyOn(moderator, "classifyNsfwImage").mockResolvedValue({
@@ -71,28 +71,17 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     else process.env.UPLOADTHING_TOKEN = savedUploadthingToken;
   });
 
-  it.each([TAVERN_IMAGE_UPLOAD_DAILY_LIMIT - 1, TAVERN_IMAGE_UPLOAD_DAILY_LIMIT])(
-    "limits recent tavern uploads for the current user (%s recent files)",
-    async (recentCount) => {
-      const database = await getTestDatabase();
-      stubDatabase(database);
-      await database.insert(userUpload).values([
-        ...Array.from({ length: recentCount }, (_, index) => ({
-          id: `recent-${index}`, userId, imageUrl: "https://example.com/image.png",
-        })),
-        { id: "old-upload", userId, imageUrl: "https://example.com/old.png", createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
-        { id: "other-user-upload", userId: "another-user", imageUrl: "https://example.com/other.png" },
-      ]);
-      const args = { files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }] } as Parameters<typeof ourFileRouter.tavernUploader.middleware>[0];
-      if (recentCount === TAVERN_IMAGE_UPLOAD_DAILY_LIMIT) {
-        await expect(ourFileRouter.tavernUploader.middleware(args)).rejects.toThrow("tavern images per day");
-        // Posting quotas must not consume an unrelated avatar upload allowance.
-        expect(await ourFileRouter.avatarNormalUploader.middleware(args)).toMatchObject({ userId });
-      } else {
-        expect(await ourFileRouter.tavernUploader.middleware(args)).toMatchObject({ userId });
-      }
-    },
-  );
+  it.each([true, false])("enforces the independent tavern upload budget (allowed: %s)", async (allowed) => {
+    stubDatabase(await getTestDatabase());
+    const claim = vi.spyOn(tavernUploads, "claimTavernImageUpload").mockResolvedValue(allowed);
+    const args = { files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }] } as Parameters<typeof ourFileRouter.tavernUploader.middleware>[0];
+    if (allowed) expect(await ourFileRouter.tavernUploader.middleware(args)).toMatchObject({ userId });
+    else await expect(ourFileRouter.tavernUploader.middleware(args)).rejects.toThrow("tavern image upload attempts per day");
+    expect(claim).toHaveBeenCalledWith(userId);
+    claim.mockClear();
+    expect(await ourFileRouter.avatarNormalUploader.middleware(args)).toMatchObject({ userId });
+    expect(claim).not.toHaveBeenCalled();
+  });
 
   it.each([
     "avatarNormalUploader",

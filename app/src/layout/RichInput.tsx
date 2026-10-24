@@ -52,6 +52,7 @@ export const RichInput = (props: RichInputProps) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const lastValueRef = useRef(value);
   const uploadInFlightRef = useRef(false);
+  const uploadErrorRef = useRef<string | null>(null);
   const uploadPendingRef = useRef(false);
   const generationRef = useRef(0);
   const blocked = !!props.disabled || uploading;
@@ -66,7 +67,11 @@ export const RichInput = (props: RichInputProps) => {
     name: "users",
     defaultValue: [],
   });
-  const { startUpload } = useUploadThing("tavernUploader");
+  const { startUpload } = useUploadThing("tavernUploader", {
+    onUploadError: (error) => {
+      uploadErrorRef.current = error.message;
+    },
+  });
 
   const checkMention = (text: string, end: number, position = end) => {
     if (!props.enableMentions) return;
@@ -242,6 +247,7 @@ export const RichInput = (props: RichInputProps) => {
       return;
     }
     uploadInFlightRef.current = true;
+    uploadErrorRef.current = null;
     setUploading(true);
     uploadPendingRef.current = true;
     props.onUploadPendingChange?.(true);
@@ -251,7 +257,11 @@ export const RichInput = (props: RichInputProps) => {
       const dimensions = await getImageDimensions(file);
       const result = (await startUpload([file]))?.[0]?.serverData;
       if (!result?.fileUrl || result.error)
-        throw new Error(result?.error || "Image upload failed. Please try again.");
+        throw new Error(
+          result?.error ||
+            uploadErrorRef.current ||
+            "Image upload failed. Please try again.",
+        );
       // A reset, closed composer or account change must not receive an old upload.
       if (generation === generationRef.current && editor === quillRef.current) {
         editor?.enable(true);
