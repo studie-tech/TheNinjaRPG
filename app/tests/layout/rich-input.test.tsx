@@ -46,6 +46,21 @@ describe("rich input composer", () => {
     await waitFor(() => expect(submit.mock.calls.at(-1)?.[0]).toEqual({ comment: "" }));
   });
 
+  it("submits breakable spaces after editing visual text", async () => {
+    const view = render(<Composer initial="two words" />);
+    const editor = await editorFor(view);
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    fireEvent.click(view.getByRole("button", { name: "Bold" }));
+    fireEvent.click(view.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    expect(submit.mock.calls[0]?.[0]).toEqual({ comment: "<p><strong>two words</strong></p>" });
+  });
+
   it("keeps source edits when switching back to visual mode", async () => {
     const view = render(<Composer />);
     await editorFor(view);

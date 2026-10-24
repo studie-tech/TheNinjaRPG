@@ -22,6 +22,7 @@ import type { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { TAVERN_IMAGE_MAX_SIZE_MB } from "@/drizzle/constants";
 import EmojiPicker from "@/layout/EmojiPicker";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
@@ -81,7 +82,12 @@ export const RichInput = (props: RichInputProps) => {
     const hasImage = editor
       .getContents()
       .ops.some((op) => typeof op.insert === "object");
-    const html = editor.getText().trim() || hasImage ? editor.getSemanticHTML() : "";
+    // Quill escapes ordinary spaces; retain a break point after each run while
+    // preserving repeated spaces in the authored text.
+    const html =
+      editor.getText().trim() || hasImage
+        ? editor.getSemanticHTML().replace(/((?:&nbsp;)*)&nbsp;/g, "$1 ")
+        : "";
     lastValueRef.current = html;
     field.onChange(html);
     setFormats(editor.getFormat());
@@ -225,8 +231,14 @@ export const RichInput = (props: RichInputProps) => {
 
   const uploadImage = async (file: File) => {
     if (blocked || uploadInFlightRef.current || !props.allowClipboardPaste) return;
-    if (!file.type.startsWith("image/") || file.size > 4 * 1024 * 1024) {
-      showMutationToast({ success: false, message: "Choose an image up to 4 MB." });
+    if (
+      !file.type.startsWith("image/") ||
+      file.size > TAVERN_IMAGE_MAX_SIZE_MB * 1024 * 1024
+    ) {
+      showMutationToast({
+        success: false,
+        message: `Choose an image up to ${TAVERN_IMAGE_MAX_SIZE_MB} MB.`,
+      });
       return;
     }
     uploadInFlightRef.current = true;

@@ -5,7 +5,11 @@ import type { FileRouter } from "uploadthing/next";
 import { createUploadthing } from "uploadthing/next";
 import { UploadThingError, UTApi, UTFiles } from "uploadthing/server";
 import { z } from "zod";
-import type { FederalStatuses } from "@/drizzle/constants";
+import {
+  type FederalStatuses,
+  TAVERN_IMAGE_MAX_SIZE_MB,
+  TAVERN_IMAGE_UPLOAD_DAILY_LIMIT,
+} from "@/drizzle/constants";
 import { historicalAvatar, userData, userUpload } from "@/drizzle/schema";
 import { classifyNsfwImage } from "@/libs/moderator";
 import { createThumbnail } from "@/libs/replicate";
@@ -106,11 +110,27 @@ export const ourFileRouter = {
     .onUploadComplete(({ file }) => {
       return { fileUrl: servedUfsUrl(file) };
     }),
-  tavernUploader: f({ image: { maxFileSize: "4MB" } })
-    .middleware(async ({ files }) => ({
-      ...(await avatarMiddleware()),
-      ...withExtensionIds(files),
-    }))
+  tavernUploader: f({ image: { maxFileSize: `${TAVERN_IMAGE_MAX_SIZE_MB}MB` } })
+    .middleware(async ({ files }) => {
+      const metadata = await avatarMiddleware();
+      const recentUploads = await drizzleDB
+        .select({ count: sql`count(*)`.mapWith(Number) })
+        .from(userUpload)
+        .where(
+          and(
+            eq(userUpload.userId, metadata.userId),
+            gt(userUpload.createdAt, sql`NOW() - INTERVAL 1 DAY`),
+          ),
+        );
+      // Concurrent uploads may slightly exceed this abuse limit; each file still
+      // passes authentication and moderation before it can be shared.
+      if ((recentUploads[0]?.count ?? 0) >= TAVERN_IMAGE_UPLOAD_DAILY_LIMIT) {
+        throw new UploadThingError(
+          `Can only upload ${TAVERN_IMAGE_UPLOAD_DAILY_LIMIT} tavern images per day`,
+        );
+      }
+      return { ...metadata, ...withExtensionIds(files) };
+    })
     .onUploadComplete(async ({ metadata, file }) => {
       const moderation = await moderateUploadedImage(file);
       if (moderation.error) return moderation;
