@@ -135,7 +135,7 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
     },
     {
       id: "reason",
-      type: "richinput",
+      type: "textarea",
       label: "Reason for update",
       doubleWidth: true,
     },
