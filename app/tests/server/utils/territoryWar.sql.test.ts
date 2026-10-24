@@ -198,15 +198,18 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect(user?.windows.map(window => new Date(window.startsAt).getTime()).sort()).toEqual([earlier.getTime(), recent.getTime()]);
   });
 
-  it("releases only expired waiting lobbies", async () => {
+  it.each(["resolved", "expired", "empty", "reserved", "active", "battle", "other", "missing"])("releases only expired waiting lobbies: %s", async state => {
     const db = await getTestDatabase();
-    await db.insert(territoryWar).values({ ...eventRow(), resolvedAt: now() });
-    await db.insert(mpvpBattleQueue).values({ id: "lobby", territoryWarId: "event", battleType: "TERRITORY_WAR", attackerEntityId: "village:home", defenderEntityId: "guardian", sector: 100 });
-    await db.insert(mpvpBattleUser).values({ id: "member", clanBattleId: "lobby", userId: "player-0", side: "ATTACKER", slot: 0 });
-    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "player-0"));
+    const removesLobby = ["resolved", "expired", "empty", "reserved"].includes(state);
+    const realBattle = state === "battle" ? guardianVictory() : null;
+    if (state !== "missing") await db.insert(territoryWar).values({ ...eventRow(), endsAt: new Date(Date.now() + (state === "expired" ? -1000 : 1800000)), resolvedAt: ["active", "expired"].includes(state) ? null : now() });
+    if (realBattle) await db.insert(battle).values(realBattle);
+    await db.insert(mpvpBattleQueue).values({ id: "lobby", territoryWarId: "event", battleType: state === "other" ? "CLAN_BATTLE" : "TERRITORY_WAR", battleId: state === "reserved" ? "reservation" : realBattle?.id, attackerEntityId: "village:home", defenderEntityId: "guardian", sector: 100 });
+    if (state !== "empty") await db.insert(mpvpBattleUser).values({ id: "member", clanBattleId: "lobby", userId: "player-0", side: "ATTACKER", slot: 0 });
+    await db.update(userData).set({ status: realBattle ? "BATTLE" : "QUEUED", battleId: realBattle?.id ?? null }).where(eq(userData.userId, "player-0"));
     await cleanupTerritoryWarTeams(db);
-    expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
-    expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(0);
-    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "player-0") }))?.status).toBe("AWAKE");
+    expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(removesLobby ? 0 : 1);
+    expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(removesLobby ? 0 : 1);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "player-0") }))?.status).toBe(realBattle ? "BATTLE" : removesLobby && state !== "empty" ? "AWAKE" : "QUEUED");
   });
 });

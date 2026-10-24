@@ -232,10 +232,7 @@ export const cleanupTerritoryWarTeams = async (
     sql`UPDATE UserData u INNER JOIN MpvpBattleUser m ON m.userId = u.userId INNER JOIN MpvpBattleQueue q ON q.id = m.clanBattleId INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId SET u.status = 'AWAKE' WHERE ${expired} AND u.status = 'QUEUED'`,
   );
   await client.execute(
-    sql`DELETE m FROM MpvpBattleUser m INNER JOIN MpvpBattleQueue q ON q.id = m.clanBattleId INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId WHERE ${expired}`,
-  );
-  await client.execute(
-    sql`DELETE q FROM MpvpBattleQueue q INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId WHERE ${expired}`,
+    sql`DELETE q, m FROM MpvpBattleQueue q INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId LEFT JOIN MpvpBattleUser m ON m.clanBattleId = q.id WHERE ${expired}`,
   );
 };
 
