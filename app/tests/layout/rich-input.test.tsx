@@ -76,6 +76,24 @@ describe("rich input composer", () => {
     expect(document.activeElement).toBe(chosen);
   });
 
+  it.each(["loading", "failed"])("does not upload images without a visual editor (%s)", async (state) => {
+    if (state === "failed") {
+      const quill = await import("quill");
+      spies.push(vi.spyOn(quill, "default").mockImplementation((() => { throw new Error("Editor unavailable"); }) as never));
+    }
+    spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width: 800, height: 600 }));
+    startUpload.mockResolvedValue([{ serverData: { fileUrl: "https://example.com/image.png" } }]);
+    const view = render(<Composer />);
+    if (state === "failed") await waitFor(() => expect(view.getByRole("status").textContent).toContain("could not load"));
+    const host = view.container.querySelector(".rich-input-editor")!;
+    const file = new File(["image"], "image.png", { type: "image/png" });
+    expect(fireEvent.drop(host, { dataTransfer: { files: [file] } })).toBe(false);
+    expect(fireEvent.paste(host, { clipboardData: { files: [file] } })).toBe(true);
+    await act(async () => {});
+    expect(startUpload).not.toHaveBeenCalled();
+    expect(uploadPending).not.toHaveBeenCalled();
+  });
+
   it("preserves existing HTML until an explicit edit and honors form reset", async () => {
     const initial = '<p><strong>Saved</strong> text</p>';
     const view = render(<Composer initial={initial} />);
@@ -332,13 +350,26 @@ describe("rich input composer", () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])("does not send on a legacy IME confirmation (plain text: %s)", async (plainText) => {
-    const view = render(<Composer initial="Draft" plainText={plainText} />);
-    const editor = plainText ? view.getByRole("textbox", { name: "Message" }) : await editorFor(view);
-    fireEvent.keyDown(editor, { key: "Enter", keyCode: 229, isComposing: false });
-    expect(submit).not.toHaveBeenCalled();
-    fireEvent.keyDown(editor, { key: "Enter" });
-    await waitFor(() => expect(submit).toHaveBeenCalled());
+  it.each(["visual", "source", "plain"])("sends only unmodified, non-composing Enter without reaching parents (%s)", async (mode) => {
+    const view = render(<Composer initial="Draft" plainText={mode === "plain"} />);
+    if (mode === "source") fireEvent.click(view.getByRole("button", { name: "HTML" }));
+    const editor = mode === "visual" ? await editorFor(view) : view.getByRole("textbox", { name: "Message" });
+    const parentKey = vi.fn();
+    document.addEventListener("keydown", parentKey);
+    try {
+      for (const extra of [{ shiftKey: true }, { ctrlKey: true }, { altKey: true }, { metaKey: true }, { isComposing: true }, { keyCode: 229, isComposing: false }]) {
+        fireEvent.keyDown(editor, { key: "Enter", ...extra });
+        expect(submit).not.toHaveBeenCalled();
+        expect(parentKey).not.toHaveBeenCalled();
+      }
+      const before = editor.innerHTML;
+      expect(fireEvent.keyDown(editor, { key: "Enter", keyCode: 13 })).toBe(false);
+      await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+      expect(editor.innerHTML).toBe(before);
+      expect(parentKey).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener("keydown", parentKey);
+    }
   });
 
   it("blocks a parent form during upload and preserves original file bytes", async () => {

@@ -270,7 +270,8 @@ export const RichInput = (props: RichInputProps) => {
       blocked ||
       uploadInFlightRef.current ||
       !props.allowClipboardPaste ||
-      props.plainText
+      props.plainText ||
+      (!isSource && !quillRef.current)
     )
       return;
     if (
@@ -385,6 +386,22 @@ export const RichInput = (props: RichInputProps) => {
 
   const submit = () => {
     if (!blocked && !uploadInFlightRef.current) props.onSubmit?.();
+  };
+  const submitOnEnter = (event: React.KeyboardEvent) => {
+    if (
+      event.key === "Enter" &&
+      props.onSubmit &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      !isComposingKey(event.nativeEvent) &&
+      !mention
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      submit();
+    }
   };
   const canEdit = !blocked && (isSource || ready);
   const height = /^\d+$/.test(props.height) ? `${props.height}px` : props.height;
@@ -609,20 +626,7 @@ export const RichInput = (props: RichInputProps) => {
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") event.stopPropagation();
-              if (
-                event.key === "Enter" &&
-                props.onSubmit &&
-                !event.shiftKey &&
-                !event.ctrlKey &&
-                !event.altKey &&
-                !event.metaKey &&
-                !isComposingKey(event.nativeEvent) &&
-                !mention
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-                submit();
-              }
+              submitOnEnter(event);
             }}
           />
         ) : (
@@ -634,22 +638,7 @@ export const RichInput = (props: RichInputProps) => {
             onKeyDown={(event) => {
               if (event.key === "Enter") event.stopPropagation();
             }}
-            onKeyDownCapture={(event) => {
-              if (
-                event.key === "Enter" &&
-                props.onSubmit &&
-                !event.shiftKey &&
-                !event.ctrlKey &&
-                !event.altKey &&
-                !event.metaKey &&
-                !isComposingKey(event.nativeEvent) &&
-                !mention
-              ) {
-                event.preventDefault();
-                event.stopPropagation();
-                submit();
-              }
-            }}
+            onKeyDownCapture={submitOnEnter}
             onDragOver={(event) => {
               if (event.dataTransfer.types.includes("Files")) event.preventDefault();
             }}
@@ -663,7 +652,7 @@ export const RichInput = (props: RichInputProps) => {
               if (file) void uploadImage(file);
             }}
             onPasteCapture={(event) => {
-              if (!props.allowClipboardPaste) return;
+              if (!props.allowClipboardPaste || !quillRef.current) return;
               const file = Array.from(event.clipboardData.files).find((item) =>
                 item.type.startsWith("image/"),
               );
