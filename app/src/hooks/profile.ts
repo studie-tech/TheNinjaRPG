@@ -171,7 +171,7 @@ export const useUserEditForm = (
       multiple: true,
       doubleWidth: true,
     });
-  formData.push({ id: "reason", type: "richinput", doubleWidth: true });
+  formData.push({ id: "reason", type: "textarea", doubleWidth: true });
 
   // Determine if any of the queries we actually executed are loading
   const loading =

@@ -51,6 +51,7 @@ export default function CreateSupportTicket() {
   const router = useRouter();
   const { data: userData } = useRequiredUserData();
   const [currentTag, setCurrentTag] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
 
   const {
     register,
@@ -87,7 +88,7 @@ export default function CreateSupportTicket() {
   });
 
   const onSubmit = (data: CreateTicketFormData) => {
-    createTicket.mutate({ ...data });
+    if (!imageUploading) createTicket.mutate({ ...data });
   };
 
   const addTag = () => {
@@ -161,10 +162,11 @@ export default function CreateSupportTicket() {
                 id="description"
                 control={control}
                 label="Description *"
-                height="min-h-[120px]"
+                height="120"
                 placeholder="Detailed description of your issue or question. Include steps to reproduce if reporting a bug."
                 error={errors.description?.message}
                 allowClipboardPaste={true}
+                onUploadPendingChange={setImageUploading}
               />
               <div className="flex items-center gap-2 text-muted-foreground text-xs">
                 <p>
@@ -334,7 +336,7 @@ export default function CreateSupportTicket() {
 
         {/* Submit */}
         <div className="flex justify-end gap-4">
-          <Button type="submit" disabled={createTicket.isPending}>
+          <Button type="submit" disabled={createTicket.isPending || imageUploading}>
             {createTicket.isPending ? (
               <>
                 <Loader explanation="" />

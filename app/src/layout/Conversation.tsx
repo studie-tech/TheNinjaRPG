@@ -731,6 +731,18 @@ const Conversation: React.FC<ConversationProps> = (props) => {
           topRightContent={
             <div className="flex items-center gap-1">
               {searchButtonElement}
+              {conversation && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Refresh messages"
+                  title="Refresh messages"
+                  onClick={() => void invalidateComments()}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              )}
               {props.topRightContent}
             </div>
           }
@@ -819,10 +831,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                 <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 transform flex-row-reverse">
                   {isCommenting && <Loader />}
                 </div>
-                <RefreshCw
-                  className="absolute top-[50%] right-24 z-20 h-8 w-8 translate-y-[-50%] text-gray-400 opacity-50 hover:cursor-pointer hover:text-gray-600"
-                  onClick={invalidateComments}
-                />
               </div>
               {/* The line is kept when nobody is typing: it comes and goes every few
                   seconds in a busy chat, and each time it moved every message below. */}

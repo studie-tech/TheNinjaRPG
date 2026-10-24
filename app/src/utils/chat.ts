@@ -40,26 +40,30 @@ export const getNewReactions = (
 };
 
 /**
- * Process mentions in a comment by converting them to bold text with links
+ * Link visible mentions outside existing links and collect their usernames.
  * @param content - The content to process mentions in
  * @returns The content with processed mentions and an array of mentioned usernames
  */
 export const processMentions = (content: string) => {
-  // Extract all mentioned usernames
-  const mentionedUserNames =
-    content.match(/@([^\s]+)/g)?.map((mention) => mention.slice(1)) || [];
-
-  // Process each mention to be bold and linked
-  let processedContent = content;
-  if (mentionedUserNames.length > 0) {
-    mentionedUserNames.forEach((username) => {
-      const mentionPattern = new RegExp(`@${username}(?![\\w-])`, "g");
-      processedContent = processedContent.replace(
-        mentionPattern,
-        `<a href="/username/${username}"><b>@${username}</b></a>`,
-      );
-    });
-  }
+  const mentionedUserNames: string[] = [];
+  let anchorDepth = 0;
+  // Normalize entities first: parser text chunks can split an encoded username.
+  const processedContent = sanitize(sanitize(content), {
+    onOpenTag: (tagName) => {
+      if (tagName === "a") anchorDepth++;
+    },
+    onCloseTag: (tagName) => {
+      if (tagName === "a") anchorDepth--;
+    },
+    textFilter: (text) => {
+      // Authored links, including formatted labels and URLs, stay intact.
+      if (anchorDepth > 0) return text;
+      return text.replace(/@([^\s<&]+)/g, (mention, username: string) => {
+        mentionedUserNames.push(username);
+        return `<a href="/username/${encodeURIComponent(username)}"><b>${mention}</b></a>`;
+      });
+    },
+  });
 
   return { processedContent, mentionedUserNames };
 };

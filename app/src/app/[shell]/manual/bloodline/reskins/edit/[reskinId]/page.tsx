@@ -149,7 +149,7 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
     },
     {
       id: "reason",
-      type: "richinput",
+      type: "textarea",
       label: "Reason for update",
       doubleWidth: true,
     },

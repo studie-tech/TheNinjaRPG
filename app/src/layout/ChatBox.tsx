@@ -226,6 +226,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                 <FormItem>
                   <FormControl>
                     <RichInput
+                      plainText
                       id="message"
                       height="120"
                       control={form.control}

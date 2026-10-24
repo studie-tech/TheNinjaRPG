@@ -6,12 +6,8 @@ import { Quote } from "@/components/ui/quote";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { ConsentGatedIframe } from "@/layout/ConsentGatedIframe";
 import EmbeddedConceptArt from "@/layout/EmbeddedConceptArt";
-import { randomString } from "@/libs/random";
 import { isAllowedIframeUrl, toPrivacyEnhancedEmbedUrl } from "@/utils/audio";
 import { isPlainObject } from "@/utils/typeutils";
-
-// Default length for randomly generated alt text when images lack alt attributes
-const DEFAULT_ALT_TEXT_LENGTH = 10;
 
 interface HtmlNode {
   type: string;
@@ -19,6 +15,7 @@ interface HtmlNode {
   attribs?: Record<string, string>;
   children?: HtmlNode[];
   data?: string;
+  parent?: HtmlNode;
 }
 
 const isValidStyle = (value: unknown): value is React.CSSProperties => {
@@ -92,9 +89,8 @@ const parseStyleAttribute = (styleJson?: string): React.CSSProperties | undefine
 };
 
 /**
- * Placeholder ratio for legacy post images stored without dimensions. Uploads are capped
- * at 512x512 by resizeImage and are predominantly landscape screenshots, so 4:3 is the
- * closest single guess; it only has to hold until the image itself loads.
+ * Post images without authored dimensions reserve a 4:3 placeholder until their
+ * intrinsic aspect ratio loads. Original-size uploads use their recorded dimensions.
  */
 const LEGACY_IMAGE_RESERVE = { width: 512, height: 384 };
 
@@ -127,7 +123,7 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
 
   const imageAttributes: React.ImgHTMLAttributes<HTMLImageElement> = {
     src: sourceUrl,
-    alt: alternativeText || randomString(DEFAULT_ALT_TEXT_LENGTH),
+    alt: alternativeText || "Post image",
     className,
     id: imageIdentifier,
     style: parsedStyle,
@@ -144,7 +140,26 @@ const tryTransformImageNode = (imageNode: HtmlNode): React.ReactElement | undefi
     Object.entries(imageAttributes).filter(([, value]) => value !== undefined),
   ) as React.ImgHTMLAttributes<HTMLImageElement>;
 
-  return React.createElement("img", { ...filteredAttributes, key: sourceUrl });
+  const image = React.createElement("img", { ...filteredAttributes, key: sourceUrl });
+  let parent = imageNode.parent;
+  while (parent) {
+    if (parent.name === "a") return image;
+    parent = parent.parent;
+  }
+  // Only navigable web URLs become links; authored links retain their own destination.
+  if (!sourceUrl || !/^(https?:\/\/|\/(?!\/))/i.test(sourceUrl)) return image;
+  return React.createElement(
+    "a",
+    {
+      href: sourceUrl,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      title: "Open original image",
+      className: "inline-block max-w-full cursor-zoom-in",
+      key: sourceUrl,
+    },
+    image,
+  );
 };
 
 const getTextFromNode = (node: HtmlNode): string => {
@@ -289,10 +304,29 @@ export const parseHtml = (html: string) => {
         case "img":
           return tryTransformImageNode(node);
         case "h1":
+        case "h2":
           node.name = "h2";
+          node.attribs = { ...node.attribs, class: "my-3 text-xl font-bold" };
+          return undefined;
+        case "h3":
+          node.attribs = { ...node.attribs, class: "my-2 text-lg font-semibold" };
+          return undefined;
+        case "ul":
+          node.attribs = { ...node.attribs, class: "my-2 list-disc pl-6" };
+          return undefined;
+        case "ol":
+          node.attribs = { ...node.attribs, class: "my-2 list-decimal pl-6" };
           return undefined;
         case "blockquote":
-          return transformBlockquoteNode(node);
+          // Authored rich-text quotes keep their formatting; attributed reply quotes
+          // use the shared Quote presentation and its author/date metadata.
+          if (node.attribs?.author || node.attribs?.date)
+            return transformBlockquoteNode(node);
+          node.attribs = {
+            ...node.attribs,
+            class: "my-3 border-l-4 border-primary bg-accent p-3 italic",
+          };
+          return undefined;
         case "conceptart":
           return transformConceptArtNode(node);
         case "iframe":

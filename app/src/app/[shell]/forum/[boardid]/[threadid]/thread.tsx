@@ -244,8 +244,8 @@ export default function Thread({ threadId, initialPage }: ThreadProps) {
               <div className="relative mb-3">
                 <RichInput
                   id="comment"
+                  allowClipboardPaste
                   height="200"
-                  refreshKey={totalComments}
                   placeholder=""
                   control={control}
                   disabled={isPending}

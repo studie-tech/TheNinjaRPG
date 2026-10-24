@@ -1,3 +1,7 @@
+/** Original images shared through posts and conversations. */
+export const TAVERN_IMAGE_MAX_SIZE_MB = 4;
+export const TAVERN_IMAGE_UPLOAD_DAILY_LIMIT = 50;
+
 export const OCCUPATIONS = ["GATHERING", "HUNTER", "CRAFTING"] as const;
 export type OccupationType = (typeof OCCUPATIONS)[number];
 
