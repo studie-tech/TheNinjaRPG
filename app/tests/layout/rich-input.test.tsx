@@ -327,6 +327,83 @@ describe("rich input composer", () => {
   const originalFile = () => new File(["original bytes"], "original.png", { type: "image/png" });
   const pasteImage = (editor: HTMLElement, file = originalFile()) => fireEvent.paste(editor, { clipboardData: { files: [file] } });
 
+  it.each(["paste", "file"])("inserts a visual %s at the saved selection without taking another control's focus", async (method) => {
+    let finish: (result: unknown) => void = () => {};
+    startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width: 1920, height: 1080 }));
+    const view = render(<Composer initial="Before after" />);
+    const editor = await editorFor(view);
+    const { default: Quill } = await import("quill");
+    const quill = Quill.find(editor.parentElement!) as InstanceType<typeof Quill>;
+    act(() => quill.setSelection(7, 3, "silent"));
+    const file = originalFile();
+    if (method === "paste") pasteImage(editor, file);
+    else {
+      const upload = view.getByRole("button", { name: "Upload image" });
+      upload.focus();
+      const chooser = vi.spyOn(view.getByLabelText("Upload image file"), "click");
+      fireEvent.click(upload);
+      expect(chooser).toHaveBeenCalled();
+      chooser.mockRestore();
+      fireEvent.change(view.getByLabelText("Upload image file"), { target: { files: [file] } });
+    }
+    await waitFor(() => expect(startUpload).toHaveBeenCalledWith([file]));
+    const chosen = document.createElement("input");
+    view.container.append(chosen);
+    chosen.focus();
+    await act(async () => { finish([{ serverData: { fileUrl: "https://example.com/upload.png" } }]); });
+    await waitFor(() => expect(editor.querySelector("img")?.getAttribute("width")).toBe("1920"));
+    expect(quill.getContents().ops).toEqual([{ insert: "Before " }, { insert: { image: "https://example.com/upload.png" }, attributes: { width: "1920", height: "1080", alt: "Uploaded image" } }, { insert: "after\n" }]);
+    expect(document.activeElement).toBe(chosen);
+    expect(uploadPending).toHaveBeenLastCalledWith(false);
+    fireEvent.click(view.getByRole("button", { name: "Send message" }));
+    await waitFor(() => expect(submit.mock.calls[0]?.[0].comment).toContain('height="1080"'));
+  });
+
+  it.each(["editor", "body"])("restores the visual upload caret when focus stays on the %s", async (focus) => {
+    let finish: (result: unknown) => void = () => {};
+    startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    spies.push(vi.spyOn(image, "getImageDimensions").mockResolvedValue({ width: 800, height: 600 }));
+    const view = render(<Composer initial="Before after" />);
+    const editor = await editorFor(view);
+    const { default: Quill } = await import("quill");
+    const quill = Quill.find(editor.parentElement!) as InstanceType<typeof Quill>;
+    act(() => quill.setSelection(7, 0, "silent"));
+    pasteImage(editor);
+    await waitFor(() => expect(startUpload).toHaveBeenCalled());
+    if (focus === "body") editor.blur();
+    expect(document.activeElement).toBe(focus === "body" ? document.body : editor);
+    await act(async () => { finish([{ serverData: { fileUrl: "https://example.com/upload.png" } }]); });
+    await waitFor(() => expect(quill.getSelection()).toEqual({ index: 8, length: 0 }));
+    expect(document.activeElement).toBe(editor);
+    expect(editor.querySelector("img")?.getAttribute("height")).toBe("600");
+  });
+
+  it.each([false, undefined])("pastes editable formatted text with an attached image when uploads are %s", async (allowClipboardPaste) => {
+    const PasteComposer = () => {
+      const form = useForm({ defaultValues: { comment: "Before after" } });
+      return <RichInput id="comment" label="Message" height="120" control={form.control} autoFocus={false} allowClipboardPaste={allowClipboardPaste} />;
+    };
+    const view = render(<PasteComposer />);
+    const editor = await editorFor(view);
+    const { default: Quill } = await import("quill");
+    const quill = Quill.find(editor.parentElement!) as InstanceType<typeof Quill>;
+    act(() => quill.setSelection(7, 0, "silent"));
+    const file = originalFile();
+    fireEvent.paste(editor, { clipboardData: {
+      files: [file],
+      items: [{ kind: "string", type: "text/plain" }, { kind: "string", type: "text/html" }, { kind: "file", type: "image/png", getAsFile: () => file }],
+      types: ["text/plain", "text/html", "Files"],
+      getData: (type: string) => type === "text/html" ? "<p><strong>Office text</strong></p>" : type === "text/plain" ? "Office text" : "",
+    } });
+    await waitFor(() => expect(editor.textContent).toBe("Before Office textafter"));
+    expect(editor.querySelector("strong")?.textContent).toBe("Office text");
+    fireEvent.paste(editor, { clipboardData: { files: [file], getData: () => "" } });
+    expect(editor.querySelector("img")).toBeNull();
+    expect(startUpload).not.toHaveBeenCalled();
+    expect(view.queryByRole("button", { name: "Upload image" })).toBeNull();
+  });
+
   it.each(["paste", "file"])("uploads a source %s at the selection without changing advanced HTML or dimensions", async (method) => {
     let finish: (result: unknown) => void = () => {};
     startUpload.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));

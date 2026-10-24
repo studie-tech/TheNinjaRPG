@@ -104,7 +104,9 @@ export const RichInput = (props: RichInputProps) => {
         : "";
     lastValueRef.current = html;
     field.onChange(html);
-    setFormats(editor.getFormat());
+    // A range-less getFormat() focuses Quill, even for a background upload.
+    const range = editor.getSelection();
+    if (range) setFormats(editor.getFormat(range));
   });
   const onSelectionChange = useEffectEvent(() => {
     const editor = quillRef.current;
@@ -239,19 +241,23 @@ export const RichInput = (props: RichInputProps) => {
     mentionForm.setValue("username", "");
   }, [selectedUsers]);
 
-  const insertImage = (url: string, dimensions?: { width: number; height: number }) => {
+  const insertImage = (
+    url: string,
+    dimensions?: { width: number; height: number },
+    target?: { index: number; restoreSelection: boolean },
+  ) => {
     const editor = quillRef.current;
     if (!editor || isSource || props.disabled) return;
-    const range = editor.getSelection(true);
-    editor.insertEmbed(range.index, "image", url, "user");
-    const [leaf] = editor.getLeaf(range.index + 1);
+    const index = target?.index ?? editor.getSelection(true).index;
+    editor.insertEmbed(index, "image", url, "user");
+    const [leaf] = editor.getLeaf(index + 1);
     if (dimensions && leaf?.domNode instanceof HTMLImageElement) {
       leaf.domNode.alt = "Uploaded image";
       leaf.domNode.width = dimensions.width;
       leaf.domNode.height = dimensions.height;
       editor.update("user");
     }
-    editor.setSelection(range.index + 1, 0, "silent");
+    if (!target || target.restoreSelection) editor.setSelection(index + 1, 0, "silent");
   };
 
   const uploadImage = async (file: File) => {
@@ -283,6 +289,7 @@ export const RichInput = (props: RichInputProps) => {
     const selection = source
       ? { start: source.selectionStart, end: source.selectionEnd, value }
       : null;
+    const visualRange = source ? null : editor?.getSelection(true);
     const focusedBeforeUpload = document.activeElement;
     try {
       const dimensions = await getImageDimensions(file);
@@ -321,9 +328,14 @@ export const RichInput = (props: RichInputProps) => {
             )
               source.focus({ preventScroll: true });
           });
-        } else {
-          editor?.enable(true);
-          insertImage(result.fileUrl, dimensions);
+        } else if (editor && visualRange) {
+          editor.enable(true);
+          insertImage(result.fileUrl, dimensions, {
+            index: visualRange.index,
+            restoreSelection:
+              document.activeElement === document.body ||
+              document.activeElement === focusedBeforeUpload,
+          });
         }
       }
     } catch (error) {
@@ -674,13 +686,14 @@ export const RichInput = (props: RichInputProps) => {
               if (file) void uploadImage(file);
             }}
             onPasteCapture={(event) => {
+              if (!props.allowClipboardPaste) return;
               const file = Array.from(event.clipboardData.files).find((item) =>
                 item.type.startsWith("image/"),
               );
               if (file) {
                 event.preventDefault();
                 event.stopPropagation();
-                if (props.allowClipboardPaste !== false) void uploadImage(file);
+                void uploadImage(file);
               }
             }}
           />
