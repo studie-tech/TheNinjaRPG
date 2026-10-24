@@ -36,6 +36,9 @@ ALTER TABLE `LogRankedPicks` MODIFY COLUMN `battleType` enum('ARENA','COMBAT','S
 ALTER TABLE `MpvpBattleQueue` MODIFY COLUMN `battleType` enum('TERRITORY_WAR','CLAN_BATTLE','SHRINE_BATTLE','RAID_BATTLE') NOT NULL DEFAULT 'CLAN_BATTLE';
 ALTER TABLE `Clan` ADD `territoryWarBoostUntil` datetime(3);
 ALTER TABLE `MpvpBattleQueue` ADD `territoryWarId` varchar(191);
+ALTER TABLE `UserJutsu` ADD `trainingStartedAt` datetime(3);
 ALTER TABLE `Village` ADD `territoryWarBoostUntil` datetime(3);
 CREATE INDEX `TerritoryWar_startsAt_idx` ON `TerritoryWar` (`startsAt`);
 CREATE INDEX `TerritoryWarReceipt_warId_idx` ON `TerritoryWarReceipt` (`warId`);
+CREATE INDEX `TerritoryWarScore_competitor_rewarded_idx` ON `TerritoryWarScore` (`competitorId`,`rewarded`);
+CREATE INDEX `MpvpBattleQueue_territoryWar_idx` ON `MpvpBattleQueue` (`territoryWarId`);

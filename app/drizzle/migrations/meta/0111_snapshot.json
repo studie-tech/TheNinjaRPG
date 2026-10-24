@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "287c8ee6-ed37-4cfc-b25a-6f3687bf62cd",
-  "prevId": "6b8dd6f4-7393-477f-abf6-c5a1ef572605",
+  "id": "939e42e9-7249-49d5-a936-6330ef76f62f",
+  "prevId": "84021756-9fb2-40fd-a54a-8c21ac3fcd20",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -18172,6 +18172,13 @@
           "autoincrement": false,
           "default": false
         },
+        "trainingStartedAt": {
+          "name": "trainingStartedAt",
+          "type": "datetime(3)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "finishTraining": {
           "name": "finishTraining",
           "type": "datetime(3)",
@@ -22233,6 +22240,14 @@
           "autoincrement": false,
           "default": false
         },
+        "purchaseLimit": {
+          "name": "purchaseLimit",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "contents": {
           "name": "contents",
           "type": "json",
@@ -22293,6 +22308,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "bundleId": {
+          "name": "bundleId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "priceCents": {
           "name": "priceCents",
           "type": "int",
@@ -22322,6 +22344,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "captureAttemptId": {
+          "name": "captureAttemptId",
+          "type": "varchar(191)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "grantedAt": {
           "name": "grantedAt",
           "type": "datetime(3)",
@@ -22349,6 +22378,14 @@
           "name": "WebStoreOrder_recipientId_idx",
           "columns": [
             "recipientId"
+          ],
+          "isUnique": false
+        },
+        "WebStoreOrder_buyer_bundle_idx": {
+          "name": "WebStoreOrder_buyer_bundle_idx",
+          "columns": [
+            "buyerId",
+            "bundleId"
           ],
           "isUnique": false
         },

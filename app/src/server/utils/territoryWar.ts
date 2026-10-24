@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
-import { and, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, getTableName, gt, isNull, lte, sql } from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import map from "@/data/hexasphere.json";
 import {
@@ -261,15 +262,19 @@ export const territoryWarBoostWindowsSql = (
     | "covertTrainingStartedAt"
   >,
   since?: Date,
-) =>
-  sql<import("@/libs/territoryWar").TerritoryBoostWindow[]>`
+) => {
+  // Relational extras strip column qualifiers; identifiers keep score columns from
+  // shadowing the outer user's competitor and unsettled activity timestamps.
+  const outerColumn = (column: AnyMySqlColumn) =>
+    sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+  return sql<import("@/libs/territoryWar").TerritoryBoostWindow[]>`
   COALESCE((SELECT JSON_ARRAYAGG(JSON_OBJECT(
     'startsAt', DATE_FORMAT(tw.resolvedAt, '%Y-%m-%dT%H:%i:%s.%fZ'),
     'endsAt', DATE_FORMAT(DATE_ADD(tw.resolvedAt, INTERVAL ${TERRITORY_WAR_BOOST_HOURS} HOUR), '%Y-%m-%dT%H:%i:%s.%fZ')))
     FROM TerritoryWarScore ts INNER JOIN TerritoryWar tw ON tw.id = ts.warId
     WHERE ts.rewarded = true AND tw.resolvedAt IS NOT NULL
-      AND ts.competitorId = CASE WHEN ${user.isOutlaw} AND ${user.clanId} IS NOT NULL THEN CONCAT('clan:', ${user.clanId}) ELSE CONCAT('village:', IF(${user.isOutlaw}, ${VILLAGE_SYNDICATE_ID}, COALESCE(${user.villageId}, ${VILLAGE_SYNDICATE_ID}))) END
-      AND DATE_ADD(tw.resolvedAt, INTERVAL ${TERRITORY_WAR_BOOST_HOURS} HOUR) > LEAST(${since ?? sql`${user.regenAt}`}, ${user.regenAt}, COALESCE(${user.masteryTrainingStartedAt}, ${user.regenAt}), COALESCE(${user.elementalTrainingStartedAt}, ${user.regenAt}), COALESCE(${user.covertTrainingStartedAt}, ${user.regenAt})))
+      AND ts.competitorId = CASE WHEN ${outerColumn(user.isOutlaw)} AND ${outerColumn(user.clanId)} IS NOT NULL THEN CONCAT('clan:', ${outerColumn(user.clanId)}) ELSE CONCAT('village:', IF(${outerColumn(user.isOutlaw)}, ${VILLAGE_SYNDICATE_ID}, COALESCE(${outerColumn(user.villageId)}, ${VILLAGE_SYNDICATE_ID}))) END
+      AND DATE_ADD(tw.resolvedAt, INTERVAL ${TERRITORY_WAR_BOOST_HOURS} HOUR) > LEAST(${since ?? outerColumn(user.regenAt)}, ${outerColumn(user.regenAt)}, COALESCE(${outerColumn(user.masteryTrainingStartedAt)}, ${outerColumn(user.regenAt)}), COALESCE(${outerColumn(user.elementalTrainingStartedAt)}, ${outerColumn(user.regenAt)}), COALESCE(${outerColumn(user.covertTrainingStartedAt)}, ${outerColumn(user.regenAt)})))
   , JSON_ARRAY())
 `.mapWith(
     (value: unknown) =>
@@ -277,3 +282,4 @@ export const territoryWarBoostWindowsSql = (
         ? JSON.parse(value)
         : value) as import("@/libs/territoryWar").TerritoryBoostWindow[],
   );
+};

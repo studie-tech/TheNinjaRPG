@@ -166,7 +166,8 @@ export default function Kitchen({ image }: { image?: string }) {
         title="Crafting & Cooking Queue"
         subtitle="Shared production capacity"
         capacity={queue.data?.capacity ?? 1}
-        help="Cooking and Crafting share one active slot and the same waiting slots. Cancel a waiting job to return its reserved ingredients."
+        help="Cooking and Crafting share one active slot and the same waiting slots. Cancel a waiting job to return its reserved ingredients. Waiting times are base durations; Territory War bonuses active when a job starts can shorten them."
+        waitingDurationLabel="base time"
         active={
           active
             ? {
