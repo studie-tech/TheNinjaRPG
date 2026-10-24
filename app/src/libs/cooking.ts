@@ -38,11 +38,16 @@ export const getCookingRankProgress = (experience: number) => {
           ),
   };
 };
-/** Time counts every output meal; Crafting shrine bonuses increase Cooking duration. */
+/**
+ * Rounded seconds for every output meal, with a one-second floor. Both boosts are
+ * fractions: shrine boosts increase duration; Territory War reduces that result.
+ * Evaluate Territory War eligibility at the job's logical start before calling.
+ */
 export const getCookingSeconds = (
   meal: Pick<Item, "cookingTimeSeconds" | "cookingOutputQuantity">,
   batches: number,
   shrineBoost: number,
+  territoryBoost = 0,
 ) =>
   Math.max(
     1,
@@ -50,7 +55,8 @@ export const getCookingSeconds = (
       meal.cookingTimeSeconds *
         meal.cookingOutputQuantity *
         batches *
-        (1 + shrineBoost),
+        (1 + shrineBoost) *
+        (1 - territoryBoost),
     ),
   );
 

@@ -86,6 +86,7 @@ import { collapseRewards } from "@/libs/rewards";
 import { getSageMasteryDisplayRank, isSageRankAtLeast } from "@/libs/sageMode";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { availableQuestLetterRanks, hasRequiredRank } from "@/libs/train";
 import { getVillageLoyaltyBonuses } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
@@ -600,15 +601,16 @@ export const getReward = (
 
       // Apply clan experience boosts (percentages stored in clan object)
       // Only apply for real clans, not outlaw factions/strongholds
-      const clanHunterExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.hunterExpBoost ?? 0) / 100;
-      const clanGathererExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.gathererExpBoost ?? 0) / 100;
-      const clanCraftingExpBoost = user.isOutlaw
-        ? 0
-        : (user.clan?.craftingExpBoost ?? 0) / 100;
+      const territoryBoost = getTerritoryWarBoost(user);
+      target.reward_medical_experience = Math.floor(
+        target.reward_medical_experience * (1 + territoryBoost),
+      );
+      const clanHunterExpBoost =
+        (user.isOutlaw ? 0 : (user.clan?.hunterExpBoost ?? 0) / 100) + territoryBoost;
+      const clanGathererExpBoost =
+        (user.isOutlaw ? 0 : (user.clan?.gathererExpBoost ?? 0) / 100) + territoryBoost;
+      const clanCraftingExpBoost =
+        (user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100) + territoryBoost;
       if (clanHunterExpBoost > 0 && target.reward_hunting_experience > 0) {
         target.reward_hunting_experience = Math.floor(
           target.reward_hunting_experience * (1 + clanHunterExpBoost),
@@ -900,6 +902,8 @@ export type CombatQuestContext = {
   battleId?: string;
   questTeamStillFighting?: boolean;
   inWarTornSector: boolean;
+  /** Human PvP in a Territory War captured at initiation; excludes guardian fights. */
+  inTerritoryWar?: boolean;
   isWarParticipant: boolean;
   /** Prevent unrelated fights from advancing ticketed or versioned run objectives. */
   questBattleSource?: { questId: string; objectiveId: string };
@@ -908,7 +912,7 @@ export type CombatQuestContext = {
 /**
  * Decide whether a war-context kill objective (`pvp_kills` / `defeat_opponents`) should advance
  * for a given quest type and battle context:
- * - `pvp` quests count only inside the war-torn sector.
+ * - `pvp` quests count in the war-torn sector or human PvP in a Territory War.
  * - `war` quests count only active-war kills: a per-opponent `warFoe` flag when available (e.g.
  *   `defeat_opponents`), otherwise the battle-global war-participant flag (e.g. the `pvp_kills`
  *   counter, which is only emitted on a win).
@@ -921,7 +925,8 @@ export const killObjectiveCountsForQuest = (
   context: CombatQuestContext | undefined,
   warFoe: boolean | undefined,
 ): boolean => {
-  if (questType === "pvp") return context?.inWarTornSector === true;
+  if (questType === "pvp")
+    return context?.inWarTornSector === true || context?.inTerritoryWar === true;
   if (questType === "war") {
     return warFoe !== undefined ? warFoe : context?.isWarParticipant === true;
   }

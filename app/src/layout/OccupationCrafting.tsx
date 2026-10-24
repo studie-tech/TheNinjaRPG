@@ -35,6 +35,7 @@ import { canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+/** Manages recipes, the crafting queue, item imbuements and repairs. */
 export default function OccupationCrafting() {
   // Utils
   const utils = api.useUtils();
@@ -471,7 +472,8 @@ export default function OccupationCrafting() {
           subtitle="Crafts that start when the current one is ready"
           initialBreak={false}
           capacity={craftingQueue?.capacity ?? 1}
-          help="Choose a recipe while crafting to queue it. Its materials are set aside when queued and returned if you cancel before it starts. Crafting experience and quest progress are granted when a queued craft starts, also while you are offline."
+          help="Choose a recipe while crafting to queue it. Its materials are set aside when queued and returned if you cancel before it starts. Crafting experience and quest progress are granted when a queued craft starts, also while you are offline. Waiting times are base durations; Territory War bonuses active when a job starts can shorten them."
+          waitingDurationLabel="base time"
           active={
             craftingStatus?.isCurrentlyCrafting &&
             craftingStatus.craftingFinishedAt &&

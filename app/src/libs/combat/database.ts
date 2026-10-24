@@ -106,6 +106,10 @@ import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlE
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
 import {
+  settleTerritoryWarCombat,
+  territoryWarAwards,
+} from "@/server/utils/territoryWar";
+import {
   applyVillageMissionShrineDamage,
   recordVillageMissionProgress,
 } from "@/server/utils/villageMission";
@@ -198,12 +202,22 @@ export const updateBattle = async (
     newBattle.battleType === "RAID" &&
     humanFighters.length > 0 &&
     humanFighters.every((u) => !stillInBattle(u, newBattle.usersEffects));
+  const territoryGuardianEnded =
+    !!result &&
+    newBattle.battleType === "TERRITORY_WAR" &&
+    // A guardian encounter ends for the whole roster on either side's defeat.
+    (newBattle.usersState
+      .filter((u) => u.isAi && !u.isSummon)
+      .every((u) => !stillInBattle(u, newBattle.usersEffects)) ||
+      humanFighters.every((u) => !stillInBattle(u, newBattle.usersEffects)));
   const battleOver =
     !!result &&
     (result.friendsLeft + result.targetsLeft === 0 ||
       raidBossDefeated ||
-      raidTeamWiped);
-  const raidEnded = battleOver && newBattle.battleType === "RAID";
+      raidTeamWiped ||
+      territoryGuardianEnded);
+  const raidEnded =
+    battleOver && ["RAID", "TERRITORY_WAR"].includes(newBattle.battleType);
 
   // Get user and other user
   const user = newBattle.usersState.find((u) => u.userId === userId && !u.isSummon);
@@ -227,13 +241,21 @@ export const updateBattle = async (
         .delete(battle)
         .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion)));
     const deleted = await retryOnDeadlock(() =>
-      newBattle.extraState.tournamentGameId || newBattle.extraState.kageMatch
+      newBattle.extraState.tournamentGameId ||
+      newBattle.extraState.kageMatch ||
+      territoryWarAwards(newBattle).length > 0
         ? client.transaction(async (tx) => {
             const database = tx as unknown as DrizzleClient;
             const deleted = await deleteBattle(database);
             // The version DELETE and match UPDATE must commit together: a single-row CAS
             // cannot prevent recovery treating a deleted battle as an interrupted launch.
             if (deleted.rowsAffected === 1) {
+              // MySQL cannot DELETE Battle while INSERTing a missing receipt/score and
+              // UPDATEing the event/rewards. Only eligible awards need that transaction;
+              // scoreless encounters use a single guarded DELETE. Retrying the
+              // claim after rollback preserves credit without delivering it twice.
+              if (newBattle.extraState.territoryWar)
+                await settleTerritoryWarCombat(database, newBattle);
               if (newBattle.extraState.tournamentGameId)
                 await updateTournament(database, newBattle, result, userId);
               if (newBattle.extraState.kageMatch)
@@ -248,8 +270,8 @@ export const updateBattle = async (
     }
   } else {
     newBattle.version = Math.max(newBattle.version, fetchedVersion + 1);
-    const result = await retryOnDeadlock(() =>
-      client
+    const updateBattleState = (database: DrizzleClient) =>
+      database
         .update(battle)
         .set({
           version: newBattle.version,
@@ -270,9 +292,22 @@ export const updateBattle = async (
           roundStartAt: newBattle.roundStartAt,
           round: newBattle.round,
         })
-        .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion))),
+        .where(and(eq(battle.id, newBattle.id), eq(battle.version, fetchedVersion)));
+    const updated = await retryOnDeadlock(() =>
+      result && territoryWarAwards(newBattle).length > 0
+        ? client.transaction(async (tx) => {
+            const database = tx as unknown as DrizzleClient;
+            const updated = await updateBattleState(database);
+            // A decided PvP win must score before the opponent collects their result.
+            // MySQL cannot UPDATE Battle and INSERT missing receipt/score rows in one
+            // statement. The version claim and receipt make whole-transaction retries safe.
+            if (updated.rowsAffected === 1)
+              await settleTerritoryWarCombat(database, newBattle);
+            return updated;
+          })
+        : updateBattleState(client),
     );
-    if (result.rowsAffected === 0) {
+    if (updated.rowsAffected === 0) {
       return null;
     }
   }
@@ -297,7 +332,7 @@ export const updateBattle = async (
             ]
           : []),
         // Clean up battle users in parallel - safe since they only read from mpvpBattleQueue
-        ...(["RAID", "SHRINE_WAR"].includes(newBattle.battleType)
+        ...(["RAID", "SHRINE_WAR", "TERRITORY_WAR"].includes(newBattle.battleType)
           ? [
               client
                 .delete(mpvpBattleUser)
@@ -333,7 +368,10 @@ export const updateBattle = async (
         // teammates who took damage don't revert to pre-battle pool values on release.
         // Mirror the HOSPITALIZED handling from updateUser: teammates whose curHealth
         // dropped to 0 from boss AoE must be sent to the hospital, not released as AWAKE.
-        ...(raidBossDefeated || raidTeamWiped ? humanTeammates : [])
+        ...(raidBossDefeated || raidTeamWiped || territoryGuardianEnded
+          ? humanTeammates
+          : []
+        )
           .filter((u) => u.userId !== userId)
           .map(async (teammate) => {
             const sendToHospital = !newBattle.forceKeepPools && teammate.curHealth <= 0;
@@ -391,7 +429,7 @@ export const updateBattle = async (
 
       // Delete queue entries AFTER the Promise.all to ensure mpvpBattleUser
       // subquery has completed (it references mpvpBattleQueue)
-      if (["RAID", "SHRINE_WAR"].includes(newBattle.battleType)) {
+      if (["RAID", "SHRINE_WAR", "TERRITORY_WAR"].includes(newBattle.battleType)) {
         await client
           .delete(mpvpBattleQueue)
           .where(eq(mpvpBattleQueue.battleId, newBattle.id));
@@ -403,7 +441,7 @@ export const updateBattle = async (
       // Skip teammates who already fled: their DB UPDATE above no-ops via the
       // battleId guard, so broadcasting here would overwrite their actual
       // sector/coords in other clients' map views with stale battle data.
-      if (pusher && raidBossDefeated) {
+      if (pusher && (raidBossDefeated || territoryGuardianEnded)) {
         humanTeammates
           .filter((u) => u.userId !== userId && !u.fledBattle)
           .forEach((teammate) => {
@@ -1522,7 +1560,7 @@ export const updateUser = async (
     const trackerTasks: Parameters<typeof getNewTrackers>[1] = [];
 
     // Update quest tracker with battle result. pvp_kills is emitted on every COMBAT win; the
-    // war-torn (pvp quests) / active-war (war quests) gating is applied per quest in getNewTrackers.
+    // War-torn/Territory War (pvp quests) and active-war gating is applied per quest in getNewTrackers.
     if (result.didWin > 0) {
       if (curBattle.battleType === "COMBAT") {
         trackerTasks.push({ task: "pvp_kills", increment: 1 });
@@ -1543,7 +1581,7 @@ export const updateUser = async (
       ...curBattle.usersState
         .filter((u) => !u.isSummon && !areBattleAllies(u, user))
         .flatMap((u) => [
-          // Defeat opponent with outcome; gated per quest type in getNewTrackers (pvp → war-torn
+          // Defeat opponent with outcome; gated per quest type in getNewTrackers (pvp → war-torn/Territory War
           // sector, war → this opponent being an active-war foe).
           {
             task: "defeat_opponents" as const,
@@ -1599,6 +1637,10 @@ export const updateUser = async (
       {
         battleId: curBattle.id,
         inWarTornSector: isInWarTornSector,
+        inTerritoryWar:
+          curBattle.battleType === "COMBAT" &&
+          hasHumanOpponent &&
+          curBattle.extraState.territoryWar !== undefined,
         isWarParticipant: isWarBattleParticipant,
         questBattleSource: curBattle.extraState.questBattleSource,
         questTeamStillFighting: curBattle.usersState.some(

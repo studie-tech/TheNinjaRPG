@@ -16,7 +16,10 @@ import type { UserItem } from "@/drizzle/schema";
 import {
   bloodlineRolls,
   huntingSession,
+  mpvpBattleQueue,
+  mpvpBattleUser,
   rankedPvpQueue,
+  territoryWar,
   userData,
   userItem,
 } from "@/drizzle/schema";
@@ -361,6 +364,8 @@ export const clearActiveNpcQuest = async ({
  * usable:
  * - RANKED_PVP rows were claimed from QUEUED and only return to QUEUED while
  *   their claimed `rankedPvpQueue` row still exists (the user may have left the queue).
+ * - TERRITORY_WAR rows return to QUEUED while their membership still owns the
+ *   reserved lobby and its event remains active.
  * - Every other battle type falls back to AWAKE (pre-existing behavior: e.g.
  *   CLAN_BATTLE and RAID claim QUEUED rows, but their queue entries are managed
  *   by their own flows).
@@ -368,7 +373,28 @@ export const clearActiveNpcQuest = async ({
 export const battleClaimRollbackStatus = (
   client: DrizzleClient,
   battleType: BattleType,
+  clanBattle?: { queueId: string; battleId: string },
 ) => {
+  if (battleType === "TERRITORY_WAR" && clanBattle) {
+    return sql`CASE WHEN ${exists(
+      client
+        .select({ one: sql`1` })
+        .from(mpvpBattleUser)
+        .innerJoin(mpvpBattleQueue, eq(mpvpBattleQueue.id, mpvpBattleUser.clanBattleId))
+        .innerJoin(territoryWar, eq(territoryWar.id, mpvpBattleQueue.territoryWarId))
+        .where(
+          and(
+            eq(mpvpBattleUser.userId, userData.userId),
+            eq(mpvpBattleQueue.id, clanBattle.queueId),
+            eq(mpvpBattleQueue.battleId, clanBattle.battleId),
+            eq(mpvpBattleQueue.battleType, "TERRITORY_WAR"),
+            isNull(territoryWar.resolvedAt),
+            lte(territoryWar.startsAt, sql`NOW(3)`),
+            gt(territoryWar.endsAt, sql`NOW(3)`),
+          ),
+        ),
+    )} THEN "QUEUED" ELSE "AWAKE" END`;
+  }
   if (battleType === "RANKED_PVP") {
     return sql`CASE WHEN ${exists(
       client

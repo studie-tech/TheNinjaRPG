@@ -30,6 +30,7 @@ interface TimedQueueProps {
       })
     | null;
   waiting: TimedQueueJob[];
+  waitingDurationLabel?: string;
   onCancel?: (id: string) => void;
   /** Cancelling a waiting job, e.g. "Cancel and refund" */
   cancelLabel: string;
@@ -121,7 +122,7 @@ export const TimedQueue: React.FC<TimedQueueProps> = (props) => {
                       timeDiff={timeDiff}
                       onEndShow="now"
                     />{" "}
-                    · takes{" "}
+                    · {props.waitingDurationLabel ?? "takes"}{" "}
                     {formatDuration(job.finishesAt.getTime() - job.startsAt.getTime())}
                   </span>
                 </span>

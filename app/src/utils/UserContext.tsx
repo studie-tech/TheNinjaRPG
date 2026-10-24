@@ -25,6 +25,7 @@ import { useSectorVillage } from "@/hooks/useSectorVillage";
 import { usePusherHandler } from "@/layout/PusherHandler";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import type { NavBarDropdownLink } from "@/libs/menus";
+import { getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { secondsFromDate } from "@/utils/time";
@@ -152,12 +153,16 @@ export function UserContextProvider(props: {
   );
 
   // Timed bonuses and Cooking completions refresh on every page, including inventory.
+  const territoryWarBoostUntil = data?.userData
+    ? getTerritoryWarBoostUntil(data.userData)?.getTime()
+    : undefined;
   const timedDeadlines = useMemo(
     () => [
+      territoryWarBoostUntil,
       ...(data?.userData?.raidBuffs?.map((buff) => buff.expiresAt) ?? []),
       ...(data?.userData?.cookingJobs?.map((job) => job.finishesAt) ?? []),
     ],
-    [data?.userData?.raidBuffs, data?.userData?.cookingJobs],
+    [territoryWarBoostUntil, data?.userData?.raidBuffs, data?.userData?.cookingJobs],
   );
   useRefreshAt(
     timedDeadlines,
@@ -243,9 +248,9 @@ export function UserContextProvider(props: {
     }
   }, [data?.userData, user?.primaryEmailAddress?.emailAddress]);
 
-  // Keep this object identity stable so useUserData consumers do not re-render
-  // when the provider re-renders without user/auth changes (parent updates,
-  // getUser background refetch with structural sharing, etc.).
+  // Keep identity stable for unchanged data, but include notifications: bonus expiry
+  // removes a notification even when structural sharing preserves userData/timeDiff.
+  // Consumers must rerender then to drop the expired bonus from activity previews.
   const value = useMemo<UserContextValue>(
     () => ({
       data: data?.userData,

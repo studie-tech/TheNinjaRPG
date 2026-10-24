@@ -444,6 +444,8 @@ export type ExtraState = {
   dungeon?: import("@/libs/dungeon").DungeonBattleState;
   /** Encounter snapshot for strategic settlement without an intermediate combat read. */
   warCamp?: WarCamp;
+  /** Private event/competitor snapshot frozen at initiation for write-only strategic settlement. */
+  territoryWar?: import("@/libs/territoryWar").TerritoryBattleState;
   /** Definitions of publicly performed actions, retained after their caster despawns. */
   revealedActions?: { jutsuIds: string[]; itemIds: string[] };
   /** Persisted, unscaled player state for confirmed completion responses; never sent to opponents. */

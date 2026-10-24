@@ -986,6 +986,7 @@ export const getDefaultBattleSizes = (battleType: BattleType, userLevel: number)
       return { width: 12, height: 10 };
     case "CLAN_BATTLE":
       return { width: 12, height: 10 };
+    case "TERRITORY_WAR":
     case "SHRINE_WAR":
       return { width: 12, height: 10 };
     case "TOURNAMENT":

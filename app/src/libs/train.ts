@@ -27,6 +27,7 @@ import {
   MAX_EXTRA_JUTSU_SLOTS,
   MAX_JUTSU_TRAIN_TIME_MS,
   MasteryQueueKinds,
+  REGEN_SECONDS,
   SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
   SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC,
   SENSEI_MAX_STUDENT_LEVEL,
@@ -64,6 +65,12 @@ import {
   toMasteryEntries,
 } from "@/libs/queue";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
+import {
+  getTerritoryWarBoost,
+  getTerritoryWarPeriodBoost,
+  type TerritoryBoostUser,
+  territoryWarBoostWindows,
+} from "@/libs/territoryWar";
 import { calcIsInVillage } from "@/libs/travel";
 import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
 import type { UserWithRelations } from "@/routers/profile";
@@ -496,11 +503,13 @@ export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5;
  * Milliseconds to train from the current level to the next level.
  * Apply the required-rank multiplier after capping the base duration so it raises
  * both training time and its cap; the sensei discount applies to that final duration.
+ * `now` is the logical start, so queued work uses the bonus active when it actually begins.
  */
 export const calcJutsuTrainTime = (
   jutsu: Pick<Jutsu, "jutsuRank" | "requiredRank">,
   level: number,
-  userdata: Pick<UserData, "senseiId" | "rank">,
+  userdata: Pick<UserData, "senseiId" | "rank"> & TerritoryBoostUser,
+  now = new Date(),
 ) => {
   let lvlIncrement = 7;
   if (jutsu.jutsuRank === "C") {
@@ -516,7 +525,9 @@ export const calcJutsuTrainTime = (
 
   const multiplier =
     jutsu.requiredRank === "ELITE JONIN" ? ELITE_JONIN_JUTSU_TRAIN_TIME_MULTIPLIER : 1;
-  const cappedTrainTime = Math.min(trainTime, MAX_JUTSU_TRAIN_TIME_MS) * multiplier;
+  const cappedTrainTime =
+    (Math.min(trainTime, MAX_JUTSU_TRAIN_TIME_MS) * multiplier) /
+    (1 + getTerritoryWarBoost(userdata, now));
 
   if (userdata.senseiId && userdata.rank === "GENIN") {
     return cappedTrainTime * (1 - SENSEI_JUTSU_TRAINING_BOOST_PERC / 100);
@@ -543,15 +554,15 @@ export const findJutsuInTraining = <T extends { finishTraining: Date | null }>(
 ) => userJutsus?.find((userJutsu) => isJutsuInTraining(userJutsu, serverNow));
 
 /**
- * Training stores the target level and finish time. Later actions such as equip
- * rewrite updatedAt without changing finishTraining, so the start is the finish
- * minus the duration of the level training began at.
+ * Fallback for training rows without a saved start. The stored level is the target
+ * level; updatedAt cannot identify the start because equip rewrites it. New starts
+ * persist trainingStartedAt to retain the duration even after a bonus expires.
  */
 export const inferJutsuTrainingStartedAt = (
   finishTraining: Date,
   jutsu: Pick<Jutsu, "jutsuRank" | "requiredRank">,
   storedLevel: number,
-  userdata: Pick<UserData, "senseiId" | "rank">,
+  userdata: Pick<UserData, "senseiId" | "rank"> & TerritoryBoostUser,
 ) =>
   new Date(
     finishTraining.getTime() -
@@ -1027,12 +1038,15 @@ export const applyMasteryTrainingGains = (
 /**
  * Shared training modifiers; `kind` selects stat or timed-mastery loyalty bonuses.
  * `now` evaluates loyalty at settlement, so offline sessions use their completion time.
+ * `territoryBoost` is an additive fraction; timed sessions override the instantaneous
+ * default with their period average, while Energy spending uses its actual tick.
  */
 export const trainingBoost = (
   user: NonNullable<UserWithRelations>,
   settings: GameSetting[],
   kind: "STATS" | "MASTERY" = "STATS",
   now = new Date(),
+  territoryBoost = getTerritoryWarBoost(user, now),
 ) => {
   const sectors = countBoostingShrines(user.village?.sectors);
   const shrineBoost = getShrineBoost(sectors, "Training", user.village);
@@ -1043,7 +1057,7 @@ export const trainingBoost = (
   const loyalty = getVillageLoyaltyBonuses(user, now);
   return (
     ((trainSetting?.value ?? 1) *
-      (1 + boost + clanBoost + shrineBoost) *
+      (1 + boost + clanBoost + shrineBoost + territoryBoost) *
       (1 + getPvpBoost(user, settings).totalPercent / 100) *
       percentageMultiplier(
         kind === "STATS" ? loyalty.statGains : loyalty.masteryTraining,
@@ -1060,7 +1074,17 @@ export const calcMasteryTrainingAmount = (
   elapsedSeconds: number,
   now = new Date(),
 ) =>
-  trainingBoost(user, settings, "MASTERY", now) *
+  trainingBoost(
+    user,
+    settings,
+    "MASTERY",
+    now,
+    getTerritoryWarPeriodBoost(
+      user,
+      new Date(now.getTime() - elapsedSeconds * 1000),
+      now,
+    ),
+  ) *
   Math.min(Math.floor(energyPerSecond(user.trainingSpeed) * elapsedSeconds), 100) *
   trainEfficiency(user) *
   trainingMultiplier(user);
@@ -1205,6 +1229,8 @@ export const settleMasteryTrainingQueue = (
  * Settle one-time entries (`queue`, oldest first) chronologically, so offline spending
  * frees capacity for later ticks.
  * regenerationGain measures recovery over (fromTick, toTick] on the original clock.
+ * Bonus boundaries change the Energy needed to fill a stat cap, so affordability
+ * must be reevaluated at those ticks before advancing to a later affordable spend.
  */
 export const settleEnergyTrainingQueue = (
   user: NonNullable<UserWithRelations>,
@@ -1219,8 +1245,24 @@ export const settleEnergyTrainingQueue = (
   const completed: { stat: CombatStatName; amount: number }[] = [];
   let energy = Math.min(user.curEnergy, user.maxEnergy);
   let remainingTicks = ticks;
-  const rate =
-    STATS_PER_ENERGY * trainingBoost(user, settings) * getTrainingMultiplierBoost(user);
+  const regenAt = user.regenAt?.getTime() ?? Date.now();
+  const rateChangeTicks = territoryWarBoostWindows(user)
+    .flatMap(({ startsAt, endsAt }) => [startsAt, endsAt])
+    .map((date) =>
+      Math.ceil((new Date(date).getTime() - regenAt) / (REGEN_SECONDS * 1000)),
+    )
+    .filter((tick) => tick > 0 && tick <= ticks)
+    .sort((a, b) => a - b);
+  const rateAtTick = (tick: number) =>
+    STATS_PER_ENERGY *
+    trainingBoost(
+      user,
+      settings,
+      "STATS",
+      new Date(regenAt + tick * REGEN_SECONDS * 1000),
+    ) *
+    getTrainingMultiplierBoost(user);
+  let rate = rateAtTick(0);
   // Sleeping is permitted for a previously authorized queue; all other training guards apply.
   const canTrain = !statTrainingBlockMessage({
     ...user,
@@ -1237,14 +1279,18 @@ export const settleEnergyTrainingQueue = (
       continue;
     }
     // A capacity reduction must not leave an entry waiting for an unreachable amount.
-    const spent = Math.min(entry.energy, user.maxEnergy, room / rate);
+    let spent = Math.min(entry.energy, user.maxEnergy, room / rate);
     if (spent <= 0) break;
     if (energy < spent) {
       const fromTick = ticks - remainingTicks;
-      if (energy + regenerationGain(fromTick, ticks) < spent) break;
-      // Recovery is monotone; find the first affordable tick without scanning offline time.
+      const nextRateChangeTick = rateChangeTicks.find((tick) => tick > fromTick);
+      // Recovery is monotone until the next bonus boundary, where the cost must be reevaluated.
       let low = 1;
-      let high = remainingTicks;
+      let high = (nextRateChangeTick ?? ticks) - fromTick;
+      if (energy + regenerationGain(fromTick, fromTick + high) < spent) {
+        if (nextRateChangeTick === undefined) break;
+        low = high;
+      }
       while (low < high) {
         const middle = Math.floor((low + high) / 2);
         if (energy + regenerationGain(fromTick, fromTick + middle) >= spent)
@@ -1257,6 +1303,9 @@ export const settleEnergyTrainingQueue = (
       );
       remainingTicks -= low;
     }
+    rate = rateAtTick(ticks - remainingTicks);
+    spent = Math.min(entry.energy, user.maxEnergy, room / rate);
+    if (energy < spent) continue;
     if (energy - spent === energy) break;
     energy -= spent;
     const amount = Math.min(room, spent * rate);

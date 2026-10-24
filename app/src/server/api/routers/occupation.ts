@@ -37,6 +37,7 @@ import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { getNextQueueSchedule } from "@/libs/queue";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import {
   fetchItemWithCraftingRequirements,
@@ -304,13 +305,20 @@ export const occupationRouter = createTRPCRouter({
         clanCraftingTimeBoostCap,
       );
       const clanCraftingTimeFactor = 1 - clanCraftingTimeBoost;
+      const territoryBoost = isQueued ? 0 : getTerritoryWarBoost(user);
       const craftSeconds = isMeal
-        ? getCookingSeconds(itemWithRequirements, input.quantity, shrineBoost)
+        ? getCookingSeconds(
+            itemWithRequirements,
+            input.quantity,
+            shrineBoost,
+            territoryBoost,
+          )
         : Math.round(
             craftingTime *
               60 *
               shrineBoostFactor *
               clanCraftingTimeFactor *
+              (1 - territoryBoost) *
               input.quantity,
           );
 
@@ -363,11 +371,15 @@ export const occupationRouter = createTRPCRouter({
         ? 0
         : (itemWithRequirements.craftingExperience ?? 0) * input.quantity;
       const cookingExpGain = isMeal
-        ? itemWithRequirements.cookingExperience * outputQuantity
+        ? Math.floor(
+            itemWithRequirements.cookingExperience *
+              outputQuantity *
+              (1 + getTerritoryWarBoost(user)),
+          )
         : 0;
       const expGain = Math.floor(
         boostPvpGain(
-          baseExpGain * (1 + clanCraftingExpBoost),
+          baseExpGain * (1 + clanCraftingExpBoost + getTerritoryWarBoost(user)),
           getPvpBoost(user, settings).totalPercent,
         ),
       );
@@ -783,7 +795,7 @@ export const occupationRouter = createTRPCRouter({
       const baseExpGain = Math.floor((crystalItem.craftingExperience ?? 0) / 2);
       const expGain = Math.floor(
         boostPvpGain(
-          baseExpGain * (1 + clanCraftingExpBoost),
+          baseExpGain * (1 + clanCraftingExpBoost + getTerritoryWarBoost(user)),
           getPvpBoost(user, updatedUserResult.settings).totalPercent,
         ),
       );

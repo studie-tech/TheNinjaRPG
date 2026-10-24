@@ -50,7 +50,7 @@ import {
   type ObjectiveTrackerTaskInput,
 } from "@/libs/quest";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
-import { fetchUser } from "@/routers/profile";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { fetchUserSkills } from "@/routers/skillTree";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
@@ -66,6 +66,7 @@ import {
   getFarmCollectionState,
   recordFirstFarmHarvests,
 } from "@/server/utils/farming";
+import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
 import {
   type FarmShopEntryState,
   type FarmStateResponse,
@@ -145,7 +146,7 @@ export const farmingRouter = createTRPCRouter({
         user,
       );
       const finishAt = new Date(now.getTime() + growTimeSeconds * 1000);
-      const xpGain = getFarmPlantExperience(seedItem);
+      const baseXpGain = getFarmPlantExperience(seedItem);
 
       const plantResult = await ctx.drizzle
         .update(farmPlot)
@@ -196,14 +197,14 @@ export const farmingRouter = createTRPCRouter({
         return errorResponse("Could not consume seed — please try again");
       }
 
-      const progressAwarded = await awardFarmingProgress(
+      const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
-        xpGain,
+        baseXpGain,
         questState,
         "seeds_planted",
       );
-      if (!progressAwarded) {
+      if (xpGain === null) {
         return errorResponse("Planted seed but failed to update farming progress");
       }
 
@@ -276,25 +277,25 @@ export const farmingRouter = createTRPCRouter({
         return errorResponse("Could not water — please try again");
       }
 
-      const progressAwarded = await awardFarmingProgress(
+      const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
         FARM_WATER_EXPERIENCE,
         questState,
         "plants_watered",
       );
-      if (!progressAwarded) {
+      if (xpGain === null) {
         return errorResponse("Watered crop but failed to update farming progress");
       }
 
       return {
         success: true,
-        message: `Watered the crop (+${FARM_WATER_EXPERIENCE} farming XP)`,
+        message: `Watered the crop (+${xpGain} farming XP)`,
         updatedPlot: mapPlotToState(
           { ...plot, finishAt: newFinishAt, lastWateredAt: now },
           now,
         ),
-        farmingExperienceDelta: FARM_WATER_EXPERIENCE,
+        farmingExperienceDelta: xpGain,
       };
     }),
 
@@ -353,7 +354,7 @@ export const farmingRouter = createTRPCRouter({
         fertilizerStack.item.farmTimeReductionSeconds,
         now,
       );
-      const xpGain = getFertilizerExperience(fertilizerStack.item);
+      const baseXpGain = getFertilizerExperience(fertilizerStack.item);
 
       const fertilizeResult = await ctx.drizzle
         .update(farmPlot)
@@ -397,14 +398,14 @@ export const farmingRouter = createTRPCRouter({
         return errorResponse("Could not consume fertilizer — please try again");
       }
 
-      const progressAwarded = await awardFarmingProgress(
+      const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
-        xpGain,
+        baseXpGain,
         questState,
         "plants_fertilized",
       );
-      if (!progressAwarded) {
+      if (xpGain === null) {
         return errorResponse(
           "Applied fertilizer but failed to update farming progress",
         );
@@ -452,7 +453,7 @@ export const farmingRouter = createTRPCRouter({
       );
       if (inventoryGuard) return inventoryGuard;
 
-      const xpGain = getFarmHarvestExperience(plot.yieldItem);
+      const baseXpGain = getFarmHarvestExperience(plot.yieldItem);
       const now = new Date();
 
       const harvestResult = await ctx.drizzle
@@ -490,16 +491,16 @@ export const farmingRouter = createTRPCRouter({
       await recordFirstFarmHarvests(ctx.drizzle, ctx.userId, [plot.yieldItem.id], now);
       const collectionCount = await getFarmCollectionCount(ctx.drizzle, ctx.userId);
 
-      const progressAwarded = await awardFarmingProgress(
+      const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
-        xpGain,
+        baseXpGain,
         questState,
         "plants_harvested",
         1,
         collectionCount,
       );
-      if (!progressAwarded) {
+      if (xpGain === null) {
         return errorResponse("Harvested crop but failed to update farming progress");
       }
 
@@ -636,16 +637,16 @@ export const farmingRouter = createTRPCRouter({
         return errorResponse("Could not consume seeds — please try again");
       }
 
-      const xpGain = getFarmPlantExperience(seedItem) * emptyPlots.length;
-      const progressAwarded = await awardFarmingProgress(
+      const baseXpGain = getFarmPlantExperience(seedItem) * emptyPlots.length;
+      const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
-        xpGain,
+        baseXpGain,
         questState,
         "seeds_planted",
         emptyPlots.length,
       );
-      if (!progressAwarded) {
+      if (xpGain === null) {
         return errorResponse("Planted seeds but failed to update farming progress");
       }
 
@@ -708,16 +709,16 @@ export const farmingRouter = createTRPCRouter({
       if (wateredCount === 0)
         return errorResponse("Could not water all — please try again");
 
-      const xpGain = FARM_WATER_EXPERIENCE * wateredCount;
-      const progressAwarded = await awardFarmingProgress(
+      const baseXpGain = FARM_WATER_EXPERIENCE * wateredCount;
+      const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
-        xpGain,
+        baseXpGain,
         questState,
         "plants_watered",
         wateredCount,
       );
-      if (!progressAwarded) {
+      if (xpGain === null) {
         return errorResponse("Watered crops but failed to update farming progress");
       }
       return {
@@ -823,17 +824,17 @@ export const farmingRouter = createTRPCRouter({
         return errorResponse("Could not consume fertilizer — please try again");
       }
 
-      const xpGain =
+      const baseXpGain =
         getFertilizerExperience(fertilizerStack.item) * fertilizable.length;
-      const progressAwarded = await awardFarmingProgress(
+      const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
-        xpGain,
+        baseXpGain,
         questState,
         "plants_fertilized",
         fertilizable.length,
       );
-      if (!progressAwarded) {
+      if (xpGain === null) {
         return errorResponse("Fertilized crops but failed to update farming progress");
       }
       return {
@@ -923,21 +924,21 @@ export const farmingRouter = createTRPCRouter({
       }
       await recordFirstFarmHarvests(ctx.drizzle, ctx.userId, [...harvests.keys()], now);
       const collectionCount = await getFarmCollectionCount(ctx.drizzle, ctx.userId);
-      const xpGain = readyPlots.reduce(
+      const baseXpGain = readyPlots.reduce(
         (sum, plot) =>
           sum + (plot.yieldItem ? getFarmHarvestExperience(plot.yieldItem) : 0),
         0,
       );
-      const progressAwarded = await awardFarmingProgress(
+      const xpGain = await awardFarmingProgress(
         ctx.drizzle,
         user,
-        xpGain,
+        baseXpGain,
         questState,
         "plants_harvested",
         readyPlots.length,
         collectionCount,
       );
-      if (!progressAwarded) {
+      if (xpGain === null) {
         return errorResponse("Harvested crops but failed to update farming progress");
       }
       return {
@@ -2348,6 +2349,7 @@ const QUEST_PROGRESS_ATTEMPTS = 3;
  * both write "1", and the later write would erase the earlier one -- watering two plots left
  * `plants_watered` at 1. So the tracker write is a compare-and-swap on the row it was derived
  * from, and a lost race re-reads and recomputes instead of overwriting.
+ * Returns the awarded XP (including zero), or null when progress could not be saved.
  */
 const awardFarmingProgress = async (
   client: DrizzleClient,
@@ -2358,6 +2360,7 @@ const awardFarmingProgress = async (
   increment = 1,
   farmingCollectionCount?: number,
 ) => {
+  xpGain = Math.floor(xpGain * (1 + getTerritoryWarBoost(user)));
   const emittedTasks = new Set<AllObjectiveTask>([
     task,
     ...(xpGain > 0 ? (["farming_level"] as const) : []),
@@ -2425,7 +2428,7 @@ const awardFarmingProgress = async (
   };
 
   const first = questUpdateFor(user, questState);
-  if (xpGain <= 0 && !first.advancesObjective) return true;
+  if (xpGain <= 0 && !first.advancesObjective) return xpGain;
 
   // Nothing but XP to persist: the SQL increment is already conflict-free.
   if (!first.advancesObjective) {
@@ -2433,7 +2436,7 @@ const awardFarmingProgress = async (
       .update(userData)
       .set({ farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` })
       .where(eq(userData.userId, user.userId));
-    return Number(result.rowsAffected ?? 0) >= 1;
+    return Number(result.rowsAffected ?? 0) >= 1 ? xpGain : null;
   }
 
   let snapshotUser = user;
@@ -2453,13 +2456,13 @@ const awardFarmingProgress = async (
           .update(userData)
           .set({ farmingExperience: sql`${userData.farmingExperience} + ${xpGain}` })
           .where(eq(userData.userId, user.userId));
-        return Number(result.rowsAffected ?? 0) >= 1;
+        return Number(result.rowsAffected ?? 0) >= 1 ? xpGain : null;
       }
     }
     // The guard has to come from the same read as the payload. fetchUser and
     // fetchFarmingQuestState are separate queries, so a write landing between them
     // pairs a current timestamp with a stale document, and the CAS waves it through.
-    if (!snapshotQuests) return false;
+    if (!snapshotQuests) return null;
     const claim = await claimUserSnapshot({
       client,
       userId: user.userId,
@@ -2471,7 +2474,7 @@ const awardFarmingProgress = async (
         questData: update.questData,
       },
     });
-    if (claim.success) return true;
+    if (claim.success) return xpGain;
   }
-  return false;
+  return null;
 };

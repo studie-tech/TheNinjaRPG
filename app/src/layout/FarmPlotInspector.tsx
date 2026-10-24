@@ -36,6 +36,7 @@ const formatDuration = (seconds: number) => {
   return `${Math.max(1, minutes)}m`;
 };
 
+/** Shows plot actions and base XP estimates with explicit harvest controls. */
 export function FarmPlotInspector({
   plot,
   farmState,
@@ -195,8 +196,8 @@ export function FarmPlotInspector({
                         {seed.yieldName}
                       </span>
                       <span className="block text-muted-foreground">
-                        Lv {seed.minLevel} · +{seed.plantExperience} plant XP · +
-                        {seed.harvestExperience} harvest XP
+                        Lv {seed.minLevel} · Base XP: +{seed.plantExperience} plant · +
+                        {seed.harvestExperience} harvest
                       </span>
                     </label>
                   );
@@ -263,7 +264,7 @@ export function FarmPlotInspector({
           <div className="rounded-md bg-amber-500/10 p-3 text-sm">
             Ready to harvest {plot.yieldQuantity ?? 1} {plot.cropName}
             {(plot.harvestExperience ?? 0) > 0
-              ? ` for +${plot.harvestExperience} farming XP.`
+              ? ` for +${plot.harvestExperience} base farming XP, plus bonuses active at harvest.`
               : "."}
           </div>
         )}

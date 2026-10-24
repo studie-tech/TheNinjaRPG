@@ -49,6 +49,7 @@ import {
   latestDate,
   rescheduleQueue,
 } from "@/libs/queue";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import {
   calcJutsuTrainCost,
   calcJutsuTrainTime,
@@ -63,6 +64,7 @@ import { completedQuestHistoryRelation } from "@/server/utils/achievementObjecti
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { getQueueTotalCapacity } from "@/utils/paypal";
 import type {
   CraftingQueueMaterial,
@@ -724,8 +726,8 @@ const settleWaitingJobs = async <
   }
   // Different queue rows must not start in parallel. Lock the existing owner row,
   // then read the active deadline: the upfront reads can come from different snapshots.
-  // Claim, rewards and active job span different tables and must commit together:
-  // a failed output/reward write must retain the prepaid receipt for a retry.
+  // MySQL cannot DELETE a queue receipt, INSERT outputs and UPDATE its owner/job
+  // in one statement. A failed reward write must retain the prepaid receipt for retry.
   return retryOnDeadlock(() =>
     client.transaction(async (tx) => {
       await tx
@@ -825,7 +827,8 @@ const startQueuedJutsu = async (
   students: Awaited<ReturnType<typeof fetchStudents>>,
 ): Promise<JobOutcome> => {
   if (!(await claimQueueRow(client, entry.id))) return "conflict";
-  const user = await fetchQuestUser(client, entry.userId, entry.jutsuId);
+  // Delayed collection must use the bonus at the queue's historical start.
+  const user = await fetchQuestUser(client, entry.userId, entry.jutsuId, startsAt);
   const owned = user.jutsus[0];
   const info = entry.jutsu;
   const level = owned?.level ?? 0;
@@ -845,13 +848,17 @@ const startQueuedJutsu = async (
     calcJutsuTrainCost(info, level, user, students),
   );
   const finishesAt = new Date(
-    startsAt.getTime() + calcJutsuTrainTime(info, level, user),
+    startsAt.getTime() + calcJutsuTrainTime(info, level, user, startsAt),
   );
   const started = owned
     ? (
         await client
           .update(userJutsu)
-          .set({ level: sql`${userJutsu.level} + 1`, finishTraining: finishesAt })
+          .set({
+            level: sql`${userJutsu.level} + 1`,
+            trainingStartedAt: startsAt,
+            finishTraining: finishesAt,
+          })
           .where(and(eq(userJutsu.id, owned.id), eq(userJutsu.level, owned.level)))
       ).rowsAffected === 1
     : await client
@@ -860,6 +867,7 @@ const startQueuedJutsu = async (
           id: nanoid(),
           userId: entry.userId,
           jutsuId: entry.jutsuId,
+          trainingStartedAt: startsAt,
           finishTraining: finishesAt,
         })
         .then(
@@ -908,8 +916,13 @@ const startQueuedCraft = async (
     await returnMaterials(client, entry.userId, entry.materials, true);
     return "dropped";
   }
-  const user = await fetchQuestUser(client, entry.userId);
-  const finishesAt = new Date(startsAt.getTime() + entry.durationSeconds * 1000);
+  // Waiting durations are unboosted; eligibility is fixed when this job actually starts.
+  const user = await fetchQuestUser(client, entry.userId, undefined, startsAt);
+  const territoryBoost = getTerritoryWarBoost(user, startsAt);
+  const finishesAt = new Date(
+    startsAt.getTime() +
+      Math.max(1, Math.round(entry.durationSeconds * (1 - territoryBoost))) * 1000,
+  );
   const outputs: (typeof userItem.$inferInsert)[] = [];
   const stackSize = Math.max(1, entry.item.stackSize);
   for (let remaining = entry.quantity; remaining > 0; remaining -= stackSize) {
@@ -941,7 +954,9 @@ const startQueuedCraft = async (
     await client.insert(userCookingJob).values({
       id: nanoid(),
       userId: entry.userId,
-      experience: entry.item.cookingExperience * entry.quantity,
+      experience: Math.floor(
+        entry.item.cookingExperience * entry.quantity * (1 + territoryBoost),
+      ),
       finishesAt,
     });
     return { finishesAt };
@@ -950,7 +965,9 @@ const startQueuedCraft = async (
   const clanBoost = user.isOutlaw ? 0 : (user.clan?.craftingExpBoost ?? 0) / 100;
   const expGain = Math.floor(
     boostPvpGain(
-      (entry.item.craftingExperience ?? 0) * entry.quantity * (1 + clanBoost),
+      (entry.item.craftingExperience ?? 0) *
+        entry.quantity *
+        (1 + clanBoost + territoryBoost),
       getPvpBoost(user, [average]).totalPercent,
     ),
   );
@@ -1116,14 +1133,21 @@ export const returnCraftMaterials = returnMaterials;
 /**
  * Quest context of a job's owner. Unlike a session refresh, settling a queue must not
  * regenerate pools, assign quests or mark the user online.
+ * Include bonus history back to the queued job's logical start in the same read.
  */
 const fetchQuestUser = async (
   client: QueueClient,
   userId: string,
   jutsuId?: string,
+  startsAt?: Date,
 ) => {
   const user = await client.query.userData.findFirst({
     where: eq(userData.userId, userId),
+    extras: (table) => ({
+      territoryWarBoostWindows: territoryWarBoostWindowsSql(table, startsAt).as(
+        "territoryWarBoostWindows",
+      ),
+    }),
     with: {
       // The owned copy of the jutsu a queued level trains, in the same read.
       jutsus: { where: eq(userJutsu.jutsuId, jutsuId ?? "") },

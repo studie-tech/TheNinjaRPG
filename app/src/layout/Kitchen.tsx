@@ -20,6 +20,7 @@ import {
   getCookingSeconds,
 } from "@/libs/cooking";
 import { getTotalItemQuantity } from "@/libs/crafting";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -27,7 +28,10 @@ import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 
 /** Recipe selection, batch production, Cooking progression, and active meal effects. */
 export default function Kitchen({ image }: { image?: string }) {
-  const { data: user } = useRequiredUserData();
+  const { data: user, timeDiff = 0 } = useRequiredUserData();
+  const territoryWarBoost = user
+    ? getTerritoryWarBoost(user, new Date(Date.now() - timeDiff))
+    : 0;
   const utils = api.useUtils();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -165,7 +169,8 @@ export default function Kitchen({ image }: { image?: string }) {
         title="Crafting & Cooking Queue"
         subtitle="Shared production capacity"
         capacity={queue.data?.capacity ?? 1}
-        help="Cooking and Crafting share one active slot and the same waiting slots. Cancel a waiting job to return its reserved ingredients."
+        help="Cooking and Crafting share one active slot and the same waiting slots. Cancel a waiting job to return its reserved ingredients. Waiting times are base durations; Territory War bonuses active when a job starts can shorten them."
+        waitingDurationLabel="base time"
         active={
           active
             ? {
@@ -239,9 +244,15 @@ export default function Kitchen({ image }: { image?: string }) {
                 <p className="mt-1 text-xs">
                   {recipe.cookingOutputQuantity} meals ·{" "}
                   {formatSecondsToTimeDisplay(
-                    getCookingSeconds(recipe, 1, shrineBoost),
+                    getCookingSeconds(recipe, 1, shrineBoost, territoryWarBoost),
                   )}{" "}
-                  · {recipe.cookingExperience * recipe.cookingOutputQuantity} XP
+                  ·{" "}
+                  {Math.floor(
+                    recipe.cookingExperience *
+                      recipe.cookingOutputQuantity *
+                      (1 + territoryWarBoost),
+                  )}{" "}
+                  XP (current bonuses)
                 </p>
                 <p className="mt-1 text-xs">
                   {locked
@@ -319,11 +330,18 @@ export default function Kitchen({ image }: { image?: string }) {
               <p className="text-sm">
                 Output: {batches * selected.cookingOutputQuantity} meals ·{" "}
                 {formatSecondsToTimeDisplay(
-                  getCookingSeconds(selected, batches, shrineBoost),
+                  getCookingSeconds(selected, batches, shrineBoost, territoryWarBoost),
                 )}{" "}
                 ·{" "}
-                {batches * selected.cookingOutputQuantity * selected.cookingExperience}{" "}
-                XP on completion
+                {Math.floor(
+                  batches *
+                    selected.cookingOutputQuantity *
+                    selected.cookingExperience *
+                    (1 + territoryWarBoost),
+                )}{" "}
+                XP on completion (current bonuses).
+                {(active || waiting.length > 0) &&
+                  " Queued meals use the time and XP bonuses active when they start."}
               </p>
             )}
             {blocked && <p className="text-muted-foreground text-sm">{blocked}</p>}

@@ -48,6 +48,7 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "war.startWarMission",
   "war.completeWarMission",
   "war.attackWarCamp",
+  "territoryWar.startBattle",
   "war.convertWarPoints",
   "quests.startQuest",
   "quests.startPetTask",

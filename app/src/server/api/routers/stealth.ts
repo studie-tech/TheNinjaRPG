@@ -2,6 +2,7 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { userData, villageAlliance } from "@/drizzle/schema";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { getPvpBoost } from "@/libs/pvpExperience";
+import { getTerritoryWarPeriodBoost } from "@/libs/territoryWar";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
   baseServerResponse,
@@ -355,6 +356,11 @@ export const stealthRouter = createTRPCRouter({
         STEALTH_SENSORY_CAP,
         STEALTH_TRAIN_GAIN_PER_MINUTE,
         getPvpBoost(user, settings).totalPercent,
+        getTerritoryWarPeriodBoost(
+          user,
+          new Date(),
+          new Date(Date.now() + input.minutes * 60000),
+        ),
       );
       const finishAt = new Date(Date.now() + input.minutes * 60 * 1000);
 
@@ -431,6 +437,11 @@ export const stealthRouter = createTRPCRouter({
         STEALTH_SENSORY_CAP,
         STEALTH_TRAIN_GAIN_PER_MINUTE,
         getPvpBoost(user, settings).totalPercent,
+        getTerritoryWarPeriodBoost(
+          user,
+          user.covertTrainingStartedAt,
+          new Date(finishTime),
+        ),
       );
       const newValue = Math.min(currentStat + gained, STEALTH_SENSORY_CAP);
 

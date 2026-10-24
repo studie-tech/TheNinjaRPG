@@ -1522,9 +1522,10 @@ export const jutsuRouter = createTRPCRouter({
       }
 
       // Time & cost
-      const trainTime = calcJutsuTrainTime(info, level, user);
+      const trainingStartedAt = new Date();
+      const trainTime = calcJutsuTrainTime(info, level, user, trainingStartedAt);
       const trainCost = calcJutsuTrainCost(info, level, user, students);
-      const finishTraining = new Date(Date.now() + trainTime);
+      const finishTraining = new Date(trainingStartedAt.getTime() + trainTime);
       // Further levels bought now wait behind this one
       const followUps = planJutsuLevels({
         info,
@@ -1572,6 +1573,7 @@ export const jutsuRouter = createTRPCRouter({
           .update(userJutsu)
           .set({
             level: sql`${userJutsu.level} + 1`,
+            trainingStartedAt,
             finishTraining,
             updatedAt: new Date(),
           })
@@ -1609,6 +1611,7 @@ export const jutsuRouter = createTRPCRouter({
               id: newUserJutsuId,
               userId: ctx.userId,
               jutsuId: input.jutsuId,
+              trainingStartedAt,
               finishTraining,
               equipped: canAutoEquip,
             })

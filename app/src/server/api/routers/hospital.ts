@@ -21,6 +21,7 @@ import {
 } from "@/libs/hospital";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { hasRequiredRank } from "@/libs/train";
 import { fetchUpdatedUser, fetchUser } from "@/routers/profile";
 import { fetchAlliances, fetchStructures } from "@/routers/village";
@@ -137,12 +138,16 @@ export const hospitalRouter = createTRPCRouter({
       const { toHeal } = calcHowMuchToHeal(u, t, input.healPercentage, pools);
       const chakraCost = calcHealthToChakra(u, toHeal);
       // Calculate experience gain, capped at 4 million. Self-heals award half.
-      const expGain = calcHospitalHealExperience({
+      const baseExpGain = calcHospitalHealExperience({
         healerId: u.userId,
         targetId: t.userId,
         toHeal,
         medicalExperience: u.medicalExperience,
       });
+      const expGain = Math.min(
+        Math.max(0, MEDNIN_EXP_CAP - u.medicalExperience),
+        Math.floor(baseExpGain * (1 + getTerritoryWarBoost(u))),
+      );
       // Guard
       if (u.isBanned) return errorResponse("You are banned");
       if (t.isBanned) return errorResponse("Target is banned");

@@ -1,3 +1,7 @@
+import {
+  getTerritoryWarPeriodBoost,
+  type TerritoryBoostUser,
+} from "@/libs/territoryWar";
 /**
  * Stealth and Sensory System
  *
@@ -243,7 +247,8 @@ export const calcCovertTrainingFinishAt = (
 };
 
 /**
- * Calculate covert training gains, applying the PvP boost before the stat cap.
+ * Calculate covert training gains, applying bonuses before the stat cap.
+ * `territoryBoost` is the session's average bonus fraction; `pvpBoostPercent` is percent.
  */
 export const calcCovertTrainingGain = (
   minutes: number,
@@ -251,19 +256,24 @@ export const calcCovertTrainingGain = (
   cap: number,
   gainPerMinute: number,
   pvpBoostPercent: number = 0,
+  territoryBoost = 0,
 ): number => {
-  const rawGain = boostPvpGain(minutes * gainPerMinute, pvpBoostPercent);
+  const rawGain = boostPvpGain(
+    minutes * gainPerMinute * (1 + territoryBoost),
+    pvpBoostPercent,
+  );
   return Math.max(0, Math.min(rawGain, cap - currentStat));
 };
 
 /**
  * Derive all stealth status values from user data.
  * This is a pure function that computes all stealth-related UI values.
- * @param timeDiff - Optional time difference between server and client clocks
+ * Covert gains average preloaded bonus windows across the actual training interval.
+ * @param timeDiff - Client minus server clock offset in milliseconds.
  */
 export const getStealthStatus = (
   userData:
-    | {
+    | (TerritoryBoostUser & {
         stealth: number;
         sensory: number;
         stealthActive: boolean;
@@ -274,7 +284,7 @@ export const getStealthStatus = (
         covertTrainingStartedAt: Date | null;
         covertTrainingMinutes: number | null;
         pvpBoost?: { totalPercent: number };
-      }
+      })
     | undefined
     | null,
   cap: number,
@@ -298,6 +308,13 @@ export const getStealthStatus = (
           cap,
           gainPerMinute,
           userData.pvpBoost?.totalPercent ?? 0,
+          userData.covertTrainingStartedAt && covertTrainingFinishAt
+            ? getTerritoryWarPeriodBoost(
+                userData,
+                userData.covertTrainingStartedAt,
+                covertTrainingFinishAt,
+              )
+            : 0,
         )
       : null;
 

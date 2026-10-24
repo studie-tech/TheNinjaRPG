@@ -23,6 +23,7 @@ import LayoutSwitcher from "@/layout/LayoutSwitcher";
 import { PyramidRunBoundary } from "@/layout/PyramidRunBoundary";
 import { RewardChoiceModal } from "@/layout/RewardChoice";
 import StructuredData from "@/layout/StructuredData";
+import { TerritoryWarNotice } from "@/layout/TerritoryWarNotice";
 import { WebAnalytics } from "@/layout/WebAnalytics";
 import { getGameLayout, getGameLayoutScript } from "@/libs/gameLayouts";
 import {
@@ -93,6 +94,7 @@ const LIGHT_LAYOUT_SCRIPT = `(function(){try{if(localStorage.getItem(${JSON.stri
  */
 const SWAP_SIDEBARS_SCRIPT = `(function(){try{if(localStorage.getItem(${JSON.stringify(SWAP_SIDEBARS_STORAGE_KEY)})==="true")document.documentElement.setAttribute(${JSON.stringify(SWAP_SIDEBARS_ATTRIBUTE)},"")}catch(e){}})()`;
 
+/** Renders app chrome, shared providers and notices for each shell variant. */
 export default async function RootLayout({
   children,
   params,
@@ -187,6 +189,7 @@ export default async function RootLayout({
                       initialLayout={initialLayout}
                       wallpaper={variant.wallpaper}
                     >
+                      <TerritoryWarNotice />
                       <PyramidRunBoundary>{children}</PyramidRunBoundary>
                     </LayoutSwitcher>
                   </ReadingPreferencesProvider>

@@ -26,6 +26,7 @@ const battleTypeLabels: Record<BattleType, string> = {
   KAGE_PVP: "Kage PvP",
   CLAN_CHALLENGE: "Clan Challenge",
   CLAN_BATTLE: "Clan Battle",
+  TERRITORY_WAR: "Territory War",
   SHRINE_WAR: "Shrine War",
   TOURNAMENT: "Tournament",
   QUEST: "Quest",

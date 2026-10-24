@@ -31,9 +31,12 @@ import {
   getMissingCraftingRank,
   getTotalItemQuantity,
 } from "@/libs/crafting";
+import { boostPvpGain } from "@/libs/pvpExperience";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
+import { useUserData } from "@/utils/UserContext";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 
 type CraftableItem = Item & {
@@ -95,6 +98,10 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
 }) => {
   // Utils
   const utils = api.useUtils();
+  const { timeDiff = 0 } = useUserData();
+  const territoryWarBoost = userData
+    ? getTerritoryWarBoost(userData, new Date(Date.now() - timeDiff))
+    : 0;
 
   // State
   const [selectedCategory, setSelectedCategory] = useState<CatalogCategory | null>(
@@ -105,6 +112,16 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   const [rarityFilter, setRarityFilter] = useState<string>("ALL");
   const [craftQuantityInput, setCraftQuantity] = useState<number>(1);
   const craftQuantity = craftQuantityInput || 1;
+  const craftingExperienceGain = Math.floor(
+    boostPvpGain(
+      (selectedItem?.craftingExperience ?? 0) *
+        craftQuantity *
+        (1 +
+          (userData?.isOutlaw ? 0 : (userData?.clan?.craftingExpBoost ?? 0) / 100) +
+          territoryWarBoost),
+      userData?.pvpBoost?.totalPercent ?? 0,
+    ),
+  );
   const [pendingCraftName, setPendingCraftName] = useState<string | null>(null);
   const craftRequestInFlight = useRef(false);
 
@@ -198,7 +215,8 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     ? `Requires ${formatCraftingRank(missingCraftingRank)} rank`
     : null;
 
-  // Calculate crafting time
+  // The numeric bonus dependency refreshes duration when expiry changes notifications
+  // while the profile object itself is structurally shared.
   const craftingTimeDisplay = useMemo(() => {
     if (!selectedItem || !userData) return "";
     const craftingTime =
@@ -211,10 +229,10 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     const shrineBoostFactor = shrineBoost ? 1 - shrineBoost : 1;
 
     const totalSeconds = Math.round(
-      craftingTime * 60 * shrineBoostFactor * craftQuantity,
+      craftingTime * 60 * shrineBoostFactor * craftQuantity * (1 - territoryWarBoost),
     );
     return formatSecondsToTimeDisplay(totalSeconds);
-  }, [selectedItem, userData, userCraftingRank, craftQuantity]);
+  }, [selectedItem, userData, userCraftingRank, craftQuantity, territoryWarBoost]);
 
   // Check if user can craft the selected item
   const canCraft = useMemo(() => {
@@ -446,7 +464,9 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">Total Crafting Time:</span>
+                  <span className="font-medium text-sm">
+                    {isBusy ? "Estimated Crafting Time:" : "Total Crafting Time:"}
+                  </span>
                   <span
                     className={`font-semibold text-sm ${requiredRankLabel ? "text-red-600" : ""}`}
                   >
@@ -455,9 +475,11 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                 </div>
                 {(selectedItem.craftingExperience ?? 0) > 0 && (
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">Total Experience Gain:</span>
+                    <span className="font-medium text-sm">
+                      {isBusy ? "Estimated Experience Gain:" : "Total Experience Gain:"}
+                    </span>
                     <span className="font-semibold text-green-600 text-sm">
-                      +{(selectedItem.craftingExperience ?? 0) * craftQuantity} EXP
+                      +{craftingExperienceGain} EXP
                     </span>
                   </div>
                 )}
@@ -511,7 +533,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                   {isQueueFull
                     ? "Your crafting queue is full. Wait for a craft to start or cancel a queued one."
-                    : "You are crafting another item. This craft joins your queue and starts when the crafts ahead of it are ready; its materials are set aside now."}
+                    : "Materials are reserved now. This craft starts after earlier jobs; time and XP use the bonuses active then. Estimates use current bonuses."}
                 </p>
               </div>
             )}

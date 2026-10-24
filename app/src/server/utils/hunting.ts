@@ -9,13 +9,14 @@ import {
 } from "@/drizzle/schema";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
+import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
 /**
  * Claim and settle a personal encounter exactly once using only preloaded battle data.
- * Inventory inserts, allowance, receipt and character recovery span different rows, so
- * they must share a transaction: a single CAS cannot roll back a partial reward grant.
+ * MySQL cannot DELETE Battle, INSERT inventory/receipt rows and UPDATE allowance
+ * and character recovery in one statement; the transaction prevents partial grants.
  * The callback must run guarded player recovery on the supplied transaction client.
  */
 export const settleHuntingBattle = async (
@@ -31,11 +32,30 @@ export const settleHuntingBattle = async (
 ) => {
   const meta = current.extraState.hunting;
   if (!meta) return false;
-  const receipt = huntingVictoryReceipt(meta, current.id, result.outcome);
+  // Reuse initiation's history and political metadata; combat settlement cannot fetch again.
+  const hunter = current.usersState.find((user) => user.userId === meta.userId);
+  const boost = hunter
+    ? getTerritoryWarBoost({
+        ...hunter,
+        village: hunter.villageId
+          ? current.extraState.villages[hunter.villageId]
+          : null,
+        clan: hunter.clanId ? current.extraState.clans[hunter.clanId] : null,
+      })
+    : 0;
+  const boostedMeta = {
+    ...meta,
+    contract: {
+      ...meta.contract,
+      experience: Math.floor(meta.contract.experience * (1 + boost)),
+    },
+  };
+  const receipt = huntingVictoryReceipt(boostedMeta, current.id, result.outcome);
   const committed = await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
       // Recovery mutates trackers/results; each deadlock retry must start from the same snapshot.
       const playerBattle = structuredClone(current);
+      playerBattle.extraState.hunting = structuredClone(boostedMeta);
       const playerResult = structuredClone(result);
       const claim = await tx
         .delete(battle)
