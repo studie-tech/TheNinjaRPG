@@ -3,11 +3,11 @@ import * as clerk from "@clerk/nextjs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as trpc from "@trpc/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { type ReactNode, useState } from "react";
+import { type ContextType, type ReactNode, useContext, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import * as pusher from "@/layout/PusherHandler";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import { UserContextProvider, useUserData } from "@/utils/UserContext";
+import { UserContext, UserContextProvider } from "@/utils/UserContext";
 import { ensureDom } from "../setup-dom.mjs";
 
 ensureDom();
@@ -123,9 +123,10 @@ describe("global timed bonus refresh", () => {
   });
 
   it("propagates expiry through the boost notice with unchanged user data and clock offset", () => {
-    const seen: ReturnType<typeof useUserData>[] = [];
+    const seen: ContextType<typeof UserContext>[] = [];
     const Bonus = () => {
-      const context = useUserData();
+      // Bun preserves other suites' useUserData module mocks; read this provider directly.
+      const context = useContext(UserContext);
       seen.push(context);
       return (
         <output>
@@ -145,6 +146,7 @@ describe("global timed bonus refresh", () => {
     const before = seen.at(-1)!;
     expect(view.getByText("0.15")).toBeTruthy();
     act(() => advance(8000));
+    expect(refetch).toHaveBeenCalledTimes(1);
     const after = seen.at(-1)!;
     expect(after.data).toBe(before.data);
     expect(after.timeDiff).toBe(before.timeDiff);
