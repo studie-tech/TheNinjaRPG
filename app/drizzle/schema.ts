@@ -186,6 +186,37 @@ export const gameAsset = mysqlTable(
 );
 export type GameAsset = InferSelectModel<typeof gameAsset>;
 
+/** Reusable, immutable character animation sheets; assignments can change independently. */
+export const spriteAnimation = mysqlTable("SpriteAnimation", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  name: varchar("name", { length: 191 }).notNull(),
+  url: varchar("url", { length: 2048 }).notNull(),
+  columns: smallint("columns").notNull(),
+  rows: smallint("rows").notNull(),
+  frameCount: smallint("frameCount").notNull(),
+  fps: float("fps").notNull(),
+  facing: mysqlEnum("facing", consts.AvatarFacings).notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+  createdByUserId: varchar("createdByUserId", { length: 191 }).notNull(),
+});
+/** Stored library entry, including staff attribution and rendering metadata. */
+export type SpriteAnimation = InferSelectModel<typeof spriteAnimation>;
+
+/** One replaceable override per AI/action; clearing it leaves the shared sheet intact. */
+export const aiSpriteAnimation = mysqlTable("AiSpriteAnimation", {
+  userId: varchar("userId", { length: 191 }).notNull(),
+  actionKey: varchar("actionKey", { length: 191 }).notNull(),
+  animationId: varchar("animationId", { length: 191 }).notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.userId, table.actionKey] }),
+  animation: index("AiSpriteAnimation_animation_idx").on(table.animationId),
+}));
+/** Resolve shared sheets at battle initiation rather than fetching them during actions. */
+export const aiSpriteAnimationRelations = relations(aiSpriteAnimation, ({ one }) => ({
+  user: one(userData, { fields: [aiSpriteAnimation.userId], references: [userData.userId] }),
+  animation: one(spriteAnimation, { fields: [aiSpriteAnimation.animationId], references: [spriteAnimation.id] }),
+}));
+
 export const gameAssetTag = mysqlTable(
   "GameAssetTag",
   {
@@ -3001,6 +3032,7 @@ export const userPetRelations = relations(userPet, ({ one }) => ({
 }));
 
 export const userDataRelations = relations(userData, ({ one, many }) => ({
+  spriteAnimationBindings: many(aiSpriteAnimation),
   home: one(userHome, { fields: [userData.userId], references: [userHome.userId] }),
   questParty: one(questParty, { fields: [userData.questPartyId], references: [questParty.id] }),
   pets: many(userPet),

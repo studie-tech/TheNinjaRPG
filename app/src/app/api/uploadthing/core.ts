@@ -86,6 +86,13 @@ const adminMiddleware = async () => {
 };
 
 export const ourFileRouter = {
+  /** Full sprite atlases need a larger limit than avatars, with the same staff/moderation guards. */
+  spriteAnimationUploader: f({ image: { maxFileSize: "8MB" } })
+    .middleware(async ({ files }) => ({
+      ...(await adminMiddleware()),
+      ...withExtensionIds(files),
+    }))
+    .onUploadComplete(async ({ file }) => moderateUploadedImage(file)),
   imageUploader: f({ image: { maxFileSize: "512KB" } })
     .middleware(async ({ files }) => ({
       ...(await avatarMiddleware()),

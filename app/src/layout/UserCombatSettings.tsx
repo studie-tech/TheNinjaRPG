@@ -74,6 +74,19 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </p>
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
+              <p className="font-semibold text-sm">Animations</p>
+              <p className="text-muted-foreground text-xs">
+                Turn off to save data and memory
+              </p>
+            </div>
+            <Switch
+              checked={config.animateBattlefield}
+              onCheckedChange={config.setAnimateBattlefield}
+              aria-label="Toggle animations"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col">
               <p className="font-semibold text-sm">Grid numbers</p>
               <p className="text-muted-foreground text-xs">Toggle coordinate labels</p>
             </div>

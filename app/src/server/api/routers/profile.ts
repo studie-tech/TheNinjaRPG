@@ -73,6 +73,7 @@ import type {
 import {
   abEvent,
   actionLog,
+  aiSpriteAnimation,
   battleHistory,
   contentProposal,
   farmPlot,
@@ -1549,19 +1550,23 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, aiData, jutsuData, itemData, nindoData] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        ctx.drizzle.query.userData.findFirst({
-          where: eq(userData.userId, input.id),
-        }),
-        ctx.drizzle.query.userJutsu.findMany({
-          where: eq(userJutsu.userId, input.id),
-        }),
-        ctx.drizzle.query.userItem.findMany({ where: eq(userItem.userId, input.id) }),
-        ctx.drizzle.query.userNindo.findFirst({
-          where: eq(userNindo.userId, input.id),
-        }),
-      ]);
+      const [user, aiData, jutsuData, itemData, nindoData, animationBindings] =
+        await Promise.all([
+          fetchUser(ctx.drizzle, ctx.userId),
+          ctx.drizzle.query.userData.findFirst({
+            where: eq(userData.userId, input.id),
+          }),
+          ctx.drizzle.query.userJutsu.findMany({
+            where: eq(userJutsu.userId, input.id),
+          }),
+          ctx.drizzle.query.userItem.findMany({ where: eq(userItem.userId, input.id) }),
+          ctx.drizzle.query.userNindo.findFirst({
+            where: eq(userNindo.userId, input.id),
+          }),
+          ctx.drizzle.query.aiSpriteAnimation.findMany({
+            where: eq(aiSpriteAnimation.userId, input.id),
+          }),
+        ]);
       // Guard
       if (!aiData) return errorResponse("AI not found");
       if (!aiData.isAi) return errorResponse("Not an AI");
@@ -1575,6 +1580,17 @@ export const profileRouter = createTRPCRouter({
       // Run all inserts at once
       await Promise.all([
         ctx.drizzle.insert(userData).values(aiData),
+        // Clone the bindings, retaining the same immutable sheets in the shared library.
+        ...(animationBindings.length
+          ? [
+              ctx.drizzle.insert(aiSpriteAnimation).values(
+                animationBindings.map((binding) => ({
+                  ...binding,
+                  userId: aiData.userId,
+                })),
+              ),
+            ]
+          : []),
         ...(jutsuData.length > 0
           ? [
               ctx.drizzle.insert(userJutsu).values(

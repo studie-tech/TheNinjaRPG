@@ -23,6 +23,7 @@ import {
 type DrawInfo = Parameters<typeof drawCombatEffects>[0];
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 let texture: Texture<HTMLImageElement>;
+let load: ReturnType<typeof vi.spyOn<TextureLoader, "load">>;
 let sequence = 0;
 
 beforeEach(() => {
@@ -32,7 +33,7 @@ beforeEach(() => {
     configurable: true,
     value: {},
   });
-  vi.spyOn(TextureLoader.prototype, "load").mockReturnValue(texture);
+  load = vi.spyOn(TextureLoader.prototype, "load").mockReturnValue(texture);
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -102,6 +103,61 @@ describe("combat tile labels", () => {
 });
 
 describe("combat effect animation lifecycle", () => {
+  it("skips effect sheets while retaining static markers with animations disabled", () => {
+    const info = createInfo();
+    info.animateBattlefield = false;
+    const markerUrl = `https://example.com/marker-${sequence++}.png`;
+    info.gameAssets.push({ id: "marker", image: markerUrl } as GameAsset);
+    info.battle.groundEffects = [{
+      ...effect("static"), staticAssetPath: "marker", appearAnimation: "animation",
+    }];
+    drawCombatEffects(info);
+    expect(load.mock.calls.map(([url]) => url)).toEqual([markerUrl]);
+    const group = info.groupEffects.children[0]!;
+    expect(group.visible).toBe(true);
+    expect(group.children).toHaveLength(1);
+    expect(group.children[0]).toBeInstanceOf(Sprite);
+    expect(group.children[0]).not.toBeInstanceOf(ActionSprite);
+    info.animateBattlefield = true;
+    drawCombatEffects(info);
+    expect(group.children.filter((child) => child instanceof ActionSprite)).toHaveLength(1);
+    expect(load.mock.calls.map(([url]) => url)).toContain(info.gameAssets[0]!.image);
+  });
+
+  it("retires visible and hidden animations, then resumes loops without replaying appearance", () => {
+    const info = createInfo();
+    info.sfxEnabled = true;
+    info.gameAssets.push({ id: "sound", url: "https://example.com/appear.wav" } as GameAsset);
+    const playback = vi.spyOn(audio, "playPreloadedAudio").mockResolvedValue(undefined);
+    info.battle.groundEffects = [
+      { ...effect("visible"), appearAnimation: "animation", appearSfx: "sound" },
+      effect("hidden"),
+    ];
+    drawCombatEffects(info);
+    const [visible, hidden] = info.groupEffects.children;
+    const animations = info.groupEffects.children.flatMap((group) => group.children) as ActionSprite[];
+    const removeSprite = vi.spyOn(info.spriteMixer, "removeActionSprite");
+    const removeListener = vi.spyOn(info.spriteMixer, "removeEventListener");
+    info.battle.groundEffects[1]!.power = 0;
+    drawCombatEffects(info);
+    info.animateBattlefield = false;
+    drawCombatEffects(info);
+    expect(info.groupEffects.children).toEqual([visible!, hidden!]);
+    expect(hidden!.visible).toBe(false);
+    expect(visible!.children).toHaveLength(0);
+    expect(hidden!.children).toHaveLength(0);
+    expect(removeSprite).toHaveBeenCalledTimes(3);
+    expect(removeListener).toHaveBeenCalledTimes(1);
+    const frames = animations.map((sprite) => sprite.currentDisplayTime);
+    info.spriteMixer.update(0.1);
+    expect(animations.map((sprite) => sprite.currentDisplayTime)).toEqual(frames);
+    info.animateBattlefield = true;
+    drawCombatEffects(info);
+    drawCombatEffects(info);
+    expect(visible!.children).toHaveLength(1);
+    expect(playback).toHaveBeenCalledTimes(1);
+  });
+
   it("retains a temporarily hidden effect without recreating its animation", () => {
     const info = createInfo();
     info.battle.groundEffects = [effect("retained")];

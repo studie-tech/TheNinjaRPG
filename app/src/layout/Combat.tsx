@@ -137,8 +137,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("combatZoom", 1.5);
 
-  // Performance monitoring (unbounded for max FPS testing in dev)
-  const performanceMonitor = usePerformanceMonitor(true);
+  const performanceMonitor = usePerformanceMonitor(false);
 
   // References which shouldn't update
   const [webglError, setWebglError] = useState<boolean>(false);
@@ -243,6 +242,8 @@ const Combat: React.FC<CombatProps> = (props) => {
   );
   const aggroRef = useRef(config.showAggro ? aggro : undefined);
   aggroRef.current = config.showAggro ? aggro : undefined;
+  const animateBattlefieldRef = useRef(config.animateBattlefield);
+  animateBattlefieldRef.current = config.animateBattlefield;
 
   // Get effects for hovered element (can include both user and ground effects)
   const hoveredEffects = useMemo(() => {
@@ -330,17 +331,26 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
   }, [gameAssets, hasPreviousGameAssets, allAssets]);
 
-  // Preload all combat-related asset textures once assets list is ready
+  // Static markers remain visible with animations disabled; do not fetch effect
+  // sheets until the player enables battlefield animations.
   useEffect(() => {
     if (!gameAssets || gameAssets.length === 0) return;
     const ids = battleRef.current?.extraState.textureAssets || [];
     if (ids.length === 0) return;
     const urls = gameAssets
-      .filter((a) => ids.includes(a.id))
+      .filter(
+        (a) =>
+          ids.includes(a.id) && (config.animateBattlefield || a.type !== "ANIMATION"),
+      )
       .map((a) => a.image)
       .filter(Boolean);
     void preloadTextures(urls);
-  }, [battleRef.current?.id, battleRef.current?.version, gameAssets]);
+  }, [
+    battleRef.current?.id,
+    battleRef.current?.version,
+    gameAssets,
+    config.animateBattlefield,
+  ]);
 
   // Preload combat-related SFX (AudioBuffers via Web Audio API) once assets list is ready
   useEffect(() => {
@@ -1028,6 +1038,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         setWebglError(true);
         return;
       }
+      const animationPixelRatio = renderer.getPixelRatio();
 
       // Create scene
       sceneRef.appendChild(renderer.domElement);
@@ -1212,7 +1223,8 @@ const Combat: React.FC<CombatProps> = (props) => {
 
         // Use clock for animating sprites
         const endSpriteMixer = profiler?.mark("animate_sprite_mixer") ?? (() => {});
-        spriteMixer.update(clock.getDelta());
+        const delta = clock.getDelta();
+        if (animateBattlefieldRef.current) spriteMixer.update(delta);
         endSpriteMixer();
 
         // Use raycaster to detect mouse intersections
@@ -1241,6 +1253,10 @@ const Combat: React.FC<CombatProps> = (props) => {
             sfxVolume: sfxVolume,
             gameAssets: gameAssetsRef.current.assets,
             aggro: aggroRef.current,
+            animateBattlefield: animateBattlefieldRef.current,
+            animationPixelRatio:
+              camera.zoom * animationPixelRatio * (cachedWidth / WIDTH),
+            animationRenderer: renderer,
           });
           endDrawUsers();
 
@@ -1276,6 +1292,7 @@ const Combat: React.FC<CombatProps> = (props) => {
               sfxEnabled: getAudioPreference("sfxOn", userData?.sfxOn),
               sfxVolume: sfxVolume,
               isAnyUserMoving,
+              animateBattlefield: animateBattlefieldRef.current,
             });
           endDrawEffects();
 
@@ -1364,6 +1381,7 @@ const Combat: React.FC<CombatProps> = (props) => {
             targetPosition: cameraTargetPositionRef.current,
             width: cachedWidth,
             height: cachedHeight,
+            lerpFactor: animateBattlefieldRef.current ? undefined : 1,
           });
           endCamera();
         }
@@ -1374,7 +1392,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         endControls();
 
         // Update wind and wave animations for sprites and tiles
-        if (!lightLayout) {
+        if (!lightLayout && animateBattlefieldRef.current) {
           const endShaders = profiler?.mark("animate_shaders") ?? (() => {});
           updateWindAnimation(group_assets, performance.now() / 1000);
           updateWaveAnimation(group_tiles, performance.now() / 1000);

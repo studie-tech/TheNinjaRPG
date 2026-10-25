@@ -22,6 +22,8 @@ export const cdnOrigin = (env) => {
  * `crossorigin`, so the directives that name 'self' have to name the zone as well. Only
  * scripts and styles are served from it today; fonts and workers are named defensively,
  * since `public/` and `/sw.js` stay on the origin.
+ * `connect-src data:` lets Three's Zstd decoder instantiate its embedded WASM for
+ * native compressed animation sheets without adding another decoder download.
  *
  * @param {string | undefined} origin
  * @returns {string}
@@ -35,7 +37,7 @@ export const contentSecurityPolicy = (origin) => {
   style-src 'self' 'unsafe-inline' *.googleapis.com *.tiny.cloud${zone};
   img-src * blob: data:;
   media-src 'self' https://uploadthing.b-cdn.net https://*.ufs.sh;
-  connect-src *;
+  connect-src * data:;
   font-src 'self'${zone};
   worker-src 'self' blob:${zone};
 `;

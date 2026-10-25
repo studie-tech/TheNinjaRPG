@@ -593,8 +593,8 @@ export const showAnimation = (info: {
   return actionSprite;
 };
 
-/** Retire animations before disposing the group's other privately owned resources. */
-export const disposeAnimatedGroup = (root: Object3D, spriteMixer: SpriteMixer) => {
+/** Remove animated sprites and mixer listeners while retaining static markers. */
+export const disposeSpriteAnimations = (root: Object3D, spriteMixer: SpriteMixer) => {
   const sprites: ActionSprite[] = [];
   root.traverse((child) => {
     if (child instanceof ActionSprite) sprites.push(child);
@@ -608,6 +608,11 @@ export const disposeAnimatedGroup = (root: Object3D, spriteMixer: SpriteMixer) =
       sprite.material.dispose();
     }
   }
+};
+
+/** Retire animations before disposing the group's other privately owned resources. */
+export const disposeAnimatedGroup = (root: Object3D, spriteMixer: SpriteMixer) => {
+  disposeSpriteAnimations(root, spriteMixer);
   disposeGroupPreservingShared(root);
 };
 
@@ -616,6 +621,9 @@ export const disposeAnimatedGroup = (root: Object3D, spriteMixer: SpriteMixer) =
  */
 export const cleanUp = (scene: Scene, renderer: WebGLRenderer) => {
   scene.traverse((object) => {
+    // Disposing a material does not free its actor-owned atlas clone.
+    if (typeof object.userData.disposeCharacterAnimation === "function")
+      object.userData.disposeCharacterAnimation();
     if ("isMesh" in object || "isSprite" in object || "isLine" in object) {
       if ("material" in object) (object.material as Material).dispose();
       if ("geometry" in object) (object.geometry as BufferGeometry).dispose();
