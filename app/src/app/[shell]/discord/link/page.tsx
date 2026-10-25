@@ -152,6 +152,11 @@ const DiscordLinkStart: React.FC = () => {
           limit for as long.
         </li>
         <li>Indefinite bans and silences in the game also apply on Discord.</li>
+        <li>
+          <Link className="font-bold" href="/privacy#discord">
+            What we share with Discord
+          </Link>
+        </li>
       </ul>
       <div>
         <Button asChild className="gap-2">

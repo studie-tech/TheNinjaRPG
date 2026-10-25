@@ -55,6 +55,7 @@ const STATIC_ROUTES: {
   { path: "/manual/staff", priority: 0.4, changeFrequency: "monthly" },
   { path: "/manual/opinions", priority: 0.5, changeFrequency: "weekly" },
   { path: "/rules", priority: 0.4, changeFrequency: "monthly" },
+  { path: "/privacy", priority: 0.3, changeFrequency: "monthly" },
   { path: "/help", priority: 0.4, changeFrequency: "monthly" },
   { path: "/conceptart", priority: 0.5, changeFrequency: "weekly" },
   { path: "/signup", priority: 0.9, changeFrequency: "monthly" },

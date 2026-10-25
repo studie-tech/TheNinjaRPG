@@ -9,6 +9,7 @@ import {
   DISCORD_UNLINK_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { DISCORD_AUTOMATIC_LINK_TEXT } from "@/libs/discordLink";
 import { showMutationToast } from "@/libs/toast";
@@ -52,6 +53,11 @@ export const DiscordLinkSettings: React.FC = () => {
           <li>
             After unlinking, linking a different account takes{" "}
             {DISCORD_UNLINK_COOLDOWN_DAYS} days.
+          </li>
+          <li>
+            <Link className="font-bold" href="/privacy#discord">
+              What we share with Discord
+            </Link>
           </li>
         </ul>
         <Button asChild className="gap-2">
@@ -140,6 +146,11 @@ export const DiscordLinkSettings: React.FC = () => {
           character stays possible.
         </p>
       </Confirm>
+      <p className="text-muted-foreground text-sm">
+        <Link className="font-bold" href="/privacy#discord">
+          What we share with Discord
+        </Link>
+      </p>
     </div>
   );
 };
