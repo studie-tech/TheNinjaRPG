@@ -57,6 +57,7 @@ describeWithDatabase("bounded durable UserData jobs", () => {
     try {
       await earlier.inserted;
       await publishNews(db, "later", new Date("2022-01-01"));
+      await db.update(userDataJob).set({ createdAt: new Date("2022-01-01") }).where(eq(userDataJob.id, "news:later"));
       const page = await fetchForumPageData(db, "News", "reader");
       expect(page.initialThreads.threads.map(({ id }) => id)).toEqual(["later"]);
       expect(page.initialThreads.newsReadIds).toEqual(["news:later"]);
@@ -283,6 +284,7 @@ const holdNewsPublication = (db: DrizzleClient, id: string, createdAt?: Date) =>
     get(target, key, receiver) {
       if (key === "transaction") return (run: (tx: DrizzleClient) => Promise<unknown>) => target.transaction(async tx => {
         const result = await run(tx as unknown as DrizzleClient);
+        if (createdAt) await tx.update(userDataJob).set({ createdAt }).where(eq(userDataJob.id, `news:${id}`));
         ready();
         await commit;
         return result;
