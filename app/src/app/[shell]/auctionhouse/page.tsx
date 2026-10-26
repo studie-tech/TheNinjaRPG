@@ -369,6 +369,8 @@ const AuctionListing: React.FC<AuctionListingProps> = ({
     isLoading,
     isPlaceholderData,
     isError,
+    isFetching,
+    isFetchNextPageError,
     refetch,
     fetchNextPage,
     hasNextPage,
@@ -408,8 +410,8 @@ const AuctionListing: React.FC<AuctionListingProps> = ({
   const isUpdatingFilters = isDebouncing || isPlaceholderData;
   useInfinitePagination({
     fetchNextPage,
-    hasNextPage: hasNextPage && !isUpdatingFilters,
-    lastElement,
+    hasNextPage,
+    lastElement: isUpdatingFilters ? null : lastElement,
   });
 
   // Flatten all pages data and filter out listings with missing userItem data
@@ -498,14 +500,7 @@ const AuctionListing: React.FC<AuctionListingProps> = ({
           <div className="flex min-h-[40vh] items-center justify-center">
             <Loader explanation={isLoading ? "Loading lots…" : "Updating lots…"} />
           </div>
-        ) : isError ? (
-          <p role="alert">
-            Could not load lots.{" "}
-            <Button variant="outline" onClick={() => void refetch()}>
-              Retry
-            </Button>
-          </p>
-        ) : allListings.length === 0 ? (
+        ) : allListings.length === 0 && !isError ? (
           <div className="flex min-h-[36vh] flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-6 py-16 text-center">
             <Landmark className="mb-3 h-12 w-12 text-muted-foreground opacity-60" />
             <p className="font-medium text-lg">No lots match your filters</p>
@@ -523,7 +518,7 @@ const AuctionListing: React.FC<AuctionListingProps> = ({
                     : "Try widening the price range, or switch to another tab."}
             </p>
           </div>
-        ) : (
+        ) : allListings.length > 0 ? (
           <>
             <ul className="grid list-none gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {allListings.map((listing) => (
@@ -551,6 +546,20 @@ const AuctionListing: React.FC<AuctionListingProps> = ({
               </div>
             )}
           </>
+        ) : null}
+        {isError && !isUpdatingFilters && (
+          <p role="alert">
+            Could not load lots.{" "}
+            <Button
+              variant="outline"
+              disabled={isFetching}
+              onClick={() =>
+                isFetchNextPageError ? void fetchNextPage() : void refetch()
+              }
+            >
+              Retry
+            </Button>
+          </p>
         )}
       </div>
 
