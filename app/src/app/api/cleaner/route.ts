@@ -24,6 +24,7 @@ import {
   trainingLog,
   userActivityEvent,
   userData,
+  userDataJob,
   userLiveActivity,
   userRequest,
   village,
@@ -47,6 +48,7 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/grant";
 import { removeExpiredSanctionTombstones } from "@/server/utils/sanctionTombstone";
+import { enqueueUserDataJob, processUserDataJobs } from "@/server/utils/userDataJobs";
 import { getBankInterestDateRange, secondsFromNow } from "@/utils/time";
 
 const HOURLY_TIMER_NAME = "cleaner-hourly";
@@ -417,14 +419,21 @@ export async function GET(request: Request) {
               AND a.createdAt < CURRENT_TIMESTAMP(3) - INTERVAL 2 HOUR
           `,
         );
-        await drizzleDB.execute(
-          sql`UPDATE ${userData} SET tavernMessages = FLOOR(tavernMessages * 0.95)`,
-        );
+        await enqueueUserDataJob(drizzleDB, {
+          id: `tavern-decay:${new Date().toISOString().slice(0, 10)}`,
+          kind: "TAVERN_DECAY",
+        });
+        await processUserDataJobs(drizzleDB);
       } catch (cause) {
         await tavernDecayTimer.release();
         throw cause;
       }
     }
+
+    await drizzleDB
+      .delete(userDataJob)
+      .where(lt(userDataJob.completedAt, secondsFromNow(-7 * 24 * 3600)))
+      .limit(rangeCleanupBatchSize);
 
     // Step 31: Clear automatedModeration older than  3 months
     await drizzleDB

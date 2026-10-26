@@ -1,9 +1,9 @@
-import { sql } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { userData } from "@/drizzle/schema";
 import { handleEndpointError, lockWithDailyTimer } from "@/libs/gamesettings";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
+
+import { enqueueUserDataJob, processUserDataJobs } from "@/server/utils/userDataJobs";
 
 const ENDPOINT_NAME = "daily-counters";
 
@@ -20,20 +20,12 @@ export async function GET(request: Request) {
   if (!timerCheck.isNewDay && timerCheck.response) return timerCheck.response;
 
   try {
-    // For all users, increment villagePrestige by 1
-    await drizzleDB.update(userData).set({
-      villagePrestige: sql`${userData.villagePrestige} + 1`,
-      dailyArenaFights: 0,
-      dailyMissions: 0,
-      dailyErrands: 0,
-      dailyMedicalMissions: 0,
-      dailyPvpMissions: 0,
-      dailyWarMissions: 0,
-      dailyTrainings: 0,
-      dailyOverworldQuestRolls: 0,
-      dailySageActivations: 0,
-      aiCalls: 0,
+    // The day ID and committed cursor make a partial grant safe to resume.
+    await enqueueUserDataJob(drizzleDB, {
+      id: `daily-counters:${new Date().toISOString().slice(0, 10)}`,
+      kind: "DAILY_COUNTERS",
     });
+    await processUserDataJobs(drizzleDB);
 
     return Response.json(`OK`);
   } catch (cause) {

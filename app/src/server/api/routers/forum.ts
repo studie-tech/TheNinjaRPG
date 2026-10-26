@@ -1,14 +1,9 @@
-import { asc, eq, ne, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import { FORUM_MIN_LEVEL, forumLevelMessage } from "@/drizzle/constants";
-import {
-  forumBoard,
-  forumPost,
-  forumThread,
-  userData,
-  userDevice,
-} from "@/drizzle/schema";
+import { forumBoard, forumPost, forumThread, userDevice } from "@/drizzle/schema";
 import { resolveSenderId } from "@/libs/comments";
 import { fetchBoard, getInfiniteThreads, readNews } from "@/libs/forum";
 import { deferModeration } from "@/libs/moderation/defer";
@@ -27,7 +22,9 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { announcement, isPushEnabled, sendPushToUsers } from "@/server/utils/push";
+import { enqueueUserDataJob, processUserDataJobs } from "@/server/utils/userDataJobs";
 import { canCreateNews, canModerate } from "@/utils/permissions";
 import { checkForBadWords, moderateUserText } from "@/utils/profanity";
 import { forumBoardSchema } from "@/validators/forum";
@@ -106,43 +103,48 @@ export const forumRouter = createTRPCRouter({
       const sanitized = moderated.sanitized;
       const postId = nanoid();
       const [, , boardUpdateResult] = await Promise.all([
-        ctx.drizzle.insert(forumThread).values({
-          id: threadId,
-          title: input.title,
-          image: input.image,
-          boardId: input.board_id,
-          userId: effectiveUserId,
-        }),
-        ctx.drizzle
-          .insert(forumPost)
-          .values({
-            id: postId,
-            content: sanitized,
-            threadId: threadId,
+        (async () => {
+          const values = {
+            id: threadId,
+            title: input.title,
+            image: input.image,
+            boardId: input.board_id,
             userId: effectiveUserId,
-            authorId: ctx.userId,
-          })
-          .then(() =>
-            deferModeration(ctx.drizzle, {
-              content: sanitized,
-              userId: ctx.userId,
-              relationType: "forumPost",
-              relationId: postId,
+          };
+          if (!isNews) return ctx.drizzle.insert(forumThread).values(values);
+          // Separate INSERTs cannot atomically publish the news and its durable delivery
+          // job. Keep this transaction to those two writes; moderation stays outside it.
+          return retryOnDeadlock(() =>
+            ctx.drizzle.transaction(async (tx) => {
+              const db = tx as unknown as DrizzleClient;
+              await db.insert(forumThread).values(values);
+              await enqueueUserDataJob(db, {
+                id: `news:${threadId}`,
+                kind: "NEWS",
+                excludedUserId: ctx.userId,
+              });
             }),
-          ),
+          );
+        })(),
+        ctx.drizzle.insert(forumPost).values({
+          id: postId,
+          content: sanitized,
+          threadId: threadId,
+          userId: effectiveUserId,
+          authorId: ctx.userId,
+        }),
         ctx.drizzle
           .update(forumBoard)
           .set({ nThreads: sql`nThreads + 1`, updatedAt: new Date() })
           .where(eq(forumBoard.id, input.board_id)),
-        ...(isNews
-          ? [
-              ctx.drizzle
-                .update(userData)
-                .set({ unreadNews: sql`LEAST(unreadNews + 1, 1000)` })
-                .where(ne(userData.userId, ctx.userId)),
-            ]
-          : []),
       ]);
+
+      deferModeration(ctx.drizzle, {
+        content: sanitized,
+        userId: ctx.userId,
+        relationType: "forumPost",
+        relationId: postId,
+      });
 
       // Note: In edge case where board is deleted during mutation, thread/post still exist
       // but board counter is not updated. This is acceptable as it prevents orphaned data.
@@ -152,6 +154,7 @@ export const forumRouter = createTRPCRouter({
         );
       }
       if (isNews) {
+        after(() => processUserDataJobs(ctx.drizzle));
         void Promise.allSettled(
           publishNewsToSocialMedia(input.title, sanitized, user.avatar, input.image),
         );

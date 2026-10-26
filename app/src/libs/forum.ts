@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { forumBoard, forumPost, forumThread, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { canCreateNews } from "@/utils/permissions";
@@ -63,10 +63,17 @@ export const fetchBoard = async (
   return entry ?? null;
 };
 
-export const readNews = async (client: DrizzleClient, userId: string) => {
+export const readNews = async (
+  client: DrizzleClient,
+  userId: string,
+  readThrough = new Date(),
+) => {
   await client
     .update(userData)
-    .set({ unreadNews: 0 })
+    .set({
+      unreadNews: 0,
+      newsReadAt: sql`GREATEST(${userData.newsReadAt}, ${readThrough})`,
+    })
     .where(eq(userData.userId, userId));
 };
 

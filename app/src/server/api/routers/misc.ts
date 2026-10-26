@@ -1,6 +1,7 @@
 import path from "node:path";
 import { and, desc, eq, gt, gte, inArray, like, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import TextToSVG from "text-to-svg";
 import { z } from "zod";
 import {
@@ -41,6 +42,8 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { hashIp } from "@/server/utils/ipHash";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { enqueueUserDataJob, processUserDataJobs } from "@/server/utils/userDataJobs";
 import {
   canAwardReputation,
   canEnableGlobalTavern,
@@ -153,15 +156,25 @@ export const miscRouter = createTRPCRouter({
         return errorResponse("You or an AI must be marked as sender");
       }
       // Update database
-      const [result] = await Promise.all([
-        ctx.drizzle.insert(notification).values({
-          userId: sender.userId,
-          content: input.content,
+      // The announcement and its delivery job are separate INSERTs; neither may
+      // commit alone. Player updates happen later in bounded autocommit batches.
+      const result = await retryOnDeadlock(() =>
+        ctx.drizzle.transaction(async (tx) => {
+          const db = tx as unknown as DrizzleClient;
+          const inserted = await db.insert(notification).values({
+            userId: sender.userId,
+            content: input.content,
+          });
+          if (inserted.rowsAffected) {
+            await enqueueUserDataJob(db, {
+              id: `notification:${inserted.insertId}`,
+              kind: "NOTIFICATION",
+            });
+          }
+          return inserted;
         }),
-        ctx.drizzle
-          .update(userData)
-          .set({ unreadNotifications: sql`unreadNotifications + 1` }),
-      ]);
+      );
+      after(() => processUserDataJobs(ctx.drizzle));
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could insert notificaiton in db" };
       } else {

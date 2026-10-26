@@ -37,6 +37,7 @@ import type { CompleteBattle } from "@/libs/combat/types";
 import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { enqueueUserDataJob } from "@/server/utils/userDataJobs";
 
 /** Latest scheduled event, including closed/expired results; does not advance its lifecycle. */
 export const fetchLatestTerritoryWar = (client: DrizzleClient) =>
@@ -153,7 +154,7 @@ export const settleTerritoryWarCombat = async (
  * Tied winners share rewards. Villages and
  * clan hideouts receive tokens; clans without hideouts receive clan points instead.
  * The caller owns the transaction so the guarded reward, announcement INSERT and
- * recipient counters commit together; this helper never starts its own transaction.
+ * delivery job commit together; this helper never starts its own transaction.
  */
 export const resolveTerritoryWar = async (
   client: DrizzleClient,
@@ -177,13 +178,13 @@ export const resolveTerritoryWar = async (
         OR (${territoryWar.endsAt} <= ${now} AND ${territoryWarScore.points} > 0 AND higher.competitorId IS NULL))
   `);
   if (result.rowsAffected) {
-    await client.execute(
+    const announcement = await client.execute(
       sql`INSERT INTO ${notification} (userId, content) SELECT guardianId, ${`Territory War victory! Winners receive ${TERRITORY_WAR_TOKEN_REWARD.toLocaleString()} tokens (or clan points) and a ${TERRITORY_WAR_BOOST_HOURS}-hour Territory War boost. See [the standings](/territory-war).`} FROM ${territoryWar} WHERE ${territoryWar.id} = ${id}`,
     );
-    await client
-      .update(userData)
-      .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` })
-      .where(eq(userData.isAi, false));
+    await enqueueUserDataJob(client, {
+      id: `notification:${announcement.insertId}`,
+      kind: "NOTIFICATION",
+    });
   }
   return result;
 };
@@ -242,7 +243,7 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
       });
       if (pending) {
         // Only scored, unresolved expiries need mixed-DML delivery: MySQL cannot
-        // combine the guarded payout UPDATE with the announcement INSERT/counters.
+        // combine the guarded payout UPDATE with the announcement INSERT/delivery job.
         // Use the deadline so delayed ticks retain the event's actual end/boost window.
         await retryOnDeadlock(() =>
           client.transaction((tx) =>
@@ -271,7 +272,7 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
   const sectorNumber = eligible[randomInt(eligible.length)]!;
   const guardianId = guardians[randomInt(guardians.length)]!.userId;
   const id = nanoid();
-  // MySQL cannot INSERT the event and notification and UPDATE unread counters in one
+  // MySQL cannot INSERT the event and notification and INSERT its delivery job in one
   // statement. A committed event without its announcement cannot be replayed because
   // its predecessor is unique, so creation needs this short mixed-DML transaction.
   // Deadlocks roll back all three writes; the same id/predecessor makes retries safe.
@@ -284,14 +285,14 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
       WHERE NOT EXISTS (SELECT 1 FROM Sector WHERE Sector.sector = ${sectorNumber})
         AND NOT EXISTS (SELECT 1 FROM Village WHERE Village.sector = ${sectorNumber})`);
       if (!inserted.rowsAffected) return;
-      await db.insert(notification).values({
+      const announcement = await db.insert(notification).values({
         userId: guardianId,
         content: `Territory War! A guardian has appeared in sector ${sectorNumber} for ${TERRITORY_WAR_DURATION_MINUTES} minutes. First to ${TERRITORY_WAR_TARGET_POINTS} wins early; otherwise the highest positive score wins at the deadline. [Join the battle](/territory-war).`,
       });
-      await db
-        .update(userData)
-        .set({ unreadNotifications: sql`${userData.unreadNotifications} + 1` })
-        .where(eq(userData.isAi, false));
+      await enqueueUserDataJob(db, {
+        id: `notification:${announcement.insertId}`,
+        kind: "NOTIFICATION",
+      });
     }),
   );
 };

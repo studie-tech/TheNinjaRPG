@@ -244,6 +244,7 @@ import { retainSanctionIps } from "@/server/utils/sanctionTombstone";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
+import { deliveredNotificationFilter } from "@/server/utils/userDataJobs";
 import {
   fetchJutsuQueueSummary,
   hasDueTimedJob,
@@ -1493,11 +1494,14 @@ export const profileRouter = createTRPCRouter({
           const [unread] = await Promise.all([
             ctx.drizzle.query.notification.findMany({
               limit: user.unreadNotifications,
+              where: deliveredNotificationFilter(ctx.userId),
               orderBy: desc(notification.createdAt),
             }),
             ctx.drizzle
               .update(userData)
-              .set({ unreadNotifications: 0 })
+              .set({
+                unreadNotifications: 0,
+              })
               .where(eq(userData.userId, ctx.userId)),
           ]);
           unread?.forEach((n) => {

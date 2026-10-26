@@ -1,12 +1,13 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { battle, clan, mpvpBattleQueue, mpvpBattleUser, notification, sector, territoryWar, territoryWarReceipt, territoryWarScore, userData, village } from "@/drizzle/schema";
+import { battle, clan, mpvpBattleQueue, mpvpBattleUser, notification, sector, territoryWar, territoryWarReceipt, territoryWarScore, userData, userDataJob, village } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
 import type { CombatResult } from "@/libs/combat/types";
 import { calcBattleResult } from "@/libs/combat/util";
 import type { DrizzleClient } from "@/server/db";
 import { cleanupTerritoryWarTeams, resolveTerritoryWar, settleTerritoryWarCombat, syncTerritoryWars, territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
+import { processUserDataJobs } from "@/server/utils/userDataJobs";
 import { guardianVictory } from "../../setup/territoryWar";
 import { insertUsers } from "../../setup/factories";
 import { failStatements } from "../../setup/statements";
@@ -30,7 +31,7 @@ const pvpVictory = () => {
 
 describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
   beforeEach(async () => {
-    await resetTables(battle, territoryWarReceipt, territoryWarScore, territoryWar, mpvpBattleUser, mpvpBattleQueue, notification, sector, clan, userData, village);
+    await resetTables(battle, territoryWarReceipt, territoryWarScore, territoryWar, mpvpBattleUser, mpvpBattleQueue, notification, userDataJob, sector, clan, userData, village);
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "home", name: "Home", kageId: "chief", sector: 1, tokens: 10 },
@@ -68,6 +69,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     await db.transaction(tx => resolveTerritoryWar(tx as unknown as DrizzleClient, "event"));
     expect((await db.query.village.findMany()).reduce((total, row) => total + row.tokens, 0)).toBe(300030);
     expect(await db.query.notification.findMany()).toHaveLength(1);
+    await processUserDataJobs(db);
     expect((await db.select({ unread: userData.unreadNotifications }).from(userData).orderBy(userData.userId)).map(user => user.unread)).toEqual([7, 8, 8, 8]);
   });
 
@@ -134,7 +136,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect(await db.query.notification.findMany()).toHaveLength(1);
   });
 
-  it.each([{ label: "announcement", table: notification }, { label: "recipient counters", table: userData }])("rolls timeout rewards back when $label fails and allows retry", async ({ table }) => {
+  it.each([{ label: "announcement", table: notification }, { label: "delivery job", table: userDataJob }])("rolls timeout rewards back when $label fails and allows retry", async ({ table }) => {
     const db = await getTestDatabase();
     const event = { ...eventRow(), endsAt: new Date(Date.now() - 1000) };
     await db.insert(territoryWar).values(event);
@@ -291,6 +293,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect([1, 2, 3, 4, 10]).not.toContain(events[0]!.sector);
     expect(events[0]!.guardianId).toBe("guardian");
     expect(await db.query.notification.findMany()).toHaveLength(1);
+    await processUserDataJobs(db);
     expect((await db.select({ unread: userData.unreadNotifications }).from(userData).orderBy(userData.userId)).map(user => user.unread)).toEqual([7, 8, 8, 8]);
     const endsAt = events[0]!.endsAt;
     expect(endsAt.getTime() - startsAt.getTime()).toBe(3600000);
@@ -300,6 +303,7 @@ describeWithDatabase("Territory War atomic scoring and lifecycle", () => {
     expect(await db.query.territoryWar.findMany()).toHaveLength(1);
     await syncTerritoryWars(db, new Date(endsAt.getTime() + 5 * 3600000));
     expect(await db.query.territoryWar.findMany()).toHaveLength(2);
+    await processUserDataJobs(db);
     expect((await db.select({ unread: userData.unreadNotifications }).from(userData).orderBy(userData.userId)).map(user => user.unread)).toEqual([7, 9, 9, 9]);
   });
 

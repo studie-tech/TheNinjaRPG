@@ -180,6 +180,8 @@ describe("account deletion in the existing cleaner", () => {
       execute: mocks.execute,
       select: queryBuilder.select.bind(queryBuilder),
       delete: skipDelete,
+      insert: () => ({ values: () => ({ onDuplicateKeyUpdate: async () => ({ rowsAffected: 1 }) }) }),
+      query: { userDataJob: { findFirst: async () => undefined } },
       update: () => ({ set: () => ({ where: vi.fn().mockResolvedValue(undefined) }) }),
     });
     // Bun retains other cron suites' module mocks; keep the error response real.
