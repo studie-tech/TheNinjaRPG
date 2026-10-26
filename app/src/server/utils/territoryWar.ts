@@ -179,7 +179,7 @@ export const resolveTerritoryWar = async (
   `);
   if (result.rowsAffected) {
     const announcement = await client.execute(
-      sql`INSERT INTO ${notification} (userId, content) SELECT guardianId, ${`Territory War victory! Winners receive ${TERRITORY_WAR_TOKEN_REWARD.toLocaleString()} tokens (or clan points) and a ${TERRITORY_WAR_BOOST_HOURS}-hour Territory War boost. See [the standings](/territory-war).`} FROM ${territoryWar} WHERE ${territoryWar.id} = ${id}`,
+      sql`INSERT INTO ${notification} (userId, content, isDeferred) SELECT guardianId, ${`Territory War victory! Winners receive ${TERRITORY_WAR_TOKEN_REWARD.toLocaleString()} tokens (or clan points) and a ${TERRITORY_WAR_BOOST_HOURS}-hour Territory War boost. See [the standings](/territory-war).`}, true FROM ${territoryWar} WHERE ${territoryWar.id} = ${id}`,
     );
     await enqueueUserDataJob(client, {
       id: `notification:${announcement.insertId}`,

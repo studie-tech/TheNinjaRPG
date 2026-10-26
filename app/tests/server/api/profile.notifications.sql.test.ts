@@ -1,8 +1,10 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { notification, userData, userDataJob, village } from "@/drizzle/schema";
+import { TERRITORY_WAR_TARGET_POINTS } from "@/drizzle/constants";
+import { notification, territoryWar, territoryWarScore, userData, userDataJob, village } from "@/drizzle/schema";
 import { profileRouter } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { resolveTerritoryWar } from "@/server/utils/territoryWar";
 import { enqueueUserDataJob, processUserDataJobs, readUserNotifications } from "@/server/utils/userDataJobs";
 import { insertUsers } from "../../setup/factories";
 import { beforeStatements } from "../../setup/statements";
@@ -12,10 +14,27 @@ const old = new Date("2020-01-01");
 
 describeWithDatabase("profile deferred notification consumption", () => {
   beforeEach(async () => {
-    await resetTables(notification, userDataJob, userData, village);
+    await resetTables(notification, userDataJob, territoryWarScore, territoryWar, userData, village);
     const db = await getTestDatabase();
     await db.insert(village).values({ id: "home", name: "Home", kageId: "reader", sector: 1 });
     await insertUsers([{ userId: "reader", username: "Reader", createdAt: old, villageId: "home", questData: [], status: "AWAKE" }]);
+  });
+
+  it.each([false, true])("keeps immediate notices separate from a pending territory victory at timeout=%s", async timeout => {
+    const db = await getTestDatabase();
+    await publish(db, "immediate", false, new Date("2021-01-01"));
+    const now = new Date();
+    await db.insert(territoryWar).values({ id: "victory", predecessorId: "initial", sector: 100, guardianId: "guardian", startsAt: new Date(now.getTime() - 10_000), endsAt: new Date(now.getTime() + (timeout ? -1000 : 60_000)) });
+    await db.insert(territoryWarScore).values({ warId: "victory", competitorId: "village:home", name: "Home", villageId: "home", points: timeout ? 1 : TERRITORY_WAR_TARGET_POINTS });
+    await db.transaction(tx => resolveTerritoryWar(tx as unknown as DrizzleClient, "victory", now));
+    const victory = await db.query.notification.findFirst({ where: eq(notification.userId, "guardian") });
+    expect(victory?.isDeferred).toBe(true);
+    expect((await db.query.userDataJob.findFirst())?.completedAt).toBeNull();
+    expect(await toasts()).toEqual(["immediate"]);
+    await processUserDataJobs(db);
+    expect((await snapshot(db)).unreadNotificationIds).toEqual([victory!.id]);
+    expect(await toasts()).toEqual([victory!.content]);
+    expect(await toasts()).toEqual([]);
   });
 
   it("returns an older deferred broadcast after a newer immediate notice was consumed", async () => {
