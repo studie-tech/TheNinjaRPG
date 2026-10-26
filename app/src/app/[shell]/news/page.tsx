@@ -10,7 +10,6 @@ export const dynamic = "force-dynamic";
 export default async function News() {
   // Session information
   const { userId } = await auth();
-  const readThrough = new Date();
   // Initial data from server for speed
   const { initialThreads, userData, canPost } = await fetchForumPageData(
     drizzleDB,
@@ -20,7 +19,7 @@ export default async function News() {
 
   // Switch off news notifications
   if (userData) {
-    await readNews(drizzleDB, userData.userId, readThrough);
+    await readNews(drizzleDB, userData.userId, initialThreads.newsReadIds);
   }
 
   // Show board

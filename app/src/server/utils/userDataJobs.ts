@@ -7,7 +7,6 @@ import {
   gt,
   inArray,
   isNull,
-  lt,
   lte,
   ne,
   sql,
@@ -106,7 +105,9 @@ const recipientFilter = (job: UserDataJob) =>
   and(
     job.kind === "NOTIFICATION" ? eq(userData.isAi, false) : undefined,
     job.excludedUserId ? ne(userData.userId, job.excludedUserId) : undefined,
-    job.kind === "NEWS" ? lt(userData.newsReadAt, job.createdAt) : undefined,
+    job.kind === "NEWS"
+      ? sql`NOT JSON_CONTAINS(${userData.newsReadIds}, JSON_QUOTE(${job.id}))`
+      : undefined,
   );
 
 const jobChanges = (
@@ -114,7 +115,10 @@ const jobChanges = (
 ): Partial<Record<keyof typeof userData.$inferSelect, number | Date | SQL>> => {
   switch (job.kind) {
     case "NEWS":
-      return { unreadNews: sql`LEAST(${userData.unreadNews} + 1, 1000)` };
+      return {
+        unreadNews: sql`LEAST(${userData.unreadNews} + 1, 1000)`,
+        newsVersion: sql`${userData.newsVersion} + 1`,
+      };
     case "NOTIFICATION":
       return { unreadNotifications: sql`${userData.unreadNotifications} + 1` };
     case "TAVERN_DECAY":

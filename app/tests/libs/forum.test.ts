@@ -25,7 +25,7 @@ describeWithDatabase("forum page snapshots", () => {
     expect(first.nextCursor).toBe(1);
     const second = await getInfiniteThreads({ client, boardId: "news", boardName: "History", cursor: 1, limit: 1 });
     expect(second.threads.map(({ id }) => id)).toEqual(["old"]);
-    expect(await getInfiniteThreads({ client, boardName: "Absent", limit: 10 })).toEqual({ board: null, threads: [], nextCursor: null });
+    expect(await getInfiniteThreads({ client, boardName: "Absent", limit: 10 })).toEqual({ board: null, threads: [], nextCursor: null, newsReadIds: [] });
   });
 
   it("loads only page permission and notification fields for signed-in readers", async () => {
@@ -34,7 +34,7 @@ describeWithDatabase("forum page snapshots", () => {
     expect(measured.result.userData).toEqual({ userId: "author", role: "CODER", unreadNews: 3 });
     expect(measured.result.canPost).toBe(true);
     expect(measured.result.initialThreads.threads.map(({ id }) => id)).toEqual(["new", "old"]);
-    expect(measured.statements).toHaveLength(3);
+    expect(measured.statements).toHaveLength(2);
     expect((await fetchForumPageData(client, "News", null)).canPost).toBeNull();
     expect((await fetchForumPageData(client, "News", "unregistered")).userData).toBeNull();
   });

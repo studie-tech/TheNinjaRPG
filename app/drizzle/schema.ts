@@ -1421,11 +1421,19 @@ export const forumThread = mysqlTable(
 );
 
 export const forumThreadRelations = relations(forumThread, ({ one, many }) => ({
+  board: one(forumBoard, {
+    fields: [forumThread.boardId],
+    references: [forumBoard.id],
+  }),
   user: one(userData, {
     fields: [forumThread.userId],
     references: [userData.userId],
   }),
   posts: many(forumPost),
+}));
+
+export const forumBoardRelations = relations(forumBoard, ({ many }) => ({
+  threads: many(forumThread),
 }));
 
 export const historicalAvatar = mysqlTable(
@@ -2770,7 +2778,8 @@ export const userData = mysqlTable(
     // Recruit rank milestone rewards received since the player last loaded their profile
     unreadRecruitRewards: smallint("unreadRecruitRewards").default(0).notNull(),
     unreadNews: smallint("unreadNews").default(0).notNull(),
-    newsReadAt: datetime("newsReadAt", { mode: "date", fsp: 3 }).default(sql`'1970-01-01 00:00:00.000'`).notNull(),
+    newsReadIds: json("newsReadIds").$type<string[]>().default([]).notNull(),
+    newsVersion: int("newsVersion").default(0).notNull(),
     questData: json("questData").$type<QuestTrackerType[]>(),
     questPartyId: varchar("questPartyId", { length: 191 }),
     activeNpcQuestId: varchar("activeNpcQuestId", { length: 191 }),
