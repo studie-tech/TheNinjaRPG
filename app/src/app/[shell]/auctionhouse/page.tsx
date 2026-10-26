@@ -25,7 +25,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
-import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -400,7 +400,20 @@ const AuctionListing: React.FC<AuctionListingProps> = ({
     },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
-      placeholderData: (previousData) => previousData,
+      placeholderData: (previousData, previousQuery) => {
+        const previousInput = previousQuery?.queryKey[1]?.input as
+          | RouterInputs["auction"]["getAuctionListings"]
+          | undefined;
+        const isSameScope =
+          browseTab === "MINE"
+            ? previousInput?.onlyMine === true
+            : browseTab === "MY_BIDS"
+              ? previousInput?.onlyBidOn === true
+              : previousInput?.listingType === browseTab;
+        return previousInput?.status === selectedStatus && isSameScope
+          ? previousData
+          : undefined;
+      },
       refetchInterval: 10000,
       refetchIntervalInBackground: false,
     },
