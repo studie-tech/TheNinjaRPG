@@ -287,6 +287,7 @@ export const syncTerritoryWars = async (client: DrizzleClient, now = new Date())
       if (!inserted.rowsAffected) return;
       const announcement = await db.insert(notification).values({
         userId: guardianId,
+        isDeferred: true,
         content: `Territory War! A guardian has appeared in sector ${sectorNumber} for ${TERRITORY_WAR_DURATION_MINUTES} minutes. First to ${TERRITORY_WAR_TARGET_POINTS} wins early; otherwise the highest positive score wins at the deadline. [Join the battle](/territory-war).`,
       });
       await enqueueUserDataJob(db, {

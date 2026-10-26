@@ -2,6 +2,7 @@ import type { SQL } from "drizzle-orm";
 import {
   and,
   asc,
+  desc,
   eq,
   getTableColumns,
   gt,
@@ -120,7 +121,10 @@ const jobChanges = (
         newsVersion: sql`${userData.newsVersion} + 1`,
       };
     case "NOTIFICATION":
-      return { unreadNotifications: sql`${userData.unreadNotifications} + 1` };
+      return {
+        unreadNotifications: sql`${userData.unreadNotifications} + 1`,
+        unreadNotificationIds: sql`JSON_ARRAY_APPEND(${userData.unreadNotificationIds}, '$', ${Number(job.id.slice("notification:".length))})`,
+      };
     case "TAVERN_DECAY":
       return { tavernMessages: sql`FLOOR(${userData.tavernMessages} * 0.95)` };
     case "DAILY_COUNTERS":
@@ -140,9 +144,61 @@ const jobChanges = (
   }
 };
 
-/** Keep undelivered global announcements out of the counter-based toast feed. */
-export const deliveredNotificationFilter = (userId: string) => sql`NOT EXISTS (
-  SELECT 1 FROM ${userDataJob} pendingDelivery
-  WHERE pendingDelivery.id = CONCAT('notification:', ${notification.id})
-    AND pendingDelivery.completedAt IS NULL AND pendingDelivery.cursor < ${userId}
-)`;
+/** Claim exact deferred deliveries alongside the existing immediate counter-based feed. */
+export const readUserNotifications = async (
+  client: DrizzleClient,
+  snapshot: Pick<
+    typeof userData.$inferSelect,
+    "userId" | "unreadNotifications" | "unreadNotificationIds"
+  >,
+) => {
+  let current = snapshot;
+  while (current.unreadNotifications > 0) {
+    const immediateCount = Math.max(
+      current.unreadNotifications - current.unreadNotificationIds.length,
+      0,
+    );
+    const [deferred, immediate] = await Promise.all([
+      current.unreadNotificationIds.length
+        ? client.query.notification.findMany({
+            where: inArray(notification.id, current.unreadNotificationIds),
+          })
+        : [],
+      immediateCount
+        ? client.query.notification.findMany({
+            where: eq(notification.isDeferred, false),
+            orderBy: desc(notification.createdAt),
+            limit: immediateCount,
+          })
+        : [],
+    ]);
+    // Both delivery and acknowledgement change the same user row. Claim only the
+    // queried snapshot so a competing reader cannot repeat it or clear a new delivery.
+    const claimed = await retryOnDeadlock(() =>
+      client
+        .update(userData)
+        .set({
+          unreadNotifications: 0,
+          unreadNotificationIds: [],
+        })
+        .where(
+          and(
+            eq(userData.userId, current.userId),
+            eq(userData.unreadNotifications, current.unreadNotifications),
+            sql`${userData.unreadNotificationIds} = CAST(${JSON.stringify(current.unreadNotificationIds)} AS JSON)`,
+          ),
+        ),
+    );
+    if (claimed.rowsAffected > 0)
+      return [...deferred, ...immediate].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id - a.id,
+      );
+    const latest = await client.query.userData.findFirst({
+      where: eq(userData.userId, current.userId),
+      columns: { userId: true, unreadNotifications: true, unreadNotificationIds: true },
+    });
+    if (!latest) return [];
+    current = latest;
+  }
+  return [];
+};

@@ -83,7 +83,6 @@ import {
   jutsu,
   jutsuReskin,
   mpvpBattleQueue,
-  notification,
   poll,
   quest,
   questHistory,
@@ -244,7 +243,7 @@ import { retainSanctionIps } from "@/server/utils/sanctionTombstone";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
-import { deliveredNotificationFilter } from "@/server/utils/userDataJobs";
+import { readUserNotifications } from "@/server/utils/userDataJobs";
 import {
   fetchJutsuQueueSummary,
   hasDueTimedJob,
@@ -1491,19 +1490,7 @@ export const profileRouter = createTRPCRouter({
             .where(eq(userData.userId, ctx.userId));
         }
         if (user.unreadNotifications > 0) {
-          const [unread] = await Promise.all([
-            ctx.drizzle.query.notification.findMany({
-              limit: user.unreadNotifications,
-              where: deliveredNotificationFilter(ctx.userId),
-              orderBy: desc(notification.createdAt),
-            }),
-            ctx.drizzle
-              .update(userData)
-              .set({
-                unreadNotifications: 0,
-              })
-              .where(eq(userData.userId, ctx.userId)),
-          ]);
+          const unread = await readUserNotifications(ctx.drizzle, user);
           unread?.forEach((n) => {
             notifications?.push({
               href: "/news",

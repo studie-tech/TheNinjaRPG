@@ -164,6 +164,7 @@ export const miscRouter = createTRPCRouter({
           const inserted = await db.insert(notification).values({
             userId: sender.userId,
             content: input.content,
+            isDeferred: true,
           });
           if (inserted.rowsAffected) {
             await enqueueUserDataJob(db, {

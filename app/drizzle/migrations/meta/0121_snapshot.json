@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "6b65f5fc-6b1a-42e6-a19f-c1bd755b5ba8",
-  "prevId": "931240f3-a0fc-4bc0-9883-7bff132099de",
+  "id": "e46342fc-0701-45bb-97cb-186abe8c1ff0",
+  "prevId": "0fe990d8-ceb3-4cab-b912-b156e6a1fb79",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",
@@ -9420,6 +9420,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "isDeferred": {
+          "name": "isDeferred",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "content": {
           "name": "content",
           "type": "text",
@@ -16972,6 +16980,14 @@
           "autoincrement": false,
           "default": 0
         },
+        "unreadNotificationIds": {
+          "name": "unreadNotificationIds",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "('[]')"
+        },
         "unreadRecruitRewards": {
           "name": "unreadRecruitRewards",
           "type": "smallint",
@@ -18918,6 +18934,13 @@
           "type": "tinyint unsigned",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "gender": {
+          "name": "gender",
+          "type": "enum('MALE','FEMALE')",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "rank": {

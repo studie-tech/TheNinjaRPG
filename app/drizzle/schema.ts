@@ -2197,6 +2197,8 @@ export const notification = mysqlTable(
       .notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     warId: varchar("warId", { length: 191 }),
+    // Retain the delivery mode after its job expires so counter-based reads exclude it.
+    isDeferred: boolean("isDeferred").default(false).notNull(),
     content: text("content").notNull(),
   },
   (table) => {
@@ -2775,6 +2777,8 @@ export const userData = mysqlTable(
       consts.MasteryNames,
     ),
     unreadNotifications: smallint("unreadNotifications").default(0).notNull(),
+    // Exact deferred deliveries are included in the total above until claimed.
+    unreadNotificationIds: json("unreadNotificationIds").$type<number[]>().default([]).notNull(),
     // Recruit rank milestone rewards received since the player last loaded their profile
     unreadRecruitRewards: smallint("unreadRecruitRewards").default(0).notNull(),
     unreadNews: smallint("unreadNews").default(0).notNull(),

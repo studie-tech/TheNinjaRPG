@@ -4,7 +4,7 @@ import { forumBoard, forumPost, forumThread, notification, userData, userDataJob
 import { fetchForumPageData, readNews } from "@/libs/forum";
 import { insertNewsThread } from "@/routers/forum";
 import type { DrizzleClient } from "@/server/db";
-import { deliveredNotificationFilter, enqueueUserDataJob, processUserDataJobs } from "@/server/utils/userDataJobs";
+import { enqueueUserDataJob, processUserDataJobs } from "@/server/utils/userDataJobs";
 import { insertUsers } from "../../setup/factories";
 import { beforeStatements, failStatements } from "../../setup/statements";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
@@ -210,7 +210,7 @@ describeWithDatabase("bounded durable UserData jobs", () => {
   it("competing workers and a lost commit acknowledgment cannot duplicate increments", async () => {
     const db = await getTestDatabase();
     await seedPlayers(1005);
-    await enqueueUserDataJob(db, { id: "notice", kind: "NOTIFICATION" });
+    await enqueueNotice(db);
     let fail = true;
     const lostResponse = new Proxy(db, {
       get(target, key, receiver) {
@@ -224,7 +224,7 @@ describeWithDatabase("bounded durable UserData jobs", () => {
     });
     await expect(processUserDataJobs(lostResponse)).rejects.toThrow("response lost");
     await Promise.all([processUserDataJobs(db), processUserDataJobs(db)]);
-    expect((await db.query.userData.findMany()).every(user => user.unreadNotifications === 8)).toBe(true);
+    expect((await db.query.userData.findMany()).every(user => user.unreadNotifications === 8 && user.unreadNotificationIds.length === 1)).toBe(true);
   });
 
   it("keeps news caps and author exclusion, and excludes AIs from staff notices", async () => {
@@ -234,7 +234,7 @@ describeWithDatabase("bounded durable UserData jobs", () => {
     await insertUsers([{ userId: "late", username: "late-player", createdAt: new Date(Date.now() + 60_000), unreadNews: 0 }]);
     await enqueueUserDataJob(db, { id: "news", kind: "NEWS", excludedUserId: "player-0000" });
     await enqueueUserDataJob(db, { id: "news-2", kind: "NEWS", excludedUserId: "player-0000" });
-    await enqueueUserDataJob(db, { id: "staff", kind: "NOTIFICATION" });
+    await enqueueNotice(db);
     await processUserDataJobs(db);
     const users = await db.query.userData.findMany({ orderBy: userData.userId });
     expect(users.map(user => user.unreadNews)).toEqual([0, 999, 1000, 1000]);
@@ -249,18 +249,6 @@ describeWithDatabase("bounded durable UserData jobs", () => {
     await processUserDataJobs(reading);
     expect((await db.query.userData.findMany()).every(user => user.unreadNews === 0)).toBe(true);
     expect((await db.query.userDataJob.findFirst())?.completedAt).toBeInstanceOf(Date);
-  });
-
-  it("keeps pending announcements out of the toast feed until their counters are delivered", async () => {
-    const db = await getTestDatabase();
-    await seedPlayers(1);
-    await db.insert(notification).values({ userId: "player-0000", content: "Delivered" });
-    const inserted = await db.insert(notification).values({ userId: "player-0000", content: "Pending" });
-    await enqueueUserDataJob(db, { id: `notification:${inserted.insertId}`, kind: "NOTIFICATION" });
-    const feed = () => db.query.notification.findMany({ where: deliveredNotificationFilter("player-0000") });
-    expect((await feed()).map(row => row.content)).toEqual(["Delivered"]);
-    await processUserDataJobs(db);
-    expect((await feed()).map(row => row.content)).toEqual(["Delivered", "Pending"]);
   });
 
   it("decays tavern activity once per job without marking activity", async () => {
@@ -303,4 +291,9 @@ const holdNewsPublication = (db: DrizzleClient, id: string, createdAt?: Date) =>
     },
   });
   return { inserted, release, publishing: publishNews(gated, id, createdAt) };
+};
+
+const enqueueNotice = async (db: DrizzleClient) => {
+  const inserted = await db.insert(notification).values({ userId: "author", content: "Announcement", isDeferred: true });
+  await enqueueUserDataJob(db, { id: `notification:${inserted.insertId}`, kind: "NOTIFICATION" });
 };
