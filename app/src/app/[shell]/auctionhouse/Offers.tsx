@@ -5,7 +5,7 @@ import { Check, ChevronsUpDown, Plus, Search } from "lucide-react";
 import { type ComponentProps, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
-import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,7 +68,14 @@ export function AuctionOffers({
     {
       getNextPageParam: (page) => page.nextCursor,
       refetchInterval: 10000,
-      placeholderData: (previousData) => previousData,
+      placeholderData: (previousData, previousQuery) => {
+        const previousInput = previousQuery?.queryKey[1]?.input as
+          | RouterInputs["auction"]["getAuctionOffers"]
+          | undefined;
+        return previousInput?.status === status && previousInput.onlyMine === onlyMine
+          ? previousData
+          : undefined;
+      },
     },
   );
   const inventory = api.item.getUserItems.useQuery(undefined, {
