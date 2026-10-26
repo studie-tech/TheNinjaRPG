@@ -1,0 +1,442 @@
+{
+  "before": "cd7760816d86b27b514ffa5c5794aed6331e9dae",
+  "after": "8e0a8f4098c0ce783720a9a7eb65b3234d5ad2db",
+  "rows": [
+    {
+      "scenario": "catalog",
+      "before": {
+        "n": 5,
+        "requests": {
+          "median": 5,
+          "min": 5,
+          "max": 5
+        },
+        "responseBytes": {
+          "median": 22075,
+          "min": 22075,
+          "max": 22075
+        },
+        "settleMs": {
+          "median": 300.40000000037253,
+          "min": 293.30000000074506,
+          "max": 307.19999999925494
+        },
+        "requestDurationMs": {
+          "median": 292.19999999925494,
+          "min": 280.3999999985099,
+          "max": 296.30000000074506
+        },
+        "requestStartMs": {
+          "median": 1.5,
+          "min": 1.299999998882413,
+          "max": 2.300000000745058
+        },
+        "loaderMs": {
+          "median": 934.0999999996275,
+          "min": 925.6999999992549,
+          "max": 939.5
+        },
+        "cardAbsentMs": {
+          "median": 934.0999999996275,
+          "min": 925.6999999992549,
+          "max": 939.5
+        }
+      },
+      "after": {
+        "n": 5,
+        "requests": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "responseBytes": {
+          "median": 4415,
+          "min": 4415,
+          "max": 4415
+        },
+        "settleMs": {
+          "median": 822,
+          "min": 816.8000000007451,
+          "max": 844.1999999992549
+        },
+        "requestDurationMs": {
+          "median": 305.90000000037253,
+          "min": 298,
+          "max": 320.40000000037253
+        },
+        "requestStartMs": {
+          "median": 513.1999999992549,
+          "min": 504.09999999962747,
+          "max": 515.5
+        },
+        "loaderMs": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "cardAbsentMs": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "scenario": "seller",
+      "before": {
+        "n": 5,
+        "requests": {
+          "median": 5,
+          "min": 5,
+          "max": 5
+        },
+        "responseBytes": {
+          "median": 22075,
+          "min": 22075,
+          "max": 22075
+        },
+        "settleMs": {
+          "median": 297.1000000014901,
+          "min": 293.09999999962747,
+          "max": 315.7000000011176
+        },
+        "requestDurationMs": {
+          "median": 286.7999999988824,
+          "min": 281,
+          "max": 304
+        },
+        "requestStartMs": {
+          "median": 1.300000000745058,
+          "min": 1.200000001117587,
+          "max": 2.099999999627471
+        },
+        "loaderMs": {
+          "median": 930.2000000011176,
+          "min": 925.5999999996275,
+          "max": 949.2000000011176
+        }
+      },
+      "after": {
+        "n": 5,
+        "requests": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "responseBytes": {
+          "median": 4415,
+          "min": 4415,
+          "max": 4415
+        },
+        "settleMs": {
+          "median": 818,
+          "min": 793.9000000003725,
+          "max": 827.8000000007451
+        },
+        "requestDurationMs": {
+          "median": 295.5,
+          "min": 284.90000000037253,
+          "max": 307.80000000074506
+        },
+        "requestStartMs": {
+          "median": 512.4000000003725,
+          "min": 504.69999999925494,
+          "max": 512.6999999992549
+        },
+        "loaderMs": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "scenario": "min",
+      "before": {
+        "n": 5,
+        "requests": {
+          "median": 3,
+          "min": 3,
+          "max": 3
+        },
+        "responseBytes": {
+          "median": 13245,
+          "min": 13245,
+          "max": 13245
+        },
+        "settleMs": {
+          "median": 324.30000000074506,
+          "min": 315.6000000014901,
+          "max": 627.4000000003725
+        },
+        "requestDurationMs": {
+          "median": 311.19999999925494,
+          "min": 303.19999999925494,
+          "max": 614
+        },
+        "requestStartMs": {
+          "median": 1.900000000372529,
+          "min": 1.799999998882413,
+          "max": 3.299999998882413
+        },
+        "loaderMs": {
+          "median": 637.5,
+          "min": 627.3000000007451,
+          "max": 940.6999999992549
+        }
+      },
+      "after": {
+        "n": 5,
+        "requests": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "responseBytes": {
+          "median": 4415,
+          "min": 4415,
+          "max": 4415
+        },
+        "settleMs": {
+          "median": 817.0999999996275,
+          "min": 802.6999999992549,
+          "max": 852.3000000007451
+        },
+        "requestDurationMs": {
+          "median": 298.7999999988824,
+          "min": 284.7000000011176,
+          "max": 333.7999999988824
+        },
+        "requestStartMs": {
+          "median": 512,
+          "min": 504.09999999962747,
+          "max": 513.8000000007451
+        },
+        "loaderMs": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "scenario": "max",
+      "before": {
+        "n": 5,
+        "requests": {
+          "median": 3,
+          "min": 3,
+          "max": 3
+        },
+        "responseBytes": {
+          "median": 4535,
+          "min": 4535,
+          "max": 4535
+        },
+        "settleMs": {
+          "median": 331.30000000074506,
+          "min": 305.19999999925494,
+          "max": 383.3999999985099
+        },
+        "requestDurationMs": {
+          "median": 317,
+          "min": 291.09999999962747,
+          "max": 369.2999999988824
+        },
+        "requestStartMs": {
+          "median": 2.400000000372529,
+          "min": 2,
+          "max": 3.800000000745058
+        },
+        "loaderMs": {
+          "median": 642.1999999992549,
+          "min": 617.1999999992549,
+          "max": 693.2000000011176
+        }
+      },
+      "after": {
+        "n": 5,
+        "requests": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "responseBytes": {
+          "median": 4415,
+          "min": 4415,
+          "max": 4415
+        },
+        "settleMs": {
+          "median": 848.3000000007451,
+          "min": 807.1999999992549,
+          "max": 886.6999999992549
+        },
+        "requestDurationMs": {
+          "median": 331.5,
+          "min": 289,
+          "max": 369.7999999988824
+        },
+        "requestStartMs": {
+          "median": 511.30000000074506,
+          "min": 510.40000000037253,
+          "max": 512.9000000003725
+        },
+        "loaderMs": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "scenario": "requests",
+      "before": {
+        "n": 5,
+        "requests": {
+          "median": 5,
+          "min": 5,
+          "max": 5
+        },
+        "responseBytes": {
+          "median": 300,
+          "min": 300,
+          "max": 300
+        },
+        "settleMs": {
+          "median": 174,
+          "min": 163.7000000011176,
+          "max": 237.30000000074506
+        },
+        "requestDurationMs": {
+          "median": 166.59999999962747,
+          "min": 156.7999999988824,
+          "max": 226.10000000149012
+        },
+        "requestStartMs": {
+          "median": 1.699999999254942,
+          "min": 1.400000000372529,
+          "max": 2.799999998882413
+        },
+        "loaderMs": {
+          "median": 807.8000000007451,
+          "min": 796.4000000003725,
+          "max": 868.5999999996275
+        }
+      },
+      "after": {
+        "n": 5,
+        "requests": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "responseBytes": {
+          "median": 60,
+          "min": 60,
+          "max": 60
+        },
+        "settleMs": {
+          "median": 679.5,
+          "min": 672.3999999985099,
+          "max": 690.6999999992549
+        },
+        "requestDurationMs": {
+          "median": 164.80000000074506,
+          "min": 156.5,
+          "max": 172.40000000037253
+        },
+        "requestStartMs": {
+          "median": 509.30000000074506,
+          "min": 504.69999999925494,
+          "max": 515.2999999988824
+        },
+        "loaderMs": {
+          "median": 1313.800000000745,
+          "min": 1299.9000000003725,
+          "max": 1321.5999999996275
+        }
+      }
+    },
+    {
+      "scenario": "trades",
+      "before": {
+        "n": 5,
+        "requests": {
+          "median": 5,
+          "min": 5,
+          "max": 5
+        },
+        "responseBytes": {
+          "median": 300,
+          "min": 300,
+          "max": 300
+        },
+        "settleMs": {
+          "median": 185.2999999988824,
+          "min": 173,
+          "max": 209.40000000037253
+        },
+        "requestDurationMs": {
+          "median": 171,
+          "min": 160.30000000074506,
+          "max": 197.5
+        },
+        "requestStartMs": {
+          "median": 2.299999998882413,
+          "min": 1.800000000745058,
+          "max": 3.5
+        },
+        "loaderMs": {
+          "median": 817.7999999988824,
+          "min": 799.3000000007451,
+          "max": 839.4000000003725
+        }
+      },
+      "after": {
+        "n": 5,
+        "requests": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "responseBytes": {
+          "median": 60,
+          "min": 60,
+          "max": 60
+        },
+        "settleMs": {
+          "median": 674.5,
+          "min": 674.0999999996275,
+          "max": 680.5
+        },
+        "requestDurationMs": {
+          "median": 159,
+          "min": 152.5,
+          "max": 161.19999999925494
+        },
+        "requestStartMs": {
+          "median": 511.69999999925494,
+          "min": 503.7999999988824,
+          "max": 514.5
+        },
+        "loaderMs": {
+          "median": 1295.9000000003725,
+          "min": 1289.199999999255,
+          "max": 1310.199999999255
+        }
+      }
+    }
+  ],
+  "totalRequests": {
+    "before": 130,
+    "after": 30
+  },
+  "totalResponseBytes": {
+    "before": 312650,
+    "after": 88900
+  },
+  "reductions": {
+    "requestsPercent": 76.92307692307692,
+    "responseBodyBytesPercent": 71.56564848872542
+  }
+}
