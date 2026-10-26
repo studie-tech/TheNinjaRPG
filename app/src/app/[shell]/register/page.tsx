@@ -42,6 +42,7 @@ import {
   IMG_REGISTRATIN_STEP9,
 } from "@/drizzle/constants";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
@@ -307,16 +308,18 @@ const IdentityStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
     defaultValue: "",
   });
 
+  const debouncedUsername = useDebouncedValue(watchUsername);
+
   // Checking for unique username
   const { data: databaseUsername } = api.profile.getUsername.useQuery(
-    { username: watchUsername },
-    { enabled: watchUsername.length >= 2 },
+    { username: debouncedUsername },
+    { enabled: debouncedUsername.length >= 2 && watchUsername === debouncedUsername },
   );
 
   // If selected username found in database, set error. If not, clear error.
   useEffect(() => {
     const usernameError = form.getFieldState("username").error;
-    if (databaseUsername) {
+    if (watchUsername === debouncedUsername && databaseUsername) {
       if (!usernameError) {
         form.setError("username", {
           type: "custom",
@@ -326,7 +329,7 @@ const IdentityStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
     } else if (usernameError?.type === "custom") {
       form.clearErrors("username");
     }
-  }, [watchUsername, databaseUsername, form]);
+  }, [watchUsername, debouncedUsername, databaseUsername, form]);
 
   return (
     <div className="flex w-full flex-wrap items-center gap-4 px-10">
