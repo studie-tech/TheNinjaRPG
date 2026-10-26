@@ -27,10 +27,10 @@ export async function GET(request: Request) {
       id: jobId,
       kind: "DAILY_COUNTERS",
     });
-    // Finish this reset before reporting success; unrelated broadcasts must not
-    // postpone its boundary or cause new activity to be cleared after the response.
+    // Finish daily resets in day order before reporting success. Broadcast backlogs
+    // must not postpone the boundary, and an older reset must not run after this one.
     const completed = await processUserDataJobs(drizzleDB, {
-      jobId,
+      jobKind: "DAILY_COUNTERS",
       budgetMs: 250_000,
     });
     if (!completed) throw new Error("Daily counter reset needs a retry");

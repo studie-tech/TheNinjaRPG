@@ -32,19 +32,22 @@ export const enqueueUserDataJob = (
 /**
  * Drain the oldest work first, yielding between committed primary-key batches. The budget
  * bounds background invocations; the minute cron resumes any remaining durable cursor.
- * A targeted reset bypasses broadcast backlogs; false means the budget expired.
+ * A reset-only drain bypasses broadcasts while retaining day order; false means the budget expired.
  * Call only with an autocommit client: an enclosing transaction would retain every lock.
  */
 export const processUserDataJobs = async (
   client: DrizzleClient,
-  { budgetMs = 20_000, jobId }: { budgetMs?: number; jobId?: string } = {},
+  {
+    budgetMs = 20_000,
+    jobKind,
+  }: { budgetMs?: number; jobKind?: UserDataJob["kind"] } = {},
 ) => {
   const deadline = Date.now() + budgetMs;
   while (Date.now() < deadline) {
     const job = await client.query.userDataJob.findFirst({
       where: and(
         isNull(userDataJob.completedAt),
-        jobId ? eq(userDataJob.id, jobId) : undefined,
+        jobKind ? eq(userDataJob.kind, jobKind) : undefined,
       ),
       orderBy: [asc(userDataJob.createdAt), asc(userDataJob.id)],
     });

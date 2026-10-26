@@ -23,13 +23,30 @@ describeWithDatabase("bounded durable UserData jobs", () => {
     await seedPlayers(2);
     await enqueueUserDataJob(db, { id: "a-broadcast", kind: "NEWS" });
     await enqueueUserDataJob(db, { id: "daily", kind: "DAILY_COUNTERS" });
-    expect(await processUserDataJobs(db, { jobId: "daily", budgetMs: 250_000 })).toBe(true);
+    expect(await processUserDataJobs(db, { jobKind: "DAILY_COUNTERS", budgetMs: 250_000 })).toBe(true);
     const jobs = await db.query.userDataJob.findMany({ orderBy: userDataJob.id });
     expect(jobs[0]?.completedAt).toBeNull();
     expect(jobs[1]?.completedAt).toBeInstanceOf(Date);
     await db.update(userData).set({ dailyMissions: sql`${userData.dailyMissions} + 1`, aiCalls: sql`${userData.aiCalls} + 1` });
     await processUserDataJobs(db);
     expect((await db.query.userData.findMany()).every(user => user.dailyMissions === 1 && user.aiCalls === 1)).toBe(true);
+  });
+
+  it("prioritizes daily resets in chronological order before reporting completion", async () => {
+    const db = await getTestDatabase();
+    await seedPlayers(2);
+    await db.insert(userDataJob).values([
+      { id: "broadcast", kind: "NEWS", createdAt: new Date("2021-01-01") },
+      { id: "older-reset", kind: "DAILY_COUNTERS", createdAt: new Date("2021-01-02") },
+      { id: "current-reset", kind: "DAILY_COUNTERS", createdAt: new Date("2021-01-03") },
+    ]);
+    const recorded = await recordQueries(() => processUserDataJobs(db, { jobKind: "DAILY_COUNTERS" }));
+    const updates = recorded.statements.filter(query => /^\s*UPDATE `UserDataJob` LEFT JOIN/.test(query));
+    expect(updates).toHaveLength(2);
+    expect(updates[0]).toContain("older-reset");
+    expect(updates[1]).toContain("current-reset");
+    expect((await db.query.userDataJob.findFirst({ where: eq(userDataJob.id, "broadcast") }))?.completedAt).toBeNull();
+    expect((await db.query.userData.findMany()).every(user => user.villagePrestige === 2)).toBe(true);
   });
 
   it.each([{ table: forumPost, name: "body" }, { table: userDataJob, name: "delivery job" }])("rolls back news publication when its $name insert fails", async ({ table }) => {
