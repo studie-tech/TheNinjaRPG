@@ -6,6 +6,7 @@ import { authenticateCronRequest } from "@/server/utils/cron";
 import { enqueueUserDataJob, processUserDataJobs } from "@/server/utils/userDataJobs";
 
 const ENDPOINT_NAME = "daily-counters";
+export const maxDuration = 300;
 
 /** Reset daily activity counters and grant the daily prestige increment under the cron timer. */
 export async function GET(request: Request) {
@@ -21,11 +22,18 @@ export async function GET(request: Request) {
 
   try {
     // The day ID and committed cursor make a partial grant safe to resume.
+    const jobId = `daily-counters:${new Date().toISOString().slice(0, 10)}`;
     await enqueueUserDataJob(drizzleDB, {
-      id: `daily-counters:${new Date().toISOString().slice(0, 10)}`,
+      id: jobId,
       kind: "DAILY_COUNTERS",
     });
-    await processUserDataJobs(drizzleDB);
+    // Finish this reset before reporting success; unrelated broadcasts must not
+    // postpone its boundary or cause new activity to be cleared after the response.
+    const completed = await processUserDataJobs(drizzleDB, {
+      jobId,
+      budgetMs: 250_000,
+    });
+    if (!completed) throw new Error("Daily counter reset needs a retry");
 
     return Response.json(`OK`);
   } catch (cause) {

@@ -32,16 +32,23 @@ export const enqueueUserDataJob = (
 /**
  * Drain the oldest work first, yielding between committed primary-key batches. The budget
  * bounds background invocations; the minute cron resumes any remaining durable cursor.
+ * A targeted reset bypasses broadcast backlogs; false means the budget expired.
  * Call only with an autocommit client: an enclosing transaction would retain every lock.
  */
-export const processUserDataJobs = async (client: DrizzleClient, budgetMs = 20_000) => {
+export const processUserDataJobs = async (
+  client: DrizzleClient,
+  { budgetMs = 20_000, jobId }: { budgetMs?: number; jobId?: string } = {},
+) => {
   const deadline = Date.now() + budgetMs;
   while (Date.now() < deadline) {
     const job = await client.query.userDataJob.findFirst({
-      where: isNull(userDataJob.completedAt),
+      where: and(
+        isNull(userDataJob.completedAt),
+        jobId ? eq(userDataJob.id, jobId) : undefined,
+      ),
       orderBy: [asc(userDataJob.createdAt), asc(userDataJob.id)],
     });
-    if (!job) return;
+    if (!job) return true;
     const recipients = recipientFilter(job);
     const users = await client
       .select({ userId: userData.userId })
@@ -89,6 +96,7 @@ export const processUserDataJobs = async (client: DrizzleClient, budgetMs = 20_0
     `),
     );
   }
+  return false;
 };
 
 const recipientFilter = (job: UserDataJob) =>

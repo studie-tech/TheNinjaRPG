@@ -102,49 +102,38 @@ export const forumRouter = createTRPCRouter({
       // Mutate
       const sanitized = moderated.sanitized;
       const postId = nanoid();
+      const threadValues = {
+        id: threadId,
+        title: input.title,
+        image: input.image,
+        boardId: input.board_id,
+        userId: effectiveUserId,
+      };
+      const postValues = {
+        id: postId,
+        content: sanitized,
+        threadId,
+        userId: effectiveUserId,
+        authorId: ctx.userId,
+      };
       const [, , boardUpdateResult] = await Promise.all([
-        (async () => {
-          const values = {
-            id: threadId,
-            title: input.title,
-            image: input.image,
-            boardId: input.board_id,
-            userId: effectiveUserId,
-          };
-          if (!isNews) return ctx.drizzle.insert(forumThread).values(values);
-          // Separate INSERTs cannot atomically publish the news and its durable delivery
-          // job. Keep this transaction to those two writes; moderation stays outside it.
-          return retryOnDeadlock(() =>
-            ctx.drizzle.transaction(async (tx) => {
-              const db = tx as unknown as DrizzleClient;
-              await db.insert(forumThread).values(values);
-              await enqueueUserDataJob(db, {
-                id: `news:${threadId}`,
-                kind: "NEWS",
-                excludedUserId: ctx.userId,
-              });
-            }),
-          );
-        })(),
-        ctx.drizzle.insert(forumPost).values({
-          id: postId,
-          content: sanitized,
-          threadId: threadId,
-          userId: effectiveUserId,
-          authorId: ctx.userId,
-        }),
+        isNews ? undefined : ctx.drizzle.insert(forumThread).values(threadValues),
+        (isNews
+          ? insertNewsThread(ctx.drizzle, threadValues, postValues, ctx.userId)
+          : ctx.drizzle.insert(forumPost).values(postValues)
+        ).then(() =>
+          deferModeration(ctx.drizzle, {
+            content: sanitized,
+            userId: ctx.userId,
+            relationType: "forumPost",
+            relationId: postId,
+          }),
+        ),
         ctx.drizzle
           .update(forumBoard)
           .set({ nThreads: sql`nThreads + 1`, updatedAt: new Date() })
           .where(eq(forumBoard.id, input.board_id)),
       ]);
-
-      deferModeration(ctx.drizzle, {
-        content: sanitized,
-        userId: ctx.userId,
-        relationType: "forumPost",
-        relationId: postId,
-      });
 
       // Note: In edge case where board is deleted during mutation, thread/post still exist
       // but board counter is not updated. This is acceptable as it prevents orphaned data.
@@ -324,3 +313,25 @@ async function fetchAndAuthorizeThreadModeration(
 
   return { user, thread };
 }
+
+/** Separate INSERTs must commit the news body and its delivery job with the thread. */
+export const insertNewsThread = (
+  client: DrizzleClient,
+  thread: typeof forumThread.$inferInsert,
+  post: typeof forumPost.$inferInsert,
+  authorId: string,
+) =>
+  retryOnDeadlock(() =>
+    client.transaction(async (tx) => {
+      // Only these three publication writes need a transaction; moderation and the
+      // independent board counter stay outside it, with no network work under the lock.
+      const db = tx as unknown as DrizzleClient;
+      await db.insert(forumThread).values(thread);
+      await db.insert(forumPost).values(post);
+      await enqueueUserDataJob(db, {
+        id: `news:${thread.id}`,
+        kind: "NEWS",
+        excludedUserId: authorId,
+      });
+    }),
+  );

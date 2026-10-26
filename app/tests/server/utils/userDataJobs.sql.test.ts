@@ -1,10 +1,11 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { notification, userData, userDataJob } from "@/drizzle/schema";
+import { forumPost, forumThread, notification, userData, userDataJob } from "@/drizzle/schema";
+import { insertNewsThread } from "@/routers/forum";
 import type { DrizzleClient } from "@/server/db";
 import { deliveredNotificationFilter, enqueueUserDataJob, processUserDataJobs } from "@/server/utils/userDataJobs";
 import { insertUsers } from "../../setup/factories";
-import { beforeStatements } from "../../setup/statements";
+import { beforeStatements, failStatements } from "../../setup/statements";
 import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 
 const old = new Date("2020-01-01T00:00:00Z");
@@ -15,7 +16,41 @@ const seedPlayers = (count: number) => insertUsers(Array.from({ length: count },
 })));
 
 describeWithDatabase("bounded durable UserData jobs", () => {
-  beforeEach(() => resetTables(userDataJob, notification, userData));
+  beforeEach(() => resetTables(userDataJob, notification, forumPost, forumThread, userData));
+
+  it("finishes a targeted daily reset before older broadcasts and preserves subsequent activity", async () => {
+    const db = await getTestDatabase();
+    await seedPlayers(2);
+    await enqueueUserDataJob(db, { id: "a-broadcast", kind: "NEWS" });
+    await enqueueUserDataJob(db, { id: "daily", kind: "DAILY_COUNTERS" });
+    expect(await processUserDataJobs(db, { jobId: "daily", budgetMs: 250_000 })).toBe(true);
+    const jobs = await db.query.userDataJob.findMany({ orderBy: userDataJob.id });
+    expect(jobs[0]?.completedAt).toBeNull();
+    expect(jobs[1]?.completedAt).toBeInstanceOf(Date);
+    await db.update(userData).set({ dailyMissions: sql`${userData.dailyMissions} + 1`, aiCalls: sql`${userData.aiCalls} + 1` });
+    await processUserDataJobs(db);
+    expect((await db.query.userData.findMany()).every(user => user.dailyMissions === 1 && user.aiCalls === 1)).toBe(true);
+  });
+
+  it.each([{ table: forumPost, name: "body" }, { table: userDataJob, name: "delivery job" }])("rolls back news publication when its $name insert fails", async ({ table }) => {
+    const db = await getTestDatabase();
+    await seedPlayers(2);
+    const failing = new Proxy(db, {
+      get(target, key, receiver) {
+        if (key === "transaction") return (run: (tx: DrizzleClient) => Promise<unknown>) => target.transaction(tx => run(failStatements(tx as unknown as DrizzleClient, table)));
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const thread = { id: "news-thread", title: "News", boardId: "board", userId: "player-0000" };
+    const post = { id: "news-body", threadId: thread.id, content: "Announcement", userId: thread.userId, authorId: thread.userId };
+    await expect(insertNewsThread(failing, thread, post, thread.userId)).rejects.toThrow("Statement failed on purpose");
+    expect(await db.query.forumThread.findMany()).toHaveLength(0);
+    expect(await db.query.forumPost.findMany()).toHaveLength(0);
+    expect(await db.query.userDataJob.findMany()).toHaveLength(0);
+    await insertNewsThread(db, thread, post, thread.userId);
+    expect(await db.query.forumPost.findMany()).toHaveLength(1);
+    expect(await db.query.userDataJob.findMany()).toHaveLength(1);
+  });
 
   it("commits at most 500 IDs at a time and resumes a partial prestige grant once", async () => {
     const db = await getTestDatabase();
