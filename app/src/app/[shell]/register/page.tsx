@@ -117,6 +117,22 @@ const REGISTER_BOX = {
   padding: false,
 } as const;
 
+const REGISTER_CAROUSEL_OPTIONS: React.ComponentProps<typeof Carousel>["opts"] = {
+  watchResize: (api, entries) => {
+    const slides = api.slideNodes();
+    const { slideRects } = api.internalEngine();
+    // AutoHeight caches step heights. Refresh for async content and form feedback;
+    // container height changes come from the plugin itself.
+    const hasHeightChange = entries.some(({ target }) => {
+      const index = slides.findIndex((slide) => slide === target);
+      return index !== -1 && slides[index]?.offsetHeight !== slideRects[index]?.height;
+    });
+    if (!hasHeightChange) return true;
+    api.reInit();
+    return false;
+  },
+};
+
 /**
  * The registration form component.
  * Holds the form and its mutations; each step subscribes only to the fields it shows, so a
@@ -249,7 +265,7 @@ const RegisterSteps: React.FC<{ form: RegisterFormApi; isLoading: boolean }> = (
 
   return (
     <>
-      <Carousel setApi={setCApi} plugins={plugins}>
+      <Carousel setApi={setCApi} plugins={plugins} opts={REGISTER_CAROUSEL_OPTIONS}>
         <CarouselContent className="items-start">
           <CarouselItem className="flex flex-col gap-4">
             <StepBanner alt="step1" src={IMG_REGISTRATIN_STEP1} />
