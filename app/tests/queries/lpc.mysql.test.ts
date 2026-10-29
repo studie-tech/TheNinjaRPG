@@ -3,12 +3,16 @@ import { eq } from "drizzle-orm";
 import { item, itemVariant, userAttribute, userData, userItem } from "@/drizzle/schema";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
+import { fetchItemWithCraftingRequirements } from "@/queries/item";
+import { itemRouter } from "@/routers/item";
+import { ItemValidator } from "@/validators/combat";
+import { ItemVariantValidator } from "@/validators/item";
 import { listUserItemForFetchUserItems, listUserItemForFetchUserItemsWithVariants } from "@/queries/item";
 import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import { fetchSectorWindowData } from "@/queries/travel";
 import type { DrizzleClient } from "@/server/db";
 import { insertItems, insertUserItems, insertUsers } from "../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
+import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
 
 describeWithDatabase("sprite appearance database snapshots", () => {
   beforeEach(async () => {
@@ -36,6 +40,25 @@ describeWithDatabase("sprite appearance database snapshots", () => {
     const user = await findUserDataForQueryUpdatedUser(client, "sprite-owner");
     expect(user?.attributes).toHaveLength(2);
     expect(user?.items[0]?.activeVariant?.lpcColor).toBe("red");
+  });
+  it("persists staff item and variant appearance overrides through their existing mutations", async () => {
+    const database = await getTestDatabase();
+    await database.update(userData).set({ role: "CODER" }).where(eq(userData.userId, "sprite-owner"));
+    const api = callerForDatabase(itemRouter, "sprite-owner", database);
+    const row = await fetchItemWithCraftingRequirements(database as unknown as DrizzleClient, "sprite-coat");
+    if (!row) throw new Error("Missing coat fixture");
+    const response = await api.update({ id: row.id, data: ItemValidator.parse({ ...row, target: "SELF", method: "SINGLE", lpcProfile: "robe", lpcColor: "green" }) });
+    expect(response.success, response.message).toBe(true);
+    expect(await database.query.item.findFirst({ where: eq(item.id, row.id) })).toMatchObject({ lpcProfile: "robe", lpcColor: "green" });
+    const variant = ItemVariantValidator.parse({ name: "Emerald cloak", image: "https://example.com/sprite.png", costType: "MONEY", cost: 0, order: 2, lpcProfile: "cloak", lpcColor: "green" });
+    const created = await api.upsertItemVariant({ itemId: row.id, variant });
+    expect(created.success, created.message).toBe(true);
+    const saved = await database.query.itemVariant.findFirst({ where: eq(itemVariant.name, variant.name) });
+    expect(saved).toMatchObject({ lpcProfile: "cloak", lpcColor: "green" });
+    if (!saved) throw new Error("Missing saved variant");
+    const updated = await api.upsertItemVariant({ itemId: row.id, variant: { ...variant, id: saved.id, lpcProfile: "leather", lpcColor: "purple" } });
+    expect(updated.success, updated.message).toBe(true);
+    expect(await database.query.itemVariant.findFirst({ where: eq(itemVariant.id, saved.id) })).toMatchObject({ lpcProfile: "leather", lpcColor: "purple" });
   });
   it("retains both worn copies of the same weapon in a sector appearance", async () => {
     const client = await getTestDatabase() as unknown as DrizzleClient;
