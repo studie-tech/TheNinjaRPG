@@ -42,7 +42,7 @@ describe("user cache updates", () => {
     await updateUserCache(test.client, key, {
       clanId: "new", clan: next as NonNullable<NonNullable<UserWithRelations>["clan"]>,
     }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value()?.userData.clan).toEqual(next);
+    expect(test.value()?.userData.clan).toEqual(next as NonNullable<NonNullable<UserWithRelations>["clan"]>);
     expect(test.value()?.userData.clanId).toBe("new");
     expect(test.reads()).toBe(0);
     test.close();
@@ -75,7 +75,7 @@ describe("user cache updates", () => {
       notifications: (current) => [...(current ?? []), notice],
     });
     expect(test.value()?.userData.money).toBe(90);
-    expect(test.value()?.notifications).toEqual(["preserved", notice]);
+    expect(test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications).toEqual(["preserved", notice]);
     expect(test.reads()).toBe(0);
     test.close();
   });
