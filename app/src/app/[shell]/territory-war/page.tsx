@@ -43,7 +43,7 @@ export default function TerritoryWarPage() {
     if (result.success || result.userPatch)
       await updateUser(result.userPatch, { revision });
     showMutationToast({ ...result, message: result.message ?? "Updated team" });
-    await Promise.all([utils.territoryWar.invalidate()]);
+    await utils.territoryWar.invalidate();
   };
   const create = api.territoryWar.createTeam.useMutation({
     onSuccess,

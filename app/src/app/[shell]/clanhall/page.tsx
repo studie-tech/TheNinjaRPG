@@ -49,7 +49,7 @@ export default function Clans() {
           });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([utils.clan.getAll.invalidate()]);
+          await utils.clan.getAll.invalidate();
         }
       },
     },
