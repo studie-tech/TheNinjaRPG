@@ -25,8 +25,8 @@ export const getDungeonRewardUserUpdate = async (
       granted: { titles: [], badges: [], sageModes: [] },
       requiresRelations: true,
     });
-  // Completion is counted when the final battle settles; its battle-ended profile
-  // refresh reconciles trackers before this scalar-only receipt is delivered.
+  // Completion is counted when the final battle settles. Its confirmed total lets
+  // clients detect a missed battle-ended profile refresh and reconcile trackers.
   const confirmation = await Promise.all([
     findDungeonRewardUserCache(client, before.userId),
     fetchMasterySources(client, before.userId),
