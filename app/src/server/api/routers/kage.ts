@@ -42,11 +42,13 @@ import {
   findUserById,
   incrementUserVillagePrestige,
 } from "@/queries/profile";
+import {
+  findGovernanceUserCache,
+  findVillageUserCache,
+} from "@/queries/socialUserCache";
 import { fetchVillage } from "@/queries/village";
-
 import { kageDefenseProcedures } from "@/routers/kageDefense";
 import { fetchUpdatedUser, updateNindo } from "@/routers/profile";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -67,6 +69,7 @@ import {
   kageVillageSchema,
   kageVoteSchema,
 } from "@/validators/kage";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import {
   structureUpgradeSchema,
   villageMaintenancePaymentSchema,
@@ -143,7 +146,7 @@ export const kageRouter = createTRPCRouter({
       };
     }),
   takeKage: protectedProcedure
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .input(
       z.object({
         reason: z
@@ -154,7 +157,7 @@ export const kageRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const { user } = await fetchUpdatedUser({
+      const { user, requiresUserRefresh } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -183,7 +186,22 @@ export const kageRouter = createTRPCRouter({
         ),
       ]);
       if (result.rowsAffected === 0) return errorResponse("No village found");
-      return { success: true, message: "You have taken the kage position" };
+      // Automatic settlement may change unrelated progression; the caller reconciles that response.
+      if (requiresUserRefresh)
+        return { success: true, message: "You have taken the kage position" };
+      const [savedVillage, savedUser] = await Promise.all([
+        findVillageUserCache(ctx.drizzle, user.villageId!),
+        findGovernanceUserCache(ctx.drizzle, ctx.userId),
+      ]);
+      return {
+        success: true,
+        message: "You have taken the kage position",
+        userPatch: {
+          village: savedVillage,
+          rank: savedUser?.rank,
+          villagePrestige: savedUser?.villagePrestige,
+        },
+      };
     }),
   upsertNotice: protectedProcedure
     .meta({
@@ -306,7 +324,7 @@ export const kageRouter = createTRPCRouter({
     }),
   payStructureMaintenance: protectedProcedure
     .input(villageMaintenancePaymentSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const result = await updateVillageForPayStructureMaintenance(
         ctx.drizzle,
@@ -314,7 +332,13 @@ export const kageRouter = createTRPCRouter({
         ctx,
       );
       return result.rowsAffected > 0
-        ? { success: true, message: "Structure maintenance paid" }
+        ? {
+            success: true,
+            message: "Structure maintenance paid",
+            userPatch: {
+              village: await findVillageUserCache(ctx.drizzle, input.villageId),
+            },
+          }
         : errorResponse(
             "Only the village Kage can pay an outstanding bill, and the village must have enough tokens",
           );
@@ -464,9 +488,9 @@ export const kageRouter = createTRPCRouter({
   /** Fill the current vacancy once, recording the approved motion's successor when applicable. */
   nominateKage: protectedProcedure
     .input(kageNominationSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      return (
+      const result =
         (await withKageDefense(ctx.drizzle, input.villageId, async (tx, hall) => {
           const [elder, candidate, motion] = await queryInTransaction([
             findUserById(tx, ctx.userId),
@@ -521,7 +545,14 @@ export const kageRouter = createTRPCRouter({
             success: true,
             message: `${candidate.username} appointed Kage. Publish a schedule within ${KAGE_DEFENSE_SETUP_HOURS} hours.`,
           };
-        })) ?? errorResponse("Village not found")
-      );
+        })) ?? errorResponse("Village not found");
+      if (!result.success) return result;
+      return {
+        ...result,
+        userPatch: {
+          village: await findVillageUserCache(ctx.drizzle, input.villageId),
+          ...(input.userId === ctx.userId ? { rank: "JONIN" as const } : {}),
+        },
+      };
     }),
 });

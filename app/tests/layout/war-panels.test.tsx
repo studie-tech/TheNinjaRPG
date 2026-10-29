@@ -24,10 +24,10 @@ import { defaultWarRules } from "@/validators/war";
 import { ensureDom } from "../setup/dom.mjs";
 
 type ObjectiveInfo = NonNullable<RouterOutputs["war"]["getObjectiveWarInfo"]>;
-type MutationResult = { success: boolean; message: string; battleId?: string };
+type MutationResult = import("@/validators/userCache").UserDeltaResponse & { battleId?: string };
 type MutationCallbacks = {
-  onMutate?: () => void;
-  onSuccess?: (result: MutationResult) => void | Promise<void>;
+  onMutate?: () => number | undefined;
+  onSuccess?: (result: MutationResult, variables: unknown, revision: number | undefined) => void | Promise<void>;
   onError?: (error: Error) => void;
 };
 type PollInterval = (query: {
@@ -38,6 +38,7 @@ type PollInterval = (query: {
 const mutation = () => {
   const mutate = vi.fn();
   let callbacks: MutationCallbacks;
+  let revision: number | undefined;
   let setPending: (pending: boolean) => void;
   return {
     mutate,
@@ -50,7 +51,7 @@ const mutation = () => {
         isPending,
         variables,
         mutate: (input: unknown) => {
-          options.onMutate?.();
+          revision = options.onMutate?.();
           mutate(input);
           setVariables(input);
           setIsPending(true);
@@ -58,7 +59,7 @@ const mutation = () => {
       };
     },
     respond: async (result: MutationResult) => {
-      await callbacks.onSuccess?.(result);
+      await callbacks.onSuccess?.(result, undefined, revision);
       setPending(false);
     },
     fail: (message: string) => {
@@ -285,7 +286,7 @@ beforeEach(() => {
     combat: { startShrineBattle: attack },
   });
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-    () => ({ data: user, timeDiff, updateUser }) as never,
+    () => ({ data: user, timeDiff, updateUser, prepareUserUpdate: () => 7 }) as never,
   );
   vi.spyOn(routing, "pushToCombat").mockImplementation(() => {});
   // Exercise our mounting/selection logic; shared Modal and Radix behavior have their own coverage.
@@ -624,7 +625,7 @@ describe("war field objectives", () => {
     expect(view.getByRole("alert").textContent).toBe("Return to your village first");
     expect(invalidateObjective).toHaveBeenCalledWith({ warId: "war-1" });
     expect(invalidateWars).toHaveBeenCalledTimes(1);
-    expect(invalidateUser).toHaveBeenCalledTimes(1);
+    expect(invalidateUser).not.toHaveBeenCalled();
     fireEvent.click(view.getByRole("button", { name: "Start sabotage" }));
     expect(view.queryByRole("alert")).toBeNull();
     act(() => start.fail("Network unavailable"));
@@ -832,10 +833,11 @@ describe("war dashboard updates", () => {
     fireEvent.click(
       view.getAllByRole("button", { name: "Convert all war points" })[0]!,
     );
-    await act(() => convert.respond({ success: true, message: "Prestige granted" }));
+    await act(() => convert.respond({ success: true, message: "Prestige granted", userPatch: { villagePrestige: 1250 } }));
     expect(view.getByRole("status").textContent).toBe("Prestige granted");
     expect(invalidateClaims).toHaveBeenCalledTimes(2);
-    expect(invalidateUser).toHaveBeenCalledTimes(1);
+    expect(invalidateUser).not.toHaveBeenCalled();
+    expect(updateUser).toHaveBeenCalledWith({ villagePrestige: 1250 }, { revision: 7 });
   });
 
   it("refreshes expiring point claims without waiting for the next background poll", () => {

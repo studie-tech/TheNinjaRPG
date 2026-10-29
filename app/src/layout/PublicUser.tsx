@@ -136,6 +136,7 @@ import { useUserData } from "@/utils/UserContext";
 import { type ExperienceAwardSchema, experienceAwardSchema } from "@/validators/misc";
 import { getSearchValidator } from "@/validators/register";
 import { awardSchema } from "@/validators/reputation";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import GlowingBorder from "./GlowingBorder";
 
 // The staff editor includes content and 3D previews; load it only when its modal opens.
@@ -244,7 +245,8 @@ const DebugUserCloneControl: React.FC<{
         // refresh/navigation so another copy always requires a new explicit confirmation.
         setConfirmedSource(null);
         void Promise.allSettled([
-          utils.profile.getUser.invalidate(),
+          // Cloning replaces character state and generated relation IDs; reload its complete projection.
+          utils.profile.getUser.refetch(),
           utils.profile.getPublicUser.invalidate({ userId: cloneUserId }),
         ]);
         router.push("/profile");
@@ -596,10 +598,22 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 
   const updateUserId = api.staff.updateUserId.useMutation({
     meta: { handlesTransportError: true },
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
+      const response: UserDeltaResponse = result;
+      if (response.success || response.userPatch)
+        await updateUser(response.userPatch, { revision });
+    },
   });
 
   const unstuckUser = api.staff.forceAwake.useMutation({
     meta: { handlesTransportError: true },
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
+      const response: UserDeltaResponse = result;
+      if (response.success || response.userPatch)
+        await updateUser(response.userPatch, { revision });
+    },
   });
 
   const handleForceAwake = async () => {
@@ -627,7 +641,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       setForceAwakeReason("");
       void Promise.allSettled([
         utils.profile.getPublicUser.invalidate({ userId: target.userId }),
-        utils.profile.getUser.invalidate(),
       ]);
     } catch (error) {
       // Non-network tRPC failures are already rendered exactly once by the global handler.
@@ -2199,7 +2212,6 @@ const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
         utils.profile.getPublicUser.invalidate({ userId: request.userId }),
         utils.profile.getPublicUser.invalidate({ userId: request.newUserId }),
         utils.profile.getPublicUsers.invalidate(),
-        utils.profile.getUser.invalidate(),
       ]);
       router.replace(`/userid/${encodeURIComponent(request.newUserId)}`);
     } catch (error) {

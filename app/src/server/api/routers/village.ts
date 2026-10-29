@@ -54,6 +54,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
 import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSwapVillage } from "@/utils/permissions";
@@ -214,10 +215,10 @@ export const villageRouter = createTRPCRouter({
     .meta({
       mcp: { description: "Leave current village to become outlaw" },
     })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Queries
-      const { user } = await fetchUpdatedUser({
+      const { user, requiresUserRefresh } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -238,15 +239,23 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      await updateUserDataForLeaveVillage(ctx.drizzle, user, ctx);
+      const saved = await updateUserDataForLeaveVillage(ctx.drizzle, user, ctx);
+      if (!saved.rowsAffected)
+        return errorResponse("Your status changed. Try again while awake.");
 
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
-      return { success: true, message: "You have left the village" };
+      return {
+        success: true,
+        message: "You have left the village",
+        userPatch: requiresUserRefresh
+          ? undefined
+          : await getMembershipUserPatch(ctx.drizzle, user),
+      };
     }),
   joinVillage: protectedProcedure
     .meta({ mcp: { description: "Join a village as an outlaw" } })
     .input(z.object({ villageId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Queries
       const [updatedUser, village] = await Promise.all([
@@ -271,22 +280,30 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      await Promise.all([
+      const [saved] = await Promise.all([
         updateUserDataForJoinVillage(ctx.drizzle, village, user, ctx),
         // Clear current sensei requests for this user
         deleteRequests(ctx.drizzle, ctx.userId),
         // Remove the user as sensei for any active students
         updateUserDataForJoinVillage2(ctx.drizzle, ctx),
       ]);
+      if (!saved.rowsAffected)
+        return errorResponse("Your status changed. Try again while awake.");
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
-      return { success: true, message: "You have joined the village" };
+      return {
+        success: true,
+        message: "You have joined the village",
+        userPatch: updatedUser.requiresUserRefresh
+          ? undefined
+          : await getMembershipUserPatch(ctx.drizzle, user),
+      };
     }),
   swapVillage: protectedProcedure
     .input(z.object({ villageId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const { user } = await fetchUpdatedUser({
+      const { user, requiresUserRefresh } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -314,7 +331,7 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      await Promise.all([
+      const [saved] = await Promise.all([
         updateUserDataForSwapVillage(ctx.drizzle, village, user, cost, ctx),
         // Clear current sensei requests for this user
         deleteRequests(ctx.drizzle, ctx.userId),
@@ -322,8 +339,17 @@ export const villageRouter = createTRPCRouter({
         updateUserDataForJoinVillage2(ctx.drizzle, ctx),
       ]);
 
+      if (!saved.rowsAffected)
+        return errorResponse("Your status changed. Try again while awake.");
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
-      return { success: true, message: "You have swapped villages" };
+      return {
+        success: true,
+        message: "You have swapped villages",
+        userDelta: requiresUserRefresh ? undefined : { reputationPoints: -cost },
+        userPatch: requiresUserRefresh
+          ? undefined
+          : await getMembershipUserPatch(ctx.drizzle, user),
+      };
     }),
   getAlliances: publicProcedure
     .meta({

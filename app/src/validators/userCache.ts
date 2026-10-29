@@ -19,7 +19,6 @@ import type {
 import { baseServerResponse } from "@/validators/base";
 import { QuestTracker } from "@/validators/objectives";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
-import { boostTemplateEntrySchema } from "@/validators/shrine";
 
 export const userDeltaSchema = z.object({
   clan: z
@@ -27,6 +26,7 @@ export const userDeltaSchema = z.object({
       id: z.string(),
       bank: z.number().optional(),
       repTreasury: z.number().optional(),
+      points: z.number().optional(),
     })
     .optional(),
   village: z
@@ -227,33 +227,51 @@ export const userPatchSchema = z.object({
       ),
     )
     .optional(),
+  clanId: z.string().nullable().optional(),
+  villageId: z.string().nullable().optional(),
+  sector: z.number().optional(),
+  longitude: z.number().optional(),
+  latitude: z.number().optional(),
+  isOutlaw: z.boolean().optional(),
+  joinedVillageAt: z.date().optional(),
+  immunityUntil: z.date().optional(),
+  stealthActive: z.boolean().optional(),
+  stealthActivatedAt: z.date().nullable().optional(),
+  bracketImmunityLiftedUntil: z.date().nullable().optional(),
+  bracketImmunityPausedAt: z.date().nullable().optional(),
+  warParticipantUntil: z.date().nullable().optional(),
+  warMission: z.custom<NonNullable<UserWithRelations>["warMission"]>().optional(),
+  activeWars: z
+    .custom<NonNullable<UserWithRelations>["activeWars"]>(Array.isArray)
+    .optional(),
+  shrineBattles: z
+    .custom<NonNullable<UserWithRelations>["shrineBattles"]>(Array.isArray)
+    .optional(),
+  activeRaids: z
+    .custom<NonNullable<UserWithRelations>["activeRaids"]>(Array.isArray)
+    .optional(),
   clan: z
-    .object({
-      id: z.string(),
-      bank: z.number().optional(),
-      repTreasury: z.number().optional(),
-    })
+    .custom<
+      | (Partial<NonNullable<NonNullable<UserWithRelations>["clan"]>> & { id: string })
+      | null
+    >()
     .optional(),
   avatar: z.string().nullable().optional(),
   avatarLight: z.string().nullable().optional(),
   jutsuLoadout: z.string().optional(),
   loadout: z.object({ jutsuIds: z.array(z.string()) }).optional(),
   village: z
-    .object({
-      id: z.string(),
-      tokens: z.number().optional(),
-      hexColor: z.string().optional(),
-      shrineSettings: z
-        .object({
-          unlockedAiIds: z.array(z.string()).optional(),
-          activeBoosts: z.record(z.string(), z.string()).optional(),
-          activeAiIds: z.array(z.string()).optional(),
-          boostTemplate: z.array(boostTemplateEntrySchema).optional(),
-          boostTemplateUpdatedBy: z.string().optional(),
-          boostTemplateUpdatedAt: z.string().optional(),
+    .custom<
+      | (Partial<
+          Omit<NonNullable<NonNullable<UserWithRelations>["village"]>, "shrineSettings">
+        > & {
+          id: string;
+          shrineSettings?: Partial<
+            NonNullable<NonNullable<UserWithRelations>["village"]>["shrineSettings"]
+          >;
         })
-        .optional(),
-    })
+      | null
+    >()
     .optional(),
   occupation: z.enum(OCCUPATIONS).optional(),
   occupationSignupAt: z.date().optional(),
