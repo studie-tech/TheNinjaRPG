@@ -129,7 +129,11 @@ export const StripePaymentReturn = () => {
         utils.stripe.getPendingCheckouts.invalidate(),
         ...(result.success
           ? [
-              updateUser(result.userPatch, { revision, delta: result.userDelta }),
+              updateUser(result.userPatch, {
+                revision,
+                delta: result.userDelta,
+                achievementProgress: result.achievementProgress,
+              }),
               utils.paypal.getRecentRepsCount.invalidate(),
               utils.stripe.getSubscriptions.invalidate(),
             ]
