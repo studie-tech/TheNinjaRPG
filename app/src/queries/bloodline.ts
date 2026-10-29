@@ -773,8 +773,8 @@ export const fetchBloodlineCacheUser = (client: DrizzleClient, userId: string) =
     with: bloodlineCacheUserRelations,
   });
 
-/** Include quest eligibility when a new ownership receipt can advance collection goals. */
-export const fetchBloodlineAcquisitionUser = (client: DrizzleClient, userId: string) =>
+/** Load quest eligibility alongside passive sources for a lineage change. */
+export const fetchBloodlineProgressionUser = (client: DrizzleClient, userId: string) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
     with: {

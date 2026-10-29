@@ -52,6 +52,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { withRequestScope } from "@/server/requestScope";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
@@ -247,9 +248,9 @@ export const villageRouter = createTRPCRouter({
       return {
         success: true,
         message: "You have left the village",
-        userPatch: requiresUserRefresh
-          ? undefined
-          : await getMembershipUserPatch(ctx.drizzle, user),
+        ...(!requiresUserRefresh
+          ? await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)
+          : {}),
       };
     }),
   joinVillage: protectedProcedure
@@ -293,9 +294,9 @@ export const villageRouter = createTRPCRouter({
       return {
         success: true,
         message: "You have joined the village",
-        userPatch: updatedUser.requiresUserRefresh
-          ? undefined
-          : await getMembershipUserPatch(ctx.drizzle, user),
+        ...(!updatedUser.requiresUserRefresh
+          ? await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)
+          : {}),
       };
     }),
   swapVillage: protectedProcedure
@@ -346,9 +347,9 @@ export const villageRouter = createTRPCRouter({
         success: true,
         message: "You have swapped villages",
         userDelta: requiresUserRefresh ? undefined : { reputationPoints: -cost },
-        userPatch: requiresUserRefresh
-          ? undefined
-          : await getMembershipUserPatch(ctx.drizzle, user),
+        ...(!requiresUserRefresh
+          ? await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)
+          : {}),
       };
     }),
   getAlliances: publicProcedure
@@ -653,6 +654,24 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "You have declared yourself an enemy" };
     }),
 });
+
+/** Village changes alter automatic quest admission and membership-dependent progression together. */
+const getVillageChangeUserUpdate = async (client: DrizzleClient, userId: string) => {
+  const updatedUser = await withRequestScope(() =>
+    fetchUpdatedUser({ client, userId }),
+  );
+  if (!updatedUser.user) return {};
+  const membership = await getMembershipUserPatch(client, updatedUser.user);
+  if (!membership) return {};
+  const progression = getUserProgressionUpdate(
+    updatedUser.user,
+    updatedUser.publishedAchievementIds,
+  );
+  return {
+    ...progression,
+    userPatch: { ...progression.userPatch, ...membership },
+  };
+};
 
 /**
  * Upserts the alliance status between two villages.

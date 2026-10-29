@@ -40,8 +40,7 @@ import {
   deleteBloodlineForDelete,
   deleteBloodlineReskinForDeleteReskin,
   fetchBloodline,
-  fetchBloodlineAcquisitionUser,
-  fetchBloodlineCacheUser,
+  fetchBloodlineProgressionUser,
   fetchBloodlineReskin,
   fetchBloodlines,
   fetchItemBloodlineRolls,
@@ -344,9 +343,10 @@ export const bloodlineRouter = createTRPCRouter({
 
       const lineagePatch = await bloodlineCachePatch(
         ctx.drizzle,
-        user,
+        { ...user, userQuests: updatedUser.progressionQuestCandidates },
         line,
         updatedUser.settings,
+        { questBootstrap: updatedUser.questBootstrap },
       );
       const progression =
         updatedUser.requiresProgressionRefresh === false && lineagePatch
@@ -725,12 +725,12 @@ export const bloodlineRouter = createTRPCRouter({
       // Query
       const [user, prevRoll, allBloodlines, registrationRoll, settings, progression] =
         await Promise.all([
-          fetchBloodlineAcquisitionUser(ctx.drizzle, ctx.userId),
+          fetchBloodlineProgressionUser(ctx.drizzle, ctx.userId),
           fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
           fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
           findBloodlineRollsForRoll(ctx.drizzle, ctx),
           fetchAllGameSettings(ctx.drizzle),
-          fetchBloodlineAcquisitionProgression(ctx.drizzle, ctx.userId),
+          fetchBloodlineProgression(ctx.drizzle, ctx.userId),
         ]);
       // Guard
       if (!user) return errorResponse("User not found");
@@ -854,11 +854,11 @@ export const bloodlineRouter = createTRPCRouter({
       // Fetch
       const [user, bloodlines, previousRolls, settings, progression] =
         await Promise.all([
-          fetchBloodlineAcquisitionUser(ctx.drizzle, ctx.userId),
+          fetchBloodlineProgressionUser(ctx.drizzle, ctx.userId),
           fetchBloodlines(ctx.drizzle),
           fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
           fetchAllGameSettings(ctx.drizzle),
-          fetchBloodlineAcquisitionProgression(ctx.drizzle, ctx.userId),
+          fetchBloodlineProgression(ctx.drizzle, ctx.userId),
         ]);
       if (!user) return errorResponse("User not found");
       if (user.bloodlineId) {
@@ -946,10 +946,11 @@ export const bloodlineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, roll, settings] = await Promise.all([
-        fetchBloodlineCacheUser(ctx.drizzle, ctx.userId),
+      const [user, roll, settings, progression] = await Promise.all([
+        fetchBloodlineProgressionUser(ctx.drizzle, ctx.userId),
         fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
+        fetchBloodlineProgression(ctx.drizzle, ctx.userId),
       ]);
       if (!user) return errorResponse("User not found");
       // Guard
@@ -978,7 +979,13 @@ export const bloodlineRouter = createTRPCRouter({
       }
       return {
         success: true,
-        userPatch: await bloodlineCachePatch(ctx.drizzle, user, null, settings),
+        userPatch: await bloodlineCachePatch(
+          ctx.drizzle,
+          user,
+          null,
+          settings,
+          progression,
+        ),
         message: removalCost
           ? `Bloodline removed for ${REMOVAL_COST} reps`
           : "Bloodline removed for free",
@@ -994,10 +1001,10 @@ export const bloodlineRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, line, settings, progression] = await Promise.all([
-        fetchBloodlineAcquisitionUser(ctx.drizzle, ctx.userId),
+        fetchBloodlineProgressionUser(ctx.drizzle, ctx.userId),
         fetchBloodline(ctx.drizzle, input.bloodlineId),
         fetchAllGameSettings(ctx.drizzle),
-        fetchBloodlineAcquisitionProgression(ctx.drizzle, ctx.userId),
+        fetchBloodlineProgression(ctx.drizzle, ctx.userId),
       ]);
       if (!user) return errorResponse("User not found");
       // Guard
@@ -1158,11 +1165,8 @@ export const bloodlineDatabaseFilter = (input?: BloodlineFilteringSchema) => {
   ];
 };
 
-/** Independent quest eligibility reads share the acquisition's opening query wave. */
-const fetchBloodlineAcquisitionProgression = async (
-  client: DrizzleClient,
-  userId: string,
-) => {
+/** Independent quest eligibility reads share the lineage mutation's opening query wave. */
+const fetchBloodlineProgression = async (client: DrizzleClient, userId: string) => {
   const [achievements, questBootstrap] = await Promise.all([
     fetchAchievementCatalogue(client),
     fetchQuestBootstrap(client, userId),
@@ -1173,29 +1177,32 @@ const fetchBloodlineAcquisitionProgression = async (
 /** Confirm SQL refunds/debits and reconcile lineage-dependent quest progression when needed. */
 const bloodlineCachePatch = async (
   client: DrizzleClient,
-  user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineCacheUser>>> &
-    Partial<
-      Pick<
-        NonNullable<Awaited<ReturnType<typeof fetchBloodlineAcquisitionUser>>>,
-        "userQuests" | "completedQuests"
-      >
-    >,
+  user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineProgressionUser>>>,
   line: Bloodline | null,
   settings: Parameters<typeof getBloodlinePassivePatch>[2],
-  progression?: Awaited<ReturnType<typeof fetchBloodlineAcquisitionProgression>>,
+  progression: {
+    questBootstrap: Awaited<ReturnType<typeof fetchQuestBootstrap>>;
+    achievements?: Awaited<ReturnType<typeof fetchAchievementCatalogue>>;
+  },
 ) => {
-  if (line && progression) {
-    const questUser = {
-      ...user,
-      bloodlineId: line.id,
-      userQuests: [...(user.userQuests ?? [])],
-      completedQuests: user.completedQuests ?? [],
-    };
-    questUser.userQuests.push(
-      ...mockAchievementHistoryEntries(progression.achievements, questUser),
-    );
-    const quests = getUserQuests(questUser);
-    const needsCollectionProgression = quests.some((quest) =>
+  const questUser = {
+    ...user,
+    userQuests: [...user.userQuests],
+  };
+  questUser.userQuests.push(
+    ...mockAchievementHistoryEntries(progression.achievements ?? [], questUser),
+  );
+  const activeQuestIds = new Set(getUserQuests(questUser).map((quest) => quest.id));
+  questUser.bloodlineId = line?.id ?? null;
+  const quests = getUserQuests(questUser);
+  const hasQuestEligibilityChange =
+    activeQuestIds.size !== quests.length ||
+    quests.some((quest) => !activeQuestIds.has(quest.id));
+  // Only acquisition changes the roll history that drives collection objectives.
+  const needsCollectionProgression =
+    line !== null &&
+    progression.achievements !== undefined &&
+    quests.some((quest) =>
       quest.content.objectives.some(
         (objective) =>
           objective.task === "bloodline_collection" &&
@@ -1205,14 +1212,14 @@ const bloodlineCachePatch = async (
             ?.goals.find((goal) => goal.id === objective.id)?.done,
       ),
     );
-    const needsQuestBootstrap = (["tier", "exam"] as const).some(
-      (type) =>
-        !quests.some((quest) => quest.questType === type) &&
-        canBootstrapQuestType(progression.questBootstrap, type, user.level),
-    );
-    // The canonical read owns collection completion receipts and automatic quest admission.
-    if (needsCollectionProgression || needsQuestBootstrap) return undefined;
-  }
+  const needsQuestBootstrap = (["tier", "exam"] as const).some(
+    (type) =>
+      !quests.some((quest) => quest.questType === type) &&
+      canBootstrapQuestType(progression.questBootstrap, type, user.level),
+  );
+  // The canonical read owns collection receipts, quest admission and tracker retirement.
+  if (hasQuestEligibilityChange || needsCollectionProgression || needsQuestBootstrap)
+    return undefined;
   const saved = await findBloodlineCacheState(client, user.userId);
   if (!saved || saved.bloodlineId !== (line?.id ?? null)) return undefined;
   return {

@@ -100,6 +100,7 @@ export default function VillageOverview() {
         if (data.success || data.userPatch)
           await updateUser(data.userPatch, {
             revision,
+            achievementProgress: data.achievementProgress,
             ...(data.userDelta ? { delta: data.userDelta } : {}),
           });
         showMutationToast(data);

@@ -1,0 +1,89 @@
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
+import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
+import { actionLog, gameSetting, quest, questHistory, userData, userVote, village } from "@/drizzle/schema";
+import { profileRouter } from "@/server/api/routers/profile";
+import { villageRouter } from "@/server/api/routers/village";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { MoveToObjective, SimpleObjective } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
+import { insertQuests, insertUsers } from "../../../setup/factories";
+import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+
+const userId = "membership-quest-actor";
+const key = [["profile", "getUser"], { type: "query" }];
+const content = { objectives: [SimpleObjective.parse({ id: "arena", task: "arena_kills", value: 100 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] };
+
+describeWithDatabase("village membership quest reconciliation", () => {
+  beforeEach(async () => {
+    await resetTables(actionLog, questHistory, quest, userVote, gameSetting, userData, village);
+    const db = await getTestDatabase();
+    await db.insert(village).values([
+      { id: "old-home", name: "Old Home", sector: 1, kageId: "", type: "VILLAGE", joinable: true },
+      { id: "new-home", name: "New Home", sector: 2, kageId: "", type: "VILLAGE", joinable: true },
+      { id: VILLAGE_SYNDICATE_ID, name: "Syndicate", sector: 3, kageId: "", type: "OUTLAW" },
+    ]);
+    await insertUsers([{ userId, username: "MembershipActor", role: "OWNER", rank: "JONIN", level: 50,
+      status: "AWAKE", villageId: "old-home", regeneration: 0, primaryElement: "Fire", secondaryElement: "Water",
+      updatedAt: new Date(), regenAt: new Date(), reputationPoints: 100000 }]);
+    await db.insert(userVote).values({ id: "membership-vote", userId, secret: "member1", lastVoteAt: new Date() });
+  });
+
+  it.each(["joinVillage", "leaveVillage", "swapVillage"] as const)("%s admits destination quests and replaces the source projection without a profile refetch", async (method) => {
+    const db = await getTestDatabase();
+    const source = method === "joinVillage" ? VILLAGE_SYNDICATE_ID : "old-home";
+    const destination = method === "leaveVillage" ? VILLAGE_SYNDICATE_ID : "new-home";
+    await db.update(userData).set({ villageId: source, isOutlaw: method === "joinVillage" }).where(eq(userData.userId, userId));
+    await insertQuests([
+      { id: "old-achievement", questType: "achievement", requiredVillage: source, content, hidden: false },
+      { id: "new-achievement", questType: "achievement", requiredVillage: destination, content, hidden: false },
+      { id: "old-tier", questType: "tier", requiredVillage: source, requiredLevel: 1, maxLevel: 100, hidden: false, content },
+      ...(["tier", "exam"] as const).map((questType) => ({ id: `new-${questType}`, questType, requiredVillage: destination, requiredLevel: 1, maxLevel: 100, hidden: false, content })),
+    ]);
+    const profile = callerForDatabase(profileRouter, userId, db);
+    const initial = await profile.getUser();
+    expect(initial.achievementProgress.map((entry) => entry.questId)).toEqual(["old-achievement"]);
+    const client = new QueryClient();
+    client.setQueryData(key, initial);
+    const getUser = vi.fn(() => profile.getUser());
+    const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      const revision = prepareUserUpdate(client, key);
+      const caller = callerForDatabase(villageRouter, userId, db);
+      const result = method === "leaveVillage" ? await caller.leaveVillage() : await caller[method]({ villageId: destination });
+      expect(result.success).toBe(true);
+      expect(result.userPatch?.userQuests?.map((entry) => entry.questId).sort()).toEqual(["new-exam", "new-tier"]);
+      expect(result.achievementProgress?.map((entry) => entry.questId)).toEqual(["new-achievement"]);
+      await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress, ...(result.userDelta ? { delta: result.userDelta } : {}) });
+      expect(getUser).not.toHaveBeenCalled();
+      const cached = client.getQueryData<typeof initial>(key)!;
+      expect(cached.userData?.villageId).toBe(destination);
+      expect(cached.userData?.questData?.map((tracker) => tracker.id).sort()).toEqual(["new-achievement", "new-exam", "new-tier"]);
+      expect((await db.query.questHistory.findMany({ where: eq(questHistory.userId, userId) })).map((entry) => entry.questId).sort()).toEqual(["new-exam", "new-tier", "old-tier"]);
+      const canonical = await profile.getUser();
+      expect(cached.userData?.questData?.slice().sort((a, b) => a.id.localeCompare(b.id))).toEqual(canonical.userData?.questData?.slice().sort((a, b) => a.id.localeCompare(b.id)));
+      expect(cached.userData?.userQuests.slice().sort((a, b) => a.questId.localeCompare(b.questId))).toEqual(canonical.userData?.userQuests.slice().sort((a, b) => a.questId.localeCompare(b.questId)));
+      expect(cached.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry)).toEqual(canonical.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry));
+      expect(cached.userData?.regeneration).toBe(canonical.userData?.regeneration);
+    } finally { unsubscribe(); client.clear(); }
+  });
+
+  it("keeps newly admitted quest locations private in a village change response", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ role: "USER", villageId: VILLAGE_SYNDICATE_ID, isOutlaw: true }).where(eq(userData.userId, userId));
+    await insertQuests([{ id: "private-destination-tier", questType: "tier", requiredVillage: "new-home", requiredLevel: 1, maxLevel: 100, hidden: false,
+      content: { ...content, objectives: [MoveToObjective.parse({ id: "secret", task: "move_to_location", sector: 723, longitude: 41, latitude: 37, hideLocation: true })] } }]);
+    const result = await callerForDatabase(villageRouter, userId, db).joinVillage({ villageId: "new-home" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch?.userQuests?.[0]?.quest.content.objectives[0]).toMatchObject({ sector: 1337, longitude: 1337, latitude: 1337 });
+    const publicGoal = result.userPatch?.questData?.[0]?.goals[0];
+    expect(publicGoal?.id).toBe("secret");
+    expect(publicGoal).not.toHaveProperty("sector");
+    expect(publicGoal).not.toHaveProperty("longitude");
+    expect(publicGoal).not.toHaveProperty("latitude");
+    const saved = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+    expect(saved?.questData?.[0]?.goals[0]).toMatchObject({ sector: 723, longitude: 41, latitude: 37 });
+  });
+});
