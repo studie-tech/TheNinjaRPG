@@ -5,6 +5,7 @@ import {
   bloodline,
   item,
   itemLoadout,
+  jutsuLoadout,
   skillTree,
   title,
   userData,
@@ -18,6 +19,10 @@ import { calcEnergy } from "@/libs/profile";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";
 import { bloodrightRouter } from "@/server/api/routers/bloodright";
 import type { DrizzleClient } from "@/server/db";
+import { staffRouter } from "@/server/api/routers/staff";
+import { effectiveMasteries } from "@/libs/mastery";
+import { calcMaxEnergy } from "@/libs/profile";
+import { fetchMasterySources } from "@/queries/skillTree";
 import { itemRouter } from "@/server/api/routers/item";
 import { countUserReads } from "../../../setup/userReads";
 import { beforeStatements } from "../../../setup/statements";
@@ -38,7 +43,7 @@ const userId = "cache-equipment-player";
 describeWithDatabase("committed profile cache patches", () => {
   beforeEach(async () => {
     const db = await getTestDatabase();
-    await resetTables(userTitle, title, userQueue, userItemImbuement, userSkill, skillTree, itemLoadout, userItem, item, userData, bloodline);
+    await resetTables(userTitle, title, userQueue, userItemImbuement, userSkill, skillTree, jutsuLoadout, itemLoadout, userItem, item, userData, bloodline);
     await insertUsers([{
       userId,
       level: 10,
@@ -80,6 +85,27 @@ describeWithDatabase("committed profile cache patches", () => {
   afterEach(() => {
     resetServerModuleStubs();
     vi.restoreAllMocks();
+  });
+
+  it("returns the staff caller's post-unequip masteries and maximum energy", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, userId));
+    const result = await (await callerFor(staffRouter, userId)).unequipAllGear();
+    const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))!;
+    const sources = await fetchMasterySources(db, userId);
+    expect(result).toMatchObject({ success: true, userPatch: {
+      items: [], effectiveMasteries: effectiveMasteries({ ...saved, ...sources }), maxEnergy: calcMaxEnergy({ ...saved, ...sources }),
+    } });
+    expect(sources.items).toEqual([]);
+  });
+
+  it("returns the emptied active jutsu loadout after a staff mass unequip", async () => {
+    const db = await getTestDatabase();
+    await db.insert(jutsuLoadout).values({ id: "staff-loadout", userId, name: "Staff", jutsuIds: ["equipped"] });
+    await db.update(userData).set({ role: "OWNER", jutsuLoadout: "staff-loadout" }).where(eq(userData.userId, userId));
+    const result = await (await callerFor(staffRouter, userId)).unequipAllJutsus();
+    expect(result).toMatchObject({ success: true, userPatch: { loadout: { jutsuIds: [] } } });
+    expect((await db.query.jutsuLoadout.findFirst())?.jutsuIds).toEqual([]);
   });
 
   it("returns confirmed slot deltas without needing an optional cache read", async () => {
