@@ -15,7 +15,6 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import AvatarImage from "@/layout/Avatar";
 import RichInput from "@/layout/RichInput";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -49,7 +48,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
 }) => {
   // State
   const { data: userData } = useUserData();
-  const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const messagesRef = useRef<null | HTMLDivElement>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   const initialMessages: UIMessage[] = [
@@ -98,12 +97,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     }
   };
 
-  // Scroll to bottom of messages
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // Keep the newest message in view. Only the message list scrolls: scrollIntoView
+  // would also scroll clipped ancestors and hide the start of the conversation.
   useEffect(() => {
-    scrollToBottom();
+    const list = messagesRef.current;
+    if (list && messages.length > 1) {
+      list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
+    }
   }, [messages]);
 
   // Input form
@@ -121,174 +121,167 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   // Loader
   if (!userData) return <p>Must be logged in to use chat</p>;
 
-  // Calculate max height for messages container
-  const messagesContainerClass =
-    showFeedback && messages.length > 2
-      ? "min-h-[200px] max-h-[500px]"
-      : "min-h-96 max-h-[700px]";
+  const visibleMessages = messages.filter((message) => message.role !== "system");
+  const hasConversation = visibleMessages.some((message) => message.role === "user");
+  const hasAnswer = hasConversation && visibleMessages.at(-1)?.role === "assistant";
+  const starterQuestions = [
+    `What should I do next at level ${userData.level}?`,
+    "How do I get stronger?",
+    "How do I earn more ryo?",
+  ];
 
   // Render
   return (
     <div
       className={cn(
         position === "fixed"
-          ? "fixed right-4 bottom-28 z-50 min-w-96 max-w-96 shadow-lg"
+          ? "fixed right-4 bottom-28 z-50 h-[32rem] min-w-96 max-w-96 shadow-lg"
           : "w-full",
-        "overflow-hidden rounded-md bg-popover",
+        "flex flex-col overflow-hidden rounded-md bg-popover",
         className,
       )}
     >
-      <div className="flex h-full flex-col">
-        {showHeader && (
-          <header className="flex items-center justify-between border-b px-4 py-2">
-            <h4 className="font-medium text-lg">Chat</h4>
-            {showCloseButton && (
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close chat window</span>
-              </Button>
-            )}
-          </header>
-        )}
-        <div className={cn("flex-1 overflow-y-auto bg-card", messagesContainerClass)}>
-          {messages
-            .filter((message) => message.role !== "system")
-            .map((message, i) => {
-              const content = getMessageText(message);
-              const isUser = message.role === "user";
-
-              return (
-                <div
-                  className={cn(
-                    "flex flex-row items-start space-x-2 p-4",
-                    i % 2 === 0 ? "bg-card" : "bg-popover",
-                  )}
-                  key={message.id}
-                >
-                  <div className="shrink-0">
-                    {isUser ? (
-                      <AvatarImage
-                        href={userData.avatar}
-                        alt={userData.username}
-                        className="h-10 w-10 border-0"
-                        size={100}
-                        hover_effect={true}
-                      />
-                    ) : (
-                      <BrainCircuit className="h-10 w-10" />
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium text-sm">
-                        {isUser ? userData.username : "Seichi AI"}
-                      </div>
-                      <div className="text-xs">{new Date().toLocaleTimeString()}</div>
-                    </div>
-                    <p className="text-sm">{content}</p>
-                  </div>
-                </div>
-              );
-            })}
-          {isLoading && (
+      {showHeader && (
+        <header className="flex items-center justify-between border-b px-4 py-2">
+          <h4 className="font-medium text-lg">Chat</h4>
+          {showCloseButton && (
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close chat window</span>
+            </Button>
+          )}
+        </header>
+      )}
+      <div
+        ref={messagesRef}
+        role="log"
+        aria-live="polite"
+        aria-label="Conversation with Seichi AI"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-3"
+      >
+        {visibleMessages.map((message) => {
+          const isUser = message.role === "user";
+          return (
             <div
-              className={cn(
-                "flex flex-row items-start space-x-2 p-4",
-                messages.length % 2 === 0 ? "bg-card" : "bg-popover",
-              )}
+              key={message.id}
+              className={cn("flex items-end gap-2", isUser && "flex-row-reverse")}
             >
-              <div className="shrink-0">
-                <BrainCircuit className="h-10 w-10" />
-              </div>
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">Seichi AI</div>
-                  <div className="text-xs">{new Date().toLocaleTimeString()}</div>
-                </div>
-                <div className="flex flex-row items-center gap-2">
-                  <p className="text-sm">Thinking</p>
-                  <div className="h-1 w-1 animate-bounce rounded-full bg-black [animation-delay:-0.3s] dark:bg-white"></div>
-                  <div className="h-1 w-1 animate-bounce rounded-full bg-black [animation-delay:-0.15s] dark:bg-white"></div>
-                  <div className="h-1 w-1 animate-bounce rounded-full bg-black dark:bg-white"></div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-        <div className="border-t p-4">
-          <Form {...form}>
-            <FormField
-              control={form.control}
-              name="message"
-              render={() => (
-                <FormItem>
-                  <FormControl>
-                    <RichInput
-                      plainText
-                      id="message"
-                      height="120"
-                      control={form.control}
-                      disabled={isLoading}
-                      onSubmit={handleSubmit}
-                      error={form.formState.errors.message?.message}
-                      autoFocus={autoFocus}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </Form>
-
-          {/* Feedback section */}
-          {showFeedback && messages.length > 2 && (
-            <div className="mt-2 flex flex-col items-center">
-              <p className="mb-1 text-muted-foreground text-xs">
-                {feedbackSubmitted
-                  ? "Thank you for your feedback!"
-                  : "How was your chat experience?"}
+              {!isUser && <AssistantMark />}
+              <p
+                className={cn(
+                  "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm",
+                  isUser
+                    ? "rounded-br-sm bg-primary text-primary-foreground"
+                    : "rounded-bl-sm bg-muted text-foreground",
+                )}
+              >
+                <span className="sr-only">{isUser ? "You: " : "Seichi AI: "}</span>
+                {getMessageText(message)}
               </p>
-              {!feedbackSubmitted && (
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleFeedback("POSITIVE")}
-                    disabled={isSubmittingFeedback}
-                    className="flex h-8 items-center gap-1 px-2 py-1"
-                  >
-                    <ThumbsUp className="h-3 w-3" />
-                    <span className="text-xs">Good</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleFeedback("NEUTRAL")}
-                    disabled={isSubmittingFeedback}
-                    className="flex h-8 items-center gap-1 px-2 py-1"
-                  >
-                    <Meh className="h-3 w-3" />
-                    <span className="text-xs">Neutral</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleFeedback("NEGATIVE")}
-                    disabled={isSubmittingFeedback}
-                    className="flex h-8 items-center gap-1 px-2 py-1"
-                  >
-                    <ThumbsDown className="h-3 w-3" />
-                    <span className="text-xs">Poor</span>
-                  </Button>
-                </div>
-              )}
             </div>
-          )}
-        </div>
+          );
+        })}
+        {!hasConversation && !isLoading && (
+          <div className="flex flex-wrap gap-2 pl-9">
+            {starterQuestions.map((question) => (
+              <Button
+                key={question}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-auto whitespace-normal rounded-full px-3 py-1.5 text-left text-sm"
+                onClick={() => void sendMessage({ text: question })}
+              >
+                {question}
+              </Button>
+            ))}
+          </div>
+        )}
+        {isLoading && (
+          <div className="flex items-end gap-2">
+            <AssistantMark />
+            <div
+              className="flex h-9 items-center gap-1 rounded-2xl rounded-bl-sm bg-muted px-3"
+              role="status"
+            >
+              <span className="sr-only">Seichi AI is writing an answer</span>
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s] motion-reduce:animate-none" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s] motion-reduce:animate-none" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current motion-reduce:animate-none" />
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="border-t p-2">
+        <Form {...form}>
+          <FormField
+            control={form.control}
+            name="message"
+            render={() => (
+              <FormItem>
+                <FormControl>
+                  <RichInput
+                    plainText
+                    id="message"
+                    placeholder="Ask about the game…"
+                    height="40"
+                    control={form.control}
+                    disabled={isLoading}
+                    onSubmit={handleSubmit}
+                    error={form.formState.errors.message?.message}
+                    autoFocus={autoFocus}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </Form>
+
+        {showFeedback && hasAnswer && !isLoading && (
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            {feedbackSubmitted ? (
+              <p className="text-muted-foreground text-sm">Thanks for the feedback.</p>
+            ) : (
+              <>
+                <p className="text-muted-foreground text-sm">Was this helpful?</p>
+                {FEEDBACK_OPTIONS.map(({ sentiment, label, icon: Icon }) => (
+                  <Button
+                    key={sentiment}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleFeedback(sentiment)}
+                    disabled={isSubmittingFeedback}
+                    className="h-8 gap-1 px-2"
+                  >
+                    <Icon className="h-3.5 w-3.5" aria-hidden />
+                    <span className="text-sm">{label}</span>
+                  </Button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 };
+
+/** Small avatar marking assistant messages. */
+const AssistantMark: React.FC = () => (
+  <span
+    aria-hidden
+    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+  >
+    <BrainCircuit className="h-4 w-4" />
+  </span>
+);
+
+const FEEDBACK_OPTIONS = [
+  { sentiment: "POSITIVE", label: "Yes", icon: ThumbsUp },
+  { sentiment: "NEUTRAL", label: "Partly", icon: Meh },
+  { sentiment: "NEGATIVE", label: "No", icon: ThumbsDown },
+] as const;
 
 export default ChatBox;

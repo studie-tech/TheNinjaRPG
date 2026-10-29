@@ -89,7 +89,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
           )}
         </div>
       </PopoverTrigger>
-      <PopoverContent className="m-2 w-[calc(100vw-1rem)] min-w-0 max-w-96 sm:min-w-96">
+      <PopoverContent className="m-2 w-[calc(100vw-1rem)] min-w-0 max-w-[32rem] p-3 sm:w-[32rem]">
         {!userData ? (
           <div>
             <p className="mb-2 font-bold text-lg">Audio Settings</p>
@@ -104,10 +104,24 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
         ) : (
           <Tabs
             defaultValue={safeDefaultValue}
-            className="flex flex-col items-center justify-center"
+            className="flex flex-col gap-3"
             onValueChange={setShowActiveSafe}
           >
-            <TabsContent value="human_support" className="flex flex-col gap-2">
+            <TabsList className="grid w-full grid-cols-4 text-center">
+              <TabsTrigger value="ai_support">Ask AI</TabsTrigger>
+              <TabsTrigger value="human_support">Human</TabsTrigger>
+              <TabsTrigger value="audio_settings">Settings</TabsTrigger>
+              <TabsTrigger value="tutorial_settings" className="relative">
+                Tutorial
+                {showTutorialNotification && (
+                  <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs">
+                    !
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="human_support" className="mt-0 flex flex-col gap-2">
               <p className="font-bold text-lg">Get Human Help</p>
               <p className="italic">
                 1. Questions related to game mechanics, please ask your fellow ninja in
@@ -151,9 +165,8 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
                 page.
               </p>
             </TabsContent>
-            <TabsContent value="ai_support" className="w-full">
-              <p className="mb-2 font-bold text-lg">Get AI Help</p>
-              <div className="h-[400px]">
+            <TabsContent value="ai_support" className="mt-0 w-full">
+              <div className="h-[min(36rem,calc(100dvh-10rem))] overflow-hidden rounded-md border">
                 <ChatBox
                   position="relative"
                   showCloseButton={false}
@@ -165,7 +178,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
               </div>
             </TabsContent>
 
-            <TabsContent value="audio_settings" className="w-full">
+            <TabsContent value="audio_settings" className="mt-0 w-full">
               <p className="mb-2 font-bold text-lg">Game Settings</p>
               <div className="max-h-[400px] overflow-y-auto">
                 <GameSettingsPanel
@@ -176,7 +189,7 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
               </div>
             </TabsContent>
 
-            <TabsContent value="tutorial_settings" className="w-full">
+            <TabsContent value="tutorial_settings" className="mt-0 w-full">
               <p className="mb-2 font-bold text-lg">Tutorial Settings</p>
               <div className="space-y-4">
                 <p className="text-sm">
@@ -222,20 +235,6 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
                 </div>
               </div>
             </TabsContent>
-
-            <TabsList className="mt-2 grid grid-cols-4 text-center">
-              <TabsTrigger value="ai_support">AI</TabsTrigger>
-              <TabsTrigger value="human_support">Human</TabsTrigger>
-              <TabsTrigger value="audio_settings">Settings</TabsTrigger>
-              <TabsTrigger value="tutorial_settings" className="relative">
-                Tutorial
-                {showTutorialNotification && (
-                  <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs">
-                    !
-                  </span>
-                )}
-              </TabsTrigger>
-            </TabsList>
           </Tabs>
         )}
       </PopoverContent>
