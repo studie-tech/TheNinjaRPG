@@ -43,6 +43,7 @@ export default function AdministrationBuilding() {
         await updateUser(data.userPatch, {
           revision,
           ...(data.userDelta ? { delta: data.userDelta } : {}),
+          achievementProgress: data.achievementProgress,
         });
       showMutationToast(data);
       await util.quests.allianceBuilding.invalidate();

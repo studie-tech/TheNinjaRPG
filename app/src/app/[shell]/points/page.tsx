@@ -459,7 +459,11 @@ const PayPalSubscriptionButton = (props: {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.userPatch)
-          await updateUser(data.userPatch, { revision, delta: data.userDelta });
+          await updateUser(data.userPatch, {
+            revision,
+            delta: data.userDelta,
+            achievementProgress: data.achievementProgress,
+          });
         if (data.success && props.onSuccess) props.onSuccess();
       },
       onError: (error) => {
@@ -971,7 +975,11 @@ const LookupTransaction = () => {
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       if (data.userPatch)
-        await updateUser(data.userPatch, { revision, delta: data.userDelta });
+        await updateUser(data.userPatch, {
+          revision,
+          delta: data.userDelta,
+          achievementProgress: data.achievementProgress,
+        });
       if (data.success) {
         await Promise.all([
           utils.item.getUserItems.invalidate(),

@@ -2824,7 +2824,10 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data.userPatch, { revision }),
+            updateUser(data.userPatch, {
+              revision,
+              achievementProgress: data.achievementProgress,
+            }),
             utils.skillTree.getUserSkills.invalidate(),
           ]);
         }

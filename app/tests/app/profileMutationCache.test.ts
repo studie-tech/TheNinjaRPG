@@ -12,6 +12,7 @@ const flows = [
   { file: "layout/ProfileEdit.tsx", procedure: "staff.unequipAllGear", patch: { items: [], maxEnergy: 100 } },
   { file: "layout/ProfileEdit.tsx", procedure: "staff.unequipAllJutsus", patch: { loadout: { jutsuIds: [] } } },
   { file: "layout/ProfileEdit.tsx", procedure: "skillTree.resetAllUsersSkillPoints", patch: { userSkills: [], skillPoints: 12 } },
+  { file: "app/[shell]/adminbuilding/page.tsx", procedure: "quests.startQuest", patch: { userQuests: [], questData: [] } },
 ];
 
 const setup = (file: string, procedure: string) => {
@@ -31,14 +32,17 @@ const setup = (file: string, procedure: string) => {
     item: { getUserItems: leaf },
     jutsu: { getUserJutsus: leaf },
     skillTree: { getUserSkills: leaf },
+    quests: { allianceBuilding: leaf },
   };
   const updateUser = vi.fn((patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options));
   const source = readFileSync(join(import.meta.dirname, "../../src", file), "utf8");
-  const callbacks = source.match(new RegExp(`api\\.${procedure.replaceAll(".", "\\.")}\\.useMutation\\((\\{[\\s\\S]*?\\n\\s*\\})\\);`))?.[1];
+  const call = source.indexOf(`api.${procedure}.useMutation(`);
+  const indent = source.slice(source.lastIndexOf("\n", call) + 1, call).match(/^\s*/)?.[0];
+  const callbacks = source.slice(call).match(new RegExp(`useMutation\\((\\{[\\s\\S]*?\\n${indent}\\})\\);`))?.[1];
   if (!callbacks) throw new Error(`${procedure} callbacks were not found in ${file}`);
   // Execute the production callbacks with the real cache merger, matching userItemsRefresh.test.ts.
-  const options = new Function("utils", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", `return (${callbacks});`)(
-    utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(),
+  const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", `return (${callbacks});`)(
+    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(),
   ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   return {
     client, getUser, invalidate, updateUser, options, profile,
@@ -56,7 +60,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch }) 
       expect(test.getUser).not.toHaveBeenCalled();
       expect(test.invalidate).toHaveBeenCalledTimes(1);
       expect(test.updateUser).toHaveBeenCalledTimes(1);
-      if (procedure.startsWith("bloodline.")) expect(test.value()?.achievementProgress).toEqual([]);
+      if (procedure.startsWith("bloodline.") || procedure === "skillTree.resetAllUsersSkillPoints" || procedure === "quests.startQuest") expect(test.value()?.achievementProgress).toEqual([]);
     } finally { test.close(); }
   });
 
