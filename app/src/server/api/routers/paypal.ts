@@ -603,8 +603,7 @@ export const paypalRouter = createTRPCRouter({
       return {
         success: true,
         message: "OK",
-        userDelta: { reputationPoints: -cost, reputationPointsTotal: -cost },
-        userPatch: { federalStatus: input.plan },
+        ...(await getPurchaseUserUpdate(ctx.drizzle, ctx.userId)),
       };
     }),
   // Cancel paypal subscription

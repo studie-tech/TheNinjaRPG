@@ -37,6 +37,18 @@ export const getRewardUserUpdate = async (input: {
     ? await withRequestScope(() => fetchUpdatedUser({ client, userId }))
     : undefined;
   if (needsRelations && !hydrated?.user) return fallback;
+  // The profile endpoint delivers pending feedback and confirms relation-changing
+  // quest effects that are outside this reward patch.
+  if (
+    hydrated &&
+    (hydrated.toastMessages?.length ||
+      hydrated.user?.unreadNotifications ||
+      hydrated.user?.unreadRecruitRewards ||
+      hydrated.trackerResults?.consequences.some(
+        (entry) => entry.type !== "update_user",
+      ))
+  )
+    return fallback;
   // Hydration can settle queued costs and rewards; reuse its confirmed counters.
   const counters = hydrated?.user
     ? {

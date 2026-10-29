@@ -21,6 +21,7 @@ import {
   lockPurchaseBuyer,
   reputationAllowanceUsed,
 } from "@/server/utils/purchases/allowance";
+import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 import {
   canonicalStoreUserId,
   isRetiredStoreUserId,
@@ -308,7 +309,6 @@ export const upgradeStripeFederalWithReps = async (
   return {
     success: true,
     message: "Federal support upgraded for the remainder of this billing period.",
-    userDelta: { reputationPoints: -cost, reputationPointsTotal: -cost },
-    userPatch: { federalStatus: nextTier },
+    ...(await getPurchaseUserUpdate(client, userId)),
   };
 };
