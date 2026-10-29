@@ -629,6 +629,11 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
             </FormItem>
           )}
         />
+        {[watchAttr1, watchAttr2, watchAttr3].includes("Bald") && (
+          <p className="text-muted-foreground col-span-2 text-sm sm:col-span-3">
+            Bald hides scalp hair; hair color still applies to beards.
+          </p>
+        )}
       </div>
     </div>
   );
