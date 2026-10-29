@@ -23,7 +23,6 @@ COLORS = ["black", "blue", "brown", "gray", "green", "orange", "purple", "red", 
 SKINS = ["light", "black", "olive", "ivory"]
 EYES = ["blue", "black", "brown", "gray", "green", "red", "yellow", "white"]
 CYCLES = {"idle": [0], "walk": list(range(1, 9)), "slash": list(range(6)), "thrust": list(range(8)), "spellcast": list(range(7)), "shoot": list(range(13)), "hurt": list(range(6))}
-ROWS = {"spellcast": 0, "thrust": 4, "walk": 8, "slash": 12, "shoot": 16, "hurt": 20}
 subprocess.run(["git", "-C", str(SOURCE), "rev-parse", "--verify", REVISION + "^{commit}"], check=True, stdout=subprocess.DEVNULL)
 if subprocess.check_output(["git", "-C", str(SOURCE), "rev-parse", "HEAD"], text=True).strip() != REVISION:
     raise SystemExit("LPC checkout must be at the pinned revision " + REVISION)
@@ -95,7 +94,7 @@ def recolor(image, definition, color, eyes, source_variant):
     config = definition.get("recolors", {})
     configs = list(config.values()) if "color_1" in config else [config]
     replacements = {}
-    for i, part in enumerate(configs):
+    for part in configs:
         material = part.get("material")
         if material in palettes:
             target = eyes if material == "eye" else color
@@ -138,17 +137,17 @@ def candidates(definition, layer, body, state, color):
         variant = variant.replace(" ", "_")
     result = []
     if custom:
-        result.extend([("spritesheets/" + path + (variant or "") + ".png", True), ("spritesheets/" + path + animation + "/" + (variant or "") + ".png", True)])
+        result.extend(["spritesheets/" + path + (variant or "") + ".png", "spritesheets/" + path + animation + "/" + (variant or "") + ".png"])
     else:
-        result.extend([("spritesheets/" + path + animation + ("/" + variant if variant else "") + ".png", False)])
-    found = [(p, oversized) for p, oversized in result if p in FILES]
+        result.extend(["spritesheets/" + path + animation + ("/" + variant if variant else "") + ".png"])
+    found = [p for p in result if p in FILES]
     if not found and variant:
         for fallback in variants:
             suffix = fallback.replace(" ", "_") + ".png"
-            for path_candidate, oversized in result:
+            for path_candidate in result:
                 candidate = path_candidate[:-(len(variant) + 4)] + suffix
                 if candidate in FILES:
-                    found.append((candidate, oversized))
+                    found.append(candidate)
     return found
 
 def pack(definition, layer, body, color, eyes):
@@ -158,7 +157,7 @@ def pack(definition, layer, body, color, eyes):
         options = candidates(definition, layer, body, state, color)
         if not options:
             continue
-        path, oversized = options[0]
+        path = options[0]
         image = read_image(path)
         rows = 1 if state == "hurt" else 4
         size = image.height // rows

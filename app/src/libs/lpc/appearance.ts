@@ -159,19 +159,12 @@ export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
   };
   const body = user.spriteBodyStyle ?? (user.gender === "Female" ? "female" : "male");
   const layers = new Map<string, SpriteLayer>();
-  const put = (
-    slot: string,
-    profile: string,
-    value: string,
-    eyes?: string,
-    mirror?: boolean,
-  ) =>
+  const put = (slot: string, profile: string, value: string, eyes?: string) =>
     layers.set(slot, {
       slot,
       profile,
       color: value,
       ...(eyes ? { eyes } : {}),
-      ...(mirror ? { mirror } : {}),
     });
   const skin =
     (
