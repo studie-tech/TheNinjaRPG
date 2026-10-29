@@ -50,10 +50,10 @@ opening a transaction or locking an account row between separate reads and write
 
 ## Rebuilding artwork
 
-Generated PNGs and their frame catalogue are checked in, so running the game needs
-neither Python nor the upstream generator. The generator's application code is not
-bundled. The import script consumes artwork and attribution metadata from a pinned
-revision and writes content-addressed atlases under `app/public/lpc/`.
+The published frame catalogue is checked in; sprite binaries are stored in UploadThing.
+Running the game needs neither Python nor the upstream generator. The import script
+consumes artwork and attribution metadata from a pinned revision and stages
+content-addressed PNG atlases in the gitignored `app/scripts/.artifacts/lpc/` directory.
 Atlas dimensions stay within WebGL 1's guaranteed 2048px texture size.
 
 From the repository root:
@@ -65,11 +65,22 @@ git clone --filter=blob:none --sparse https://github.com/LiberatedPixelCup/Unive
 git -C /tmp/tnr-lpc-source checkout 86160e7507d6841259cff624a51a63c1d4847ee3
 git -C /tmp/tnr-lpc-source sparse-checkout set sheet_definitions palette_definitions
 /tmp/tnr-lpc-import-env/bin/python app/scripts/import-lpc-assets.py /tmp/tnr-lpc-source
+make bun run scripts/upload-lpc-assets.ts
 ```
+
+The publisher uses the configured UploadThing token. It compares optimized PNGs with
+lossless WebP (`exact: true`, maximum compression effort), retains the smaller file,
+and verifies every decoded RGBA pixel, dimensions and alpha channel. Each upload has
+an immutable content-hash custom ID. Publication verifies the downloaded bytes from
+every served URL before writing the runtime catalogue and downloadable credits URL.
+A local checkpoint resumes interrupted uploads without replacing published assets.
+Sprite textures use their original UploadThing CDN URL with no resize or dynamic
+image optimizer, preserving frame coordinates and pixel colours. No sprite binaries
+are served by Next.js or committed to the repository.
 
 To add artwork, update `profiles.json` and the shared equipment validator when
 introducing a new silhouette, then import again. The script selects only required
-source blobs and removes obsolete generated PNGs. Keep its `REVISION` synchronized
+source blobs and removes obsolete staged PNGs. Keep its `REVISION` synchronized
 with the checked-out upstream revision when deliberately upgrading the source.
 
 To refresh catalogue mappings, supply a JSON array with `id`, `name`, `slot`,
@@ -81,9 +92,9 @@ overrides on the corresponding item. Variant overrides remain in the database.
 
 `/credits`, linked in the footer, attributes the selected upstream assets, records
 recolouring and repacking, and links each source and chosen licence.
-`/lpc/credits.json` carries the downloadable attribution. Sprite files remain
-publicly accessible for web and native players. Hashed PNG URLs use immutable
-cache headers; the mutable credits file does not.
+The catalogue's UploadThing credits URL carries downloadable attribution. Sprite files
+and credits remain publicly accessible for web and native players through immutable,
+content-addressed UploadThing URLs.
 
 The [LPC migration](../app/drizzle/migrations/0126_safe_microchip.sql) adds nullable
 item and variant overrides plus the player's body choice. Apply the journaled
@@ -91,7 +102,8 @@ migrations through this migration before deploying code that selects these colum
 Existing rows use the catalogue and attribute defaults without a content backfill.
 
 Tests under `app/tests/libs/lpc/` validate creation choices, mappings, attribution,
-PNG transparency, hashes and frame bounds. Rendering tests cover repeated attacks,
+published asset URLs and frame bounds. The publication command validates lossless
+compression, transparency and downloaded content hashes for every atlas. Rendering tests cover repeated attacks,
 cue deduplication, cancellation and texture ownership. The database suite in
 `app/tests/queries/lpc.mysql.test.ts` verifies sector and profile snapshots and the
 atomic guard against body edits during combat. Run SQL tests only against an

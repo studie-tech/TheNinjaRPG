@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageOps
 REVISION = "86160e7507d6841259cff624a51a63c1d4847ee3"
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = pathlib.Path(sys.argv[1]).resolve()
-OUT = ROOT / "public/lpc"
+OUT = ROOT / "scripts/.artifacts/lpc"
 LIB = ROOT / "src/libs/lpc"
 PROFILES = json.loads((LIB / "profiles.json").read_text())
 COLORS = ["black", "blue", "brown", "gray", "green", "orange", "purple", "red", "white", "yellow", "gold", "silver"]
@@ -215,7 +215,7 @@ def write_atlas(frames, clips, cell, definition, layer, color, eyes, source_vari
     generated.add(name)
     if not (OUT / name).exists():
         (OUT / name).write_bytes(data.getvalue())
-    return {"image": "/lpc/" + name, "cell": cell, "columns": columns, "z": layer["zPos"], "clips": clips}
+    return {"image": name, "cell": cell, "columns": columns, "z": layer["zPos"], "clips": clips}
 
 def supplement(template, profile, direction, color):
     """Original pixel details follow the authored head/hand pose, never a fixed screen position."""
@@ -294,8 +294,7 @@ for layers in catalog.values():
             layout_ids[key] = len(layouts)
             layouts.append(layout)
         layer["layout"] = layout_ids[key]
-(LIB / "catalog.json").write_text(json.dumps({"revision": REVISION, "entries": catalog, "layouts": layouts}, separators=(",", ":")) + "\n")
-(LIB / "credits.json").write_text(json.dumps(credits, indent=2, ensure_ascii=False) + "\n")
+(OUT / "catalog.json").write_text(json.dumps({"revision": REVISION, "entries": catalog, "layouts": layouts}, separators=(",", ":")) + "\n")
 (OUT / "credits.json").write_text(json.dumps(credits, indent=2, ensure_ascii=False) + "\n")
 for path in OUT.glob("*.png"):
     if path.name not in generated:

@@ -1,44 +1,33 @@
 import { describe, expect, it } from "bun:test";
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import sharp from "sharp";
+import { existsSync } from "node:fs";
+import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { lpcCatalog, lpcFacing, lpcFrame } from "@/libs/lpc/catalog";
 import credits from "@/libs/lpc/credits.json";
 
-// Decode shipped files to verify the importer's palette, transparency, attribution and frame contracts.
-describe("bundled LPC artwork", () => {
-  it("actually recolours metal armour for item palettes", async () => {
-    for (const body of ["male", "female"]) for (const color of ["red", "blue"]) {
-      const sheet = lpcCatalog.entries[`plate/${body}/${color}/blue`]![0]!;
-      const stats = await sharp(new Uint8Array(await readFile(new URL(`../../../public${sheet.image}`, import.meta.url)))).stats();
-      const red = stats.channels[0]!.mean, blue = stats.channels[2]!.mean;
-      expect(color === "red" ? red : blue).toBeGreaterThan(color === "red" ? blue : red);
+// Publication verifies decoded RGBA pixels; runtime tests validate our atlas/frame manifest offline.
+describe("published LPC artwork", () => {
+  it("references immutable UploadThing assets without shipping sprites in public", () => {
+    expect(existsSync(new URL("../../../public/lpc", import.meta.url))).toBe(false);
+    const origin = new URL(UPLOADTHING_HOST).origin;
+    expect(new URL(lpcCatalog.creditsUrl).origin).toBe(origin);
+    expect(new URL(lpcCatalog.creditsUrl).pathname).toMatch(/^\/f\/lpc-credits-[a-f0-9]{24}\.json$/);
+    for (const layers of Object.values(lpcCatalog.entries)) for (const sheet of layers.flatMap((sheet) => [sheet, ...sheet.travel ? [sheet.travel] : []])) {
+      const url = new URL(sheet.image);
+      expect(url.origin).toBe(origin);
+      expect(url.pathname).toMatch(/^\/f\/lpc-[a-f0-9]{24}\.(webp|png)$/);
+      expect(url.search).toBe("");
+      const layout = lpcCatalog.layouts[sheet.layout]!;
+      expect(layout).toBeDefined();
+      expect(layout.cell * layout.columns).toBeLessThanOrEqual(2048);
+      for (const directions of Object.values(layout.clips)) {
+        expect(directions).toHaveLength(4);
+        for (const indices of directions) for (const index of indices) {
+          expect(index).toBeGreaterThanOrEqual(0);
+          expect((Math.floor(index / layout.columns) + 1) * layout.cell).toBeLessThanOrEqual(2048);
+        }
+      }
     }
   });
-  it("ships every referenced atlas with intact transparency, dimensions and content hashes", async () => {
-    const dimensions = new Map<string, { width: number; height: number }>();
-    for (const layers of Object.values(lpcCatalog.entries)) for (const sheet of layers.flatMap((sheet) => [sheet, ...sheet.travel ? [sheet.travel] : []])) {
-      if (!dimensions.has(sheet.image)) {
-        const bytes = new Uint8Array(await readFile(new URL(`../../../public${sheet.image}`, import.meta.url)));
-        expect(createHash("sha256").update(bytes).digest("hex").slice(0, 24)).toBe(sheet.image.replace(/^\/lpc\//, "").replace(/\.png$/, ""));
-        const image = sharp(bytes);
-        const metadata = await image.metadata();
-        const stats = await image.stats();
-        expect(metadata.hasAlpha).toBe(true);
-        expect(metadata.width).toBeLessThanOrEqual(2048);
-        expect(metadata.height).toBeLessThanOrEqual(2048);
-        expect(stats.channels[3]?.min).toBe(0);
-        expect(stats.channels[3]?.max).toBeGreaterThan(0);
-        dimensions.set(sheet.image, { width: metadata.width!, height: metadata.height! });
-      }
-      const layout = lpcCatalog.layouts[sheet.layout]!;
-      const bounds = dimensions.get(sheet.image)!;
-      for (const directions of Object.values(layout.clips)) for (const indices of directions) for (const index of indices) {
-        expect((index % layout.columns + 1) * layout.cell).toBeLessThanOrEqual(bounds.width);
-        expect((Math.floor(index / layout.columns) + 1) * layout.cell).toBeLessThanOrEqual(bounds.height);
-      }
-    }
-  }, 120000);
   it("uses one slash alternative, and supplies compact resting/movement poses for every silhouette", () => {
     const sword = lpcCatalog.entries["sword/male/gray/blue"]!;
     expect(sword.filter((sheet) => lpcCatalog.layouts[sheet.layout]!.clips.slash)).toHaveLength(2);

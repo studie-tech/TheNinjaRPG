@@ -14,9 +14,10 @@ export type LpcLayout = {
 };
 /** A layer's full poses and its optional movement-only atlas share the same visual selection. */
 export type LpcSheet = { image: string; z: number; layout: number; travel?: LpcSheet };
-/** Generated manifest of bundled atlas URLs and authored layouts, pinned to an upstream revision. */
+/** Published UploadThing atlas URLs and authored layouts, pinned to an upstream revision. */
 export const lpcCatalog = source as unknown as {
   revision: string;
+  creditsUrl: string;
   entries: Record<string, LpcSheet[]>;
   layouts: LpcLayout[];
 };

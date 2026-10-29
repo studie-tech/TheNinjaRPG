@@ -33,7 +33,7 @@ export default function ArtworkCredits() {
         throwing stars, jewellery, tattoo and scar details are original TNR artwork.
       </p>
       <p className="my-3">
-        <a className="underline" href="/lpc/credits.json">
+        <a className="underline" href={lpcCatalog.creditsUrl}>
           Download detailed credits
         </a>
         {" · "}
@@ -45,8 +45,8 @@ export default function ArtworkCredits() {
         </a>
       </p>
       <p className="my-3">
-        The sprite PNG files are served without DRM and remain available from this
-        website, including when playing in the native app.
+        The sprite files are served without DRM and remain available from this website,
+        including when playing in the native app.
       </p>
       <ul className="space-y-4">
         {credits.map((entry, index) => {
