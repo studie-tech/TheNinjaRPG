@@ -84,6 +84,34 @@ describe("Modal", () => {
     expect(scrollableBody?.contains(closeButton)).toBe(false);
   });
 
+  it("omits the footer for content dialogs without a Close button", () => {
+    const { getByRole, queryByRole } = render(
+      <Modal isOpen setIsOpen={vi.fn()} title="Farm" closeButton={false}>
+        Farm content
+      </Modal>,
+    );
+    const dialog = getByRole("dialog");
+    expect(queryByRole("button", { name: "Close" })).toBeNull();
+    expect(dialog.children).toHaveLength(2);
+  });
+
+  it("keeps the confirmation footer when only the Close button is dropped", () => {
+    const { getByRole, queryByRole } = render(
+      <Modal
+        isOpen
+        setIsOpen={vi.fn()}
+        title="Confirm"
+        closeButton={false}
+        proceed_label="Accept"
+        onAccept={vi.fn()}
+      >
+        Body
+      </Modal>,
+    );
+    expect(getByRole("button", { name: "Accept" })).toBeTruthy();
+    expect(queryByRole("button", { name: "Close" })).toBeNull();
+  });
+
   it("blocks confirmation and closure for invalid numeric controls", () => {
     const accept = vi.fn();
     const close = vi.fn();

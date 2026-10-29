@@ -52,6 +52,12 @@ interface ModalProps {
   dismissOnInteractOutside?: boolean;
   /** Restore focus to a mounted caller control when opened without a Radix DialogTrigger. */
   returnFocusRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Footer Close button (default true). Content dialogs without a confirmation or
+   * `onClose` can drop it; the header close button, Escape and an outside click still
+   * close the dialog. The header button does not run `onClose`.
+   */
+  closeButton?: boolean;
 }
 
 /**
@@ -196,48 +202,55 @@ export const Modal: React.FC<ModalProps> = (props) => {
           {props.children}
         </div>
 
-        <DialogFooter
-          className={cn(props.centerText && "sm:justify-center", props.footerClassName)}
-        >
-          {props.proceed_label && (
-            <>
+        {(props.closeButton !== false || props.proceed_label || props.footerExtra) && (
+          <DialogFooter
+            className={cn(
+              props.centerText && "sm:justify-center",
+              props.footerClassName,
+            )}
+          >
+            {props.proceed_label && (
+              <>
+                <Button
+                  id={props.id ? `${props.id}-proceed` : undefined}
+                  disabled={isProceedDisabled}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAccept(e);
+                  }}
+                  className={`z-30 rounded-lg ${confirmBtnClassName}`}
+                >
+                  {props.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {props.isLoading
+                    ? (props.proceed_loading_label ?? props.proceed_label)
+                    : props.proceed_label}
+                </Button>
+                <div className="grow"></div>
+              </>
+            )}
+            {props.footerExtra}
+            {props.closeButton !== false && (
               <Button
-                id={props.id ? `${props.id}-proceed` : undefined}
-                disabled={isProceedDisabled}
+                id={props.id ? `${props.id}-close` : undefined}
+                disabled={props.isLoading}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleAccept(e);
+                  handleDialogClose();
                 }}
-                className={`z-30 rounded-lg ${confirmBtnClassName}`}
+                className="z-30 rounded-lg border border-gray-500 bg-gray-700 font-medium text-gray-300 text-sm hover:bg-gray-600 hover:text-white"
               >
-                {props.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {props.isLoading
-                  ? (props.proceed_loading_label ?? props.proceed_label)
-                  : props.proceed_label}
+                Close
               </Button>
-              <div className="grow"></div>
-            </>
-          )}
-          {props.footerExtra}
-          <Button
-            id={props.id ? `${props.id}-close` : undefined}
-            disabled={props.isLoading}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleDialogClose();
-            }}
-            className="z-30 rounded-lg border border-gray-500 bg-gray-700 font-medium text-gray-300 text-sm hover:bg-gray-600 hover:text-white"
-          >
-            Close
-          </Button>
-          {props.isLoading && props.proceed_loading_label && (
-            <span className="sr-only" role="status" aria-live="polite">
-              {props.proceed_loading_label}
-            </span>
-          )}
-        </DialogFooter>
+            )}
+            {props.isLoading && props.proceed_loading_label && (
+              <span className="sr-only" role="status" aria-live="polite">
+                {props.proceed_loading_label}
+              </span>
+            )}
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -62,6 +62,7 @@ const baseState = {
   sellableCrops: [],
   extractableCrops: [],
   activeSeedExtractions: [],
+  collectionLog: { collected: 0, total: 3, items: [] },
 } as unknown as FarmStateResponse;
 
 const handlers = {
@@ -179,6 +180,27 @@ describe("FarmOverview", () => {
     expect(handlers.onOpenMarket).toHaveBeenCalledTimes(1);
   });
 
+  it("points a returning farmer without seeds to the market instead of the first steps", () => {
+    const view = render(
+      <FarmOverview
+        state={{
+          ...baseState,
+          availableSeeds: [],
+          collectionLog: { collected: 2, total: 3, items: [] },
+        } as unknown as FarmStateResponse}
+        summary={summary({ empty: 5 })}
+        now={now}
+        timeDiff={0}
+        pendingAction={null}
+        {...handlers}
+      />,
+    );
+    expect(view.queryByText("Start your first crop")).toBeNull();
+    expect(view.getByText(/5 empty plots, no\s+seeds to plant/)).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "Buy seeds" }));
+    expect(handlers.onOpenMarket).toHaveBeenCalledTimes(1);
+  });
+
   it("marks the running bulk action and blocks the others", () => {
     const view = render(
       <FarmOverview
@@ -224,7 +246,7 @@ describe("FarmMarket", () => {
       />,
     );
     fireEvent.click(view.getByRole("button", { name: "Increase tomato seed quantity" }));
-    fireEvent.click(view.getByRole("button", { name: /Buy for 20/ }));
+    fireEvent.click(view.getByRole("button", { name: "Buy 2 for 20" }));
     expect(onBuy).toHaveBeenCalledWith(entry, 2);
   });
 

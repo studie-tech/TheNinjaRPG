@@ -88,8 +88,12 @@ export function FarmOverview({
     pending: isPending,
   });
   const { nextHarvestAt, nextWateringAt } = getNextFarmEvents(state.plots, now);
+  // First steps only for a farm that has never produced anything.
   const isNewFarm =
-    summary.growing + summary.ready === 0 && state.availableSeeds.length === 0;
+    summary.growing + summary.ready === 0 &&
+    state.availableSeeds.length === 0 &&
+    state.sellableCrops.length === 0 &&
+    state.collectionLog.collected === 0;
   const showPlant = summary.empty > 0 && eligibleSeeds.length > 0;
   const showFertilize =
     summary.fertilizable > 0 && state.availableFertilizers.length > 0;

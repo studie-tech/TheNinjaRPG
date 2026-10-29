@@ -8,15 +8,12 @@ import {
   FARM_SEED_EXTRACTION_SECONDS_PER_CROP,
 } from "@/drizzle/constants";
 import Countdown from "@/layout/Countdown";
+import { FARM_CARD_GRID, FarmItemCard } from "@/layout/FarmItemCard";
 import { FarmItemCount } from "@/layout/FarmItemCount";
 import { FarmQuantityStepper } from "@/layout/FarmQuantityStepper";
 import Image from "@/layout/Image";
 import { getExtractorCropCapacity, getFarmQuantityPrice } from "@/libs/farming";
 import type { FarmStateResponse } from "@/validators/farming";
-
-/** Card grid that adds columns as the farm gets wider. */
-export const FARM_CARD_GRID =
-  "grid gap-2 grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))]";
 
 type SellableCrop = FarmStateResponse["sellableCrops"][number];
 
@@ -122,40 +119,35 @@ export function FarmInventory({
             const validQuantity =
               Number.isInteger(quantity) && quantity >= 1 && quantity <= max;
             return (
-              <li
+              <FarmItemCard
                 key={key}
-                className="flex flex-col gap-2 rounded-md border bg-card p-2.5"
-              >
-                <div className="flex items-start gap-3">
-                  <Image src={crop.image} alt="" width={40} height={40} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm">{crop.name}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {crop.sellValue} coins each
-                    </p>
-                  </div>
-                  <FarmItemCount count={crop.quantity} label="in storage" />
-                </div>
-                <div className="flex items-center justify-end gap-2">
-                  <FarmQuantityStepper
-                    value={quantity}
-                    max={max}
-                    disabled={pending}
-                    onChange={(value) => setQuantity(key, value)}
-                    label={`${crop.name} sale quantity`}
-                    showMax
-                  />
-                  <Button
-                    size="sm"
-                    disabled={pending || !validQuantity}
-                    onClick={() => void onSell(crop.userItemId, quantity)}
-                  >
-                    {pendingKeys.has(key)
-                      ? "Selling…"
-                      : `Sell for ${getFarmQuantityPrice(crop.sellValue, validQuantity ? quantity : 1).toLocaleString()}`}
-                  </Button>
-                </div>
-              </li>
+                image={crop.image}
+                title={crop.name}
+                aside={<FarmItemCount count={crop.quantity} label="in storage" />}
+                details={<p>Sells for {crop.sellValue} coins each</p>}
+                actions={
+                  <>
+                    <FarmQuantityStepper
+                      value={quantity}
+                      max={max}
+                      disabled={pending}
+                      onChange={(value) => setQuantity(key, value)}
+                      label={`${crop.name} sale quantity`}
+                      showMax
+                    />
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      disabled={pending || !validQuantity}
+                      onClick={() => void onSell(crop.userItemId, quantity)}
+                    >
+                      {pendingKeys.has(key)
+                        ? "Selling…"
+                        : `Sell ${validQuantity && quantity > 1 ? `${quantity} ` : ""}for ${getFarmQuantityPrice(crop.sellValue, validQuantity ? quantity : 1).toLocaleString()}`}
+                    </Button>
+                  </>
+                }
+              />
             );
           })}
         </ul>
@@ -247,44 +239,43 @@ export function FarmInventory({
                 const validQuantity =
                   Number.isInteger(quantity) && quantity >= 1 && quantity <= max;
                 return (
-                  <li
+                  <FarmItemCard
                     key={crop.userItemId}
-                    className="flex flex-col gap-2 rounded-md border bg-card p-2.5"
-                  >
-                    <div className="flex items-start gap-3">
-                      <Image src={crop.image} alt="" width={40} height={40} />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm">{crop.name}</p>
-                        <p className="text-muted-foreground text-xs">
-                          {validQuantity
-                            ? `${quantity} → ${crop.seedCount * quantity} seeds in ${minutesPerCrop * quantity} minutes`
-                            : `${crop.seedCount} seeds per crop`}
-                        </p>
-                      </div>
-                      <FarmItemCount count={crop.quantity} label="in storage" />
-                    </div>
-                    <div className="flex items-center justify-end gap-2">
-                      <FarmQuantityStepper
-                        value={quantity}
-                        max={max}
-                        disabled={pending || idleSlot === undefined}
-                        onChange={(value) => setQuantity(crop.userItemId, value)}
-                        label={`${crop.name} extraction quantity`}
-                        showMax
-                      />
-                      <Button
-                        size="sm"
-                        disabled={pending || !validQuantity || idleSlot === undefined}
-                        onClick={() => {
-                          if (idleSlot !== undefined) {
-                            void onExtract(idleSlot, crop.userItemId, quantity);
-                          }
-                        }}
-                      >
-                        {pending ? "Starting…" : "Extract"}
-                      </Button>
-                    </div>
-                  </li>
+                    image={crop.image}
+                    title={crop.name}
+                    aside={<FarmItemCount count={crop.quantity} label="in storage" />}
+                    details={
+                      <p>
+                        {validQuantity
+                          ? `${quantity} → ${crop.seedCount * quantity} seeds in ${minutesPerCrop * quantity} minutes`
+                          : `${crop.seedCount} seeds per crop`}
+                      </p>
+                    }
+                    actions={
+                      <>
+                        <FarmQuantityStepper
+                          value={quantity}
+                          max={max}
+                          disabled={pending || idleSlot === undefined}
+                          onChange={(value) => setQuantity(crop.userItemId, value)}
+                          label={`${crop.name} extraction quantity`}
+                          showMax
+                        />
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          disabled={pending || !validQuantity || idleSlot === undefined}
+                          onClick={() => {
+                            if (idleSlot !== undefined) {
+                              void onExtract(idleSlot, crop.userItemId, quantity);
+                            }
+                          }}
+                        >
+                          {pending ? "Starting…" : "Extract"}
+                        </Button>
+                      </>
+                    }
+                  />
                 );
               })}
             </ul>

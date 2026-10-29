@@ -4,9 +4,8 @@ import { Coins } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FARM_MAX_PLOTS } from "@/drizzle/constants";
-import { FARM_CARD_GRID } from "@/layout/FarmInventory";
+import { FARM_CARD_GRID, FarmItemCard } from "@/layout/FarmItemCard";
 import { FarmQuantityStepper } from "@/layout/FarmQuantityStepper";
-import Image from "@/layout/Image";
 import { getFarmQuantityPrice } from "@/libs/farming";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import type { FarmShopEntryState, FarmStateResponse } from "@/validators/farming";
@@ -80,75 +79,62 @@ export function FarmMarket({
       Number.isInteger(quantity) && quantity >= 1 && quantity <= max;
     const total = getFarmQuantityPrice(entry.cost, validQuantity ? quantity : 1);
     return (
-      <li
+      <FarmItemCard
         key={key}
-        className="flex flex-col justify-between gap-2 rounded-md border bg-card p-2.5"
-      >
-        <div className="flex min-w-0 items-start gap-3">
-          {entry.itemImage && (
-            <Image src={entry.itemImage} alt="" width={40} height={40} />
-          )}
-          <div className="min-w-0">
-            <p className="font-medium text-sm">
-              {entry.label}{" "}
-              <span className="font-normal text-muted-foreground">
-                {entry.cost.toLocaleString()} coins{consumable ? " each" : ""}
-              </span>
-            </p>
+        image={entry.itemImage}
+        title={entry.label}
+        aside={<FarmPriceTag cost={entry.cost} each={consumable} />}
+        details={
+          <>
             {entry.type === "SEED" && (
-              <p className="text-muted-foreground text-xs">
+              <p>
                 {duration(entry.growTimeSeconds)} → {entry.yieldQuantity}{" "}
                 {entry.yieldName} · +{entry.experience ?? 0} XP
               </p>
             )}
             {entry.type === "FERTILIZER" && (
-              <p className="text-muted-foreground text-xs">
+              <p>
                 Reduces grow time by {duration(entry.fertilizerTimeReductionSeconds)}
               </p>
             )}
             {entry.lockedReason ? (
-              <p className="text-destructive text-xs">{entry.lockedReason}</p>
+              <p className="text-destructive">{entry.lockedReason}</p>
             ) : (
-              entry.minLevel > 1 && (
-                <p className="text-muted-foreground text-xs">
-                  Farming level {entry.minLevel}+
-                </p>
-              )
+              entry.minLevel > 1 && <p>Farming level {entry.minLevel}+</p>
             )}
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2">
-          {consumable && (
-            <FarmQuantityStepper
-              value={quantity}
-              max={max}
-              disabled={pending || !entry.canPurchase}
-              onChange={(value) =>
-                setQuantities((current) => ({ ...current, [key]: value }))
-              }
-              label={`${entry.label} quantity`}
-              showMax
-            />
-          )}
-          <Button
-            size="sm"
-            className="min-w-28"
-            disabled={!entry.canPurchase || pending || !validQuantity}
-            onClick={() => {
-              if (validQuantity) void onBuy(entry, quantity);
-            }}
-          >
-            {pending ? (
-              "Buying…"
-            ) : (
-              <>
-                <Coins className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                Buy for {total.toLocaleString()}
-              </>
+          </>
+        }
+        actions={
+          <>
+            {consumable && (
+              <FarmQuantityStepper
+                value={quantity}
+                max={max}
+                disabled={pending || !entry.canPurchase}
+                onChange={(value) =>
+                  setQuantities((current) => ({ ...current, [key]: value }))
+                }
+                label={`${entry.label} quantity`}
+                showMax
+              />
             )}
-          </Button>
-        </div>
-      </li>
+            <Button
+              size="sm"
+              className="flex-1"
+              disabled={!entry.canPurchase || pending || !validQuantity}
+              onClick={() => {
+                if (validQuantity) void onBuy(entry, quantity);
+              }}
+            >
+              {pending
+                ? "Buying…"
+                : validQuantity && quantity > 1
+                  ? `Buy ${quantity} for ${total.toLocaleString()}`
+                  : `Buy for ${total.toLocaleString()}`}
+            </Button>
+          </>
+        }
+      />
     );
   };
 
@@ -208,3 +194,12 @@ export function FarmMarket({
     </div>
   );
 }
+
+/** Unit price shown in a card's corner. */
+const FarmPriceTag = ({ cost, each }: { cost: number; each: boolean }) => (
+  <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 font-semibold text-amber-900 text-xs tabular-nums dark:text-amber-200">
+    <Coins className="h-3.5 w-3.5" aria-hidden />
+    {cost.toLocaleString()}
+    <span className="sr-only">farm coins{each ? " each" : ""}</span>
+  </span>
+);
