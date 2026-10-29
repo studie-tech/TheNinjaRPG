@@ -31,7 +31,12 @@ export const prepareUserUpdate = (client: QueryClient, key: QueryKey) => {
   // An action can render before the initial profile; leave that loading query running.
   // Pending or invalidated reads may reconcile another action, so keep those too.
   const state = client.getQueryState<UserCache>(key);
-  if (!state?.data?.userData || state?.isInvalidated || state?.fetchStatus !== "idle") {
+  if (
+    !state?.data?.userData ||
+    state.status === "error" ||
+    state.isInvalidated ||
+    state.fetchStatus !== "idle"
+  ) {
     return undefined;
   }
   return state.dataUpdateCount;
@@ -42,6 +47,9 @@ export type UserUpdateOptions = {
   // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
   delta?: UserDelta;
   achievementProgress?: AchievementProgress[];
+  notifications?: (
+    current: NavBarDropdownLink[] | undefined,
+  ) => NavBarDropdownLink[] | undefined;
 };
 
 /** Merge local fields or reconcile a confirmed mutation against its captured revision. */
@@ -54,14 +62,21 @@ export const updateUserCache = async (
   if (!mutation) {
     if (!patch) return;
     const before = client.getQueryState(key);
-    let needsRefresh = !!before?.isInvalidated || before?.fetchStatus !== "idle";
+    let needsRefresh =
+      before?.status === "error" ||
+      !!before?.isInvalidated ||
+      before?.fetchStatus !== "idle";
     await client.cancelQueries({ queryKey: key, exact: true });
     client.setQueryData<UserCache>(key, (old) => {
       const state = client.getQueryState(key);
-      needsRefresh ||= !!state?.isInvalidated || state?.fetchStatus !== "idle";
+      needsRefresh ||=
+        state?.status === "error" ||
+        !!state?.isInvalidated ||
+        state?.fetchStatus !== "idle";
       if (!old?.userData) return undefined;
       const known = typeof patch === "function" ? patch(old.userData) : patch;
-      const user = known && mergeUserChanges(old.userData, known);
+      const user =
+        known && mergeUserChanges(old.userData, known, {}, undefined, USER_RELATIONS);
       if (!user) {
         needsRefresh = true;
         return undefined;
@@ -69,17 +84,18 @@ export const updateUserCache = async (
       return mergeUserCache(old, user);
     });
     // A local patch must preserve reconciliation of unrelated fields.
-    if (needsRefresh) await client.invalidateQueries({ queryKey: key, exact: true });
+    if (needsRefresh)
+      await client.refetchQueries({ queryKey: key, exact: true, type: "all" });
     return;
   }
   const { revision } = mutation;
   const delta =
     "delta" in mutation ? mutation.delta : patch === undefined ? undefined : {};
   if (delta === undefined || revision === undefined) {
-    // Invalidation reuses an initial fetch without cached data. Cancel it first so
+    // An initial fetch may contain a pre-mutation snapshot. Cancel it first so
     // a snapshot taken before the mutation cannot satisfy this reconciliation.
     await client.cancelQueries({ queryKey: key, exact: true });
-    await client.invalidateQueries({ queryKey: key, exact: true });
+    await client.refetchQueries({ queryKey: key, exact: true, type: "all" });
     return;
   }
   const wasFetching = client.getQueryState(key)?.fetchStatus !== "idle";
@@ -87,7 +103,7 @@ export const updateUserCache = async (
   // Another action may have requested this unfinished read to reconcile its own changes.
   // Preserve that refresh instead of cancelling it and clearing the invalidation with a delta.
   if (wasFetching) {
-    await client.invalidateQueries({ queryKey: key, exact: true });
+    await client.refetchQueries({ queryKey: key, exact: true, type: "all" });
     return;
   }
   let applied = false;
@@ -97,6 +113,7 @@ export const updateUserCache = async (
     const state = client.getQueryState(key);
     if (
       !old?.userData ||
+      state?.status === "error" ||
       state?.dataUpdateCount !== revision ||
       state.isInvalidated ||
       state.fetchStatus !== "idle"
@@ -105,13 +122,32 @@ export const updateUserCache = async (
     }
     const known = typeof patch === "function" ? patch(old.userData) : patch;
     if (patch && known === undefined) return undefined;
-    const user = mergeUserChanges(old.userData, known ?? {}, delta, USER_DELTA_CAPS);
+    const user = mergeUserChanges(
+      old.userData,
+      known ?? {},
+      delta,
+      USER_DELTA_CAPS,
+      USER_RELATIONS,
+    );
     if (!user) return undefined;
     applied = true;
-    return mergeUserCache(old, user, mutation.achievementProgress);
+    const result = mergeUserCache(old, user, mutation.achievementProgress);
+    if (mutation.notifications)
+      result.notifications = mutation.notifications(result.notifications);
+    return result;
   });
-  if (!applied) await client.invalidateQueries({ queryKey: key, exact: true });
+  if (!applied)
+    await client.refetchQueries({ queryKey: key, exact: true, type: "all" });
 };
+
+const USER_RELATIONS = {
+  clan: "clanId",
+  village: "villageId",
+  bloodline: "bloodlineId",
+  activeReskin: "bloodlineReskinId",
+  sageMode: "sageModeId",
+  questParty: "questPartyId",
+} as const;
 
 const USER_DELTA_CAPS = {
   skillPoints: MAX_SKILL_POINTS,
@@ -125,6 +161,7 @@ const mergeUserChanges = <T extends object>(
   patch: object,
   delta: object = {},
   caps?: Readonly<Record<string, number>>,
+  relations?: Readonly<Record<string, string>>,
 ): T | undefined => {
   const original = current as Record<string, unknown>;
   const values = patch as Record<string, unknown>;
@@ -135,9 +172,30 @@ const mergeUserChanges = <T extends object>(
   )
     return undefined;
   const updated = { ...original, ...values };
+  // A changed membership must carry its complete relation, never fields from the old owner.
+  for (const [relation, foreignKey] of Object.entries(relations ?? {})) {
+    if (values[foreignKey] === undefined || values[foreignKey] === original[foreignKey])
+      continue;
+    const value = values[relation];
+    if (
+      amounts[relation] !== undefined ||
+      (values[foreignKey] === null
+        ? value !== null
+        : !isCacheObject(value) || value.id !== values[foreignKey])
+    )
+      return undefined;
+    updated[relation] = value;
+  }
   for (const field in { ...values, ...amounts }) {
     const value = values[field];
     const amount = amounts[field];
+    const foreignKey = relations?.[field];
+    if (
+      foreignKey &&
+      values[foreignKey] !== undefined &&
+      values[foreignKey] !== original[foreignKey]
+    )
+      continue;
     if (amount === undefined && value === original[field]) continue;
     if (isCacheObject(value) || isCacheObject(amount)) {
       const merged = mergeUserChanges(

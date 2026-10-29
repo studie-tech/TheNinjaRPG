@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "bun:test";
 import { getUserCaps, MAX_MASTERY_CAP } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
@@ -50,10 +50,13 @@ describe("progression-derived profile navigation", () => {
     const revision = prepareUserUpdate(test.client, key);
     const current = [{ questId: "concurrent-progress" } as AchievementProgress];
     test.client.setQueryData(key, { ...test.value(), achievementProgress: current });
+    const observer = new QueryObserver(test.client, { queryKey: key, staleTime: Infinity, retry: false, queryFn: async () => ({ ...test.value(), achievementProgress: current }) });
+    const unsubscribe = observer.subscribe(() => {});
     await updateUserCache(test.client, key, { earnedExperience: 0 }, { revision, achievementProgress: [] });
     expect(test.value().achievementProgress).toEqual(current);
     expect(test.value().userData.earnedExperience).toBe(100);
-    expect(test.client.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+    unsubscribe();
     test.close();
   });
 });

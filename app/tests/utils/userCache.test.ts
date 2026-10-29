@@ -34,6 +34,65 @@ const setup = () => {
 };
 
 describe("user cache updates", () => {
+  it("replaces a confirmed membership without retaining fields from the former clan", async () => {
+    const test = setup();
+    const previous = { id: "old", name: "Former clan", bank: 1000, leaderId: "former-leader" };
+    const next = { id: "new", name: "New clan", bank: 0 };
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, clanId: "old", clan: previous } });
+    await updateUserCache(test.client, key, {
+      clanId: "new", clan: next as NonNullable<NonNullable<UserWithRelations>["clan"]>,
+    }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.clan).toEqual(next);
+    expect(test.value()?.userData.clanId).toBe("new");
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("reconciles an incomplete membership response instead of retaining the previous relation", async () => {
+    const test = setup();
+    await updateUserCache(test.client, key, { clanId: "new" }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()).toEqual(profile(100));
+    expect(test.reads()).toBe(1);
+    test.close();
+  });
+
+  it("replaces a confirmed bloodline and clears its cosmetic relation", async () => {
+    const test = setup();
+    const bloodline = { id: "new", name: "New lineage" } as NonNullable<NonNullable<UserWithRelations>["bloodline"]>;
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, bloodlineId: "old", bloodline: { id: "old", regenIncrease: 10 }, bloodlineReskinId: "skin", activeReskin: { id: "skin" } } });
+    await updateUserCache(test.client, key, { bloodlineId: "new", bloodline, bloodlineReskinId: null, activeReskin: null }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.bloodline).toEqual(bloodline);
+    expect(test.value()?.userData.activeReskin).toBeNull();
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("merges notification metadata with the accepted user update", async () => {
+    const test = setup();
+    const notice = { href: "/manual/review", name: "Content review (2)", color: "green" as const };
+    await updateUserCache(test.client, key, { money: 90 }, {
+      revision: prepareUserUpdate(test.client, key),
+      notifications: (current) => [...(current ?? []), notice],
+    });
+    expect(test.value()?.userData.money).toBe(90);
+    expect(test.value()?.notifications).toEqual(["preserved", notice]);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("requires another authoritative read after reconciliation fails", async () => {
+    const test = setup();
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, retry: false, queryFn: async () => { throw new Error("offline"); } });
+    await updateUserCache(test.client, key, undefined, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.money).toBe(100);
+    expect(prepareUserUpdate(test.client, key)).toBeUndefined();
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => profile(80) });
+    await updateUserCache(test.client, key, { money: 110 }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.money).toBe(80);
+    expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+    test.close();
+  });
+
   it("merges an ordinary patch without a mutation snapshot or read", async () => {
     const test = setup();
     await updateUserCache(test.client, key, { money: 120 });
