@@ -108,6 +108,8 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   const [isFurnitureMeasuring, setIsFurnitureMeasuring] = React.useState(false);
   const itemName = useWatch({ control: form.control, name: "name" });
   const itemDescription = useWatch({ control: form.control, name: "description" });
+  const itemSlot = useWatch({ control: form.control, name: "slot" });
+  const itemWeaponType = useWatch({ control: form.control, name: "weaponType" });
 
   // Filter out any undefined effects from useWatch
   const validEffects = (effects?.filter((e): e is ZodAllTags => e !== undefined) ??
@@ -147,7 +149,17 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         {item && (
           <>
             <fieldset disabled={isUpdating || isFurnitureMeasuring}>
-              <LpcEquipmentFields control={form.control} />
+              <LpcEquipmentFields
+                control={form.control}
+                className="grid-cols-1 gap-1 md:grid-cols-2 [&>div]:p-2"
+                item={{
+                  ...item,
+                  name: itemName,
+                  itemType,
+                  slot: itemSlot,
+                  weaponType: itemWeaponType,
+                }}
+              />
             </fieldset>
             <EditContent
               schema={ItemValidatorRawSchema}
@@ -223,7 +235,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         )}
         {item && props.canSave && (
           <ItemVariantsEditor
-            itemId={item.id}
+            item={item}
             furnitureData={
               isFurniture
                 ? {
@@ -303,7 +315,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
 };
 
 interface ItemVariantsEditorProps {
-  itemId: string;
+  item: Item;
   furnitureData?: Pick<
     FurnitureData,
     "width" | "groundAnchor" | "isFloor" | "action"
@@ -326,9 +338,10 @@ type VariantFormInput = {
 };
 
 const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
-  itemId,
+  item,
   furnitureData,
 }) => {
+  const itemId = item.id;
   const isFurniture = Boolean(furnitureData);
   const utils = api.useUtils();
   const [editingVariant, setEditingVariant] = React.useState<ZodItemVariantType | null>(
@@ -603,10 +616,14 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
           aria-busy={variantOperationPending}
         >
           <fieldset disabled={variantOperationPending} className="space-y-3">
-            <LpcEquipmentFields control={form.control} />
             <h3 className="font-medium">
               {editingVariant ? "Edit Variant" : "New Variant"}
             </h3>
+            <LpcEquipmentFields
+              control={form.control}
+              item={item}
+              variant={{ name: variantName }}
+            />
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="variant-name" className="font-medium text-sm">

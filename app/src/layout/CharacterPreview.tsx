@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { resolveSpriteAppearance, type SpriteUser } from "@/libs/lpc/appearance";
+import { cn } from "@/libs/shadui";
 import type { LpcAnimation } from "@/validators/lpc";
 
 /**
@@ -11,9 +12,13 @@ import type { LpcAnimation } from "@/validators/lpc";
 export const CharacterPreview = ({
   user,
   animation = "idle",
+  className,
+  label = "Your ninja",
 }: {
   user: SpriteUser;
   animation?: LpcAnimation;
+  className?: string;
+  label?: string;
 }) => {
   const mount = useRef<HTMLDivElement>(null);
   const [error, setError] = useState(false);
@@ -75,18 +80,18 @@ export const CharacterPreview = ({
     };
   }, [signature, animation]);
   return (
-    <figure className="mx-auto max-w-64 text-center">
+    <figure className={cn("mx-auto w-64 max-w-full text-center", className)}>
       <div
         ref={mount}
-        className="aspect-square w-64 max-w-full overflow-hidden rounded-lg bg-black/10"
+        className="aspect-square w-full overflow-hidden rounded-lg bg-black/10"
         role="img"
-        aria-label="Animated appearance of your ninja"
+        aria-label={`Animated appearance: ${label}`}
       />
       <figcaption className="text-muted-foreground min-h-6 text-sm" role="status">
         {error
-          ? "Character preview unavailable. You can continue editing your character."
+          ? "Character preview unavailable. You can continue editing."
           : ready
-            ? "Your ninja"
+            ? label
             : "Loading character preview…"}
       </figcaption>
     </figure>
