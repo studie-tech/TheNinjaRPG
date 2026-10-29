@@ -91,6 +91,16 @@ import type {
 import type { PetTask } from "@/validators/petTasks";
 import type { RewardChoiceCard } from "@/validators/rewards";
 
+/** Load definitions needed to apply public masking to committed tracker goals. */
+export const listQuestTrackerDefinitions = (
+  client: Pick<DrizzleClient, "query">,
+  questIds: string[],
+) =>
+  client.query.quest.findMany({
+    where: inArray(quest.id, questIds),
+    columns: { id: true, content: true },
+  });
+
 /** Build the `quest` listing for `GET`, using predicates on `questType`, `content`, `hidden`. */
 export const listQuestForGET = (client: Pick<DrizzleClient, "query">) =>
   client.query.quest.findMany({

@@ -27,11 +27,7 @@ import {
   getInventoryBucketFullMessage,
 } from "@/libs/item";
 import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
-import {
-  filterQuestTrackersForDbPersist,
-  getNewTrackers,
-  getPublicQuestUser,
-} from "@/libs/quest";
+import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { getNextQueueSchedule } from "@/libs/queue";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
@@ -72,6 +68,7 @@ import {
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+import { getPublicQuestTrackerPatch } from "@/server/utils/questUserCache";
 import {
   appendQueueEntries,
   cancelQueuedCraft,
@@ -653,20 +650,20 @@ export const occupationRouter = createTRPCRouter({
             (entry.quest.teamEnabled ||
               ["tier", "daily", "achievement"].includes(entry.quest.questType)),
         );
-      const publicUser =
-        saved &&
-        getPublicQuestUser({ ...user, ...saved, completedQuests: [], items: [] });
+      const publicTrackers = canProject
+        ? await getPublicQuestTrackerPatch(ctx.drizzle, saved)
+        : undefined;
       return {
         success: true,
         message: "Queued craft cancelled, materials returned",
         userPatch:
-          canProject && publicUser
+          saved && publicTrackers
             ? {
-                updatedAt: publicUser.updatedAt,
-                craftingExperience: publicUser.craftingExperience,
-                questData: publicUser.questData,
-                queue: publicUser.queue,
-                cookingJobs: publicUser.cookingJobs,
+                updatedAt: saved.updatedAt,
+                craftingExperience: saved.craftingExperience,
+                ...publicTrackers,
+                queue: saved.queue,
+                cookingJobs: saved.cookingJobs,
               }
             : undefined,
       };
