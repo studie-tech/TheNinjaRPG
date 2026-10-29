@@ -179,7 +179,7 @@ const ElderHall: React.FC<{
   user: NonNullable<UserWithRelations>;
   navTabs: React.ReactNode;
 }> = ({ user, navTabs }) => {
-  const { timeDiff } = useRequiredUserData();
+  const { timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
   const syncedTime = Date.now() - timeDiff;
   const [removalReason, setRemovalReason] = useState("");
   const nomineeForm = useForm<{ username: string; users: UserSearchResult[] }>({
@@ -194,7 +194,13 @@ const ElderHall: React.FC<{
       { enabled: !!user.villageId, refetchInterval: 15_000 },
     );
   const nominate = api.kage.nominateKage.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
       showMutationToast(data);
       setGovernanceMessage(data.message);
       if (data.success) {
@@ -203,7 +209,6 @@ const ElderHall: React.FC<{
           refetchVotes(),
           apiUtils.kage.getElders.invalidate(),
           apiUtils.village.get.invalidate(),
-          apiUtils.profile.getUser.invalidate(),
         ]);
       }
     },
@@ -930,17 +935,24 @@ const KageHall: React.FC<{
 
 /** Show the incumbent and public defenses, with reasoned staff takeover when permitted. */
 const KageChallenge = ({ user }: { user: NonNullable<UserWithRelations> }) => {
+  const { updateUser, prepareUserUpdate } = useRequiredUserData();
   const utils = api.useUtils();
   const [showTakeKageModal, setShowTakeKageModal] = useState(false);
   const [takeKageReason, setTakeKageReason] = useState("");
   const isKage = user.userId === user.village?.kageId;
   const { mutate: take, isPending: isTaking } = api.kage.takeKage.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
           utils.village.get.invalidate(),
-          utils.profile.getUser.invalidate(),
+
           utils.kage.getDefenses.invalidate(),
         ]);
         setShowTakeKageModal(false);

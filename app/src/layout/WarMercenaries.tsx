@@ -14,20 +14,30 @@ import {
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { useRequiredUserData } from "@/utils/UserContext";
 import type { UserSearchResult } from "@/validators/register";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Private hiring controls: identities are returned only to the employing Kage and the player. */
 export const WarMercenaries = ({ warId }: { warId: string }) => {
   const [tokens, setTokens] = useState(1);
   const controlsRef = useRef<HTMLDetailsElement>(null);
-  const { feedback, refresh, onError } = useMercenaryFeedback();
+  const { feedback, refresh, onError, onMutate } = useMercenaryFeedback();
   const roster = api.war.getMercenaries.useQuery({ warId }, { refetchInterval: 10000 });
   const form = useForm<{ username: string; users: UserSearchResult[] }>({
     defaultValues: { username: "", users: [] },
   });
   const selected = useWatch({ control: form.control, name: "users" })?.[0];
-  const invite = api.war.inviteMercenary.useMutation({ onSuccess: refresh, onError });
-  const leave = api.war.leaveMercenary.useMutation({ onSuccess: refresh, onError });
+  const invite = api.war.inviteMercenary.useMutation({
+    onSuccess: refresh,
+    onError,
+    onMutate,
+  });
+  const leave = api.war.leaveMercenary.useMutation({
+    onSuccess: refresh,
+    onError,
+    onMutate,
+  });
   const busy = invite.isPending || leave.isPending;
   return (
     <details
@@ -145,9 +155,17 @@ export const MercenaryOffers = () => {
     // Invitations can come from another village, including while our own is at peace.
     refetchInterval: 60000,
   });
-  const { feedback, refresh, onError } = useMercenaryFeedback();
-  const accept = api.war.acceptMercenary.useMutation({ onSuccess: refresh, onError });
-  const leave = api.war.leaveMercenary.useMutation({ onSuccess: refresh, onError });
+  const { feedback, refresh, onError, onMutate } = useMercenaryFeedback();
+  const accept = api.war.acceptMercenary.useMutation({
+    onSuccess: refresh,
+    onError,
+    onMutate,
+  });
+  const leave = api.war.leaveMercenary.useMutation({
+    onSuccess: refresh,
+    onError,
+    onMutate,
+  });
   const busy = accept.isPending || leave.isPending;
   if (!offers.data?.length && !offers.error && !feedback) return null;
   return (
@@ -230,7 +248,17 @@ const useMercenaryFeedback = () => {
     message: string;
   } | null>(null);
   const utils = api.useUtils();
-  const refresh = (result: { success: boolean; message: string }) => {
+  const { updateUser, prepareUserUpdate } = useRequiredUserData();
+  const refresh = async (
+    result: UserDeltaResponse,
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
+    if (result.success || result.userPatch)
+      await updateUser(result.userPatch, {
+        revision,
+        ...(result.userDelta ? { delta: result.userDelta } : {}),
+      });
     setFeedback(result);
     void Promise.all([
       utils.war.getMercenaries.invalidate(),
@@ -239,11 +267,11 @@ const useMercenaryFeedback = () => {
       utils.war.getObjectiveWarInfo.invalidate(),
       utils.war.getWarCampNotices.invalidate(),
       utils.travel.getSectorData.invalidate(),
-      utils.profile.getUser.invalidate(),
     ]);
   };
   return {
     feedback,
+    onMutate: prepareUserUpdate,
     refresh,
     onError: (error: { message: string }) =>
       setFeedback({ success: false, message: error.message }),

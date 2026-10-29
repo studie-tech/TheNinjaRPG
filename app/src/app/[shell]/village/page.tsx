@@ -44,7 +44,8 @@ import { mutateContentSchema } from "@/validators/comments";
 
 export default function VillageOverview() {
   // State
-  const { userData, sectorVillage } = useRequireInVillage();
+  const { userData, sectorVillage, updateUser, prepareUserUpdate } =
+    useRequireInVillage();
   const { currentStep } = useTutorialStep();
 
   // Queries
@@ -94,11 +95,14 @@ export default function VillageOverview() {
 
   const { mutate: leaveVillage, isPending: isLeaving } =
     api.village.leaveVillage.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success || data.userPatch)
+          await updateUser(data.userPatch, {
+            revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
         showMutationToast(data);
-        if (data.success) {
-          await utils.profile.getUser.invalidate();
-        }
       },
     });
 

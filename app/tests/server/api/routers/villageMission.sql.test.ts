@@ -232,7 +232,9 @@ describeWithDatabase("Village Missions and maintenance on real MySQL", () => {
     const missionId = (await state())?.activeMission?.id;
     await recordVillageMissionProgress(db, "v1", "member", { combined_mission_effort: 14 });
     const results = await Promise.all([caller.claim({ villageId: "v1", missionId }), caller.claim({ villageId: "v1", missionId })]);
-    expect(results.filter((result) => result.success)).toEqual([{ success: true, message: `${expectedTokens.toLocaleString()} tokens awarded to the village` }]);
+    const successful = results.filter((result) => result.success);
+    expect(successful).toHaveLength(1);
+    expect(successful[0]).toMatchObject({ success: true, message: `${expectedTokens.toLocaleString()} tokens awarded to the village`, userPatch: { village: { id: "v1", tokens: 500_000 + expectedTokens, activeMission: null } } });
     expect((await state())?.tokens).toBe(500_000 + expectedTokens);
     expect((await state())?.activeMission).toBeNull();
     expect((await caller.claim({ villageId: "v1", missionId })).success).toBe(false);

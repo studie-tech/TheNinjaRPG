@@ -52,6 +52,7 @@ import { fetchElderVote } from "@/queries/elder";
 import { incrementNotificationCounters } from "@/queries/misc";
 import { fetchUser } from "@/queries/profile";
 import { fetchQuest, listVisibleRaidQuests } from "@/queries/quests";
+import { findWarUserCache } from "@/queries/socialUserCache";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import {
   countVillageSectors,
@@ -135,6 +136,7 @@ import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { applyObjectiveWarAction, fetchWarRules } from "@/server/utils/objectiveWar";
 import { notifyWarVillages } from "@/server/utils/push/war";
+import { getWarAllegianceUserPatch } from "@/server/utils/socialUserCache";
 import {
   handleWarEnd,
   startApprovedVoteWar,
@@ -156,6 +158,7 @@ import {
 } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromNow } from "@/utils/time";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import {
   completeWarMissionSchema,
   declareVillageWarSchema,
@@ -207,7 +210,7 @@ export const warRouter = createTRPCRouter({
         tokens: z.number().int().min(1).max(WAR_MERCENARY_MAX_TOKENS),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, target, activeWar, payer, roster] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -258,6 +261,7 @@ export const warRouter = createTRPCRouter({
         return saved.rowsAffected > 0
           ? {
               success: true,
+              userPatch: {},
               message:
                 "Invitation sent. Tokens are charged only when the player accepts.",
             }
@@ -273,10 +277,20 @@ export const warRouter = createTRPCRouter({
   /** Accept the caller's invitation, atomically exchanging village tokens for player Ryo. */
   acceptMercenary: protectedProcedure
     .input(z.object({ contractId: z.string() }))
-    .output(baseServerResponse)
-    .mutation(({ ctx, input }) =>
-      acceptWarMercenary(ctx.drizzle, input.contractId, ctx.userId),
-    ),
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const result = await acceptWarMercenary(
+        ctx.drizzle,
+        input.contractId,
+        ctx.userId,
+      );
+      return result.success
+        ? {
+            ...result,
+            userPatch: await getWarAllegianceUserPatch(ctx.drizzle, ctx.userId),
+          }
+        : result;
+    }),
   /**
    * Let the player or employing Kage close a contract without refunding payment.
    * Clear an unfinished mission only when it matches an accepted contract's war and
@@ -284,7 +298,7 @@ export const warRouter = createTRPCRouter({
    */
   leaveMercenary: protectedProcedure
     .input(z.object({ contractId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const saved = await retryOnDeadlock(() =>
         executeSavedForLeaveMercenary(ctx.drizzle, input, ctx),
@@ -293,6 +307,7 @@ export const warRouter = createTRPCRouter({
         ? {
             success: true,
             message: "Mercenary contract closed. Payments are not refunded.",
+            userPatch: await getWarAllegianceUserPatch(ctx.drizzle, ctx.userId),
           }
         : errorResponse("Contract already closed or you are not authorized.");
     }),
@@ -422,7 +437,7 @@ export const warRouter = createTRPCRouter({
   /** Claim one concurrent attempt with its authored value and required location frozen. */
   startWarMission: protectedProcedure
     .input(startWarMissionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [activeWar, user, mission, completedQuests, mercenaryWarId] =
         await Promise.all([
@@ -509,12 +524,13 @@ export const warRouter = createTRPCRouter({
       return {
         success: true,
         message: "War mission started. Remain in this sector until completion.",
+        userPatch: await findWarUserCache(ctx.drizzle, ctx.userId),
       };
     }),
   /** Consume the matching ready attempt inside the strategic effect's receipt boundary. */
   completeWarMission: protectedProcedure
     .input(completeWarMissionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const attempt = user.warMission;
@@ -577,7 +593,11 @@ export const warRouter = createTRPCRouter({
         },
       });
       return applied
-        ? { success: true, message: "War objective completed" }
+        ? {
+            success: true,
+            message: "War objective completed",
+            userPatch: await findWarUserCache(ctx.drizzle, ctx.userId),
+          }
         : errorResponse(
             "The war or mission changed before completion. Refresh to continue.",
           );
@@ -585,10 +605,14 @@ export const warRouter = createTRPCRouter({
   /** Clear only the named attempt so a stale cancellation cannot delete its replacement. */
   cancelWarMission: protectedProcedure
     .input(completeWarMissionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       await updateUserDataForCancelWarMission(ctx.drizzle, ctx, input);
-      return { success: true, message: "War mission cancelled" };
+      return {
+        success: true,
+        message: "War mission cancelled",
+        userPatch: await findWarUserCache(ctx.drizzle, ctx.userId),
+      };
     }),
   /** Enter shrine combat with the camp snapshot preloaded for later score settlement. */
   attackWarCamp: protectedProcedure
@@ -648,11 +672,15 @@ export const warRouter = createTRPCRouter({
   /** Grant prestige and consume eligibility in one guarded joined UPDATE. */
   convertWarPoints: protectedProcedure
     .input(warIdSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const saved = await executeSavedForConvertWarPoints(ctx.drizzle, input, ctx);
       return saved.rowsAffected > 0
-        ? { success: true, message: "All war points converted to prestige" }
+        ? {
+            success: true,
+            message: "All war points converted to prestige",
+            userPatch: await findWarUserCache(ctx.drizzle, ctx.userId),
+          }
         : errorResponse("No unclaimed war points remain in the conversion window");
     }),
   /** Preview structure eligibility; declaration rechecks membership, funds and cooldowns under lock. */

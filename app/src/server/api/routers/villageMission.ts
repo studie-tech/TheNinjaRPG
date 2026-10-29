@@ -8,6 +8,7 @@ import {
   isVillageMissionAvailable,
 } from "@/libs/villageMission";
 import { fetchUser } from "@/queries/profile";
+import { findVillageUserCache } from "@/queries/socialUserCache";
 import { findVillageById } from "@/queries/village";
 import {
   listQuestForSelect,
@@ -15,17 +16,11 @@ import {
   updateVillageForClaim,
   updateVillageForSelect,
 } from "@/queries/villageMission";
-
-import {
-  baseServerResponse,
-  createTRPCRouter,
-  errorResponse,
-  protectedProcedure,
-} from "@/server/api/trpc";
-
+import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { getRandomElement } from "@/utils/array";
 import { isStaffRole } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import {
   type VillageMission,
   villageMissionActionSchema,
@@ -54,7 +49,7 @@ export const villageMissionRouter = createTRPCRouter({
   }),
   select: protectedProcedure
     .input(villageMissionActionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, villageData, candidates] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -126,6 +121,9 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
+        userPatch: {
+          village: await findVillageUserCache(ctx.drizzle, input.villageId),
+        },
         message: current
           ? "Village Mission rerolled. Progress starts again for the new mission."
           : "Village Mission selected",
@@ -133,7 +131,7 @@ export const villageMissionRouter = createTRPCRouter({
     }),
   cancel: protectedProcedure
     .input(villageMissionCancelSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!isStaffRole(user.role))
@@ -148,13 +146,16 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
+        userPatch: {
+          village: await findVillageUserCache(ctx.drizzle, input.villageId),
+        },
         message:
           "Village Mission cancelled without penalty. A new mission can be selected immediately.",
       };
     }),
   claim: protectedProcedure
     .input(villageMissionActionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, villageData] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -198,6 +199,9 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
+        userPatch: {
+          village: await findVillageUserCache(ctx.drizzle, input.villageId),
+        },
         message: `${rewardTokens.toLocaleString()} tokens awarded to the village`,
       };
     }),
