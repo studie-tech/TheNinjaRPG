@@ -3720,7 +3720,7 @@ export type UserWithRelations =
       bloodline?: Bloodline | null;
       sageMode?: SageMode | null;
       activeReskin?: BloodlineReskin | null;
-      anbuSquad?: { name: string } | null;
+      anbuSquad?: { name: string; id?: string; points?: number } | null;
       attributes?: { attribute: string }[];
       clan?: Clan | null;
       items: (UserItem & {

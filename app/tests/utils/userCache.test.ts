@@ -64,6 +64,16 @@ describe("user cache updates", () => {
     test.close();
   });
 
+  it("replaces an ANBU membership without retaining the former squad's counters", async () => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, anbuId: "old", anbuSquad: { id: "old", name: "Former squad", points: 100, leaderId: "former-leader" } } });
+    const next = { id: "new", name: "New squad", points: 25 };
+    await updateUserCache(test.client, key, { anbuId: "new", anbuSquad: next }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.anbuSquad).toEqual(next);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
   it("replaces a confirmed membership without retaining fields from the former clan", async () => {
     const test = setup();
     const previous = { id: "old", name: "Former clan", bank: 1000, leaderId: "former-leader" };

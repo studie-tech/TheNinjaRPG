@@ -6,6 +6,8 @@ import {
 } from "@/server/api/routers/profile";
 import type { updateRewards } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
+import { withRequestScope } from "@/server/requestScope";
+import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 
 /** Confirm SQL-capped counters; hydrate derived relations only when the reward changes them. */
@@ -35,9 +37,40 @@ export const getRewardUserUpdate = async (input: {
     MASTERY_EXPERIENCE_FIELDS.some((field) => (rewards[field] ?? 0) !== 0) ||
     (rewards.reward_mastery_rank != null && rewards.reward_mastery_rank !== "NONE");
   const hydrated = needsRelations
-    ? await fetchUpdatedUser({ client, userId })
+    ? await withRequestScope(() => fetchUpdatedUser({ client, userId }))
     : undefined;
-  const counters = await findRewardUserSnapshot(client, userId);
+  // Hydration can settle queued costs and rewards; reuse its confirmed counters.
+  const counters = hydrated?.user
+    ? {
+        money: hydrated.user.money,
+        seichiSilver: hydrated.user.seichiSilver,
+        earnedExperience: hydrated.user.earnedExperience,
+        petExperience: hydrated.user.petExperience,
+        villagePrestige: hydrated.user.villagePrestige,
+        reputationPoints: hydrated.user.reputationPoints,
+        reputationPointsTotal: hydrated.user.reputationPointsTotal,
+        skillPoints: hydrated.user.skillPoints,
+        medicalExperience: hydrated.user.medicalExperience,
+        huntingExperience: hydrated.user.huntingExperience,
+        craftingExperience: hydrated.user.craftingExperience,
+        gatheringExperience: hydrated.user.gatheringExperience,
+        sageMasteryExperience: hydrated.user.sageMasteryExperience,
+        ninjutsuMastery: hydrated.user.ninjutsuMastery,
+        genjutsuMastery: hydrated.user.genjutsuMastery,
+        taijutsuMastery: hydrated.user.taijutsuMastery,
+        bukijutsuMastery: hydrated.user.bukijutsuMastery,
+        bloodlineMastery: hydrated.user.bloodlineMastery,
+        sageMastery: hydrated.user.sageMastery,
+        masteryRanks: hydrated.user.masteryRanks,
+        village: hydrated.user.village
+          ? { id: hydrated.user.village.id, tokens: hydrated.user.village.tokens }
+          : undefined,
+      }
+    : await findRewardUserSnapshot(client, userId);
+  const membership =
+    hydrated?.user && rewards.reward_village_membership !== "NONE"
+      ? await getMembershipUserPatch(client, hydrated.user)
+      : undefined;
   const progression = hydrated?.user
     ? getUserProgressionUpdate(hydrated.user, hydrated.publishedAchievementIds)
     : input.progression;
@@ -52,13 +85,16 @@ export const getRewardUserUpdate = async (input: {
           villageId: hydrated.user.villageId,
           isOutlaw: hydrated.user.isOutlaw,
           joinedVillageAt: hydrated.user.joinedVillageAt,
+          clanId: hydrated.user.clanId,
           clan: hydrated.user.clan,
+          anbuId: hydrated.user.anbuId,
           anbuSquad: hydrated.user.anbuSquad,
           titles: hydrated.user.titles,
           displayTitle: hydrated.user.displayTitle,
           sageModeId: hydrated.user.sageModeId,
           sageMode: hydrated.user.sageMode,
           raidBuffs: hydrated.user.raidBuffs,
+          ...membership,
         }
       : counters
         ? {
