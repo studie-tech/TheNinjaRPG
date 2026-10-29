@@ -1,4 +1,5 @@
 import * as combat from "@/routers/combat";
+import { QueryClient } from "@tanstack/react-query";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -14,7 +15,9 @@ import {
 import { getRaidChatConversationId } from "@/libs/raids";
 import { Pusher } from "@/libs/pusher";
 import { raidsRouter } from "@/server/api/routers/raids";
-import { RaidObjective } from "@/validators/objectives";
+import { profileRouter } from "@/server/api/routers/profile";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { AllObjectives, RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
 import {
@@ -152,6 +155,42 @@ describeWithDatabase("raid join committed queue", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
+  it("applies fresh virtual achievement progress from raid admission to the warmed profile", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "QUEUED", rank: "JONIN", level: 50, primaryElement: "Fire", secondaryElement: "Water", reputationPointsTotal: 10 }).where(eq(userData.userId, "queue-sql-user"));
+    await db.update(mpvpBattleQueue).set({ createdAt: new Date(0) }).where(eq(mpvpBattleQueue.id, "cache-team"));
+    await db.insert(mpvpBattleUser).values({ id: "starter", userId: "queue-sql-user", clanBattleId: "cache-team", side: "ATTACKER", slot: 0 });
+    await insertQuests([{
+      id: "cache-reputation-achievement", name: "Reputation", questType: "achievement", hidden: false,
+      content: { objectives: [AllObjectives.parse({ id: "reputation", task: "reputation_points", value: 1000 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] },
+    }]);
+    const profile = await (await callerFor(profileRouter, "queue-sql-user")).getUser();
+    const valueOf = (trackers: NonNullable<typeof profile.userData>["questData"] | undefined) => trackers?.find((entry) => entry.id === "cache-reputation-achievement")?.goals.find((goal) => goal.id === "reputation")?.value;
+    expect(valueOf(profile.userData?.questData)).toBe(10);
+    await db.update(userData).set({ reputationPointsTotal: 20 }).where(eq(userData.userId, "queue-sql-user"));
+    vi.spyOn(combat, "initiateBattle").mockImplementation(async () => {
+      await db.update(userData).set({ status: "BATTLE", battleId: "started-raid" }).where(eq(userData.userId, "queue-sql-user"));
+      return { success: true, message: "Started", battleId: "started-raid" };
+    });
+    const client = new QueryClient();
+    const key = [["profile", "getUser"], { type: "query" }];
+    const refetch = vi.fn();
+    client.setQueryDefaults(key, { queryFn: refetch });
+    client.setQueryData(key, profile);
+    const revision = prepareUserUpdate(client, key);
+    const result = await (await callerFor(raidsRouter, "queue-sql-user")).startRaidBattle({ teamId: "cache-team" });
+    expect(result.success).toBe(true);
+    expect(valueOf(result.userPatch?.questData)).toBe(20);
+    expect(result.userPatch?.persistedQuestData).toBeNull();
+    expect(result.achievementProgress?.some((entry) => entry.questId === "cache-reputation-achievement")).toBe(true);
+    await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
+    const cached = client.getQueryData<typeof profile>(key);
+    expect(valueOf(cached?.userData?.questData)).toBe(20);
+    expect(cached?.achievementProgress).toEqual(result.achievementProgress);
+    expect(refetch).not.toHaveBeenCalled();
+    client.clear();
+  });
+
   it("preserves the started battle and queue receipt when optional battle confirmation fails", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));

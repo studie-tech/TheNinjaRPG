@@ -254,7 +254,7 @@ const mergeUserCache = (
         ?.filter(isMockQuestHistoryRow)
         .map((entry) => entry.questId),
     );
-    const virtualTrackers = old.userData?.questData?.filter(
+    const virtualTrackers = user.questData?.filter(
       (entry) => virtualIds.has(entry.id) && !persistedIds.has(entry.id),
     );
     user = {
