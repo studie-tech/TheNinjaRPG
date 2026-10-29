@@ -82,6 +82,21 @@ export const userPatchSchema = z.object({
   isTradeBanned: z.boolean().optional(),
   isWarned: z.boolean().optional(),
   rankedLp: z.number().optional(),
+  unreadNotifications: z.number().optional(),
+  activePetId: z.string().nullable().optional(),
+  petSlots: z.number().optional(),
+  petAcquisitions: z.number().optional(),
+  petDailyClaims: z
+    .object({ dayKey: z.string(), speciesIds: z.array(z.string()) })
+    .nullable()
+    .optional(),
+  bloodlineId: z.string().nullable().optional(),
+  bloodlineReskinId: z.string().nullable().optional(),
+  bloodline: z.custom<NonNullable<UserWithRelations>["bloodline"]>().optional(),
+  activeReskin: z.custom<NonNullable<UserWithRelations>["activeReskin"]>().optional(),
+  userSkills: z
+    .custom<NonNullable<UserWithRelations>["userSkills"]>(Array.isArray)
+    .optional(),
   cookingJobs: z
     .array(
       z.object({

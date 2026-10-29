@@ -26,6 +26,7 @@ import {
   getFreeBloodlineSwaps,
   getPityRolls,
 } from "@/libs/bloodline";
+import { getBloodlinePassivePatch } from "@/libs/bloodlineUserCache";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import {
   deletedReason,
@@ -38,6 +39,7 @@ import {
   deleteBloodlineForDelete,
   deleteBloodlineReskinForDeleteReskin,
   fetchBloodline,
+  fetchBloodlineCacheUser,
   fetchBloodlineReskin,
   fetchBloodlines,
   fetchItemBloodlineRolls,
@@ -45,6 +47,7 @@ import {
   fetchNaturalBloodlineRoll,
   fetchUserHistoricBloodlines,
   findActionLogForSwapBloodline,
+  findBloodlineCacheState,
   findBloodlineForUpdate,
   findBloodlineReskinForUpdateReskin,
   findBloodlineRollsForRoll,
@@ -84,8 +87,8 @@ import {
   updateUserJutsuForUpdateBloodline,
 } from "@/queries/bloodline";
 import { refundPityCredit } from "@/queries/concurrency";
-import { fetchUser } from "@/queries/profile";
-import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
+import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -130,6 +133,8 @@ import { BloodlineValidator, type ZodAllTags } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
 
 const ALREADY_HAS_BLOODLINE_ERROR = "Already have a bloodline, please remove it first";
+
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const bloodlineRouter = createTRPCRouter({
   getAllNames: publicProcedure
@@ -251,7 +256,7 @@ export const bloodlineRouter = createTRPCRouter({
       mcp: { description: "Swap to a previously owned bloodline" },
     })
     .input(z.object({ bloodlineId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [updatedUser, line, historicBloodlines, lastTransfer, monthlySwaps] =
@@ -326,7 +331,20 @@ export const bloodlineRouter = createTRPCRouter({
         );
       }
 
+      const lineagePatch = await bloodlineCachePatch(
+        ctx.drizzle,
+        user,
+        line,
+        updatedUser.settings,
+      );
+      const progression =
+        updatedUser.requiresProgressionRefresh === false && lineagePatch
+          ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
+          : undefined;
       return {
+        ...(progression
+          ? { ...progression, userPatch: { ...progression.userPatch, ...lineagePatch } }
+          : {}),
         success: true,
         message: `Bloodline swapped${isFreeSwap ? (isStaffFreeSwap ? " (Free for staff member)" : ` (Free for ${federalStatus} supporter)`) : ""}`,
       };
@@ -691,15 +709,17 @@ export const bloodlineRouter = createTRPCRouter({
   // Natural bloodline roll: CAS on userData.updatedAt before RNG; unique index allows one NATURAL row per user.
   roll: protectedProcedure
     .meta({ mcp: { description: "Roll for a natural bloodline" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, prevRoll, allBloodlines, registrationRoll] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
-        fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
-        findBloodlineRollsForRoll(ctx.drizzle, ctx),
-      ]);
+      const [user, prevRoll, allBloodlines, registrationRoll, settings] =
+        await Promise.all([
+          fetchBloodlineCacheUser(ctx.drizzle, ctx.userId),
+          fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
+          fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
+          findBloodlineRollsForRoll(ctx.drizzle, ctx),
+          fetchAllGameSettings(ctx.drizzle),
+        ]);
       // Guard
       if (!user) return errorResponse("User not found");
       if (prevRoll) return errorResponse("You have already rolled a bloodline");
@@ -785,6 +805,12 @@ export const bloodlineRouter = createTRPCRouter({
             }
             return {
               success: true,
+              userPatch: await bloodlineCachePatch(
+                ctx.drizzle,
+                user,
+                randomBloodline,
+                settings,
+              ),
               message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
             };
           }
@@ -810,14 +836,16 @@ export const bloodlineRouter = createTRPCRouter({
   pityRoll: protectedProcedure
     .meta({ mcp: { description: "Use pity roll for a bloodline" } })
     .input(z.object({ rank: z.enum(LetterRanks).optional().nullish() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, bloodlines, previousRolls] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [user, bloodlines, previousRolls, settings] = await Promise.all([
+        fetchBloodlineCacheUser(ctx.drizzle, ctx.userId),
         fetchBloodlines(ctx.drizzle),
         fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      if (!user) return errorResponse("User not found");
       if (user.bloodlineId) {
         return errorResponse(ALREADY_HAS_BLOODLINE_ERROR);
       }
@@ -887,19 +915,27 @@ export const bloodlineRouter = createTRPCRouter({
       await insertBloodlineRollsForPityRoll(ctx.drizzle, ctx, randomBloodline, input);
       return {
         success: true,
+        userPatch: await bloodlineCachePatch(
+          ctx.drizzle,
+          user,
+          randomBloodline,
+          settings,
+        ),
         message: `You have been granted a bloodline: ${randomBloodline.name}`,
       };
     }),
   // Remove a bloodline from session user
   removeBloodline: protectedProcedure
     .meta({ mcp: { description: "Remove current bloodline" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, roll] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [user, roll, settings] = await Promise.all([
+        fetchBloodlineCacheUser(ctx.drizzle, ctx.userId),
         fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      if (!user) return errorResponse("User not found");
       // Guard
       if (user.status === "BATTLE")
         return errorResponse("You cannot change bloodline during battle");
@@ -926,6 +962,7 @@ export const bloodlineRouter = createTRPCRouter({
       }
       return {
         success: true,
+        userPatch: await bloodlineCachePatch(ctx.drizzle, user, null, settings),
         message: removalCost
           ? `Bloodline removed for ${REMOVAL_COST} reps`
           : "Bloodline removed for free",
@@ -937,13 +974,15 @@ export const bloodlineRouter = createTRPCRouter({
       mcp: { description: "Purchase a bloodline with reputation" },
     })
     .input(z.object({ bloodlineId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, line] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [user, line, settings] = await Promise.all([
+        fetchBloodlineCacheUser(ctx.drizzle, ctx.userId),
         fetchBloodline(ctx.drizzle, input.bloodlineId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
+      if (!user) return errorResponse("User not found");
       // Guard
       if (!line) return errorResponse("Bloodline does not exist");
       if (user.bloodlineId) {
@@ -964,7 +1003,11 @@ export const bloodlineRouter = createTRPCRouter({
         `Bloodline Purchased: ${line.name}`,
       );
       await insertBloodlineRollsForPurchaseBloodline(ctx.drizzle, ctx, line);
-      return { success: true, message: "Bloodline purchased" };
+      return {
+        success: true,
+        message: "Bloodline purchased",
+        userPatch: await bloodlineCachePatch(ctx.drizzle, user, line, settings),
+      };
     }),
 });
 
@@ -1090,4 +1133,24 @@ export const bloodlineDatabaseFilter = (input?: BloodlineFilteringSchema) => {
       ? [eq(bloodline.hidden, input.hidden)]
       : [eq(bloodline.hidden, false)]),
   ];
+};
+
+/** Confirm SQL refunds/debits and project passive effects without another profile hydration. */
+const bloodlineCachePatch = async (
+  client: DrizzleClient,
+  user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineCacheUser>>>,
+  line: Bloodline | null,
+  settings: Parameters<typeof getBloodlinePassivePatch>[2],
+) => {
+  const saved = await findBloodlineCacheState(client, user.userId);
+  if (!saved || saved.bloodlineId !== (line?.id ?? null)) return undefined;
+  return {
+    ...saved,
+    ...getBloodlinePassivePatch(
+      { ...user, regeneration: saved.regeneration },
+      line,
+      settings,
+    ),
+    ...(saved.bloodlineReskinId === null ? { activeReskin: null } : {}),
+  };
 };

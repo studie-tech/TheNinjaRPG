@@ -95,7 +95,14 @@ export const trainRouter = createTRPCRouter({
         where: [...elementalSnapshotConditions(user), eq(userData.status, "AWAKE")],
       });
       return result.success
-        ? { success: true, message: "Active trained element updated" }
+        ? {
+            success: true,
+            message: "Active trained element updated",
+            userPatch: {
+              activeTrainedElement: input.element,
+              updatedAt: result.claimedAt,
+            },
+          }
         : errorResponse("Your elements changed. Please try again");
     }),
   updateEnergyTrainingQueue: protectedProcedure

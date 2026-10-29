@@ -56,10 +56,9 @@ const OCCUPATION_DATA = [
 
 export default function Occupations() {
   // Utils
-  const utils = api.useUtils();
 
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [selectedOccupation, setSelectedOccupation] = useState<OccupationType | null>(
     null,
   );
@@ -83,17 +82,13 @@ export default function Occupations() {
   // Mutation for selecting occupation
   const { mutate: selectOccupation, isPending } =
     api.occupation.selectOccupation.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data?.success) {
           setSelectedOccupation(null);
           setChangeDialogOpen(false);
-          if (data.userPatch?.occupation && data.userPatch.occupationSignupAt) {
-            await updateUser({
-              occupation: data.userPatch.occupation,
-              occupationSignupAt: data.userPatch.occupationSignupAt,
-            });
-          } else await utils.profile.getUser.invalidate();
+          await updateUser(data.userPatch, { revision });
         }
       },
     });

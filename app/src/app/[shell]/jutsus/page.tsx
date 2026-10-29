@@ -270,17 +270,20 @@ export default function MyJutsu() {
 
   const { mutate: updateOrder, isPending: isReordering } =
     api.jutsu.updateUserJutsuOrder.useMutation({
-      onSuccess: async (data, variables) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           const loadout = data.userPatch?.loadout;
           await Promise.all([
             utils.jutsu.getLoadouts.invalidate(),
-            loadout
-              ? updateUser((current) =>
-                  current?.jutsuLoadout === variables.loadoutId ? { loadout } : {},
-                )
-              : utils.profile.getUser.invalidate(),
+            updateUser(
+              loadout
+                ? (current) =>
+                    current.jutsuLoadout === variables.loadoutId ? { loadout } : {}
+                : undefined,
+              { revision },
+            ),
           ]);
         }
       },
@@ -357,14 +360,18 @@ export default function MyJutsu() {
 
   const { mutate: evolveJutsu, isPending: isEvolving } =
     api.jutsu.evolveJutsu.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
             utils.jutsu.getUserJutsus.invalidate(),
             utils.jutsu.getEvolutions.invalidate(),
             utils.jutsu.getLoadouts.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, {
+              revision,
+              achievementProgress: data.achievementProgress,
+            }),
           ]);
           setIsOpen(false);
           setUserJutsu(undefined);

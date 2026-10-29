@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { and, eq, exists, gte, isNull, lt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import {
   CombatStatNames,
   MAP_WAKE_ISLAND_SECTOR,
@@ -66,14 +67,13 @@ import {
   updateUserPetForGenerateAppearance3,
 } from "@/queries/pets";
 import {
-  baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { claimUserSnapshot, getNextUserSnapshotAt } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { logError } from "@/server/utils/sentry";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -83,7 +83,6 @@ import {
   assignPetExperienceSchema,
   feedPetSchema,
   generatePetAppearanceSchema,
-  petAcquisitionResponseSchema,
   petPaymentSchema,
   petSelectionSchema,
   updatePetAbilitiesSchema,
@@ -97,7 +96,7 @@ export const petsRouter = createTRPCRouter({
   /** Buy collection capacity and debit its price in one account update. */
   unlockSlot: protectedProcedure
     .input(petPaymentSchema.optional())
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const { user } = await fetchPetOwner(ctx.drizzle, ctx.userId);
       if (!user) return errorResponse("User not found");
@@ -133,14 +132,19 @@ export const petsRouter = createTRPCRouter({
         }),
       );
       return claim.success
-        ? { success: true, message: "Companion collection slot unlocked." }
+        ? {
+            success: true,
+            message: "Companion collection slot unlocked.",
+            userPatch: { petSlots: user.petSlots + 1, updatedAt: claim.claimedAt },
+            userDelta: { [payment.column.name]: -payment.cost },
+          }
         : changedResponse();
     }),
 
   /** Move both unused XP banks with their companions when changing the active selection. */
   activatePet: protectedProcedure
     .input(petSelectionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const { user, pet, pets } = await fetchPetOwner(
         ctx.drizzle,
@@ -178,14 +182,22 @@ export const petsRouter = createTRPCRouter({
         ),
       );
       return activated.rowsAffected > 0
-        ? { success: true, message: `${pet.name} is now your active companion.` }
+        ? {
+            success: true,
+            message: `${pet.name} is now your active companion.`,
+            userPatch: {
+              activePetId: pet.id,
+              petExperience: pet.storedExperience,
+              updatedAt: getNextUserSnapshotAt(user.updatedAt, now),
+            },
+          }
         : changedResponse();
     }),
 
   /** Equip published pet jutsus and activated skills within the companion's shared budget. */
   updateAbilities: protectedProcedure
     .input(updatePetAbilitiesSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [{ user, pet }, abilities] = await Promise.all([
         fetchPetOwner(ctx.drizzle, ctx.userId, input.petId),
@@ -205,14 +217,14 @@ export const petsRouter = createTRPCRouter({
         skillIds: input.skillIds,
       });
       return changed
-        ? { success: true, message: "Companion abilities updated." }
+        ? { success: true, message: "Companion abilities updated.", userPatch: {} }
         : changedResponse();
     }),
 
   /** Exchange one carried meal for XP after the companion's feeding cooldown. */
   feedPet: protectedProcedure
     .input(feedPetSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [{ user, pet }, meal] = await Promise.all([
         fetchPetOwner(ctx.drizzle, ctx.userId, input.petId),
@@ -278,6 +290,8 @@ export const petsRouter = createTRPCRouter({
       }
       return {
         success: true,
+        userPatch: { updatedAt: getNextUserSnapshotAt(user.updatedAt, now) },
+        userDelta: isActive ? { petExperience: experience } : {},
         message: `${pet.name} enjoyed its meal and gained ${experience.toLocaleString("en-US")} companion experience.`,
       };
     }),
@@ -394,7 +408,7 @@ export const petsRouter = createTRPCRouter({
   /** Adopt the first companion free, then charge each additional adoption exactly once. */
   acquirePet: protectedProcedure
     .input(acquirePetSchema)
-    .output(petAcquisitionResponseSchema)
+    .output(userDeltaResponseSchema.extend({ petId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const [{ user, pets }, species, jutsus] = await Promise.all([
         fetchPetOwner(ctx.drizzle, ctx.userId),
@@ -495,6 +509,15 @@ export const petsRouter = createTRPCRouter({
         return {
           success: true,
           petId,
+          userPatch: {
+            ...(!user.activePetId ? { activePetId: petId, petExperience: 0 } : {}),
+            petAcquisitions: user.petAcquisitions + 1,
+            petDailyClaims: {
+              dayKey,
+              speciesIds: [...claimedSpecies, input.speciesId],
+            },
+          },
+          userDelta: { [payment.column.name]: -payment.cost },
           message: payment.cost
             ? `Companion adopted for ${payment.cost} ${payment.label}. Its appearance is ready to generate.`
             : "Your first companion is adopted free. Its appearance is ready to generate.",
@@ -509,7 +532,7 @@ export const petsRouter = createTRPCRouter({
   /** Remove an owned companion and discard only its own unused XP bank. */
   releasePet: protectedProcedure
     .input(petSelectionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
       const restriction = petMutationBlockMessage(user, pet);
@@ -535,6 +558,7 @@ export const petsRouter = createTRPCRouter({
           return removed.rowsAffected === 1
             ? {
                 success: true,
+                userPatch: {},
                 message:
                   "Your companion returned to the sanctuary. Its progress and unused experience were removed.",
               }
@@ -560,6 +584,7 @@ export const petsRouter = createTRPCRouter({
         return released
           ? {
               success: true,
+              userPatch: { activePetId: null, petExperience: 0 },
               message:
                 "Your companion returned to the sanctuary. Its progress and unused experience were removed.",
             }
@@ -573,7 +598,7 @@ export const petsRouter = createTRPCRouter({
   /** Save presentation and battle settings without charging reputation. */
   updatePet: protectedProcedure
     .input(updatePetSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
       const restriction = petMutationBlockMessage(user, pet);
@@ -588,14 +613,14 @@ export const petsRouter = createTRPCRouter({
       const { petId: _petId, ...patch } = input;
       const changed = await updateOwnedPet(ctx.drizzle, user, pet, patch);
       return changed
-        ? { success: true, message: "Companion settings updated." }
+        ? { success: true, message: "Companion settings updated.", userPatch: {} }
         : changedResponse();
     }),
 
   /** Save validated companion AI rules against its current revision. */
   updateAiConfig: protectedProcedure
     .input(updatePetAiSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
       const restriction = petMutationBlockMessage(user, pet);
@@ -608,7 +633,7 @@ export const petsRouter = createTRPCRouter({
         includeDefaultRules: input.includeDefaultRules,
       });
       return changed
-        ? { success: true, message: "Companion AI settings updated." }
+        ? { success: true, message: "Companion AI settings updated.", userPatch: {} }
         : changedResponse();
     }),
 
@@ -682,7 +707,7 @@ export const petsRouter = createTRPCRouter({
   /** Evolve an eligible companion for free and require art for its new rank. */
   rankUp: protectedProcedure
     .input(petSelectionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const { user, pet } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId);
       const restriction = petMutationBlockMessage(user, pet);
@@ -703,6 +728,7 @@ export const petsRouter = createTRPCRouter({
       return changed
         ? {
             success: true,
+            userPatch: {},
             message: `Your companion is now ${next.name}. Generate its evolved appearance to continue training.`,
           }
         : changedResponse();
@@ -717,7 +743,7 @@ export const petsRouter = createTRPCRouter({
    */
   generateAppearance: protectedProcedure
     .input(generatePetAppearanceSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [{ user, pet }, provider] = await Promise.all([
         fetchPetOwner(ctx.drizzle, ctx.userId, input.petId),
@@ -825,7 +851,11 @@ export const petsRouter = createTRPCRouter({
           return errorResponse(
             "The companion changed before the image completed. Refresh to see its current appearance.",
           );
-        return { success: true, message: "Your companion's appearance is ready." };
+        return {
+          success: true,
+          message: "Your companion's appearance is ready.",
+          userPatch: {},
+        };
       } catch (error) {
         // Returned failures bypass tRPC's onError; retain diagnostics while the UI offers a retry.
         logError(error, "Companion appearance generation failed", {

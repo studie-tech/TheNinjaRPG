@@ -26,6 +26,7 @@ import { getPetRank, isPetAppearanceReady } from "@/libs/pets/progression";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { acquirePetSchema } from "@/validators/pets";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
  * Guide daily trait selection, claim a companion, then request its first artwork.
@@ -33,7 +34,7 @@ import { acquirePetSchema } from "@/validators/pets";
  * reconciled with the collection before another potentially paid claim is allowed.
  */
 export function PetAcquisition() {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const [name, setName] = useState("");
   const [gender, setGender] = useState<PetGender | null>(null);
@@ -116,13 +117,26 @@ export function PetAcquisition() {
     setStage(next);
   };
 
-  const finishMutation = async (result: { success: boolean; message: string }) => {
+  const finishMutation = async (
+    result: UserDeltaResponse,
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
     setMessage(result.success ? null : result.message);
     showMutationToast(result);
     await Promise.all([
       utils.pets.getPet.invalidate(),
       utils.pets.getCollection.invalidate(),
-      utils.profile.getUser.invalidate(),
+      result.success
+        ? result.userPatch &&
+          Object.keys(result.userPatch).length === 0 &&
+          !result.userDelta
+          ? undefined
+          : updateUser(result.userPatch, {
+              revision,
+              delta: result.userPatch ? (result.userDelta ?? {}) : undefined,
+            })
+        : utils.profile.getUser.refetch(),
     ]);
   };
   const failMutation = async (cause: { message: string }) => {
@@ -131,14 +145,16 @@ export function PetAcquisition() {
     await Promise.all([
       utils.pets.getPet.invalidate(),
       utils.pets.getCollection.invalidate(),
-      utils.profile.getUser.invalidate(),
+      utils.profile.getUser.refetch(),
     ]);
   };
   const acquire = api.pets.acquirePet.useMutation({
+    onMutate: prepareUserUpdate,
     onSuccess: finishMutation,
     onError: failMutation,
   });
   const generate = api.pets.generateAppearance.useMutation({
+    onMutate: prepareUserUpdate,
     onSuccess: finishMutation,
     onError: failMutation,
   });

@@ -54,7 +54,7 @@ import {
   updateUserDataForResetSkillPoints,
   updateUserSkillForPurchaseSkill,
 } from "@/queries/skillTree";
-import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -184,10 +184,10 @@ export const skillTreeRouter = createTRPCRouter({
   purchaseSkill: protectedProcedure
     .meta({ mcp: { description: "Purchase or activate a skill" } })
     .input(z.object({ skillId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch all required data in parallel
-      const [{ user }, skill, userSkills] = await Promise.all([
+      const [snapshot, skill, userSkills] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -196,6 +196,7 @@ export const skillTreeRouter = createTRPCRouter({
         fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
 
+      const { user } = snapshot;
       if (!user) return errorResponse("User not found");
       if (
         !skill ||
@@ -237,13 +238,44 @@ export const skillTreeRouter = createTRPCRouter({
         );
       }
 
+      const activatedSkills = [
+        ...userSkills.filter((entry) => entry.activated && entry.skillId !== skill.id),
+        {
+          skillId: skill.id,
+          activated: true,
+          skill: { target: skill.target, effects: skill.effects },
+        },
+      ];
+      const progression =
+        snapshot.requiresProgressionRefresh === false
+          ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
+          : undefined;
+      const cacheUpdate = progression
+        ? {
+            ...progression,
+            userPatch: {
+              ...progression.userPatch,
+              userSkills: activatedSkills,
+              effectiveMasteries: effectiveMasteries({
+                ...user,
+                userSkills: activatedSkills,
+              }),
+              maxEnergy: calcMaxEnergy({ ...user, userSkills: activatedSkills }),
+            },
+          }
+        : {};
+
       // Check if skill is already owned
       if (existingUserSkill) {
         if (existingUserSkill.activated) {
           return errorResponse("Skill already activated");
         }
         await updateUserSkillForPurchaseSkill(ctx.drizzle, existingUserSkill);
-        return { success: true, message: `Successfully activated ${skill.name}!` };
+        return {
+          success: true,
+          message: `Successfully activated ${skill.name}!`,
+          ...cacheUpdate,
+        };
       }
 
       // Purchase the skill (add to userSkill table, activated by default)
@@ -252,7 +284,11 @@ export const skillTreeRouter = createTRPCRouter({
       // only one record exists, and we simply update activated=true if it already exists.
       await insertUserSkillForPurchaseSkill(ctx.drizzle, ctx, input);
 
-      return { success: true, message: `Successfully purchased ${skill.name}!` };
+      return {
+        success: true,
+        message: `Successfully purchased ${skill.name}!`,
+        ...cacheUpdate,
+      };
     }),
 
   // Admin: Create new skill with placeholder data
@@ -579,6 +615,7 @@ export const skillTreeRouter = createTRPCRouter({
             ? {}
             : { reputationPoints: -COST_SKILL_RESET },
         userPatch: {
+          userSkills: [],
           monthlySkillResets: {
             ...resetState,
             count: resetState.count + (isStaffFreeReset ? 0 : 1),
@@ -617,14 +654,15 @@ export const skillTreeRouter = createTRPCRouter({
 
   // Reset all users' skill points (staff only)
   resetAllUsersSkillPoints: protectedProcedure
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user data to check permissions
-      const { user } = await fetchUpdatedUser({
+      const snapshot = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
 
+      const { user } = snapshot;
       if (!user) return errorResponse("User not found");
 
       // Check if user has permission to unequip all users
@@ -682,7 +720,21 @@ export const skillTreeRouter = createTRPCRouter({
       // Log the action
       await insertActionLogForResetAllUsersSkillPoints2(ctx.drizzle, ctx, user);
 
+      const activeSkills = (await fetchUserSkills(ctx.drizzle, ctx.userId)).filter(
+        (entry) => entry.activated,
+      );
+      const updated = { ...user, userSkills: activeSkills };
+      const progression =
+        snapshot.requiresProgressionRefresh === false
+          ? getUserProgressionUpdate(updated, snapshot.publishedAchievementIds)
+          : undefined;
       return {
+        ...(progression
+          ? {
+              ...progression,
+              userPatch: { ...progression.userPatch, userSkills: activeSkills },
+            }
+          : {}),
         success: true,
         message: `Reset skill trees (${totalDeleted} entries cleared)`,
       };

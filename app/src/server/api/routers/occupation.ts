@@ -27,7 +27,11 @@ import {
   getInventoryBucketFullMessage,
 } from "@/libs/item";
 import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
-import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
+import {
+  filterQuestTrackersForDbPersist,
+  getNewTrackers,
+  getPublicQuestUser,
+} from "@/libs/quest";
 import { getNextQueueSchedule } from "@/libs/queue";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
@@ -38,6 +42,7 @@ import {
 import { fetchItemWithCraftingRequirements, insertUserItems } from "@/queries/item";
 import {
   deleteUserItemImbuementForRemoveImbuement,
+  findCraftingCacheState,
   findUserItemImbuementForRemoveImbuement,
   insertUserCookingJobForCraftItem,
   insertUserItemForRemoveImbuement,
@@ -623,11 +628,48 @@ export const occupationRouter = createTRPCRouter({
   cancelQueuedCraft: protectedProcedure
     .meta({ mcp: { description: "Cancel a queued craft and return its materials" } })
     .input(cancelQueuedJobInputSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
       const cancelled = await cancelQueuedCraft(ctx.drizzle, ctx.userId, input.queueId);
       if (!cancelled) return errorResponse("That queued craft already started");
-      return { success: true, message: "Queued craft cancelled, materials returned" };
+      const saved = await findCraftingCacheState(ctx.drizzle, ctx.userId);
+      // Queue starts persist ordinary trackers; automatic achievements and team effects
+      // still require the canonical progression flow before publishing a cache update.
+      const changedIds = new Set(
+        (saved?.questData ?? [])
+          .filter(
+            (entry) =>
+              JSON.stringify(entry) !==
+              JSON.stringify(user.questData?.find((old) => old.id === entry.id)),
+          )
+          .map((entry) => entry.id),
+      );
+      const canProject =
+        saved &&
+        !saved.userQuests.some(
+          (entry) =>
+            changedIds.has(entry.questId) &&
+            (entry.quest.teamEnabled ||
+              ["tier", "daily", "achievement"].includes(entry.quest.questType)),
+        );
+      const publicUser =
+        saved &&
+        getPublicQuestUser({ ...user, ...saved, completedQuests: [], items: [] });
+      return {
+        success: true,
+        message: "Queued craft cancelled, materials returned",
+        userPatch:
+          canProject && publicUser
+            ? {
+                updatedAt: publicUser.updatedAt,
+                craftingExperience: publicUser.craftingExperience,
+                questData: publicUser.questData,
+                queue: publicUser.queue,
+                cookingJobs: publicUser.cookingJobs,
+              }
+            : undefined,
+      };
     }),
 
   imbueItem: protectedProcedure

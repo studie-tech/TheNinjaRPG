@@ -2,7 +2,7 @@
  * Database access for bloodline; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { and, eq, gte, isNotNull } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull } from "drizzle-orm";
 import type { z } from "zod";
 import type {
   BloodlineDifficultyRating,
@@ -16,6 +16,8 @@ import {
   bloodline,
   bloodlineReskin,
   bloodlineRolls,
+  userItem,
+  userSkill,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { getUnique } from "@/utils/grouping";
@@ -744,4 +746,39 @@ export const insertActionLogForUpdateBloodline = (
     relatedId: user.userId,
     relatedMsg: "Bloodline Changed",
     relatedImage: user.avatarLight || user.avatar || IMG_AVATAR_DEFAULT,
+  });
+
+/** Load passive sources required to project a lineage change without quest hydration. */
+export const fetchBloodlineCacheUser = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    with: {
+      bloodline: true,
+      activeReskin: true,
+      clan: true,
+      village: { with: { structures: true } },
+      raidBuffs: true,
+      titles: true,
+      userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
+      items: {
+        where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
+        with: { item: true, imbuements: { with: { item: true } } },
+      },
+    },
+  });
+
+/** Confirm fields changed by a lineage grant, including its SQL Bloodright refund. */
+export const findBloodlineCacheState = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: {
+      bloodlineId: true,
+      bloodlineReskinId: true,
+      bloodright: true,
+      bloodrightSpent: true,
+      reputationPoints: true,
+      seichiSilver: true,
+      regeneration: true,
+      updatedAt: true,
+    },
   });
