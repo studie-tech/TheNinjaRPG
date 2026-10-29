@@ -35,7 +35,7 @@ export const EnergyTrainingQueue = ({
   });
   useEffect(() => {
     if (!entries.length) return;
-    const timer = setInterval(() => void utils.profile.getUser.invalidate(), 60_000);
+    const timer = setInterval(() => void utils.profile.getUser.refetch(), 60_000);
     return () => clearInterval(timer);
   }, [entries.length, utils]);
 

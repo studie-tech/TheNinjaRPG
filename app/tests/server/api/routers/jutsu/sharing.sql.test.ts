@@ -53,7 +53,9 @@ describeWithDatabase("jutsu loadout sharing atomic SQL", () => {
     const input = await previewInput();
     const before = await snapshot();
     const caller = await callerFor(jutsuRouter, USER);
-    expect((await caller.importJutsuLoadout(input)).success).toBe(true);
+    const result = await caller.importJutsuLoadout(input);
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toMatchObject({ jutsuLoadout: "sharing-active", loadout: { jutsuIds: ["sharing-b", "sharing-a"] } });
     const after = await snapshot();
     expect(after.loadouts.find((entry) => entry.id === input.loadoutId)).toMatchObject({ name: "Keep name", jutsuIds: ["sharing-b", "sharing-a"] });
     expect(after.equipped).toEqual(["sharing-a", "sharing-b"]);
@@ -64,7 +66,10 @@ describeWithDatabase("jutsu loadout sharing atomic SQL", () => {
     const input = await previewInput("sharing-inactive");
     const before = await snapshot();
     const caller = await callerFor(jutsuRouter, USER);
-    expect((await caller.importJutsuLoadout(input)).success).toBe(true);
+    const result = await caller.importJutsuLoadout(input);
+    expect(result.success).toBe(true);
+    expect(result.userPatch?.loadout).toBeUndefined();
+    expect(result.userPatch?.jutsuLoadout).toBeUndefined();
     const after = await snapshot();
     expect(after.loadouts.find((entry) => entry.id === input.loadoutId)).toMatchObject({ name: "Other", jutsuIds: ["sharing-b", "sharing-a"] });
     expect(after.owned).toEqual(before.owned);
@@ -98,7 +103,9 @@ describeWithDatabase("jutsu loadout sharing atomic SQL", () => {
     const input = await previewInput(loadoutId, exportJutsuLoadout(["sharing-old"]));
     const before = await snapshot();
     const caller = await callerFor(jutsuRouter, USER);
-    expect(await caller.importJutsuLoadout(input)).toEqual({ success: true, message: "Loadout already matches" });
+    const result = await caller.importJutsuLoadout(input);
+    expect(result).toMatchObject({ success: true, message: "Loadout already matches" });
+    expect(result.userPatch?.loadout).toEqual(loadoutId === "sharing-active" ? { jutsuIds: ["sharing-old"] } : undefined);
     expect(await snapshot()).toEqual(before);
   });
 

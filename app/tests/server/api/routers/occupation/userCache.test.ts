@@ -21,6 +21,23 @@ describeWithDatabase("crafting user cache quest progress", () => {
     await db.insert(userVote).values({ id: "vote", userId: "crafter", secret: "secret01", lastVoteAt: new Date() });
   });
 
+
+  it("publishes the queue and production XP when cancelling starts the following craft", async () => {
+    const db = await getTestDatabase();
+    const caller = await callerFor(occupationRouter, "crafter");
+    expect((await caller.craftItem({ itemId: "crafted", quantity: 1 })).success).toBe(true);
+    expect((await caller.craftItem({ itemId: "crafted", quantity: 1 })).success).toBe(true);
+    expect((await caller.craftItem({ itemId: "crafted", quantity: 1 })).success).toBe(true);
+    const waiting = await db.query.userQueue.findMany();
+    expect(waiting).toHaveLength(2);
+    await db.update(userItem).set({ craftingFinishedAt: new Date(Date.now() - 60000) });
+    const result = await caller.cancelQueuedCraft({ queueId: waiting[0]!.id });
+    expect(result.success).toBe(true);
+    expect(result.userPatch?.queue).toEqual([]);
+    expect(result.userPatch?.craftingExperience).toBe(10);
+    expect(result.userPatch?.cookingJobs).toEqual([]);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "crafter") }))?.craftingExperience).toBe(result.userPatch?.craftingExperience);
+  });
   it.each(["mission", "achievement", "queued"] as const)("publishes only committed production progress (%s)", async (scenario) => {
     const db = await getTestDatabase();
     const questType = scenario === "achievement" ? "achievement" : "mission";

@@ -13,6 +13,7 @@ import {
   userItemImbuement,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { userQuestHistoryRelation } from "@/server/utils/achievementObjectives";
 
 /** Build the `item` listing for `getCraftableItems`, using predicates on `canBeCrafted`, `hidden`, `itemType`. */
 export const listItemForGetCraftableItems = (client: Pick<DrizzleClient, "query">) =>
@@ -248,4 +249,12 @@ export const insertUserItemForRemoveImbuement = (
     storedAtHome: false,
     isInAuction: false,
     craftingFinishedAt: null,
+  });
+
+/** Confirm queue settlement after cancellation without hydrating unrelated profile relations. */
+export const findCraftingCacheState = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: { updatedAt: true, craftingExperience: true, questData: true },
+    with: { queue: true, cookingJobs: true, userQuests: userQuestHistoryRelation },
   });

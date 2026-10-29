@@ -81,6 +81,7 @@ import {
   PET_AI_EFFECT_TYPES,
   updatePetSchema,
 } from "@/validators/pets";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
  * Manage the owner's collection and selected companion within the profile tab.
@@ -204,50 +205,69 @@ export function PetProfile() {
     await Promise.all([
       utils.pets.getPet.invalidate(),
       utils.pets.getCollection.invalidate(),
-      utils.profile.getUser.invalidate(),
     ]);
   };
-  const finishMutation = async (result: { success: boolean; message: string }) => {
+  const finishMutation = async (
+    result: UserDeltaResponse,
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
     setMessage(result.success ? null : result.message);
     showMutationToast(result);
-    await invalidatePetData();
+    await Promise.all([
+      invalidatePetData(),
+      result.success
+        ? result.userPatch &&
+          Object.keys(result.userPatch).length === 0 &&
+          !result.userDelta
+          ? undefined
+          : updateUser(result.userPatch, {
+              revision,
+              delta: result.userPatch ? (result.userDelta ?? {}) : undefined,
+            })
+        : utils.profile.getUser.refetch(),
+    ]);
   };
   const failMutation = async (cause: { message: string }) => {
     setMessage(cause.message);
     // A network failure may arrive after the server commits the update.
-    await invalidatePetData();
+    await Promise.all([invalidatePetData(), utils.profile.getUser.refetch()]);
   };
   const update = api.pets.updatePet.useMutation({
+    onMutate: prepareUserUpdate,
     onSuccess: finishMutation,
     onError: failMutation,
   });
   const generate = api.pets.generateAppearance.useMutation({
     // Capture the name before the player can rename or switch companions.
-    onMutate: ({ petId }) => data?.pets.find((entry) => entry.id === petId)?.name,
-    onSuccess: async (result, { petId }, name) => {
+    onMutate: ({ petId }) => ({
+      name: data?.pets.find((entry) => entry.id === petId)?.name,
+    }),
+    onSuccess: async (result, { petId }, context) => {
       setGenerationMessages((previous) => ({
         ...previous,
         [petId]: result.success ? null : result.message,
       }));
       showMutationToast({
         ...result,
-        message: `${name ?? "Companion"}: ${result.message}`,
+        message: `${context?.name ?? "Companion"}: ${result.message}`,
       });
       await invalidatePetData();
     },
-    onError: async (cause, { petId }, name) => {
+    onError: async (cause, { petId }, context) => {
       // A dropped connection says nothing about the server: the image may still be accepted.
       const message = `${cause.message.replace(/[.!?]?\s*$/, ".")} The image may still finish; refresh in a few minutes. Failed generations do not use an attempt.`;
       setGenerationMessages((previous) => ({ ...previous, [petId]: message }));
       // A local onError replaces the provider's default toast, so report background failures here.
       showMutationToast({
         success: false,
-        message: `${name ?? "Companion"}: ${message}`,
+        message: `${context?.name ?? "Companion"}: ${message}`,
       });
       await invalidatePetData();
     },
   });
   const evolve = api.pets.rankUp.useMutation({
+    onMutate: prepareUserUpdate,
     onSuccess: finishMutation,
     onError: failMutation,
   });
@@ -263,42 +283,51 @@ export function PetProfile() {
           utils.pets.getCollection.invalidate(),
         ]);
       } else {
-        await invalidatePetData();
+        await Promise.all([invalidatePetData(), utils.profile.getUser.refetch()]);
       }
     },
     onError: failMutation,
   });
   const updateAi = api.pets.updateAiConfig.useMutation({
+    onMutate: prepareUserUpdate,
     onSuccess: finishMutation,
     onError: failMutation,
   });
   const release = api.pets.releasePet.useMutation({
-    onSuccess: async (result) => {
-      await finishMutation(result);
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, variables, revision) => {
+      await finishMutation(result, variables, revision);
       if (result.success) setSelectedPetId(undefined);
     },
     onError: failMutation,
   });
   const activate = api.pets.activatePet.useMutation({
+    onMutate: prepareUserUpdate,
     onSuccess: finishMutation,
     onError: failMutation,
   });
   const unlockSlot = api.pets.unlockSlot.useMutation({
-    onSuccess: async (result) => {
-      await finishMutation(result);
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, variables, revision) => {
+      await finishMutation(result, variables, revision);
       if (result.success) setIsSlotDialogOpen(false);
     },
     onError: failMutation,
   });
   const feed = api.pets.feedPet.useMutation({
-    onSuccess: async (result) => {
-      await Promise.all([finishMutation(result), utils.item.getUserItems.invalidate()]);
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, variables, revision) => {
+      await Promise.all([
+        finishMutation(result, variables, revision),
+        utils.item.getUserItems.invalidate(),
+      ]);
     },
     onError: failMutation,
   });
   const updateAbilities = api.pets.updateAbilities.useMutation({
-    onSuccess: async (result) => {
-      await finishMutation(result);
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, variables, revision) => {
+      await finishMutation(result, variables, revision);
       if (result.success) setAbilityDraft(null);
     },
     onError: failMutation,
@@ -886,12 +915,12 @@ export function PetProfile() {
                   hideImage
                   hideData
                   item={{
-                    id: `species:${pet.species!.id}:${index}`,
+                    id: `species:${pet.species?.id}:${index}`,
                     name: `Tag ${index + 1} · ${effect.skillTarget === "ENEMIES" ? "Enemies" : "Companion and owner"}`,
                     description: "",
                     effects: [effect],
-                    createdAt: pet.species!.createdAt,
-                    updatedAt: pet.species!.updatedAt,
+                    createdAt: pet.species?.createdAt,
+                    updatedAt: pet.species?.updatedAt,
                   }}
                 />
               ))}
