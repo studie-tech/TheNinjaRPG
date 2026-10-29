@@ -2,14 +2,16 @@ import type { GameRenderer } from "@/libs/rendering/runtime";
 
 /**
  * Scene-owned gestures report taps/pointers in renderer pixels (Y downward), with
- * client coordinates retained for DOM overlays. Zoom receives a multiplicative factor;
- * omitting it leaves wheel scrolling available. Drags/pinches suppress taps.
+ * client coordinates retained for DOM overlays. Pan receives renderer-pixel deltas;
+ * zoom receives a multiplicative factor. Omitting zoom leaves wheel scrolling available.
+ * Drags/pinches suppress taps, including the final finger left after a pinch.
  */
 export const createMapControls = (
   game: GameRenderer,
   options: {
     enabled: () => boolean;
     zoom?: (factor: number) => void;
+    pan?: (dx: number, dy: number) => void;
     tap: (x: number, y: number) => void;
   },
 ) => {
@@ -34,7 +36,7 @@ export const createMapControls = (
     return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
   };
   game.listen("pointerdown", (event) => {
-    if (!options.enabled()) return;
+    if (!options.enabled() || event.button !== 0) return;
     if (!contacts.size) multi = false;
     const p = point(event);
     pointer = p;
@@ -43,7 +45,7 @@ export const createMapControls = (
       ...p,
       startX: p.x,
       startY: p.y,
-      moved: event.button !== 0,
+      moved: false,
     });
     if (contacts.size > 1) multi = true;
     if (event.isTrusted) game.canvas.setPointerCapture(event.pointerId);
@@ -54,6 +56,8 @@ export const createMapControls = (
     revision++;
     const contact = contacts.get(event.pointerId);
     if (!contact) return;
+    const panX = contact.moved ? contact.x : contact.startX,
+      panY = contact.moved ? contact.y : contact.startY;
     const before = distance();
     contact.x = p.x;
     contact.y = p.y;
@@ -61,6 +65,8 @@ export const createMapControls = (
     const after = distance();
     if (options.enabled() && contacts.size > 1 && before > 1 && after > 1)
       options.zoom?.(after / before);
+    else if (options.enabled() && !multi && contact.moved)
+      options.pan?.(p.x - panX, p.y - panY);
   });
   game.listen("pointerup", (event) => {
     const contact = contacts.get(event.pointerId),
@@ -93,5 +99,11 @@ export const createMapControls = (
       (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? game.renderer.height : 1);
     options.zoom(Math.exp(Math.max(-1, Math.min(1, -delta * 0.0012))));
   });
-  return { pointer: () => pointer, revision: () => revision };
+  return {
+    pointer: () => pointer,
+    revision: () => revision,
+    dragging: () =>
+      contacts.size > 0 &&
+      (multi || [...contacts.values()].some((contact) => contact.moved)),
+  };
 };
