@@ -61,7 +61,6 @@ describe("bundled LPC artwork", () => {
     expect([lpcFacing(0, 1), lpcFacing(-1, 0), lpcFacing(0, -1), lpcFacing(1, 0)]).toEqual([0, 1, 2, 3]);
     const sheet = lpcCatalog.entries["body/male/light/blue"]![0]!;
     expect(lpcFrame(sheet, "walk", 2, 10000, true)).toEqual(lpcFrame(sheet, "walk", 2, 0, true));
-    expect(lpcFrame(sheet, "slash", 2, 10000)?.finished).toBe(true);
     expect(lpcFrame(sheet, "slash", 2, 10000)).toEqual(lpcFrame(sheet, "slash", 2, 20000));
   });
 });

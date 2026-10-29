@@ -1864,7 +1864,6 @@ export const listUserItemForFetchUserItemsWithVariants = (
     where: eq(userItem.userId, userId),
     with: {
       item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } },
-      activeVariant: true,
       imbuements: { with: { item: true } },
     },
   });

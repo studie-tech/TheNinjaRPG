@@ -61,7 +61,6 @@ export const lpcFrame = (
     x: (frame % layout.columns) * layout.cell,
     y: Math.floor(frame / layout.columns) * layout.cell,
     size: layout.cell,
-    finished: step >= frames.length,
   };
 };
 
