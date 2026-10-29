@@ -1,14 +1,14 @@
 import { eq } from "drizzle-orm";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { quest, questHistory, userData, userQueue, userVote } from "@/drizzle/schema";
+import { item, quest, questHistory, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
 import { profileRouter } from "@/server/api/routers/profile";
 import { getEnergyQueue } from "@/libs/queue";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, CollectItem, InstantNewQuestObjective, InstantStartBattleObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
+import { insertItems, insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
 import { queueEnergy } from "../../../../setup/queues";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
@@ -40,7 +40,7 @@ const countProfileReads = async () => {
 
 describeWithDatabase("confirmed quest cache responses", () => {
   beforeEach(async () => {
-    await resetTables(userQueue, questHistory, quest, userVote, userData);
+    await resetTables(userItem, item, userQueue, questHistory, quest, userVote, userData);
     await insertUsers([{ userId: playerId, username: "questcache", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", isOutlaw: true, status: "AWAKE",
       sector: 0, money: 1000, earnedExperience: 0, curEnergy: 30, regeneration: 0,
@@ -148,6 +148,37 @@ describeWithDatabase("confirmed quest cache responses", () => {
     expect(result.userPatch?.questData?.find((entry) => entry.id === missionId)).toBeDefined();
     expect(result.userPatch?.userQuests?.filter((entry) => entry.questId === missionId)).toHaveLength(1);
     expect(reads()).toBe(1);
+  });
+
+  it("reconciles collection effects unlocked by a consecutive quest assignment", async () => {
+    const database = await getTestDatabase();
+    const collectionItemId = "cache-consecutive-item";
+    await insertItems([{ id: collectionItemId }]);
+    await database.update(userData).set({ longitude: 10, latitude: 7 }).where(eq(userData.userId, playerId));
+    await database.update(quest).set({
+      consecutiveObjectives: true,
+      content: {
+        ...content(10),
+        objectives: [
+          SimpleObjective.parse({ id: "ready", task: "user_level", value: 1, nextObjectiveId: "collect" }),
+          CollectItem.parse({ id: "collect", task: "collect_item", sector: 0, longitude: 10, latitude: 7, collectItemIds: [collectionItemId] }),
+        ],
+      },
+    }).where(eq(quest.id, missionId));
+
+    const result = await (await callerFor(questsRouter, playerId)).startQuest({ questId: missionId, userSector: 0 });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.achievementProgress).toBeUndefined();
+    expect((await readPlayer())?.questData?.find((entry) => entry.id === missionId)?.goals.find((goal) => goal.id === "collect")?.done).toBe(false);
+    expect(await database.query.userItem.findMany({ where: eq(userItem.userId, playerId) })).toHaveLength(0);
+
+    const profileApi = await callerFor(profileRouter, playerId);
+    const reconciled = await profileApi.getUser();
+    expect(reconciled.userData?.questData?.find((entry) => entry.id === missionId)?.goals.find((goal) => goal.id === "collect")?.done).toBe(true);
+    expect(await database.query.userItem.findMany({ where: eq(userItem.userId, playerId) })).toMatchObject([{ itemId: collectionItemId }]);
+    await profileApi.getUser();
+    expect(await database.query.userItem.findMany({ where: eq(userItem.userId, playerId) })).toHaveLength(1);
   });
 
   it.each(["startQuest", "startRandom"] as const)("keeps reconciliation after %s emits an immediate objective consequence", async (method) => {

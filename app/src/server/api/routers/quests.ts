@@ -3186,15 +3186,26 @@ export const upsertQuestEntry = async (
   Object.assign(user, recovery);
   user.questData = trackers;
   user.completedQuests = user.completedQuests.filter((row) => row.questId !== quest.id);
-  // Instant objectives may become done before a later pass can recover their side effects.
+  // A concurrent delegation may preserve a different tracker/attempt. Immediate
+  // effects also require reconciliation beyond the tracker-only assignment write.
+  let userCacheEligible =
+    !professionContract &&
+    consequences.every((entry) => entry.type === "update_user") &&
+    notifications.length === 0;
+  if (userCacheEligible) {
+    // Consecutive goals can unlock effects only after the initial tracker pass.
+    // Probe a copy so completion flags cannot consume effects before their handler runs.
+    const reconciled = getNewTrackers(structuredClone({ ...trackerUser, ...user }), [
+      { task: "any" },
+    ]);
+    userCacheEligible =
+      reconciled.consequences.every((entry) => entry.type === "update_user") &&
+      reconciled.notifications.length === 0 &&
+      JSON.stringify(reconciled.trackers) === JSON.stringify(trackers);
+  }
   return {
     entry,
-    // A concurrent delegation may have preserved a different tracker/attempt; reload
-    // profession assignments instead of publishing this proposed in-memory projection.
-    userCacheEligible:
-      !professionContract &&
-      consequences.every((entry) => entry.type === "update_user") &&
-      notifications.length === 0,
+    userCacheEligible,
   };
 };
 
