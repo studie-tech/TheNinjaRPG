@@ -52,10 +52,9 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
-import { withRequestScope } from "@/server/requestScope";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
+import { getVillageChangeUserUpdate } from "@/server/utils/socialUserCache";
 import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSwapVillage } from "@/utils/permissions";
@@ -654,30 +653,6 @@ export const villageRouter = createTRPCRouter({
       return { success: true, message: "You have declared yourself an enemy" };
     }),
 });
-
-/** Village changes alter automatic quest admission and membership-dependent progression together. */
-const getVillageChangeUserUpdate = async (client: DrizzleClient, userId: string) => {
-  const fallback = {
-    userPatch: undefined,
-    achievementProgress: undefined,
-    userDelta: undefined,
-  };
-  const updatedUser = await withRequestScope(() =>
-    fetchUpdatedUser({ client, userId }),
-  );
-  // Progression can publish histories and effects after loading this user snapshot.
-  if (!updatedUser.user || updatedUser.requiresProgressionRefresh) return fallback;
-  const membership = await getMembershipUserPatch(client, updatedUser.user);
-  if (!membership) return fallback;
-  const progression = getUserProgressionUpdate(
-    updatedUser.user,
-    updatedUser.publishedAchievementIds,
-  );
-  return {
-    ...progression,
-    userPatch: { ...progression.userPatch, ...membership },
-  };
-};
 
 /**
  * Upserts the alliance status between two villages.

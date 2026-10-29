@@ -1,6 +1,8 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "bun:test";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import type { KageDefenseSchedule } from "@/validators/kage";
+import type { WarMissionAttempt } from "@/validators/war";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { updateUserCache, prepareUserUpdate } from "@/utils/userCache";
 
@@ -8,6 +10,11 @@ const key = [["profile", "getUser"], { type: "query" }];
 const profile = (money: number) => ({
   userData: { money, reputationPoints: 30 } as NonNullable<UserWithRelations>,
   notifications: ["preserved"],
+});
+const warMission = (id: string): WarMissionAttempt => ({
+  id, warId: "war", questId: "quest", objectiveId: "objective",
+  sideVillageId: "village", villageId: "village", sector: 1,
+  task: "espionage", value: 10, endsAt: "2026-01-01T00:01:00Z",
 });
 const setup = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -34,6 +41,66 @@ const setup = () => {
 };
 
 describe("user cache updates", () => {
+  it.each(["added", "removed"] as const)("replaces a saved Kage schedule with its invitation %s", async (change) => {
+    const test = setup();
+    const schedule: KageDefenseSchedule = { kageId: "kage", tenure: "2026-01-01T00:00:00Z", windows: [], publishedAt: null, missedStarts: 0, paused: false, observedAt: "2026-01-01T00:00:00Z" };
+    const withInvitation = { ...schedule, instantChallenge: { id: "invitation", matchId: "match", scheduledAt: "2026-01-02T00:00:00Z", expiresAt: "2026-01-01T00:10:00Z", ai: false } };
+    const previous = change === "added" ? schedule : withInvitation;
+    const saved = change === "added" ? withInvitation : schedule;
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village: { id: "village", kageSchedule: previous } } });
+    await updateUserCache(test.client, key, { village: { id: "village", kageSchedule: saved } }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.village?.kageSchedule).toEqual(saved);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it.each(["none", "previous"] as const)("applies a complete war mission over %s without a profile read", async (previousId) => {
+    const test = setup();
+    const previous = previousId === "none" ? null : warMission(previousId);
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, warMission: previous } });
+    const mission = warMission("new");
+    await updateUserCache(test.client, key, { warMission: mission }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.warMission).toEqual(mission);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("clears a completed war mission without a profile read", async () => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, warMission: warMission("completed") } });
+    await updateUserCache(test.client, key, { warMission: null }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.warMission).toBeNull();
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("reconciles a delayed war mission snapshot after a newer cache revision", async () => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, warMission: null } });
+    const revision = prepareUserUpdate(test.client, key);
+    const latest = { ...profile(100), userData: { ...profile(100).userData, warMission: warMission("latest") } };
+    test.client.setQueryData(key, latest);
+    let reads = 0;
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
+    await updateUserCache(test.client, key, { warMission: warMission("delayed") }, { revision });
+    expect(test.value()?.userData.warMission).toEqual(latest.userData.warMission);
+    expect(reads).toBe(1);
+    test.close();
+  });
+
+  it("applies complete pet task snapshots when dispatching, replacing and clearing a task", async () => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, petTask: null } });
+    const first = { petId: "pet", questHistoryId: "history", questId: "quest", startedAt: 1, questVersion: 1, finishesAt: 1000 };
+    const next = { ...first, petId: "next-pet", questHistoryId: "next-history", startedAt: 2 };
+    for (const petTask of [first, next, null]) {
+      await updateUserCache(test.client, key, { petTask }, { revision: prepareUserUpdate(test.client, key) });
+      expect(test.value()?.userData.petTask).toEqual(petTask);
+      expect(test.reads()).toBe(0);
+    }
+    test.close();
+  });
+
   it("replaces a new village mission without retaining the previous assignment", async () => {
     const test = setup();
     const village = { id: "village", activeMission: { id: "old", progress: 12 } };

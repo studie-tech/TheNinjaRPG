@@ -203,11 +203,13 @@ const mergeUserChanges = <T extends object>(
     )
       continue;
     if (amount === undefined && value === original[field]) continue;
-    // Mission assignments and complete shrine settings are saved JSON snapshots.
+    // Mission assignments, Kage schedules and complete shrine settings are saved JSON snapshots.
     if (
       amount === undefined &&
       isCacheObject(value) &&
       (field === "activeMission" ||
+        field === "warMission" ||
+        field === "kageSchedule" ||
         (field === "shrineSettings" &&
           Array.isArray(value.unlockedAiIds) &&
           Array.isArray(value.activeAiIds) &&

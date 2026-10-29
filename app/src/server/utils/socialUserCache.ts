@@ -18,10 +18,41 @@ import {
   findQueueUserCache,
   findWarUserCache,
 } from "@/queries/socialUserCache";
+import {
+  fetchUpdatedUser,
+  getUserProgressionUpdate,
+} from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
 import { getPublicQuestTrackerPatch } from "@/server/utils/questUserCache";
 import { fetchMercenaryWarId } from "@/server/utils/warMercenary";
+
+/** Village changes alter automatic quest admission and membership-dependent progression together. */
+export const getVillageChangeUserUpdate = async (
+  client: DrizzleClient,
+  userId: string,
+) => {
+  const fallback = {
+    userPatch: undefined,
+    achievementProgress: undefined,
+    userDelta: undefined,
+  };
+  const updatedUser = await withRequestScope(() =>
+    fetchUpdatedUser({ client, userId }),
+  );
+  // Progression can publish histories and effects after loading this user snapshot.
+  if (!updatedUser.user || updatedUser.requiresProgressionRefresh) return fallback;
+  const membership = await getMembershipUserPatch(client, updatedUser.user);
+  if (!membership) return fallback;
+  const progression = getUserProgressionUpdate(
+    updatedUser.user,
+    updatedUser.publishedAchievementIds,
+  );
+  return {
+    ...progression,
+    userPatch: { ...progression.userPatch, ...membership },
+  };
+};
 
 /** Reproject only membership-dependent data, retaining unrelated progression and inventory. */
 export const getMembershipUserPatch = (client: DrizzleClient, before: UserData) =>

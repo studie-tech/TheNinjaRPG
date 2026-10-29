@@ -22,6 +22,7 @@ import {
   FACTION_REPUTATION_TREASURY_LIMIT,
   HIDEOUT_COST,
   STRONGHOLD_REESTABLISH_COST,
+  VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { clan, userData, village } from "@/drizzle/schema";
@@ -130,6 +131,7 @@ import { membershipUpdate } from "@/server/utils/push/messages";
 import {
   getBattleUserPatch,
   getMembershipUserPatch,
+  getVillageChangeUserUpdate,
 } from "@/server/utils/socialUserCache";
 import { canEditClans } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
@@ -209,7 +211,7 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: "Hideout purchased successfully",
-        userPatch: await getMembershipUserPatch(ctx.drizzle, user),
+        ...(await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)),
       };
     }),
   upgradeHideoutToStronghold: protectedProcedure
@@ -971,7 +973,11 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: "Member kicked",
-        userPatch: await getMembershipUserPatch(ctx.drizzle, user),
+        ...(member.userId === ctx.userId &&
+        user.isOutlaw &&
+        user.villageId !== VILLAGE_SYNDICATE_ID
+          ? await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)
+          : { userPatch: await getMembershipUserPatch(ctx.drizzle, user) }),
       };
     }),
   leaveClan: protectedProcedure
@@ -1003,7 +1009,9 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: `User left ${groupLabel}`,
-        userPatch: await getMembershipUserPatch(ctx.drizzle, user),
+        ...(user.isOutlaw && user.villageId !== VILLAGE_SYNDICATE_ID
+          ? await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)
+          : { userPatch: await getMembershipUserPatch(ctx.drizzle, user) }),
       };
     }),
   upsertNotice: protectedProcedure
@@ -1682,7 +1690,9 @@ export const clanRouter = createTRPCRouter({
       await syncStrongholdMembership(ctx.drizzle, fetchedClan.villageId);
       return {
         success: true,
-        userPatch: await getMembershipUserPatch(ctx.drizzle, user),
+        ...(user.villageId !== fetchedClan.village?.id
+          ? await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)
+          : { userPatch: await getMembershipUserPatch(ctx.drizzle, user) }),
         message: `You have instantly joined and taken leadership of ${fetchedClan.name}`,
       };
     }),
