@@ -19,6 +19,34 @@ const setup = () => {
 };
 
 describe("progression-derived profile navigation", () => {
+  it("replaces faction activity notices while retaining unrelated navigation", async () => {
+    const test = setup();
+    test.client.setQueryData(key, {
+      ...test.value(),
+      userData: { ...test.value().userData, villageId: "village", shrineBattles: [{ defenderEntityId: "village", attackerEntityId: "enemy", sector: 4 }] },
+      notifications: [
+        { href: "/travel", name: "Shrine under attack (Sector 4)", color: "red", alwaysShow: true },
+        { id: "unrelated", href: "/mail", name: "Mail", color: "blue" },
+      ],
+    });
+    await updateUserCache(test.client, key, { shrineBattles: [] }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value().notifications.some((entry) => entry.name === "Shrine under attack (Sector 4)")).toBe(false);
+    expect(test.value().notifications.some((entry) => entry.id === "unrelated")).toBe(true);
+    test.close();
+  });
+
+  it("clears deletion and sanction notices from the same confirmed account update", async () => {
+    const test = setup();
+    test.client.setQueryData(key, { ...test.value(), notifications: [
+      { href: "/profile", name: "Being deleted", color: "red" },
+      { href: "/reports", name: "Banned!", color: "red" },
+      { href: "/reports", name: "Trade Banned!", color: "red" },
+    ] });
+    await updateUserCache(test.client, key, { deletionAt: null, isBanned: false, isTradeBanned: false }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value().notifications.some((entry) => ["Being deleted", "Banned!", "Trade Banned!"].includes(entry.name))).toBe(false);
+    test.close();
+  });
+
   it("removes spent XP and ended battle notifications while retaining unrelated navigation", async () => {
     const test = setup();
     await updateUserCache(test.client, key, { earnedExperience: 0, status: "AWAKE" }, { revision: prepareUserUpdate(test.client, key) });

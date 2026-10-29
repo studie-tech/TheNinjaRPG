@@ -8,6 +8,7 @@ import {
 } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { canAssignExperience } from "@/libs/profile";
+import { getUserFactionNotifications } from "@/libs/userNotifications";
 import type {
   AchievementProgress,
   UserWithRelations,
@@ -223,7 +224,11 @@ const mergeUserCache = (
   user: User,
   achievementProgress?: AchievementProgress[],
 ): UserCache => {
-  const desired: NavBarDropdownLink[] = [];
+  const factionNotifications = getUserFactionNotifications(user);
+  const previousFactionNames = new Set(
+    getUserFactionNotifications(old.userData ?? undefined).map((entry) => entry.name),
+  );
+  const desired: NavBarDropdownLink[] = [...factionNotifications];
   if (
     UserRanks.includes(user.rank) &&
     user.earnedExperience > 0 &&
@@ -239,6 +244,11 @@ const mergeUserCache = (
     desired.push({ href: "/combat", name: "In combat", color: "red" });
   if (user.status === "HOSPITALIZED")
     desired.push({ href: "/hospital", name: "In hospital", color: "red" });
+  if (user.deletionAt)
+    desired.push({ href: "/profile", name: "Being deleted", color: "red" });
+  if (user.isBanned) desired.push({ href: "/reports", name: "Banned!", color: "red" });
+  if (user.isTradeBanned)
+    desired.push({ href: "/reports", name: "Trade Banned!", color: "red" });
   for (const boostType of SHRINE_BOOST_TYPES) {
     const boost =
       getShrineBoost(
@@ -257,7 +267,15 @@ const mergeUserCache = (
   let notifications = old.notifications?.flatMap((entry) => {
     if (
       entry.id !== "tutorial-unassigned-stats" &&
-      !["Assign XP", "In combat", "In hospital"].includes(entry.name) &&
+      ![
+        "Assign XP",
+        "In combat",
+        "In hospital",
+        "Being deleted",
+        "Banned!",
+        "Trade Banned!",
+      ].includes(entry.name) &&
+      !previousFactionNames.has(entry.name) &&
       !(
         entry.href === "/shrine" &&
         entry.group === "Active boosts" &&
