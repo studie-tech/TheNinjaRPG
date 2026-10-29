@@ -1,8 +1,77 @@
+import { isAvailableUserQuests, mockAchievementHistoryEntries } from "@/libs/quest";
+import { fetchAchievementCatalogue } from "@/queries/profile";
 import { findPurchaseUserSnapshot } from "@/queries/purchases";
+import {
+  canBootstrapQuestType,
+  fetchQuestBootstrap,
+} from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
+import { withRequestScope } from "@/server/requestScope";
+import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
+import { PostProcessedRewardSchema } from "@/validators/rewards";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
-/** Idempotent delivery may already be in the cache, so confirm absolute saved balances. */
-export const getPurchaseUserUpdate = async (client: DrizzleClient, userId: string) => ({
-  userPatch: await findPurchaseUserSnapshot(client, userId),
-  userDelta: {},
-});
+/** Idempotent delivery confirms balances and advances objectives affected by purchased reputation. */
+export const getPurchaseUserUpdate = (
+  client: DrizzleClient,
+  userId: string,
+): Promise<
+  Pick<UserDeltaResponse, "userPatch" | "userDelta" | "achievementProgress">
+> =>
+  withRequestScope(async () => {
+    const [saved, achievements, bootstrap] = await Promise.all([
+      findPurchaseUserSnapshot(client, userId),
+      fetchAchievementCatalogue(client),
+      fetchQuestBootstrap(client, userId),
+    ]);
+    const candidates = saved
+      ? [
+          ...saved.userQuests.filter((entry) => entry.quest),
+          ...mockAchievementHistoryEntries(achievements, saved),
+        ]
+      : [];
+    const available = saved
+      ? candidates.filter(
+          (entry) =>
+            isAvailableUserQuests({ ...entry.quest, ...entry }, saved, true).check,
+        )
+      : [];
+    const needsProgression =
+      saved &&
+      (available.some((entry) =>
+        entry.quest.content.objectives.some(
+          (objective) =>
+            objective.task === "reputation_points" &&
+            !saved.questData
+              ?.find((tracker) => tracker.id === entry.questId)
+              ?.goals.find((goal) => goal.id === objective.id)?.done,
+        ),
+      ) ||
+        (["tier", "exam"] as const).some(
+          (questType) =>
+            !available.some((entry) => entry.questType === questType) &&
+            canBootstrapQuestType(bootstrap, questType, saved.level),
+        ));
+    const progression = needsProgression
+      ? await getRewardUserUpdate({
+          client,
+          userId,
+          rewards: PostProcessedRewardSchema.parse({}),
+          granted: { titles: [], badges: [], sageModes: [] },
+          requiresRelations: true,
+        })
+      : undefined;
+    return {
+      userPatch: saved
+        ? {
+            money: saved.money,
+            reputationPoints: saved.reputationPoints,
+            reputationPointsTotal: saved.reputationPointsTotal,
+            federalStatus: saved.federalStatus,
+            ...progression?.userPatch,
+          }
+        : undefined,
+      userDelta: {},
+      achievementProgress: progression?.achievementProgress,
+    };
+  });

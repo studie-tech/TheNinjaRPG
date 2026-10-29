@@ -300,7 +300,10 @@ export default function NativeStore() {
       }
       return;
     }
-    await updateUser(snapshot.userPatch, { revision });
+    await updateUser(snapshot.userPatch, {
+      revision,
+      achievementProgress: snapshot.achievementProgress,
+    });
   }, [player?.userId, prepareUserUpdate, updateUser, utils]);
   useEffect(() => {
     const accountId = player?.userId;

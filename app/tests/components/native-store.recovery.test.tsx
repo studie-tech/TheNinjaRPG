@@ -294,6 +294,9 @@ describe("NativeStore purchase recovery", () => {
       activeEntitlements: ["federal"], activeSubscriptions: [gold.productId],
       originalAppUserId: "player-1", transactions: [],
     });
+    const achievementProgress = [{ questId: "native-reputation", completed: 0 }];
+    const userPatch = { federalStatus: "NONE", reputationPoints: 18, reputationPointsTotal: 18, questData: [{ id: "native-reputation", goals: [{ id: "reputation", value: 18, done: true }] }] };
+    testMocks().fetchSnapshot.mockResolvedValue({ userId: "player-1", userPatch, achievementProgress });
     const view = render(<NativeStore />);
     await view.findByRole("button", { name: "Active" });
     await waitFor(() => expect(onState).toBeDefined());
@@ -306,7 +309,7 @@ describe("NativeStore purchase recovery", () => {
     act(() => onState?.({ isActive: true }));
     await waitFor(() => expect(view.queryByRole("button", { name: "Active" })).toBeNull());
     await waitFor(() => expect(testMocks().updateUser).toHaveBeenCalled());
-    expect(testMocks().updateUser).toHaveBeenCalledWith(expect.objectContaining({ federalStatus: "NONE" }), { revision: 1 });
+    expect(testMocks().updateUser).toHaveBeenCalledWith(userPatch, { revision: 1, achievementProgress });
     expect(invalidate).toHaveBeenCalledTimes(1);
     expect(testMocks().restore).not.toHaveBeenCalled();
     view.unmount();

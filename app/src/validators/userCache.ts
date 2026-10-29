@@ -135,6 +135,7 @@ export const userPatchSchema = z.object({
   pvpExperience: z.number().optional(),
   pvpStreak: z.number().optional(),
   dungeonsCompleted: z.number().optional(),
+  raidsCompleted: z.number().optional(),
   sageModeId: z.string().nullable().optional(),
   sageMode: z.custom<NonNullable<UserWithRelations>["sageMode"]>().optional(),
   titles: z.custom<NonNullable<UserWithRelations>["titles"]>(Array.isArray).optional(),
