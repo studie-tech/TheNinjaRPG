@@ -45,7 +45,7 @@ export default function AdministrationBuilding() {
           ...(data.userDelta ? { delta: data.userDelta } : {}),
         });
       showMutationToast(data);
-      await Promise.all([util.quests.allianceBuilding.invalidate()]);
+      await util.quests.allianceBuilding.invalidate();
     },
   });
 

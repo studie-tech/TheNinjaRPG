@@ -249,7 +249,7 @@ export const VillageStructureMaintenance = ({ villageId }: { villageId: string }
       const result = data;
       setMessage(result.message ?? "");
       showMutationToast(result);
-      if (result.success) await Promise.all([utils.village.get.invalidate()]);
+      if (result.success) await utils.village.get.invalidate();
     },
     onError: (error) => setMessage(error.message),
   });

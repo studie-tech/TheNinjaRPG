@@ -65,7 +65,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
           });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([utils.shrine.getShrineBattles.invalidate()]);
+          await utils.shrine.getShrineBattles.invalidate();
         }
       },
     });
@@ -81,7 +81,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
           });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([utils.shrine.getShrineBattles.invalidate()]);
+          await utils.shrine.getShrineBattles.invalidate();
         }
       },
     });
@@ -97,7 +97,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
           });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([utils.shrine.getShrineBattles.invalidate()]);
+          await utils.shrine.getShrineBattles.invalidate();
         }
       },
     });
@@ -113,7 +113,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
           });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([utils.shrine.getShrineBattles.invalidate()]);
+          await utils.shrine.getShrineBattles.invalidate();
           if (data.battleId) pushToCombat(router, data.battleId);
         }
       },

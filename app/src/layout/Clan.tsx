@@ -467,7 +467,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
         next.delete(clanBattleId);
         return next;
       });
-      void Promise.all([utils.clan.getClanBattles.invalidate()]).catch(() => undefined);
+      void utils.clan.getClanBattles.invalidate().catch(() => undefined);
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -504,7 +504,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       // best-effort so a transient refetch failure cannot expose a stale retry.
       setLeftBattleIds((current) => new Set(current).add(clanBattleId));
       setJoinedBattleId(null);
-      void Promise.all([utils.clan.getClanBattles.invalidate()]).catch(() => undefined);
+      void utils.clan.getClanBattles.invalidate().catch(() => undefined);
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -559,7 +559,8 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       // stale queue cannot expose a second kick for the same member.
       kickedTargets.current.add(targetKey);
       setKickedTargetKeys((current) => new Set(current).add(targetKey));
-      void Promise.all([utils.clan.getClanBattles.invalidate()])
+      void utils.clan.getClanBattles
+        .invalidate()
         .then(() => {
           // The refreshed queue is now authoritative. Stop suppressing this key
           // so a legitimate later rejoin to the same battle becomes visible.
@@ -612,7 +613,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
           });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([utils.clan.getClanBattles.invalidate()]);
+          await utils.clan.getClanBattles.invalidate();
           if (data.battleId) pushToCombat(router, data.battleId);
         }
       },
@@ -3499,7 +3500,7 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
       setIsOpen(false);
       setAmount(1);
       // Profile data also embeds clan balances used outside the clan hall.
-      await Promise.all([utils.clan.get.invalidate()]);
+      await utils.clan.get.invalidate();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not convert points");
     } finally {
