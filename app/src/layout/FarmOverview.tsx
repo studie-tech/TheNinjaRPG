@@ -68,12 +68,22 @@ export function FarmOverview({
   }, [fertilizerId, state.availableFertilizers]);
 
   const isPending = pendingAction !== null;
+  // Bulk planting and fertilizing cover as many plots as the selected stack allows.
+  const selectedSeed = eligibleSeeds.find((seed) => seed.itemId === seedId);
+  const plantCount = Math.min(summary.empty, selectedSeed?.quantity ?? 0);
+  const selectedFertilizer = state.availableFertilizers.find(
+    (fertilizer) => fertilizer.userItemId === fertilizerId,
+  );
+  const fertilizeCount = Math.min(
+    summary.fertilizable,
+    selectedFertilizer?.quantity ?? 0,
+  );
   const tools = getFarmBulkToolAvailability({
     selectedSeedId: seedId,
     selectedFertilizerId: fertilizerId,
-    emptyCount: summary.empty,
+    emptyCount: plantCount,
     waterableCount: summary.waterable,
-    fertilizableCount: summary.fertilizable,
+    fertilizableCount: fertilizeCount,
     readyCount: summary.ready,
     pending: isPending,
   });
@@ -163,7 +173,7 @@ export function FarmOverview({
           {showPlant && (
             <div className="flex gap-2">
               <select
-                aria-label="Seed to plant in every empty plot"
+                aria-label="Seed to plant in empty plots"
                 className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
                 value={seedId}
                 onChange={(event) => setSeedId(event.target.value)}
@@ -171,7 +181,7 @@ export function FarmOverview({
               >
                 {eligibleSeeds.map((seed) => (
                   <option key={seed.itemId} value={seed.itemId}>
-                    {seed.name} ×{seed.quantity}
+                    {seed.name} ({seed.quantity})
                   </option>
                 ))}
               </select>
@@ -186,7 +196,10 @@ export function FarmOverview({
                   className="mr-2 h-4 w-4 text-emerald-600 dark:text-emerald-400"
                   aria-hidden
                 />
-                {label("plant", `Plant all (${summary.empty})`)}
+                {label(
+                  "plant",
+                  `Plant ${plantCount} ${plantCount === 1 ? "plot" : "plots"}`,
+                )}
               </Button>
             </div>
           )}
@@ -204,7 +217,7 @@ export function FarmOverview({
           {showFertilize && (
             <div className="flex gap-2">
               <select
-                aria-label="Fertilizer for every growing crop"
+                aria-label="Fertilizer for growing crops"
                 className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
                 value={fertilizerId}
                 onChange={(event) => setFertilizerId(event.target.value)}
@@ -212,7 +225,7 @@ export function FarmOverview({
               >
                 {state.availableFertilizers.map((fertilizer) => (
                   <option key={fertilizer.userItemId} value={fertilizer.userItemId}>
-                    {fertilizer.name} ×{fertilizer.quantity}
+                    {fertilizer.name} ({fertilizer.quantity})
                   </option>
                 ))}
               </select>
@@ -227,7 +240,10 @@ export function FarmOverview({
                   className="mr-2 h-4 w-4 text-orange-600 dark:text-orange-400"
                   aria-hidden
                 />
-                {label("fertilize", `Fertilize all (${summary.fertilizable})`)}
+                {label(
+                  "fertilize",
+                  `Fertilize ${fertilizeCount} ${fertilizeCount === 1 ? "crop" : "crops"}`,
+                )}
               </Button>
             </div>
           )}

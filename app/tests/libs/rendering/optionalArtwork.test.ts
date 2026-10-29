@@ -123,6 +123,21 @@ describe("optional farm crop artwork", () => {
     expect(fixture.mount.children).toHaveLength(0);
   });
 
+  it("reports presses on the field outside every plot", async () => {
+    const fixture = renderer(() => Promise.resolve(Texture.WHITE));
+    const onFieldClick = vi.fn();
+    const options = { ...farmOptions(fixture), onFieldClick };
+    const scene = await createFarmScene(options);
+    fixture.pointer("pointerdown", 10, 10);
+    expect(onFieldClick).toHaveBeenCalledTimes(1);
+    expect(options.onPlotClick).not.toHaveBeenCalled();
+    const position = farmPlotPosition(0, 6), scale = farmViewScale(800, 440, 6);
+    fixture.pointer("pointerdown", 400 + position.x * scale, 220 + position.y * scale);
+    expect(options.onPlotClick).toHaveBeenCalledTimes(1);
+    expect(onFieldClick).toHaveBeenCalledTimes(1);
+    scene.dispose();
+  });
+
   it("uses healthy crop/glow artwork and clears only changed artwork when its replacement fails", async () => {
     const healthy = image(), pending = pendingTexture(), failure = new Error("Replacement crop unavailable");
     const fixture = renderer((path) => path === "replacement.png" ? pending.promise : Promise.resolve(healthy));

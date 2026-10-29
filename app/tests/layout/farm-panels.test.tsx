@@ -101,10 +101,42 @@ describe("FarmOverview", () => {
     );
     fireEvent.click(view.getByRole("button", { name: "Harvest all (2)" }));
     expect(handlers.onHarvestAll).toHaveBeenCalledTimes(1);
-    fireEvent.click(view.getByRole("button", { name: "Plant all (1)" }));
+    fireEvent.click(view.getByRole("button", { name: "Plant 1 plot" }));
     expect(handlers.onPlantAll).toHaveBeenCalledWith("seed-1");
     expect(view.queryByRole("button", { name: /Water all/ })).toBeNull();
     expect(view.queryByRole("button", { name: /Fertilize all/ })).toBeNull();
+  });
+
+  it("counts bulk planting and fertilizing from the selected stack", () => {
+    const view = render(
+      <FarmOverview
+        state={{
+          ...baseState,
+          availableSeeds: [seed, { ...seed, itemId: "seed-2", name: "Onion Seed", quantity: 1 }],
+          availableFertilizers: [
+            { userItemId: "fert-big", itemId: "f1", name: "Compost", image: "f.webp", quantity: 9, timeReductionSeconds: 60 },
+            { userItemId: "fert-small", itemId: "f2", name: "Ash", image: "f.webp", quantity: 1, timeReductionSeconds: 60 },
+          ],
+        } as unknown as FarmStateResponse}
+        summary={summary({ empty: 5, growing: 4, fertilizable: 4 })}
+        now={now}
+        timeDiff={0}
+        pendingAction={null}
+        {...handlers}
+      />,
+    );
+    expect(view.getByRole("button", { name: "Plant 3 plots" })).toBeTruthy();
+    fireEvent.change(view.getByLabelText("Seed to plant in empty plots"), {
+      target: { value: "seed-2" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Plant 1 plot" }));
+    expect(handlers.onPlantAll).toHaveBeenCalledWith("seed-2");
+    expect(view.getByRole("button", { name: "Fertilize 4 crops" })).toBeTruthy();
+    fireEvent.change(view.getByLabelText("Fertilizer for growing crops"), {
+      target: { value: "fert-small" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Fertilize 1 crop" }));
+    expect(handlers.onFertilizeAll).toHaveBeenCalledWith("fert-small");
   });
 
   it("shows the next harvest and says when nothing can be done", () => {
@@ -225,6 +257,7 @@ describe("FarmInventory", () => {
         } as unknown as FarmStateResponse}
         pendingKeys={new Set()}
         onSell={onSell}
+        onSellAll={async () => true}
         onExtract={async () => true}
         onOpenMarket={vi.fn()}
         onOpenUpgrades={vi.fn()}
@@ -236,6 +269,60 @@ describe("FarmInventory", () => {
     expect(onSell).toHaveBeenCalledWith("crop-stack", 1);
   });
 
+  it("sells every crop after confirming", () => {
+    const onSellAll = vi.fn(async () => true);
+    const crops = [
+      { userItemId: "a", name: "Tomato", image: "a.webp", quantity: 4, sellValue: 6 },
+      { userItemId: "b", name: "Onion", image: "b.webp", quantity: 2, sellValue: 5 },
+    ];
+    const view = render(
+      <FarmInventory
+        view="crops"
+        farmState={{ ...baseState, sellableCrops: crops } as unknown as FarmStateResponse}
+        pendingKeys={new Set()}
+        onSell={async () => true}
+        onSellAll={onSellAll}
+        onExtract={async () => true}
+        onOpenMarket={vi.fn()}
+        onOpenUpgrades={vi.fn()}
+        onExtractionFinished={vi.fn()}
+        timeDiff={0}
+      />,
+    );
+    fireEvent.click(view.getByRole("button", { name: /Sell all/ }));
+    expect(onSellAll).not.toHaveBeenCalled();
+    fireEvent.click(view.getByRole("button", { name: "Sell 6 for 34" }));
+    expect(onSellAll).toHaveBeenCalledWith(crops);
+  });
+
+  it("extracts with the first idle extractor and waits when all are busy", () => {
+    const onExtract = vi.fn(async () => true);
+    const crop = { userItemId: "c", name: "Tomato", image: "c.webp", quantity: 3, seedCount: 2 };
+    const busy = (extractorSlot: number) => ({
+      extractorSlot, cropName: "Onion", cropQuantity: 1, seedName: "Onion Seed",
+      seedQuantity: 2, seedImage: "s.webp", finishAt: new Date(Date.now() + 60_000),
+    });
+    const props = {
+      view: "extraction" as const,
+      pendingKeys: new Set<string>(),
+      onSell: async () => true,
+      onSellAll: async () => true,
+      onExtract,
+      onOpenMarket: vi.fn(),
+      onOpenUpgrades: vi.fn(),
+      onExtractionFinished: vi.fn(),
+      timeDiff: 0,
+    };
+    const state = (active: ReturnType<typeof busy>[]) =>
+      ({ ...baseState, farmExtractorsOwned: 2, extractableCrops: [crop], activeSeedExtractions: active }) as unknown as FarmStateResponse;
+    const view = render(<FarmInventory {...props} farmState={state([busy(0)])} />);
+    fireEvent.click(view.getByRole("button", { name: "Extract" }));
+    expect(onExtract).toHaveBeenCalledWith(1, "c", 1);
+    view.rerender(<FarmInventory {...props} farmState={state([busy(0), busy(1)])} />);
+    expect(view.getByText(/All extractors are busy/)).toBeTruthy();
+    expect(view.getByRole("button", { name: "Extract" }).hasAttribute("disabled")).toBe(true);
+  });
+
   it("points to upgrades when no seed extractor is owned", () => {
     const onOpenUpgrades = vi.fn();
     const view = render(
@@ -244,6 +331,7 @@ describe("FarmInventory", () => {
         farmState={baseState}
         pendingKeys={new Set()}
         onSell={async () => true}
+        onSellAll={async () => true}
         onExtract={async () => true}
         onOpenMarket={vi.fn()}
         onOpenUpgrades={onOpenUpgrades}

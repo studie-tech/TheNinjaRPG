@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import Countdown from "@/layout/Countdown";
+import { FarmItemCount } from "@/layout/FarmItemCount";
 import Image from "@/layout/Image";
 import {
   canWaterPlot,
@@ -207,9 +208,7 @@ export function FarmPlotInspector({
                       />
                       <Image src={seed.image} alt="" width={36} height={36} />
                       <span className="min-w-0 flex-1">
-                        <span className="block font-medium">
-                          {seed.name} ×{seed.quantity}
-                        </span>
+                        <span className="block font-medium">{seed.name}</span>
                         <span className="block text-muted-foreground text-xs">
                           {formatDuration(seed.growTimeSeconds)} → {seed.yieldQuantity}{" "}
                           {seed.yieldName}
@@ -217,9 +216,12 @@ export function FarmPlotInspector({
                         <span className="block text-muted-foreground text-xs">
                           {locked
                             ? `Requires farming level ${seed.minLevel}`
-                            : `+${seed.plantExperience} XP planting, +${seed.harvestExperience} XP harvest`}
+                            : seed.harvestExperience > 0
+                              ? `+${seed.plantExperience} XP planting, +${seed.harvestExperience} XP harvest`
+                              : `+${seed.plantExperience} XP planting`}
                         </span>
                       </span>
+                      <FarmItemCount count={seed.quantity} />
                     </label>
                   );
                 })}

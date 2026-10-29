@@ -168,6 +168,7 @@ export default function OccupationFarming({
           ref={canvasRef}
           initialState={initialVisual}
           onPlotClick={(slotIndex) => controller.setSelectedSlotIndex(slotIndex)}
+          onFieldClick={() => controller.setSelectedSlotIndex(null)}
         />
         <div id="farm-panel">
           {selectedPlot && !isDocked ? (
@@ -218,6 +219,7 @@ export default function OccupationFarming({
                 farmState={farmState}
                 pendingKeys={controller.pendingInventoryKeys}
                 onSell={controller.sell}
+                onSellAll={controller.sellAll}
                 onExtract={controller.extract}
                 onOpenMarket={() => openTab("market")}
                 onOpenUpgrades={() => openTab("upgrades")}

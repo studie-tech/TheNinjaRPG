@@ -19,10 +19,17 @@ export type FarmCanvasHandle = {
 type FarmCanvasProps = {
   initialState: FarmVisualState;
   onPlotClick: (slotIndex: number, plot: FarmPlotState | undefined) => void;
+  /** A press on the field outside every plot. */
+  onFieldClick?: () => void;
   ref?: Ref<FarmCanvasHandle>;
 };
 
-const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) => {
+const FarmCanvasInner = ({
+  initialState,
+  onPlotClick,
+  onFieldClick,
+  ref,
+}: FarmCanvasProps) => {
   const { timeDiff } = useUserData();
   const { showDayNightMapOverlays } = useDayNightMapOverlays();
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -30,11 +37,13 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
     timeDiff,
     showDayNightMapOverlays,
     onPlotClick,
+    onFieldClick,
     state: initialState,
   });
   current.current.timeDiff = timeDiff;
   current.current.showDayNightMapOverlays = showDayNightMapOverlays;
   current.current.onPlotClick = onPlotClick;
+  current.current.onFieldClick = onFieldClick;
   const { scene, error, isReady } = useGameScene(
     mountRef,
     async (mount, signal, onError) => {
@@ -46,6 +55,7 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
         getTimeDiff: () => current.current.timeDiff,
         showDayNight: () => current.current.showDayNightMapOverlays,
         onPlotClick: (slot, plot) => current.current.onPlotClick(slot, plot),
+        onFieldClick: () => current.current.onFieldClick?.(),
       });
       // Server state can arrive while the renderer and artwork are loading.
       if (!signal.aborted) instance.updateState(current.current.state);
@@ -77,7 +87,9 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
 };
 
 const propsAreEqual = (prev: FarmCanvasProps, next: FarmCanvasProps) =>
-  prev.onPlotClick === next.onPlotClick && prev.ref === next.ref;
+  prev.onPlotClick === next.onPlotClick &&
+  prev.onFieldClick === next.onFieldClick &&
+  prev.ref === next.ref;
 
 export const FarmCanvas = memo(FarmCanvasInner, propsAreEqual);
 

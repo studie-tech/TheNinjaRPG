@@ -29,6 +29,8 @@ export const createFarmScene = async (options: {
   getTimeDiff: () => number;
   showDayNight: () => boolean;
   onPlotClick: (slot: number, plot: FarmPlotState | undefined) => void;
+  /** A press on the field outside every plot. */
+  onFieldClick?: () => void;
   onError: (error: unknown) => void;
 }) => {
   const game = await createGameRenderer({
@@ -267,7 +269,10 @@ export const createFarmScene = async (options: {
       if (event.button !== 0) return;
       const slot = pointerSlot(event);
       setHovered(slot);
-      if (slot === null) return;
+      if (slot === null) {
+        options.onFieldClick?.();
+        return;
+      }
       const plot = state.plots.find((candidate) => candidate.slotIndex === slot);
       options.onPlotClick(slot, plot ? livePlot(plot, clock()) : undefined);
     });

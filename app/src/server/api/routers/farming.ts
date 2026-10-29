@@ -562,19 +562,19 @@ export const farmingRouter = createTRPCRouter({
       }
 
       const totalPlots = getTotalFarmPlots(user.farmPlotsPurchased);
-      const emptyPlots = plots.filter(
+      const openPlots = plots.filter(
         (plot) => plot.slotIndex < totalPlots && !plot.seedItemId,
       );
-      if (emptyPlots.length === 0) return errorResponse("There are no empty plots");
+      if (openPlots.length === 0) return errorResponse("There are no empty plots");
 
       const now = new Date();
       const seedStacks = getAvailableFarmItemStacks(userItems, input.seedItemId, now);
       const seedQuantity = seedStacks.reduce((sum, stack) => sum + stack.quantity, 0);
-      if (seedQuantity < emptyPlots.length) {
-        return errorResponse(
-          `Not enough ${seedItem.name}: need ${emptyPlots.length}, have ${seedQuantity}`,
-        );
-      }
+      if (seedQuantity < 1) return errorResponse(`You have no ${seedItem.name}`);
+      // With fewer seeds than empty plots, the first plots in slot order are planted.
+      const emptyPlots = [...openPlots]
+        .sort((a, b) => a.slotIndex - b.slotIndex)
+        .slice(0, seedQuantity);
 
       const claim = await claimUserSnapshot({
         client: ctx.drizzle,
@@ -739,7 +739,7 @@ export const farmingRouter = createTRPCRouter({
       if (!hasRequiredSkill(fertilizerStack.item, { userSkills }))
         return errorResponse("Activate the required skill to use this fertilizer");
       const totalPlots = getTotalFarmPlots(user.farmPlotsPurchased);
-      const fertilizable = plots.filter(
+      const eligible = plots.filter(
         (plot) =>
           plot.slotIndex < totalPlots &&
           !!plot.seedItemId &&
@@ -747,14 +747,16 @@ export const farmingRouter = createTRPCRouter({
           !plot.fertilizerApplied &&
           !isPlotReady(plot.finishAt, now),
       );
-      if (fertilizable.length === 0) {
+      if (eligible.length === 0) {
         return errorResponse("No plots can be fertilized");
       }
-      if (fertilizerStack.quantity < fertilizable.length) {
-        return errorResponse(
-          `Not enough ${fertilizerStack.item.name}: need ${fertilizable.length}, have ${fertilizerStack.quantity}`,
-        );
+      if (fertilizerStack.quantity < 1) {
+        return errorResponse(`You have no ${fertilizerStack.item.name}`);
       }
+      // With less fertilizer than crops, the first plots in slot order are fertilized.
+      const fertilizable = [...eligible]
+        .sort((a, b) => a.slotIndex - b.slotIndex)
+        .slice(0, fertilizerStack.quantity);
 
       const claim = await claimUserSnapshot({
         client: ctx.drizzle,

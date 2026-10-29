@@ -292,20 +292,46 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     expect(crops.reduce((sum, row) => sum + row.quantity, 0)).toBe(1);
   });
 
-  it("plants nothing and consumes nothing when the seed stack cannot cover every empty plot", async () => {
+  it("plants the first empty plots the seed stack covers when it cannot cover all", async () => {
     await farmer();
     await giveItem("ui-seed", "seed-1", 2);
     const database = await getTestDatabase();
     await database.insert(farmPlot).values(
-      [0, 1, 2, 3, 4].map((slotIndex) => ({ id: `plot-${slotIndex}`, userId: "farm-user", slotIndex })) as never,
+      [4, 2, 0, 3, 1].map((slotIndex) => ({ id: `plot-${slotIndex}`, userId: "farm-user", slotIndex })) as never,
     );
     const api = await caller("farm-user");
     const result = await api.plantAllEmpty({ seedItemId: "seed-1" });
-    expect(result.success).toBe(false);
-    const planted = await database.select().from(farmPlot).where(eq(farmPlot.userId, "farm-user"));
-    expect(planted.every((plot) => plot.seedItemId === null)).toBe(true);
-    const [stack] = await database.select().from(userItem).where(eq(userItem.id, "ui-seed"));
-    expect(stack?.quantity).toBe(2);
+    expect(result.success).toBe(true);
+    expect(result.inventoryDeltas).toEqual([{ itemId: "seed-1", quantityDelta: -2 }]);
+    const plots = await database.select().from(farmPlot).where(eq(farmPlot.userId, "farm-user"));
+    expect(
+      plots.filter((plot) => plot.seedItemId).map((plot) => plot.slotIndex).sort(),
+    ).toEqual([0, 1]);
+    const seeds = await database.select().from(userItem).where(eq(userItem.itemId, "seed-1"));
+    expect(seeds.reduce((sum, row) => sum + row.quantity, 0)).toBe(0);
+  });
+
+  it("fertilizes the first growing plots the fertilizer stack covers when it cannot cover all", async () => {
+    await farmer();
+    const database = await getTestDatabase();
+    await database.insert(item).values(seedItemRow({
+      id: "fert-1", name: "Compost", isFarmSeed: false, isFarmFertilizer: true,
+      farmTimeReductionSeconds: 60, farmYieldItemId: null,
+    }) as never);
+    await giveItem("ui-fert", "fert-1", 1);
+    await database.insert(farmPlot).values([2, 0, 1].map((slotIndex) => ({
+      id: `plot-${slotIndex}`, userId: "farm-user", slotIndex,
+      seedItemId: "seed-1", plantedAt: new Date(), finishAt: new Date(Date.now() + 3_600_000),
+    })) as never);
+    const api = await caller("farm-user");
+    const result = await api.fertilizeAll({ userItemId: "ui-fert" });
+    expect(result.success).toBe(true);
+    const plots = await database.select().from(farmPlot).where(eq(farmPlot.userId, "farm-user"));
+    expect(
+      plots.filter((plot) => plot.fertilizerApplied).map((plot) => plot.slotIndex),
+    ).toEqual([0]);
+    const fertilizer = await database.select().from(userItem).where(eq(userItem.itemId, "fert-1"));
+    expect(fertilizer.reduce((sum, row) => sum + row.quantity, 0)).toBe(0);
   });
 
   it.each(["single", "bulk"] as const)(

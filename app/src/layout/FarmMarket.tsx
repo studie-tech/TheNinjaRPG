@@ -4,6 +4,7 @@ import { Coins } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FARM_MAX_PLOTS } from "@/drizzle/constants";
+import { FARM_CARD_GRID } from "@/layout/FarmInventory";
 import { FarmQuantityStepper } from "@/layout/FarmQuantityStepper";
 import Image from "@/layout/Image";
 import { getFarmQuantityPrice } from "@/libs/farming";
@@ -81,9 +82,9 @@ export function FarmMarket({
     return (
       <li
         key={key}
-        className="flex flex-col gap-2 rounded-md border bg-card p-2.5 @[640px]:flex-row @[640px]:items-center"
+        className="flex flex-col justify-between gap-2 rounded-md border bg-card p-2.5"
       >
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex min-w-0 items-start gap-3">
           {entry.itemImage && (
             <Image src={entry.itemImage} alt="" width={40} height={40} />
           )}
@@ -126,6 +127,7 @@ export function FarmMarket({
                 setQuantities((current) => ({ ...current, [key]: value }))
               }
               label={`${entry.label} quantity`}
+              showMax
             />
           )}
           <Button
@@ -199,7 +201,7 @@ export function FarmMarket({
               )}
             </div>
           ) : (
-            <ul className="grid gap-2">{group.items.map(renderEntry)}</ul>
+            <ul className={FARM_CARD_GRID}>{group.items.map(renderEntry)}</ul>
           )}
         </section>
       ))}

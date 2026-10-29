@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { FARM_MAX_CROP_SELL_QUANTITY } from "@/drizzle/constants";
 import { applyFarmMutationPatch } from "@/libs/farm-state";
 import {
   applyFertilizerReduction,
@@ -359,6 +360,61 @@ export function useFarmController() {
       ),
     [runInventoryAction, sellMutation],
   );
+  /**
+   * Sells every listed crop stack through the per-stack sale, in chunks of the sale
+   * limit, stopping at the first rejection; reports one summary instead of a toast per sale.
+   */
+  const sellAll = useCallback(
+    async (crops: { userItemId: string; quantity: number; sellValue: number }[]) => {
+      const key = "sell:all";
+      if (pendingInventoryKeysRef.current.has(key)) return false;
+      const pendingKeys = new Set(pendingInventoryKeysRef.current).add(key);
+      pendingInventoryKeysRef.current = pendingKeys;
+      setPendingInventoryKeys(pendingKeys);
+      let sold = 0;
+      let earned = 0;
+      let failure: string | null = null;
+      try {
+        for (const crop of crops) {
+          let remaining = crop.quantity;
+          while (remaining > 0 && !failure) {
+            const quantity = Math.min(FARM_MAX_CROP_SELL_QUANTITY, remaining);
+            const result = await sellMutation.mutateAsync({
+              userItemId: crop.userItemId,
+              quantity,
+            });
+            if (!result.success) {
+              failure = result.message;
+              break;
+            }
+            updateCache((state) => applyFarmMutationPatch(state, result));
+            remaining -= quantity;
+            sold += quantity;
+            earned += quantity * crop.sellValue;
+          }
+          if (failure) break;
+        }
+      } catch (error) {
+        failure = error instanceof Error ? error.message : "Transaction failed";
+      } finally {
+        const next = new Set(pendingInventoryKeysRef.current);
+        next.delete(key);
+        pendingInventoryKeysRef.current = next;
+        setPendingInventoryKeys(next);
+        void utils.farming.getFarmState.invalidate();
+      }
+      const summary = `Sold ${sold} ${sold === 1 ? "crop" : "crops"} for ${earned.toLocaleString()} farm coins`;
+      const message = failure
+        ? sold > 0
+          ? `${summary}. ${failure}`
+          : failure
+        : summary;
+      showMutationToast({ success: !failure, message });
+      setAnnouncement(message);
+      return !failure;
+    },
+    [sellMutation, updateCache, utils],
+  );
   const extract = useCallback(
     (extractorSlot: number, userItemId: string, quantity: number) =>
       runInventoryAction(`extract:${extractorSlot}:${userItemId}`, () =>
@@ -391,6 +447,7 @@ export function useFarmController() {
     harvestAll,
     buy,
     sell,
+    sellAll,
     extract,
   };
 }
