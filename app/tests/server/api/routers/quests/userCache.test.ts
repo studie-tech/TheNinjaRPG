@@ -58,6 +58,25 @@ describeWithDatabase("confirmed quest cache responses", () => {
   });
   afterEach(() => { vi.restoreAllMocks(); invalidatePublishedMapCache(); });
 
+  it("returns ordinary abandonment from the existing profile read and exact written timestamp", async () => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "unclaimed-cache-achievement", questType: "achievement", content: content(10000) }]);
+    const api = await callerFor(questsRouter, playerId);
+    expect((await api.startQuest({ questId: missionId, userSector: 0 })).success).toBe(true);
+    await db.update(userData).set({ activeNpcQuestId: missionId }).where(eq(userData.userId, playerId));
+    const reads = await countProfileReads();
+    const result = await api.abandon({ id: missionId });
+    expect(result.success).toBe(true);
+    expect(result.userPatch?.activeNpcQuestId).toBeNull();
+    expect(result.userPatch?.userQuests?.some((entry) => entry.questId === missionId)).toBe(false);
+    expect(result.userPatch?.questData?.some((entry) => entry.id === missionId)).toBe(false);
+    expect(result.userPatch?.userQuests?.some((entry) => entry.questId === "cache-tier")).toBe(true);
+    expect(result.userPatch?.questData?.some((entry) => entry.id === "unclaimed-cache-achievement")).toBe(true);
+    expect((await readPlayer())?.questData?.some((entry) => entry.id === "unclaimed-cache-achievement")).toBe(false);
+    expect(result.userPatch?.questFinishAt).toEqual((await readPlayer())?.questFinishAt);
+    expect(reads()).toBe(1);
+  });
+
   it.each(["event", "story", "mastery"] as const)(
     "claims a %s mastery reward once despite history for a deleted achievement",
     async (questType) => {
@@ -429,7 +448,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
     expect(profile.userData?.questPartyId).toBeNull();
     expect(profile.notifications).toContainEqual(expect.objectContaining(notice));
     const key = ["disbanded-team-profile"];
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryDefaults(key, { queryFn: () => profileApi.getUser() });
     client.setQueryData(key, profile);
     const revision = prepareUserUpdate(client, key);
     const result = await (await callerFor(questsRouter, playerId)).checkRewards({ questId });
@@ -699,8 +719,10 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const profileApi = await callerFor(profileRouter, playerId);
     const before = await profileApi.getUser();
     expect(before.achievementProgress?.some((entry) => entry.questId === achievementId)).toBe(false);
-    const client = new QueryClient();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const key = ["prerequisite-profile"];
+    let refetches = 0;
+    client.setQueryDefaults(key, { queryFn: async () => { refetches++; return profileApi.getUser(); } });
     client.setQueryData(key, before);
     const revision = prepareUserUpdate(client, key);
     const reads = await countProfileReads();
@@ -709,7 +731,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
     expect(reads()).toBe(1);
     await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
     const isEligible = requiredLevel <= 50;
-    expect(client.getQueryState(key)?.isInvalidated).toBe(isEligible);
+    expect(refetches).toBe(isEligible ? 1 : 0);
+    expect(client.getQueryState(key)?.isInvalidated).toBe(false);
     if (isEligible) {
       expect(result.userPatch).toBeUndefined();
       expect(result.achievementProgress).toBeUndefined();

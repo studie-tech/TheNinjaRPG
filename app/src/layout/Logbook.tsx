@@ -415,7 +415,7 @@ export const QuestDialogScene: React.FC<QuestDialogSceneProps> = ({
  * @returns The rendered component.
  */
 export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { userQuest, tracker, hideTitle, showScene } = props;
   const quest = userQuest.quest;
   const tierOrDaily = ["tier", "daily"].includes(quest.questType);
@@ -581,7 +581,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
     // React state is asynchronous, so the ref is the same-tick duplicate-submit lock.
     if (abandonRequestRef.current || !questStartedAt) return;
 
-    const request = { identity: abandonIdentity };
+    const request = { identity: abandonIdentity, revision: prepareUserUpdate() };
     abandonRequestRef.current = request;
     setAbandonPendingIdentity(abandonIdentity);
 
@@ -609,7 +609,10 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
       setAbandonDialogIdentity(null);
       await Promise.allSettled([
         utils.quests.allianceBuilding.invalidate(),
-        utils.profile.getUser.invalidate(),
+        updateUser(data.userPatch, {
+          revision: request.revision,
+          achievementProgress: data.achievementProgress,
+        }),
       ]);
     } catch (error) {
       // This caller owns transport recovery feedback; other tRPC failures use the global handler.

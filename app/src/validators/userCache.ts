@@ -82,6 +82,7 @@ export const userPatchSchema = z.object({
   isTradeBanned: z.boolean().optional(),
   isWarned: z.boolean().optional(),
   rankedLp: z.number().optional(),
+  petTask: z.custom<NonNullable<UserWithRelations>["petTask"]>().optional(),
   unreadNotifications: z.number().optional(),
   activePetId: z.string().nullable().optional(),
   petSlots: z.number().optional(),

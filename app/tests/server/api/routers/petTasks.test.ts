@@ -46,8 +46,11 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
     const before = Date.now();
     expect(await callerForDatabase(questsRouter, ownerId, database).startQuest({ questId: contractId, userSector: 0 })).toMatchObject({ success: false, message: expect.stringContaining("Hunter contract board") });
     expect(await readHistory(database)).toBeUndefined();
-    expect((await dispatch(database)).success).toBe(true);
+    const dispatched = await dispatch(database);
+    expect(dispatched.success).toBe(true);
     const task = (await readOwner(database))!.petTask!;
+    expect(dispatched.userPatch?.petTask).toEqual(task);
+    expect(dispatched.userPatch?.questData?.some((tracker) => tracker.id === contractId)).toBe(false);
     const history = await readHistory(database);
     expect(task).toMatchObject({ petId, questId: contractId, questHistoryId: history!.id, startedAt: history!.startedAt.getTime(), questVersion: history!.questVersion!.getTime() });
     expect(task.finishesAt).toBeGreaterThanOrEqual(before + 60_000);
@@ -115,6 +118,7 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
     const result = await caller.collectPetTask(task);
     expect(result.success).toBe(true);
     expect(result.rewards).toMatchObject({ reward_money: 50, reward_exp: 20, reward_hunting_experience: 40 });
+    expect(result.userPatch).toMatchObject({ petTask: null, money: 1050, huntingExperience: 40, earnedExperience: 1020, petExperience: 797 });
     expect(await readOwner(database)).toMatchObject({ petTask: null, money: 1050, huntingExperience: 40, earnedExperience: 1020, petExperience: 797 });
     expect(await readHistory(database)).toMatchObject({ completed: 1, previousCompletes: 1, periodCompletes: 1 });
     expect((await caller.collectPetTask(task)).success).toBe(false);
@@ -203,7 +207,8 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
     const task = (await readOwner(database))!.petTask!;
     const restartedAt = new Date(task.startedAt + 1);
     await database.update(questHistory).set({ startedAt: restartedAt }).where(eq(questHistory.id, task.questHistoryId));
-    expect((await callerForDatabase(questsRouter, ownerId, database).cancelPetTask(task)).success).toBe(true);
+    expect(await callerForDatabase(questsRouter, ownerId, database).cancelPetTask(task)).toMatchObject({ success: true,
+      userPatch: { petTask: null }, closedAttempt: { id: task.questHistoryId, startedAt: task.startedAt } });
     expect(await readHistory(database)).toMatchObject({ startedAt: restartedAt, completed: 0, endAt: null });
   });
 

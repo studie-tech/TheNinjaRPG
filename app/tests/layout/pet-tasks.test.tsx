@@ -19,6 +19,7 @@ let task: RouterOutputs["quests"]["getPetTask"];
 let start: ReturnType<typeof vi.fn>;
 let collect: ReturnType<typeof vi.fn>;
 let cancel: ReturnType<typeof vi.fn>;
+let updateUser: ReturnType<typeof vi.fn>;
 const receipt = { petId: "pet", questHistoryId: "attempt", questId: "contract", startedAt: 1000, questVersion: 500, finishesAt: Date.now() + 60_000 };
 const browserGlobals = ["Event", "CustomEvent", "ResizeObserver"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
@@ -29,6 +30,7 @@ beforeEach(() => {
     Event: { configurable: true, value: window.Event }, CustomEvent: { configurable: true, value: window.CustomEvent },
     ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
   });
+  updateUser = vi.fn().mockResolvedValue(undefined);
   owner = { userId: "owner", rank: "CHUNIN", status: "AWAKE", level: 30, occupation: "HUNTER", activePetId: "pet", battleId: null, petTask: null, isBanned: false, isAi: false };
   task = { task: null, petName: "Kumo", questName: "Contract", blockMessage: null, dispatchBlockMessage: null };
   start = vi.fn(() => ({ success: true, message: "Sent" }));
@@ -36,7 +38,7 @@ beforeEach(() => {
   cancel = vi.fn(() => ({ success: true, message: "Returned without rewards" }));
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   Object.assign(vi.spyOn(client, "api" as never), { quests: testApi.quests, pets: testApi.pets, useUtils: testApi.useUtils });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: owner, timeDiff: 0 }) as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: owner, timeDiff: 0, prepareUserUpdate: () => 1, updateUser }) as never);
   vi.spyOn(RewardChoice, "useOpenRewardChoice").mockImplementation(() => vi.fn());
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(toast, "showRewardToast").mockImplementation(() => undefined);
@@ -124,4 +126,20 @@ it("dispatches from the existing profession card using a ready eligible companio
   const dialog = await view.findByRole("dialog", { name: "Send Kumo on Hunt creature?" });
   fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
   await waitFor(() => expect(start).toHaveBeenCalledWith({ petId: "pet", questId: "contract" }));
+});
+
+it("merges a cancelled receipt without deleting a restarted cached attempt", async () => {
+  task = { ...task, task: receipt };
+  cancel.mockReturnValue({ success: true, message: "Returned", userPatch: { petTask: null },
+    closedAttempt: { id: receipt.questHistoryId, startedAt: receipt.startedAt } });
+  const view = mount();
+  await view.findAllByRole("button", { name: "Return without rewards" });
+  fireEvent.click(view.getAllByRole("button", { name: "Return without rewards" }).find((button) => button.tagName === "BUTTON")!);
+  const dialog = await view.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+  await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+  const [patch, options] = updateUser.mock.calls[0]!;
+  const successor = { id: receipt.questHistoryId, startedAt: new Date(receipt.startedAt + 1) };
+  expect(patch({ userQuests: [{ id: receipt.questHistoryId, startedAt: new Date(receipt.startedAt) }, successor] })).toEqual({ petTask: null, userQuests: [successor] });
+  expect(options.revision).toBe(1);
 });

@@ -22,6 +22,7 @@ type UserCache = {
   userData?: User | null;
   achievementProgress?: AchievementProgress[];
   notifications?: NavBarDropdownLink[];
+  isEventParticipant?: boolean;
 };
 type KnownUserPatch = Partial<User> | UserCachePatch;
 export type UserPatch =
@@ -48,6 +49,7 @@ export type UserUpdateOptions = {
   // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
   delta?: UserDelta;
   achievementProgress?: AchievementProgress[];
+  isEventParticipant?: boolean;
   notifications?: (
     current: NavBarDropdownLink[] | undefined,
   ) => NavBarDropdownLink[] | undefined;
@@ -133,6 +135,8 @@ export const updateUserCache = async (
     if (!user) return undefined;
     applied = true;
     const result = mergeUserCache(old, user, mutation.achievementProgress);
+    if (mutation.isEventParticipant !== undefined)
+      result.isEventParticipant = mutation.isEventParticipant;
     if (mutation.notifications)
       result.notifications = mutation.notifications(result.notifications);
     return result;
