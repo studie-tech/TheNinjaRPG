@@ -1,8 +1,15 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as clerk from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
 import type { Clerk } from "@clerk/shared/types";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
-import { type QueryClient, QueryObserver, useQueryClient } from "@tanstack/react-query";
+import {
+  type MutationOptions,
+  type QueryClient,
+  QueryObserver,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { type TRPCClient, TRPCClientError } from "@trpc/client";
 import * as trpcClient from "@trpc/client";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
@@ -12,14 +19,22 @@ import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
 import * as clientModule from "@/app/_trpc/client";
 import TrpcClientProvider from "@/app/_trpc/Provider";
+import { BOTID_BLOCKED_MESSAGE, BOTID_RELOAD_REQUIRED_MESSAGE } from "@/libs/botid";
 import * as toast from "@/libs/toast";
 import { SESSION_CHANGED_MESSAGE, SESSION_EXPIRED_MESSAGE } from "@/libs/trpcSession";
 import { QUERY_METRICS_HEADER } from "@/libs/queryTelemetry";
 import { shareUserCache } from "@/utils/userCacheSharing";
+import {
+  prepareUserUpdate,
+  updateUserCache,
+  type UserPatch,
+  type UserUpdateOptions,
+} from "@/utils/userCache";
 import { actualShowMutationToast } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();
 let queryClient: QueryClient;
+const profileObservers: Array<() => void> = [];
 const toastMessages = () =>
   sonnerToast
     .getToasts()
@@ -93,10 +108,213 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  for (const unsubscribe of profileObservers.splice(0)) unsubscribe();
   queryClient?.clear();
   sonnerToast.dismiss();
   vi.restoreAllMocks();
 });
+
+const recoveryFlows = [
+  { file: "RaidBrowser.tsx", procedure: "raids.joinRaidQueue" },
+  { file: "RaidBrowser.tsx", procedure: "raids.leaveRaidQueue" },
+  { file: "RaidBrowser.tsx", procedure: "raids.startRaidBattle" },
+  { file: "RaidBrowser.tsx", procedure: "raids.claimDamageReward" },
+  { file: "RaidBrowser.tsx", procedure: "raids.readyToQueue" },
+  { file: "Bloodline.tsx", procedure: "bloodline.purchaseBloodline" },
+  { file: "Bloodline.tsx", procedure: "bloodline.removeBloodline" },
+  { file: "Bloodline.tsx", procedure: "bloodline.roll" },
+];
+
+const profileRecoveryCallbacks = ({
+  file,
+  procedure,
+}: (typeof recoveryFlows)[number]) => {
+  mountProvider(session("a"));
+  const key = getQueryKey(testApi.profile.getUser, undefined, "query");
+  const initial = {
+    userData: { userId: "player", status: "AWAKE", reputationPoints: 30, money: 100 },
+    achievementProgress: [{ questId: "preserved" }],
+  };
+  const authoritative = { ...initial, userData: { ...initial.userData, money: 120 } };
+  queryClient.setQueryData(key, initial);
+  const read = vi.fn(async () => authoritative);
+  const observer = new QueryObserver(queryClient, {
+    queryKey: key,
+    queryFn: read,
+    staleTime: Infinity,
+  });
+  profileObservers.push(observer.subscribe(() => {}));
+  const invalidate = vi.fn(async () => undefined);
+  const utils = {
+    profile: {
+      getUser: {
+        refetch: () => queryClient.refetchQueries({ queryKey: key, exact: true }),
+      },
+      getDashboard: { invalidate },
+    },
+    raids: Object.fromEntries(
+      ["getUserRaidQueue", "getActiveRaidTeams", "getRaidDetails"].map((name) => [
+        name,
+        { invalidate },
+      ]),
+    ),
+  };
+  const updateUser = vi.fn((patch: UserPatch | undefined, options: UserUpdateOptions) =>
+    updateUserCache(queryClient, key, patch, options),
+  );
+  const closeModal = vi.fn();
+  const source = readFileSync(
+    join(import.meta.dirname, "../../src/layout", file),
+    "utf8",
+  );
+  const call = source.indexOf(`api.${procedure}.useMutation(`);
+  const indent = source
+    .slice(source.lastIndexOf("\n", call) + 1, call)
+    .match(/^\s*/)?.[0];
+  const callbacks = source
+    .slice(call)
+    .match(new RegExp(`useMutation\\((\\{[\\s\\S]*?\\n${indent}\\})\\);`))?.[1];
+  if (!callbacks) throw new Error(`${procedure} callbacks were not found`);
+  const recover =
+    file === "RaidBrowser.tsx"
+      ? source.match(/const recoverUser = [\s\S]*?\n  };/)?.[0]
+      : "";
+  // Run the production callback options and shared recovery with the real provider defaults.
+  const transpiler = new (require("bun").Transpiler)({ loader: "ts" }) as {
+    transformSync(source: string): string;
+  };
+  const factory = transpiler.transformSync(
+    `function getOptions() { ${recover}\nreturn (${callbacks}); }`,
+  );
+  const options = new Function(
+    "util",
+    "prepareUserUpdate",
+    "updateUser",
+    "showMutationToast",
+    "showRewardToast",
+    "setIsOpen",
+    "setIsReadyToQueue",
+    "props",
+    `${factory}\nreturn getOptions();`,
+  )(
+    utils,
+    () => prepareUserUpdate(queryClient, key),
+    updateUser,
+    toast.showMutationToast,
+    vi.fn(),
+    closeModal,
+    vi.fn(),
+    { refetch: vi.fn() },
+  ) as MutationOptions<unknown, Error, void, number | undefined>;
+  return { key, initial, authoritative, read, options, closeModal };
+};
+
+for (const flow of recoveryFlows) {
+  it.each(["rate limit", "lost response"])(
+    `${flow.procedure} preserves default feedback and profile recovery after %s`,
+    async (failure) => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const test = profileRecoveryCallbacks(flow);
+      const error =
+        failure === "rate limit"
+          ? TRPCClientError.from({
+              error: {
+                message: "Please wait before trying again.",
+                code: -32029,
+                data: { code: "TOO_MANY_REQUESTS" },
+              },
+            })
+          : TRPCClientError.from(fetchFailure());
+      let finishRead!: () => void;
+      test.read.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishRead = () => resolve(test.authoritative);
+          }),
+      );
+      const mutation = queryClient.getMutationCache().build(queryClient, {
+        ...test.options,
+        mutationKey: [flow.procedure.split(".")],
+        mutationFn: async () => {
+          throw error;
+        },
+      });
+      const result = mutation.execute(undefined).catch((cause) => cause);
+      await waitFor(() => expect(test.read).toHaveBeenCalledTimes(1));
+      expect(toastMessages()).toEqual([
+        failure === "rate limit"
+          ? error.message
+          : "Could not confirm whether this action completed. Refresh the page to check the result before trying again.",
+      ]);
+      expect(mutation.state.status).toBe("pending");
+      finishRead();
+      expect(await result).toBe(error);
+      expect(mutation.state.status).toBe("error");
+      expect(queryClient.isMutating()).toBe(0);
+      expect(queryClient.getQueryData(test.key)).toEqual(test.authoritative);
+      if (flow.procedure === "bloodline.purchaseBloodline") {
+        expect(test.closeModal).toHaveBeenCalledWith(false);
+        expect(document.body.style.cursor).toBe("default");
+      }
+    },
+  );
+
+  it(`${flow.procedure} keeps a confirmed patch local without error recovery`, async () => {
+    const test = profileRecoveryCallbacks(flow);
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      ...test.options,
+      mutationKey: [flow.procedure.split(".")],
+      mutationFn: async () => ({
+        success: true,
+        message: "Updated",
+        userPatch: { reputationPoints: 20 },
+        userDelta: {},
+      }),
+    });
+    await mutation.execute(undefined);
+    await waitFor(() =>
+      expect(queryClient.getQueryData(test.key)).toMatchObject({
+        userData: { reputationPoints: 20, money: 100 },
+      }),
+    );
+    expect(test.read).not.toHaveBeenCalled();
+    expect(mutation.state.status).toBe("success");
+    expect(toastMessages()).toEqual(["Updated"]);
+  });
+}
+
+it.each([BOTID_BLOCKED_MESSAGE, BOTID_RELOAD_REQUIRED_MESSAGE])(
+  "retains the provider reload action during profile recovery: %s",
+  async (message) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const test = profileRecoveryCallbacks(recoveryFlows[0]!);
+    const mutation = queryClient.getMutationCache().build(queryClient, {
+      ...test.options,
+      mutationFn: async () => {
+        throw TRPCClientError.from({
+          error: {
+            message,
+            code: -32003,
+            data: {
+              code:
+                message === BOTID_BLOCKED_MESSAGE ? "FORBIDDEN" : "PRECONDITION_FAILED",
+            },
+          },
+        });
+      },
+    });
+    await expect(mutation.execute(undefined)).rejects.toThrow(message);
+    expect(test.read).toHaveBeenCalledTimes(1);
+    expect(toastMessages()).toEqual([message]);
+    expect(toast.showMutationToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: expect.objectContaining({
+          props: expect.objectContaining({ altText: "Reload the page" }),
+        }),
+      }),
+    );
+  },
+);
 
 it("preserves profile sharing for imperative reads without changing other query defaults", async () => {
   mountProvider(session("a"));

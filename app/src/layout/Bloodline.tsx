@@ -55,14 +55,14 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
   const { mutate: purchase, isPending: isPurchasing } =
     api.bloodline.purchaseBloodline.useMutation({
       onMutate: prepareUserUpdate,
-      onError: () => updateUser(undefined, { revision: undefined }),
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) await updateUser(data.userPatch, { revision });
       },
-      onSettled: () => {
+      onSettled: (_data, error) => {
         setIsOpen(false);
         document.body.style.cursor = "default";
+        if (error) return updateUser(undefined, { revision: undefined });
       },
     });
 
@@ -182,7 +182,9 @@ export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
   const { mutate: remove, isPending: isRemoving } =
     api.bloodline.removeBloodline.useMutation({
       onMutate: prepareUserUpdate,
-      onError: () => updateUser(undefined, { revision: undefined }),
+      onSettled: (_data, error) => {
+        if (error) return updateUser(undefined, { revision: undefined });
+      },
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
@@ -247,7 +249,9 @@ export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
   // State
   const { mutate: roll, isPending: isRolling } = api.bloodline.roll.useMutation({
     onMutate: prepareUserUpdate,
-    onError: () => updateUser(undefined, { revision: undefined }),
+    onSettled: (_data, error) => {
+      if (error) return updateUser(undefined, { revision: undefined });
+    },
     onSuccess: async (data, _variables, revision) => {
       props.refetch();
       showMutationToast({ ...data, title: "Bloodline Roll" });

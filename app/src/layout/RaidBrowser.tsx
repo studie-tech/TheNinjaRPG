@@ -101,14 +101,14 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
     { enabled: !!selectedRaidId },
   );
 
-  // A transport error can follow a committed payout or rollback whose response was lost.
-  const recoverUser = () => {
-    void util.profile.getUser.refetch();
+  // Preserve default error feedback while reconciling a potentially committed action.
+  const recoverUser = (_data: unknown, error: unknown) => {
+    if (error) return util.profile.getUser.refetch();
   };
   // Mutations
   const { mutate: joinQueue, isPending: joinPending } =
     api.raids.joinRaidQueue.useMutation({
-      onError: recoverUser,
+      onSettled: recoverUser,
       onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
@@ -123,7 +123,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
   const { mutate: leaveQueue, isPending: leavePending } =
     api.raids.leaveRaidQueue.useMutation({
-      onError: recoverUser,
+      onSettled: recoverUser,
       onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
@@ -141,7 +141,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
   const { mutate: startBattle, isPending: startPending } =
     api.raids.startRaidBattle.useMutation({
-      onError: recoverUser,
+      onSettled: recoverUser,
       onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
@@ -157,7 +157,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
   const { mutate: claimReward, isPending: claimPending } =
     api.raids.claimDamageReward.useMutation({
-      onError: recoverUser,
+      onSettled: recoverUser,
       onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
         if (data.success && "rewards" in data && data.rewards) {
@@ -178,7 +178,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
   const { mutate: readyToQueue, isPending: readyPending } =
     api.raids.readyToQueue.useMutation({
-      onError: recoverUser,
+      onSettled: recoverUser,
       onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
         if (data.success) {
