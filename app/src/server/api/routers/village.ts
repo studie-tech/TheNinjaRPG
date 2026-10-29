@@ -657,12 +657,18 @@ export const villageRouter = createTRPCRouter({
 
 /** Village changes alter automatic quest admission and membership-dependent progression together. */
 const getVillageChangeUserUpdate = async (client: DrizzleClient, userId: string) => {
+  const fallback = {
+    userPatch: undefined,
+    achievementProgress: undefined,
+    userDelta: undefined,
+  };
   const updatedUser = await withRequestScope(() =>
     fetchUpdatedUser({ client, userId }),
   );
-  if (!updatedUser.user) return {};
+  // Progression can publish histories and effects after loading this user snapshot.
+  if (!updatedUser.user || updatedUser.requiresProgressionRefresh) return fallback;
   const membership = await getMembershipUserPatch(client, updatedUser.user);
-  if (!membership) return {};
+  if (!membership) return fallback;
   const progression = getUserProgressionUpdate(
     updatedUser.user,
     updatedUser.publishedAchievementIds,
