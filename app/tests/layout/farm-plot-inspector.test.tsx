@@ -190,8 +190,8 @@ describe("FarmPlotInspector", () => {
     expect(handlers.onPlant).toHaveBeenCalledWith(expect.objectContaining({ id: "plot-1" }), "seed-1");
   });
 
-  it("closes with the Escape key", () => {
-    const { getByLabelText } = render(
+  it("focuses its close control after canvas selection so Escape dismisses it", () => {
+    const { getByRole } = render(
       <FarmPlotInspector
         plot={plot()}
         farmState={farmState}
@@ -200,7 +200,9 @@ describe("FarmPlotInspector", () => {
         {...handlers}
       />,
     );
-    fireEvent.keyDown(getByLabelText("Farm plot 1 inspector"), { key: "Escape" });
+    const closeButton = getByRole("button", { name: "Close plot inspector" });
+    expect(document.activeElement).toBe(closeButton);
+    fireEvent.keyDown(closeButton, { key: "Escape" });
     expect(handlers.onClose).toHaveBeenCalledTimes(1);
   });
 

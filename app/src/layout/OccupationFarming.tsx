@@ -196,7 +196,7 @@ export default function OccupationFarming({
         aria-label="Market and storage"
         className="rounded-lg border bg-card p-3"
       >
-        <Tabs value={tab} onValueChange={(value) => setTab(value as FarmTab)}>
+        <Tabs value={tab} onValueChange={(value) => openTab(value as FarmTab)}>
           <TabsList className="mb-3 grid w-full grid-cols-4">
             <TabsTrigger value="market">Market</TabsTrigger>
             <TabsTrigger value="crops">

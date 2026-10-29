@@ -157,6 +157,8 @@ describe("OccupationFarming layout", () => {
     expect(view.getByRole("tab", { name: "Upgrades" }).getAttribute("aria-selected")).toBe(
       "true",
     );
+    expect(setSelectedSlotIndex).toHaveBeenCalledWith(null);
+    setSelectedSlotIndex.mockClear();
     fireEvent.click(view.getByRole("button", { name: "Buy seeds" }));
     expect(view.getByRole("tab", { name: "Market" }).getAttribute("aria-selected")).toBe(
       "true",

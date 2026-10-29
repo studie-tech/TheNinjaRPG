@@ -1,7 +1,7 @@
 "use client";
 
 import { Droplets, Leaf, PackageOpen, Shovel, Wheat, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -57,12 +57,15 @@ export function FarmPlotInspector({
   onBrowseSeeds,
 }: FarmPlotInspectorProps) {
   const { timeDiff } = useRequiredUserData();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [selectedSeedId, setSelectedSeedId] = useState<string | null>(null);
   const [selectedFertilizerId, setSelectedFertilizerId] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedSeedId(null);
     setSelectedFertilizerId(null);
+    // Canvas selection leaves focus outside the panel; give its keyboard controls focus.
+    closeButtonRef.current?.focus({ preventScroll: true });
   }, [plot.id]);
 
   const status = getFarmPlotStatus(plot, now);
@@ -131,6 +134,7 @@ export function FarmPlotInspector({
           </span>
         </CardTitle>
         <Button
+          ref={closeButtonRef}
           variant="ghost"
           size="icon"
           onClick={onClose}
