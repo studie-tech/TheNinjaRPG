@@ -167,7 +167,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({
               className={cn("flex items-end gap-2", isUser && "flex-row-reverse")}
             >
               {!isUser && <AssistantMark />}
+              {/* Defer live announcements until the streamed answer is complete. */}
               <p
+                aria-busy={
+                  status === "streaming" &&
+                  message.role === "assistant" &&
+                  message.id === visibleMessages.at(-1)?.id
+                }
                 className={cn(
                   "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm",
                   isUser
