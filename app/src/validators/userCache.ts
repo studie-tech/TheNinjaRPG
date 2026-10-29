@@ -72,6 +72,16 @@ export type UserDelta = z.infer<typeof userDeltaSchema>;
 
 // Absolute values are kept separate from arithmetic deltas so a saved field is never added.
 export const userPatchSchema = z.object({
+  cookingJobs: z
+    .array(
+      z.object({
+        id: z.string(),
+        userId: z.string(),
+        experience: z.number(),
+        finishesAt: z.date(),
+      }),
+    )
+    .optional(),
   elementalMastery: z.partialRecord(z.enum(BasicElementName), z.number()).optional(),
   activeTrainedElement: z.enum(BasicElementName).nullable().optional(),
   preferredDamageElement: z.enum(BasicElementName).nullable().optional(),
@@ -122,6 +132,7 @@ export const userPatchSchema = z.object({
   maxChakra: z.number().optional(),
   maxStamina: z.number().optional(),
   regeneration: z.number().optional(),
+  regenerationWithoutTimedBuffs: z.number().optional(),
   dailyTrainings: z.number().optional(),
   dailyMissions: z.number().optional(),
   dailyErrands: z.number().optional(),
