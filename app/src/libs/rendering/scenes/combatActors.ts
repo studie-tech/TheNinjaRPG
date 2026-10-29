@@ -2,7 +2,6 @@ import type { Grid } from "honeycomb-grid";
 import { Container, Graphics, Sprite } from "pixi.js";
 import {
   IMG_AVATAR_DEFAULT,
-  IMG_BATTLEFIELD_STAR,
   IMG_BATTLEFIELD_TOMBSTONE,
   IMG_SECTOR_USER_MARKER,
   IMG_SECTOR_USER_SPRITE_MASK,
@@ -68,7 +67,7 @@ export const createCombatActors = (
       const tile = grid.getHex({ col: user.longitude, row: user.latitude });
       if (!tile) continue;
       let record = records.get(user.userId);
-      const parts = combatActorParts(user, tile, next.battle, next.playerId);
+      const parts = combatActorParts(user, tile, next.battle);
       const signature = JSON.stringify(parts);
       if (!record || record.signature !== signature) {
         if (!record && (user.curHealth <= 0 || user.fledBattle)) continue;
@@ -86,24 +85,69 @@ export const createCombatActors = (
         shadowSprite.height = tile.height * 0.5;
         shadowSprite.scale.y *= -1;
         shadowSprite.position.set(tile.width / 2, tile.height * 0.3);
-        const halo = new Graphics();
-        // Threat sits behind the fighter and its status meters.
-        root.addChild(shadowSprite, halo, artRoot);
-        const noMarker = user.isAi && user.isOriginal;
-        const offset = noMarker ? tile.height / 8 : 0;
+        const selection = groundSelection(tile, true),
+          hover = groundSelection(tile, false);
+        const identity = new Graphics()
+          .poly([
+            tile.width * 0.44,
+            tile.height * 0.09,
+            tile.width * 0.5,
+            tile.height * 0.02,
+            tile.width * 0.56,
+            tile.height * 0.09,
+            tile.width * 0.5,
+            tile.height * 0.065,
+          ])
+          .fill(0xf0c56b)
+          .stroke({ color: 0x15232c, width: tile.width * 0.015 });
+        identity.label = "combat-original";
+        artRoot.label = "combat-art";
+        // Ground cues stay below artwork; the compact HUD clears both LPC heads and NPC portraits.
+        root.addChild(shadowSprite, selection, hover, identity, artRoot);
+        const hudTop = tile.height * (user.isAi && user.isOriginal ? 1.84 : 1.58);
+        const meterWidth = tile.width * 0.62;
         const meter = (color: number, index: number) =>
           createStatusMeter({
-            width: tile.width / 2,
-            height: tile.height / 10,
+            width: meterWidth,
+            height: tile.height * (index === 0 ? 0.055 : 0.035),
             color,
-            y:
-              tile.height +
-              tile.width / 3 -
-              ((offset + index) * (tile.height * 0.3 - 2)) / 3,
+            backgroundColor: 0x15232c,
+            trackColor: 0x35414a,
+            x: (tile.width - meterWidth) / 2,
+            y: hudTop - tile.height * (index === 0 ? 0 : index === 1 ? 0.065 : 0.115),
           });
-        const hp = meter(0xb22222, 0);
-        const sp = "curStamina" in user ? meter(0x008000, 1) : null;
-        const cp = "curChakra" in user ? meter(0x0000ff, 2) : null;
+        const hp = meter(0xe77970, 0);
+        const sp = "curStamina" in user ? meter(0x8ebd9b, 1) : null;
+        const cp = "curChakra" in user ? meter(0x7bb7df, 2) : null;
+        hp.container.label = "combat-health";
+        if (sp) sp.container.label = "combat-stamina";
+        if (cp) cp.container.label = "combat-chakra";
+        const threat = createStatusMeter({
+          width: meterWidth,
+          height: tile.height * 0.035,
+          color: 0xe9bf75,
+          backgroundColor: 0x15232c,
+          trackColor: 0x35414a,
+          x: (tile.width - meterWidth) / 2,
+          y: hudTop + tile.height * 0.085,
+        });
+        threat.container.label = "combat-aggro";
+        const highestThreat = new Graphics()
+          .poly([
+            -tile.height * 0.07,
+            0,
+            -tile.height * 0.035,
+            tile.height * 0.035,
+            0,
+            0,
+            -tile.height * 0.035,
+            -tile.height * 0.035,
+          ])
+          .fill(0xf18a63)
+          .stroke({ color: 0x15232c, width: tile.height * 0.014 });
+        highestThreat.label = "combat-aggro-highest";
+        threat.container.addChild(highestThreat);
+        root.addChild(threat.container);
         root.addChild(hp.container);
         if (sp) root.addChild(sp.container);
         if (cp) root.addChild(cp.container);
@@ -127,8 +171,11 @@ export const createCombatActors = (
           hp,
           sp,
           cp,
-          halo,
-          haloRatio: Number.NaN,
+          selection,
+          hover,
+          identity,
+          threat,
+          highestThreat,
           shadow: shadowSprite,
           alive: true,
           lastActionId: previous?.lastActionId ?? user.spriteAction?.id,
@@ -186,10 +233,18 @@ export const createCombatActors = (
   };
   const updateVisual = (record: Fighter) => {
     if (!snapshot) return;
-    const { user, target } = record;
+    const { user } = record;
     const alive = stillInBattle(user, snapshot.battle.usersEffects);
     record.alive = alive;
-    record.shadow.visible = alive;
+    record.root.visible = !user.hidden && !user.leftBattle;
+    const displayed = alive && record.root.visible;
+    record.shadow.visible = displayed;
+    record.identity.visible =
+      displayed &&
+      user.isOriginal &&
+      (user.isAi
+        ? !!user.isSummon && user.controllerId === snapshot.playerId
+        : "curStamina" in user);
     for (const entry of record.art?.entries ?? []) {
       entry.sprite.visible =
         entry.description.kind === "tombstone" ? !alive && user.isOriginal : alive;
@@ -219,40 +274,10 @@ export const createCombatActors = (
         getEffectiveCurPool(user, snapshot.battle.usersEffects, "Chakra") /
           maxima.chakra,
       );
-    const ratio = alive ? snapshot.aggro?.get(user.userId)?.ratio : undefined;
-    record.halo.visible = ratio !== undefined;
-    if (ratio !== undefined && ratio !== record.haloRatio) {
-      record.haloRatio = ratio;
-      const hasPortrait = !(user.isAi && user.isOriginal);
-      const size = target.height * (hasPortrait ? 1.08 : 1.75);
-      // Leave the bottom quarter open where the portrait pin tapers to its point.
-      const start = hasPortrait ? (Math.PI * 5) / 4 : Math.PI / 2;
-      const sweep = Math.PI * (hasPortrait ? 1.5 : 2);
-      const y = target.height * (hasPortrait ? 1 : 0.9);
-      record.halo.clear();
-      if (hasPortrait)
-        record.halo.arc(target.width / 2, y, size * 0.4775, start, start - sweep, true);
-      else record.halo.circle(target.width / 2, y, size * 0.4775);
-      record.halo.stroke({
-        color: 0x252b26,
-        alpha: 0.65,
-        width: size * 0.03,
-        cap: "round",
-      });
-      if (ratio > 0)
-        record.halo
-          // The threat arc is independent of the track's retained path endpoint.
-          .beginPath()
-          .arc(
-            target.width / 2,
-            y,
-            size * 0.4775,
-            start,
-            start - sweep * Math.max(0, Math.min(1, ratio)),
-            true,
-          )
-          .stroke({ color: 0xfbbf24, width: size * 0.03, cap: "round" });
-    }
+    const threat = displayed ? snapshot.aggro?.get(user.userId) : undefined;
+    record.threat.container.visible = threat !== undefined;
+    record.highestThreat.visible = threat?.isHighest ?? false;
+    record.threat.set(threat?.ratio ?? 0, threat?.isHighest ? 0xf18a63 : 0xe9bf75);
   };
   const animate = (
     frame: GameFrame,
@@ -348,8 +373,12 @@ export const createCombatActors = (
         root.y += ((ty - root.y) / distance) * step;
       }
       moving ||= Math.hypot(root.x + target.center.x, root.y + target.center.y) > 0.01;
+      const displayed = record.alive && root.visible;
+      record.selection.visible = displayed && user.userId === selectedId;
+      record.hover.visible =
+        displayed && user.userId === hoveredId && user.userId !== selectedId;
       const visible =
-        record.alive && (user.userId === selectedId || user.userId === hoveredId);
+        displayed && (user.userId === selectedId || user.userId === hoveredId);
       record.hp.container.visible = visible;
       if (record.sp) record.sp.container.visible = visible;
       if (record.cp) record.cp.container.visible = visible;
@@ -392,12 +421,11 @@ export const createCombatActors = (
   };
 };
 
-/** Viewer-aware fighter artwork in tile-local Y-up units, including fainted and summon overlays. */
+/** Fighter artwork in tile-local Y-up units; vector UI is owned separately by the actor. */
 export const combatActorParts = (
   user: ReturnedUserState,
   tile: TerrainHex,
   battle: ReturnedBattle,
-  playerId: string | undefined,
 ) => {
   const h = tile.height,
     w = tile.width;
@@ -424,8 +452,6 @@ export const combatActorParts = (
         rendition: 256,
       }),
     );
-    if (user.isSummon && user.controllerId === playerId)
-      parts.push(part("star", IMG_BATTLEFIELD_STAR, h / 2.5, h * 0.2));
   } else {
     const village = getVillage(battle, user.villageId);
     if (user.spriteAppearance)
@@ -466,10 +492,44 @@ export const combatActorParts = (
         }),
       );
   }
-  if ("curStamina" in user && user.isOriginal && !user.isAi)
-    parts.push(part("star", IMG_BATTLEFIELD_STAR, h / 2.5, h * 0.4));
   parts.push(part("tombstone", IMG_BATTLEFIELD_TOMBSTONE, h * 0.5, h * 0.6));
   return parts;
+};
+
+/** Retained ground-plane reticles distinguish the controlled unit from a hovered target by shape. */
+const groundSelection = (tile: TerrainHex, selected: boolean) => {
+  const x = tile.width / 2,
+    y = tile.height * 0.28;
+  const rx = tile.width * 0.36,
+    ry = tile.height * 0.115;
+  const marker = new Graphics()
+    .ellipse(x, y, rx, ry)
+    .fill({ color: selected ? 0xf0c56b : 0x9ae0e9, alpha: selected ? 0.1 : 0.035 })
+    .stroke({ color: 0x15232c, alpha: 0.9, width: tile.width * 0.045 })
+    .ellipse(x, y, rx, ry)
+    .stroke({
+      color: selected ? 0xf0c56b : 0x9ae0e9,
+      width: tile.width * (selected ? 0.022 : 0.015),
+    });
+  for (const side of [-1, 1]) {
+    marker
+      .moveTo(x + side * rx * 0.9, y + ry * 0.8)
+      .lineTo(x + side * rx * 1.12, y)
+      .lineTo(x + side * rx * 0.9, y - ry * 0.8);
+    if (selected)
+      marker
+        .moveTo(x - rx * 0.15, y + side * ry * 1.25)
+        .lineTo(x + rx * 0.15, y + side * ry * 1.25);
+  }
+  marker.stroke({
+    color: selected ? 0xf0c56b : 0x9ae0e9,
+    width: tile.width * 0.025,
+    cap: "round",
+    join: "round",
+  });
+  marker.label = selected ? "combat-selection" : "combat-hover";
+  marker.visible = false;
+  return marker;
 };
 
 export type CombatActorSnapshot = {
@@ -498,8 +558,11 @@ type Fighter = {
   hp: Meter;
   sp: Meter | null;
   cp: Meter | null;
-  halo: Graphics;
-  haloRatio: number;
+  selection: Graphics;
+  hover: Graphics;
+  identity: Graphics;
+  threat: Meter;
+  highestThreat: Graphics;
   shadow: Sprite;
   alive: boolean;
 };
