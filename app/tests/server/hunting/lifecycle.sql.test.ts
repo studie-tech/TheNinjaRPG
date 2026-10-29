@@ -25,7 +25,7 @@ describeWithDatabase("Hunting lifecycle", () => {
   afterEach(() => vi.restoreAllMocks());
   const accept = async () => {
     const hunter = await callerFor(huntingRouter, "hunter");
-    expect((await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).success).toBe(true);
+    expect(await hunter.accept({ habitatId: "forest", contractId: "contract", version: null })).toMatchObject({ success: true, userPatch: {} });
     const session = (await hunter.getBoard()).session;
     if (!session) throw Error("Missing session");
     return { hunter, session };
@@ -48,7 +48,7 @@ describeWithDatabase("Hunting lifecycle", () => {
     expect(await hunter.getSession()).toMatchObject({ allowance: { used: 3, remaining: 0, cooling: true } });
     await db.update(huntingHabitat).set({ content: { ...huntingHabitatContent(), enabled: false } });
     expect(await hunter.getSession()).toMatchObject({ session: { id: session.id }, contract: { name: "Forest boar" }, allowance: { used: 3, remaining: 0, cooling: true } });
-    expect((await hunter.sessionAction({ id: session.id, version: session.version, action: "finish" })).success).toBe(true);
+    expect(await hunter.sessionAction({ id: session.id, version: session.version, action: "finish" })).toMatchObject({ success: true, userPatch: {} });
     expect(await hunter.getSession()).toBeNull();
   });
   it("limits acceptance map payloads to contract sectors and skips them for unchanged or rejected sessions", async () => {
