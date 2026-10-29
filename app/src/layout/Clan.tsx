@@ -1284,6 +1284,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
         if (data.success || data.userPatch)
           await updateUser(data.userPatch, {
             revision,
+            achievementProgress: data.achievementProgress,
             ...(data.userDelta ? { delta: data.userDelta } : {}),
           });
         showMutationToast(data);
@@ -1495,6 +1496,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
         if (data.success || data.userPatch)
           await updateUser(data.userPatch, {
             revision,
+            achievementProgress: data.achievementProgress,
             ...(data.userDelta ? { delta: data.userDelta } : {}),
           });
         showMutationToast(data);
@@ -2614,6 +2616,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       if (data.success || data.userPatch)
         await updateUser(data.userPatch, {
           revision,
+          achievementProgress: data.achievementProgress,
           ...(data.userDelta ? { delta: data.userDelta } : {}),
         });
     },
