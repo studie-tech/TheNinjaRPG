@@ -320,16 +320,21 @@ export const updateRankedLoadoutForUpdateRankedLoadout = (
  */
 export const updateUserDataForEnterRankedSeason = (
   client: Pick<DrizzleClient, "update">,
-  user: { villagePrestige: number },
   ctx: { userId: string },
 ) =>
   client
     .update(userData)
     .set({
       rankedLp: 150,
-      villagePrestige: user.villagePrestige - RANKED_ENTRY_COST,
+      villagePrestige: sql`${userData.villagePrestige} - ${RANKED_ENTRY_COST}`,
     })
-    .where(eq(userData.userId, ctx.userId));
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        lte(userData.rankedLp, 0),
+        gte(userData.villagePrestige, RANKED_ENTRY_COST),
+      ),
+    );
 
 /** Build the `rankedPvpQueue` insert for `queueForRankedPvp`. */
 export const insertRankedPvpQueueForQueueForRankedPvp = (
@@ -598,4 +603,36 @@ export const findRankedLoadoutForCleanRankedProhibitedSelections = (
 ) =>
   client.query.rankedLoadout.findFirst({
     where: eq(rankedLoadout.id, storedLoadout.id),
+  });
+
+/** Confirm reward counters whose SQL grants include live caps and pet eligibility. */
+export const findSeasonRewardUserSnapshot = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    columns: {
+      money: true,
+      seichiSilver: true,
+      earnedExperience: true,
+      petExperience: true,
+      villagePrestige: true,
+      reputationPoints: true,
+      reputationPointsTotal: true,
+      skillPoints: true,
+      medicalExperience: true,
+      huntingExperience: true,
+      craftingExperience: true,
+      gatheringExperience: true,
+      sageMasteryExperience: true,
+      ninjutsuMastery: true,
+      genjutsuMastery: true,
+      taijutsuMastery: true,
+      bukijutsuMastery: true,
+      bloodlineMastery: true,
+      sageMastery: true,
+      masteryRanks: true,
+    },
+    with: { village: { columns: { id: true, tokens: true } } },
+    where: eq(userData.userId, userId),
   });

@@ -55,6 +55,7 @@ describeWithDatabase("reputation-funded subscriptions", () => {
       ),
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(results.find((result) => result.success)).toMatchObject({ userDelta: { reputationPoints: -cost }, userPatch: { federalStatus: "GOLD" } });
     expect(await readUser(BUYER)).toMatchObject({
       federalStatus: "GOLD",
       reputationPoints: cost * (ATTEMPTS - 1),
@@ -74,6 +75,7 @@ describeWithDatabase("reputation-funded subscriptions", () => {
       giftees.map((userId) => caller.subscribeWithReps({ expectedUserId: BUYER, userId, status: "NORMAL" })),
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(results.find((result) => result.success)).toMatchObject({ userDelta: { reputationPoints: -cost }, userPatch: {} });
     expect(await readUser(BUYER)).toMatchObject({ reputationPoints: 0 });
     const subscriptions = await readSubscriptions();
     expect(subscriptions).toHaveLength(1);
@@ -129,6 +131,7 @@ describeWithDatabase("reputation-funded subscriptions", () => {
       ),
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
+    expect(results.find((result) => result.success)).toMatchObject({ userPatch: { federalStatus: "GOLD" }, userDelta: { reputationPoints: -cost, reputationPointsTotal: -cost } });
     expect(await readUser(BUYER)).toMatchObject({
       federalStatus: "GOLD",
       reputationPoints: cost * (ATTEMPTS - 1),

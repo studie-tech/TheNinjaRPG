@@ -22,13 +22,14 @@ import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
+import { withUserNotificationCount } from "@/utils/userNotificationCounts";
 
 /**
  * The content review desk: suggestions from the content audit and from staff, one at a time,
  * with keyboard shortcuts for fast review. Staff who cannot review see their own suggestions.
  */
 export const ContentReviewDesk: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [tab, setTab] = useState<Tab>("Pending");
   const [category, setCategory] = useState<ContentProposalCategory | null>(null);
   const [source, setSource] = useState<ContentProposalSource | null>(null);
@@ -48,15 +49,30 @@ export const ContentReviewDesk: React.FC = () => {
     },
   );
   const bulkApprove = api.contentReview.bulkApprove.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
       setBulkIds(new Set());
       await Promise.all([
         utils.contentReview.getQueue.invalidate(),
-        utils.contentReview.getCounts.invalidate(),
         utils.contentReview.getStats.invalidate(),
-        utils.profile.getUser.invalidate(),
       ]);
+      // Queue reads can outdate suggestions, so count after the queue refresh.
+      await utils.contentReview.getCounts.invalidate();
+      const counts = await utils.contentReview.getCounts.fetch();
+      if (counts.canReview)
+        await updateUser(
+          {},
+          {
+            revision,
+            notifications: (current) =>
+              withUserNotificationCount(
+                current,
+                "contentReview",
+                counts.statuses.PENDING ?? 0,
+              ),
+          },
+        );
     },
   });
 

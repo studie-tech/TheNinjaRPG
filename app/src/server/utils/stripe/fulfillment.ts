@@ -308,5 +308,7 @@ export const upgradeStripeFederalWithReps = async (
   return {
     success: true,
     message: "Federal support upgraded for the remainder of this billing period.",
+    userDelta: { reputationPoints: -cost, reputationPointsTotal: -cost },
+    userPatch: { federalStatus: nextTier },
   };
 };

@@ -6,6 +6,7 @@ import {
   ACTIVE_VOTING_SITES,
   BasicElementName,
   CHARACTER_DELETION_CONFIRMATION,
+  CHARACTER_DELETION_DELAY_DAYS,
   COST_CHANGE_USERNAME,
   type CombatStatName,
   CombatStatNames,
@@ -327,7 +328,13 @@ import {
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
-import { isDifferentDay, secondsFromDate, secondsPassed } from "@/utils/time";
+import {
+  DAY_S,
+  isDifferentDay,
+  secondsFromDate,
+  secondsFromNow,
+  secondsPassed,
+} from "@/utils/time";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { insertAiSchema } from "@/validators/aiInput";
 import { mutateContentSchema } from "@/validators/comments";
@@ -2144,7 +2151,7 @@ export const profileRouter = createTRPCRouter({
    */
   toggleDeletionTimer: protectedProcedure
     .input(z.object({ userId: z.string(), confirmation: z.string().optional() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema.extend({ affectedUserId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, target] = await Promise.all([
@@ -2166,8 +2173,17 @@ export const profileRouter = createTRPCRouter({
         );
       }
       // Mutate
-      await updateUserDataForToggleDeletionTimer(ctx.drizzle, target, input);
-      return { success: true, message: "Deletion timer toggled" };
+      const deletionAt = target.deletionAt
+        ? null
+        : secondsFromNow(CHARACTER_DELETION_DELAY_DAYS * DAY_S);
+      await updateUserDataForToggleDeletionTimer(ctx.drizzle, deletionAt, input);
+      return {
+        success: true,
+        message: "Deletion timer toggled",
+        affectedUserId: input.userId,
+        userPatch: input.userId === ctx.userId ? { deletionAt } : {},
+        userDelta: {},
+      };
     }),
   /** Enforce the elapsed wait and self-confirmation before the deletion safeguards run. */
   confirmDeletion: protectedProcedure
@@ -2175,7 +2191,7 @@ export const profileRouter = createTRPCRouter({
       mcp: { description: "Confirm and execute account deletion" },
     })
     .input(z.object({ userId: z.string(), confirmation: z.string().optional() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema.extend({ affectedUserId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, target] = await Promise.all([
@@ -2206,7 +2222,7 @@ export const profileRouter = createTRPCRouter({
       // Mutate
       const rejected = await deleteUser(ctx.drizzle, input.userId);
       if (rejected) return rejected;
-      return { success: true, message: "User deleted" };
+      return { success: true, message: "User deleted", affectedUserId: input.userId };
     }),
   claimVotes: protectedProcedure
     .meta({ mcp: { description: "Claim reputation points for voting" } })

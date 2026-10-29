@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   BasicElementName,
   ElementNames,
+  FederalStatuses,
   MASTERY_RANKS,
   MasteryNames,
   OCCUPATIONS,
@@ -49,6 +50,7 @@ export const userDeltaSchema = z.object({
   dailyArenaFights: z.number().optional(),
   dailySageActivations: z.number().optional(),
 
+  bank: z.number().optional(),
   money: z.number().optional(),
   petExperience: z.number().optional(),
   earnedExperience: z.number().optional(),
@@ -73,6 +75,13 @@ export type UserDelta = z.infer<typeof userDeltaSchema>;
 
 // Absolute values are kept separate from arithmetic deltas so a saved field is never added.
 export const userPatchSchema = z.object({
+  federalStatus: z.enum(FederalStatuses).optional(),
+  deletionAt: z.date().nullable().optional(),
+  isBanned: z.boolean().optional(),
+  isSilenced: z.boolean().optional(),
+  isTradeBanned: z.boolean().optional(),
+  isWarned: z.boolean().optional(),
+  rankedLp: z.number().optional(),
   cookingJobs: z
     .array(
       z.object({

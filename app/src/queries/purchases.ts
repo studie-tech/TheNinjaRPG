@@ -1170,3 +1170,18 @@ export const executeRowsForReconcileFederalStatuses = (
   client.execute(sql`UPDATE ${userData} FORCE INDEX (PRIMARY)
       SET ${userData.federalStatus} = ${federalStatus}
       WHERE ${and(inArray(userData.userId, ids), eligible)}`);
+
+/** Confirm current balances after idempotent or asynchronous payment delivery. */
+export const findPurchaseUserSnapshot = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    columns: {
+      money: true,
+      reputationPoints: true,
+      reputationPointsTotal: true,
+      federalStatus: true,
+    },
+    where: eq(userData.userId, userId),
+  });

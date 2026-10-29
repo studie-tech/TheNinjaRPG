@@ -451,15 +451,15 @@ const PayPalSubscriptionButton = (props: {
     };
   }, []);
 
-  // tRPC utility
-  const utils = api.useUtils();
-
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   // Mutation for starting subscription
   const { mutate: subscribe, isPending: isSubscribing } =
     api.paypal.resolveSubscription.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        await utils.profile.getUser.invalidate();
+        if (data.userPatch)
+          await updateUser(data.userPatch, { revision, delta: data.userDelta });
         if (data.success && props.onSuccess) props.onSuccess();
       },
       onError: (error) => {
@@ -471,10 +471,11 @@ const PayPalSubscriptionButton = (props: {
   // Mutation for upgrading subscription
   const { mutate: upgrade, isPending: isUpgrading } =
     api.paypal.upgradeSubscription.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(data.userPatch, { revision, delta: data.userDelta });
           if (props.onSuccess) props.onSuccess();
         }
       },
@@ -487,10 +488,11 @@ const PayPalSubscriptionButton = (props: {
   // Mutation for buyins with reputation points
   const { mutate: buy, isPending: isBuying } = api.paypal.subscribeWithReps.useMutation(
     {
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(data.userPatch, { revision, delta: data.userDelta });
           if (props.onSuccess) props.onSuccess();
         }
       },
@@ -953,6 +955,7 @@ const SubscriptionsOverview = () => {
  * Lookup paypal subscription
  */
 const LookupTransaction = () => {
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   // tRPC utility
   const utils = api.useUtils();
 
@@ -964,11 +967,13 @@ const LookupTransaction = () => {
 
   // Sync transaction
   const { mutate, isPending } = api.paypal.resolveTransaction.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
+      if (data.userPatch)
+        await updateUser(data.userPatch, { revision, delta: data.userDelta });
       if (data.success) {
         await Promise.all([
-          utils.profile.getUser.invalidate(),
           utils.item.getUserItems.invalidate(),
           utils.item.getUserItemsWithVariants.invalidate(),
           utils.paypal.getRecentRepsCount.invalidate(),

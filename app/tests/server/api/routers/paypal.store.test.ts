@@ -282,7 +282,7 @@ describeWithDatabase("web store payments", () => {
     try {
       for (const report of [[], [pending]]) {
         transactions = report;
-        expect(await buyer.resolveTransaction({ transactionId: capture(order.id).captureId, transactionDate: new Date() })).toEqual({
+        expect(await buyer.resolveTransaction({ transactionId: capture(order.id).captureId, transactionDate: new Date() })).toMatchObject({
           success: false,
           message: "No completed PayPal transaction was found for that ID and date. Check the details and try again.",
         });
@@ -304,7 +304,7 @@ describeWithDatabase("web store payments", () => {
     });
     try {
       const input = { transactionId: capture(order.id).captureId, transactionDate: new Date() };
-      expect(await buyer.resolveTransaction(input)).toEqual({
+      expect(await buyer.resolveTransaction(input)).toMatchObject({
         success: false,
         message: `Transaction ID ${capture(order.id).captureId}: Recipient unavailable. Contact support with your payment receipt.`,
       });
@@ -314,8 +314,8 @@ describeWithDatabase("web store payments", () => {
       expect(await db.query.userData.findFirst({ where: eq(userData.userId, "buyer") })).toMatchObject({ reputationPoints: 0, money: 0 });
 
       await insertUsers([{ userId: "recipient", username: "Recipient", reputationPoints: 0, reputationPointsTotal: 0, money: 0 }]);
-      expect(await buyer.resolveTransaction(input)).toEqual({ success: true, message: `${offer.name} delivered` });
-      expect(await buyer.resolveTransaction(input)).toEqual({ success: true, message: "Purchase already delivered" });
+      expect(await buyer.resolveTransaction(input)).toMatchObject({ success: true, message: `${offer.name} delivered` });
+      expect(await buyer.resolveTransaction(input)).toMatchObject({ success: true, message: "Purchase already delivered" });
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
       expect(await db.query.userItem.findMany()).toHaveLength(3);
       expect(await db.query.userData.findFirst({ where: eq(userData.userId, "recipient") })).toMatchObject({ reputationPoints: 20, reputationPointsTotal: 20, money: 500 });
@@ -392,10 +392,14 @@ describeWithDatabase("web store payments", () => {
       return Response.json({ transaction_details: batch });
     });
     try {
-      expect(await caller.resolveTransaction({ transactionId: capture(failed.order.id).captureId, transactionDate: new Date() })).toEqual({
+      const result = await caller.resolveTransaction({ transactionId: capture(failed.order.id).captureId, transactionDate: new Date() });
+      expect(result).toMatchObject({
         success: false,
         message: `${failure}, ${offer.name} delivered, Transaction ID capture-legacy-payment synced!`,
       });
+      const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "buyer") });
+      expect(result.userPatch).toMatchObject({ reputationPoints: saved!.reputationPoints, reputationPointsTotal: saved!.reputationPointsTotal });
+      expect(result.userDelta).toEqual({});
     } finally { fetchMock.mockRestore(); }
     const buyer = await db.query.userData.findFirst({ where: eq(userData.userId, "buyer") });
     expect(buyer!.reputationPoints).toBeGreaterThan(0);
@@ -605,7 +609,7 @@ describeWithDatabase("web store payments", () => {
     expect(await authorizeStoreCapture(db,old.id,"buyer")).toContain("No payment was captured");
     expect((await db.query.webStoreOrder.findFirst({where:eq(webStoreOrder.id,old.id)}))?.grantedAt).toBeNull();
   });
-  it("creates server-priced provider orders and captures/reconciles exactly once", async () => {
+  it.each(["buyer", "recipient"])("creates server-priced provider orders and reconciles exactly once for %s", async recipientId => {
     const owner = await callerFor(paypalRouter,"buyer"); const db = await getTestDatabase();
     let provider:any; let captures=0; let requestedRepresentation=false;
     const fetchMock = spyOn(globalThis,"fetch").mockImplementation(async (url,options) => {
@@ -616,14 +620,14 @@ describeWithDatabase("web store payments", () => {
       return Response.json(provider);
     });
     try {
-      const result=await owner.createStoreOrder({recipientId:"recipient",selection:{type:"custom",reputationPoints:73}});
+      const result=await owner.createStoreOrder({recipientId,selection:{type:"custom",reputationPoints:73}});
       expect(result.success).toBe(true); expect(provider.purchase_units[0].amount).toEqual({currency_code:"USD",value:"26.80"});
       const firstCapture=await owner.captureStoreOrder({orderId:provider.id});
-      expect(firstCapture.success).toBe(true);expect(firstCapture.purchase).toMatchObject({value:26.8,transactionId:"CAPTURE1",currency:"USD"});
+      expect(firstCapture.success).toBe(true);expect(firstCapture.userPatch).toMatchObject({ reputationPoints: recipientId === "buyer" ? 73 : 0 });expect(firstCapture.purchase).toMatchObject({value:26.8,transactionId:"CAPTURE1",currency:"USD"});
       const repeatCapture=await owner.captureStoreOrder({orderId:provider.id});
-      expect(repeatCapture.success).toBe(true);expect(repeatCapture.purchase).toBeUndefined();expect(requestedRepresentation).toBe(true);
+      expect(repeatCapture.success).toBe(true);expect(repeatCapture.userPatch).toEqual(firstCapture.userPatch);expect(repeatCapture.userDelta).toEqual({});expect(repeatCapture.purchase).toBeUndefined();expect(requestedRepresentation).toBe(true);
       expect(captures).toBe(1);
-      expect(await db.query.userData.findFirst({where:eq(userData.userId,"recipient")})).toMatchObject({reputationPoints:73});
+      expect(await db.query.userData.findFirst({where:eq(userData.userId,recipientId)})).toMatchObject({reputationPoints:73});
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
     } finally {fetchMock.mockRestore();}
   });

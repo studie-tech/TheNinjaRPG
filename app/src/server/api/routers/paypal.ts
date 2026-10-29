@@ -42,7 +42,6 @@ import {
   updateWebStoreOrderForCreateStoreOrder,
 } from "@/queries/paypal";
 import { fetchUser, findUserById } from "@/queries/profile";
-
 import {
   type BaseServerResponse,
   baseServerResponse,
@@ -56,6 +55,7 @@ import {
   lockPurchaseBuyer,
   reputationAllowanceUsed,
 } from "@/server/utils/purchases/allowance";
+import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 import {
   canonicalStoreUserId,
   isDeletedStoreUserId,
@@ -87,6 +87,7 @@ import {
   storeBundleSchemaForItems,
   storeCheckoutSchema,
 } from "@/validators/points";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import type { DrizzleClient } from "../../db";
 
 type PaypalAmount = {
@@ -256,7 +257,7 @@ export const paypalRouter = createTRPCRouter({
   captureStoreOrder: protectedProcedure
     .input(z.object({ orderId: z.string().min(15).max(20) }))
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         purchase: z
           .object({
             transactionId: z.string(),
@@ -341,7 +342,7 @@ export const paypalRouter = createTRPCRouter({
         return errorResponse(
           "Payment is awaiting confirmation. Use Lookup Transaction after it clears.",
         );
-      return deliverStoreOrder(ctx.drizzle, {
+      const result = await deliverStoreOrder(ctx.drizzle, {
         snapshotId,
         captureId: capture.id,
         orderId: input.orderId,
@@ -350,6 +351,10 @@ export const paypalRouter = createTRPCRouter({
         invoiceId: capture.invoice_id ?? order?.purchase_units?.[0]?.invoice_id,
         raw: order,
       });
+      return {
+        ...result,
+        ...(result.success ? await getPurchaseUserUpdate(ctx.drizzle, ctx.userId) : {}),
+      };
     }),
 
   resolveOrder: protectedProcedure
@@ -409,7 +414,7 @@ export const paypalRouter = createTRPCRouter({
     }),
   resolveTransaction: protectedProcedure
     .input(searchPaypalTransactionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch potential transactions from paypal
       const token = await getPaypalAccessToken();
@@ -420,6 +425,7 @@ export const paypalRouter = createTRPCRouter({
       );
       const result = await syncTransactions(ctx.drizzle, transactions, token);
       return {
+        ...(result.length ? await getPurchaseUserUpdate(ctx.drizzle, ctx.userId) : {}),
         success: result.length > 0 && result.every((entry) => entry.success),
         message: result.length
           ? result.map((entry) => entry.message).join(", ")
@@ -433,17 +439,21 @@ export const paypalRouter = createTRPCRouter({
         orderId: z.string().min(1).max(191).optional(),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const token = await getPaypalAccessToken();
       const subscription = await getPaypalSubscription(input.subscriptionId, token);
-      return reconcilePaypalSubscription({
+      const result = await reconcilePaypalSubscription({
         client: ctx.drizzle,
         subscription,
         subscriptionId: input.subscriptionId,
         orderId: input.orderId,
         callerId: ctx.userId,
       });
+      return {
+        ...result,
+        ...(result.success ? await getPurchaseUserUpdate(ctx.drizzle, ctx.userId) : {}),
+      };
     }),
   // Includes reservations from both web payment providers.
   getRecentRepsCount: protectedProcedure
@@ -494,7 +504,7 @@ export const paypalRouter = createTRPCRouter({
         status: z.enum(FederalStatuses),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       if (input.expectedUserId !== ctx.userId)
         return errorResponse("Your account changed. Reload before purchasing.");
@@ -522,7 +532,12 @@ export const paypalRouter = createTRPCRouter({
         throw error;
       }
 
-      return { success: true, message: "OK" };
+      return {
+        success: true,
+        message: "OK",
+        userDelta: { reputationPoints: -cost },
+        userPatch: input.userId === ctx.userId ? { federalStatus: input.status } : {},
+      };
     }),
   // Upgrade a subscription for a user. Can only be done by the user who created the subscription
   upgradeSubscription: protectedProcedure
@@ -532,7 +547,7 @@ export const paypalRouter = createTRPCRouter({
         plan: z.enum(FederalStatuses),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Self only, which is all the UI ever offers. Without it the caller can name any
       // subscriber: the upgrade price is the delta between their tier and the new one, so
@@ -585,7 +600,12 @@ export const paypalRouter = createTRPCRouter({
           "Your balance or subscription changed. Reload and try again.",
         );
 
-      return { success: true, message: "OK" };
+      return {
+        success: true,
+        message: "OK",
+        userDelta: { reputationPoints: -cost, reputationPointsTotal: -cost },
+        userPatch: { federalStatus: input.plan },
+      };
     }),
   // Cancel paypal subscription
   cancelPaypalSubscription: protectedProcedure

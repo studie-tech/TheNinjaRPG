@@ -49,7 +49,7 @@ const PURCHASE_ATTEMPT_STORAGE_KEY = "tnr:unsettled-store-purchases";
  */
 export default function NativeStore() {
   const isNativeShell = useNativeShell();
-  const { data: userData, userId } = useUserData();
+  const { data: userData, userId, prepareUserUpdate, updateUser } = useUserData();
   // The profile query keeps its last result once it is disabled, so cached userData
   // outlives the session. Treating it as the current player would leave the store up and
   // buyable after a sign-out has already logged RevenueCat out, and the purchase would
@@ -273,7 +273,35 @@ export default function NativeStore() {
   const packages = available?.packages ?? null;
   const activeSubscriptions = available?.activeSubscriptions ?? null;
 
-  const invalidateProfile = utils.profile.getUser.invalidate;
+  const refreshProfile = useCallback(async () => {
+    const accountId = player?.userId;
+    if (!accountId) return;
+    const generation = bindingGeneration.current;
+    const revision = prepareUserUpdate();
+    const snapshot = await fetchFreshStoreObservation(
+      () => utils.purchases.userSnapshot.invalidate(),
+      () => utils.purchases.userSnapshot.fetch(undefined, { staleTime: 0 }),
+    );
+    if (generation !== bindingGeneration.current || snapshot.userId !== accountId)
+      return;
+    if (!snapshot.userPatch) {
+      await utils.profile.getUser.cancel();
+      if (generation === bindingGeneration.current) {
+        utils.profile.getUser.setData(undefined, (current) =>
+          current?.userData?.userId === accountId
+            ? {
+                ...current,
+                userData: undefined,
+                achievementProgress: [],
+                notifications: [],
+              }
+            : current,
+        );
+      }
+      return;
+    }
+    await updateUser(snapshot.userPatch, { revision });
+  }, [player?.userId, prepareUserUpdate, updateUser, utils]);
   useEffect(() => {
     const accountId = player?.userId;
     if (!isNativeShell || !accountId || !available?.bound || busyProduct || isRestoring)
@@ -302,7 +330,7 @@ export default function NativeStore() {
               : current,
           );
           setBindingError(null);
-          await invalidateProfile();
+          await refreshProfile();
         })
         .catch(() => {
           if (!disposed)
@@ -326,7 +354,7 @@ export default function NativeStore() {
     player?.userId,
     busyProduct,
     isRestoring,
-    invalidateProfile,
+    refreshProfile,
   ]);
 
   // `recent` is the before-checkout watermark used to tell this attempt's receipt from a
@@ -396,12 +424,12 @@ export default function NativeStore() {
           );
         }
         if (data && !data.some(isPendingStorePurchase)) {
-          void utils.profile.getUser.invalidate();
+          void refreshProfile();
         }
       });
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [hasPendingPurchase, player?.userId, refetchRecent, utils]);
+  }, [hasPendingPurchase, player?.userId, refetchRecent, refreshProfile]);
 
   /**
    * Wait for the webhook, then refetch the balance.
@@ -435,10 +463,7 @@ export default function NativeStore() {
       }
       // Refetch regardless: if the webhook is slow or has failed, the player should still
       // see whatever the truth currently is rather than a frozen screen.
-      const [{ data }] = await Promise.all([
-        refetchRecent(),
-        utils.profile.getUser.invalidate(),
-      ]);
+      const [{ data }] = await Promise.all([refetchRecent(), refreshProfile()]);
       assertCurrent?.();
       if (data && observation === "pending") {
         observation = storePurchaseReconciliation(data, attempt);
@@ -448,7 +473,7 @@ export default function NativeStore() {
         status: finalStorePurchaseResult(observation),
       };
     },
-    [fetchRecentFresh, refetchRecent, utils],
+    [fetchRecentFresh, refetchRecent, refreshProfile],
   );
 
   const verifyPurchaseAttempt = useCallback(
@@ -472,10 +497,10 @@ export default function NativeStore() {
       updateUnsettledAttempts((current) =>
         releaseStorePurchaseLock(current, accountId, attempt),
       );
-      await Promise.all([refetchRecent(), utils.profile.getUser.invalidate()]);
+      await Promise.all([refetchRecent(), refreshProfile()]);
       return observation;
     },
-    [fetchRecentFresh, refetchRecent, updateUnsettledAttempts, utils],
+    [fetchRecentFresh, refetchRecent, updateUnsettledAttempts, refreshProfile],
   );
 
   // A receipt may not exist yet when the initial wait expires. Keep checking the exact
@@ -593,15 +618,12 @@ export default function NativeStore() {
         observation = storeRestoreReconciliation(matching, attempt);
         if (observation === "reconciled") break;
       }
-      const [{ data }] = await Promise.all([
-        refetchRecent(),
-        utils.profile.getUser.invalidate(),
-      ]);
+      const [{ data }] = await Promise.all([refetchRecent(), refreshProfile()]);
       assertCurrent?.();
       newestId = data?.[0]?.id ?? newestId;
       return { newestId, status: finalStoreRestoreResult(observation) };
     },
-    [fetchRecentFresh, refetchRecent, utils],
+    [fetchRecentFresh, refetchRecent, refreshProfile],
   );
 
   const buy = async (
@@ -870,10 +892,7 @@ export default function NativeStore() {
         });
       } else {
         // There is no webhook to wait for. Refresh once and finish immediately.
-        const [{ data }] = await Promise.all([
-          refetchRecent(),
-          utils.profile.getUser.invalidate(),
-        ]);
+        const [{ data }] = await Promise.all([refetchRecent(), refreshProfile()]);
         assertCurrentRestore();
         if (data) {
           setRecentBaseline((current) =>
