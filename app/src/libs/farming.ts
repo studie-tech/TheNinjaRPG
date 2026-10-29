@@ -218,7 +218,7 @@ export const summarizeFarmPlots = (plots: FarmPlotState[], now = new Date()) => 
   return summary;
 };
 
-/** Earliest upcoming harvest and watering times across growing plots; null when none. */
+/** Earliest harvest and pre-harvest watering times across growing plots; null when none. */
 export const getNextFarmEvents = (plots: FarmPlotState[], now = new Date()) => {
   let nextHarvestAt: Date | null = null;
   let nextWateringAt: Date | null = null;
@@ -228,7 +228,12 @@ export const getNextFarmEvents = (plots: FarmPlotState[], now = new Date()) => {
       nextHarvestAt = plot.finishAt;
     }
     const wateringAt = getNextWateringAt(plot.lastWateredAt, now);
-    if (wateringAt && (!nextWateringAt || wateringAt < nextWateringAt)) {
+    if (
+      wateringAt &&
+      plot.finishAt &&
+      wateringAt < plot.finishAt &&
+      (!nextWateringAt || wateringAt < nextWateringAt)
+    ) {
       nextWateringAt = wateringAt;
     }
   }

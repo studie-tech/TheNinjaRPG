@@ -3,7 +3,6 @@ import { FARM_PLOT_COLUMNS } from "@/drizzle/constants";
 /** Farm-local units with Y downward; the scene scales this centered layout to renderer pixels. */
 export const FARM_PLOT_SIZE = 1.8;
 export const FARM_PLOT_GAP = 0.25;
-export const FARM_VIEW_HEIGHT = 14;
 
 /** Center of a zero-based slot, with the complete row layout centered around the origin. */
 export const farmPlotPosition = (slot: number, total: number) => {
@@ -25,20 +24,19 @@ export const FARM_MAX_PIXELS_PER_UNIT = 48;
 const FARM_GRID_FILL = 0.8;
 
 /**
- * Pixels per farm unit. The view zooms toward the plot grid so plots grow with the
- * canvas, but never shows less of the field than the full-height view.
+ * Pixels per farm unit, fitting the complete plot grid within the canvas while
+ * capping plot size on large canvases.
  */
 export const farmViewScale = (width: number, height: number, total: number) => {
   const spacing = FARM_PLOT_SIZE + FARM_PLOT_GAP;
   const rows = Math.max(1, Math.ceil(total / FARM_PLOT_COLUMNS));
   const gridWidth = FARM_PLOT_COLUMNS * spacing - FARM_PLOT_GAP;
   const gridHeight = rows * spacing - FARM_PLOT_GAP;
-  const fullField = height / FARM_VIEW_HEIGHT;
   const fit = Math.min(
     (width * FARM_GRID_FILL) / gridWidth,
     (height * FARM_GRID_FILL) / gridHeight,
   );
-  return Math.max(fullField, Math.min(fit, FARM_MAX_PIXELS_PER_UNIT));
+  return Math.min(fit, FARM_MAX_PIXELS_PER_UNIT);
 };
 
 /** Uses the same square bounds as the soil artwork without allocating hit meshes. */

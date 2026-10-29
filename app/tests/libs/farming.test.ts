@@ -311,6 +311,7 @@ describe("farm seed dropping", () => {
 
 describe("next farm events", () => {
   const now = new Date(WORLD_CYCLE_SECONDS * 1000 * 100 + 60_000);
+  const nextCycleAt = new Date(WORLD_CYCLE_SECONDS * 1000 * 101);
   const plot = (patch: Partial<FarmPlotState>): FarmPlotState =>
     ({
       id: "plot",
@@ -336,8 +337,18 @@ describe("next farm events", () => {
       now,
     );
     expect(events.nextHarvestAt).toEqual(soon);
-    expect(events.nextWateringAt).toEqual(new Date(WORLD_CYCLE_SECONDS * 1000 * 101));
+    expect(events.nextWateringAt).toEqual(nextCycleAt);
   });
+
+  it.each([nextCycleAt.getTime() - 1, nextCycleAt.getTime()])(
+    "omits watering when the crop finishes at %i before it can be watered",
+    (finishTime) => {
+      const finishAt = new Date(finishTime);
+      expect(
+        getNextFarmEvents([plot({ finishAt, lastWateredAt: now })], now),
+      ).toEqual({ nextHarvestAt: finishAt, nextWateringAt: null });
+    },
+  );
 
   it("has no events without growing plots", () => {
     expect(getNextFarmEvents([plot({ seedItemId: null })], now)).toEqual({
