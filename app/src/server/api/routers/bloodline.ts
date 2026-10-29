@@ -34,11 +34,13 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { validateUserUpdateReason } from "@/libs/moderator";
+import { getUserQuests, mockAchievementHistoryEntries } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
 import {
   deleteBloodlineForDelete,
   deleteBloodlineReskinForDeleteReskin,
   fetchBloodline,
+  fetchBloodlineAcquisitionUser,
   fetchBloodlineCacheUser,
   fetchBloodlineReskin,
   fetchBloodlines,
@@ -87,8 +89,17 @@ import {
   updateUserJutsuForUpdateBloodline,
 } from "@/queries/bloodline";
 import { refundPityCredit } from "@/queries/concurrency";
-import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
-import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
+import {
+  fetchAchievementCatalogue,
+  fetchAllGameSettings,
+  fetchUser,
+} from "@/queries/profile";
+import {
+  canBootstrapQuestType,
+  fetchQuestBootstrap,
+  fetchUpdatedUser,
+  getUserProgressionUpdate,
+} from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -712,13 +723,14 @@ export const bloodlineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, prevRoll, allBloodlines, registrationRoll, settings] =
+      const [user, prevRoll, allBloodlines, registrationRoll, settings, progression] =
         await Promise.all([
-          fetchBloodlineCacheUser(ctx.drizzle, ctx.userId),
+          fetchBloodlineAcquisitionUser(ctx.drizzle, ctx.userId),
           fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
           fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
           findBloodlineRollsForRoll(ctx.drizzle, ctx),
           fetchAllGameSettings(ctx.drizzle),
+          fetchBloodlineAcquisitionProgression(ctx.drizzle, ctx.userId),
         ]);
       // Guard
       if (!user) return errorResponse("User not found");
@@ -810,6 +822,7 @@ export const bloodlineRouter = createTRPCRouter({
                 user,
                 randomBloodline,
                 settings,
+                progression,
               ),
               message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
             };
@@ -839,12 +852,14 @@ export const bloodlineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, bloodlines, previousRolls, settings] = await Promise.all([
-        fetchBloodlineCacheUser(ctx.drizzle, ctx.userId),
-        fetchBloodlines(ctx.drizzle),
-        fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
-        fetchAllGameSettings(ctx.drizzle),
-      ]);
+      const [user, bloodlines, previousRolls, settings, progression] =
+        await Promise.all([
+          fetchBloodlineAcquisitionUser(ctx.drizzle, ctx.userId),
+          fetchBloodlines(ctx.drizzle),
+          fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
+          fetchAllGameSettings(ctx.drizzle),
+          fetchBloodlineAcquisitionProgression(ctx.drizzle, ctx.userId),
+        ]);
       if (!user) return errorResponse("User not found");
       if (user.bloodlineId) {
         return errorResponse(ALREADY_HAS_BLOODLINE_ERROR);
@@ -920,6 +935,7 @@ export const bloodlineRouter = createTRPCRouter({
           user,
           randomBloodline,
           settings,
+          progression,
         ),
         message: `You have been granted a bloodline: ${randomBloodline.name}`,
       };
@@ -977,10 +993,11 @@ export const bloodlineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, line, settings] = await Promise.all([
-        fetchBloodlineCacheUser(ctx.drizzle, ctx.userId),
+      const [user, line, settings, progression] = await Promise.all([
+        fetchBloodlineAcquisitionUser(ctx.drizzle, ctx.userId),
         fetchBloodline(ctx.drizzle, input.bloodlineId),
         fetchAllGameSettings(ctx.drizzle),
+        fetchBloodlineAcquisitionProgression(ctx.drizzle, ctx.userId),
       ]);
       if (!user) return errorResponse("User not found");
       // Guard
@@ -1006,7 +1023,13 @@ export const bloodlineRouter = createTRPCRouter({
       return {
         success: true,
         message: "Bloodline purchased",
-        userPatch: await bloodlineCachePatch(ctx.drizzle, user, line, settings),
+        userPatch: await bloodlineCachePatch(
+          ctx.drizzle,
+          user,
+          line,
+          settings,
+          progression,
+        ),
       };
     }),
 });
@@ -1135,13 +1158,61 @@ export const bloodlineDatabaseFilter = (input?: BloodlineFilteringSchema) => {
   ];
 };
 
-/** Confirm SQL refunds/debits and project passive effects without another profile hydration. */
+/** Independent quest eligibility reads share the acquisition's opening query wave. */
+const fetchBloodlineAcquisitionProgression = async (
+  client: DrizzleClient,
+  userId: string,
+) => {
+  const [achievements, questBootstrap] = await Promise.all([
+    fetchAchievementCatalogue(client),
+    fetchQuestBootstrap(client, userId),
+  ]);
+  return { achievements, questBootstrap };
+};
+
+/** Confirm SQL refunds/debits and reconcile lineage-dependent quest progression when needed. */
 const bloodlineCachePatch = async (
   client: DrizzleClient,
-  user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineCacheUser>>>,
+  user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineCacheUser>>> &
+    Partial<
+      Pick<
+        NonNullable<Awaited<ReturnType<typeof fetchBloodlineAcquisitionUser>>>,
+        "userQuests" | "completedQuests"
+      >
+    >,
   line: Bloodline | null,
   settings: Parameters<typeof getBloodlinePassivePatch>[2],
+  progression?: Awaited<ReturnType<typeof fetchBloodlineAcquisitionProgression>>,
 ) => {
+  if (line && progression) {
+    const questUser = {
+      ...user,
+      bloodlineId: line.id,
+      userQuests: [...(user.userQuests ?? [])],
+      completedQuests: user.completedQuests ?? [],
+    };
+    questUser.userQuests.push(
+      ...mockAchievementHistoryEntries(progression.achievements, questUser),
+    );
+    const quests = getUserQuests(questUser);
+    const needsCollectionProgression = quests.some((quest) =>
+      quest.content.objectives.some(
+        (objective) =>
+          objective.task === "bloodline_collection" &&
+          objective.bloodlineRanks.includes(line.rank) &&
+          !user.questData
+            ?.find((tracker) => tracker.id === quest.id)
+            ?.goals.find((goal) => goal.id === objective.id)?.done,
+      ),
+    );
+    const needsQuestBootstrap = (["tier", "exam"] as const).some(
+      (type) =>
+        !quests.some((quest) => quest.questType === type) &&
+        canBootstrapQuestType(progression.questBootstrap, type, user.level),
+    );
+    // The canonical read owns collection completion receipts and automatic quest admission.
+    if (needsCollectionProgression || needsQuestBootstrap) return undefined;
+  }
   const saved = await findBloodlineCacheState(client, user.userId);
   if (!saved || saved.bloodlineId !== (line?.id ?? null)) return undefined;
   return {

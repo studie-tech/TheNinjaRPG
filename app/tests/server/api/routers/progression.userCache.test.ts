@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { BLOODLINE_COST, ELEMENTAL_MASTERY_CAP, REMOVAL_COST } from "@/drizzle/constants";
-import { bloodline, bloodlineRolls, gameSetting, skillTree, userData, userSkill, userVote } from "@/drizzle/schema";
+import { bloodline, bloodlineRolls, gameSetting, quest, questHistory, skillTree, userData, userSkill, userVote } from "@/drizzle/schema";
 import { calcEnergy } from "@/libs/profile";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { miscRouter } from "@/server/api/routers/misc";
@@ -22,7 +22,7 @@ const effects = [
 
 describeWithDatabase("confirmed progression cache responses", () => {
   beforeEach(async () => {
-    await resetTables(bloodlineRolls, bloodline, userSkill, skillTree, userVote, gameSetting, userData);
+    await resetTables(bloodlineRolls, bloodline, questHistory, quest, userSkill, skillTree, userVote, gameSetting, userData);
     await insertUsers([{ userId, username: "ProgressCache", role: "OWNER", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,
       regeneration: 20, ninjutsuMastery: 100, reputationPoints: 1000, seichiSilver: 200,
