@@ -143,7 +143,9 @@ import {
   fetchRewardChoiceOwnership,
   fetchUserQuestByQuestId,
   fetchViewerRole,
+  findIsolatedAbandonState,
   findOverworldAiPlacementQuestForAssignQuestToUser,
+  findPetTaskRewardCacheState,
   findQuestHistoryForCheckRewards,
   findQuestHistoryForClaimRewardChoice,
   findQuestHistoryForCollectPetTask,
@@ -684,12 +686,13 @@ export const questsRouter = createTRPCRouter({
   abandon: protectedProcedure
     .meta({ mcp: { description: "Abandon an active quest" } })
     .input(idSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const { user } = await fetchUpdatedUser({
+      const snapshot = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
+      const { user } = snapshot;
       if (!user) return errorResponse("User does not exist");
       const current = user?.userQuests?.find((q) => q.questId === input.id && !q.endAt);
       if (user.petTask?.questId === input.id)
@@ -699,7 +702,13 @@ export const questsRouter = createTRPCRouter({
       if (user.questParty?.questId === input.id)
         return errorResponse("Leave your quest team before abandoning this quest");
       if (!current) {
-        return { success: true, message: `Quest already abandoned` };
+        return {
+          success: true,
+          message: `Quest already abandoned`,
+          ...(snapshot.requiresProgressionRefresh === false
+            ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
+            : {}),
+        };
       }
       if (
         user.role === "USER" &&
@@ -732,18 +741,16 @@ export const questsRouter = createTRPCRouter({
           "Finish or flee your current battle before abandoning this run.",
         );
       // Derived
-      const questData = filterQuestTrackersForDbPersist(
-        user.questData?.filter((q) => q.id !== input.id) ?? [],
-        user,
-      );
+      const trackers = user.questData?.filter((q) => q.id !== input.id) ?? [];
+      const questData = filterQuestTrackersForDbPersist(trackers, user);
       const managedRun =
         current.questType === "battlepyramid" ||
         current.questType === "hunting" ||
         current.questType === "gathering" ||
         current.isolated ||
         !!current.quest.content.entryItems?.length;
+      const now = new Date();
       if (managedRun) {
-        const now = new Date();
         // Drizzle has no multi-table UPDATE builder. One joined write releases the run
         // and its account/NPC state together; a combat or snapshot race changes neither.
         const result = await retryOnDeadlock(() =>
@@ -764,11 +771,35 @@ export const questsRouter = createTRPCRouter({
           );
       } else {
         await Promise.all([
-          updateQuestHistoryForAbandon(ctx.drizzle, current),
-          updateUserDataForAbandon(ctx.drizzle, questData, input, ctx),
+          updateQuestHistoryForAbandon(ctx.drizzle, current, now),
+          updateUserDataForAbandon(ctx.drizzle, questData, input, ctx, now),
         ]);
       }
-      return { success: true, message: `Quest abandoned` };
+      const released = current.isolated
+        ? await findIsolatedAbandonState(ctx.drizzle, ctx.userId)
+        : undefined;
+      const canProject =
+        snapshot.requiresProgressionRefresh === false &&
+        !current.quest.teamEnabled &&
+        !["tier", "daily", "achievement"].includes(current.questType) &&
+        (!current.isolated || released !== undefined);
+      Object.assign(user, {
+        questData: trackers,
+        questFinishAt: now,
+        ...(managedRun
+          ? { updatedAt: getNextUserSnapshotAt(user.updatedAt, now) }
+          : {}),
+        ...(user.activeNpcQuestId === input.id ? { activeNpcQuestId: null } : {}),
+        ...released,
+        userQuests: user.userQuests.filter((entry) => entry.id !== current.id),
+      });
+      return {
+        success: true,
+        message: `Quest abandoned`,
+        ...(canProject
+          ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
+          : {}),
+      };
     }),
   getQuestHistory: protectedProcedure
     .meta({ mcp: { description: "Get user's quest history" } })
@@ -1158,14 +1189,15 @@ export const questsRouter = createTRPCRouter({
   /** Accept the normal profession contract, then reserve one exact attempt and companion. */
   startPetTask: protectedProcedure
     .input(startPetTaskSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user }, contract, previous, pet] = await Promise.all([
+      const [snapshot, contract, previous, pet] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId, forceRegen: true }),
         fetchQuest(ctx.drizzle, input.questId),
         fetchUserQuestByQuestId(ctx.drizzle, ctx.userId, input.questId),
         findOwnedUserPet(ctx.drizzle, input.petId, ctx.userId),
       ]);
+      const { user } = snapshot;
       if (!user) return errorResponse("User not found");
       const blocked = petTaskDispatchBlockMessage(user, pet);
       if (blocked || !pet) return errorResponse(blocked ?? "Companion not found");
@@ -1249,11 +1281,34 @@ export const questsRouter = createTRPCRouter({
           },
         }),
       );
-      return claim.success
-        ? { success: true, message: `${pet.name} left to complete ${contract.name}.` }
-        : errorResponse(
-            "The contract is accepted, but your character changed before dispatch. Refresh and send your companion again.",
-          );
+      if (!claim.success)
+        return errorResponse(
+          "The contract is accepted, but your character changed before dispatch. Refresh and send your companion again.",
+        );
+      user.updatedAt = claim.claimedAt;
+      user.petTask = task;
+      user.questData =
+        user.questData?.filter((tracker) => tracker.id !== contract.id) ?? [];
+      user.userQuests = [
+        ...user.userQuests.filter((entry) => entry.questId !== contract.id),
+        { ...history, quest: contract },
+      ];
+      // Entry costs normally consume carried materials. Equipped entry rows alter
+      // passive sources and require authoritative equipment reconciliation.
+      const consumedWornItem = contract.content.entryItems?.some((cost) =>
+        user.items.some((owned) => cost.ids.includes(owned.itemId)),
+      );
+      const projection =
+        snapshot.requiresProgressionRefresh === false && !consumedWornItem
+          ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
+          : undefined;
+      return {
+        success: true,
+        message: `${pet.name} left to complete ${contract.name}.`,
+        ...(projection
+          ? { ...projection, userPatch: { ...projection.userPatch, petTask: task } }
+          : {}),
+      };
     }),
 
   /** Claim only the final configured reward through the normal quest completion guards. */
@@ -1261,11 +1316,12 @@ export const questsRouter = createTRPCRouter({
     .input(petTaskActionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [{ user, settings }, history, pet] = await Promise.all([
+      const [snapshot, history, pet] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         findQuestHistoryForCollectPetTask(ctx.drizzle, input, ctx),
         findOwnedUserPet(ctx.drizzle, input.petId, ctx.userId),
       ]);
+      const { user, settings } = snapshot;
       if (!user) return errorResponse("User not found");
       const task = user.petTask;
       if (
@@ -1312,7 +1368,54 @@ export const questsRouter = createTRPCRouter({
         return errorResponse(
           "Task state changed. Refresh and collect its results again.",
         );
+      // Profession counters and pet XP are SQL grants; confirm them instead of guessing
+      // rounded amounts or the eligible companion bank from the pre-claim snapshot.
+      const scalarRewards = getRewardUserDelta(
+        {
+          ...claim.rewards,
+          reward_hunting_experience: 0,
+          reward_gathering_experience: 0,
+          reward_medical_experience: 0,
+          reward_crafting_experience: 0,
+          reward_sage_mastery_experience: 0,
+          reward_pet_experience: 0,
+          reward_hunter_items: false,
+          reward_gathering_items: false,
+        },
+        0,
+        true,
+      );
+      const saved =
+        snapshot.requiresProgressionRefresh === false &&
+        claim.userCacheEligible &&
+        scalarRewards
+          ? await findPetTaskRewardCacheState(ctx.drizzle, ctx.userId)
+          : undefined;
+      if (saved) Object.assign(user, saved);
+      const refreshed = getNewTrackers(user, [{ task: "any" }]);
+      user.questData = refreshed.trackers;
+      const projectedIds = new Set(user.userQuests.map((entry) => entry.questId));
+      const projection =
+        saved &&
+        saved.petTask === null &&
+        refreshed.consequences.length === 0 &&
+        !snapshot.progressionQuestCandidates.some(
+          (entry) =>
+            entry.quest.questType === "achievement" &&
+            !projectedIds.has(entry.questId) &&
+            isAvailableUserQuests({ ...entry.quest, ...entry }, user, true).check,
+        ) &&
+        getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
+          ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
+          : undefined;
+      const { questData: _privateTrackers, ...savedFields } = saved ?? {};
       return {
+        ...(projection
+          ? {
+              ...projection,
+              userPatch: { ...savedFields, ...projection.userPatch, petTask: null },
+            }
+          : {}),
         success: true,
         message: `${pet.name} returned from ${history.quest.name}.${claim.rewardChoicePending ? " Choose your rewards in the Logbook." : ""}`,
         rewards: claim.rewards,
@@ -1324,7 +1427,11 @@ export const questsRouter = createTRPCRouter({
   /** Return safely without rewards, including deleted content and a missing/restarted attempt. */
   cancelPetTask: protectedProcedure
     .input(petTaskActionSchema)
-    .output(baseServerResponse)
+    .output(
+      userDeltaResponseSchema.extend({
+        closedAttempt: z.object({ id: z.string(), startedAt: z.number() }).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const owner = await findUserById(ctx.drizzle, ctx.userId);
       const task = owner?.petTask;
@@ -1343,7 +1450,15 @@ export const questsRouter = createTRPCRouter({
         executeCancelledForCancelPetTask(ctx.drizzle, task, owner, now, ctx),
       );
       return cancelled.rowsAffected > 0
-        ? { success: true, message: "Your companion returned without task rewards." }
+        ? {
+            success: true,
+            message: "Your companion returned without task rewards.",
+            userPatch: {
+              petTask: null,
+              updatedAt: getNextUserSnapshotAt(owner.updatedAt, now),
+            },
+            closedAttempt: { id: task.questHistoryId, startedAt: task.startedAt },
+          }
         : errorResponse(
             "Task state changed. Refresh and try returning your companion again.",
           );
@@ -1828,14 +1943,15 @@ export const questsRouter = createTRPCRouter({
   retryBattle: protectedProcedure
     .meta({ mcp: { description: "Retry a quest battle after failure" } })
     .input(z.object({ questId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const { user } = await fetchUpdatedUser({
+      const snapshot = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
         hideInformation: false,
       });
+      const { user } = snapshot;
       // Guard
       if (!user) return errorResponse("User does not exist");
       const tracker = user.questData?.find((t) => t.id === input.questId);
@@ -1862,18 +1978,49 @@ export const questsRouter = createTRPCRouter({
             : "This quest is currently unavailable.",
         );
       // Get updated quest information with start_battle task and retry flag
-      const { notifications, consequences } = getNewTrackers(user, [
+      const { trackers, notifications, consequences } = getNewTrackers(user, [
         { task: "start_battle", text: "retry" },
       ]);
+      user.questData = trackers;
       // Handle consequences
-      const { notifications: finalNotification } = await handleQuestConsequences(
-        ctx.drizzle,
-        user,
-        consequences,
-        notifications,
-      );
+      const {
+        notifications: finalNotification,
+        claimed,
+        battleAttempted,
+        battleUserPatch,
+      } = await handleQuestConsequences(ctx.drizzle, user, consequences, notifications);
       // Return information
-      return { success: true, message: finalNotification.join("\n") };
+      const canProject =
+        claimed &&
+        (!battleAttempted || battleUserPatch) &&
+        snapshot.requiresProgressionRefresh === false &&
+        !user.questParty &&
+        !user.queue?.length &&
+        !user.currentlyTrainingMastery &&
+        !user.currentlyTrainingElement &&
+        consequences.every(
+          (entry) => entry.type === "combat" || entry.type === "update_user",
+        ) &&
+        getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0;
+      const projection = canProject
+        ? getUserProgressionUpdate(
+            { ...user, ...battleUserPatch },
+            snapshot.publishedAchievementIds,
+          )
+        : undefined;
+      // Battle initiation owns the account's next version; retain the cached stamp
+      // until an authoritative read supplies it rather than publishing the earlier claim.
+      const { updatedAt: _claimStamp, ...battlePatch } = projection?.userPatch ?? {};
+      return {
+        success: true,
+        message: finalNotification.join("\n"),
+        ...(projection
+          ? {
+              ...projection,
+              userPatch: battleUserPatch ? battlePatch : projection.userPatch,
+            }
+          : {}),
+      };
     }),
 });
 
@@ -3974,6 +4121,7 @@ const executeClaimedQuestConsequences = async ({
   opponent: QuestConsequence | undefined;
 }) => {
   user.updatedAt = claimedAt;
+  let battleUserPatch: Pick<UserData, "status" | "battleId"> | undefined;
   const collectedItems = collected.flatMap(({ ids }) => ids);
   // Combat preloads trackers without the live party relation; both carry receipt ownership.
   const partyQuestId =
@@ -4128,10 +4276,13 @@ const executeClaimedQuestConsequences = async ({
               opponent.scaleGains ?? 1,
             );
             if (!result.success) notifications.push(result.message);
+            else if (result.battleId)
+              battleUserPatch = { status: "BATTLE", battleId: result.battleId };
           })()
         : Promise.resolve(),
     ],
   ]);
+  return battleUserPatch;
 };
 
 /**
@@ -4158,7 +4309,12 @@ export const handleQuestConsequences = async (
     /** Roll the active objectives' ambush attackers; only the travel movement check sets it. */
     rollObjectiveAttackers?: boolean;
   },
-) => {
+): Promise<{
+  notifications: string[];
+  claimed: boolean;
+  battleAttempted: boolean;
+  battleUserPatch?: Pick<UserData, "status" | "battleId">;
+}> => {
   // Quests reset
   const resetQuests = consequences.filter(
     (c) => c.type === "reset_quest" && c.ids.length > 0,
@@ -4286,7 +4442,7 @@ export const handleQuestConsequences = async (
         });
         notifications.push("Quest team progress will update on your next request.");
       }
-      await executeClaimedQuestConsequences({
+      const battleUserPatch = await executeClaimedQuestConsequences({
         client,
         user,
         claimedAt: claimResult.claimedAt,
@@ -4298,7 +4454,12 @@ export const handleQuestConsequences = async (
         opponent,
       });
 
-      return { notifications, claimed: true, battleAttempted: !!opponent };
+      return {
+        notifications,
+        claimed: true,
+        battleAttempted: !!opponent,
+        ...(battleUserPatch ? { battleUserPatch } : {}),
+      };
     }
   }
   return { notifications, claimed: !shouldClaimUserState, battleAttempted: false };

@@ -130,7 +130,8 @@ describeWithDatabase("event tournament persistence", () => {
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("first", "event", { type: "eventTournament" });
     expect((await first.getEventNotices())[0]?.message).toBe("You have a tournament invitation");
     vi.spyOn(Pusher.prototype, "trigger").mockClear();
-    await first.participateEvent({ tournamentId, action: "JOIN" });
+    expect(await first.participateEvent({ tournamentId, action: "JOIN" })).toMatchObject({ success: true,
+      userPatch: { status: "AWAKE", battleId: null }, eventNotices: [], isEventParticipant: true });
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("first", "event", { type: "eventTournament" });
     expect(await first.getEventNotices()).toEqual([]);
     expect((await second.getEventNotices())[0]?.message).toBe("You have a tournament invitation");

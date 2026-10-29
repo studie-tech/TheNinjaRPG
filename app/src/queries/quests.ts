@@ -525,10 +525,11 @@ export const executeResultForAbandon = (
 export const updateQuestHistoryForAbandon = (
   client: Pick<DrizzleClient, "update">,
   current: { id: string },
+  now = new Date(),
 ) =>
   client
     .update(questHistory)
-    .set({ completed: 0, endAt: new Date() })
+    .set({ completed: 0, endAt: now })
     .where(
       and(
         eq(questHistory.id, current.id),
@@ -543,11 +544,12 @@ export const updateUserDataForAbandon = (
   questData: import("@/validators/objectives").QuestTrackerType[],
   input: { id: string },
   ctx: { userId: string },
+  now = new Date(),
 ) =>
   client
     .update(userData)
     .set({
-      questFinishAt: new Date(),
+      questFinishAt: now,
       questData,
       activeNpcQuestId: sql`IF(${userData.activeNpcQuestId} = ${input.id}, NULL, ${userData.activeNpcQuestId})`,
     })
@@ -2353,4 +2355,44 @@ export const findRewardUserSnapshot = (
     },
     with: { village: { columns: { id: true, tokens: true } } },
     where: eq(userData.userId, userId),
+  });
+
+/** Confirm only the pools and state released by an isolated quest abandonment. */
+export const findIsolatedAbandonState = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: {
+      updatedAt: true,
+      questFinishAt: true,
+      curEnergy: true,
+      regenAt: true,
+      status: true,
+      battleId: true,
+      activeNpcQuestId: true,
+    },
+  });
+
+/** Confirm rounded/capped scalar rewards and the companion bank after a task claim. */
+export const findPetTaskRewardCacheState = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: {
+      updatedAt: true,
+      petTask: true,
+      questData: true,
+      questFinishAt: true,
+      money: true,
+      seichiSilver: true,
+      earnedExperience: true,
+      petExperience: true,
+      reputationPoints: true,
+      reputationPointsTotal: true,
+      villagePrestige: true,
+      skillPoints: true,
+      huntingExperience: true,
+      gatheringExperience: true,
+      medicalExperience: true,
+      craftingExperience: true,
+      sageMasteryExperience: true,
+    },
   });

@@ -16,7 +16,10 @@ export const fetchEvent = (client: DrizzleClient, id: string) =>
 /** Fetch the account and distinct mastered jutsu needed for event eligibility in parallel. */
 export const fetchEventUser = async (client: DrizzleClient, id: string) => {
   const [user, mastered] = await Promise.all([
-    client.query.userData.findFirst({ where: eq(userData.userId, id) }),
+    client.query.userData.findFirst({
+      where: eq(userData.userId, id),
+      with: { queue: { columns: { id: true } } },
+    }),
     client.query.userJutsu.findMany({
       where: and(eq(userJutsu.userId, id), gte(userJutsu.level, JUTSU_TRAIN_LEVEL_CAP)),
       columns: { jutsuId: true },
@@ -318,3 +321,37 @@ export const deleteTournamentRewardClaimForMaintainEventTournaments = (
   client
     .delete(tournamentRewardClaim)
     .where(eq(tournamentRewardClaim.tournamentId, row.id));
+
+/** Read only state affected by battle launches and flags that require progression reconciliation. */
+export const findEventActorCacheState = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: {
+      role: true,
+      status: true,
+      battleId: true,
+      updatedAt: true,
+      curHealth: true,
+      curChakra: true,
+      curStamina: true,
+      curEnergy: true,
+      regenAt: true,
+      currentlyTrainingMastery: true,
+      currentlyTrainingElement: true,
+    },
+    with: { queue: { columns: { id: true } } },
+  });
+
+/** Detect a payout to the acting account while synchronization advances this event. */
+export const findEventActorRewardReceipt = (
+  client: DrizzleClient,
+  tournamentId: string,
+  userId: string,
+) =>
+  client.query.tournamentRewardClaim.findFirst({
+    where: and(
+      eq(tournamentRewardClaim.tournamentId, tournamentId),
+      eq(tournamentRewardClaim.userId, userId),
+    ),
+    columns: { id: true },
+  });

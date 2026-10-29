@@ -5,7 +5,7 @@ import { Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +45,7 @@ export const EventTournaments = ({
   staff?: boolean;
 }) => {
   const { data: user, status: userStatus } = useUserData();
+  const reconcile = useEventActionCache();
   const [editing, setEditing] = useState(false);
   const canManage = canManageTournaments(user?.role ?? "USER");
   const list = api.tournament.listEvents.useQuery(undefined, {
@@ -61,22 +62,23 @@ export const EventTournaments = ({
       utils.tournament.getEvent.invalidate(),
       utils.tournament.listEvents.invalidate(),
       utils.tournament.getEventNotices.invalidate(),
-      utils.profile.getUser.invalidate(),
     ]);
   };
   const [message, setMessage] = useState("");
   const manage = api.tournament.manageEvent.useMutation({
-    onSuccess: async (result) => {
+    onMutate: reconcile.prepare,
+    onSuccess: async (result, _variables, revision) => {
       setMessage(result.message);
       showMutationToast(result);
-      await refresh();
+      await Promise.all([refresh(), reconcile.apply(result, revision)]);
     },
   });
   const participate = api.tournament.participateEvent.useMutation({
-    onSuccess: async (result) => {
+    onMutate: reconcile.prepare,
+    onSuccess: async (result, _variables, revision) => {
       setMessage(result.message);
       showMutationToast(result);
-      await refresh();
+      await Promise.all([refresh(), reconcile.apply(result, revision)]);
     },
   });
   const event = details.data?.eventData;
@@ -603,13 +605,17 @@ const StaffTournamentControls = ({
     defaultValues: { username: "", users: [] },
   });
   const utils = api.useUtils();
+  const reconcile = useEventActionCache();
   const mutation = api.tournament.manageEvent.useMutation({
-    onSuccess: async (result) => {
+    onMutate: reconcile.prepare,
+    onSuccess: async (result, _variables, revision) => {
       setMessage(result.message);
       showMutationToast(result);
       await Promise.all([
         utils.tournament.getEvent.invalidate(),
         utils.tournament.listEvents.invalidate(),
+        utils.tournament.getEventNotices.invalidate(),
+        reconcile.apply(result, revision),
       ]);
     },
   });
@@ -787,3 +793,39 @@ const StaffTournamentControls = ({
 
 /** Display event timestamps in the player's browser locale and time zone. */
 const date = (value: number) => new Date(value).toLocaleString();
+
+/** Apply actor state, participation polling and actionable notices in the same accepted revision. */
+const useEventActionCache = () => {
+  const { prepareUserUpdate, updateUser } = useUserData();
+  const utils = api.useUtils();
+  return {
+    prepare: prepareUserUpdate,
+    apply: (
+      result: RouterOutputs["tournament"]["participateEvent"],
+      revision: number | undefined,
+    ) =>
+      result.success
+        ? updateUser(result.userPatch, {
+            revision,
+            isEventParticipant: result.isEventParticipant,
+            notifications: (current) =>
+              current
+                ? [
+                    ...current.filter(
+                      (entry) =>
+                        entry.color !== "toast" &&
+                        !/^\/tournaments\/[^/?#]+$/.test(entry.href),
+                    ),
+                    ...(result.eventNotices ?? []).map((notice) => ({
+                      href: `/tournaments/${notice.tournamentId}`,
+                      name: `${notice.message}: ${notice.name}`,
+                      color: "green" as const,
+                      notificationCount: 1,
+                      alwaysShow: true,
+                    })),
+                  ]
+                : current,
+          })
+        : utils.profile.getUser.refetch(),
+  };
+};

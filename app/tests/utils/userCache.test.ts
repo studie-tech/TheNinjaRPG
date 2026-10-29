@@ -55,6 +55,15 @@ describe("user cache updates", () => {
     test.close();
   });
 
+  it("merges a confirmed withdrawal into the participation polling flag", async () => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), isEventParticipant: true });
+    await updateUserCache(test.client, key, {}, { revision: prepareUserUpdate(test.client, key), isEventParticipant: false });
+    expect(test.client.getQueryData<{ isEventParticipant?: boolean }>(key)?.isEventParticipant).toBe(false);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
   it("replaces a confirmed membership without retaining fields from the former clan", async () => {
     const test = setup();
     const previous = { id: "old", name: "Former clan", bank: 1000, leaderId: "former-leader" };
