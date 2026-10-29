@@ -24,6 +24,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Exercise router guards while query doubles prevent database and deletion side effects. */
 const caller = () => callerForDatabase(profileRouter, "player", {} as never);
 
 it.each([undefined, "", "delete my character", "Delete my character "])("rejects starting a self-deletion timer without the exact phrase (%s)", async (confirmation) => {

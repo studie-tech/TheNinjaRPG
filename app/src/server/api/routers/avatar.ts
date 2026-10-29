@@ -40,6 +40,7 @@ export const avatarRouter = createTRPCRouter({
       if (!user) {
         return errorResponse("User not found. Please try again in a moment.");
       }
+      // The conditional debit remains authoritative if another request spends points.
       if (user.reputationPoints < COST_GENERATE_AVATAR) {
         return errorResponse("Not enough reputation points");
       }

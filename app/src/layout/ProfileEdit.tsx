@@ -181,7 +181,10 @@ import {
   updateUserPreferencesSchema,
 } from "@/validators/user";
 
-/** Profile settings retain each editor's own save, eligibility, and confirmation flow. */
+/**
+ * Assemble the player's permitted settings while retaining each editor's save flow.
+ * The navigator mounts only the selected editor; availability queries stay upfront.
+ */
 export function ProfileEdit() {
   const { data: userData } = useRequiredUserData();
   const { data: emailReminder } = api.misc.getPersonalEmailReminder.useQuery();
@@ -519,6 +522,7 @@ export function ProfileEdit() {
   );
 }
 
+/** Group avatar generation, history, and uploads without mounting inactive panels. */
 function AvatarSettings() {
   return (
     <Tabs defaultValue="generate">
@@ -1167,9 +1171,7 @@ const Marriage: React.FC = () => {
     </>
   );
 };
-/**
- * AI Avatar Change
- */
+/** Generate a paid avatar and apply the server's authoritative cache update. */
 const NewAiAvatar: React.FC = () => {
   // Queries & mutations
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
@@ -1282,6 +1284,7 @@ interface HistoricalAiAvatarProps {
   operationGeneration?: number;
 }
 
+/** Select saved character/content artwork while retaining cached choices on read errors. */
 export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => {
   // Queries & mutations
   const [lastElement, setLastElement] = useState<HTMLButtonElement | null>(null);
@@ -1364,6 +1367,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
     },
   });
 
+  // Failed refreshes retain cached choices; pagination errors retry the failed cursor.
   const errorNotice = isError ? (
     <div role="alert" className="space-y-3 text-sm">
       <p>
@@ -1399,6 +1403,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
         <div className="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-3">
           {pageAvatars.map((avatar, i) => (
             <div key={avatar.id} className="relative">
+              {/* Selection and deletion must remain separate interactive targets. */}
               <button
                 type="button"
                 aria-label={`Use saved avatar ${i + 1}`}
@@ -2494,6 +2499,7 @@ const TavernColors: React.FC = () => {
   ];
 
   return (
+    // Size pickers to the editor's width, including when the category sidebar is visible.
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-5">
       {controls.map((control) => {
         const cost = getTavernColorChangeCost(control.value);

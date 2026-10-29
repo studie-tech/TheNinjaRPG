@@ -8,7 +8,10 @@ import { Input } from "@/components/ui/input";
 import Link from "@/layout/Link";
 import { cn } from "@/libs/shadui";
 
-/** URL-backed settings drill-down, shared by the compact and wide profile layouts. */
+/**
+ * Navigate an authorized settings catalog through URL-backed categories and editors.
+ * Only the selected editor mounts, so unopened forms do not load data or hold drafts.
+ */
 export function ProfileSettingsNavigation({
   groups,
   summary,
@@ -39,6 +42,7 @@ export function ProfileSettingsNavigation({
       .map((setting) => ({ group, setting })),
   );
 
+  // Move focus with in-page navigation without stealing it on the initial render.
   useEffect(() => {
     if (!hasNavigated.current) return;
     headingRef.current?.focus({ preventScroll: true });
@@ -48,6 +52,7 @@ export function ProfileSettingsNavigation({
     }
   }, [groupId, settingId]);
 
+  /** Retain unrelated profile parameters while replacing the settings destination. */
   const hrefFor = (group?: ProfileSettingsGroup, setting?: ProfileSetting) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", "edit");
@@ -58,11 +63,13 @@ export function ProfileSettingsNavigation({
     return `/profile?${params}`;
   };
 
+  /** Use Next's native history integration; retain search when opening a result. */
   const navigate = (href: string, clearSearch = false) => {
     hasNavigated.current = true;
     if (clearSearch) setSearch("");
     window.history.pushState(null, "", href);
   };
+  /** Skip the extra menu step for categories containing a single editor. */
   const groupHref = (group: ProfileSettingsGroup) =>
     hrefFor(group, group.settings.length === 1 ? group.settings[0] : undefined);
   const parentGroup =
@@ -282,6 +289,7 @@ export function ProfileSettingsNavigation({
   );
 }
 
+/** Destination row shared by category menus, editor lists, and search results. */
 function SettingsRow({
   title,
   description,
@@ -347,6 +355,7 @@ function SettingsRow({
   );
 }
 
+/** A discoverable editor whose own component owns saving and eligibility feedback. */
 export type ProfileSetting = {
   id: string;
   title: string;
@@ -354,9 +363,11 @@ export type ProfileSetting = {
   keywords?: string;
   icon: LucideIcon;
   notice?: ReactNode;
+  /** Mounted only when this setting is selected. */
   content: ReactNode;
 };
 
+/** Category assembled from the settings available to the current player. */
 export type ProfileSettingsGroup = {
   id: string;
   title: string;

@@ -21,6 +21,7 @@ const push = vi.fn();
 const invalidate = vi.fn(async () => undefined);
 const clearUser = vi.fn();
 const userId = "character-owner";
+// Radix dispatches DOM events; use the same realm as jsdom and restore Bun's globals.
 const browserGlobals = ["Event", "CustomEvent"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
 

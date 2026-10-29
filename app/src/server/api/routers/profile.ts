@@ -2239,7 +2239,10 @@ export const profileRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       return await fetchRecruitMilestoneSummary(ctx.drizzle, ctx.userId);
     }),
-  // Toggle deletion of user
+  /**
+   * Start or cancel the waiting period. Confirmation is optional for cancellation
+   * and staff moderation; self-service starts require the exact phrase.
+   */
   toggleDeletionTimer: protectedProcedure
     .input(z.object({ userId: z.string(), confirmation: z.string().optional() }))
     .output(baseServerResponse)
@@ -2267,7 +2270,7 @@ export const profileRouter = createTRPCRouter({
       await updateUserDataForToggleDeletionTimer(ctx.drizzle, target, input);
       return { success: true, message: "Deletion timer toggled" };
     }),
-  // Delete user
+  /** Enforce the elapsed wait and self-confirmation before the deletion safeguards run. */
   confirmDeletion: protectedProcedure
     .meta({
       mcp: { description: "Confirm and execute account deletion" },

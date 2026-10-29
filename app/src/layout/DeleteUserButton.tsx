@@ -19,11 +19,12 @@ import { showMutationToast } from "@/libs/toast";
 import { secondsPassed } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+/** Keep dialog and confirmation state scoped to a single character. */
 const DeleteUserButton = (props: DeleteUserButtonProps) => (
   <DeletionControls key={props.userData.userId} {...props} />
 );
 
-/** Character deletion is requested, cancellable during the wait, and confirmed separately. */
+/** Explain the waiting period and expose the character's deletion request controls. */
 export function CharacterDeletionSettings({
   userData,
 }: Pick<DeleteUserButtonProps, "userData">) {
@@ -59,6 +60,7 @@ export function CharacterDeletionSettings({
   );
 }
 
+/** Shared self-service and staff controls with pending guards and inline recovery. */
 function DeletionControls({ userData, label, className }: DeleteUserButtonProps) {
   const { data: viewer, timeDiff } = useRequiredUserData();
   const utils = api.useUtils();
@@ -66,10 +68,12 @@ function DeletionControls({ userData, label, className }: DeleteUserButtonProps)
   const [isOpen, setIsOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Countdown completion enables confirmation without introducing another timer.
   const [finishedDeadline, setFinishedDeadline] = useState<number | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const confirmationId = useId();
 
+  /** Require a fresh typed phrase each time the dialog is opened. */
   const closeDialog = () => {
     setIsOpen(false);
     setConfirmation("");
@@ -123,12 +127,14 @@ function DeletionControls({ userData, label, className }: DeleteUserButtonProps)
       (secondsPassed(userData.deletionAt, timeDiff, false) >= 0 ||
         finishedDeadline === deadline),
   );
+  // Cancellation stays available without typing; self-service destructive steps do not.
   const requiresConfirmation =
     viewer?.userId === userData.userId && (!userData.deletionAt || canDelete);
   const hasConfirmed =
     !requiresConfirmation || confirmation === CHARACTER_DELETION_CONFIRMATION;
   const isPending = isDeleting || isTogglingDelete;
 
+  /** Cancel an active request even after its waiting period has finished. */
   const cancelDeletion = () => {
     if (isPending || !userData.deletionAt) return;
     setError(null);
@@ -263,6 +269,7 @@ function DeletionControls({ userData, label, className }: DeleteUserButtonProps)
   );
 }
 
+/** Button contract shared by profile settings and staff profile actions. */
 type DeleteUserButtonProps = {
   className?: string;
   label?: string;

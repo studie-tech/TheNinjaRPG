@@ -1499,7 +1499,11 @@ export const listRecruitmentRewardsForGetRecruitmentRewards = (
     orderBy: desc(recruitmentRewards.createdAt),
   });
 
-/** Build the `userData` update for `toggleDeletionTimer`, setting `deletionAt`, using predicates on `userId`. */
+/**
+ * Build a timer-only update from the caller's authorized snapshot.
+ * Concurrent toggles can restart or cancel the reversible wait; permanent deletion
+ * remains a separate guarded operation.
+ */
 export const updateUserDataForToggleDeletionTimer = (
   client: Pick<DrizzleClient, "update">,
   target: { deletionAt: null | Date },

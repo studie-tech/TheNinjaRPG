@@ -8,6 +8,7 @@ import { ProfileSettingsNavigation, type ProfileSettingsGroup } from "@/layout/P
 import { ensureDom } from "../setup/dom.mjs";
 
 const mounted = vi.fn();
+/** Record rendered editors so navigation tests catch hidden forms mounting eagerly. */
 function Editor({ name }: { name: string }) {
   mounted(name);
   return <label>{name} draft<input aria-label={`${name} draft`} /></label>;
@@ -40,6 +41,7 @@ beforeEach(() => {
     return new URLSearchParams(search) as ReturnType<typeof navigation.useSearchParams>;
   });
   const pushState = window.history.pushState.bind(window.history);
+  // Notify the search-param double as Next does for its integrated history updates.
   vi.spyOn(window.history, "pushState").mockImplementation((...args) => {
     pushState(...args);
     window.dispatchEvent(new window.PopStateEvent("popstate"));
