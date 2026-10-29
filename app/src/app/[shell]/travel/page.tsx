@@ -635,22 +635,30 @@ function Travel() {
 
   const { mutate: joinVillage, isPending: isJoining } =
     api.village.joinVillage.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(data.userPatch, {
+            revision,
+            achievementProgress: data.achievementProgress,
+          });
         }
       },
     });
 
   const { mutate: purchaseHideout, isPending: isCreatingHideout } =
     api.clan.purchaseHideout.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
             utils.village.getAll.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, {
+              revision,
+              achievementProgress: data.achievementProgress,
+            }),
             utils.travel.getSectorData.invalidate(),
           ]);
         }
@@ -693,7 +701,7 @@ function Travel() {
       } else if (useritem?.item.itemType === "MEAL") {
         // A rejected snapshot must refresh the next modal's quantity and account state.
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          utils.profile.getUser.refetch(),
           utils.item.getUserItems.invalidate(),
         ]);
       }

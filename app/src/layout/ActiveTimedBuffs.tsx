@@ -61,7 +61,7 @@ export const ActiveTimedBuffs = () => {
                 onEndShow="Expired"
                 onFinish={() => {
                   void refetch();
-                  void utils.profile.getUser.invalidate();
+                  void utils.profile.getUser.refetch();
                 }}
               />
             </p>

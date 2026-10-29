@@ -234,7 +234,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
     () => {
       void Promise.allSettled([
         dashboard.refetch({ cancelRefetch: false }),
-        utils.profile.getUser.invalidate(),
+        utils.profile.getUser.refetch(),
       ]);
     },
     timeDiff ?? 0,

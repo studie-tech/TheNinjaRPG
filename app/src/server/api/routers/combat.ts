@@ -1554,8 +1554,9 @@ export const combatRouter = createTRPCRouter({
       // PvP handovers belong to this encounter; only PvE toggles update the
       // non-PvP default, after the battle change succeeds.
       const rememberPreference = async (battleType: BattleType) => {
-        if (ManualStartBattleTypes.includes(battleType)) return;
+        if (ManualStartBattleTypes.includes(battleType)) return {};
         await updateUserDataForRememberPreference(ctx.drizzle, input, ctx);
+        return { defaultAutoCombat: input.enabled };
       };
 
       // Retry loop
@@ -1589,9 +1590,10 @@ export const combatRouter = createTRPCRouter({
         // with a version here — the battle already reads the way the player
         // asked for, so their choice is safe to remember.
         if (!!user.isAutoCombat === input.enabled) {
-          await rememberPreference(userBattle.battleType);
+          const userPatch = await rememberPreference(userBattle.battleType);
           return {
             success: true,
+            userPatch,
             message: "",
             battle: maskBattle(userBattle, ctx.userId),
           };
@@ -1617,12 +1619,13 @@ export const combatRouter = createTRPCRouter({
         );
 
         if (result.rowsAffected > 0) {
-          await rememberPreference(userBattle.battleType);
+          const userPatch = await rememberPreference(userBattle.battleType);
           void pusher.trigger(userBattle.id, "event", {
             version: userBattle.version + 1,
           });
           return {
             success: true,
+            userPatch,
             message: input.enabled
               ? "Your AI profile has taken over the battle"
               : "You have taken back control of the battle",

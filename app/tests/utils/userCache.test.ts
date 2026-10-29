@@ -34,6 +34,27 @@ const setup = () => {
 };
 
 describe("user cache updates", () => {
+  it("replaces a new village mission without retaining the previous assignment", async () => {
+    const test = setup();
+    const village = { id: "village", activeMission: { id: "old", progress: 12 } };
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    const mission = { id: "new", progress: 0 };
+    await updateUserCache(test.client, key, { village: { id: "village", activeMission: mission } } as never, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.village?.activeMission).toEqual(mission as never);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+  it("removes boosts omitted by a complete saved shrine settings snapshot", async () => {
+    const test = setup();
+    const village = { id: "village", shrineSettings: { unlockedAiIds: [], activeAiIds: [], activeBoosts: { Training: "expired" }, boostTemplateUpdatedBy: "old" } };
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    const shrineSettings = { unlockedAiIds: [], activeAiIds: [], activeBoosts: {} };
+    await updateUserCache(test.client, key, { village: { id: "village", shrineSettings } }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value()?.userData.village?.shrineSettings).toEqual(shrineSettings);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
   it("replaces a confirmed membership without retaining fields from the former clan", async () => {
     const test = setup();
     const previous = { id: "old", name: "Former clan", bank: 1000, leaderId: "former-leader" };

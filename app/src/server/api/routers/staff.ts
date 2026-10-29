@@ -6,7 +6,9 @@ import { after } from "next/server";
 import { z } from "zod";
 import type { UserStatus } from "@/drizzle/constants";
 import { huntingProgress, huntingReceipt, huntingSession } from "@/drizzle/schema";
+import { effectiveMasteries } from "@/libs/mastery";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
+import { calcMaxEnergy } from "@/libs/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
 import { incrementAnbuMemberCount } from "@/queries/anbu";
@@ -27,7 +29,8 @@ import {
 import { findStoreUserIdAlias, insertStoreUserIdAlias } from "@/queries/purchases";
 import { deleteRankedQueueForUser } from "@/queries/pvprank";
 import { clearQueueBattleId, deleteQueueById, listQueueMembers } from "@/queries/raids";
-import { deleteUserSkills } from "@/queries/skillTree";
+import { deleteUserSkills, fetchMasterySources } from "@/queries/skillTree";
+import { findVillageUserCache } from "@/queries/socialUserCache";
 import {
   applyDevelopmentBackup,
   clearDevelopmentBackupTarget,
@@ -267,6 +270,7 @@ import {
   canUseMonitoringTests,
 } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const staffRouter = createTRPCRouter({
   // Content Backups
@@ -415,7 +419,7 @@ export const staffRouter = createTRPCRouter({
       });
     }),
   unequipAllJutsus: protectedProcedure
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -434,12 +438,15 @@ export const staffRouter = createTRPCRouter({
         updateJutsuLoadoutForUnequipAllJutsus(ctx.drizzle),
       ]);
       return {
+        userPatch: user.isAi
+          ? {}
+          : { ...(user.jutsuLoadout ? { loadout: { jutsuIds: [] } } : {}) },
         success: true,
         message: `All jutsu has been unequipped for all non-AI users.`,
       };
     }),
   unequipAllGear: protectedProcedure
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -454,13 +461,23 @@ export const staffRouter = createTRPCRouter({
         updateUserItemForUnequipAllGear(ctx.drizzle),
         updateItemLoadoutForUnequipAllGear(ctx.drizzle),
       ]);
+      const sources = user.isAi
+        ? undefined
+        : await fetchMasterySources(ctx.drizzle, ctx.userId);
       return {
+        userPatch: sources
+          ? {
+              items: [],
+              effectiveMasteries: effectiveMasteries({ ...user, ...sources }),
+              maxEnergy: calcMaxEnergy({ ...user, ...sources }),
+            }
+          : {},
         success: true,
         message: `All gear has been unequipped for all non-AI users.`,
       };
     }),
   forceAwake: protectedProcedure
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .input(
       z.object({
         userId: z.string(),
@@ -541,6 +558,7 @@ export const staffRouter = createTRPCRouter({
       void updateUserOnMap(pusher, targetUser.sector, output);
       // Done
       return {
+        userPatch: input.userId === ctx.userId ? undefined : {},
         success: true,
         message: "You have changed user's state to awake",
       };
@@ -739,7 +757,7 @@ export const staffRouter = createTRPCRouter({
   // VERY dangerous - used to e.g. link up unlinked accounts with new userIds from clerk
   updateUserId: protectedProcedure
     .input(z.object({ userId: z.string(), newUserId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, fromUser, toUser, sourceAlias, destinationAlias] = await Promise.all(
@@ -919,7 +937,14 @@ export const staffRouter = createTRPCRouter({
       // races moves still in flight.
       const failed = moves.find((move) => move.status === "rejected");
       if (failed) throw failed.reason;
-      return { success: true, message: "UserId updated" };
+      const savedVillage = user.villageId
+        ? await findVillageUserCache(ctx.drizzle, user.villageId)
+        : undefined;
+      return {
+        success: true,
+        message: "UserId updated",
+        userPatch: savedVillage ? { village: savedVillage } : {},
+      };
     }),
   // Delete referral from user
   deleteReferral: protectedProcedure
