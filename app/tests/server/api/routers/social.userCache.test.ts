@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { clan, item, userItem, mpvpBattleQueue, mpvpBattleUser, userData, village, war } from "@/drizzle/schema";
+import { clan, item, quest, questHistory, userItem, mpvpBattleQueue, mpvpBattleUser, userData, village, war } from "@/drizzle/schema";
 import { fetchActiveShrineLobbies, fetchAllActiveWars } from "@/queries/profile";
 import { findQueueUserCache } from "@/queries/socialUserCache";
 import { withRequestScope } from "@/server/requestScope";
@@ -8,13 +8,15 @@ import { getBattleUserPatch, getMembershipUserPatch, getShrineLobbyUserPatch } f
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { makeEffect } from "../../../libs/combat/helpers/battleScenario";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import { AllObjectives, QuestTracker } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
+import { insertItems, insertQuests, insertUserItems, insertUsers } from "../../../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 describeWithDatabase("confirmed social profile projections", () => {
   afterEach(resetServerModuleStubs);
   beforeEach(async () => {
-    await resetTables(userItem, item, mpvpBattleUser, mpvpBattleQueue, war, clan, userData, village);
+    await resetTables(questHistory, quest, userItem, item, mpvpBattleUser, mpvpBattleQueue, war, clan, userData, village);
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "old", name: "Old village", sector: 10, kageId: "old-kage" },
@@ -74,6 +76,79 @@ describeWithDatabase("confirmed social profile projections", () => {
     stubProfile("fetchUpdatedUser", async () => ({ user: await db.query.userData.findFirst({ where: eq(userData.userId, "projection-user") }) }));
     const result = await callerForDatabase(shrineRouter, "projection-user", db).leaveShrineBattle({ shrineBattleId: "expired-shrine" });
     expect(result).toMatchObject({ success: false, userPatch: { status: "AWAKE", battleId: null } });
+  });
+
+  it.each(["mission", "achievement"] as const)("masks remote hidden coordinates in a battle patch without a persisted %s history", async (questType) => {
+    const db = await getTestDatabase();
+    const questId = `battle-secret-${questType}`;
+    await insertQuests([{ id: questId, questType, content: {
+      objectives: [AllObjectives.parse({ id: "secret-target", task: "move_to_location", hideLocation: true, sector: 723, longitude: 41, latitude: 37 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    const privateTracker = QuestTracker.parse({ id: questId, goals: [{ id: "secret-target", sector: 723, longitude: 41, latitude: 37, value: 0, done: false }] });
+    await db.update(userData).set({ role: "USER", sector: 10, questData: [privateTracker] }).where(eq(userData.userId, "projection-user"));
+    const patch = await getBattleUserPatch(db, "projection-user");
+    const goal = patch?.questData?.[0]?.goals[0];
+    expect(goal).toMatchObject({ id: "secret-target", done: false });
+    expect(goal).not.toHaveProperty("sector");
+    expect(goal).not.toHaveProperty("longitude");
+    expect(goal).not.toHaveProperty("latitude");
+    expect(patch).not.toHaveProperty("userQuests");
+    const canonical = await db.query.userData.findFirst({ where: eq(userData.userId, "projection-user") });
+    expect(canonical?.questData).toEqual([privateTracker]);
+    expect(await db.query.questHistory.findMany({ where: eq(questHistory.userId, "projection-user") })).toEqual([]);
+  });
+
+  it.each([{ role: "USER" as const, sector: 723 }, { role: "CONTENT" as const, sector: 10 }])("retains coordinates visible to %s", async ({ role, sector }) => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "visible-battle-target", content: {
+      objectives: [AllObjectives.parse({ id: "target", task: "move_to_location", hideLocation: true, sector: 723, longitude: 41, latitude: 37 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    await db.update(userData).set({ role, sector, questData: [QuestTracker.parse({ id: "visible-battle-target", goals: [{ id: "target", sector: 723, longitude: 41, latitude: 37 }] })] }).where(eq(userData.userId, "projection-user"));
+    expect((await getBattleUserPatch(db, "projection-user"))?.questData?.[0]?.goals[0]).toMatchObject({ sector: 723, longitude: 41, latitude: 37 });
+  });
+
+  it("omits coordinates when a battle tracker no longer has a definition", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ questData: [QuestTracker.parse({ id: "deleted-target", goals: [{ id: "target", sector: 723, longitude: 41, latitude: 37, value: 2 }] })] }).where(eq(userData.userId, "projection-user"));
+    const goal = (await getBattleUserPatch(db, "projection-user"))?.questData?.[0]?.goals[0];
+    expect(goal).toMatchObject({ id: "target", value: 2 });
+    expect(goal).not.toHaveProperty("sector");
+    expect(goal).not.toHaveProperty("longitude");
+    expect(goal).not.toHaveProperty("latitude");
+  });
+
+  it("skips quest definitions when committed battle trackers contain no locations", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ questData: [QuestTracker.parse({ id: "numeric-progress", goals: [{ id: "train", value: 3 }] })] }).where(eq(userData.userId, "projection-user"));
+    const definitions = vi.spyOn(db.query.quest, "findMany");
+    try {
+      const patch = await getBattleUserPatch(db, "projection-user");
+      expect(patch?.questData?.[0]?.goals[0]).toMatchObject({ id: "train", value: 3 });
+      expect(definitions).not.toHaveBeenCalled();
+    } finally { definitions.mockRestore(); }
+  });
+
+  it("omits coordinates for a goal removed from its current quest definition", async () => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "edited-target", content: {
+      objectives: [AllObjectives.parse({ id: "replacement", task: "stats_trained", value: 1 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    await db.update(userData).set({ questData: [QuestTracker.parse({ id: "edited-target", goals: [{ id: "removed-target", sector: 723, longitude: 41, latitude: 37 }] })] }).where(eq(userData.userId, "projection-user"));
+    const goal = (await getBattleUserPatch(db, "projection-user"))?.questData?.[0]?.goals[0];
+    expect(goal).not.toHaveProperty("sector");
+    expect(goal).not.toHaveProperty("longitude");
+    expect(goal).not.toHaveProperty("latitude");
+  });
+
+  it("omits the battle patch when required privacy definitions cannot be confirmed", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ questData: [QuestTracker.parse({ id: "unconfirmed-target", goals: [{ id: "target", sector: 723, longitude: 41, latitude: 37 }] })] }).where(eq(userData.userId, "projection-user"));
+    const definitions = vi.spyOn(db.query.quest, "findMany").mockRejectedValueOnce(new Error("Definition lookup unavailable"));
+    try { expect(await getBattleUserPatch(db, "projection-user")).toBeUndefined(); }
+    finally { definitions.mockRestore(); }
   });
 
 });

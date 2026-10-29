@@ -2,6 +2,7 @@ import { shrineLobbyFreshAfter } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { effectiveMasteries } from "@/libs/mastery";
 import { calcActiveUserRegen, calcMaxEnergy } from "@/libs/profile";
+import { getPublicQuestUser } from "@/libs/quest";
 import { getRaidObjectiveData, isRaidListedForVillage } from "@/libs/raids";
 import { getTimedRegeneration } from "@/libs/timedBuffs";
 import { regenerationBuffs } from "@/libs/titles";
@@ -17,6 +18,7 @@ import {
   findMembershipUserCache,
   findQueueUserCache,
   findWarUserCache,
+  listBattleQuestCacheDefinitions,
 } from "@/queries/socialUserCache";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
@@ -156,10 +158,57 @@ export const getBattleUserPatch = async (client: DrizzleClient, userId: string) 
     fetchMasterySources(client, userId),
   ]);
   if (!saved) return undefined;
+  const questIds = [
+    ...new Set(
+      saved.questData
+        ?.filter((entry) =>
+          entry.goals.some(
+            (goal) =>
+              goal.sector !== undefined ||
+              goal.longitude !== undefined ||
+              goal.latitude !== undefined,
+          ),
+        )
+        .map((entry) => entry.id) ?? [],
+    ),
+  ];
+  // Tracker IDs come from the committed row. Histories alone omit unclaimed achievement trackers.
+  const definitions = questIds.length
+    ? await listBattleQuestCacheDefinitions(client, questIds).catch(() => undefined)
+    : [];
+  // A failed privacy projection reconciles through the profile instead of publishing private goals.
+  if (!definitions) return undefined;
+  const objectiveIds = new Map(
+    definitions.map((entry) => [
+      entry.id,
+      new Set(entry.content.objectives.map((objective) => objective.id)),
+    ]),
+  );
+  const questData =
+    saved.questData?.map((entry) => ({
+      ...entry,
+      // Deleted definitions/objectives and raced assignments cannot establish public visibility.
+      goals: entry.goals.map((goal) => {
+        if (objectiveIds.get(entry.id)?.has(goal.id)) return goal;
+        const {
+          sector: _sector,
+          longitude: _longitude,
+          latitude: _latitude,
+          ...publicGoal
+        } = goal;
+        return publicGoal;
+      }),
+    })) ?? saved.questData;
+  const publicUser = getPublicQuestUser({
+    ...saved,
+    questData,
+    userQuests: definitions.map((quest) => ({ quest })),
+  });
   const sourceUser = { ...saved, ...sources };
-  const { bloodlineId: _bloodlineId, isAi: _isAi, ...patch } = saved;
+  const { bloodlineId: _bloodlineId, isAi: _isAi, role: _role, ...patch } = saved;
   return {
     ...patch,
+    questData: publicUser.questData,
     effectiveMasteries: effectiveMasteries(sourceUser),
     maxEnergy: calcMaxEnergy(sourceUser),
   };

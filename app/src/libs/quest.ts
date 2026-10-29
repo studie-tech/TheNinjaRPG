@@ -2237,7 +2237,12 @@ export const questHasOverworldObjectives = (quest: Quest) =>
   );
 
 /** Projects private quest state for client responses without changing server-owned trackers. */
-export const getPublicQuestUser = <T extends NonNullable<UserWithRelations>>(
+export const getPublicQuestUser = <
+  T extends Pick<UserData, "questData" | "sector" | "role"> & {
+    userQuests: { quest?: Pick<Quest, "id" | "content"> | null }[];
+    questParty?: unknown;
+  },
+>(
   user: T,
 ): T => {
   const responseUser = {
@@ -2264,8 +2269,8 @@ export const getPublicQuestUser = <T extends NonNullable<UserWithRelations>>(
  * it will obfuscate the objective's location by setting its latitude, longitude, and sector to 1337.
  */
 export const controlShownQuestLocationInformation = (
-  quest?: Quest,
-  user?: UserData,
+  quest?: Pick<Quest, "id" | "content"> | null,
+  user?: Pick<UserData, "questData" | "sector" | "role">,
 ) => {
   const tracker = user?.questData?.find((q) => q.id === quest?.id);
   quest?.content.objectives.forEach((objective) => {
