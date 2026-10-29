@@ -50,6 +50,7 @@ export const findMembershipUserCache = (
       latitude: true,
       reputationPoints: true,
       clanId: true,
+      anbuId: true,
       villageId: true,
       isOutlaw: true,
       joinedVillageAt: true,
@@ -62,6 +63,7 @@ export const findMembershipUserCache = (
       homeType: true,
     },
     with: {
+      anbuSquad: { columns: { id: true, name: true, points: true } },
       clan: true,
       bloodline: true,
       raidBuffs: true,

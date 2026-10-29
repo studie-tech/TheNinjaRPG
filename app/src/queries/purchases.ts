@@ -33,6 +33,10 @@ import {
 } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
 import type { DrizzleClient } from "@/server/db";
+import {
+  completedQuestHistoryRelation,
+  userQuestHistoryRelation,
+} from "@/server/utils/achievementObjectives";
 
 /** Build the `storePurchase` selection for `recent`, including predicates on `userId`, `transactionId`, `productId`. */
 export const selectStorePurchaseForRecent = (
@@ -1171,17 +1175,15 @@ export const executeRowsForReconcileFederalStatuses = (
       SET ${userData.federalStatus} = ${federalStatus}
       WHERE ${and(inArray(userData.userId, ids), eligible)}`);
 
-/** Confirm current balances after idempotent or asynchronous payment delivery. */
+/** Confirm balances and the quest eligibility inputs affected by asynchronous reputation grants. */
 export const findPurchaseUserSnapshot = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
 ) =>
   client.query.userData.findFirst({
-    columns: {
-      money: true,
-      reputationPoints: true,
-      reputationPointsTotal: true,
-      federalStatus: true,
-    },
     where: eq(userData.userId, userId),
+    with: {
+      userQuests: userQuestHistoryRelation,
+      completedQuests: completedQuestHistoryRelation,
+    },
   });

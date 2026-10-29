@@ -4,11 +4,10 @@ import {
   fetchUpdatedUser,
   getUserProgressionUpdate,
 } from "@/server/api/routers/profile";
-import type { updateRewards } from "@/server/api/routers/quests";
+import { getRewardUserDelta, type updateRewards } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
 import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
-import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 
 /** Confirm SQL-capped counters; hydrate derived relations only when the reward changes them. */
 export const getRewardUserUpdate = async (input: {
@@ -25,17 +24,10 @@ export const getRewardUserUpdate = async (input: {
   const { client, userId, rewards, granted } = input;
   const needsRelations =
     input.requiresRelations ||
-    rewards.reward_rank !== "NONE" ||
-    rewards.reward_village_membership !== "NONE" ||
+    getRewardUserDelta(rewards) === undefined ||
     granted.titles.length > 0 ||
     granted.badges.length > 0 ||
-    granted.sageModes.length > 0 ||
-    rewards.reward_clanpoints !== 0 ||
-    rewards.reward_anbupoints !== 0 ||
-    rewards.reward_war_damage !== 0 ||
-    rewards.reward_war_healing !== 0 ||
-    MASTERY_EXPERIENCE_FIELDS.some((field) => (rewards[field] ?? 0) !== 0) ||
-    (rewards.reward_mastery_rank != null && rewards.reward_mastery_rank !== "NONE");
+    granted.sageModes.length > 0;
   const hydrated = needsRelations
     ? await withRequestScope(() => fetchUpdatedUser({ client, userId }))
     : undefined;
@@ -68,7 +60,10 @@ export const getRewardUserUpdate = async (input: {
       }
     : await findRewardUserSnapshot(client, userId);
   const membership =
-    hydrated?.user && rewards.reward_village_membership !== "NONE"
+    hydrated?.user &&
+    (rewards.reward_village_membership !== "NONE" ||
+      rewards.reward_prestige < 0 ||
+      hydrated.user.villageId !== (hydrated.user.village?.id ?? null))
       ? await getMembershipUserPatch(client, hydrated.user)
       : undefined;
   const progression = hydrated?.user
@@ -80,6 +75,8 @@ export const getRewardUserUpdate = async (input: {
     userPatch: hydrated?.user
       ? {
           ...progression?.userPatch,
+          dungeonsCompleted: hydrated.user.dungeonsCompleted,
+          raidsCompleted: hydrated.user.raidsCompleted,
           ...counters,
           village: hydrated.user.village,
           villageId: hydrated.user.villageId,

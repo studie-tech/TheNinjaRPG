@@ -187,7 +187,8 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
         },
       });
       for (const reread of rereads) expect(reread).not.toHaveBeenCalled();
-      expect(catalogueReads.mock.calls).toEqual(Array.from({ length: owned ? 1 : 2 }, () => [catalogueQuery]));
+      // Content rewards reconcile collection objectives even when this content is already owned.
+      expect(catalogueReads.mock.calls).toEqual(Array.from({ length: 2 }, () => [catalogueQuery]));
       const inventory = await database.query.userItem.findMany({
         where: eq(userItem.userId, "raid-reward-user"),
       });
@@ -213,7 +214,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
         ).reduce((sum, row) => sum + row.quantity, 0),
       ).toBe(3);
       for (const reread of rereads) expect(reread).not.toHaveBeenCalled();
-      expect(catalogueReads.mock.calls).toEqual(Array.from({ length: owned ? 2 : 3 }, () => [catalogueQuery]));
+      expect(catalogueReads.mock.calls).toEqual(Array.from({ length: 3 }, () => [catalogueQuery]));
     },
   );
 });
