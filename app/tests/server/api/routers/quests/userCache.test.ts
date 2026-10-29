@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { item, quest, questHistory, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
+import { item, quest, questHistory, userCookingJob, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
 import { profileRouter } from "@/server/api/routers/profile";
 import { getEnergyQueue } from "@/libs/queue";
@@ -40,7 +40,7 @@ const countProfileReads = async () => {
 
 describeWithDatabase("confirmed quest cache responses", () => {
   beforeEach(async () => {
-    await resetTables(userItem, item, userQueue, questHistory, quest, userVote, userData);
+    await resetTables(userCookingJob, userItem, item, userQueue, questHistory, quest, userVote, userData);
     await insertUsers([{ userId: playerId, username: "questcache", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", isOutlaw: true, status: "AWAKE",
       sector: 0, money: 1000, earnedExperience: 0, curEnergy: 30, regeneration: 0,
@@ -115,10 +115,12 @@ describeWithDatabase("confirmed quest cache responses", () => {
     },
   );
 
-  it("forwards a located mission start without refetching the profile", async () => {
+  it.each([false, true])("forwards a located mission start without refetching the profile (settled cooking=%s)", async (settleCooking) => {
     const db = await getTestDatabase();
     await db.update(quest).set({ content: { ...content(10), objectives: [AllObjectives.parse({ id: "located", task: "move_to_location", sector: 2, longitude: 10, latitude: 7, sectorType: "specific", sectorList: [], locationType: "specific", hideLocation: false })] } }).where(eq(quest.id, missionId));
+    if (settleCooking) await db.insert(userCookingJob).values({ id: "completed-cooking", userId: playerId, experience: 23, finishesAt: new Date(Date.now() + 60000) });
     const profile = await (await callerFor(profileRouter, playerId)).getUser();
+    if (settleCooking) await db.update(userCookingJob).set({ finishesAt: new Date(Date.now() - 1000) }).where(eq(userCookingJob.id, "completed-cooking"));
     const client = new QueryClient();
     const key = [["profile", "getUser"], { type: "query" }];
     client.setQueryData(key, profile);
@@ -133,8 +135,11 @@ describeWithDatabase("confirmed quest cache responses", () => {
       expect(result.userPatch).toBeDefined();
       await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress });
       expect(client.getQueryData<typeof profile>(key)?.userData?.userQuests.some((entry) => entry.questId === missionId)).toBe(true);
+      expect((await readPlayer())?.cookingExperience).toBe(settleCooking ? 23 : 0);
+      expect(client.getQueryData<typeof profile>(key)?.userData).toMatchObject({ cookingExperience: settleCooking ? 23 : 0, cookingJobs: [] });
       expect(reads).toBe(0);
-      expect(readsBefore()).toBe(1);
+      // Cooking settlement reloads its committed receipt; the response adds no read.
+      expect(readsBefore()).toBe(settleCooking ? 2 : 1);
     } finally { stop(); client.clear(); }
   });
 
