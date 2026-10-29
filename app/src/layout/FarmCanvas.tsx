@@ -6,6 +6,7 @@ import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { useGameScene } from "@/hooks/game-scene";
 import WebGlError from "@/layout/WebGLError";
 import { createFarmScene } from "@/libs/rendering/scenes/farm";
+import { FARM_CANVAS_MIN_HEIGHT } from "@/libs/rendering/scenes/farmLayout";
 import { useUserData } from "@/utils/UserContext";
 import type { FarmEffect, FarmPlotState, FarmVisualState } from "@/validators/farming";
 
@@ -70,7 +71,7 @@ const FarmCanvasInner = ({ initialState, onPlotClick, ref }: FarmCanvasProps) =>
     <div
       ref={mountRef}
       className="w-full rounded-lg border bg-emerald-900/40"
-      style={{ minHeight: 360 }}
+      style={{ minHeight: FARM_CANVAS_MIN_HEIGHT }}
     />
   );
 };

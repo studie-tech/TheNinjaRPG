@@ -1,13 +1,12 @@
 "use client";
 
-import { Filter, ShoppingBag } from "lucide-react";
+import { Coins } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FARM_MAX_PLOTS } from "@/drizzle/constants";
 import { FarmQuantityStepper } from "@/layout/FarmQuantityStepper";
-import { FarmTransactionSummary } from "@/layout/FarmTransactionSummary";
 import Image from "@/layout/Image";
+import { getFarmQuantityPrice } from "@/libs/farming";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import type { FarmShopEntryState, FarmStateResponse } from "@/validators/farming";
 
@@ -15,6 +14,8 @@ type FarmMarketProps = {
   farmState: FarmStateResponse;
   pendingKeys: Set<string>;
   onBuy: (entry: FarmShopEntryState, quantity: number) => Promise<boolean>;
+  /** Seeds and supplies, or plot and extractor upgrades. */
+  section?: "market" | "upgrades";
 };
 
 const duration = (seconds?: number) => {
@@ -25,141 +26,183 @@ const duration = (seconds?: number) => {
   return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
 };
 
-export function FarmMarket({ farmState, pendingKeys, onBuy }: FarmMarketProps) {
+/** Farm shop rows with quantity, total price and purchase in one line per item. */
+export function FarmMarket({
+  farmState,
+  pendingKeys,
+  onBuy,
+  section = "market",
+}: FarmMarketProps) {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [affordableOnly, setAffordableOnly] = useState(false);
   const [unlockedOnly, setUnlockedOnly] = useState(false);
 
+  const filtersActive = affordableOnly || unlockedOnly;
   const entries = farmState.shopEntries.filter(
     (entry) =>
       (!affordableOnly || entry.canAfford) &&
       (!unlockedOnly || farmState.farmingLevel >= entry.minLevel),
   );
-  const seeds = entries.filter((entry) => entry.type === "SEED");
-  const supplies = entries.filter((entry) => entry.type === "FERTILIZER");
-  const upgrades = entries.filter(
-    (entry) => entry.type === "PLOT" || entry.type === "EXTRACTOR",
-  );
+  const groups =
+    section === "market"
+      ? [
+          {
+            title: "Seeds",
+            items: entries.filter((entry) => entry.type === "SEED"),
+            empty: "No seeds are for sale right now.",
+          },
+          {
+            title: "Supplies",
+            items: entries.filter((entry) => entry.type === "FERTILIZER"),
+            empty: "No supplies are for sale right now.",
+          },
+        ]
+      : [
+          {
+            title: "Upgrades",
+            items: entries.filter(
+              (entry) => entry.type === "PLOT" || entry.type === "EXTRACTOR",
+            ),
+            empty: "No upgrades are available right now.",
+          },
+        ];
 
-  const renderEntries = (items: FarmShopEntryState[]) =>
-    items.length === 0 ? (
-      <p className="rounded-md border border-dashed p-5 text-center text-muted-foreground text-sm">
-        No items match these filters.
-      </p>
-    ) : (
-      <div className="grid gap-3 sm:grid-cols-2">
-        {items.map((entry) => {
-          const key = `${entry.type}:${entry.itemId ?? "upgrade"}`;
-          const pending = pendingKeys.has(`buy:${key}`);
-          const consumable = entry.type === "SEED" || entry.type === "FERTILIZER";
-          const max = consumable
-            ? Math.max(1, Math.min(99, Math.floor(farmState.farmCurrency / entry.cost)))
-            : 1;
-          const quantity = Math.min(quantities[key] ?? 1, max);
-          return (
-            <div key={key} className="space-y-3 rounded-lg border p-3">
-              <div className="flex gap-3">
-                {entry.itemImage && (
-                  <Image src={entry.itemImage} alt="" width={44} height={44} />
-                )}
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-sm">{entry.label}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {entry.cost.toLocaleString()} coins each · Lv {entry.minLevel}+
-                  </p>
-                  {entry.type === "SEED" && (
-                    <p className="text-muted-foreground text-xs">
-                      {duration(entry.growTimeSeconds)} → {entry.yieldQuantity}{" "}
-                      {entry.yieldName} · +{entry.experience ?? 0} XP
-                    </p>
-                  )}
-                  {entry.type === "FERTILIZER" && (
-                    <p className="text-muted-foreground text-xs">
-                      Reduces grow time by{" "}
-                      {duration(entry.fertilizerTimeReductionSeconds)}
-                    </p>
-                  )}
-                  {entry.lockedReason && (
-                    <p className="text-destructive text-xs">{entry.lockedReason}</p>
-                  )}
-                </div>
-              </div>
-              {consumable && (
-                <FarmQuantityStepper
-                  value={quantity}
-                  max={max}
-                  disabled={pending || !entry.canPurchase}
-                  onChange={(value) =>
-                    setQuantities((current) => ({ ...current, [key]: value }))
-                  }
-                  label={`${entry.label} quantity`}
-                />
-              )}
-              <FarmTransactionSummary
-                verb="Buy"
-                quantity={quantity}
-                itemName={entry.label}
-                unitPrice={entry.cost}
-              />
-              <Button
-                className="w-full"
-                size="sm"
-                disabled={
-                  !entry.canPurchase ||
-                  pending ||
-                  !Number.isInteger(quantity) ||
-                  quantity < 1 ||
-                  quantity > max
-                }
-                onClick={() => {
-                  if (Number.isInteger(quantity) && quantity >= 1 && quantity <= max)
-                    void onBuy(entry, quantity);
-                }}
-              >
-                {pending ? "Purchasing…" : "Purchase"}
-              </Button>
-            </div>
-          );
-        })}
-      </div>
+  const renderEntry = (entry: FarmShopEntryState) => {
+    const key = `${entry.type}:${entry.itemId ?? "upgrade"}`;
+    const pending = pendingKeys.has(`buy:${key}`);
+    const consumable = entry.type === "SEED" || entry.type === "FERTILIZER";
+    const max = consumable
+      ? Math.max(1, Math.min(99, Math.floor(farmState.farmCurrency / entry.cost)))
+      : 1;
+    const quantity = Math.min(quantities[key] ?? 1, max);
+    const validQuantity =
+      Number.isInteger(quantity) && quantity >= 1 && quantity <= max;
+    const total = getFarmQuantityPrice(entry.cost, validQuantity ? quantity : 1);
+    return (
+      <li
+        key={key}
+        className="flex flex-col gap-2 rounded-md border bg-card p-2.5 @[640px]:flex-row @[640px]:items-center"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {entry.itemImage && (
+            <Image src={entry.itemImage} alt="" width={40} height={40} />
+          )}
+          <div className="min-w-0">
+            <p className="font-medium text-sm">
+              {entry.label}{" "}
+              <span className="font-normal text-muted-foreground">
+                {entry.cost.toLocaleString()} coins{consumable ? " each" : ""}
+              </span>
+            </p>
+            {entry.type === "SEED" && (
+              <p className="text-muted-foreground text-xs">
+                {duration(entry.growTimeSeconds)} → {entry.yieldQuantity}{" "}
+                {entry.yieldName} · +{entry.experience ?? 0} XP
+              </p>
+            )}
+            {entry.type === "FERTILIZER" && (
+              <p className="text-muted-foreground text-xs">
+                Reduces grow time by {duration(entry.fertilizerTimeReductionSeconds)}
+              </p>
+            )}
+            {entry.lockedReason ? (
+              <p className="text-destructive text-xs">{entry.lockedReason}</p>
+            ) : (
+              entry.minLevel > 1 && (
+                <p className="text-muted-foreground text-xs">
+                  Farming level {entry.minLevel}+
+                </p>
+              )
+            )}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          {consumable && (
+            <FarmQuantityStepper
+              value={quantity}
+              max={max}
+              disabled={pending || !entry.canPurchase}
+              onChange={(value) =>
+                setQuantities((current) => ({ ...current, [key]: value }))
+              }
+              label={`${entry.label} quantity`}
+            />
+          )}
+          <Button
+            size="sm"
+            className="min-w-28"
+            disabled={!entry.canPurchase || pending || !validQuantity}
+            onClick={() => {
+              if (validQuantity) void onBuy(entry, quantity);
+            }}
+          >
+            {pending ? (
+              "Buying…"
+            ) : (
+              <>
+                <Coins className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Buy for {total.toLocaleString()}
+              </>
+            )}
+          </Button>
+        </div>
+      </li>
     );
+  };
 
   return (
-    <Card id="farm-market">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ShoppingBag className="h-5 w-5" /> Farm Market
-        </CardTitle>
+    <div id={section === "market" ? "farm-market" : undefined} className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-muted-foreground text-sm">
+          {section === "upgrades" &&
+            `You have ${farmState.totalPlots} of ${FARM_MAX_PLOTS} plots and ${farmState.farmExtractorsOwned} seed ${farmState.farmExtractorsOwned === 1 ? "extractor" : "extractors"}.`}
+        </p>
         <fieldset className="flex gap-1">
           <legend className="sr-only">Market filters</legend>
           <Button
             size="sm"
             variant={affordableOnly ? "default" : "outline"}
+            aria-pressed={affordableOnly}
             onClick={() => setAffordableOnly((value) => !value)}
           >
-            <Filter className="mr-1 h-3.5 w-3.5" /> Affordable
+            Affordable
           </Button>
           <Button
             size="sm"
             variant={unlockedOnly ? "default" : "outline"}
+            aria-pressed={unlockedOnly}
             onClick={() => setUnlockedOnly((value) => !value)}
           >
             Unlocked
           </Button>
         </fieldset>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="seeds">
-          <TabsList className="mb-3 grid w-full grid-cols-3">
-            <TabsTrigger value="seeds">Seeds</TabsTrigger>
-            <TabsTrigger value="supplies">Supplies</TabsTrigger>
-            <TabsTrigger value="upgrades">Upgrades</TabsTrigger>
-          </TabsList>
-          <TabsContent value="seeds">{renderEntries(seeds)}</TabsContent>
-          <TabsContent value="supplies">{renderEntries(supplies)}</TabsContent>
-          <TabsContent value="upgrades">{renderEntries(upgrades)}</TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+      </div>
+      {groups.map((group) => (
+        <section key={group.title} className="space-y-2">
+          {groups.length > 1 && (
+            <h3 className="font-semibold text-sm">{group.title}</h3>
+          )}
+          {group.items.length === 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed p-3 text-muted-foreground text-sm">
+              {filtersActive ? "Nothing matches these filters." : group.empty}
+              {filtersActive && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setAffordableOnly(false);
+                    setUnlockedOnly(false);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          ) : (
+            <ul className="grid gap-2">{group.items.map(renderEntry)}</ul>
+          )}
+        </section>
+      ))}
+    </div>
   );
 }

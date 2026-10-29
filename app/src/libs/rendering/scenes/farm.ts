@@ -8,10 +8,11 @@ import { canWaterPlot, getPlotGrowthStage, isPlotReady } from "@/libs/farming";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { farmLightingClock, nextFarmVisualAt } from "@/libs/rendering/scenes/farmClock";
 import {
+  FARM_CANVAS_MIN_HEIGHT,
   FARM_PLOT_SIZE,
-  FARM_VIEW_HEIGHT,
   farmPlotAt,
   farmPlotPosition,
+  farmViewScale,
 } from "@/libs/rendering/scenes/farmLayout";
 import type { FarmEffect, FarmPlotState, FarmVisualState } from "@/validators/farming";
 
@@ -34,7 +35,7 @@ export const createFarmScene = async (options: {
     ...options,
     touchAction: "auto",
     background: 0x87ae73,
-    height: (width) => Math.max(360, width * 0.55),
+    height: (width) => Math.max(FARM_CANVAS_MIN_HEIGHT, width * 0.55),
   });
   game.setAnimating(false);
   try {
@@ -148,10 +149,27 @@ export const createFarmScene = async (options: {
       }
       return true;
     };
+    // The view zooms to the plot grid, so it is laid out again when the plot count changes.
+    let viewTotal = state.totalPlots;
+    const applyView = (width: number, height: number) => {
+      viewTotal = state.totalPlots;
+      const scale = farmViewScale(width, height, viewTotal);
+      background.width = width;
+      background.height = height;
+      world.position.set(width / 2, height / 2);
+      world.scale.set(scale);
+      night.position.set(-width / scale / 2, -height / scale / 2);
+      night.width = width / scale;
+      night.height = height / scale;
+    };
     const refresh = () => {
       if (game.isDisposed()) return;
       const now = clock();
       let changed = false;
+      if (state.totalPlots !== viewTotal) {
+        applyView(game.renderer.width, game.renderer.height);
+        changed = true;
+      }
       const plots = new Map(
         state.plots.map((plot) => [plot.slotIndex, livePlot(plot, now)]),
       );
@@ -226,15 +244,7 @@ export const createFarmScene = async (options: {
           : setTimeout(refresh, Math.max(1, nextAt - now.getTime()));
     };
     refresh();
-    game.setResize((width, height) => {
-      background.width = width;
-      background.height = height;
-      world.position.set(width / 2, height / 2);
-      world.scale.set(height / FARM_VIEW_HEIGHT);
-      night.position.set(-width / world.scale.x / 2, -FARM_VIEW_HEIGHT / 2);
-      night.width = width / world.scale.x;
-      night.height = FARM_VIEW_HEIGHT;
-    });
+    game.setResize(applyView);
     const setHovered = (slot: number | null) => {
       if (hovered === slot) return;
       hovered = slot;

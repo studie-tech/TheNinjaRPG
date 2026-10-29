@@ -13,12 +13,15 @@ import {
   getFarmPrimaryAction,
   getNextWateringAt,
 } from "@/libs/farming";
+import { cn } from "@/libs/shadui";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
 type FarmPlotInspectorProps = {
-  plot: FarmPlotState | null;
+  plot: FarmPlotState;
+  /** Floats above the page on phones instead of sitting in the layout. */
+  docked?: boolean;
   farmState: FarmStateResponse;
   now: Date;
   pending: boolean;
@@ -41,6 +44,7 @@ const formatDuration = (seconds: number) => {
 /** Shows plot actions and base XP estimates with explicit harvest controls. */
 export function FarmPlotInspector({
   plot,
+  docked = false,
   farmState,
   now,
   pending,
@@ -58,17 +62,7 @@ export function FarmPlotInspector({
   useEffect(() => {
     setSelectedSeedId(null);
     setSelectedFertilizerId(null);
-  }, [plot?.id]);
-
-  if (!plot) {
-    return (
-      <Card className="lg:sticky lg:top-4">
-        <CardContent className="flex min-h-40 items-center justify-center py-6 text-center text-muted-foreground text-sm">
-          Select any plot to inspect it. Harvesting always requires a separate action.
-        </CardContent>
-      </Card>
-    );
-  }
+  }, [plot.id]);
 
   const status = getFarmPlotStatus(plot, now);
   const canWater = status === "growing" && canWaterPlot(plot.lastWateredAt, now);
@@ -103,13 +97,37 @@ export function FarmPlotInspector({
 
   return (
     <Card
-      data-mobile-dock="farm-plot-inspector"
-      className="fixed inset-x-2 bottom-[calc(5rem+env(safe-area-inset-bottom)+0.5rem)] z-30 max-h-[calc(100dvh-6rem-env(safe-area-inset-bottom))] overflow-y-auto shadow-xl md:bottom-2 md:max-h-[72vh] lg:sticky lg:inset-auto lg:top-4 lg:z-auto lg:max-h-[calc(100vh-2rem)] lg:shadow-sm"
+      data-mobile-dock={docked ? "farm-plot-inspector" : undefined}
+      className={cn(
+        "overflow-y-auto",
+        docked
+          ? "fixed inset-x-2 bottom-[calc(5rem+env(safe-area-inset-bottom)+0.5rem)] z-30 max-h-[min(55dvh,32rem)] shadow-xl md:inset-x-auto md:right-4 md:bottom-4 md:w-[360px]"
+          : "max-h-[min(80dvh,40rem)]",
+      )}
       aria-label={`Farm plot ${plot.slotIndex + 1} inspector`}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
+      }}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Leaf className="h-4 w-4 text-emerald-600" /> Plot {plot.slotIndex + 1}
+          <Leaf
+            className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+            aria-hidden
+          />
+          Plot {plot.slotIndex + 1}
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 font-medium text-xs",
+              status === "ready"
+                ? "bg-amber-500/15 text-amber-800 dark:text-amber-300"
+                : status === "growing"
+                  ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
+                  : "bg-muted text-muted-foreground",
+            )}
+          >
+            {status === "ready" ? "Ready" : status === "growing" ? "Growing" : "Empty"}
+          </span>
         </CardTitle>
         <Button
           variant="ghost"
@@ -157,28 +175,26 @@ export function FarmPlotInspector({
             {farmState.availableSeeds.length === 0 ? (
               <div className="rounded-md border border-dashed p-4 text-center">
                 <PackageOpen className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-                <p className="mb-3 text-sm">No seeds in your inventory.</p>
+                <p className="mb-3 text-sm">You have no seeds to plant.</p>
                 <Button size="sm" variant="outline" onClick={onBrowseSeeds}>
-                  Browse seeds
+                  Buy seeds
                 </Button>
               </div>
             ) : (
-              <div
-                className="grid grid-cols-2 gap-2"
-                role="radiogroup"
-                aria-label="Seeds"
-              >
+              <div className="grid gap-2" role="radiogroup" aria-label="Seeds">
                 {farmState.availableSeeds.map((seed) => {
                   const selected = selectedSeed?.itemId === seed.itemId;
                   const locked = farmState.farmingLevel < seed.minLevel;
                   return (
                     <label
                       key={seed.itemId}
-                      className={`rounded-md border p-2 text-left text-xs transition-colors focus-within:ring-2 focus-within:ring-ring ${
+                      className={cn(
+                        "flex cursor-pointer items-center gap-3 rounded-md border p-2 text-left text-sm transition-colors focus-within:ring-2 focus-within:ring-ring",
                         selected
                           ? "border-emerald-500 bg-emerald-500/10"
-                          : "hover:bg-muted"
-                      }`}
+                          : "hover:bg-muted",
+                        locked && "cursor-not-allowed opacity-60",
+                      )}
                     >
                       <input
                         type="radio"
@@ -189,17 +205,20 @@ export function FarmPlotInspector({
                         onChange={() => setSelectedSeedId(seed.itemId)}
                         className="sr-only"
                       />
-                      <span className="flex items-center gap-2 font-medium">
-                        <Image src={seed.image} alt="" width={28} height={28} />
-                        {seed.name} ×{seed.quantity}
-                      </span>
-                      <span className="mt-1 block text-muted-foreground">
-                        {formatDuration(seed.growTimeSeconds)} → {seed.yieldQuantity}{" "}
-                        {seed.yieldName}
-                      </span>
-                      <span className="block text-muted-foreground">
-                        Lv {seed.minLevel} · Base XP: +{seed.plantExperience} plant · +
-                        {seed.harvestExperience} harvest
+                      <Image src={seed.image} alt="" width={36} height={36} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium">
+                          {seed.name} ×{seed.quantity}
+                        </span>
+                        <span className="block text-muted-foreground text-xs">
+                          {formatDuration(seed.growTimeSeconds)} → {seed.yieldQuantity}{" "}
+                          {seed.yieldName}
+                        </span>
+                        <span className="block text-muted-foreground text-xs">
+                          {locked
+                            ? `Requires farming level ${seed.minLevel}`
+                            : `+${seed.plantExperience} XP planting, +${seed.harvestExperience} XP harvest`}
+                        </span>
                       </span>
                     </label>
                   );

@@ -17,6 +17,7 @@ import {
   getFarmingLevelProgress,
   getMaxExtractors,
   getMaxPurchasablePlots,
+  getNextFarmEvents,
   getPlotGrowthStage,
   getPvpFarmActivityReductionSeconds,
   getSeedExtractionDurationSeconds,
@@ -305,5 +306,43 @@ describe("farm seed dropping", () => {
   it("never blocks items that are not market seeds", () => {
     expect(canDropFarmSeed({ ...marketSeed, isFarmSeed: false }, 0)).toBe(true);
     expect(canDropFarmSeed({ ...marketSeed, hidden: true }, 0)).toBe(true);
+  });
+});
+
+describe("next farm events", () => {
+  const now = new Date(WORLD_CYCLE_SECONDS * 1000 * 100 + 60_000);
+  const plot = (patch: Partial<FarmPlotState>): FarmPlotState =>
+    ({
+      id: "plot",
+      slotIndex: 0,
+      seedItemId: "seed",
+      plantedAt: new Date(now.getTime() - 60_000),
+      finishAt: null,
+      lastWateredAt: null,
+      fertilizerApplied: false,
+      ...patch,
+    }) as FarmPlotState;
+
+  it("reports the earliest harvest and watering among growing plots", () => {
+    const soon = new Date(now.getTime() + 10 * 60_000);
+    const later = new Date(now.getTime() + 60 * 60_000);
+    const events = getNextFarmEvents(
+      [
+        plot({ finishAt: later, lastWateredAt: now }),
+        plot({ slotIndex: 1, finishAt: soon, lastWateredAt: now }),
+        plot({ slotIndex: 2, finishAt: new Date(now.getTime() - 1_000) }),
+        plot({ slotIndex: 3, seedItemId: null }),
+      ],
+      now,
+    );
+    expect(events.nextHarvestAt).toEqual(soon);
+    expect(events.nextWateringAt).toEqual(new Date(WORLD_CYCLE_SECONDS * 1000 * 101));
+  });
+
+  it("has no events without growing plots", () => {
+    expect(getNextFarmEvents([plot({ seedItemId: null })], now)).toEqual({
+      nextHarvestAt: null,
+      nextWateringAt: null,
+    });
   });
 });

@@ -148,10 +148,25 @@ describe("FarmPlotInspector", () => {
     });
   });
 
+  it("stays in the layout unless docked", () => {
+    const { container } = render(
+      <FarmPlotInspector
+        plot={plot()}
+        farmState={farmState}
+        now={new Date()}
+        pending={false}
+        {...handlers}
+      />,
+    );
+    expect(container.querySelector("[data-mobile-dock]")).toBeNull();
+    expect(container.firstElementChild?.className).not.toContain("fixed");
+  });
+
   it("renders the mobile dock and plants only from the explicit primary action", () => {
     const { container, getByRole } = render(
       <FarmPlotInspector
         plot={plot()}
+        docked
         farmState={farmState}
         now={new Date()}
         pending={false}
@@ -166,13 +181,27 @@ describe("FarmPlotInspector", () => {
     expect(mobileDock?.className).toContain(
       "bottom-[calc(5rem+env(safe-area-inset-bottom)+0.5rem)]",
     );
-    expect(mobileDock?.className).toContain("md:bottom-2");
+    expect(mobileDock?.className).toContain("md:bottom-4");
     const seed = getByRole("radio", { name: /Tomato Seed/i });
     seed.focus();
     expect(document.activeElement).toBe(seed);
     expect(handlers.onPlant).not.toHaveBeenCalled();
     fireEvent.click(getByRole("button", { name: "Plant" }));
     expect(handlers.onPlant).toHaveBeenCalledWith(expect.objectContaining({ id: "plot-1" }), "seed-1");
+  });
+
+  it("closes with the Escape key", () => {
+    const { getByLabelText } = render(
+      <FarmPlotInspector
+        plot={plot()}
+        farmState={farmState}
+        now={new Date()}
+        pending={false}
+        {...handlers}
+      />,
+    );
+    fireEvent.keyDown(getByLabelText("Farm plot 1 inspector"), { key: "Escape" });
+    expect(handlers.onClose).toHaveBeenCalledTimes(1);
   });
 
   it("shows growing and pending action states", () => {
