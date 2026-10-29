@@ -69,13 +69,13 @@ describe("combat actor reconciliation", () => {
     const fill = threat.children[2] as Sprite, width = fill.width;
     const geometry = highest.context;
     expect(highest.visible).toBe(true);
-    expect(fill.tint).toBe(0xf18a63);
+    expect(fill.tint).toBe(0xf59e0b);
     for (const ratio of [0.25, 2, 0.5, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       actors.sync({ battle, aggro: new Map([[user.userId, { enmity: ratio * 100, ratio, isHighest: ratio === 1 }]]) });
       expect(fill.width).toBeCloseTo(width * (Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 0));
       expect(highest.context).toBe(geometry);
       expect(highest.visible).toBe(false);
-      expect(fill.tint).toBe(0xe9bf75);
+      expect(fill.tint).toBe(0xfbbf24);
     }
   });
   it.each([false, true])("keeps ground cues beneath artwork and the HUD above the head for NPC=%s", async (isAi) => {
@@ -101,7 +101,7 @@ describe("combat actor reconciliation", () => {
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
     const art = root.getChildByLabel("combat-art")!;
     const top = art.getLocalBounds().maxY;
-    expect(top).toBeCloseTo(tile.height * (failedAtlas ? 1.8 : 1.5));
+    expect(top).toBeCloseTo(tile.height * (failedAtlas ? 1.35 : 1.5));
     const meters = ["combat-health", "combat-stamina", "combat-chakra", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
     const positions = meters.map((meter) => meter.y);
     for (const meter of meters) expect(meter.y + meter.getLocalBounds().minY).toBeGreaterThan(top);
@@ -119,13 +119,33 @@ describe("combat actor reconciliation", () => {
   it("retains the compact HUD position when LPC artwork loads successfully", async () => {
     const { root, user, grid } = await setup(false, resolveSpriteAppearance({}));
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
-    expect(root.getChildByLabel("combat-health")?.y).toBeCloseTo(tile.height * 1.58);
-    expect(root.getChildByLabel("combat-aggro")?.y).toBeCloseTo(tile.height * 1.665);
+    expect(root.getChildByLabel("combat-health")?.y).toBeCloseTo(tile.height * 1.4);
+    expect(root.getChildByLabel("combat-aggro")?.y).toBeCloseTo(tile.height * 1.55);
     for (const label of ["combat-selection", "combat-hover", "combat-original"])
       expect(root.getChildByLabel(label)?.y).toBe(0);
   });
+  it("keeps resource rows full-height and separates amber threat from their distinct colors", async () => {
+    const { root, user, grid } = await setup(false, resolveSpriteAppearance({}));
+    const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
+    const meters = ["combat-chakra", "combat-stamina", "combat-health", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
+    expect(meters.map((meter) => (meter.children[2] as Sprite).tint)).toEqual([0x0000ff, 0x008000, 0xb22222, 0xfbbf24]);
+    for (const meter of meters) {
+      expect(meter.height).toBeCloseTo(tile.height / 10);
+      expect(meter.width).toBeCloseTo(tile.width / 2);
+      expect(meter.children[0]).toMatchObject({ tint: 0x000000 });
+    }
+    const gaps = meters.slice(1).map((meter, index) => meter.y - meter.height / 2 - (meters[index]!.y + meters[index]!.height / 2));
+    for (const gap of gaps) expect(gap).toBeGreaterThan(0);
+    expect(gaps[2]).toBeGreaterThan(gaps[0]!);
+  });
   it("shows distinct selection and hover states without rebuilding their geometry", async () => {
-    const { actors, selection, hover, health, user } = await setup();
+    const { actors, selection, hover, health, user, grid } = await setup();
+    const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
+    for (const marker of [selection, hover]) {
+      expect(marker.width).toBeLessThan(tile.width * 0.4);
+      expect(marker.height).toBeLessThan(tile.height * 0.2);
+      expect(marker.context.instructions.every((instruction) => instruction.action === "stroke")).toBe(true);
+    }
     const selectedGeometry = [...selection.context.instructions], hoverGeometry = [...hover.context.instructions];
     const frame = { now: 1000, delta: 1 / 60, reducedMotion: true };
     actors.animate(frame, user.userId, user.userId);

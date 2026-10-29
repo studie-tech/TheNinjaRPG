@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { IMG_BATTLEFIELD_TOMBSTONE } from "@/drizzle/constants";
 import type { ReturnedBattle, ReturnedUserState } from "@/libs/combat/types";
 import type { TerrainHex } from "@/libs/hexgrid";
+import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { combatActorParts } from "@/libs/rendering/scenes/combatActors";
 import { createStatusMeter } from "@/libs/rendering/primitives/statusMeter";
 import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
@@ -23,6 +24,13 @@ describe("combat fighter recipes", () => {
     expect(parts.map((part) => part.kind)).toEqual(["aiAvatar", "tombstone"]);
     expect(parts[0]).toMatchObject({ image: "portrait.webp", size: 32, y: 18, rendition: 256 });
     expect(parts[0]?.mask).toBeUndefined();
+  });
+  it("scales LPC fighters to 75% while keeping their frame grounded", () => {
+    const spriteAppearance = resolveSpriteAppearance({});
+    const parts = combatActorParts(user({ isAi: false, spriteAppearance }), tile, battle);
+    const avatar = parts.find((part) => part.kind === "avatar")!;
+    expect(avatar).toMatchObject({ character: spriteAppearance, size: tile.height * 1.8 * 0.75, y: tile.height * 0.9 * 0.75 });
+    expect(avatar.y - avatar.size / 2).toBe(0);
   });
   it("never mutates the battle or fighter while building its display", () => {
     const fighter = user({ isAi: false }), original = structuredClone(fighter);

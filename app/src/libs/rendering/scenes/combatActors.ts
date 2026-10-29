@@ -27,6 +27,8 @@ import { createRenderScope } from "@/libs/rendering/scope";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { isObjectChainVisible } from "@/libs/rendering/visibility";
 
+const LPC_COMBAT_SCALE = 0.75;
+
 /** Scene-owned fighters keep art, interpolation and display values outside battle state. */
 export const createCombatActors = (
   game: GameRenderer,
@@ -79,14 +81,15 @@ export const createCombatActors = (
         const scope = createRenderScope(game),
           root = new Container(),
           artRoot = new Container();
+        const figureScale = parts.some((part) => part.character) ? LPC_COMBAT_SCALE : 1;
         const shadowSprite = new Sprite(shadow);
         shadowSprite.anchor.set(0.5);
-        shadowSprite.width = tile.width * 0.8;
-        shadowSprite.height = tile.height * 0.5;
+        shadowSprite.width = tile.width * 0.8 * figureScale;
+        shadowSprite.height = tile.height * 0.5 * figureScale;
         shadowSprite.scale.y *= -1;
-        shadowSprite.position.set(tile.width / 2, tile.height * 0.3);
-        const selection = groundSelection(tile, true),
-          hover = groundSelection(tile, false);
+        shadowSprite.position.set(tile.width / 2, tile.height * 0.3 * figureScale);
+        const selection = groundSelection(tile, true, figureScale),
+          hover = groundSelection(tile, false, figureScale);
         const identity = new Graphics()
           .poly([
             tile.width * 0.44,
@@ -104,32 +107,36 @@ export const createCombatActors = (
         artRoot.label = "combat-art";
         // Ground cues stay below artwork; the compact HUD clears both LPC heads and NPC portraits.
         root.addChild(shadowSprite, selection, hover, identity, artRoot);
-        const hudTop = tile.height * (user.isAi && user.isOriginal ? 1.84 : 1.58);
-        const meterWidth = tile.width * 0.62;
+        // Full-height, separated rows preserve the resource colors at mobile map scale.
+        const meterWidth = tile.width / 2,
+          meterHeight = tile.height / 10,
+          meterGap = tile.height * 0.025,
+          meterStep = meterHeight + meterGap;
+        const lastMeterIndex = "curChakra" in user ? 2 : "curStamina" in user ? 1 : 0;
+        const hudClearance =
+          lastMeterIndex * meterStep + meterHeight / 2 + tile.height * 0.03;
+        const hudTop =
+          tile.height * (user.isAi && user.isOriginal ? 1.71 : 1.07) + hudClearance;
         const meter = (color: number, index: number) =>
           createStatusMeter({
             width: meterWidth,
-            height: tile.height * (index === 0 ? 0.055 : 0.035),
+            height: meterHeight,
             color,
-            backgroundColor: 0x15232c,
-            trackColor: 0x35414a,
             x: (tile.width - meterWidth) / 2,
-            y: hudTop - tile.height * (index === 0 ? 0 : index === 1 ? 0.065 : 0.115),
+            y: hudTop - index * meterStep,
           });
-        const hp = meter(0xe77970, 0);
-        const sp = "curStamina" in user ? meter(0x8ebd9b, 1) : null;
-        const cp = "curChakra" in user ? meter(0x7bb7df, 2) : null;
+        const hp = meter(0xb22222, 0);
+        const sp = "curStamina" in user ? meter(0x008000, 1) : null;
+        const cp = "curChakra" in user ? meter(0x0000ff, 2) : null;
         hp.container.label = "combat-health";
         if (sp) sp.container.label = "combat-stamina";
         if (cp) cp.container.label = "combat-chakra";
         const threat = createStatusMeter({
           width: meterWidth,
-          height: tile.height * 0.035,
-          color: 0xe9bf75,
-          backgroundColor: 0x15232c,
-          trackColor: 0x35414a,
+          height: meterHeight,
+          color: 0xfbbf24,
           x: (tile.width - meterWidth) / 2,
-          y: hudTop + tile.height * 0.085,
+          y: hudTop + meterHeight + meterGap * 2,
         });
         threat.container.label = "combat-aggro";
         const highestThreat = new Graphics()
@@ -143,7 +150,7 @@ export const createCombatActors = (
             -tile.height * 0.035,
             -tile.height * 0.035,
           ])
-          .fill(0xf18a63)
+          .fill(0xf59e0b)
           .stroke({ color: 0x15232c, width: tile.height * 0.014 });
         highestThreat.label = "combat-aggro-highest";
         threat.container.addChild(highestThreat);
@@ -209,7 +216,7 @@ export const createCombatActors = (
                   top = Math.max(top, entry.bounds.maxY);
                   bottom = Math.min(bottom, entry.bounds.minY);
                 }
-                const offset = Math.max(0, top + tile.height * 0.16 - hudTop);
+                const offset = Math.max(0, top + hudClearance - hudTop);
                 for (const meter of [hp, sp, cp, threat])
                   if (meter) meter.container.y += offset;
                 const groundOffset = Math.min(
@@ -300,7 +307,7 @@ export const createCombatActors = (
     const threat = displayed ? snapshot.aggro?.get(user.userId) : undefined;
     record.threat.container.visible = threat !== undefined;
     record.highestThreat.visible = threat?.isHighest ?? false;
-    record.threat.set(threat?.ratio ?? 0, threat?.isHighest ? 0xf18a63 : 0xe9bf75);
+    record.threat.set(threat?.ratio ?? 0, threat?.isHighest ? 0xf59e0b : 0xfbbf24);
   };
   const animate = (
     frame: GameFrame,
@@ -479,9 +486,14 @@ export const combatActorParts = (
     const village = getVillage(battle, user.villageId);
     if (user.spriteAppearance)
       parts.push(
-        part("avatar", user.avatar || IMG_AVATAR_DEFAULT, h * 1.8, h * 0.9, {
-          character: user.spriteAppearance,
-        }),
+        // Scale the authored frame around its ground anchor without shrinking the HUD.
+        part(
+          "avatar",
+          user.avatar || IMG_AVATAR_DEFAULT,
+          h * 1.8 * LPC_COMBAT_SCALE,
+          h * 0.9 * LPC_COMBAT_SCALE,
+          { character: user.spriteAppearance },
+        ),
       );
     else {
       parts.push(
@@ -519,37 +531,21 @@ export const combatActorParts = (
   return parts;
 };
 
-/** Retained ground-plane reticles distinguish the controlled unit from a hovered target by shape. */
-const groundSelection = (tile: TerrainHex, selected: boolean) => {
+/** Thin ground ellipses identify controlled and hovered fighters without obscuring the terrain. */
+const groundSelection = (tile: TerrainHex, selected: boolean, figureScale: number) => {
   const x = tile.width / 2,
-    y = tile.height * 0.28;
-  const rx = tile.width * 0.36,
-    ry = tile.height * 0.115;
+    y = tile.height * 0.28 * figureScale;
+  const rx = tile.width * 0.17,
+    ry = tile.height * 0.07;
   const marker = new Graphics()
     .ellipse(x, y, rx, ry)
-    .fill({ color: selected ? 0xf0c56b : 0x9ae0e9, alpha: selected ? 0.1 : 0.035 })
-    .stroke({ color: 0x15232c, alpha: 0.9, width: tile.width * 0.045 })
+    .stroke({ color: 0x15232c, alpha: 0.55, width: tile.width * 0.025 })
     .ellipse(x, y, rx, ry)
     .stroke({
       color: selected ? 0xf0c56b : 0x9ae0e9,
-      width: tile.width * (selected ? 0.022 : 0.015),
+      alpha: selected ? 0.8 : 0.65,
+      width: tile.width * (selected ? 0.012 : 0.01),
     });
-  for (const side of [-1, 1]) {
-    marker
-      .moveTo(x + side * rx * 0.9, y + ry * 0.8)
-      .lineTo(x + side * rx * 1.12, y)
-      .lineTo(x + side * rx * 0.9, y - ry * 0.8);
-    if (selected)
-      marker
-        .moveTo(x - rx * 0.15, y + side * ry * 1.25)
-        .lineTo(x + rx * 0.15, y + side * ry * 1.25);
-  }
-  marker.stroke({
-    color: selected ? 0xf0c56b : 0x9ae0e9,
-    width: tile.width * 0.025,
-    cap: "round",
-    join: "round",
-  });
   marker.label = selected ? "combat-selection" : "combat-hover";
   marker.visible = false;
   return marker;
