@@ -62,7 +62,8 @@ interface RankedLoadoutSaveSnapshot {
  */
 export const RankedArenaMain: React.FC = () => {
   // Ensure user is in village
-  const { userData, access } = useRequireInVillage("/battlearena");
+  const { userData, access, prepareUserUpdate, updateUser } =
+    useRequireInVillage("/battlearena");
   const utils = api.useUtils();
 
   // Get queue data
@@ -80,10 +81,11 @@ export const RankedArenaMain: React.FC = () => {
   // Enter ranked season
   const { mutate: enterSeason, isPending: isEntering } =
     api.pvpRank.enterRankedSeason.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          void utils.profile.getUser.invalidate();
+          void updateUser(data.userPatch, { revision, delta: data.userDelta });
         }
       },
     });
