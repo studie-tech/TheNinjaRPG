@@ -6,6 +6,7 @@ import { sceneAssetIds } from "@/libs/contentReview/paths";
 import { ensureDom } from "../setup/dom.mjs";
 import { createToastMock } from "../setup/toastMock";
 import type { ContentProposalStatus } from "@/drizzle/constants";
+import * as UserContext from "@/utils/UserContext";
 
 const state: {
   before: Record<string, unknown>;
@@ -100,9 +101,16 @@ const render = () => renderToStaticMarkup(
 );
 
 describe("proposal review detail", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
   beforeEach(() => {
     ensureDom();
+    vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+      prepareUserUpdate: vi.fn(),
+      updateUser: vi.fn(),
+    } as never);
     state.before = {};
     state.after = {};
     state.applied = null;

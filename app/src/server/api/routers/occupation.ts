@@ -633,8 +633,8 @@ export const occupationRouter = createTRPCRouter({
       const saved = await findCraftingCacheState(ctx.drizzle, ctx.userId).catch(
         () => undefined,
       );
-      // Queue starts persist ordinary trackers; automatic achievements and team effects
-      // still require the canonical progression flow before publishing a cache update.
+      // Queue starts persist event counters without evaluating total XP objectives or
+      // virtual achievements; changed XP requires the canonical progression flow.
       const changedIds = new Set(
         (saved?.questData ?? [])
           .filter(
@@ -646,6 +646,7 @@ export const occupationRouter = createTRPCRouter({
       );
       const canProject =
         saved &&
+        saved.craftingExperience === user.craftingExperience &&
         !saved.userQuests.some(
           (entry) =>
             changedIds.has(entry.questId) &&

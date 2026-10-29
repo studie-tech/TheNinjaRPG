@@ -200,7 +200,13 @@ export const getBattleUserPatch = async (client: DrizzleClient, userId: string) 
   const publicTrackers = await getPublicQuestTrackerPatch(client, saved);
   if (!publicTrackers) return undefined;
   const sourceUser = { ...saved, ...sources };
-  const { bloodlineId: _bloodlineId, isAi: _isAi, role: _role, ...patch } = saved;
+  const {
+    bloodlineId: _bloodlineId,
+    isAi: _isAi,
+    role: _role,
+    questData: _privateTrackers,
+    ...patch
+  } = saved;
   return {
     ...patch,
     ...publicTrackers,
