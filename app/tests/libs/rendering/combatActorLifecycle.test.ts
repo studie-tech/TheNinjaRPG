@@ -2,25 +2,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Graphics, type Sprite, Texture } from "pixi.js";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
+import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
+import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
+import type { SpriteAppearance } from "@/validators/lpc";
 import { makeBattleUser, makeCompleteBattle } from "../combat/helpers/battleScenario";
 
 const cleanups: (() => void)[] = [];
 let sequence = 0;
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
-  vi.spyOn(Assets, "load").mockImplementation(async () => new Texture({ source: new BufferImageSource({ resource: new Uint8Array(16 * 16 * 4), width: 16, height: 16 }) }));
+  vi.spyOn(Assets, "load").mockImplementation(async () => new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) }));
   vi.spyOn(Assets, "unload").mockResolvedValue(undefined);
   vi.spyOn(maskedTextures, "acquireMaskedTexture").mockImplementation(() => ({ resource: Promise.resolve(Texture.WHITE), release() {} }));
 });
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
-const setup = async (isAi = true) => {
+const setup = async (isAi = true, spriteAppearance?: SpriteAppearance) => {
   const owned = new Set<() => void>(), stage = new Container();
   const game = { own: (cleanup: () => void) => owned.add(cleanup), disown: (cleanup: () => void) => owned.delete(cleanup), isDisposed: () => false, signal: new AbortController().signal } as unknown as GameRenderer;
   cleanups.push(() => { stage.destroy({ children: true, texture: false, textureSource: false }); for (const cleanup of owned) cleanup(); });
-  const user = makeBattleUser("actor", { longitude: 3, latitude: 1, avatar: `https://example.com/actor-${sequence++}.png`, isAi, isOriginal: true });
+  const user = makeBattleUser("actor", { longitude: 3, latitude: 1, avatar: `https://example.com/actor-${sequence++}.png`, isAi, isOriginal: true, spriteAppearance });
   const battle = makeCompleteBattle({ usersState: [user], usersEffects: [], width: 12, height: 10 }) as unknown as ReturnedBattle;
   const grid = getBattleGrid(40, battle, { x: -20, y: -20 });
   const step = vi.fn(), actors = createCombatActors(game, grid, step);
@@ -88,6 +91,28 @@ describe("combat actor reconciliation", () => {
       const meter = root.getChildByLabel(label)!;
       expect(meter.y - meter.height / 2).toBeGreaterThan(tile.height * (isAi ? 1.7 : 1.4));
     }
+  });
+  it.each([false, true])("keeps every HUD row above portrait artwork, including failed LPC atlases=%s", async (failedAtlas) => {
+    if (failedAtlas) {
+      vi.spyOn(characters, "createLpcCharacter").mockRejectedValue(new Error("Atlas unavailable"));
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+    }
+    const { actors, root, user, battle, grid } = await setup(false, failedAtlas ? resolveSpriteAppearance({}) : undefined);
+    const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
+    const art = root.getChildByLabel("combat-art")!;
+    const top = art.getLocalBounds().maxY;
+    expect(top).toBeCloseTo(tile.height * (failedAtlas ? 1.8 : 1.5));
+    const meters = ["combat-health", "combat-stamina", "combat-chakra", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
+    const positions = meters.map((meter) => meter.y);
+    for (const meter of meters) expect(meter.y + meter.getLocalBounds().minY).toBeGreaterThan(top);
+    actors.sync({ battle }); actors.sync({ battle });
+    expect(meters.map((meter) => meter.y)).toEqual(positions);
+  });
+  it("retains the compact HUD position when LPC artwork loads successfully", async () => {
+    const { root, user, grid } = await setup(false, resolveSpriteAppearance({}));
+    const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
+    expect(root.getChildByLabel("combat-health")?.y).toBeCloseTo(tile.height * 1.58);
+    expect(root.getChildByLabel("combat-aggro")?.y).toBeCloseTo(tile.height * 1.665);
   });
   it("shows distinct selection and hover states without rebuilding their geometry", async () => {
     const { actors, selection, hover, health, user } = await setup();

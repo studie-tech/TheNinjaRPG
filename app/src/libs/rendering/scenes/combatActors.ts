@@ -196,6 +196,21 @@ export const createCombatActors = (
             if (!scope.isDisposed()) {
               current.art = art;
               artRoot.addChild(art.container);
+              // Portrait pins, clan badges and atlas-failure portraits can exceed the LPC figure's head.
+              // Shift the retained meters once after loading, using non-LPC artwork bounds.
+              if (!(current.user.isAi && current.user.isOriginal)) {
+                const { hp, sp, cp, threat } = current;
+                const top = art.entries.reduce(
+                  (height, entry) =>
+                    entry.character || entry.description.kind === "tombstone"
+                      ? height
+                      : Math.max(height, entry.bounds.maxY),
+                  0,
+                );
+                const offset = Math.max(0, top + tile.height * 0.16 - hudTop);
+                for (const meter of [hp, sp, cp, threat])
+                  if (meter) meter.container.y += offset;
+              }
               updateVisual(current);
             }
           },
