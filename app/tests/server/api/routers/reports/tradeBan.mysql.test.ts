@@ -44,7 +44,7 @@ describeWithDatabase("moderator trade ban removal", () => {
   it("lets a moderator lift a trade ban they imposed and records the decision", async () => {
     const db = await getTestDatabase();
     const staff = callerForDatabase(reportsRouter, "staff", db);
-    expect(await staff.tradeBan(decision)).toMatchObject({ success: true });
+    expect(await staff.tradeBan(decision)).toMatchObject({ success: true, pendingReportCount: 0, userPatch: {}, userDelta: {} });
     expect(
       await db.query.userData.findFirst({ where: eq(userData.userId, "target") }),
     ).toMatchObject({ isTradeBanned: true });
@@ -71,7 +71,7 @@ describeWithDatabase("moderator trade ban removal", () => {
       },
     ]);
 
-    expect(await staff.clear(decision)).toMatchObject({ success: true });
+    expect(await staff.clear(decision)).toMatchObject({ success: true, pendingReportCount: 0, userPatch: {}, userDelta: {} });
     expect(
       await db.query.userReport.findFirst({
         where: eq(userReport.id, decision.object_id),

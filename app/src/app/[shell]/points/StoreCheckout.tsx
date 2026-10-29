@@ -8,6 +8,7 @@ import { api } from "@/app/_trpc/client";
 import { STORE_ORDER_RESERVATION_MINUTES } from "@/drizzle/constants";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
+import { useRequiredUserData } from "@/utils/UserContext";
 import type { storeCheckoutSchema } from "@/validators/points";
 
 /**
@@ -28,9 +29,11 @@ export function StoreCheckout({
   const [{ isResolved, isRejected }] = usePayPalScriptReducer();
   const [message, setMessage] = useState<string>();
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const prepare = api.paypal.createStoreOrder.useMutation();
   const resolve = api.paypal.captureStoreOrder.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       setMessage(result.message);
       showMutationToast(result);
       if (result.success && result.purchase) {
@@ -55,7 +58,7 @@ export function StoreCheckout({
       }
       if (result.success)
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser(result.userPatch, { revision, delta: result.userDelta }),
           utils.paypal.getRecentRepsCount.invalidate(),
           utils.paypal.getPaypalTransactions.invalidate(),
           utils.paypal.getStoreBundles.invalidate(),

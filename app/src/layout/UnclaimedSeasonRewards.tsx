@@ -7,22 +7,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRewardArray } from "@/libs/objectives";
 import { showRewardToast } from "@/libs/toast";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export function UnclaimedSeasonRewards() {
   // Fetch unclaimed rewards for the logged-in user
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const { data: unclaimedRewards } =
     api.pvpRank.getUnclaimedUserSeasonRewards.useQuery(undefined);
 
   // Optional: allow the player to claim all rewards directly from here
   const claimRewards = api.pvpRank.claimSeasonRewards.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       if (data.success) {
         if ("rewards" in data && data.rewards) {
           showRewardToast([data.message], data.rewards, "Claimed!");
           await Promise.all([
             utils.pvpRank.getUnclaimedUserSeasonRewards.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, {
+              revision,
+              delta: data.userDelta,
+              achievementProgress: data.achievementProgress,
+            }),
           ]);
         }
       }

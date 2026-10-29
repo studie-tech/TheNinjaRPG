@@ -22,6 +22,7 @@ import {
   STRIPE_CHECKOUT_RESERVATION_SECONDS,
   STRIPE_CHECKOUT_RETRY_SECONDS,
 } from "@/server/utils/purchases/allowance";
+import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 import { logError } from "@/server/utils/sentry";
 import {
   getStripe,
@@ -299,6 +300,9 @@ export const stripeRouter = createTRPCRouter({
       const outcome = await fulfillStripeSession(ctx.drizzle, input.sessionId);
       return {
         success: outcome === "fulfilled",
+        ...(outcome === "fulfilled"
+          ? await getPurchaseUserUpdate(ctx.drizzle, ctx.userId)
+          : {}),
         message:
           outcome === "fulfilled"
             ? "Your Stripe payment has been delivered."

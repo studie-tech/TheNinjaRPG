@@ -52,6 +52,8 @@ import {
 import { questSceneOf } from "@/libs/contentReview/questScene";
 import { showMutationToast } from "@/libs/toast";
 import { formatSoundLength, formatTimeAgo } from "@/utils/time";
+import { useRequiredUserData } from "@/utils/UserContext";
+import { withUserNotificationCount } from "@/utils/userNotificationCounts";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
 
 interface ContentReviewDetailProps {
@@ -90,6 +92,7 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
   props,
 ) => {
   const { id, position, onMove, onDecided, proposal } = props;
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -103,19 +106,38 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
   const [isApproveArmed, setIsApproveArmed] = useState(false);
   const [hasPickedReason, setHasPickedReason] = useState(false);
 
-  const refresh = async () => {
+  const refresh = async (revision: number | undefined) => {
     await Promise.all([
       utils.contentReview.getQueue.invalidate(),
-      utils.contentReview.getCounts.invalidate(),
       utils.contentReview.getStats.invalidate(),
       utils.contentReview.getProposal.invalidate({ id }),
-      utils.profile.getUser.invalidate(),
     ]);
+    // Queue reads can outdate suggestions, so count after the queue refresh.
+    await utils.contentReview.getCounts.invalidate();
+    const counts = await utils.contentReview.getCounts.fetch();
+    if (counts.canReview)
+      await updateUser(
+        {},
+        {
+          revision,
+          notifications: (current) =>
+            withUserNotificationCount(
+              current,
+              "contentReview",
+              counts.statuses.PENDING ?? 0,
+            ),
+        },
+      );
   };
   const decisionOptions = {
-    onSuccess: async (data: { success: boolean; message: string }) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (
+      data: { success: boolean; message: string },
+      _variables: unknown,
+      revision: number | undefined,
+    ) => {
       showMutationToast(data);
-      await refresh();
+      await refresh(revision);
       if (data.success) onDecided();
     },
   };
@@ -123,9 +145,10 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
   const reject = api.contentReview.reject.useMutation(decisionOptions);
   const unreject = api.contentReview.unreject.useMutation(decisionOptions);
   const revert = api.contentReview.revert.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
-      await refresh();
+      await refresh(revision);
     },
   });
   const isBusy =

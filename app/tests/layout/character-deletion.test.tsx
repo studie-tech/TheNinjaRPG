@@ -7,11 +7,12 @@ import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import DeleteUserButton, { CharacterDeletionSettings } from "@/layout/DeleteUserButton";
 import * as Modal from "@/layout/Modal";
 import * as UserContext from "@/utils/UserContext";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { ensureDom } from "../setup/dom.mjs";
 import { actualModal } from "../setup/preload";
 
-type Result = { success: boolean; message: string };
-type Callbacks = { onSuccess: (result: Result) => Promise<void>; onError: (error: { message: string }) => void };
+type Result = UserDeltaResponse & { affectedUserId?: string };
+type Callbacks = { onMutate?: () => number | undefined; onSuccess: (result: Result, input?: unknown, revision?: number) => Promise<void>; onError: (error: { message: string }) => void };
 let timerCallbacks: Callbacks;
 let deleteCallbacks: Callbacks;
 let isPending: boolean;
@@ -20,7 +21,11 @@ const remove = vi.fn();
 const push = vi.fn();
 const invalidate = vi.fn(async () => undefined);
 const clearUser = vi.fn();
+const cancelProfile = vi.fn(async () => undefined);
+const prepareUserUpdate = vi.fn(() => 7);
+const updateUser = vi.fn(async () => undefined);
 const userId = "character-owner";
+let cachedUserId = userId;
 // Radix dispatches DOM events; use the same realm as jsdom and restore Bun's globals.
 const browserGlobals = ["Event", "CustomEvent"] as const;
 const browserDescriptors = browserGlobals.map((key) => Object.getOwnPropertyDescriptor(globalThis, key));
@@ -30,14 +35,16 @@ beforeEach(() => {
   for (const key of browserGlobals) Object.defineProperty(globalThis, key, { configurable: true, value: window[key] });
   vi.clearAllMocks();
   isPending = false;
+  cachedUserId = userId;
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ profile: { getUser: { invalidate, setData: clearUser }, getPublicUser: { invalidate } } }),
+    useUtils: () => ({ profile: { getUser: { invalidate, setData: clearUser, cancel: cancelProfile,
+      getData: () => ({ userData: { userId: cachedUserId } }) }, getPublicUser: { invalidate } } }),
     profile: {
       toggleDeletionTimer: { useMutation: (options: Callbacks) => { timerCallbacks = options; return { mutate: toggle, isPending }; } },
       confirmDeletion: { useMutation: (options: Callbacks) => { deleteCallbacks = options; return { mutate: remove, isPending }; } },
     },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: { userId }, timeDiff: 0 }) as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: { userId }, timeDiff: 0, prepareUserUpdate, updateUser }) as never);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
   vi.spyOn(Modal, "default").mockImplementation(actualModal);
   vi.spyOn(gtm, "sendGTMEvent").mockImplementation(() => undefined);
@@ -112,6 +119,20 @@ it("keeps rejected requests open with feedback and clears confirmation when clos
   expect((dialog.getByRole("textbox") as HTMLInputElement).value).toBe("");
 });
 
+it("applies the confirmed deletion timer with its captured profile revision", async () => {
+  const view = mount();
+  const dialog = open(view);
+  typeConfirmation(dialog);
+  fireEvent.click(dialog.getByRole("button", { name: "Start deletion timer" }));
+  const revision = timerCallbacks.onMutate?.();
+  const deletionAt = new Date(Date.now() + 60_000);
+  await act(async () => timerCallbacks.onSuccess({ success: true, message: "Started", affectedUserId: userId,
+    userPatch: { deletionAt }, userDelta: {} }, undefined, revision));
+  expect(updateUser).toHaveBeenCalledWith({ deletionAt }, { revision: 7, delta: {} });
+  expect(invalidate).toHaveBeenCalledTimes(1);
+  expect(view.queryByRole("dialog")).toBeNull();
+});
+
 it("disables controls during requests and clears cached character data after deletion", async () => {
   const deletionAt = new Date(Date.now() - 1000);
   const view = mount(deletionAt);
@@ -122,10 +143,24 @@ it("disables controls during requests and clears cached character data after del
   view.rerender(<CharacterDeletionSettings userData={{ userId, deletionAt }} />);
   expect((dialog.getByRole("textbox") as HTMLInputElement).disabled).toBe(true);
   expect((dialog.getByRole("button", { name: "Cancel deletion request" }) as HTMLButtonElement).disabled).toBe(true);
-  await act(async () => deleteCallbacks.onSuccess({ success: true, message: "Deleted" }));
+  await act(async () => deleteCallbacks.onSuccess({ success: true, message: "Deleted", affectedUserId: userId }));
+  expect(cancelProfile).toHaveBeenCalledTimes(1);
   expect(clearUser).toHaveBeenCalledTimes(1);
-  expect(invalidate).toHaveBeenCalledTimes(2);
+  expect(clearUser.mock.calls[0]?.[1]({ userData: { userId }, achievementProgress: ["progress"], notifications: ["notice"] }))
+    .toEqual({ userData: undefined, achievementProgress: [], notifications: [] });
+  expect(invalidate).toHaveBeenCalledTimes(1);
   expect(push).toHaveBeenCalledWith("/");
+});
+
+it("keeps a different signed-in character when a deletion response arrives after an account switch", async () => {
+  const view = mount(new Date(Date.now() - 1000));
+  open(view, true);
+  cachedUserId = "different-character";
+  await act(async () => deleteCallbacks.onSuccess({ success: true, message: "Deleted", affectedUserId: userId }));
+  expect(cancelProfile).not.toHaveBeenCalled();
+  expect(clearUser).not.toHaveBeenCalled();
+  expect(push).not.toHaveBeenCalled();
+  expect(invalidate).toHaveBeenCalledTimes(1);
 });
 
 it("preserves staff deletion controls for another character", () => {
