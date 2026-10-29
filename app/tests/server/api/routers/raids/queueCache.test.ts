@@ -1,3 +1,4 @@
+import * as combat from "@/routers/combat";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -23,6 +24,9 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { beforeStatements } from "../../../../setup/statements";
+import { fetchUpdatedUser } from "@/routers/profile";
+import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { queueEnergy } from "../../../../setup/queues";
 
 describe("raid join cache reconciliation", () => {
@@ -82,7 +86,8 @@ describe("raid join cache reconciliation", () => {
         db as never,
       ).joinRaidQueue({ questId: "cache-raid", teamId: "cache-team" });
       expect(result.success).toBe(true);
-      expect(result.userDelta).toEqual(pendingQueue ? undefined : {});
+      expect(result.userDelta).toEqual({});
+      expect(result.userPatch).toMatchObject({ status: "QUEUED" });
       expect(db.query.userData.findFirst).toHaveBeenCalledTimes(1);
       expect(db.insert).toHaveBeenCalledTimes(3);
     });
@@ -145,9 +150,49 @@ describeWithDatabase("raid join committed queue", () => {
     });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
+  it.each([true, false])("confirms saved admission fields after raid start, success=%s", async (success) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));
+    await db.update(mpvpBattleQueue).set({ createdAt: new Date(0) }).where(eq(mpvpBattleQueue.id, "cache-team"));
+    await db.insert(mpvpBattleUser).values({ id: "starter", userId: "queue-sql-user", clanBattleId: "cache-team", side: "ATTACKER", slot: 0 });
+    await fetchUpdatedUser({ client: db, userId: "queue-sql-user" });
+    vi.spyOn(combat, "initiateBattle").mockImplementation(async () => {
+      await db.update(userData).set({ status: success ? "BATTLE" : "QUEUED", battleId: success ? "started-raid" : null, curEnergy: 17, pveFights: 5 }).where(eq(userData.userId, "queue-sql-user"));
+      return success ? { success: true, message: "Started", battleId: "started-raid" } : { success: false, message: "Admission rejected" };
+    });
+    const result = await (await callerFor(raidsRouter, "queue-sql-user")).startRaidBattle({ teamId: "cache-team" });
+    expect(result).toMatchObject({ success, userDelta: {}, userPatch: { status: success ? "BATTLE" : "AWAKE", battleId: success ? "started-raid" : null, curEnergy: 17, pveFights: 5 } });
+    expect(result.userPatch).not.toHaveProperty("items");
+    expect(result.userPatch).not.toHaveProperty("bloodline");
+  });
+
+  it("confirms a newer battle when ready-up's guarded cleanup loses", async () => {
+    const db = await getTestDatabase();
+    const client = beforeStatements(db, userData, [async () => {
+      await db.update(userData).set({ status: "BATTLE", battleId: "newer-battle" }).where(eq(userData.userId, "queue-sql-user"));
+    }]);
+    const result = await callerForDatabase(raidsRouter, "queue-sql-user", client).readyToQueue();
+    expect(result).toMatchObject({ success: false, userPatch: { status: "BATTLE", battleId: "newer-battle" }, userDelta: {} });
+  });
+
+  it("confirms the guarded wake when leaving after a newer combat starts", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));
+    await db.insert(mpvpBattleUser).values({ id: "leaver", userId: "queue-sql-user", clanBattleId: "cache-team", side: "ATTACKER", slot: 0 });
+    await fetchUpdatedUser({ client: db, userId: "queue-sql-user" });
+    const snapshot = await fetchUpdatedUser({ client: db, userId: "queue-sql-user" });
+    stubProfile("fetchUpdatedUser", async () => snapshot);
+    const client = beforeStatements(db, userData, [async () => {
+      await db.update(userData).set({ status: "BATTLE", battleId: "newer-battle" }).where(eq(userData.userId, "queue-sql-user"));
+    }]);
+    const result = await callerForDatabase(raidsRouter, "queue-sql-user", client).leaveRaidQueue();
+    expect(result).toMatchObject({ success: true, userPatch: { status: "BATTLE", battleId: "newer-battle" }, userDelta: {} });
+    expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
+  });
+
   for (const pendingQueue of [false, true]) {
-    it(`commits queue and chat membership with the correct refresh fallback, training=${pendingQueue}`, async () => {
+    it(`commits queue and chat membership without settling unrelated training, training=${pendingQueue}`, async () => {
       const db = await getTestDatabase();
       if (pendingQueue) await queueEnergy("queue-sql-user", [{ stat: "offence", energy: 10 }]);
       const reads = vi.spyOn(db.query.userData, "findFirst");
@@ -155,7 +200,8 @@ describeWithDatabase("raid join committed queue", () => {
         await callerFor(raidsRouter, "queue-sql-user")
       ).joinRaidQueue({ questId: "cache-raid", teamId: "cache-team" });
       expect(result.success).toBe(true);
-      expect(result.userDelta).toEqual(pendingQueue ? undefined : {});
+      expect(result.userDelta).toEqual({});
+      expect(result.userPatch).toMatchObject({ status: "QUEUED" });
       expect(reads).toHaveBeenCalledTimes(1);
       const [saved, membership, chat] = await Promise.all([
         db.query.userData.findFirst({ where: eq(userData.userId, "queue-sql-user") }),

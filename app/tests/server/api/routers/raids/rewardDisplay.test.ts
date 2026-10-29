@@ -177,6 +177,8 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
       });
       expect(result).toMatchObject({
         success: true,
+        userDelta: {},
+        userPatch: { money: expect.any(Number), reputationPoints: expect.any(Number) },
         rewards: {
           reward_items: ["Potion B", "Potion A", "Potion A"],
           reward_jutsus: owned ? [] : ["Reward Jutsu"],
@@ -185,7 +187,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
         },
       });
       for (const reread of rereads) expect(reread).not.toHaveBeenCalled();
-      expect(catalogueReads.mock.calls).toEqual([[catalogueQuery]]);
+      expect(catalogueReads.mock.calls).toEqual(Array.from({ length: owned ? 1 : 2 }, () => [catalogueQuery]));
       const inventory = await database.query.userItem.findMany({
         where: eq(userItem.userId, "raid-reward-user"),
       });
@@ -211,7 +213,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
         ).reduce((sum, row) => sum + row.quantity, 0),
       ).toBe(3);
       for (const reread of rereads) expect(reread).not.toHaveBeenCalled();
-      expect(catalogueReads.mock.calls).toEqual([[catalogueQuery], [catalogueQuery]]);
+      expect(catalogueReads.mock.calls).toEqual(Array.from({ length: owned ? 2 : 3 }, () => [catalogueQuery]));
     },
   );
 });

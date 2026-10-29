@@ -2322,3 +2322,35 @@ const petTaskOwnerReturnCondition = (userId: string, task: PetTask) =>
       isNotNull(userPet.avatar),
       ne(userPet.avatar, ""),
     )})`;
+
+/** Confirm reward counters whose SQL grants include live caps and pet eligibility. */
+export const findRewardUserSnapshot = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    columns: {
+      money: true,
+      seichiSilver: true,
+      earnedExperience: true,
+      petExperience: true,
+      villagePrestige: true,
+      reputationPoints: true,
+      reputationPointsTotal: true,
+      skillPoints: true,
+      medicalExperience: true,
+      huntingExperience: true,
+      craftingExperience: true,
+      gatheringExperience: true,
+      sageMasteryExperience: true,
+      ninjutsuMastery: true,
+      genjutsuMastery: true,
+      taijutsuMastery: true,
+      bukijutsuMastery: true,
+      bloodlineMastery: true,
+      sageMastery: true,
+      masteryRanks: true,
+    },
+    with: { village: { columns: { id: true, tokens: true } } },
+    where: eq(userData.userId, userId),
+  });

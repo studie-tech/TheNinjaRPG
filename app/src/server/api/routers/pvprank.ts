@@ -31,7 +31,6 @@ import {
   fetchUserRankedQueue,
   findRankedLoadoutByUserId,
   findRankedSeasonById,
-  findSeasonRewardUserSnapshot,
   findUserDataForLeaveRankedPvpQueue,
   insertLogQueueLengthsForCheckRankedPvpMatches,
   insertLogRankedPicksForCheckRankedPvpMatches,
@@ -53,10 +52,6 @@ import {
   updateUserDataForGetRankedPvpQueue,
 } from "@/queries/pvprank";
 import { initiateBattle } from "@/routers/combat";
-import {
-  fetchUpdatedUser,
-  getUserProgressionUpdate,
-} from "@/server/api/routers/profile";
 import { updateRewards } from "@/server/api/routers/quests";
 import {
   baseServerResponse,
@@ -70,6 +65,7 @@ import {
   cleanRankedProhibitedSelections,
   fetchSanninRankedPlayers,
 } from "@/server/utils/ranked";
+import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -80,7 +76,6 @@ import {
   rankedQueueResponseSchema,
   rankedSeasonSchema,
 } from "@/validators/pvpRank";
-import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const pvpRankRouter = createTRPCRouter({
@@ -132,56 +127,16 @@ export const pvpRankRouter = createTRPCRouter({
         reason: "RANKED_REWARDS",
       });
 
-      // Content and membership rewards change derived relations; ordinary numeric payouts
-      // only confirm their saved counters, including SQL-capped gains and live pet eligibility.
-      const needsRelations =
-        processedRewards.reward_rank !== "NONE" ||
-        processedRewards.reward_village_membership !== "NONE" ||
-        granted.titles.length > 0 ||
-        granted.badges.length > 0 ||
-        granted.sageModes.length > 0 ||
-        processedRewards.reward_clanpoints !== 0 ||
-        processedRewards.reward_anbupoints !== 0 ||
-        processedRewards.reward_war_damage !== 0 ||
-        processedRewards.reward_war_healing !== 0 ||
-        MASTERY_EXPERIENCE_FIELDS.some(
-          (field) => (processedRewards[field] ?? 0) !== 0,
-        ) ||
-        (processedRewards.reward_mastery_rank != null &&
-          processedRewards.reward_mastery_rank !== "NONE");
-      const hydrated = needsRelations
-        ? await fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId })
-        : undefined;
-      const counters = await findSeasonRewardUserSnapshot(ctx.drizzle, ctx.userId);
-      const progression = hydrated?.user
-        ? getUserProgressionUpdate(hydrated.user, hydrated.publishedAchievementIds)
-        : undefined;
+      const cacheUpdate = await getRewardUserUpdate({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+        rewards: processedRewards,
+        granted,
+      });
       return {
         success: true,
         message: "Season rewards claimed successfully",
-        userDelta: {},
-        achievementProgress: progression?.achievementProgress,
-        userPatch: hydrated?.user
-          ? {
-              ...counters,
-              ...progression?.userPatch,
-              village: hydrated.user.village,
-              villageId: hydrated.user.villageId,
-              isOutlaw: hydrated.user.isOutlaw,
-              joinedVillageAt: hydrated.user.joinedVillageAt,
-              clan: hydrated.user.clan,
-              anbuSquad: hydrated.user.anbuSquad,
-              titles: hydrated.user.titles,
-              displayTitle: hydrated.user.displayTitle,
-              sageModeId: hydrated.user.sageModeId,
-              sageMode: hydrated.user.sageMode,
-            }
-          : counters
-            ? {
-                ...counters,
-                village: counters.village ?? undefined,
-              }
-            : undefined,
+        ...cacheUpdate,
         rewards: {
           ...processedRewards,
           reward_titles: granted.titles.map((entry) => entry.name),
