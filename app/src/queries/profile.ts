@@ -1882,6 +1882,7 @@ export const findUserDataForQueryUpdatedUser = (
       displayTitle: displayTitleSql(table).as("displayTitle"),
     }),
     with: {
+      attributes: true,
       bloodline: true,
       questParty: { with: questPartyRelations },
       sageMode: true,
@@ -1909,6 +1910,7 @@ export const findUserDataForQueryUpdatedUser = (
       items: {
         where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
         with: {
+          activeVariant: true,
           item: true,
           imbuements: { with: { item: true } },
         },

@@ -33,6 +33,7 @@ import { EditContent, EffectFormWrapper } from "@/layout/EditContent";
 import { FurnitureViewsEditor } from "@/layout/FurnitureViewsEditor";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import { LpcEquipmentFields } from "@/layout/LpcEquipmentFields";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
@@ -145,6 +146,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         {!item && <p>Could not find this item</p>}
         {item && (
           <>
+            <LpcEquipmentFields control={form.control} />
             <EditContent
               schema={ItemValidatorRawSchema}
               form={form as unknown as UseFormReturn<ZodItemType, any>}
@@ -317,6 +319,8 @@ type VariantFormInput = {
   description?: string;
   battleDescription?: string;
   furnitureData?: FurnitureVariantData | null;
+  lpcProfile?: ZodItemVariantType["lpcProfile"];
+  lpcColor?: ZodItemVariantType["lpcColor"];
 };
 
 const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
@@ -597,6 +601,7 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
           aria-busy={variantOperationPending}
         >
           <fieldset disabled={variantOperationPending} className="space-y-3">
+            <LpcEquipmentFields control={form.control} />
             <h3 className="font-medium">
               {editingVariant ? "Edit Variant" : "New Variant"}
             </h3>

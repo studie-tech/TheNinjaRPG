@@ -990,6 +990,8 @@ export const updateItemVariantForUpsertItemVariant = (
       order: number;
       furnitureData: null | FurnitureVariantData;
       id: string;
+      lpcProfile?: import("@/validators/lpc").LpcEquipmentProfile | null;
+      lpcColor?: import("@/validators/lpc").LpcColor | null;
     };
     itemId: string;
   },
@@ -1009,6 +1011,8 @@ export const updateItemVariantForUpsertItemVariant = (
       battleDescription: safeBattleDescription,
       furnitureData: input.variant.furnitureData,
       updatedAt: new Date(),
+      lpcProfile: input.variant.lpcProfile,
+      lpcColor: input.variant.lpcColor,
     })
     .where(
       and(
@@ -1037,6 +1041,8 @@ export const insertItemVariantForUpsertItemVariant = (
       cost: number;
       order: number;
       furnitureData: null | FurnitureVariantData;
+      lpcProfile?: import("@/validators/lpc").LpcEquipmentProfile | null;
+      lpcColor?: import("@/validators/lpc").LpcColor | null;
     };
   },
   safeDescription: null | string,
@@ -1048,6 +1054,8 @@ export const insertItemVariantForUpsertItemVariant = (
     name: input.variant.name,
     image: input.variant.image,
     requiredItemId: input.variant.requiredItemId,
+    lpcProfile: input.variant.lpcProfile,
+    lpcColor: input.variant.lpcColor,
     costType: input.variant.costType,
     cost: input.variant.cost,
     order: input.variant.order,
@@ -1842,6 +1850,7 @@ export const listUserItemForFetchUserItems = (
     where: eq(userItem.userId, userId),
     with: {
       item: true,
+      activeVariant: true,
       imbuements: { with: { item: true } },
     },
   });
@@ -1855,6 +1864,7 @@ export const listUserItemForFetchUserItemsWithVariants = (
     where: eq(userItem.userId, userId),
     with: {
       item: { with: { variants: { orderBy: (v, { asc }) => [asc(v.order)] } } },
+      activeVariant: true,
       imbuements: { with: { item: true } },
     },
   });

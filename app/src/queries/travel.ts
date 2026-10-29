@@ -30,6 +30,7 @@ import {
   war,
 } from "@/drizzle/schema";
 import { SECTOR_BATTLE_STALE_SECONDS } from "@/libs/travel";
+import { spriteUserRelations } from "@/queries/lpc";
 import { fetchSector } from "@/queries/village";
 import { activeWarAllyWhere, activeWarMercenaryWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
@@ -51,6 +52,8 @@ export const fetchSectorWindowData = (
       columns: {
         userId: true,
         username: true,
+        gender: true,
+        spriteBodyStyle: true,
         longitude: true,
         latitude: true,
         location: true,
@@ -84,6 +87,7 @@ export const fetchSectorWindowData = (
         ne(userData.userId, userId),
       ),
       with: {
+        ...spriteUserRelations,
         anbuSquad: {
           columns: {
             id: true,
@@ -231,6 +235,7 @@ export const findUserDataForGetSectorData = (
   client.query.userData.findFirst({
     where: eq(userData.userId, ctx.userId),
     with: {
+      ...spriteUserRelations,
       anbuSquad: {
         columns: { id: true, name: true, image: true, villageId: true },
       },

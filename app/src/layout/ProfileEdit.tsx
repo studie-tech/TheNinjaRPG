@@ -92,6 +92,7 @@ import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import AvatarImage from "@/layout/Avatar";
 import { ResetBloodright } from "@/layout/Bloodright";
+import { CharacterPreview } from "@/layout/CharacterPreview";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -1852,6 +1853,13 @@ const AvatarChange: React.FC = () => {
  * Attribute change component
  */
 const AttributeChange: React.FC = () => {
+  const { data: spriteUser, updateUser: updateSpriteUser } = useRequiredUserData();
+  const bodyMutation = api.profile.updateSpriteBody.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success && result.userPatch) await updateSpriteUser(result.userPatch);
+    },
+  });
   // State
   const [hairColor, setHairColor] = useState<Color>("Black");
   const [eyeColor, setEyeColor] = useState<Color>("Black");
@@ -1868,6 +1876,15 @@ const AttributeChange: React.FC = () => {
   // Queries
   const { data, refetch } = api.profile.getUserAttributes.useQuery(undefined);
   const selectedAttributes = data ? data.map((a) => a.attribute as Attribute) : [];
+  useEffect(() => {
+    if (
+      spriteUser &&
+      data &&
+      JSON.stringify(data.map(({ attribute }) => attribute)) !==
+        JSON.stringify(spriteUser.attributes?.map(({ attribute }) => attribute))
+    )
+      void updateSpriteUser({ attributes: data });
+  }, [data, updateSpriteUser, spriteUser?.attributes]);
 
   // Mutations
   const { mutateAsync: insertAttr } = api.profile.insertAttribute.useMutation({
@@ -1938,6 +1955,34 @@ const AttributeChange: React.FC = () => {
 
   return (
     <div className="grid grid-cols-2 pt-2">
+      <div className="col-span-2 space-y-3 py-3">
+        <CharacterPreview
+          user={{ ...spriteUser, attributes: data ?? spriteUser?.attributes }}
+        />
+        <div className="mx-auto max-w-64">
+          <label htmlFor="character-body-style" className="font-medium text-sm">
+            Body style
+          </label>
+          <Select
+            disabled={bodyMutation.isPending}
+            value={
+              spriteUser?.spriteBodyStyle ??
+              (spriteUser?.gender === "Female" ? "female" : "male")
+            }
+            onValueChange={(body) =>
+              bodyMutation.mutate({ body: body as "male" | "female" })
+            }
+          >
+            <SelectTrigger id="character-body-style">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="male">Broad build</SelectItem>
+              <SelectItem value="female">Slender build</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <div className="m-3 rounded-md bg-popover p-3">
         <p className="font-bold">Current </p>
         {selectedAttributes.map((attribute) => {

@@ -40,7 +40,6 @@ import {
   VILLAGE_SYNDICATE_ID,
   WAKE_ISLAND_PVP_PROTECTION,
 } from "@/drizzle/constants";
-
 import {
   type AiProfile,
   type BattleAction,
@@ -54,7 +53,6 @@ import {
   type Village,
   type VillageAlliance,
 } from "@/drizzle/schema";
-
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getReskinnedBloodline } from "@/libs/bloodline";
 import {
@@ -136,6 +134,12 @@ import { dungeonBattleOutcome } from "@/libs/dungeon";
 import { activeTrainedElement } from "@/libs/elementalMastery";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import { resolveSelectableLoadout } from "@/libs/loadout";
+import {
+  anonymousSpriteAppearance,
+  resolveSpriteAppearance,
+  resolveSpriteEquipment,
+  withSpriteEquipment,
+} from "@/libs/lpc/appearance";
 import { effectiveMasteries, isWornGear, isWornGearDisabled } from "@/libs/mastery";
 import {
   areWarObjectivesRevealed,
@@ -3889,6 +3893,7 @@ export const processUsersForBattle = async (
     ) {
       user.isMasked = true;
       user.username = "Mercenary";
+      user.spriteAppearance = anonymousSpriteAppearance();
       user.avatar = IMG_AVATAR_DEFAULT;
       user.avatarLight = IMG_AVATAR_DEFAULT;
     }
@@ -3902,6 +3907,7 @@ export const processUsersForBattle = async (
       !leftSideUserIds?.includes(user.userId)
     ) {
       user.username = "ANBU Member";
+      user.spriteAppearance = anonymousSpriteAppearance(true);
       user.avatar = user.anbuSquad.image;
       user.avatarLight = user.anbuSquad.image;
     }
@@ -4326,6 +4332,17 @@ export const processUsersForBattle = async (
     }
 
     summonDependencies.set(inputUser.userId, dependencies);
+    if (!inputUser.isAi && !user.isMasked && user.username !== "ANBU Member") {
+      user.spriteBaseAppearance ??= resolveSpriteAppearance({
+        ...inputUser,
+        items: [],
+      });
+      user.spriteEquipment = resolveSpriteEquipment(user.items);
+      user.spriteAppearance = withSpriteEquipment(
+        user.spriteBaseAppearance,
+        Object.values(user.spriteEquipment),
+      );
+    }
     return user;
   });
 

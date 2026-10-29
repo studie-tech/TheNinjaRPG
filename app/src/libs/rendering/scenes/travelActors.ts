@@ -14,7 +14,9 @@ import {
   MEDNIN_MIN_RANK,
   RANKS_RESTRICTED_FROM_PVP,
 } from "@/drizzle/constants";
-import type { TerrainHex } from "@/libs/hexgrid";
+import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
+import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import { lpcFacing } from "@/libs/lpc/catalog";
 import { passesBracketFilter } from "@/libs/profile";
 import { getActiveObjectives } from "@/libs/quest";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
@@ -36,7 +38,13 @@ export const createTravelActors = (game: GameRenderer) => {
   let users: SectorUser[] = [];
   let friendlyAttack = false;
   let hovered: string | null = null;
+  let paths: PathCalculator | null = null;
+  let pathGrid: Grid<TerrainHex> | null = null;
   const sync = (snapshot: TravelActorsSnapshot) => {
+    if (pathGrid !== snapshot.grid) {
+      pathGrid = snapshot.grid;
+      paths = new PathCalculator(snapshot.grid);
+    }
     viewer = snapshot.viewer;
     users = snapshot.users;
     friendlyAttack = snapshot.friendlyAttack;
@@ -53,6 +61,10 @@ export const createTravelActors = (game: GameRenderer) => {
       const signature = JSON.stringify([recipe.parts, recipe.counter]);
       const previous = records.get(recipe.key);
       if (previous?.signature === signature) {
+        if (previous.recipe.tile !== recipe.tile) {
+          const path = paths?.getShortestPath(previous.tile, recipe.tile) ?? [];
+          previous.path = path[0] === previous.tile ? path.slice(1) : path;
+        }
         previous.recipe = recipe;
         continue;
       }
@@ -61,11 +73,40 @@ export const createTravelActors = (game: GameRenderer) => {
       const scope = createRenderScope(game);
       const root = new Container();
       container.addChild(root);
+      if (recipe.user?.spriteAppearance) {
+        const color =
+          recipe.user.allianceStatus === "ALLY"
+            ? 0x338855
+            : recipe.user.allianceStatus === "ENEMY"
+              ? 0xb84040
+              : 0x3c80bb;
+        root.addChild(
+          new Graphics()
+            .ellipse(
+              recipe.tile.width / 2,
+              recipe.tile.height * 0.2,
+              recipe.tile.height * 0.35,
+              recipe.tile.height * 0.12,
+            )
+            .fill({ color, alpha: 0.55 }),
+        );
+      }
       scope.own(() => {
         if (!root.destroyed)
           root.destroy({ children: true, texture: false, textureSource: false });
       });
-      const record: ActorRecord = { recipe, signature, scope, root, art: null };
+      const record: ActorRecord = {
+        recipe,
+        signature,
+        scope,
+        root,
+        art: null,
+        tile: previous?.tile ?? recipe.tile,
+        path: previous?.path ?? [],
+        x: previous?.x ?? -recipe.tile.center.x,
+        y: previous?.y ?? -recipe.tile.center.y,
+        facing: previous?.facing ?? 2,
+      };
       records.set(recipe.key, record);
       byRoot.set(root, record);
       if (recipe.counter) {
@@ -173,13 +214,31 @@ export const createTravelActors = (game: GameRenderer) => {
     const wobble = cycle < 1 ? Math.sin(cycle * Math.PI * 4) * (1 - cycle) * 2 : 0;
     for (const record of records.values()) {
       const { recipe, root } = record;
+      const waypoint = record.path[0] ?? recipe.tile;
+      const dx = -waypoint.center.x - record.x,
+        dy = -waypoint.center.y - record.y;
+      const distance = Math.hypot(dx, dy);
+      const moving = distance > 0.01;
+      if (moving) {
+        record.facing = lpcFacing(dx, dy, record.facing);
+        const step = frame.reducedMotion
+          ? distance
+          : Math.min(distance, recipe.tile.width * frame.delta * 6);
+        record.x += (dx / distance) * step;
+        record.y += (dy / distance) * step;
+        if (step === distance) {
+          record.tile = waypoint;
+          record.path.shift();
+        }
+      }
+      for (const entry of record.art?.entries ?? [])
+        entry.character?.render(frame, moving ? "walk" : "idle", record.facing);
       const phi = angle + recipe.orbit;
       root.position.set(
-        -recipe.tile.center.x +
+        record.x +
           (recipe.spread ? recipe.tile.width * 0.1 * Math.sin(phi) : 0) +
           (recipe.quest ? wobble : 0),
-        -recipe.tile.center.y +
-          (recipe.spread ? recipe.tile.height * 0.1 * Math.cos(phi) : 0),
+        record.y + (recipe.spread ? recipe.tile.height * 0.1 * Math.cos(phi) : 0),
       );
     }
     container.children.sort((a, b) => b.position.y - a.position.y);
@@ -222,13 +281,17 @@ export const travelActorRecipes = (snapshot: TravelActorsSnapshot): ActorRecipe[
     if (!tile) continue;
     const awake = tileUsers.filter((user) => user.status === "AWAKE");
     awake.forEach((user, index) => {
+      const appearanceUser =
+        !user.spriteAppearance && user.userId === snapshot.viewer?.userId
+          ? { ...user, spriteAppearance: resolveSpriteAppearance(snapshot.viewer) }
+          : user;
       recipes.push({
         key: user.isNpc
           ? `npc:${user.npcPlacementId ?? user.userId}`
           : `user:${user.userId}`,
-        user,
+        user: appearanceUser,
         tile,
-        parts: userParts(user, tile),
+        parts: userParts(appearanceUser, tile),
         orbit: (index / tileUsers.length) * Math.PI * 2,
         spread: awake.length > 1,
       });
@@ -370,25 +433,30 @@ const pin = (tile: TerrainHex, tint: number) => [
   }),
 ];
 const userParts = (user: SectorUser, tile: TerrainHex) => {
-  const parts = user.isNpc
-    ? []
-    : pin(
-        tile,
-        user.allianceStatus === "ALLY"
-          ? 0x008000
-          : user.allianceStatus === "NEUTRAL"
-            ? 0x2986cc
-            : 0xff0000,
-      );
+  const parts =
+    user.isNpc || user.spriteAppearance
+      ? []
+      : pin(
+          tile,
+          user.allianceStatus === "ALLY"
+            ? 0x008000
+            : user.allianceStatus === "NEUTRAL"
+              ? 0x2986cc
+              : 0xff0000,
+        );
   parts.push(
     part(
       tile,
       "avatar",
       travelAvatar(user),
-      user.isNpc ? 1.3 : 0.8,
+      user.spriteAppearance ? 1.8 : user.isNpc ? 1.3 : 0.8,
       0.5,
       1,
-      user.isNpc ? { rendition: 256 } : { mask: IMG_SECTOR_USER_SPRITE_MASK },
+      user.spriteAppearance
+        ? { character: user.spriteAppearance }
+        : user.isNpc
+          ? { rendition: 256 }
+          : { mask: IMG_SECTOR_USER_SPRITE_MASK },
     ),
   );
   if (user.isNpc)
@@ -462,6 +530,11 @@ type ActorRecipe = {
   spread: boolean;
 };
 type ActorRecord = {
+  tile: TerrainHex;
+  path: TerrainHex[];
+  x: number;
+  y: number;
+  facing: import("@/validators/lpc").LpcDirection;
   recipe: ActorRecipe;
   signature: string;
   scope: GameRenderer;

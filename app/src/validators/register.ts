@@ -7,6 +7,7 @@ import {
   UserRanks,
   UserRoles,
 } from "@/drizzle/constants";
+import { lpcBodyStyles } from "@/validators/lpc";
 import { createReservedNameField } from "@/validators/reservedName";
 
 // List of possible attributes
@@ -81,6 +82,7 @@ export const registrationSchema = z
   .strictObject({
     username: usernameSchema,
     gender: z.enum(genders),
+    spriteBodyStyle: z.enum(lpcBodyStyles).optional(),
     hair_color: z.enum(colors),
     eye_color: z.enum(colors),
     skin_color: z.enum(skin_colors),

@@ -1,6 +1,10 @@
 import { Container, Sprite } from "pixi.js";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { acquireMaskedTexture } from "@/libs/rendering/maskedTextures";
+import {
+  createLpcCharacter,
+  type LpcCharacter,
+} from "@/libs/rendering/primitives/character";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import {
@@ -22,9 +26,10 @@ export const createWorldSprites = async (
   const masked: ReturnType<typeof acquireMaskedTexture>[] = [];
   const container = new Container();
   const entries: {
-    sprite: Sprite;
+    sprite: Sprite | LpcCharacter["sprite"];
     description: WorldSpriteDescription;
     bounds: WorldBounds;
+    character?: LpcCharacter;
   }[] = [];
   let disposed = false;
   const dispose = () => {
@@ -39,6 +44,16 @@ export const createWorldSprites = async (
   game.own(dispose);
   const settled = await Promise.allSettled(
     descriptions.map(async (description) => {
+      if (description.character) {
+        try {
+          const character = await createLpcCharacter(game, description.character);
+          return { texture: null, description, character };
+        } catch (error) {
+          if (game.signal.aborted) throw error;
+          // A portrait keeps the actor visible and interactive when an atlas cannot load.
+          console.warn("Character artwork unavailable; showing portrait", error);
+        }
+      }
       const lease = description.mask
         ? acquireMaskedTexture(
             description.image,
@@ -54,7 +69,7 @@ export const createWorldSprites = async (
           description.nearest ? "nearest" : "linear",
         ));
       if (disposed || game.signal.aborted) return null;
-      return { texture, description };
+      return { texture, description, character: undefined };
     }),
   );
   if (disposed || game.signal.aborted) {
@@ -64,30 +79,35 @@ export const createWorldSprites = async (
   let missing = 0;
   for (const result of settled) {
     if (result.status === "fulfilled" && result.value) {
-      const { texture, description } = result.value;
-      const sprite = new Sprite(texture);
+      const { texture, description, character } = result.value;
+      const sprite = character?.sprite ?? new Sprite(texture ?? undefined);
       sprite.label = description.id;
-      sprite.anchor.set(description.anchorX ?? 0.5, description.anchorY ?? 0.5);
+      if (sprite instanceof Sprite)
+        sprite.anchor.set(description.anchorX ?? 0.5, description.anchorY ?? 0.5);
       sprite.position.set(description.x, description.y);
-      sprite.width =
-        description.width ??
-        (description.preserveAspect
-          ? (description.size * texture.width) / texture.height
-          : description.size);
-      sprite.height = description.size;
-      sprite.scale.y *= -1;
+      if (character) sprite.scale.set(description.size, -description.size);
+      else {
+        sprite.width =
+          description.width ??
+          (description.preserveAspect
+            ? (description.size * (texture?.width ?? 1)) / (texture?.height ?? 1)
+            : description.size);
+        sprite.height = description.size;
+        sprite.scale.y *= -1;
+      }
       sprite.tint = description.tint ?? 0xffffff;
       sprite.rotation = description.rotation ?? 0;
       entries.push({
         sprite,
         description,
+        character,
         bounds: worldSpriteBounds({
           x: sprite.x,
           y: sprite.y,
           width: sprite.width,
           height: sprite.height,
-          anchorX: sprite.anchor.x,
-          anchorY: sprite.anchor.y,
+          anchorX: description.anchorX ?? 0.5,
+          anchorY: description.anchorY ?? 0.5,
           rotation: sprite.rotation,
         }),
       });

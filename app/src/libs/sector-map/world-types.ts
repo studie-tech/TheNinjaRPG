@@ -51,6 +51,7 @@ export interface GlobalMapData {
 }
 
 export interface SectorUser {
+  spriteAppearance?: import("@/validators/lpc").SpriteAppearance;
   userId: string;
   username: string;
   /** Viewer-specific anonymity from the authenticated sector snapshot. */

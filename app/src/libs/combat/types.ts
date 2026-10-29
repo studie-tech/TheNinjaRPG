@@ -121,6 +121,7 @@ export type CombatQueryCompletedQuest = {
  */
 export type CombatQueryUser = UserData &
   ActivityCompletions & {
+    attributes?: { attribute: string }[];
     titles?: import("@/drizzle/schema").UserTitle[];
     /** Loaded at initiation and realized into battle effects; never fetched during an action. */
     raidBuffs?: import("@/drizzle/schema").UserRaidBuff[];
@@ -169,6 +170,10 @@ export type ProcessedItem = CombatQueryUserItem & {
  * Shared between ProcessingBattleUser and BattleUserState.
  */
 export type CombatUserFields = {
+  spriteBaseAppearance?: import("@/validators/lpc").SpriteAppearance;
+  spriteEquipment?: Record<string, import("@/validators/lpc").SpriteLayer>;
+  spriteAppearance?: import("@/validators/lpc").SpriteAppearance;
+  spriteAction?: import("@/validators/lpc").SpriteAction;
   /** Identity masking captured with the combatant's battle snapshot. */
   isMasked?: boolean;
   /** Damage already deferred by Diffuse; survives the granting effect's expiry. */

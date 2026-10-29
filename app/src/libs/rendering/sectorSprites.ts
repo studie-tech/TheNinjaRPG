@@ -223,6 +223,7 @@ const WALL_CORNERS = [
  * Anchors are image fractions; rotation/wind phase are radians. rendition is a CDN pixel width.
  */
 export type WorldSpriteDescription = {
+  character?: import("@/validators/lpc").SpriteAppearance;
   id: string;
   kind: string;
   image: string;

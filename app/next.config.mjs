@@ -123,6 +123,11 @@ const config = {
   async headers() {
     return [
       {
+        // Sprite atlas names are content hashes; palettes and animation frames never change in place.
+        source: "/lpc/:atlas([a-f0-9]{24}).png",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
         source: "/",
         headers: securityHeaders,
       },

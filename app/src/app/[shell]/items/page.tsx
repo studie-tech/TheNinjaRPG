@@ -1918,7 +1918,11 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
     onSuccess: async (result) => {
       showMutationToast(result);
       if (result.success) {
-        await utils.item.getUserItemsWithVariants.invalidate();
+        await Promise.all([
+          utils.item.getUserItemsWithVariants.invalidate(),
+          utils.profile.getUser.invalidate(),
+          utils.travel.getSectorData.invalidate(),
+        ]);
         setIsOpen(false);
         onClose();
       }

@@ -230,6 +230,7 @@ export const registerRouter = createTRPCRouter({
         recruiterId: input.recruiter_userid,
         username: input.username,
         gender: input.gender,
+        spriteBodyStyle: input.spriteBodyStyle,
         avatar: IMG_DEFAULT_PROFILE_PICTURE,
         villageId: villageData.id,
         // New characters start at day zero rather than inheriting the backdated schema default.

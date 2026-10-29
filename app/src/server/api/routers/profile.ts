@@ -128,6 +128,7 @@ import { incrementUserBank } from "@/queries/bank";
 import { fetchClan } from "@/queries/clan";
 import { listHuntingHabitats } from "@/queries/hunting";
 import { fetchKageReplacement } from "@/queries/kage";
+import { updateSpriteBodyStyle } from "@/queries/lpc";
 import {
   countUsersActiveInLastDay,
   deleteUserAttributeForDeleteAttribute,
@@ -1474,7 +1475,7 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [user, target, village, sageExists, villages] = await Promise.all([
+      const [user, target, village, sageExists, _villages] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         findUserDataForUpdateUser(ctx.drizzle, input),
         fetchVillage(ctx.drizzle, input.data?.villageId || VILLAGE_SYNDICATE_ID),
@@ -1756,6 +1757,23 @@ export const profileRouter = createTRPCRouter({
         await callDiscordContent(user.username, ai.username, diff, ai.avatar);
       }
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
+    }),
+  updateSpriteBody: protectedProcedure
+    .input(z.object({ body: z.enum(["male", "female"]) }))
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned) return errorResponse("You are banned");
+      if (user.status === "BATTLE")
+        return errorResponse("Change body style outside combat");
+      const result = await updateSpriteBodyStyle(ctx.drizzle, ctx.userId, input.body);
+      if (!result.rowsAffected && user.spriteBodyStyle !== input.body)
+        return errorResponse("Your character changed. Refresh and try again.");
+      return {
+        success: true,
+        message: "Body style updated",
+        userPatch: { spriteBodyStyle: input.body },
+      };
     }),
   // Get user attributes
   getUserAttributes: protectedProcedure
@@ -3801,8 +3819,12 @@ export type UserWithRelations =
       sageMode?: SageMode | null;
       activeReskin?: BloodlineReskin | null;
       anbuSquad?: { name: string } | null;
+      attributes?: { attribute: string }[];
       clan?: Clan | null;
-      items: (UserItem & { item: Pick<Item, "id" | "itemType" | "maxDurability"> })[];
+      items: (UserItem & {
+        activeVariant?: import("@/libs/lpc/appearance").SpriteVariant | null;
+        item: Pick<Item, "id" | "itemType" | "maxDurability"> & Partial<Item>;
+      })[];
       village?:
         | (Village & {
             structures?: VillageStructure[];

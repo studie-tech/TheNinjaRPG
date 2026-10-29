@@ -557,6 +557,7 @@ export const listUserDataForQueryBattleUsers = (
     with: {
       raidBuffs: true,
       titles: true,
+      attributes: true,
       cookingJobs: true,
       bloodline: { with: { bloodrightTiers: true } },
       sageMode: true,

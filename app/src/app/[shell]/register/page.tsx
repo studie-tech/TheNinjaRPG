@@ -43,6 +43,7 @@ import {
 } from "@/drizzle/constants";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { CharacterPreview } from "@/layout/CharacterPreview";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
@@ -158,6 +159,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
     defaultValues: {
       username: "",
       gender: initialFormValues.gender,
+      spriteBodyStyle: undefined,
       hair_color: initialFormValues.hair_color,
       eye_color: initialFormValues.eye_color,
       skin_color: initialFormValues.skin_color,
@@ -387,6 +389,10 @@ const IdentityStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
 
 /** Step 2: appearance colors and attributes */
 const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
+  const [gender, hair, eyes, skin, body] = useWatch({
+    control: form.control,
+    name: ["gender", "hair_color", "eye_color", "skin_color", "spriteBodyStyle"],
+  });
   const [watchAttr1, watchAttr2, watchAttr3] = useWatch({
     control: form.control,
     name: ["attribute_1", "attribute_2", "attribute_3"],
@@ -414,6 +420,44 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
 
   return (
     <>
+      <CharacterPreview
+        user={{
+          gender,
+          spriteBodyStyle: body,
+          attributes: [
+            watchAttr1,
+            watchAttr2,
+            watchAttr3,
+            `${hair} hair`,
+            `${eyes} eyes`,
+            `${skin} skin`,
+          ].filter((value): value is string => !!value),
+        }}
+      />
+      <FormField
+        control={form.control}
+        name="spriteBodyStyle"
+        render={({ field }) => (
+          <FormItem className="mx-auto mb-4 w-full max-w-64">
+            <FormLabel>Body style</FormLabel>
+            <Select
+              value={field.value ?? (gender === "Female" ? "female" : "male")}
+              onValueChange={field.onChange}
+            >
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="male">Broad build</SelectItem>
+                <SelectItem value="female">Slender build</SelectItem>
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
       <div className="grid w-full grid-cols-1 gap-4 px-3 sm:grid-cols-3">
         <FormField
           control={form.control}

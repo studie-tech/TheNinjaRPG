@@ -83,6 +83,8 @@ export const userPatchSchema = z.object({
       }),
     )
     .optional(),
+  spriteBodyStyle: z.enum(["male", "female"]).nullable().optional(),
+  attributes: z.array(z.object({ attribute: z.string() })).optional(),
   elementalMastery: z.partialRecord(z.enum(BasicElementName), z.number()).optional(),
   activeTrainedElement: z.enum(BasicElementName).nullable().optional(),
   preferredDamageElement: z.enum(BasicElementName).nullable().optional(),

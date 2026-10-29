@@ -18,6 +18,7 @@ import {
   getVillage,
 } from "@/libs/combat/util";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
+import { lpcFacing } from "@/libs/lpc/catalog";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
 import { createSoftShadowTexture } from "@/libs/rendering/primitives/shadow";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
@@ -130,6 +131,11 @@ export const createCombatActors = (
           haloRatio: Number.NaN,
           shadow: shadowSprite,
           alive: true,
+          lastActionId: previous?.lastActionId ?? user.spriteAction?.id,
+          action: previous?.action,
+          actionAt: previous?.actionAt,
+          facing: previous?.facing,
+          deathAt: previous?.deathAt,
         };
         root.position.set(
           previousPosition?.x ?? -tile.center.x,
@@ -154,6 +160,11 @@ export const createCombatActors = (
         void loading.finally(() => pending.delete(loading));
       }
       record.user = user;
+      if (user.spriteAction && user.spriteAction.id !== record.lastActionId) {
+        record.lastActionId = user.spriteAction.id;
+        record.action = user.spriteAction;
+        record.actionAt = undefined;
+      }
       if (record.target !== tile) {
         record.target = tile;
         const path = paths.getShortestPath(record.tile, tile) ?? [];
@@ -260,6 +271,55 @@ export const createCombatActors = (
       const tx = -waypoint.center.x,
         ty = -waypoint.center.y;
       const distance = Math.hypot(tx - root.x, ty - root.y);
+      if (distance > 0.01)
+        record.facing = lpcFacing(tx - root.x, ty - root.y, record.facing);
+      const cue = record.action;
+      const startsAction = !!(
+        cue &&
+        record.art &&
+        distance < 0.01 &&
+        record.actionAt === undefined
+      );
+      if (startsAction && cue) {
+        record.actionAt = frame.now;
+        const targetTile = grid.getHex({ col: cue.longitude, row: cue.latitude });
+        if (targetTile)
+          record.facing = lpcFacing(
+            -targetTile.center.x - root.x,
+            -targetTile.center.y - root.y,
+            record.facing,
+          );
+      }
+      const durations = {
+        idle: 0,
+        walk: 0,
+        slash: 480,
+        thrust: 640,
+        spellcast: 560,
+        shoot: 1040,
+        hurt: 480,
+      };
+      const active =
+        cue &&
+        record.actionAt !== undefined &&
+        frame.now - record.actionAt < durations[cue.animation];
+      if (!record.alive && user.curHealth <= 0 && record.deathAt === undefined)
+        record.deathAt = frame.now;
+      if (record.alive) record.deathAt = undefined;
+      for (const entry of record.art?.entries ?? []) {
+        if (!entry.character) continue;
+        const falling =
+          record.deathAt !== undefined &&
+          !frame.reducedMotion &&
+          frame.now - record.deathAt < 480;
+        entry.sprite.visible = record.alive || falling;
+        entry.character.render(
+          frame,
+          falling ? "hurt" : distance > 0.01 ? "walk" : active ? cue.animation : "idle",
+          record.facing ?? (user.direction === "left" ? 3 : 1),
+          startsAction,
+        );
+      }
       const segment = Math.hypot(
         waypoint.center.x - record.tile.center.x,
         waypoint.center.y - record.tile.center.y,
@@ -365,22 +425,30 @@ export const combatActorParts = (
       parts.push(part("star", IMG_BATTLEFIELD_STAR, h / 2.5, h * 0.2));
   } else {
     const village = getVillage(battle, user.villageId);
-    parts.push(
-      part("marker", IMG_SECTOR_USER_MARKER, h * 1.2, h * 0.9, {
-        width: h,
-        mask: IMG_SECTOR_USER_MARKER,
-        tint: village
-          ? Number.parseInt(village.hexColor.replace("#", ""), 16)
-          : 0x000000,
-      }),
-      part("marker", IMG_SECTOR_USER_MARKER, h * 1.1, h * 0.9, {
-        width: h * 0.9,
-        mask: IMG_SECTOR_USER_MARKER,
-      }),
-      part("avatar", user.avatar || IMG_AVATAR_DEFAULT, h * 0.8, h, {
-        mask: IMG_SECTOR_USER_SPRITE_MASK,
-      }),
-    );
+    if (user.spriteAppearance)
+      parts.push(
+        part("avatar", user.avatar || IMG_AVATAR_DEFAULT, h * 1.8, h * 0.9, {
+          character: user.spriteAppearance,
+        }),
+      );
+    else {
+      parts.push(
+        part("marker", IMG_SECTOR_USER_MARKER, h * 1.2, h * 0.9, {
+          width: h,
+          mask: IMG_SECTOR_USER_MARKER,
+          tint: village
+            ? Number.parseInt(village.hexColor.replace("#", ""), 16)
+            : 0x000000,
+        }),
+        part("marker", IMG_SECTOR_USER_MARKER, h * 1.1, h * 0.9, {
+          width: h * 0.9,
+          mask: IMG_SECTOR_USER_MARKER,
+        }),
+        part("avatar", user.avatar || IMG_AVATAR_DEFAULT, h * 0.8, h, {
+          mask: IMG_SECTOR_USER_SPRITE_MASK,
+        }),
+      );
+    }
     const clan = getClan(battle, user.clanId);
     if (clan?.image)
       parts.push(
@@ -409,6 +477,11 @@ export type CombatActorSnapshot = {
 };
 type Meter = ReturnType<typeof createStatusMeter>;
 type Fighter = {
+  lastActionId?: string;
+  action?: import("@/validators/lpc").SpriteAction;
+  actionAt?: number;
+  deathAt?: number;
+  facing?: import("@/validators/lpc").LpcDirection;
   scope: GameRenderer;
   root: Container;
   artRoot: Container;

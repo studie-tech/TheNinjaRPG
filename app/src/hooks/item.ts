@@ -41,6 +41,8 @@ export const useItemEditForm = (
     : "";
   const item = {
     ...data,
+    lpcProfile: data.lpcProfile || null,
+    lpcColor: data.lpcColor || null,
     coordinateTargeting: data.coordinateTargeting || null,
     methodSize: data.methodSize || null,
     effects: data.effects,
