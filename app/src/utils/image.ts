@@ -49,12 +49,11 @@ export const bunnyImageUrl = (src: string, width: number) => {
 
 /**
  * Game texture URL: host rewrite plus an optional Bunny width.
- * Zero preserves the original CDN URL and pixels for precompressed sprite atlases.
+ * Zero skips rendition parameters; packed atlases use raw keys to bypass the optimizer.
  * Omit `optimizer=image`: forcing optimization of extensionless UploadThing keys
  * can cache renditions incompatible with travel-map portraits.
  */
 export const textureImageUrl = (src: string, width = 50) => {
-  if (width === 0) return src;
   const transformed = transformImageUrl(src);
   if (!isBunnyCdnUrl(transformed) || !Number.isFinite(width) || width <= 0) {
     return transformed;

@@ -74,8 +74,10 @@ and verifies every decoded RGBA pixel, dimensions and alpha channel. Each upload
 an immutable content-hash custom ID. Publication verifies the downloaded bytes from
 every served URL before writing the runtime catalogue and downloadable credits URL.
 A local checkpoint resumes interrupted uploads without replacing published assets.
-Sprite textures use their original UploadThing CDN URL with no resize or dynamic
-image optimizer, preserving frame coordinates and pixel colours. No sprite binaries
+Sprite textures use raw UploadThing file keys through the existing Bunny CDN host
+rewrite without resize or optimizer parameters. Extension-bearing aliases can trigger
+automatic resizing, which changes packed frame coordinates. Publication verifies
+Bunny's delivered bytes, preserving frame coordinates and pixel colours. No sprite binaries
 are served by Next.js or committed to the repository.
 
 To add artwork, update `profiles.json` and the shared equipment validator when
@@ -94,7 +96,7 @@ overrides on the corresponding item. Variant overrides remain in the database.
 recolouring and repacking, and links each source and chosen licence.
 The catalogue's UploadThing credits URL carries downloadable attribution. Sprite files
 and credits remain publicly accessible for web and native players through immutable,
-content-addressed UploadThing URLs.
+versioned UploadThing URLs.
 
 The [LPC migration](../app/drizzle/migrations/0126_safe_microchip.sql) adds nullable
 item and variant overrides plus the player's body choice. Apply the journaled

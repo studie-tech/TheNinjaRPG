@@ -11,6 +11,7 @@ import { UTApi, UTFile } from "uploadthing/server";
 import type { LpcLayout, LpcSheet } from "../src/libs/lpc/catalog";
 import { servedUfsUrl } from "../src/libs/uploadthing";
 import { fetchWithRetry } from "../src/utils/http";
+import { textureImageUrl } from "../src/utils/image";
 import { withRetry } from "../src/utils/retry";
 
 /** Content-addressed uploads can be resumed without replacing existing files. */
@@ -89,7 +90,8 @@ const main = async () => {
           { concurrency: 5 },
         );
         for (const [index, result] of results.entries()) {
-          if (result.data) uploads[pending[index]!.id] = servedUfsUrl(result.data);
+          // Raw keys bypass Bunny's automatic resizing/recompression of extension-bearing aliases.
+          if (result.data) uploads[pending[index]!.id] = result.data.ufsUrl;
         }
         await writeFile(checkpoint, `${JSON.stringify(uploads, null, 2)}\n`);
         const failed = results.find((result) => result.error);
@@ -101,7 +103,9 @@ const main = async () => {
     await Promise.all(
       batch.map(async (file) => {
         const url = uploads[file.id]!;
-        const response = await fetchWithRetry(url, {}, 30_000, { deadlineMs: 100_000 });
+        const response = await fetchWithRetry(textureImageUrl(url, 0), {}, 30_000, {
+          deadlineMs: 100_000,
+        });
         if (
           !response.ok ||
           !Buffer.from(await response.arrayBuffer()).equals(file.bytes)

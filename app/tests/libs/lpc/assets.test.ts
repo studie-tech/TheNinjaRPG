@@ -14,7 +14,7 @@ describe("published LPC artwork", () => {
     for (const layers of Object.values(lpcCatalog.entries)) for (const sheet of layers.flatMap((sheet) => [sheet, ...sheet.travel ? [sheet.travel] : []])) {
       const url = new URL(sheet.image);
       expect(url.origin).toBe(origin);
-      expect(url.pathname).toMatch(/^\/f\/lpc-[a-f0-9]{24}\.(webp|png)$/);
+      expect(url.pathname).toMatch(/^\/f\/[A-Za-z0-9_-]+$/);
       expect(url.search).toBe("");
       const layout = lpcCatalog.layouts[sheet.layout]!;
       expect(layout).toBeDefined();

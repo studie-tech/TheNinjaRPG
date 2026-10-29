@@ -57,9 +57,9 @@ describe("image URL utilities", () => {
     );
   });
 
-  it("preserves packed sprite atlas URLs without CDN transformations", () => {
-    const atlas = "https://ui0arpl8sm.ufs.sh/f/lpc-original.webp";
-    expect(textureImageUrl(atlas, 0)).toBe(atlas);
+  it("routes packed sprite atlases through Bunny without resizing", () => {
+    const atlas = "https://ui0arpl8sm.ufs.sh/f/raw-atlas-key";
+    expect(textureImageUrl(atlas, 0)).toBe("https://uploadthing.b-cdn.net/f/raw-atlas-key");
   });
 
   it("replaces an existing width and preserves fragments", () => {
