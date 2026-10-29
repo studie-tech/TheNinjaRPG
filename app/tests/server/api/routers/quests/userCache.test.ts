@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { quest, questHistory, userData, userQueue, userVote } from "@/drizzle/schema";
 import { questsRouter } from "@/server/api/routers/quests";
 import { profileRouter } from "@/server/api/routers/profile";
 import { getEnergyQueue } from "@/libs/queue";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { CollectItem, InstantNewQuestObjective, InstantStartBattleObjective, SimpleObjective } from "@/validators/objectives";
+import { AllObjectives, CollectItem, InstantNewQuestObjective, InstantStartBattleObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
 import { queueEnergy } from "../../../../setup/queues";
@@ -114,6 +114,29 @@ describeWithDatabase("confirmed quest cache responses", () => {
       expect(history).toMatchObject({ completed: 1, previousCompletes: 1 });
     },
   );
+
+  it("forwards a located mission start without refetching the profile", async () => {
+    const db = await getTestDatabase();
+    await db.update(quest).set({ content: { ...content(10), objectives: [AllObjectives.parse({ id: "located", task: "move_to_location", sector: 2, longitude: 10, latitude: 7, sectorType: "specific", sectorList: [], locationType: "specific", hideLocation: false })] } }).where(eq(quest.id, missionId));
+    const profile = await (await callerFor(profileRouter, playerId)).getUser();
+    const client = new QueryClient();
+    const key = [["profile", "getUser"], { type: "query" }];
+    client.setQueryData(key, profile);
+    let reads = 0;
+    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return profile; } });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      const revision = prepareUserUpdate(client, key);
+      const readsBefore = await countProfileReads();
+      const result = await (await callerFor(questsRouter, playerId)).startQuest({ questId: missionId, userSector: 0 });
+      expect(result.success).toBe(true);
+      expect(result.userPatch).toBeDefined();
+      await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress });
+      expect(client.getQueryData<typeof profile>(key)?.userData?.userQuests.some((entry) => entry.questId === missionId)).toBe(true);
+      expect(reads).toBe(0);
+      expect(readsBefore()).toBe(1);
+    } finally { stop(); client.clear(); }
+  });
 
   it("returns the accepted specific mission, counter and trackers using its existing profile read", async () => {
     const reads = await countProfileReads();

@@ -23,7 +23,6 @@ import {
   type UserRole,
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
-
 import {
   type Quest,
   quest,
@@ -33,7 +32,6 @@ import {
   userData,
   userPet,
 } from "@/drizzle/schema";
-
 import {
   deletedReason,
   editedReason,
@@ -87,9 +85,9 @@ import {
   questTypeConcurrentBlockMessage,
   questUiAccessBlockMessage,
   rollObjectiveAttackers,
+  snapQuestTargetsToReachable,
   verifyQuestContentForSave,
 } from "@/libs/quest";
-
 import {
   formatQuestEntryCost,
   getIsolatedPyramid,
@@ -110,7 +108,6 @@ import {
   verifyRewardChoiceForSave,
 } from "@/libs/rewardChoice";
 import { collapseRewards } from "@/libs/rewards";
-
 import { callDiscordContent } from "@/libs/socials";
 import { availableQuestLetterRanks, availableRanks } from "@/libs/train";
 import { villageMissionCompletionEvents } from "@/libs/villageMission";
@@ -273,6 +270,7 @@ import {
   getUserRegenerationGain,
   userRegenerationGainSql,
 } from "@/server/utils/regeneration";
+import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
 import { grantTitles } from "@/server/utils/titleGrants";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { recordVillageMissionProgress } from "@/server/utils/villageMission";
@@ -679,8 +677,7 @@ export const questsRouter = createTRPCRouter({
         ...(result.success &&
         userCacheEligible === true &&
         !updatedUser.requiresProgressionRefresh &&
-        questData.questType !== "war" &&
-        getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
+        questData.questType !== "war"
           ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
           : {}),
       };
@@ -3154,6 +3151,21 @@ export const upsertQuestEntry = async (
   const { trackers, consequences, notifications } = getNewTrackers(trackerUser, [
     { task: "any" },
   ]);
+  // Target sectors depend on the rolled trackers, so their cached map read follows
+  // tracker creation and precedes the same write that publishes the quest attempt.
+  const targetSectors = getQuestTargetSectorsToCheck(user, trackers, true);
+  if (targetSectors.length > 0) {
+    const maps = await fetchPublishedSectorMaps(client, targetSectors).catch(
+      (error: unknown) => {
+        Sentry.captureException(error, {
+          level: "warning",
+          tags: { source: "questAssignmentTargets" },
+        });
+        return null;
+      },
+    );
+    if (maps) snapQuestTargetsToReachable(user, trackers, maps);
+  }
   promises.push(
     updateUserDataForUpsertQuestEntry(
       client,
@@ -3180,7 +3192,9 @@ export const upsertQuestEntry = async (
     // A concurrent delegation may have preserved a different tracker/attempt; reload
     // profession assignments instead of publishing this proposed in-memory projection.
     userCacheEligible:
-      !professionContract && consequences.length === 0 && notifications.length === 0,
+      !professionContract &&
+      consequences.every((entry) => entry.type === "update_user") &&
+      notifications.length === 0,
   };
 };
 
