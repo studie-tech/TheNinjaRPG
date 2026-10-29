@@ -6,12 +6,15 @@ import type {
   SpriteLayer,
 } from "@/validators/lpc";
 
+/** Authored frame indices can be sparse; cell and columns locate them in the packed atlas. */
 export type LpcLayout = {
   cell: number;
   columns: number;
   clips: Partial<Record<LpcAnimation, number[][]>>;
 };
+/** A layer's full poses and its optional movement-only atlas share the same visual selection. */
 export type LpcSheet = { image: string; z: number; layout: number; travel?: LpcSheet };
+/** Generated manifest of bundled atlas URLs and authored layouts, pinned to an upstream revision. */
 export const lpcCatalog = source as unknown as {
   revision: string;
   entries: Record<string, LpcSheet[]>;
@@ -35,6 +38,10 @@ export const spriteLayerSheets = (
     : sheets;
 };
 
+/**
+ * Sample elapsed milliseconds: idle/walk loop, attacks clamp, and reduced motion holds the first pose.
+ * Missing clips fall back to an authored idle/walk pose; scene code owns cue expiry.
+ */
 export const lpcFrame = (
   sheet: LpcSheet,
   state: LpcAnimation,

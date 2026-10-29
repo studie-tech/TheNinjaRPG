@@ -431,6 +431,7 @@ export const travelRouter = createTRPCRouter({
             u,
           );
           const isMasked = !!contract && u.userId !== ctx.userId;
+          // Raw traits and inventory inputs stay server-side; masked users receive a uniform below.
           const { attributes, items, gender, spriteBodyStyle, ...publicUser } = u;
           const participant = {
             ...publicUser,

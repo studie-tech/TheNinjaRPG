@@ -21,9 +21,10 @@ restores that clothing. Non-wearable items explicitly resolve to `NONE`.
 `inferItemProfile` and `inferItemColor` cover subsequently authored content by
 slot, weapon family and name. These are visual interpretations using the supplied
 LPC silhouettes, rather than reproductions of item portrait artwork. The item and
-variant editors expose silhouette and palette overrides. Resolution precedence is
-variant override, item override, catalogue mapping, then family inference. A
-variant name can supply its colour while inheriting the item's silhouette.
+variant editors expose silhouette and palette overrides. Silhouettes resolve by
+variant override, item override, catalogue mapping, then family inference. Palettes
+resolve by variant override, variant name, item override, catalogue mapping, item
+name, then grey. A variant name can supply its colour while inheriting the item's silhouette.
 
 `profiles.json` selects upstream definitions for both supported bodies. Missing
 LPC equivalents for fans, throwing stars, rings, bracelets, tattoos and scars use
@@ -41,6 +42,11 @@ item-instance visual lookup in battle state. Action processing recomposes worn
 equipment in memory and records deduplicated animation cues. It performs no sprite
 queries during an action. Public battle state exposes the appearance and cue,
 without the internal equipment lookup.
+
+Body-style changes use a single guarded update that excludes banned accounts and
+characters in combat. The router checks the affected row count and treats an
+unchanged saved style as a successful no-op. This keeps the guard atomic without
+opening a transaction or locking an account row between separate reads and writes.
 
 ## Rebuilding artwork
 

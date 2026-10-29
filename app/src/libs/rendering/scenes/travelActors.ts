@@ -44,6 +44,7 @@ export const createTravelActors = (game: GameRenderer) => {
   let sourceSnapshot: TravelActorsSnapshot | null = null;
   let viewport: WorldBounds | null = null;
   let visibleKey = "";
+  /** Cull before acquiring artwork; padding preloads nearby actors and the viewer stays present. */
   const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
     const bounds = viewport;
     const visibleUsers = !bounds
@@ -64,10 +65,12 @@ export const createTravelActors = (game: GameRenderer) => {
         });
     return { ...snapshot, users: visibleUsers };
   };
+  /** Camera movement only reconciles resources when visible actor membership changes. */
   const userKey = (snapshot: TravelActorsSnapshot) =>
     snapshot.users
       .map((user) => `${user.userId}:${user.npcPlacementId ?? ""}`)
       .join("|");
+  /** Retire departed scopes while retaining movement state for unchanged actor identities. */
   const reconcile = (snapshot: TravelActorsSnapshot) => {
     if (pathGrid !== snapshot.grid || actorSector !== snapshot.sector) {
       // Snapshots use sector-local coordinates; interpolation cannot cross their origins.
@@ -258,6 +261,7 @@ export const createTravelActors = (game: GameRenderer) => {
       const moving = distance > 0.01;
       if (moving) {
         record.facing = lpcFacing(dx, dy, record.facing);
+        // Catch up queued network waypoints without overshooting; reduced motion snaps to each one.
         const step = frame.reducedMotion
           ? distance
           : Math.min(
@@ -283,6 +287,7 @@ export const createTravelActors = (game: GameRenderer) => {
     }
     container.children.sort((a, b) => b.position.y - a.position.y);
   };
+  /** Retain the latest snapshot so viewport changes can materialize its actors without another fetch. */
   const sync = (snapshot: TravelActorsSnapshot) => {
     sourceSnapshot = snapshot;
     const visible = visibleSnapshot(snapshot);

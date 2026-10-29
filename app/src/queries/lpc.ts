@@ -2,6 +2,10 @@ import { and, eq, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { userData, userItem } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
+/**
+ * Build one atomic body-style update guarded against bans and concurrent combat entry.
+ * The caller checks rowsAffected; no read/lock/write transaction is required.
+ */
 export const updateSpriteBodyStyle = (
   client: DrizzleClient,
   userId: string,
@@ -18,10 +22,11 @@ export const updateSpriteBodyStyle = (
       ),
     );
 
-/** Public appearance inputs travel with the existing sector read, without a query per actor. */
+/** Private resolver inputs join the sector snapshot; callers publish only the resolved recipe. */
 export const spriteUserRelations = {
   attributes: { columns: { attribute: true } },
   items: {
+    // Instance IDs distinguish two worn copies; the base item ID alone cannot identify them.
     columns: { id: true, equipped: true, quantity: true },
     where: and(
       ne(userItem.equipped, "NONE"),

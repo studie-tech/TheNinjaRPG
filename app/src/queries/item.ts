@@ -1841,7 +1841,7 @@ export const listQuestForGetItemRelations = (
       )`,
   });
 
-/** Build the `userItem` listing for `fetchUserItems`, using predicates on `userId`. */
+/** Load inventory with its selected variant; this lean query omits the full variant catalogue. */
 export const listUserItemForFetchUserItems = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
@@ -1855,7 +1855,7 @@ export const listUserItemForFetchUserItems = (
     },
   });
 
-/** Build the `userItem` listing for `fetchUserItemsWithVariants`, using predicates on `userId`. */
+/** Load every variant choice; appearance and portrait resolvers select from this list by activeVariantId. */
 export const listUserItemForFetchUserItemsWithVariants = (
   client: Pick<DrizzleClient, "query">,
   userId: string,

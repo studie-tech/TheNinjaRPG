@@ -388,7 +388,7 @@ const IdentityStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
   );
 };
 
-/** Step 2: appearance colors and attributes */
+/** Preview unsaved body, colour and trait choices through the same resolver as saved characters. */
 const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
   const [gender, hair, eyes, skin, body] = useWatch({
     control: form.control,

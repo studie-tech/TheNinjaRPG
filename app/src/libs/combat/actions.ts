@@ -1448,6 +1448,7 @@ export const performBattleAction = (props: {
   // Apply relevant effects, and get back new state + active effects
   const { newBattle, actionEffects } = applyEffects(battle, actorId, action);
 
+  // Recompose from captured layers so consumed/broken gear restores clothing without a database read.
   for (const wearer of newBattle.usersState) {
     if (
       wearer.spriteBaseAppearance &&

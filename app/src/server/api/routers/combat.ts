@@ -4332,6 +4332,7 @@ export const processUsersForBattle = async (
     }
 
     summonDependencies.set(inputUser.userId, dependencies);
+    // Capture visual inputs during initiation/loadout processing, never during performAction.
     if (!inputUser.isAi && !user.isMasked && user.username !== "ANBU Member") {
       user.spriteBaseAppearance ??= resolveSpriteAppearance({
         ...inputUser,

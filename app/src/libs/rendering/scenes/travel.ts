@@ -297,6 +297,7 @@ export const createTravelScene = async (options: {
       actors.container.position.copyFrom(entry.position);
       const halfWidth = game.renderer.width / (2 * scale());
       const halfHeight = game.renderer.height / (2 * scale());
+      // Actor culling uses sector-local world coordinates, independent of camera zoom and sector offset.
       if (camera)
         actors.setViewport({
           minX: camera.x - halfWidth - entry.position.x,

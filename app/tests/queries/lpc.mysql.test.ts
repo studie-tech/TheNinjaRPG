@@ -14,6 +14,7 @@ import type { DrizzleClient } from "@/server/db";
 import { insertItems, insertUserItems, insertUsers } from "../setup/factories";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
 
+// Exercise production query/mutation contracts against real rows, including selected variants and guards.
 describeWithDatabase("sprite appearance database snapshots", () => {
   beforeEach(async () => {
     await resetTables(userItem, itemVariant, item, userAttribute, userData);

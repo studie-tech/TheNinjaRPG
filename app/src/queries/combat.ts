@@ -540,7 +540,10 @@ export const executeResultsForListOngoingBattles = (
         `,
   );
 
-/** Build the `userData` listing for `queryBattleUsers`, using predicates on `status` and `userId`. */
+/**
+ * Load battle participants and their appearance inputs at initiation.
+ * Action processing uses the captured battle state instead of repeating these relation reads.
+ */
 export const listUserDataForQueryBattleUsers = (
   client: Pick<DrizzleClient, "query">,
   userIds: string[],

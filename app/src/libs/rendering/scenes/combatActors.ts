@@ -160,6 +160,7 @@ export const createCombatActors = (
         void loading.finally(() => pending.delete(loading));
       }
       record.user = user;
+      // New cue IDs retrigger repeated attacks; refetched snapshots keep the current animation clock.
       if (user.spriteAction && user.spriteAction.id !== record.lastActionId) {
         record.lastActionId = user.spriteAction.id;
         record.action = user.spriteAction;
@@ -274,6 +275,7 @@ export const createCombatActors = (
       if (distance > 0.01)
         record.facing = lpcFacing(tx - root.x, ty - root.y, record.facing);
       const cue = record.action;
+      // Begin the cue clock only after movement and asynchronous artwork loading both finish.
       const startsAction = !!(
         cue &&
         record.art &&
@@ -290,6 +292,7 @@ export const createCombatActors = (
             record.facing,
           );
       }
+      // Full authored cycles expire independently of reduced-motion frame freezing.
       const durations = {
         idle: 0,
         walk: 0,

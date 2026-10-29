@@ -170,9 +170,13 @@ export type ProcessedItem = CombatQueryUserItem & {
  * Shared between ProcessingBattleUser and BattleUserState.
  */
 export type CombatUserFields = {
+  /** Private creation/clothing snapshot captured at initiation and retained across loadout edits. */
   spriteBaseAppearance?: import("@/validators/lpc").SpriteAppearance;
+  /** Private item-instance lookup permits in-memory recomposition after consumption or breakage. */
   spriteEquipment?: Record<string, import("@/validators/lpc").SpriteLayer>;
+  /** Public resolved artwork, replaced with a uniform when identity is masked. */
   spriteAppearance?: import("@/validators/lpc").SpriteAppearance;
+  /** Public presentation cue, distinct from the authoritative action/content identifier. */
   spriteAction?: import("@/validators/lpc").SpriteAction;
   /** Identity masking captured with the combatant's battle snapshot. */
   isMasked?: boolean;

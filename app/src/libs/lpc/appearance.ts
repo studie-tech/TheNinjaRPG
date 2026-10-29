@@ -7,7 +7,10 @@ import type {
 } from "@/validators/lpc";
 import { colors, skin_colors } from "@/validators/register";
 
-/** Persisted content mappings take precedence over family defaults; staff overrides take precedence over both. */
+/**
+ * Choose silhouettes by variant override, item override, catalogue mapping, then family inference.
+ * Palettes prefer variant overrides/names before item overrides and catalogue/name defaults.
+ */
 export const resolveItemSprite = (item: SpriteItem, variant?: SpriteVariant | null) => {
   const saved = (
     contentMappings as Record<string, { profile: LpcEquipmentProfile; color: LpcColor }>
@@ -121,6 +124,7 @@ export const inferItemProfile = (item: SpriteItem): LpcEquipmentProfile => {
   }
 };
 
+/** Infer a palette from content names, leaving unmatched names to the caller's fallback. */
 export const inferItemColor = (name: string): LpcColor | null => {
   const value = name.toLowerCase();
   const colors: [RegExp, LpcColor][] = [
@@ -137,13 +141,17 @@ export const inferItemColor = (name: string): LpcColor | null => {
   return colors.find(([pattern]) => pattern.test(value))?.[1] ?? null;
 };
 
-/** Resolves solely from an authoritative snapshot; no URLs, inventory IDs or private stats leave this boundary. */
+/**
+ * Compose visual selections from a query snapshot or unsaved creation choices.
+ * Server callers supply authoritative inputs and replace masked identities before publishing.
+ */
 export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
   const attributes = new Set(
     (user.attributes ?? []).map((value) =>
       (typeof value === "string" ? value : value.attribute).toLowerCase(),
     ),
   );
+  // Validate colour prefixes so traits such as Long Hair cannot become palette names.
   const color = (suffix: string, fallback: string) => {
     const choices = new Set([
       ...(suffix === "skin" ? skin_colors : colors).map((value) => value.toLowerCase()),
@@ -221,7 +229,10 @@ export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
   );
 };
 
-/** The item-instance lookup is captured at initiation, so breaking/consuming gear needs no query. */
+/**
+ * Resolve worn visuals by item-instance ID, preserving two equipped copies of one item.
+ * Accept either a selected variant join or the full variant list; battle initiation captures this lookup.
+ */
 export const resolveSpriteEquipment = (items: SpriteUser["items"]) => {
   const result: Record<string, SpriteLayer> = {};
   const equipped = [...(items ?? [])]
@@ -267,6 +278,7 @@ export const resolveSpriteEquipment = (items: SpriteUser["items"]) => {
   return result;
 };
 
+/** Replace logical clothing slots without mutating the captured base used after gear is removed. */
 export const withSpriteEquipment = (
   base: SpriteAppearance,
   equipment: SpriteLayer[],
@@ -278,6 +290,7 @@ export const withSpriteEquipment = (
   return { ...base, layers: [...layers.values()] };
 };
 
+/** Uniform recipes omit personal traits and equipment so masked identities remain anonymous. */
 export const anonymousSpriteAppearance = (anbu = false): SpriteAppearance => ({
   version: 1,
   body: "male",
@@ -291,18 +304,21 @@ export const anonymousSpriteAppearance = (anbu = false): SpriteAppearance => ({
   ],
 });
 
+/** Visual fields shared by selected-variant joins and full catalogue entries. */
 export type SpriteVariant = {
   id?: string;
   name?: string;
   lpcProfile?: string | null;
   lpcColor?: LpcColor | null;
 };
+/** Minimal content inputs accepted from both lean and full inventory queries. */
 export type SpriteItem = SpriteVariant & {
   slot?: string;
   itemType?: string;
   weaponType?: string;
   variants?: SpriteVariant[];
 };
+/** Resolver inputs shared by creation drafts and private server snapshots; never a public DTO. */
 export type SpriteUser = {
   gender?: string;
   spriteBodyStyle?: "male" | "female" | null;

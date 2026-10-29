@@ -223,7 +223,9 @@ const WALL_CORNERS = [
  * Anchors are image fractions; rotation/wind phase are radians. rendition is a CDN pixel width.
  */
 export type WorldSpriteDescription = {
+  /** Optional layered art; image remains the portrait fallback if its atlases fail to load. */
   character?: import("@/validators/lpc").SpriteAppearance;
+  /** Sector actors use movement-only atlases; combat needs the full authored poses. */
   characterMode?: "all" | "travel";
   id: string;
   kind: string;

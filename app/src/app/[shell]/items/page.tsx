@@ -1918,6 +1918,7 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
     onSuccess: async (result) => {
       showMutationToast(result);
       if (result.success) {
+        // One selection changes inventory labels, the profile preview and the public sector recipe.
         await Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),
           utils.profile.getUser.invalidate(),

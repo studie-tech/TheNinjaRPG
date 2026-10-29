@@ -17,6 +17,7 @@ const cleanups: (() => void)[] = [];
 const originalCreate = characters.createLpcCharacter;
 const texture = () => new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
 const frame = (now: number, reducedMotion = false) => ({ now, delta: 1 / 60, reducedMotion });
+/** Keep fixtures CPU-only while exercising real Pixi frame views, scope cleanup and cancellation. */
 const gameFixture = () => {
   const owned = new Set<() => void>();
   const controller = new AbortController();

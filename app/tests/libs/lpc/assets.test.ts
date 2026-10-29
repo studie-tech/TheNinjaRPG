@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { lpcCatalog, lpcFacing, lpcFrame } from "@/libs/lpc/catalog";
 import credits from "@/libs/lpc/credits.json";
 
+// Decode shipped files to verify the importer's palette, transparency, attribution and frame contracts.
 describe("bundled LPC artwork", () => {
   it("actually recolours metal armour for item palettes", async () => {
     for (const body of ["male", "female"]) for (const color of ["red", "blue"]) {

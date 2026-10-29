@@ -3,7 +3,10 @@ import { lpcCatalog, lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
 
-/** Layer atlases share scene leases; only lightweight frame views belong to this actor. */
+/**
+ * Acquire shared atlas leases and build a unit-square actor with lazily cached frame views.
+ * Movement mode omits attack atlases; the owning render scope releases images and actor views.
+ */
 export const createLpcCharacter = async (
   game: GameRenderer,
   appearance: SpriteAppearance,
@@ -42,6 +45,7 @@ export const createLpcCharacter = async (
     direction: LpcDirection = 2,
     startedAt = 0,
     disposed = false;
+  /** Restart retriggers the same animation for a new cue; elapsed time comes from the scene clock. */
   const render = (
     frame: GameFrame,
     nextState: LpcAnimation = "idle",
@@ -62,6 +66,7 @@ export const createLpcCharacter = async (
         entry.child.visible = false;
         continue;
       }
+      // Flipping an off-hand pose reverses its horizontal facing, so sample the opposite row first.
       const sample = lpcFrame(
         entry.sheet,
         state,

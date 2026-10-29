@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { resolveSpriteAppearance, type SpriteUser } from "@/libs/lpc/appearance";
 import type { LpcAnimation } from "@/validators/lpc";
 
-/** Uses the game renderer and atlas leases so creation and wardrobe previews match the maps. */
+/**
+ * Preview drafts and saved appearances with the same renderer and atlas leases as the maps.
+ * Recipe changes abort the previous render scope; load failures leave the surrounding form usable.
+ */
 export const CharacterPreview = ({
   user,
   animation = "idle",
@@ -37,6 +40,7 @@ export const CharacterPreview = ({
           onError: () => setError(true),
         });
         dispose = game.dispose;
+        // Preserve the square aspect when the rem-sized mount follows the player's font scale.
         game.canvas.style.height = "auto";
         try {
           const actor = await createLpcCharacter(

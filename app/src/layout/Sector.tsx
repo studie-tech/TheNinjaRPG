@@ -312,6 +312,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     [userData],
   );
   const lastAppearanceSignature = useRef<string | null>(null);
+  // Only a changed visual recipe refetches sector art; unrelated user stat patches do not.
   useEffect(() => {
     const previous = lastAppearanceSignature.current;
     lastAppearanceSignature.current = appearanceSignature;

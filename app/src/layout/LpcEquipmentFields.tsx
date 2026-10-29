@@ -11,7 +11,10 @@ import {
 } from "@/components/ui/select";
 import { lpcColors, lpcEquipmentProfiles } from "@/validators/lpc";
 
-/** Both content editors write the same validated silhouette and palette overrides. */
+/**
+ * Share nullable silhouette/palette overrides between item and variant editors.
+ * AUTO stores null; the owning form's fieldset supplies the save/measurement lock.
+ */
 export const LpcEquipmentFields = <
   T extends FieldValues,
   Context,

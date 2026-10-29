@@ -1758,6 +1758,7 @@ export const profileRouter = createTRPCRouter({
       }
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
+  /** Save a cosmetic choice as an absolute user patch; stale guards return recoverable responses. */
   updateSpriteBody: protectedProcedure
     .input(z.object({ body: z.enum(["male", "female"]) }))
     .output(userDeltaResponseSchema)
@@ -1767,6 +1768,7 @@ export const profileRouter = createTRPCRouter({
       if (user.status === "BATTLE")
         return errorResponse("Change body style outside combat");
       const result = await updateSpriteBodyStyle(ctx.drizzle, ctx.userId, input.body);
+      // An unchanged MySQL value can report zero rows; reject a guarded race only for an actual change.
       if (!result.rowsAffected && user.spriteBodyStyle !== input.body)
         return errorResponse("Your character changed. Refresh and try again.");
       return {

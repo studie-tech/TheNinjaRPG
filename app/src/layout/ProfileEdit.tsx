@@ -1849,9 +1849,7 @@ const AvatarChange: React.FC = () => {
   }
 };
 
-/**
- * Attribute change component
- */
+/** Edit saved traits and body style while keeping the shared appearance snapshot in sync. */
 const AttributeChange: React.FC = () => {
   const { data: spriteUser, updateUser: updateSpriteUser } = useRequiredUserData();
   const bodyMutation = api.profile.updateSpriteBody.useMutation({
@@ -1876,6 +1874,7 @@ const AttributeChange: React.FC = () => {
   // Queries
   const { data, refetch } = api.profile.getUserAttributes.useQuery(undefined);
   const selectedAttributes = data ? data.map((a) => a.attribute as Attribute) : [];
+  // Attribute mutations refetch this separate query; previews and sector invalidation use the shared user.
   useEffect(() => {
     if (
       spriteUser &&
