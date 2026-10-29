@@ -246,7 +246,7 @@ beforeEach(() => {
         getActiveWars: { invalidate: invalidateWars },
         getWarPointClaims: { invalidate: invalidateClaims },
       },
-      profile: { getUser: { invalidate: invalidateUser } },
+      profile: { getUser: { refetch: invalidateUser } },
     }),
     war: {
       getMercenaries: { useQuery: () => ({ data: mercenaries }) },

@@ -61,7 +61,7 @@ describe("inventory pages", () => {
     );
     const options = new Function("utils", "useritem", "showMutationToast", "showRewardToast", "onSettled", "finishItemConsumeRequest", "userData", "getItemConsumeErrorMessage", "prepareUserUpdate", "updateUser", `return (${callbacks});`)(
       {
-        profile: { getUser: { invalidate: () => client.invalidateQueries({ queryKey: ["profile"] }) } },
+        profile: { getUser: { refetch: () => client.refetchQueries({ queryKey: ["profile"] }) } },
         item: { getUserItemsWithVariants: { invalidate: () => client.invalidateQueries({ queryKey: ["inventory"] }) } },
       },
       selected,
