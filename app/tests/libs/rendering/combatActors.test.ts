@@ -25,12 +25,12 @@ describe("combat fighter recipes", () => {
     expect(parts[0]).toMatchObject({ image: "portrait.webp", size: 32, y: 18, rendition: 256 });
     expect(parts[0]?.mask).toBeUndefined();
   });
-  it("scales LPC fighters to 75% while keeping their frame grounded", () => {
+  it("scales LPC fighters to 75% and raises them within their tile", () => {
     const spriteAppearance = resolveSpriteAppearance({});
     const parts = combatActorParts(user({ isAi: false, spriteAppearance }), tile, battle);
     const avatar = parts.find((part) => part.kind === "avatar")!;
-    expect(avatar).toMatchObject({ character: spriteAppearance, size: tile.height * 1.8 * 0.75, y: tile.height * 0.9 * 0.75 });
-    expect(avatar.y - avatar.size / 2).toBe(0);
+    expect(avatar).toMatchObject({ character: spriteAppearance, size: tile.height * 1.8 * 0.75, y: tile.height * (0.9 * 0.75 + 0.15) });
+    expect(avatar.y - avatar.size / 2).toBeCloseTo(tile.height * 0.15);
   });
   it("never mutates the battle or fighter while building its display", () => {
     const fighter = user({ isAi: false }), original = structuredClone(fighter);

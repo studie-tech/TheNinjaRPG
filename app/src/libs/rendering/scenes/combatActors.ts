@@ -123,7 +123,10 @@ export const createCombatActors = (
         const hudClearance =
           lastMeterIndex * meterHeight + meterHeight / 2 + tile.height * 0.03;
         const hudTop =
-          tile.height * (user.isAi && user.isOriginal ? 1.71 : 1.07) + hudClearance;
+          tile.height * (user.isAi && user.isOriginal ? 1.71 : 1.07) +
+          hudClearance +
+          // Keep the same head clearance when the LPC frame is raised within its hex.
+          (character ? character.y - character.size / 2 : 0);
         const meter = (color: number, index: number) =>
           createStatusMeter({
             width: meterWidth,
@@ -327,8 +330,10 @@ export const createCombatActors = (
           maxima.chakra,
       );
     const threat = displayed ? snapshot.aggro?.get(user.userId) : undefined;
-    record.threat.container.visible = threat !== undefined;
-    record.highestThreat.visible = threat?.isHighest ?? false;
+    record.threat.container.visible =
+      !!threat && Number.isFinite(threat.ratio) && threat.ratio > 0;
+    record.highestThreat.visible =
+      record.threat.container.visible && (threat?.isHighest ?? false);
     record.threat.set(threat?.ratio ?? 0, threat?.isHighest ? 0xf59e0b : 0xfbbf24);
   };
   const animate = (
@@ -512,12 +517,12 @@ export const combatActorParts = (
     const village = getVillage(battle, user.villageId);
     if (user.spriteAppearance)
       parts.push(
-        // Scale the authored frame around its ground anchor without shrinking the HUD.
+        // Raise the compact frame within the hex; ground cues and HUD follow its placement.
         part(
           "avatar",
           user.avatar || IMG_AVATAR_DEFAULT,
           h * 1.8 * LPC_COMBAT_SCALE,
-          h * 0.9 * LPC_COMBAT_SCALE,
+          h * (0.9 * LPC_COMBAT_SCALE + 0.15),
           { character: user.spriteAppearance },
         ),
       );

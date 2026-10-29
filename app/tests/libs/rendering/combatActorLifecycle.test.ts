@@ -51,15 +51,22 @@ describe("combat actor reconciliation", () => {
     actors.animate({ now: 1017, delta: 1 / 60, reducedMotion: true }, user.userId, undefined);
     expect(actors.animate({ now: 1034, delta: 0, reducedMotion: true }, user.userId, undefined)).toBe(false);
   });
-  it("keeps an empty threat track for zero aggro and removes it when threat does not apply", async () => {
+  it("hides empty threat tracks and reuses them when aggro changes", async () => {
     const { actors, threat, highest, user, battle } = await setup();
     const aggro = new Map([[user.userId, { enmity: 0, ratio: 0, isHighest: false }]]);
     actors.sync({ battle, aggro });
-    expect(threat.visible).toBe(true);
+    expect(threat.visible).toBe(false);
     expect(threat.children[2]?.visible).toBe(false);
     expect(highest.visible).toBe(false);
     const children = [...threat.children];
+    aggro.set(user.userId, { enmity: 25, ratio: 1, isHighest: true });
     actors.sync({ battle, aggro });
+    expect(threat.visible).toBe(true);
+    expect(highest.visible).toBe(true);
+    aggro.set(user.userId, { enmity: 0, ratio: 0, isHighest: false });
+    actors.sync({ battle, aggro });
+    expect(threat.visible).toBe(false);
+    expect(highest.visible).toBe(false);
     expect(threat.children).toEqual(children);
     actors.sync({ battle }); expect(threat.visible).toBe(false);
   });
@@ -73,6 +80,7 @@ describe("combat actor reconciliation", () => {
     for (const ratio of [0.25, 2, 0.5, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       actors.sync({ battle, aggro: new Map([[user.userId, { enmity: ratio * 100, ratio, isHighest: ratio === 1 }]]) });
       expect(fill.width).toBeCloseTo(width * (Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 0));
+      expect(threat.visible).toBe(Number.isFinite(ratio) && ratio > 0);
       expect(highest.context).toBe(geometry);
       expect(highest.visible).toBe(false);
       expect(fill.tint).toBe(0xfbbf24);
@@ -101,7 +109,7 @@ describe("combat actor reconciliation", () => {
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
     const art = root.getChildByLabel("combat-art")!;
     const top = art.getLocalBounds().maxY;
-    expect(top).toBeCloseTo(tile.height * (failedAtlas ? 1.35 : 1.5));
+    expect(top).toBeCloseTo(tile.height * 1.5);
     const meters = ["combat-health", "combat-stamina", "combat-chakra", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
     const positions = meters.map((meter) => meter.y);
     for (const meter of meters) expect(meter.y + meter.getLocalBounds().minY).toBeGreaterThan(top);
@@ -119,8 +127,8 @@ describe("combat actor reconciliation", () => {
   it("retains the compact HUD position when LPC artwork loads successfully", async () => {
     const { root, user, grid } = await setup(false, resolveSpriteAppearance({}));
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
-    expect(root.getChildByLabel("combat-health")?.y).toBeCloseTo(tile.height * 1.35);
-    expect(root.getChildByLabel("combat-aggro")?.y).toBeCloseTo(tile.height * 1.45);
+    expect(root.getChildByLabel("combat-health")?.y).toBeCloseTo(tile.height * 1.5);
+    expect(root.getChildByLabel("combat-aggro")?.y).toBeCloseTo(tile.height * 1.6);
     for (const label of ["combat-selection", "combat-hover", "combat-original"])
       expect(root.getChildByLabel(label)?.y).toBe(0);
   });
@@ -129,7 +137,7 @@ describe("combat actor reconciliation", () => {
     appearance.layers.push({ profile, color: "gray" });
     const { actors, root, user, battle, grid } = await setup(false, appearance);
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
-    const frameTop = tile.height * 1.35;
+    const frameTop = tile.height * 1.5;
     const meters = ["combat-health", "combat-stamina", "combat-chakra", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
     const positions = meters.map((meter) => meter.y);
     for (const meter of meters) expect(meter.y + meter.getLocalBounds().minY).toBeGreaterThan(frameTop);
@@ -156,6 +164,7 @@ describe("combat actor reconciliation", () => {
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
     const art = root.getChildByLabel("combat-art")!.children[0]!.children[0]!;
     const footY = art.y - Math.abs(art.scale.y) * (0.5 - 4 / 64);
+    expect(footY).toBeGreaterThan(tile.height * 0.2);
     for (const marker of [selection, hover]) {
       const bounds = marker.getLocalBounds();
       expect((bounds.minX + bounds.maxX) / 2).toBeCloseTo(art.x);
