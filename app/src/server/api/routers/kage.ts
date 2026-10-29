@@ -189,18 +189,22 @@ export const kageRouter = createTRPCRouter({
       // Automatic settlement may change unrelated progression; the caller reconciles that response.
       if (requiresUserRefresh)
         return { success: true, message: "You have taken the kage position" };
-      const [savedVillage, savedUser] = await Promise.all([
+      const confirmation = await Promise.all([
         findVillageUserCache(ctx.drizzle, user.villageId!),
         findGovernanceUserCache(ctx.drizzle, ctx.userId),
-      ]);
+      ]).catch(() => undefined);
+      const [savedVillage, savedUser] = confirmation ?? [];
       return {
         success: true,
         message: "You have taken the kage position",
-        userPatch: {
-          village: savedVillage,
-          rank: savedUser?.rank,
-          villagePrestige: savedUser?.villagePrestige,
-        },
+        userPatch:
+          savedVillage && savedUser
+            ? {
+                village: savedVillage,
+                rank: savedUser?.rank,
+                villagePrestige: savedUser?.villagePrestige,
+              }
+            : undefined,
       };
     }),
   upsertNotice: protectedProcedure
@@ -331,13 +335,17 @@ export const kageRouter = createTRPCRouter({
         input,
         ctx,
       );
+      const savedVillage =
+        result.rowsAffected > 0
+          ? await findVillageUserCache(ctx.drizzle, input.villageId).catch(
+              () => undefined,
+            )
+          : undefined;
       return result.rowsAffected > 0
         ? {
             success: true,
             message: "Structure maintenance paid",
-            userPatch: {
-              village: await findVillageUserCache(ctx.drizzle, input.villageId),
-            },
+            userPatch: savedVillage ? { village: savedVillage } : undefined,
           }
         : errorResponse(
             "Only the village Kage can pay an outstanding bill, and the village must have enough tokens",
@@ -547,12 +555,18 @@ export const kageRouter = createTRPCRouter({
           };
         })) ?? errorResponse("Village not found");
       if (!result.success) return result;
+      const savedVillage = await findVillageUserCache(
+        ctx.drizzle,
+        input.villageId,
+      ).catch(() => undefined);
       return {
         ...result,
-        userPatch: {
-          village: await findVillageUserCache(ctx.drizzle, input.villageId),
-          ...(input.userId === ctx.userId ? { rank: "JONIN" as const } : {}),
-        },
+        userPatch: savedVillage
+          ? {
+              village: savedVillage,
+              ...(input.userId === ctx.userId ? { rank: "JONIN" as const } : {}),
+            }
+          : undefined,
       };
     }),
 });

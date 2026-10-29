@@ -811,8 +811,7 @@ export const raidsRouter = createTRPCRouter({
         if (teamData.queue.length >= RAID_BATTLE_MAX_USERS_PER_TEAM) {
           return {
             ...errorResponse("Team is full"),
-            userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId),
-            userDelta: {},
+            ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId)),
           };
         }
       } else {
@@ -864,8 +863,7 @@ export const raidsRouter = createTRPCRouter({
           await wakeQueuedUser(ctx.drizzle, ctx.userId);
           return {
             ...errorResponse("Team is no longer available"),
-            userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId),
-            userDelta: {},
+            ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId)),
           };
         }
 
@@ -877,8 +875,7 @@ export const raidsRouter = createTRPCRouter({
           await wakeQueuedUser(ctx.drizzle, ctx.userId);
           return {
             ...errorResponse("Team is full"),
-            userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId),
-            userDelta: {},
+            ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId)),
           };
         }
       }
@@ -903,8 +900,7 @@ export const raidsRouter = createTRPCRouter({
         });
         return {
           ...errorResponse("Failed to join raid - please try again"),
-          userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId),
-          userDelta: {},
+          ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId)),
         };
       }
 
@@ -1517,14 +1513,17 @@ const getRaidSnapshotUpdate = (
 const confirmRaidQueueUpdate = async (
   client: DrizzleClient,
   userId: string,
-  initial: ReturnType<typeof getRaidSnapshotUpdate>,
+  initial?: ReturnType<typeof getRaidSnapshotUpdate>,
 ) => {
-  const saved = await findQueueUserCache(client, userId);
+  const saved = await findQueueUserCache(client, userId).catch(() => undefined);
+  const patch =
+    saved && (!initial || initial.userPatch)
+      ? { ...initial?.userPatch, ...saved }
+      : undefined;
   return {
     ...initial,
-    userPatch:
-      saved && initial.userPatch ? { ...initial.userPatch, ...saved } : undefined,
-    userDelta: saved && initial.userPatch ? {} : undefined,
+    userPatch: patch,
+    userDelta: patch ? {} : undefined,
   };
 };
 

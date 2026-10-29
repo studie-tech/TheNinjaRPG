@@ -122,7 +122,9 @@ export const territoryWarRouter = createTRPCRouter({
       return {
         success: true,
         message: "Left the team",
-        userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId),
+        userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId).catch(
+          () => undefined,
+        ),
       };
     }),
 

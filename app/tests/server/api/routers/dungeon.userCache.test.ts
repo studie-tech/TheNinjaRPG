@@ -3,7 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { dungeon, dungeonMember, dungeonRun, gameSetting, quest, questHistory, userData, userRewards, userVote, village } from "@/drizzle/schema";
+import * as dungeonQueries from "@/queries/dungeon";
+import * as skillQueries from "@/queries/skillTree";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
+import * as profileQueries from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
@@ -116,6 +119,39 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     expect(cache.refetch).not.toHaveBeenCalled();
     expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 10, dungeonsCompleted: 1 });
     expect(goal(cache.current(), "dungeon-completion")).toEqual(goal(initial, "dungeon-completion"));
+  });
+
+  it.each(["unavailable", "missing", "mastery unavailable"] as const)("keeps delivered receipts successful and reconciles the profile when confirmation is %s", async (failure) => {
+    const db = await getTestDatabase();
+    const profile = callerForDatabase(profileRouter, userId, db);
+    const api = await completedRun();
+    const cache = cachedProfile(await profile.getUser(), () => profile.getUser());
+    if (failure === "mastery unavailable") vi.spyOn(skillQueries, "fetchMasterySources").mockRejectedValueOnce(new Error("Mastery confirmation unavailable"));
+    else {
+      const confirmation = vi.spyOn(dungeonQueries, "findDungeonRewardUserCache");
+      if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
+      else confirmation.mockRejectedValueOnce(new Error("Dungeon confirmation unavailable"));
+    }
+    const revision = prepareUserUpdate(cache.client, cache.key);
+    const result = userDeltaResponseSchema.parse(await api.claim({ id: "completed-run" }));
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    await updateUserCache(cache.client, cache.key, result.userPatch, { revision, delta: result.userDelta });
+    expect(cache.refetch).toHaveBeenCalledTimes(1);
+    expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 10, dungeonsCompleted: 1 });
+    expect((await api.claim({ id: "completed-run" })).success).toBe(true);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, earnedExperience: 10 });
+    expect(await db.query.dungeonMember.findFirst()).toMatchObject({ reward: { money: 100 } });
+  });
+
+  it("propagates canonical progression failures after a relation-changing receipt", async () => {
+    const db = await getTestDatabase();
+    const api = await completedRun({ reward_rank: "JONIN" });
+    const progression = vi.spyOn(profileQueries, "fetchUpdatedUser").mockRejectedValueOnce(new Error("Dungeon progression unavailable"));
+    await expect(api.claim({ id: "completed-run" })).rejects.toThrow("Dungeon progression unavailable");
+    expect(progression).toHaveBeenCalledTimes(1);
+    expect(await db.query.dungeonMember.findFirst()).toMatchObject({ reward: { money: 100 } });
   });
 
   it("reconciles mastery and village membership from the committed receipt without granting twice", async () => {

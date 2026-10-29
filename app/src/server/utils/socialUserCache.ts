@@ -58,14 +58,17 @@ export const getVillageChangeUserUpdate = async (
 export const getMembershipUserPatch = (client: DrizzleClient, before: UserData) =>
   withRequestScope(async () => {
     const now = new Date();
-    const [saved, wars, shrines, raids, settings, mercenaryWarId] = await Promise.all([
+    const confirmation = await Promise.all([
       findMembershipUserCache(client, before.userId),
       fetchAllActiveWars(client),
       fetchActiveShrineLobbies(client, shrineLobbyFreshAfter(now)),
       fetchActiveRaids(client, now),
       fetchAllGameSettings(client),
       fetchMercenaryWarId(client, before.userId),
-    ]);
+      // Membership writes are committed; missing projection data reconciles the profile.
+    ]).catch(() => undefined);
+    if (!confirmation) return undefined;
+    const [saved, wars, shrines, raids, settings, mercenaryWarId] = confirmation;
     if (!saved) return undefined;
     const user = { ...before, ...saved };
     const regenerationWithoutTimedBuffs = calcActiveUserRegen(user, settings, false);
@@ -137,11 +140,13 @@ export const getMembershipUserPatch = (client: DrizzleClient, before: UserData) 
 /** Contract acceptance and resignation alter the exclusive list of visible wars. */
 export const getWarAllegianceUserPatch = (client: DrizzleClient, userId: string) =>
   withRequestScope(async () => {
-    const [saved, wars, mercenaryWarId] = await Promise.all([
+    const confirmation = await Promise.all([
       findWarUserCache(client, userId),
       fetchAllActiveWars(client),
       fetchMercenaryWarId(client, userId),
-    ]);
+    ]).catch(() => undefined);
+    if (!confirmation) return undefined;
+    const [saved, wars, mercenaryWarId] = confirmation;
     if (!saved) return undefined;
     return {
       ...saved,
@@ -163,12 +168,14 @@ export const getShrineLobbyUserPatch = (
   isCombat = false,
 ) =>
   withRequestScope(async () => {
-    const [saved, lobbies] = await Promise.all([
+    const confirmation = await Promise.all([
       isCombat
         ? getBattleUserPatch(client, userId)
         : findQueueUserCache(client, userId),
       fetchActiveShrineLobbies(client, shrineLobbyFreshAfter()),
-    ]);
+    ]).catch(() => undefined);
+    if (!confirmation) return undefined;
+    const [saved, lobbies] = confirmation;
     return saved
       ? {
           ...saved,
@@ -183,11 +190,13 @@ export const getShrineLobbyUserPatch = (
 
 /** Public derived combat values retain equipment eligibility without exposing effect definitions. */
 export const getBattleUserPatch = async (client: DrizzleClient, userId: string) => {
-  const [saved, sources] = await Promise.all([
+  const confirmation = await Promise.all([
     findBattleUserCache(client, userId),
     fetchMasterySources(client, userId),
-  ]);
-  if (!saved) return undefined;
+    // Battle initiation already supplies its outcome; this read only projects cache fields.
+  ]).catch(() => undefined);
+  if (!confirmation?.[0]) return undefined;
+  const [saved, sources] = confirmation;
   const publicTrackers = await getPublicQuestTrackerPatch(client, saved);
   if (!publicTrackers) return undefined;
   const sourceUser = { ...saved, ...sources };

@@ -13,12 +13,14 @@ const flows = [
   { file: "layout/ProfileEdit.tsx", procedure: "staff.unequipAllJutsus", patch: { loadout: { jutsuIds: [] } } },
   { file: "layout/ProfileEdit.tsx", procedure: "skillTree.resetAllUsersSkillPoints", patch: { userSkills: [], skillPoints: 12 } },
   { file: "app/[shell]/adminbuilding/page.tsx", procedure: "quests.startQuest", patch: { userQuests: [], questData: [] } },
+  { file: "layout/Clan.tsx", procedure: "clan.upgradeHideoutToStronghold", patch: { village: { id: "home", type: "STRONGHOLD" } }, invalidations: 0 },
+  { file: "layout/OccupationCrafting.tsx", procedure: "occupation.cancelQueuedCraft", patch: { queue: [] }, invalidations: 2 },
 ];
 
 const setup = (file: string, procedure: string) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const profile = {
-    userData: { userId: "actor", money: 100, reputationPoints: 30, bloodlineId: null, bloodline: null, items: [{ id: "gear" }], loadout: { jutsuIds: ["jutsu"] }, userSkills: [{ id: "skill" }], skillPoints: 0, maxEnergy: 200 } as unknown as NonNullable<UserWithRelations>,
+    userData: { userId: "actor", money: 100, reputationPoints: 30, bloodlineId: null, bloodline: null, villageId: "home", village: { id: "home", type: "HIDEOUT" }, items: [{ id: "gear" }], loadout: { jutsuIds: ["jutsu"] }, userSkills: [{ id: "skill" }], skillPoints: 0, maxEnergy: 200 } as unknown as NonNullable<UserWithRelations>,
     achievementProgress: [{ questId: "preserved" }],
   };
   client.setQueryData(key, profile);
@@ -33,6 +35,7 @@ const setup = (file: string, procedure: string) => {
     jutsu: { getUserJutsus: leaf },
     skillTree: { getUserSkills: leaf },
     quests: { allianceBuilding: leaf },
+    occupation: { getCraftingQueue: leaf },
   };
   const updateUser = vi.fn((patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options));
   const source = readFileSync(join(import.meta.dirname, "../../src", file), "utf8");
@@ -51,14 +54,14 @@ const setup = (file: string, procedure: string) => {
   };
 };
 
-describe.each(flows)("$procedure profile updates", ({ file, procedure, patch }) => {
+describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, invalidations = 1 }) => {
   it("applies a normal patch-only success without fetching the observed profile", async () => {
     const test = setup(file, procedure);
     try {
       await test.options.onSuccess({ success: true, userPatch: patch, achievementProgress: [] }, undefined, test.options.onMutate());
       expect(test.value()?.userData).toMatchObject({ ...patch, money: 100 });
       expect(test.getUser).not.toHaveBeenCalled();
-      expect(test.invalidate).toHaveBeenCalledTimes(1);
+      expect(test.invalidate).toHaveBeenCalledTimes(invalidations);
       expect(test.updateUser).toHaveBeenCalledTimes(1);
       if (procedure.startsWith("bloodline.") || procedure === "skillTree.resetAllUsersSkillPoints" || procedure === "quests.startQuest") expect(test.value()?.achievementProgress).toEqual([]);
     } finally { test.close(); }
@@ -70,7 +73,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch }) 
       await test.options.onSuccess({ success: true, userPatch: {} }, undefined, test.options.onMutate());
       expect(test.value()?.userData).toEqual(test.profile.userData);
       expect(test.getUser).not.toHaveBeenCalled();
-      expect(test.invalidate).toHaveBeenCalledTimes(1);
+      expect(test.invalidate).toHaveBeenCalledTimes(invalidations);
     } finally { test.close(); }
   });
 
@@ -79,7 +82,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch }) 
     try {
       await test.options.onSuccess({ success: true }, undefined, test.options.onMutate());
       expect(test.getUser).toHaveBeenCalledTimes(1);
-      expect(test.invalidate).toHaveBeenCalledTimes(1);
+      expect(test.invalidate).toHaveBeenCalledTimes(invalidations);
     } finally { test.close(); }
   });
 
@@ -90,7 +93,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch }) 
       test.client.setQueryData(key, { ...test.profile, userData: { ...test.profile.userData, money: 90 } });
       await test.options.onSuccess({ success: true, userPatch: patch }, undefined, revision);
       expect(test.getUser).toHaveBeenCalledTimes(1);
-      expect(test.invalidate).toHaveBeenCalledTimes(1);
+      expect(test.invalidate).toHaveBeenCalledTimes(invalidations);
     } finally { test.close(); }
   });
 });

@@ -885,10 +885,17 @@ const getReportDecisionUserUpdate = async (
   userId: string,
   targetUserId: string | null,
 ) => {
-  const [counts, sanctions] = await Promise.all([
+  const confirmation = await Promise.all([
     selectUserReportForGetUser(client),
     userId === targetUserId ? findUserSanctionSnapshot(client, userId) : undefined,
-  ]);
+  ]).catch(() => undefined);
+  if (!confirmation || (userId === targetUserId && !confirmation[1]))
+    return {
+      userPatch: undefined,
+      userDelta: undefined,
+      pendingReportCount: undefined,
+    };
+  const [counts, sanctions] = confirmation;
   return {
     pendingReportCount: counts[0]?.count ?? 0,
     userPatch: sanctions ?? {},

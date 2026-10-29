@@ -2,6 +2,7 @@ import { releaseDeclinedStoreCapture } from "@/queries/paypal";
 import { beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { DrizzleQueryError, eq } from "drizzle-orm";
 import { actionLog, item, paypalTransaction, recruitmentRewards, userData, userItem, webStoreBundle, webStoreOrder, storeUserIdAlias } from "@/drizzle/schema";
+import * as purchaseQueries from "@/queries/purchases";
 import { staffRouter, deleteUser } from "@/server/api/routers/staff";
 import { paypalRouter, syncTransactions } from "@/server/api/routers/paypal";
 import { itemRouter } from "@/server/api/routers/item";
@@ -630,6 +631,43 @@ describeWithDatabase("web store payments", () => {
       expect(await db.query.userData.findFirst({where:eq(userData.userId,recipientId)})).toMatchObject({reputationPoints:73});
       expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
     } finally {fetchMock.mockRestore();}
+  });
+  it.each(["unavailable", "missing"] as const)("keeps a captured store order successful when balance confirmation is %s", async failure => {
+    const owner = await callerFor(paypalRouter, "buyer");
+    const db = await getTestDatabase();
+    await db.update(userData).set({ reputationPointsTotal: 0 }).where(eq(userData.userId, "buyer"));
+    let provider: any;
+    let captures = 0;
+    const fetchMock = spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+      const path = String(url);
+      if (path.endsWith("/v1/oauth2/token")) return Response.json({ access_token: "test-only" });
+      if (path.endsWith("/v2/checkout/orders")) {
+        provider = { ...JSON.parse(String(options?.body)), id: "TESTORDER123456789", status: "APPROVED" };
+        return Response.json(provider);
+      }
+      if (path.endsWith("/capture")) {
+        captures++;
+        provider.status = "COMPLETED";
+        provider.purchase_units[0].payments = { captures: [{ id: "CONFIRMATION1", status: "COMPLETED", amount: provider.purchase_units[0].amount }] };
+      }
+      return Response.json(provider);
+    });
+    const confirmation = spyOn(purchaseQueries, "findPurchaseUserSnapshot");
+    try {
+      expect((await owner.createStoreOrder({ recipientId: "buyer", selection: { type: "custom", reputationPoints: 73 } })).success).toBe(true);
+      if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
+      else confirmation.mockRejectedValueOnce(new Error("Payment confirmation unavailable"));
+      const result = await owner.captureStoreOrder({ orderId: provider.id });
+      expect(result.success).toBe(true);
+      expect(result.userPatch).toBeUndefined();
+      expect(result.userDelta).toBeUndefined();
+      expect(result.purchase).toMatchObject({ transactionId: "CONFIRMATION1" });
+      expect((await owner.captureStoreOrder({ orderId: provider.id })).success).toBe(true);
+      expect(captures).toBe(1);
+      expect(await db.query.userData.findFirst({ where: eq(userData.userId, "buyer") })).toMatchObject({ reputationPoints: 73, reputationPointsTotal: 73 });
+      expect(await db.query.paypalTransaction.findMany()).toHaveLength(1);
+      expect(await db.query.webStoreOrder.findFirst()).toMatchObject({ grantedAt: expect.any(Date) });
+    } finally { confirmation.mockRestore(); fetchMock.mockRestore(); }
   });
   it("refuses a mismatched order before calling the provider capture API", async () => {
     const owner = await callerFor(paypalRouter,"buyer"); const order=await reserve(); let captures=0;

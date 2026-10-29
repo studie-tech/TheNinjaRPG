@@ -720,13 +720,15 @@ export const skillTreeRouter = createTRPCRouter({
       // Log the action
       await insertActionLogForResetAllUsersSkillPoints2(ctx.drizzle, ctx, user);
 
-      const activeSkills = (await fetchUserSkills(ctx.drizzle, ctx.userId)).filter(
-        (entry) => entry.activated,
-      );
-      const updated = { ...user, userSkills: activeSkills };
+      const activeSkills = (
+        await fetchUserSkills(ctx.drizzle, ctx.userId).catch(() => undefined)
+      )?.filter((entry) => entry.activated);
       const progression =
-        snapshot.requiresProgressionRefresh === false
-          ? getUserProgressionUpdate(updated, snapshot.publishedAchievementIds)
+        snapshot.requiresProgressionRefresh === false && activeSkills
+          ? getUserProgressionUpdate(
+              { ...user, userSkills: activeSkills },
+              snapshot.publishedAchievementIds,
+            )
           : undefined;
       return {
         ...(progression

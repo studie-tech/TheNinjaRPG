@@ -776,7 +776,7 @@ export const questsRouter = createTRPCRouter({
         ]);
       }
       const released = current.isolated
-        ? await findIsolatedAbandonState(ctx.drizzle, ctx.userId)
+        ? await findIsolatedAbandonState(ctx.drizzle, ctx.userId).catch(() => undefined)
         : undefined;
       const canProject =
         snapshot.requiresProgressionRefresh === false &&
@@ -1389,7 +1389,9 @@ export const questsRouter = createTRPCRouter({
         snapshot.requiresProgressionRefresh === false &&
         claim.userCacheEligible &&
         scalarRewards
-          ? await findPetTaskRewardCacheState(ctx.drizzle, ctx.userId)
+          ? await findPetTaskRewardCacheState(ctx.drizzle, ctx.userId).catch(
+              () => undefined,
+            )
           : undefined;
       if (saved) Object.assign(user, saved);
       const refreshed = getNewTrackers(user, [{ task: "any" }]);

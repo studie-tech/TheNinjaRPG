@@ -1,11 +1,14 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { BLOODLINE_COST, ELEMENTAL_MASTERY_CAP, REMOVAL_COST } from "@/drizzle/constants";
-import { bloodline, bloodlineRolls, gameSetting, quest, questHistory, skillTree, userData, userSkill, userVote } from "@/drizzle/schema";
+import { bloodline, bloodlineRolls, gameSetting, notification, quest, questHistory, skillTree, userData, userSkill, userVote } from "@/drizzle/schema";
+import * as miscQueries from "@/queries/misc";
+import * as profileQueries from "@/queries/profile";
+import * as skillQueries from "@/queries/skillTree";
 import { calcEnergy } from "@/libs/profile";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { miscRouter } from "@/server/api/routers/misc";
-import { fetchUpdatedUser } from "@/server/api/routers/profile";
+import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { trainRouter } from "@/server/api/routers/train";
 import { IncreaseMasteryTag, IncreaseMaxPoolsTag } from "@/validators/combat";
@@ -21,8 +24,9 @@ const effects = [
 ];
 
 describeWithDatabase("confirmed progression cache responses", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
-    await resetTables(bloodlineRolls, bloodline, questHistory, quest, userSkill, skillTree, userVote, gameSetting, userData);
+    await resetTables(bloodlineRolls, bloodline, notification, questHistory, quest, userSkill, skillTree, userVote, gameSetting, userData);
     await insertUsers([{ userId, username: "ProgressCache", role: "OWNER", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,
       regeneration: 20, ninjutsuMastery: 100, reputationPoints: 1000, seichiSilver: 200,
@@ -74,6 +78,19 @@ describeWithDatabase("confirmed progression cache responses", () => {
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))?.skillPoints).toBe(5);
   });
 
+  it("keeps a completed global skill reset successful when optional actor confirmation fails", async () => {
+    const db = await getTestDatabase();
+    await db.insert(skillTree).values(petSkillFixture({ id: "reset-skill", effects }));
+    await db.insert(userSkill).values({ id: "reset-entry", userId, skillId: "reset-skill", activated: true });
+    await fetchUpdatedUser({ client: db, userId });
+    vi.spyOn(skillQueries, "fetchUserSkills").mockRejectedValueOnce(new Error("Skill confirmation unavailable"));
+    const result = await callerForDatabase(skillTreeRouter, userId, db).resetAllUsersSkillPoints();
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(await db.query.userSkill.findMany()).toEqual([]);
+  });
+
   it("publishes only the accepted elemental selection", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ elementalMastery: { Earth: ELEMENTAL_MASTERY_CAP } }).where(eq(userData.userId, userId));
@@ -102,5 +119,17 @@ describeWithDatabase("confirmed progression cache responses", () => {
     expect(result).toMatchObject({ success: true, userPatch: { unreadNotifications: 0 }, announcements: ["A new event has started."] });
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))?.unreadNotifications).toBe(0);
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, "other-reader") }))?.unreadNotifications).toBe(1);
+  });
+
+  it.each(["receipt", "listing"] as const)("keeps a sent announcement available to canonical hydration when its optional %s fails", async (failure) => {
+    const db = await getTestDatabase();
+    if (failure === "receipt") vi.spyOn(miscQueries, "findAnnouncementReceipt").mockRejectedValueOnce(new Error("Announcement receipt unavailable"));
+    else vi.spyOn(profileQueries, "listNotificationForGetUser").mockRejectedValueOnce(new Error("Announcement listing unavailable"));
+    const result = await callerForDatabase(miscRouter, userId, db).submitNotification({ content: "A committed announcement", senderId: userId });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(await db.query.notification.findMany()).toHaveLength(1);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ unreadNotifications: 1 });
+    expect((await callerForDatabase(profileRouter, userId, db).getUser()).notifications).toContainEqual(expect.objectContaining({ name: "A committed announcement", color: "toast" }));
   });
 });

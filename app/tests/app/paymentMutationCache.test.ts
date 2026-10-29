@@ -47,6 +47,14 @@ const setup = (file: string, procedure: string, progress: AchievementProgress[])
 };
 
 describe.each(flows)("$procedure purchase confirmation", ({ file, procedure }) => {
+  it("refetches the canonical profile after delivery when confirmation cannot supply a patch", async () => {
+    const test = setup(file, procedure, []);
+    try {
+      await test.options.onSuccess({ success: true, message: "Delivered", userPatch: undefined, userDelta: undefined }, undefined, test.options.onMutate());
+      expect(test.updateUser).toHaveBeenCalledTimes(1);
+      expect(test.getUser).toHaveBeenCalledTimes(1);
+    } finally { test.close(); }
+  });
   it.each([false, true])("updates published achievement progress without a profile read (existing progress: %s)", async (hasProgress) => {
     const progress = { questId: "reputation-achievement", completed: 1 } as AchievementProgress;
     const test = setup(file, procedure, hasProgress ? [{ ...progress, completed: 0 }] : []);

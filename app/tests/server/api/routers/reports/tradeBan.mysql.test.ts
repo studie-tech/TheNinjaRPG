@@ -1,6 +1,7 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { userData, userReport, userReportComment } from "@/drizzle/schema";
+import * as profileQueries from "@/queries/profile";
 import { reportsRouter } from "@/server/api/routers/reports";
 import { insertUsers } from "../../../../setup/factories";
 import {
@@ -21,6 +22,7 @@ const decision = {
  * Exercise real router decisions so permissions also cover persisted restrictions and audit comments.
  */
 describeWithDatabase("moderator trade ban removal", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
     const db = await getTestDatabase();
     await resetTables(userReportComment, userReport, userData);
@@ -93,6 +95,18 @@ describeWithDatabase("moderator trade ban removal", () => {
         }),
       ]),
     );
+  });
+
+  it("keeps a committed moderation decision successful when optional report counts fail", async () => {
+    const db = await getTestDatabase();
+    vi.spyOn(profileQueries, "selectUserReportForGetUser").mockRejectedValueOnce(new Error("Report count unavailable"));
+    const result = await callerForDatabase(reportsRouter, "staff", db).tradeBan(decision);
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(result.pendingReportCount).toBeUndefined();
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "target") })).toMatchObject({ isTradeBanned: true });
+    expect(await db.query.userReportComment.findMany()).toHaveLength(1);
   });
 
   it("keeps trading restricted until the last active trade ban is cleared", async () => {

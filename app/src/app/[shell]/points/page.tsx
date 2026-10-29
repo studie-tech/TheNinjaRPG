@@ -458,7 +458,7 @@ const PayPalSubscriptionButton = (props: {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.userPatch)
+        if (data.success || data.userPatch)
           await updateUser(data.userPatch, {
             revision,
             delta: data.userDelta,
@@ -974,7 +974,7 @@ const LookupTransaction = () => {
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
-      if (data.userPatch)
+      if (data.success || data.userPatch)
         await updateUser(data.userPatch, {
           revision,
           delta: data.userDelta,

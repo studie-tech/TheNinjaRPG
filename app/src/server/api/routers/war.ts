@@ -524,7 +524,9 @@ export const warRouter = createTRPCRouter({
       return {
         success: true,
         message: "War mission started. Remain in this sector until completion.",
-        userPatch: await findWarUserCache(ctx.drizzle, ctx.userId),
+        userPatch: await findWarUserCache(ctx.drizzle, ctx.userId).catch(
+          () => undefined,
+        ),
       };
     }),
   /** Consume the matching ready attempt inside the strategic effect's receipt boundary. */
@@ -596,7 +598,9 @@ export const warRouter = createTRPCRouter({
         ? {
             success: true,
             message: "War objective completed",
-            userPatch: await findWarUserCache(ctx.drizzle, ctx.userId),
+            userPatch: await findWarUserCache(ctx.drizzle, ctx.userId).catch(
+              () => undefined,
+            ),
           }
         : errorResponse(
             "The war or mission changed before completion. Refresh to continue.",
@@ -611,7 +615,9 @@ export const warRouter = createTRPCRouter({
       return {
         success: true,
         message: "War mission cancelled",
-        userPatch: await findWarUserCache(ctx.drizzle, ctx.userId),
+        userPatch: await findWarUserCache(ctx.drizzle, ctx.userId).catch(
+          () => undefined,
+        ),
       };
     }),
   /** Enter shrine combat with the camp snapshot preloaded for later score settlement. */
@@ -679,7 +685,9 @@ export const warRouter = createTRPCRouter({
         ? {
             success: true,
             message: "All war points converted to prestige",
-            userPatch: await findWarUserCache(ctx.drizzle, ctx.userId),
+            userPatch: await findWarUserCache(ctx.drizzle, ctx.userId).catch(
+              () => undefined,
+            ),
           }
         : errorResponse("No unclaimed war points remain in the conversion window");
     }),

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { HIDEOUT_COST, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { actionLog, clan, conversation, gameSetting, quest, questHistory, sector, userData, userVote, village, villageStructure } from "@/drizzle/schema";
 import * as clanLogic from "@/libs/clan";
+import * as socialQueries from "@/queries/socialUserCache";
 import { clanRouter } from "@/server/api/routers/clan";
 import { profileRouter } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -90,6 +91,18 @@ describeWithDatabase("clan village membership progression", () => {
     expect(result.userPatch?.questData).toBeUndefined();
     expect(result.userPatch?.userQuests).toBeUndefined();
     expect(result.achievementProgress).toBeUndefined();
+  });
+
+  it("preserves a committed clan departure when optional membership confirmation fails", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ isOutlaw: false }).where(eq(userData.userId, userId));
+    const confirmation = vi.spyOn(socialQueries, "findMembershipUserCache").mockRejectedValueOnce(new Error("Membership confirmation unavailable"));
+    const result = await callerForDatabase(clanRouter, userId, db).leaveClan({ clanId });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(confirmation).toHaveBeenCalledTimes(1);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ clanId: null, villageId: strongholdId });
   });
 
   it("reconciles child quest effects after joining a stronghold without publishing a partial update", async () => {

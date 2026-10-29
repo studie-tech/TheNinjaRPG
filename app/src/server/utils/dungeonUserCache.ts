@@ -27,11 +27,13 @@ export const getDungeonRewardUserUpdate = async (
     });
   // Completion is counted when the final battle settles; its battle-ended profile
   // refresh reconciles trackers before this scalar-only receipt is delivered.
-  const [saved, sources] = await Promise.all([
+  const confirmation = await Promise.all([
     findDungeonRewardUserCache(client, before.userId),
     fetchMasterySources(client, before.userId),
-  ]);
-  if (!saved) return { userPatch: undefined };
+    // Receipt delivery has committed; missing cache data reconciles through the profile.
+  ]).catch(() => undefined);
+  if (!confirmation?.[0]) return { userPatch: undefined };
+  const [saved, sources] = confirmation;
   const sourceUser = { ...saved, ...sources };
   const { bloodlineId: _bloodlineId, isAi: _isAi, ...patch } = saved;
   return {

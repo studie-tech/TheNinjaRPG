@@ -2,6 +2,7 @@ import { beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import { craftingRequirement, item, quest, questHistory, userCookingJob, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
+import * as occupationQueries from "@/queries/occupation";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -37,6 +38,23 @@ describeWithDatabase("crafting user cache quest progress", () => {
     expect(result.userPatch?.craftingExperience).toBe(10);
     expect(result.userPatch?.cookingJobs).toEqual([]);
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, "crafter") }))?.craftingExperience).toBe(result.userPatch?.craftingExperience);
+  });
+
+  it("keeps returned materials and cancellation successful when optional confirmation fails", async () => {
+    const db = await getTestDatabase();
+    const caller = await callerFor(occupationRouter, "crafter");
+    await caller.craftItem({ itemId: "crafted", quantity: 1 });
+    await caller.craftItem({ itemId: "crafted", quantity: 1 });
+    const waiting = (await db.query.userQueue.findFirst())!;
+    const confirmation = vi.spyOn(occupationQueries, "findCraftingCacheState").mockRejectedValueOnce(new Error("Crafting confirmation unavailable"));
+    try {
+      const result = await caller.cancelQueuedCraft({ queueId: waiting.id });
+      expect(result.success).toBe(true);
+      expect(result.userPatch).toBeUndefined();
+      expect((await caller.cancelQueuedCraft({ queueId: waiting.id })).success).toBe(false);
+      expect(await db.query.userQueue.findMany()).toEqual([]);
+      expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "material-stack") })).toMatchObject({ quantity: 19 });
+    } finally { confirmation.mockRestore(); }
   });
 
   it.each([

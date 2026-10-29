@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { beforeEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { STRONGHOLD_REESTABLISH_COST } from "@/drizzle/constants";
 import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";
+import * as socialQueries from "@/queries/socialUserCache";
 import { clanRouter } from "@/server/api/routers/clan";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
@@ -23,6 +24,23 @@ const seedFaction = async (type: "HIDEOUT" | "STRONGHOLD", wasDowngraded = true)
 
 describeWithDatabase("Stronghold membership and restoration", () => {
   beforeEach(async () => { await resetTables(actionLog, clan, userData, village); });
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(["unavailable", "missing"] as const)("keeps a paid restoration successful and omits both cache fields when confirmation is %s", async (failure) => {
+    await seedFaction("HIDEOUT");
+    const db = await getTestDatabase();
+    const caller = await callerFor(clanRouter, "leader");
+    const confirmation = vi.spyOn(socialQueries, "findVillageUserCache");
+    if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
+    else confirmation.mockRejectedValueOnce(new Error("Stronghold confirmation unavailable"));
+    const result = await caller.upgradeHideoutToStronghold({ clanId: "faction" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect((await caller.upgradeHideoutToStronghold({ clanId: "faction" })).success).toBe(false);
+    expect(await db.query.clan.findFirst()).toMatchObject({ bank: STRONGHOLD_REESTABLISH_COST });
+    expect(await db.query.village.findFirst()).toMatchObject({ type: "STRONGHOLD" });
+  });
 
   it("starts immediately, resets on recovery, and downgrades after 72 hours", async () => {
     await seedFaction("STRONGHOLD", false);
