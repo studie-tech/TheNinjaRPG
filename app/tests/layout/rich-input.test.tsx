@@ -13,12 +13,15 @@ const startUpload = vi.fn();
 const submit = vi.fn();
 const uploadPending = vi.fn();
 let spies: { mockRestore: () => void }[];
-const eventDescriptors = ["Event", "CustomEvent"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
+const eventDescriptors = ["Event", "CustomEvent", "requestAnimationFrame", "cancelAnimationFrame"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
 beforeEach(() => {
   ensureDom();
   Object.defineProperties(globalThis, {
     Event: { configurable: true, value: window.Event },
     CustomEvent: { configurable: true, value: window.CustomEvent },
+    // Keep frame callbacks independent of jsdom intervals cleared by fake timers.
+    requestAnimationFrame: { configurable: true, value: (callback: FrameRequestCallback) => Number(setTimeout(() => callback(Date.now()), 0)) },
+    cancelAnimationFrame: { configurable: true, value: (id: number) => clearTimeout(id) },
   });
   vi.clearAllMocks();
   startUpload.mockReset();
