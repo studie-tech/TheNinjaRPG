@@ -14,6 +14,7 @@ import { pushToCombat, usePublicPathname } from "@/utils/routing";
 // Events sent to the user from websockets
 export type UserEvent = {
   type: string;
+  originSocketId?: string;
   message?: string;
   /** Toast display duration in milliseconds. */
   duration?: number;
@@ -124,6 +125,12 @@ export const usePusherHandler = (
               ),
             });
         } else if (data.type === "eventTournament") {
+          // The originating action reconciles its response, including transport failure.
+          if (
+            data.originSocketId &&
+            data.originSocketId === pusher.connection.socket_id
+          )
+            return;
           // Invitations and substitutions can make an idle tab a ready-check participant.
           await Promise.all([
             utils.profile.getUser.refetch(),

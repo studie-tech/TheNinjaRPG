@@ -67,6 +67,7 @@ export const EventTournaments = ({
   const [message, setMessage] = useState("");
   const manage = api.tournament.manageEvent.useMutation({
     onMutate: reconcile.prepare,
+    onSettled: reconcile.settle,
     onSuccess: async (result, _variables, revision) => {
       setMessage(result.message);
       showMutationToast(result);
@@ -75,6 +76,7 @@ export const EventTournaments = ({
   });
   const participate = api.tournament.participateEvent.useMutation({
     onMutate: reconcile.prepare,
+    onSettled: reconcile.settle,
     onSuccess: async (result, _variables, revision) => {
       setMessage(result.message);
       showMutationToast(result);
@@ -87,13 +89,25 @@ export const EventTournaments = ({
     action: "JOIN" | "WITHDRAW" | "DECLINE" | "ACCEPT" | "READY" | "NOT_READY",
     seriesId?: string,
   ) => {
-    if (tournamentId) participate.mutate({ tournamentId, action, seriesId });
+    if (tournamentId)
+      participate.mutate({
+        tournamentId,
+        action,
+        seriesId,
+        originSocketId: reconcile.originSocketId(),
+      });
   };
   const staffAction = (
     action: "PUBLISH" | "SEED" | "BEGIN" | "CANCEL",
     extra: { payRewards?: boolean; scheduledAt?: number; seriesId?: string } = {},
   ) => {
-    if (tournamentId) manage.mutate({ tournamentId, action, ...extra });
+    if (tournamentId)
+      manage.mutate({
+        tournamentId,
+        action,
+        ...extra,
+        originSocketId: reconcile.originSocketId(),
+      });
   };
   if (userStatus === "pending") return <Loader explanation="Loading your account" />;
   if (staff && !canManage)
@@ -608,6 +622,7 @@ const StaffTournamentControls = ({
   const reconcile = useEventActionCache();
   const mutation = api.tournament.manageEvent.useMutation({
     onMutate: reconcile.prepare,
+    onSettled: reconcile.settle,
     onSuccess: async (result, _variables, revision) => {
       setMessage(result.message);
       showMutationToast(result);
@@ -625,6 +640,7 @@ const StaffTournamentControls = ({
       action,
       seatId: seatId || undefined,
       userId: form.getValues("users")[0]?.userId,
+      originSocketId: reconcile.originSocketId(),
     });
   if (event.status === "COMPLETED") return null;
   if (event.status === "CANCELLED")
@@ -796,10 +812,21 @@ const date = (value: number) => new Date(value).toLocaleString();
 
 /** Apply actor state, participation polling and actionable notices in the same accepted revision. */
 const useEventActionCache = () => {
-  const { prepareUserUpdate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser, pusher } = useUserData();
   const utils = api.useUtils();
   return {
     prepare: prepareUserUpdate,
+    originSocketId: () => pusher?.connection.socket_id,
+    // Preserve the global error toast while recovering an action whose response was lost.
+    settle: (_result: unknown, error: unknown) => {
+      if (error)
+        return Promise.all([
+          utils.profile.getUser.refetch(),
+          utils.tournament.getEvent.invalidate(),
+          utils.tournament.listEvents.invalidate(),
+          utils.tournament.getEventNotices.invalidate(),
+        ]);
+    },
     apply: (
       result: RouterOutputs["tournament"]["participateEvent"],
       revision: number | undefined,

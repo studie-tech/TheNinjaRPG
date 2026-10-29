@@ -126,7 +126,7 @@ describeWithDatabase("event tournament persistence", () => {
     if (!("tournamentId" in created)) throw new Error(created.message);
     const { tournamentId } = created;
     await staff.manageEvent({ tournamentId, action: "PUBLISH" });
-    for (const userId of ["first", "second"]) await staff.manageEvent({ tournamentId, action: "INVITE", userId });
+    for (const userId of ["first", "second"]) await staff.manageEvent({ tournamentId, action: "INVITE", userId, originSocketId: "1.1" });
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("first", "event", { type: "eventTournament" });
     expect((await first.getEventNotices())[0]?.message).toBe("You have a tournament invitation");
     vi.spyOn(Pusher.prototype, "trigger").mockClear();
@@ -152,7 +152,7 @@ describeWithDatabase("event tournament persistence", () => {
     await first.participateEvent({ tournamentId, seriesId, action: "NOT_READY" });
     expect((await fetchEvent(database, tournamentId))!.eventData!.series[0]!.readyUserIds).toEqual(["second"]);
     const seatId = event.participants.find((p) => p.userId === "second")!.id;
-    expect((await staff.manageEvent({ tournamentId, action: "SUBSTITUTE", seatId, userId: "replacement" })).success).toBe(true);
+    expect((await staff.manageEvent({ tournamentId, action: "SUBSTITUTE", seatId, userId: "replacement", originSocketId: "1.1" })).success).toBe(true);
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("replacement", "event", { type: "eventTournament" });
     event = (await fetchEvent(database, tournamentId))!.eventData!;
     expect(event.series[0]!.readyUserIds).toEqual([]);
@@ -163,6 +163,36 @@ describeWithDatabase("event tournament persistence", () => {
     expect((await first.participateEvent({ tournamentId, seriesId, action: "READY" })).success).toBe(false);
     expect((await first.participateEvent({ tournamentId, seriesId, action: "ACCEPT" })).success).toBe(true);
     expect(await first.getEventNotices()).toEqual([]);
+  });
+
+  it.each(["JOIN", "WITHDRAW", "DECLINE"] as const)("identifies the originating socket for %s without suppressing other tabs", async (action) => {
+    await insertUsers(["staff", "player"].map((userId) => ({
+      userId, role: userId === "staff" ? "CODER" : "USER", status: "AWAKE", sector: MAP_WAKE_ISLAND_SECTOR,
+    })));
+    const staff = await callerFor(tournamentRouter, "staff");
+    const player = await callerFor(tournamentRouter, "player");
+    const created = await staff.saveEvent({ config: eventConfig("Socket roster") });
+    if (!("tournamentId" in created)) throw new Error(created.message);
+    const { tournamentId } = created;
+    await staff.manageEvent({ tournamentId, action: "PUBLISH" });
+    if (action === "WITHDRAW") await player.participateEvent({ tournamentId, action: "JOIN" });
+    if (action === "DECLINE") await staff.manageEvent({ tournamentId, action: "INVITE", userId: "player" });
+    vi.spyOn(Pusher.prototype, "trigger").mockClear();
+    expect((await player.participateEvent({ tournamentId, action, originSocketId: "2.1" })).success).toBe(true);
+    expect(Pusher.prototype.trigger).toHaveBeenCalledWith("player", "event", { type: "eventTournament", originSocketId: "2.1" });
+    expect(Pusher.prototype.trigger).toHaveBeenCalledTimes(1);
+  });
+
+  it("identifies the actor's socket when staff invite themselves", async () => {
+    await insertUsers([{ userId: "staff", role: "CODER", status: "AWAKE", sector: MAP_WAKE_ISLAND_SECTOR }]);
+    const staff = await callerFor(tournamentRouter, "staff");
+    const created = await staff.saveEvent({ config: eventConfig("Staff invitation") });
+    if (!("tournamentId" in created)) throw new Error(created.message);
+    const { tournamentId } = created;
+    await staff.manageEvent({ tournamentId, action: "PUBLISH" });
+    vi.spyOn(Pusher.prototype, "trigger").mockClear();
+    expect((await staff.manageEvent({ tournamentId, action: "INVITE", userId: "staff", originSocketId: "3.1" })).success).toBe(true);
+    expect(Pusher.prototype.trigger).toHaveBeenCalledWith("staff", "event", { type: "eventTournament", originSocketId: "3.1" });
   });
 
   it("returns invitations and ready matches after unrelated active events fill the notice limit", async () => {
