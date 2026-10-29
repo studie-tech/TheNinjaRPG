@@ -55,7 +55,8 @@ export const CharacterPreview = ({
           );
           if (controller.signal.aborted) return;
           actor.sprite.position.set(128, 125);
-          actor.sprite.scale.set(128);
+          // Enlarge facial details within the compact preview without expanding the form.
+          actor.sprite.scale.set(160);
           game.stage.addChild(actor.sprite);
           let start = 0;
           game.setUpdate((frame) => {
