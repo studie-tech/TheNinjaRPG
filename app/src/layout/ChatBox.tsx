@@ -225,6 +225,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                     id="message"
                     placeholder="Ask about the game…"
                     height="40"
+                    rows={1}
                     control={form.control}
                     disabled={isLoading}
                     onSubmit={handleSubmit}

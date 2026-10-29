@@ -711,6 +711,7 @@ export const RichInput = (props: RichInputProps) => {
             disabled={blocked}
             autoFocus={props.autoFocus ?? true}
             placeholder={props.placeholder}
+            rows={props.rows}
             isDirty={props.isDirty}
             style={{ minHeight: height }}
             onPaste={(event) => {
@@ -866,6 +867,8 @@ interface RichInputProps {
   refreshKey?: number;
   label?: string;
   height: string;
+  /** Visible rows in plain-text and HTML source modes. */
+  rows?: number;
   placeholder?: string;
   error?: string;
   disabled?: boolean;
