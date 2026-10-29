@@ -1571,7 +1571,6 @@ const SwapBloodline: React.FC = () => {
             ? [
                 updateUser(data.userPatch, {
                   revision,
-                  delta: data.userDelta,
                   achievementProgress: data.achievementProgress,
                 }),
               ]
@@ -2773,7 +2772,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
+            updateUser(data.userPatch, { revision }),
             utils.item.getUserItems.invalidate(),
           ]);
         }
@@ -2787,7 +2786,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
+            updateUser(data.userPatch, { revision }),
             utils.jutsu.getUserJutsus.invalidate(),
           ]);
         }
@@ -2825,7 +2824,7 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(data.userPatch, { revision, delta: data.userDelta }),
+            updateUser(data.userPatch, { revision }),
             utils.skillTree.getUserSkills.invalidate(),
           ]);
         }

@@ -195,7 +195,6 @@ const PityBloodlineRoll: React.FC<{
         await Promise.all([
           updateUser(data.userPatch, {
             revision,
-            delta: data.userDelta,
             achievementProgress: data.achievementProgress,
           }),
           utils.bloodline.getItemRolls.invalidate(),

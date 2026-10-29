@@ -20,6 +20,10 @@ import {
   userSkill,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import {
+  completedQuestHistoryRelation,
+  userQuestHistoryRelation,
+} from "@/server/utils/achievementObjectives";
 import { getUnique } from "@/utils/grouping";
 import { DAY_S, secondsFromDate } from "@/utils/time";
 import type { baseReskinSchema } from "@/validators/bloodline";
@@ -748,22 +752,35 @@ export const insertActionLogForUpdateBloodline = (
     relatedImage: user.avatarLight || user.avatar || IMG_AVATAR_DEFAULT,
   });
 
+const bloodlineCacheUserRelations = {
+  bloodline: true,
+  activeReskin: true,
+  clan: true,
+  village: { with: { structures: true } },
+  raidBuffs: true,
+  titles: true,
+  userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
+  items: {
+    where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
+    with: { item: true, imbuements: { with: { item: true } } },
+  },
+} as const;
+
 /** Load passive sources required to project a lineage change without quest hydration. */
 export const fetchBloodlineCacheUser = (client: DrizzleClient, userId: string) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
+    with: bloodlineCacheUserRelations,
+  });
+
+/** Include quest eligibility when a new ownership receipt can advance collection goals. */
+export const fetchBloodlineAcquisitionUser = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
     with: {
-      bloodline: true,
-      activeReskin: true,
-      clan: true,
-      village: { with: { structures: true } },
-      raidBuffs: true,
-      titles: true,
-      userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
-      items: {
-        where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
-        with: { item: true, imbuements: { with: { item: true } } },
-      },
+      ...bloodlineCacheUserRelations,
+      userQuests: userQuestHistoryRelation,
+      completedQuests: completedQuestHistoryRelation,
     },
   });
 
