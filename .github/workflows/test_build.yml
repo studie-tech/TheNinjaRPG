@@ -58,7 +58,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-test-build-${{ hashFiles('app/bun.lock', 'app/next.config.mjs') }}-
       - name: run build
-        run: bun run build
+        run: |
+          # Regenerate TypeScript diagnostics for this checkout; retain the bundler cache.
+          rm -f .next/cache/.tsbuildinfo
+          bun run build
         working-directory: ./app
     env:
       # Fork pull requests receive empty secrets. An empty Pusher secret fails HMAC

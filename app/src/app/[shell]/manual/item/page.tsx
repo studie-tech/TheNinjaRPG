@@ -22,6 +22,7 @@ export default function ManualItems() {
 
   // Router for forwarding
   const router = useRouter();
+  const utils = api.useUtils();
 
   //Two-Way Filtering
   const state = useFiltering();
@@ -60,7 +61,12 @@ export default function ManualItems() {
   const { mutate: remove, isPending: load2 } = api.item.delete.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      await refetch();
+      await Promise.all([
+        refetch(),
+        // Remove deleted unlock tokens and their variants from content selectors.
+        data.success ? utils.item.getAllNames.invalidate() : undefined,
+        data.success ? utils.item.getVariantNames.invalidate() : undefined,
+      ]);
     },
   });
 

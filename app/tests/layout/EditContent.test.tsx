@@ -18,6 +18,7 @@ import {
   NonCombatConsumeRewardTag,
   NonCombatQuestTag,
   HealTag,
+  UnlockItemVariantTag,
   JutsuValidatorRawSchema,
   ItemValidator,
   type ZodAllTags,
@@ -37,9 +38,9 @@ const update: { useMutation: () => { mutateAsync: (...args: Parameters<typeof sa
 
 vi.mock("@/app/_trpc/client", () => ({
   api: {
-    useUtils: () => ({}),
+    useUtils: () => ({ item: { getAllNames: { invalidate: async () => undefined }, getVariantNames: { invalidate: async () => undefined } } }),
     profile: { getAllAiNames: names },
-    item: { getAllNames: names, update },
+    item: { getVariantNames: names, getAllNames: names, update },
     jutsu: { getAllNames: names, update },
     bloodline: { getAllNames: names, update },
     sageMode: { getAllNames: names },
@@ -855,6 +856,33 @@ describe("companion reward editing", () => {
     fireEvent.click(view.getByRole("button", { name: "Save companion reward" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ reward_pets: [id] });
+  });
+});
+
+/** Exercise the effect form's nullable database choice through real form controls. */
+const VariantTokenDraftForm = ({ variantId }: { variantId: string | null }) => {
+  const [effects, setEffects] = useState<ZodAllTags[]>([UnlockItemVariantTag.parse({ variantId })]);
+  return <>
+    <EffectFormWrapper type="item" idx={0} tag={effects[0]!} effects={effects} setEffects={setEffects} availableTags={["unlockitemvariant"]} />
+    <button type="button" onClick={() => void save({ id: "variant-token", data: { effects } })}>Save token effects</button>
+  </>;
+};
+
+describe("variant token effect drafts", () => {
+  afterEach(() => vi.restoreAllMocks());
+  it.each([
+    ["Any variant", "red-variant", null],
+    ["Sword: Red", null, "red-variant"],
+  ] as const)("saves %s as the token's variant binding", async (label, initial, expected) => {
+    vi.spyOn(names, "useQuery").mockReturnValue({ data: [{ id: "red-variant", name: "Sword: Red" }] } as never);
+    const view = render(<VariantTokenDraftForm variantId={initial} />);
+    const field = view.getByText("Variant", { exact: true }).closest<HTMLElement>('[data-slot="form-item"]')!;
+    expect(within(field).getByRole("combobox").textContent).toContain(initial ? "Sword: Red" : "Any variant");
+    fireEvent.click(within(field).getByRole("combobox"));
+    fireEvent.click(await view.findByRole("option", { name: label }));
+    await waitFor(() => expect(within(field).getByRole("combobox").textContent).toContain(label));
+    fireEvent.click(view.getByRole("button", { name: "Save token effects" }));
+    expect(save.mock.calls.at(-1)?.[0].data.effects[0]).toMatchObject({ type: "unlockitemvariant", variantId: expected });
   });
 });
 

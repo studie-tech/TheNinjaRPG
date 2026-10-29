@@ -1867,6 +1867,9 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [isOpen, setIsOpen] = useState(true);
   const variants = userItem.item.variants ?? [];
+  const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {
+    enabled: variants.some((variant) => Boolean(variant.requiredItemId)),
+  });
 
   const { data: unlockedVariants } = api.item.getUserUnlockedVariants.useQuery({
     itemId: userItem.item.id,
@@ -1876,12 +1879,12 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   const unlockStatusLoaded = unlockedVariants !== undefined;
   const unlockedIds = new Set(unlockedVariants?.map((u) => u.variantId) ?? []);
 
-  // Only carried tokens count — home storage is not carried inventory, matching
-  // how regular consumables require the item to be in the backpack to be used.
+  // Match the server's carried, non-auctioned and finished-crafting checks.
   const variantTokens =
     allUserItems?.filter(
       (ui) =>
-        !ui.storedAtHome && ui.item.effects.some((e) => e.type === "unlockitemvariant"),
+        isEquippableUserItem(ui) &&
+        ui.item.effects.some((e) => e.type === "unlockitemvariant"),
     ) ?? [];
 
   const purchase = api.item.purchaseVariant.useMutation({
@@ -1964,6 +1967,18 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
           const isUnlocked = unlockedIds.has(v.id);
           const isActive = activeVariantId === v.id;
           const needsToken = v.costType === "VARIANT_TOKEN";
+          const matchingToken = variantTokens.find(
+            (token) =>
+              (!v.requiredItemId || token.item.id === v.requiredItemId) &&
+              token.item.effects.some(
+                (effect) =>
+                  effect.type === "unlockitemvariant" &&
+                  (!effect.variantId || effect.variantId === v.id),
+              ),
+          );
+          const tokenActionLabel = matchingToken
+            ? `Use ${matchingToken.item.name}`
+            : `Need ${itemNames?.find((entry) => entry.id === v.requiredItemId)?.name ?? "compatible token"}`;
           // Preview the same discounted prestige amount guarded and charged by the server.
           const purchaseCost =
             v.costType === "VILLAGE_PRESTIGE" && userData
@@ -2016,9 +2031,9 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
                   size="sm"
                   variant="outline"
                   className="mt-1 w-full"
-                  disabled={variantTokens.length === 0 || consumeToken.isPending}
+                  disabled={!matchingToken || consumeToken.isPending}
                   onClick={() => {
-                    const token = variantTokens[0];
+                    const token = matchingToken;
                     if (token) {
                       consumeToken.mutate({
                         tokenUserItemId: token.id,
@@ -2027,7 +2042,9 @@ const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
                     }
                   }}
                 >
-                  {variantTokens.length > 0 ? "Use Token" : "Need Variant Token"}
+                  <span className="min-w-0 truncate" title={tokenActionLabel}>
+                    {tokenActionLabel}
+                  </span>
                 </Button>
               ) : (
                 <Button

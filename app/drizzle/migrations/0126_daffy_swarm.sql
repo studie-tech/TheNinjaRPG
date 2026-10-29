@@ -1,0 +1,1 @@
+ALTER TABLE `ItemVariant` ADD `requiredItemId` varchar(191);

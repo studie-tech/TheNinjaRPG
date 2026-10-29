@@ -1189,6 +1189,7 @@ export const UnlockItemVariantTag = z.object({
   ...BaseAttributes,
   type: z.literal("unlockitemvariant").prefault("unlockitemvariant"),
   description: msg("Unlocks a token-locked item variant when used on an item"),
+  variantId: z.string().trim().nullable().prefault(null),
 });
 export type UnlockItemVariantTagType = z.infer<typeof UnlockItemVariantTag>;
 

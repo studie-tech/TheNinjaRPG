@@ -189,6 +189,7 @@ import {
   listItemVariantForDelete,
   listItemVariantForGetItemVariants,
   listItemVariantForUpsertItemVariant,
+  listItemVariantRequiringItemForDelete,
   listPetSpeciesForFetchRewardPetSpecies,
   listQuestForGetItemRelations,
   listUserItemForExecuteMergeStacksForItem,
@@ -196,6 +197,7 @@ import {
   listUserItemForFetchUserItemsWithVariants,
   listUserItemForMergeAllStacks,
   listUserPetForConsume,
+  listVariantNames,
   restoreUserItemDurability,
   selectEvoSiblingCountForUpdate,
   selectItemForDelete,
@@ -418,6 +420,10 @@ export const itemRouter = createTRPCRouter({
             effect.rewardMode === "weightedCache",
         ),
         isRestrictedCacheReward: isRestrictedCacheReward({ bloodlineId, effects }),
+        /** Variant bindings let content selectors offer only compatible unlock tokens. */
+        unlockVariantIds: effects.flatMap((effect) =>
+          effect.type === "unlockitemvariant" ? [effect.variantId] : [],
+        ),
       }));
     }),
   getBloodlineItemNames: publicProcedure
@@ -576,12 +582,13 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role))
         return errorResponse("Not allowed to delete item");
-      const [entry, childEvolutions, variants, huntingReferences] = await Promise.all([
-        fetchItem(ctx.drizzle, input.id),
-        listItemForDelete(ctx.drizzle, input),
-        listItemVariantForDelete(ctx.drizzle, input),
-        listHuntingHabitats(ctx.drizzle),
-      ]);
+      const [entry, childEvolutions, huntingReferences, requiredByVariants] =
+        await Promise.all([
+          fetchItem(ctx.drizzle, input.id),
+          listItemForDelete(ctx.drizzle, input),
+          listHuntingHabitats(ctx.drizzle),
+          listItemVariantRequiringItemForDelete(ctx.drizzle, input),
+        ]);
       if (
         huntingReferences.some((h) =>
           h.content.contracts.some((c) => c.rewards.some((r) => r.itemId === input.id)),
@@ -590,6 +597,11 @@ export const itemRouter = createTRPCRouter({
         return errorResponse(
           "This material is used by a hunting contract. Remove that reward first.",
         );
+      if (requiredByVariants.length) {
+        return errorResponse(
+          `This item unlocks variants: ${requiredByVariants.map((variant) => variant.name).join(", ")}. Change their required unlock item first.`,
+        );
+      }
       // Check accepted terms after live references: an acceptance can precede a
       // staff edit that removes the reward while the habitat query is in flight.
       // Match the selected contract; backfilled snapshots can contain the whole habitat.
@@ -598,8 +610,7 @@ export const itemRouter = createTRPCRouter({
         return errorResponse(
           "This material is used by an active hunting session. Wait for it to finish.",
         );
-      if (!entry) return errorResponse("Item not found");
-      if (entry.id === TUTORIAL_ITEM_ID)
+      if (input.id === TUTORIAL_ITEM_ID)
         return errorResponse("Cannot delete tutorial item");
       if (childEvolutions.length > 0) {
         return errorResponse(
@@ -607,10 +618,26 @@ export const itemRouter = createTRPCRouter({
         );
       }
 
-      // No FK cascades on PlanetScale, so clean dependent rows leaf-first (user
-      // unlocks -> variant definitions -> user rows) and delete the parent Item
-      // last. A partial failure then leaves children pointing at a still-present
-      // parent, and the delete can simply be retried.
+      // Guard the parent deletion before removing owned rows, so new references
+      // reject without inventory loss. Missing parents still allow cleanup retries.
+      if (entry) {
+        // Materialize the evolution subquery to avoid MySQL's self-delete restriction.
+        const evolutionChildGuard = selectItemForDelete(ctx.drizzle, input);
+        const deleteResult = await deleteItemForDelete(
+          ctx.drizzle,
+          input,
+          evolutionChildGuard,
+        );
+        if (deleteResult.rowsAffected === 0) {
+          return errorResponse(
+            "Delete incomplete — an evolution or variant now requires this item. Remove the reference and retry.",
+          );
+        }
+        // Record the deletion before retryable cleanup loses the item's metadata.
+        await insertActionLogForDelete(ctx.drizzle, ctx, entry);
+      }
+      // Variant saves require a live parent; load cleanup IDs after deleting it.
+      const variants = await listItemVariantForDelete(ctx.drizzle, input);
       if (variants.length > 0) {
         await deleteUserItemVariantForDelete(ctx.drizzle, variants);
         await deleteItemVariantForDelete(ctx.drizzle, input);
@@ -620,29 +647,12 @@ export const itemRouter = createTRPCRouter({
         deleteUserItemImbuementForDelete(ctx.drizzle, input),
       ]);
 
-      // Write-time guard: only delete if no child evolutions appeared concurrently.
-      // The subquery alias materializes a derived table, avoiding MySQL errno 1093
-      // (a DELETE cannot otherwise read its own target table in a subquery).
-      const evolutionChildGuard = selectItemForDelete(ctx.drizzle, input);
-      const deleteResult = await deleteItemForDelete(
+      await outdateProposalsFor(
         ctx.drizzle,
-        input,
-        evolutionChildGuard,
+        "ITEM",
+        [input.id],
+        deletedReason("ITEM", entry?.name ?? input.id, user.username),
       );
-      if (deleteResult.rowsAffected === 0) {
-        return errorResponse(
-          "Delete incomplete — an evolution now points at this item. Remove it and retry.",
-        );
-      }
-      await Promise.all([
-        insertActionLogForDelete(ctx.drizzle, ctx, entry),
-        outdateProposalsFor(
-          ctx.drizzle,
-          "ITEM",
-          [entry.id],
-          deletedReason("ITEM", entry.name, user.username),
-        ),
-      ]);
       return { success: true, message: `Item deleted` };
     }),
   // Update an item
@@ -1137,6 +1147,8 @@ export const itemRouter = createTRPCRouter({
       await insertActionLogForAdjustUserItem(ctx.drizzle, ctx, owned, input);
       return { success: true, message: "Item updated" };
     }),
+  getVariantNames: protectedProcedure.query(({ ctx }) => listVariantNames(ctx.drizzle)),
+
   // Get all variants for an item
   getItemVariants: protectedProcedure
     .input(z.object({ itemId: z.string() }))
@@ -1156,14 +1168,33 @@ export const itemRouter = createTRPCRouter({
     .input(upsertItemVariantInputSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const [user, existing, parentItem] = await Promise.all([
+      const [user, existing, parentItem, requiredItem] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         listItemVariantForUpsertItemVariant(ctx.drizzle, input),
         findItemForUpsertItemVariant(ctx.drizzle, input),
+        input.variant.requiredItemId
+          ? findItemForUpsertItemVariant(ctx.drizzle, {
+              itemId: input.variant.requiredItemId,
+            })
+          : undefined,
       ]);
       if (user.isBanned) return errorResponse("You are banned");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
       if (!parentItem) return errorResponse("Item not found");
+      if (input.variant.requiredItemId && !requiredItem)
+        return errorResponse("Required unlock item not found");
+      if (input.variant.requiredItemId && input.variant.costType !== "VARIANT_TOKEN")
+        return errorResponse("Only token variants can require an unlock item");
+      if (
+        requiredItem &&
+        !requiredItem.effects.some(
+          (effect) =>
+            effect.type === "unlockitemvariant" &&
+            (!effect.variantId || effect.variantId === input.variant.id),
+        )
+      ) {
+        return errorResponse("Required unlock item cannot unlock this variant");
+      }
       if (parentItem.itemType !== "FURNITURE" && input.variant.furnitureData) {
         return errorResponse("Only furniture variants can define orientation images");
       }
@@ -1194,6 +1225,7 @@ export const itemRouter = createTRPCRouter({
             variant: {
               name: input.variant.name,
               image: input.variant.image,
+              requiredItemId: input.variant.requiredItemId,
               costType: input.variant.costType,
               cost: input.variant.cost,
               order: input.variant.order,
@@ -1205,7 +1237,10 @@ export const itemRouter = createTRPCRouter({
           safeDescription,
           safeBattleDescription,
         );
-        if (result.rowsAffected === 0) return errorResponse("Variant not found");
+        if (result.rowsAffected === 0)
+          return errorResponse(
+            "Variant or required item changed — refresh and try again",
+          );
       } else {
         const newVariantId = nanoid();
         const insertResult = await insertItemVariantForUpsertItemVariant(
@@ -1216,7 +1251,9 @@ export const itemRouter = createTRPCRouter({
           safeBattleDescription,
         );
         if (insertResult.rowsAffected === 0) {
-          return errorResponse(`Order ${input.variant.order} is already taken`);
+          return errorResponse(
+            `Order ${input.variant.order} is taken or a required item changed — refresh and try again`,
+          );
         }
         // Re-count after insert to close the TOCTOU window on MAX_ITEM_VARIANTS
         const [countRow] = await selectItemVariantForUpsertItemVariant(
@@ -1460,15 +1497,16 @@ export const itemRouter = createTRPCRouter({
       if (variant.costType !== "VARIANT_TOKEN") {
         return errorResponse("This variant does not require a Variant Token");
       }
-      // Variant Tokens are intentionally generic: any item carrying the
-      // `unlockitemvariant` effect can unlock any token-gated variant on any item
-      // the user owns. This mirrors the jutsu Reskin Token model — there is
-      // deliberately no per-item or per-variant binding stored on the token.
       const hasVariantTokenEffect = tokenItem.item.effects.some(
-        (e) => e.type === "unlockitemvariant",
+        (e) =>
+          e.type === "unlockitemvariant" &&
+          (!e.variantId || e.variantId === variant.id),
       );
+      if (variant.requiredItemId && variant.requiredItemId !== tokenItem.item.id) {
+        return errorResponse("This variant requires a different unlock item");
+      }
       if (!hasVariantTokenEffect) {
-        return errorResponse("This item is not a Variant Token");
+        return errorResponse("This item cannot unlock this variant");
       }
       if (!ownershipRows.length) return errorResponse("You don't own this item");
       if (existingUnlock) return errorResponse("Variant already unlocked");

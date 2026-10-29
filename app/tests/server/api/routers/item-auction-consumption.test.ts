@@ -21,6 +21,24 @@ describeWithDatabase("item consumption preserves auction escrow", () => {
     await (await getTestDatabase()).insert(itemVariant).values({ id: "variant", itemId: "weapon", name: "Variant", image: "/variant.png", costType: "VARIANT_TOKEN" });
   });
 
+  it("requires both the token's selected variant and the variant's unlock item before consumption", async () => {
+    const db = await getTestDatabase();
+    await insertUserItems([{ id: "owner-token", userId: "owner", itemId: "token", quantity: 2 }]);
+    await db.update(item).set({ effects: [UnlockItemVariantTag.parse({ variantId: "other-variant" })] }).where(eq(item.id, "token"));
+    const items = await callerFor(itemRouter, "owner");
+    const consume = () => items.consumeVariantToken({ tokenUserItemId: "owner-token", variantId: "variant" });
+    expect(await consume()).toMatchObject({ success: false, message: "This item cannot unlock this variant" });
+    await db.update(item).set({ effects: [UnlockItemVariantTag.parse({ variantId: "variant" })] }).where(eq(item.id, "token"));
+    await db.update(itemVariant).set({ requiredItemId: "ore" }).where(eq(itemVariant.id, "variant"));
+    expect(await consume()).toMatchObject({ success: false, message: "This variant requires a different unlock item" });
+    expect((await db.select().from(userItem).where(eq(userItem.id, "owner-token")))[0]?.quantity).toBe(2);
+    expect(await db.select().from(userItemVariant)).toHaveLength(0);
+    await db.update(itemVariant).set({ requiredItemId: "token" }).where(eq(itemVariant.id, "variant"));
+    expect(await consume()).toMatchObject({ success: true });
+    expect((await db.select().from(userItem).where(eq(userItem.id, "owner-token")))[0]?.quantity).toBe(1);
+    expect(await db.select().from(userItemVariant)).toHaveLength(1);
+  });
+
   for (const quantity of [1, 2]) {
     for (const isVariantToken of [false, true]) {
       for (const concurrentReservation of [false, true]) {

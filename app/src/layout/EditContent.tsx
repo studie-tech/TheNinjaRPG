@@ -146,6 +146,8 @@ export type FormEntry<K> = {
       values: FormDbValue[] | undefined;
       multiple?: boolean;
       current?: string;
+      /** Save the empty option as null instead of the generic None sentinel. */
+      nullable?: boolean;
     }
   | {
       type: "db_values_with_number";
@@ -860,9 +862,11 @@ export const EditContent = <
                             const dynamicOptions =
                               dynamicOptionsMap[fieldId] || options;
                             const newItemInput = newItemInputMap[fieldId] || "";
-                            const selectedLabel = hasComboboxValue(field.value)
+                            const nullable = formEntry.type === "db_values" && formEntry.nullable;
+                            const selectedValue = field.value ?? (nullable ? "None" : undefined);
+                            const selectedLabel = hasComboboxValue(selectedValue)
                               ? dynamicOptions.find(
-                                  (option) => String(option.value) === String(field.value),
+                                  (option) => String(option.value) === String(selectedValue),
                                 )?.label
                               : "Select option";
 
@@ -939,7 +943,7 @@ export const EditContent = <
                                           role="combobox"
                                           className={cn(
                                             "w-full justify-between",
-                                            !hasComboboxValue(field.value) &&
+                                            !hasComboboxValue(selectedValue) &&
                                               "text-muted-foreground",
                                             fieldState.isDirty && "border-orange-300",
                                           )}
@@ -973,7 +977,7 @@ export const EditContent = <
                                                 onSelect={() => {
                                                   form.setValue(
                                                     id,
-                                                    option.value as PathValue<S, K>,
+                                                    (nullable && option.value === "None" ? null : option.value) as PathValue<S, K>,
                                                     { shouldDirty: true },
                                                   );
                                                 }}
@@ -983,7 +987,7 @@ export const EditContent = <
                                                   className={cn(
                                                     "ml-auto",
                                                     String(option.value) ===
-                                                      String(field.value)
+                                                      String(selectedValue)
                                                       ? "opacity-100"
                                                       : "opacity-0",
                                                   )}
@@ -1700,6 +1704,10 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     enabled: Object.keys(shownTag).includes("aiId"),
   });
 
+  const { data: variantData } = api.item.getVariantNames.useQuery(undefined, {
+    enabled: fields.includes("variantId"),
+  });
+
   const { data: questData } = api.quests.getAllNames.useQuery(undefined, {
     enabled: fields.includes("questId"),
   });
@@ -2030,6 +2038,15 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           values: jutsuData.filter((j) => j.injectableInBattle),
           multiple: true,
           label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values",
+        };
+      } else if ((value as string) === "variantId") {
+        return {
+          id: value,
+          values: [{ id: "", name: "Any variant" }, ...(variantData ?? [])],
+          nullable: true,
+          multiple: false,
+          label: "Variant",
           type: "db_values",
         };
       } else if ((value as string) === "questId") {

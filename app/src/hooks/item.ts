@@ -32,6 +32,7 @@ export const useItemEditForm = (
   data: Item & { craftingRequirements: CraftingRequirement[] },
   refetch: () => Promise<unknown>,
 ) => {
+  const utils = api.useUtils();
   const submitInFlight = useRef(false);
 
   // Case type
@@ -71,7 +72,12 @@ export const useItemEditForm = (
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await refetch();
+          // Token selectors use compatibility metadata; variant labels use the item name.
+          await Promise.all([
+            refetch(),
+            utils.item.getAllNames.invalidate(),
+            utils.item.getVariantNames.invalidate(),
+          ]);
         }
       },
       onSettled: () => {

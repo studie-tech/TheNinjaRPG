@@ -1,23 +1,30 @@
 import * as radixSize from "@radix-ui/react-use-size";
+import { QueryClient, QueryClientProvider, useMutation, type UseMutationOptions } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
-import { type ComponentProps, Suspense } from "react";
+import { type ComponentProps, type ReactNode, Suspense } from "react";
 import { Controller, type UseFormReturn } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import ItemEdit from "@/app/[shell]/manual/item/edit/[itemid]/page";
+import ManualItems from "@/app/[shell]/manual/item/page";
 import type { Item } from "@/drizzle/schema";
 import * as itemHooks from "@/hooks/item";
 import { useItemEditForm } from "@/hooks/item";
 import * as ContentHelp from "@/layout/ContentHelp";
+import * as ContentBox from "@/layout/ContentBox";
+import * as Confirm from "@/layout/Confirm";
 import * as ContentImageSelector from "@/layout/ContentImageSelector";
 import * as editContent from "@/layout/EditContent";
 import { EditContent } from "@/layout/EditContent";
 import * as furnitureEditor from "@/layout/FurnitureViewsEditor";
 import * as Image from "@/layout/Image";
+import * as itemFiltering from "@/layout/ItemFiltering";
+import * as ItemWithEffects from "@/layout/ItemWithEffects";
 import * as SuggestChange from "@/layout/SuggestChange";
-import { ItemValidator, ItemValidatorRawSchema, type ZodItemType } from "@/validators/combat";
-import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/item";
+import * as pagination from "@/libs/pagination";
+import { ItemValidator, ItemValidatorRawSchema, UnlockItemVariantTag, type ZodItemType } from "@/validators/combat";
+import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS, ItemVariantValidator } from "@/validators/item";
 import type { FurnitureGeometry } from "@/validators/itemFurniture";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import * as UserContext from "@/utils/UserContext";
@@ -67,15 +74,25 @@ const data = {
   craftingRequirements: [],
 } as Item & { craftingRequirements: [] };
 const updateItem = vi.fn();
+const catalogueInvalidations = {
+  getAllNames: vi.fn(async () => undefined),
+  getVariantNames: vi.fn(async () => undefined),
+  getItemVariants: vi.fn(async (_input: { itemId: string }) => undefined),
+};
+const itemUtils = Object.fromEntries(Object.entries(catalogueInvalidations).map(([name, invalidate]) => [name, { invalidate }]));
 const originalEvent = globalThis.Event;
+const originalCustomEvent = globalThis.CustomEvent;
 const ActualFurnitureViewsEditor = furnitureEditor.FurnitureViewsEditor;
 const ActualEditContent = EditContent;
 const actualUseItemEditForm = useItemEditForm;
 
 beforeEach(() => {
   globalThis.Event = window.Event;
+  globalThis.CustomEvent = window.CustomEvent;
   updateItem.mockReset();
+  for (const invalidate of Object.values(catalogueInvalidations)) invalidate.mockClear();
   Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => ({ item: itemUtils }),
     item: {
       getAllNames: { useQuery: () => ({ data: [] }) },
       update: { useMutation: () => ({ mutateAsync: updateItem, isPending: false }) },
@@ -93,6 +110,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   globalThis.Event = originalEvent;
+  globalThis.CustomEvent = originalCustomEvent;
 });
 
 describe("staff item economy editor", () => {
@@ -275,7 +293,7 @@ describe("staff item economy editor", () => {
       deleteItemVariant: { useMutation: () => ({ isPending: false }) },
       getFurnitureImageGeometry: { useQuery: query },
     });
-    Object.assign(client.api, { useUtils: () => ({}), useQueries: () => [query(), query(), query()] });
+    Object.assign(client.api, { useQueries: () => [query(), query(), query()] });
     vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
     vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
     vi.spyOn(radixSize, "useSize").mockReturnValue({ width: 0, height: 0 });
@@ -369,5 +387,103 @@ describe("staff item economy editor", () => {
     expect(result.current.form.getFieldState("purchaseLimit").error).toBeUndefined();
     expect(result.current.form.getFieldState("auctionMinPrice").error).toBeUndefined();
     expect(result.current.form.getFieldState("auctionMaxPrice").error).toBeUndefined();
+  });
+});
+
+describe("staff item selector refreshes", () => {
+  let queryClient: QueryClient;
+  const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: () => undefined });
+    vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
+    vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+    vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+    vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <section>{children}</section>);
+    vi.spyOn(ContentHelp, "ItemHelper").mockImplementation(() => null);
+    vi.spyOn(SuggestChange, "SuggestChange").mockImplementation(() => null);
+    vi.spyOn(Image, "default").mockImplementation(({ alt }) => <span>{alt}</span>);
+  });
+  afterEach(() => {
+    queryClient.clear();
+    if (originalScroll) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScroll);
+    else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  });
+
+  it.each([true, false])("refreshes token bindings and variant labels only after a successful item save (success=%s)", async (success) => {
+    type Input = client.RouterInputs["item"]["update"];
+    type Result = client.RouterOutputs["item"]["update"];
+    updateItem.mockResolvedValue({ success, message: success ? "Saved" : "Cannot save" });
+    Object.assign(client.api.item, {
+      update: { useMutation: (options: UseMutationOptions<Result, Error, Input>) => useMutation({ ...options, mutationFn: updateItem }) },
+    });
+    const refetch = vi.fn(async () => undefined);
+    const token = { ...data, itemType: "CONSUMABLE" as const, destroyOnUse: true, preventBattleUsage: true };
+    const { result } = renderHook(() => useItemEditForm(token, refetch), { wrapper });
+    await act(async () => {
+      result.current.form.setValue("name", "Renamed token", { shouldDirty: true });
+      result.current.form.setValue("effects", [UnlockItemVariantTag.parse({ variantId: "red-variant" })], { shouldDirty: true });
+      expect(ItemValidator.safeParse(result.current.form.getValues()).success).toBe(true);
+      await result.current.handleItemSubmit();
+    });
+    expect(updateItem).toHaveBeenCalledTimes(1);
+    expect(catalogueInvalidations.getAllNames).toHaveBeenCalledTimes(success ? 1 : 0);
+    expect(catalogueInvalidations.getVariantNames).toHaveBeenCalledTimes(success ? 1 : 0);
+    expect(refetch).toHaveBeenCalledTimes(success ? 1 : 0);
+  });
+
+  it.each(["create", "update", "delete"] as const)("refreshes token variant choices after a variant %s", async (operation) => {
+    const variant = { ...ItemVariantValidator.parse({ name: "Red", image: "https://example.com/red.webp", costType: "VARIANT_TOKEN", cost: 1, order: 1 }), id: "red-variant", itemId: data.id };
+    const saveVariant = vi.fn(async () => ({ success: true, message: "Saved" }));
+    const deleteVariant = vi.fn(async () => ({ success: true, message: "Deleted" }));
+    Object.assign(client.api.item, {
+      getItemWithCraftingRequirements: { useQuery: () => ({ data: structuredClone(data), isPending: false, refetch: async () => undefined }) },
+      getItemVariants: { useQuery: () => ({ data: operation === "create" ? [] : [variant] }) },
+      upsertItemVariant: { useMutation: (options: UseMutationOptions<client.RouterOutputs["item"]["upsertItemVariant"], Error, client.RouterInputs["item"]["upsertItemVariant"]>) => useMutation({ ...options, mutationFn: saveVariant }) },
+      deleteItemVariant: { useMutation: (options: UseMutationOptions<client.RouterOutputs["item"]["deleteItemVariant"], Error, client.RouterInputs["item"]["deleteItemVariant"]>) => useMutation({ ...options, mutationFn: deleteVariant }) },
+    });
+    vi.spyOn(editContent, "EditContent").mockImplementation(() => <></>);
+    vi.spyOn(ContentImageSelector, "default").mockImplementation(({ onUploadComplete }) => <button type="button" onClick={() => onUploadComplete("https://example.com/new.webp")}>Choose variant image</button>);
+    vi.spyOn(Confirm, "default").mockImplementation(({ onAccept }) => <button type="button" onClick={onAccept}>Confirm variant deletion</button>);
+    const params = Promise.resolve({ itemid: data.id });
+    let view!: ReturnType<typeof render>;
+    await act(async () => { view = render(<Suspense fallback={null}><ItemEdit params={params} /></Suspense>, { wrapper }); });
+    if (operation === "delete") {
+      fireEvent.click(view.getByRole("button", { name: "Confirm variant deletion" }));
+    } else {
+      fireEvent.click(view.getByRole("button", { name: operation === "create" ? "+ Add Variant" : "Edit" }));
+      fireEvent.change(view.getByRole("textbox", { name: "Name" }), { target: { value: "Blue" } });
+      if (operation === "create") {
+        fireEvent.click(view.getByRole("combobox", { name: "Cost Type" }));
+        fireEvent.click(await view.findByRole("option", { name: "Variant Token" }));
+      }
+      fireEvent.click(view.getByRole("button", { name: "Choose variant image" }));
+      fireEvent.click(view.getByRole("button", { name: "Save Variant" }));
+    }
+    await waitFor(() => expect(catalogueInvalidations.getVariantNames).toHaveBeenCalledTimes(1));
+    expect(catalogueInvalidations.getItemVariants).toHaveBeenCalledWith({ itemId: data.id });
+    expect(operation === "delete" ? deleteVariant : saveVariant).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([true, false])("refreshes token variant choices only after a successful parent deletion (success=%s)", async (success) => {
+    const refetch = vi.fn(async () => undefined);
+    const deleteItem = vi.fn(async () => ({ success, message: success ? "Deleted" : "Cannot delete" }));
+    Object.assign(client.api.item, {
+      getAll: { useInfiniteQuery: () => ({ data: { pages: [{ data: [data] }] }, isFetching: false, isPending: false, refetch, fetchNextPage: async () => undefined, hasNextPage: false }) },
+      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      delete: { useMutation: (options: UseMutationOptions<client.RouterOutputs["item"]["delete"], Error, client.RouterInputs["item"]["delete"]>) => useMutation({ ...options, mutationFn: deleteItem }) },
+    });
+    vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
+    vi.spyOn(itemFiltering, "default").mockImplementation(() => null);
+    vi.spyOn(itemFiltering, "useFiltering").mockReturnValue({ itemType: "ANY" } as never);
+    vi.spyOn(itemFiltering, "getFilter").mockReturnValue({} as never);
+    vi.spyOn(ItemWithEffects, "default").mockImplementation(({ item, onDelete }) => <button type="button" onClick={() => onDelete?.(item.id)}>Delete parent item</button>);
+    const view = render(<ManualItems />, { wrapper });
+    fireEvent.click(view.getByRole("button", { name: "Delete parent item" }));
+    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
+    expect(deleteItem).toHaveBeenCalledWith({ id: data.id }, expect.anything());
+    expect(catalogueInvalidations.getVariantNames).toHaveBeenCalledTimes(success ? 1 : 0);
+    expect(catalogueInvalidations.getAllNames).toHaveBeenCalledTimes(success ? 1 : 0);
   });
 });
