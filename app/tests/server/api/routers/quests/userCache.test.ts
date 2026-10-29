@@ -115,9 +115,9 @@ describeWithDatabase("confirmed quest cache responses", () => {
     },
   );
 
-  it("forwards a located mission start without refetching the profile", async () => {
+  it.each(["startQuest", "startRandom"] as const)("forwards a located %s result without refetching the profile", async (method) => {
     const db = await getTestDatabase();
-    await db.update(quest).set({ content: { ...content(10), objectives: [AllObjectives.parse({ id: "located", task: "move_to_location", sector: 2, longitude: 10, latitude: 7, sectorType: "specific", sectorList: [], locationType: "specific", hideLocation: false })] } }).where(eq(quest.id, missionId));
+    await db.update(quest).set({ questType: method === "startRandom" ? "crime" : "mission", content: { ...content(10), objectives: [AllObjectives.parse({ id: "located", task: "move_to_location", sector: 2, longitude: 10, latitude: 7, sectorType: "specific", sectorList: [], locationType: "specific", hideLocation: false })] } }).where(eq(quest.id, missionId));
     const profile = await (await callerFor(profileRouter, playerId)).getUser();
     const client = new QueryClient();
     const key = [["profile", "getUser"], { type: "query" }];
@@ -128,7 +128,10 @@ describeWithDatabase("confirmed quest cache responses", () => {
     try {
       const revision = prepareUserUpdate(client, key);
       const readsBefore = await countProfileReads();
-      const result = await (await callerFor(questsRouter, playerId)).startQuest({ questId: missionId, userSector: 0 });
+      const caller = await callerFor(questsRouter, playerId);
+      const result = method === "startQuest"
+        ? await caller.startQuest({ questId: missionId, userSector: 0 })
+        : await caller.startRandom({ type: "crime", rank: "A", userLevel: 50, userSector: 0, userVillageId: null });
       expect(result.success).toBe(true);
       expect(result.userPatch).toBeDefined();
       await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress });

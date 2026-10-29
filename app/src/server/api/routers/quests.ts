@@ -628,9 +628,7 @@ export const questsRouter = createTRPCRouter({
       return {
         success: true,
         message: `Quest started: ${result.name}${rankInfo}`,
-        ...(assignment.userCacheEligible &&
-        !updatedUser.requiresProgressionRefresh &&
-        getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
+        ...(assignment.userCacheEligible && !updatedUser.requiresProgressionRefresh
           ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
           : {}),
       };
