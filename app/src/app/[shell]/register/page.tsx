@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
+import AutoHeight from "embla-carousel-auto-height";
 import { ArrowRight, MonitorPlay } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { startTransition, useEffect, useState } from "react";
@@ -224,6 +225,8 @@ const RegisterSteps: React.FC<{ form: RegisterFormApi; isLoading: boolean }> = (
   const [cApi, setCApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const [count, setCount] = useState(0);
+  // Size each step to its content instead of reserving space for the tallest step.
+  const plugins = React.useMemo(() => [AutoHeight()], []);
 
   // Carousel control. The step counter renders in a transition so the slide animation
   // starts without waiting for it; reInit fires when the steps after the first mount.
@@ -246,8 +249,8 @@ const RegisterSteps: React.FC<{ form: RegisterFormApi; isLoading: boolean }> = (
 
   return (
     <>
-      <Carousel setApi={setCApi}>
-        <CarouselContent>
+      <Carousel setApi={setCApi} plugins={plugins}>
+        <CarouselContent className="items-start">
           <CarouselItem className="flex flex-col gap-4">
             <StepBanner alt="step1" src={IMG_REGISTRATIN_STEP1} />
             {isLoading ? (

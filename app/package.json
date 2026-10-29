@@ -111,6 +111,7 @@
     "dotenv": "^18.0.8",
     "drizzle-orm": "0.45.4",
     "drizzle-zod": "^0.8.3",
+    "embla-carousel-auto-height": "8.6.0",
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
     "entities": "8.1.0",
