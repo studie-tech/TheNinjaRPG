@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { userData } from "@/drizzle/schema";
+import { quest, questHistory, userData } from "@/drizzle/schema";
 import { purchasesRouter } from "@/server/api/routers/purchases";
 import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 import { insertUsers } from "../../setup/factories";
@@ -8,7 +8,7 @@ import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from ".
 
 describeWithDatabase("purchase balance confirmation", () => {
   beforeEach(async () => {
-    await resetTables(userData);
+    await resetTables(questHistory, quest, userData);
     await insertUsers([
       { userId: "buyer", money: 10, reputationPoints: 20, reputationPointsTotal: 40, federalStatus: "GOLD" },
       { userId: "recipient", reputationPoints: 500 },
