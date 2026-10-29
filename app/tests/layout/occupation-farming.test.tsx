@@ -108,6 +108,7 @@ beforeEach(() => {
     removeEventListener: () => undefined,
   })) as unknown as typeof window.matchMedia;
   Element.prototype.scrollIntoView = vi.fn();
+  window.scrollBy = vi.fn() as unknown as typeof window.scrollBy;
   globalThis.ResizeObserver = class {
     observe() {}
     unobserve() {}
@@ -161,6 +162,8 @@ describe("OccupationFarming layout", () => {
       "true",
     );
     expect(setSelectedSlotIndex).toHaveBeenCalledWith(null);
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    // Only scrolling containers move; scrollIntoView would also shift a clipped dialog frame.
+    expect(window.scrollBy).toHaveBeenCalled();
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
   });
 });

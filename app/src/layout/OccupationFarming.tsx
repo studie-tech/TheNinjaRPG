@@ -84,20 +84,14 @@ export default function OccupationFarming({
   // Below the scene, the selected plot's panel can start off screen; bring it into view.
   useEffect(() => {
     if (selectedSlotIndex === null || isWide || isDocked) return;
-    document.getElementById("farm-panel")?.scrollIntoView({
-      behavior: prefersReducedMotion() ? "auto" : "smooth",
-      block: "nearest",
-    });
+    revealElement("farm-panel", "nearest");
   }, [selectedSlotIndex, isWide, isDocked]);
 
   const openTab = useCallback(
     (next: FarmTab) => {
       controller.setSelectedSlotIndex(null);
       setTab(next);
-      document.getElementById("farm-storehouse")?.scrollIntoView({
-        behavior: prefersReducedMotion() ? "auto" : "smooth",
-        block: "start",
-      });
+      revealElement("farm-storehouse", "start");
     },
     [controller.setSelectedSlotIndex],
   );
@@ -175,7 +169,7 @@ export default function OccupationFarming({
           initialState={initialVisual}
           onPlotClick={(slotIndex) => controller.setSelectedSlotIndex(slotIndex)}
         />
-        <div id="farm-panel" className="scroll-mt-4">
+        <div id="farm-panel">
           {selectedPlot && !isDocked ? (
             renderInspector(false)
           ) : (
@@ -199,7 +193,7 @@ export default function OccupationFarming({
       <section
         id="farm-storehouse"
         aria-label="Market and storage"
-        className="scroll-mt-4 rounded-lg border bg-card p-3"
+        className="rounded-lg border bg-card p-3"
       >
         <Tabs value={tab} onValueChange={(value) => setTab(value as FarmTab)}>
           <TabsList className="mb-3 grid w-full grid-cols-4">
@@ -265,8 +259,42 @@ export default function OccupationFarming({
   );
 }
 
-const prefersReducedMotion = () =>
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Space kept above an element revealed by scrolling. */
+const REVEAL_MARGIN_PX = 16;
+
+/**
+ * Scrolls an element into view inside its nearest scrolling ancestor, or the page.
+ * `scrollIntoView` would also scroll clipped ancestors such as a dialog frame,
+ * shifting the frame's own header out of view.
+ */
+const revealElement = (id: string, block: "start" | "nearest") => {
+  const element = document.getElementById(id);
+  if (!element) return;
+  let scroller = element.parentElement;
+  while (
+    scroller &&
+    !(
+      ["auto", "scroll"].includes(getComputedStyle(scroller).overflowY) &&
+      scroller.scrollHeight > scroller.clientHeight + 1
+    )
+  ) {
+    scroller = scroller.parentElement;
+  }
+  const viewTop = scroller ? scroller.getBoundingClientRect().top : 0;
+  const viewHeight = scroller ? scroller.clientHeight : window.innerHeight;
+  const rect = element.getBoundingClientRect();
+  const top = rect.top - viewTop;
+  const bottom = rect.bottom - viewTop;
+  let delta = top - REVEAL_MARGIN_PX;
+  if (block === "nearest") {
+    if (top >= 0 && bottom <= viewHeight) return;
+    if (top >= 0) delta = Math.min(delta, bottom - viewHeight + REVEAL_MARGIN_PX);
+  }
+  const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+  (scroller ?? window).scrollBy({ top: delta, behavior });
+};
 
 type FarmTab = "market" | "crops" | "extraction" | "upgrades";
 
