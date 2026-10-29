@@ -1,5 +1,5 @@
-import { eq, inArray } from "drizzle-orm";
-import { clan, quest, userData, village } from "@/drizzle/schema";
+import { eq } from "drizzle-orm";
+import { clan, userData, village } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
 /** Observe queue cleanup without assuming a guarded wake displaced a newer combat. */
@@ -190,14 +190,4 @@ export const findVillageBoostUserCache = (
     with: {
       village: { columns: { id: true, tokens: true, shrineSettings: true } },
     },
-  });
-
-/** Load only the definitions needed to apply public masking to committed tracker goals. */
-export const listBattleQuestCacheDefinitions = (
-  client: Pick<DrizzleClient, "query">,
-  questIds: string[],
-) =>
-  client.query.quest.findMany({
-    where: inArray(quest.id, questIds),
-    columns: { id: true, content: true },
   });

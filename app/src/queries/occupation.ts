@@ -255,6 +255,12 @@ export const insertUserItemForRemoveImbuement = (
 export const findCraftingCacheState = (client: DrizzleClient, userId: string) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
-    columns: { updatedAt: true, craftingExperience: true, questData: true },
+    columns: {
+      updatedAt: true,
+      craftingExperience: true,
+      questData: true,
+      role: true,
+      sector: true,
+    },
     with: { queue: true, cookingJobs: true, userQuests: userQuestHistoryRelation },
   });
