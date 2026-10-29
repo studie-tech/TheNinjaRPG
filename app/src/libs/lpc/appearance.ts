@@ -5,7 +5,7 @@ import type {
   SpriteAppearance,
   SpriteLayer,
 } from "@/validators/lpc";
-import { colors, skin_colors } from "@/validators/register";
+import { getCharacterAttributes } from "@/validators/register";
 
 /**
  * Choose silhouettes by variant override, item override, catalogue mapping, then family inference.
@@ -146,25 +146,12 @@ export const inferItemColor = (name: string): LpcColor | null => {
  * Server callers supply authoritative inputs and replace masked identities before publishing.
  */
 export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
-  const attributes = new Set(
+  const choices = getCharacterAttributes(
     (user.attributes ?? []).map((value) =>
-      (typeof value === "string" ? value : value.attribute).toLowerCase(),
+      typeof value === "string" ? value : value.attribute,
     ),
   );
-  // Validate colour prefixes so traits such as Long Hair cannot become palette names.
-  const color = (suffix: string, fallback: string) => {
-    const choices = new Set([
-      ...(suffix === "skin" ? skin_colors : colors).map((value) => value.toLowerCase()),
-      ...(suffix === "skin" ? ["albino"] : ["green", "yellow"]),
-    ]);
-    return (
-      [...attributes]
-        .filter((a) => a.endsWith(` ${suffix}`) && choices.has(a.split(" ")[0] ?? ""))
-        .sort()[0]
-        ?.split(" ")[0]
-        ?.replace("blonde", "yellow") ?? fallback
-    );
-  };
+  const attributes = new Set(choices.traits.map((value) => value.toLowerCase()));
   const body = user.spriteBodyStyle ?? (user.gender === "Female" ? "female" : "male");
   const layers = new Map<string, SpriteLayer>();
   const put = (slot: string, profile: string, value: string, eyes?: string) =>
@@ -183,8 +170,8 @@ export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
         alibino: "ivory",
         albino: "ivory",
       } as Record<string, string>
-    )[color("skin", "light")] ?? "light";
-  const hair = color("hair", "black");
+    )[choices.Skin.toLowerCase()] ?? "light";
+  const hair = choices.Hair.toLowerCase().replace("blonde", "yellow");
   put("body", "body", skin);
   put("shirt", "shirt", "black");
   put("legs", "pants", "black");
@@ -201,7 +188,7 @@ export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
             ? "head-soft"
             : "head-hard",
     skin,
-    color("eyes", "blue"),
+    choices.Eyes.toLowerCase().replace("blonde", "yellow"),
   );
   // Existing accounts can contain contradictory traits. A stable priority makes them reproducible.
   if (!attributes.has("bald"))

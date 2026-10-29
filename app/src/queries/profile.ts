@@ -1264,17 +1264,17 @@ export const insertUserAttributeForInsertAttribute = (
     })
     .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
-/** Build the `userAttribute` deletion for `deleteAttribute`, using predicates on `attribute` and `userId`. */
+/** Remove selected attribute rows for one account, including replaced exclusive choices. */
 export const deleteUserAttributeForDeleteAttribute = (
   client: Pick<DrizzleClient, "delete">,
-  input: { attribute: string },
+  names: readonly string[],
   ctx: { userId: string },
 ) =>
   client
     .delete(userAttribute)
     .where(
       and(
-        eq(userAttribute.attribute, input.attribute),
+        inArray(userAttribute.attribute, [...names]),
         eq(userAttribute.userId, ctx.userId),
       ),
     );

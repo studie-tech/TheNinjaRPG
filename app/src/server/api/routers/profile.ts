@@ -333,7 +333,14 @@ import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { insertAiSchema } from "@/validators/aiInput";
 import { mutateContentSchema } from "@/validators/comments";
 import { idSchema } from "@/validators/misc";
-import { attributes, colors, skin_colors, usernameSchema } from "@/validators/register";
+import {
+  attributes,
+  colors,
+  getAttributeGroup,
+  getCharacterAttributes,
+  skin_colors,
+  usernameSchema,
+} from "@/validators/register";
 import {
   isReservedCustomTitle,
   RESERVED_CUSTOM_TITLE_MESSAGE,
@@ -2066,31 +2073,40 @@ export const profileRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
+      const isColor = ["Hair", "Skin", "Eyes"].includes(input.attribute);
+      const palette: readonly string[] =
+        input.attribute === "Skin" ? skin_colors : colors;
+      if (isColor && (!input.color || !palette.includes(input.color)))
+        return errorResponse(
+          `Choose a valid ${input.attribute === "Eyes" ? "eye" : input.attribute.toLowerCase()} color`,
+        );
+      if (!isColor && input.color)
+        return errorResponse("Colors must be selected separately from traits");
+
       const existingAttributes = await fetchAttributes(ctx.drizzle, ctx.userId);
-      // Construct the attribute name
-      const name =
-        ["Hair", "Skin", "Eyes"].includes(input.attribute) && input.color
-          ? `${input.color} ${input.attribute}`
-          : input.attribute;
-      // Guards
-      if (existingAttributes.length >= MAX_ATTRIBUTES) {
-        return errorResponse(`Only ${MAX_ATTRIBUTES} attributes allowed`);
-      }
-      if (existingAttributes.some((attr) => attr.attribute === name)) {
-        return errorResponse(`You already have the attribute "${name}"`);
-      }
-      // Mutate - use onDuplicateKeyUpdate to handle race conditions
-      const result = await insertUserAttributeForInsertAttribute(
-        ctx.drizzle,
-        ctx,
-        name,
-      );
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Failed to insert attribute" };
-      } else {
-        return { success: true, message: "Attribute inserted" };
-      }
+      const name = isColor ? `${input.color} ${input.attribute}` : input.attribute;
+      const group = getAttributeGroup(name).map((choice) => choice.toLowerCase());
+      const remainingTraits = getCharacterAttributes(
+        existingAttributes.map((row) => row.attribute),
+      ).traits.filter((trait) => !group.includes(trait.toLowerCase()));
+      if (!isColor && remainingTraits.length >= MAX_ATTRIBUTES)
+        return errorResponse(
+          `Only ${MAX_ATTRIBUTES} traits allowed; colors are separate`,
+        );
+
+      // Insert before removing old choices so an interrupted save retains a usable appearance.
+      // Concurrent edits on this account can leave an extra cosmetic choice; selecting it again cleans it up.
+      await insertUserAttributeForInsertAttribute(ctx.drizzle, ctx, name);
+      const replaced = existingAttributes
+        .filter(
+          (row) =>
+            group.includes(row.attribute.toLowerCase()) &&
+            row.attribute.toLowerCase() !== name.toLowerCase(),
+        )
+        .map((row) => row.attribute);
+      if (replaced.length)
+        await deleteUserAttributeForDeleteAttribute(ctx.drizzle, replaced, ctx);
+      return { success: true, message: isColor ? "Color updated" : "Trait updated" };
     }),
   // Delete attribute
   deleteAttribute: protectedProcedure
@@ -2102,7 +2118,7 @@ export const profileRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const result = await deleteUserAttributeForDeleteAttribute(
         ctx.drizzle,
-        input,
+        getAttributeGroup(input.attribute),
         ctx,
       );
       if (result.rowsAffected === 0) {

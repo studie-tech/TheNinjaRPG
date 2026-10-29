@@ -58,6 +58,7 @@ import {
   attributes,
   colors,
   genders,
+  getAttributeGroup,
   type RegistrationSchema,
   registrationSchema,
   skin_colors,
@@ -549,7 +550,12 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                 </FormControl>
                 <SelectContent>
                   {attributes
-                    .filter((e) => ![watchAttr2, watchAttr3].includes(e))
+                    .filter(
+                      (e) =>
+                        ![watchAttr2, watchAttr3].some(
+                          (chosen) => chosen && getAttributeGroup(e).includes(chosen),
+                        ),
+                    )
                     .map((attribute, i) => (
                       <SelectItem key={`${attribute}-${i}`} value={attribute}>
                         {attribute}
@@ -575,7 +581,12 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                 </FormControl>
                 <SelectContent>
                   {attributes
-                    .filter((e) => ![watchAttr1, watchAttr3].includes(e))
+                    .filter(
+                      (e) =>
+                        ![watchAttr1, watchAttr3].some(
+                          (chosen) => chosen && getAttributeGroup(e).includes(chosen),
+                        ),
+                    )
                     .map((attribute, i) => (
                       <SelectItem key={`${attribute}-${i}`} value={attribute}>
                         {attribute}
@@ -601,7 +612,12 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                 </FormControl>
                 <SelectContent>
                   {attributes
-                    .filter((e) => ![watchAttr1, watchAttr2].includes(e))
+                    .filter(
+                      (e) =>
+                        ![watchAttr1, watchAttr2].some(
+                          (chosen) => chosen && getAttributeGroup(e).includes(chosen),
+                        ),
+                    )
                     .map((attribute, i) => (
                       <SelectItem key={`${attribute}-${i}`} value={attribute}>
                         {attribute}
@@ -845,7 +861,14 @@ const getLocalStorageBoolean = (key: string, defaultValue: boolean): boolean => 
 /** Helper to get randomized initial form values */
 const getRandomizedFormValues = () => {
   const shuffledAttributes = [...attributes].sort(() => 0.5 - Math.random());
-  const [attr1, attr2, attr3] = shuffledAttributes.slice(0, 3);
+  const [attr1, attr2, attr3] = shuffledAttributes
+    .filter(
+      (attribute, index, all) =>
+        !all
+          .slice(0, index)
+          .some((previous) => getAttributeGroup(attribute).includes(previous)),
+    )
+    .slice(0, 3);
 
   return {
     attribute_1: attr1 ?? attributes[0],

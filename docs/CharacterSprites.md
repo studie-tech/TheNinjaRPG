@@ -17,6 +17,12 @@ creation traits, worn equipment and selected item variants. Equipment replaces
 the corresponding base clothing. Unequipping, consuming or breaking equipment
 restores that clothing. Non-wearable items explicitly resolve to `NONE`.
 
+Skin, eye and hair palettes save directly from their selectors and do not count
+toward the trait limit. Hair styles, face shapes and beard styles are mutually
+exclusive within each group. The shared attribute resolver displays deterministic
+choices for conflicting saved rows; selecting or removing a group replaces or
+clears its old choices. Bald hides scalp hair while retaining the hair palette for beards.
+
 `content.json` contains ID-specific visual mappings for the item catalogue.
 `inferItemProfile` and `inferItemColor` cover subsequently authored content by
 slot, weapon family and name. These are visual interpretations using the supplied
