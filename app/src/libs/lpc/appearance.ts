@@ -5,6 +5,7 @@ import type {
   SpriteAppearance,
   SpriteLayer,
 } from "@/validators/lpc";
+import { colors, skin_colors } from "@/validators/register";
 
 /** Persisted content mappings take precedence over family defaults; staff overrides take precedence over both. */
 export const resolveItemSprite = (item: SpriteItem, variant?: SpriteVariant | null) => {
@@ -143,12 +144,19 @@ export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
       (typeof value === "string" ? value : value.attribute).toLowerCase(),
     ),
   );
-  const color = (suffix: string, fallback: string) =>
-    [...attributes]
-      .filter((a) => a.endsWith(` ${suffix}`))
-      .sort()[0]
-      ?.split(" ")[0]
-      ?.replace("blonde", "yellow") ?? fallback;
+  const color = (suffix: string, fallback: string) => {
+    const choices = new Set([
+      ...(suffix === "skin" ? skin_colors : colors).map((value) => value.toLowerCase()),
+      ...(suffix === "skin" ? ["albino"] : ["green", "yellow"]),
+    ]);
+    return (
+      [...attributes]
+        .filter((a) => a.endsWith(` ${suffix}`) && choices.has(a.split(" ")[0] ?? ""))
+        .sort()[0]
+        ?.split(" ")[0]
+        ?.replace("blonde", "yellow") ?? fallback
+    );
+  };
   const body = user.spriteBodyStyle ?? (user.gender === "Female" ? "female" : "male");
   const layers = new Map<string, SpriteLayer>();
   const put = (

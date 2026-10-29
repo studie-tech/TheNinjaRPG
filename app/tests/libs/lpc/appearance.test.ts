@@ -17,7 +17,11 @@ describe("character appearances", () => {
   it("covers every persisted creation trait and colour on both body styles", () => {
     for (const spriteBodyStyle of ["male", "female"] as const) for (const trait of attributes) for (const color of colors) for (const skin of skin_colors) {
       const appearance = resolveSpriteAppearance({ spriteBodyStyle, attributes: [trait, `${color} Hair`, `${color} Eyes`, `${skin} Skin`] });
-      for (const layer of appearance.layers) expect(spriteLayerSheets(appearance, layer).length).toBeGreaterThan(0);
+      for (const layer of appearance.layers) {
+        expect(spriteLayerSheets(appearance, layer).length).toBeGreaterThan(0);
+        if (layer.profile.startsWith("hair-") || layer.profile.startsWith("beard-"))
+          expect(layer.color).toBe(color.toLowerCase().replace("blonde", "yellow"));
+      }
     }
   });
   it("keeps body style independent of gender and resolves legacy conflicting hair choices consistently", () => {
