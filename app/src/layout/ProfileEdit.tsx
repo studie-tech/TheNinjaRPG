@@ -4,8 +4,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Ban,
   BarChart3,
-  ChevronsLeft,
-  ChevronsRight,
   Dices,
   Droplets,
   Heart,
@@ -15,6 +13,7 @@ import {
   MessageCircle,
   Palette,
   PenLine,
+  Plus,
   RotateCcw,
   SendHorizontal,
   Settings,
@@ -33,6 +32,7 @@ import {
   Upload,
   UserRound,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 import type React from "react";
@@ -1953,225 +1953,264 @@ const AttributeChange: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-2 pt-2">
-      <div className="col-span-2 space-y-3 py-3">
+    <div className="space-y-3 py-3">
+      <div className="flex items-start gap-3">
         <CharacterPreview
+          className="mx-0 w-28 max-w-[35%] shrink-0 sm:w-36"
           user={{ ...spriteUser, attributes: data ?? spriteUser?.attributes }}
         />
-        <div className="mx-auto max-w-64">
-          <label htmlFor="character-body-style" className="font-medium text-sm">
-            Body style
-          </label>
-          <Select
-            disabled={bodyMutation.isPending}
-            value={
-              spriteUser?.spriteBodyStyle ??
-              (spriteUser?.gender === "Female" ? "female" : "male")
-            }
-            onValueChange={(body) =>
-              bodyMutation.mutate({ body: body as "male" | "female" })
-            }
-          >
-            <SelectTrigger id="character-body-style">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="male">Broad build</SelectItem>
-              <SelectItem value="female">Slender build</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="space-y-1">
+            <label htmlFor="character-body-style" className="font-medium text-sm">
+              Body style
+            </label>
+            <Select
+              disabled={bodyMutation.isPending}
+              value={
+                spriteUser?.spriteBodyStyle ??
+                (spriteUser?.gender === "Female" ? "female" : "male")
+              }
+              onValueChange={(body) =>
+                bodyMutation.mutate({ body: body as "male" | "female" })
+              }
+            >
+              <SelectTrigger id="character-body-style">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">Broad build</SelectItem>
+                <SelectItem value="female">Slender build</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <p className="font-medium text-sm">Current traits</p>
+            <div className="flex flex-wrap gap-1">
+              {selectedAttributes.map((attribute) => {
+                const isRemoving = pendingAttributeRemovals.has(attribute);
+                return (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    aria-label={`Remove ${attribute}`}
+                    key={attribute}
+                    className="h-auto min-h-8 max-w-full justify-start whitespace-normal bg-popover px-2 py-1 text-left"
+                    disabled={isRemoving}
+                    aria-busy={isRemoving}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void removeAttribute(attribute);
+                    }}
+                  >
+                    {isRemoving ? (
+                      <>
+                        <Loader2
+                          className="mr-1 h-4 w-4 animate-spin"
+                          aria-hidden="true"
+                        />
+                        <span aria-live="polite">Removing</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>{attribute}</span>
+                        <X className="ml-1 h-3 w-3 shrink-0" aria-hidden="true" />
+                      </>
+                    )}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
-      <div className="m-3 rounded-md bg-popover p-3">
-        <p className="font-bold">Current </p>
-        {selectedAttributes.map((attribute) => {
-          const isRemoving = pendingAttributeRemovals.has(attribute);
-          return (
-            <button
-              type="button"
-              key={attribute}
-              className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isRemoving}
-              aria-busy={isRemoving}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                void removeAttribute(attribute);
-              }}
-            >
-              {isRemoving ? (
-                <>
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                  <span aria-live="polite">Removing</span>
-                </>
-              ) : (
-                <>
-                  <span> - {attribute}</span>
-                  <ChevronsRight className="ml-1 h-5 w-5" />
-                </>
-              )}
-            </button>
-          );
-        })}
+      <div className="space-y-1">
+        <p className="font-medium text-sm">Available traits</p>
+        <div className="flex flex-wrap gap-1">
+          {attributes
+            .filter((a) => !selectedAttributes.includes(a))
+            .map((attribute) => {
+              const pendingLabel = pendingAttributeAdditions[attribute];
+              return (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  aria-label={`Add ${attribute}`}
+                  key={attribute}
+                  className="h-auto min-h-8 max-w-full justify-start whitespace-normal bg-popover px-2 py-1 text-left"
+                  disabled={Boolean(pendingLabel)}
+                  aria-busy={Boolean(pendingLabel)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void addAttribute(attribute);
+                  }}
+                >
+                  {pendingLabel ? (
+                    <>
+                      <Loader2
+                        className="mr-1 h-4 w-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                      <span aria-live="polite">Adding</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-1 h-3 w-3 shrink-0" aria-hidden="true" />
+                      <span> {attribute} </span>
+                    </>
+                  )}
+                </Button>
+              );
+            })}
+        </div>
       </div>
-      <div className="m-3 rounded-md bg-popover p-3">
-        <p className="font-bold">Available </p>
-        {attributes
-          .filter((a) => !selectedAttributes.includes(a))
-          .map((attribute) => {
-            const pendingLabel = pendingAttributeAdditions[attribute];
-            return (
-              <button
-                type="button"
-                key={attribute}
-                className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={Boolean(pendingLabel)}
-                aria-busy={Boolean(pendingLabel)}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  void addAttribute(attribute);
-                }}
-              >
-                {pendingLabel ? (
-                  <>
-                    <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                    <span aria-live="polite">Adding</span>
-                  </>
-                ) : (
-                  <>
-                    <ChevronsLeft className="mr-1 h-5 w-5" />
-                    <span> {attribute} </span>
-                  </>
-                )}
-              </button>
-            );
-          })}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div
-          className="relative mt-3"
+          className="min-w-0 space-y-1"
           aria-busy={Boolean(pendingAttributeAdditions.Eyes)}
         >
-          <Select
-            onValueChange={(e) => setEyeColor(e as Color)}
-            defaultValue={eyeColor}
-            value={eyeColor}
-            disabled={Boolean(pendingAttributeAdditions.Eyes)}
-          >
-            <Label htmlFor="eye_color">Eye color</Label>
-            <SelectTrigger>
-              <SelectValue placeholder={`None`} />
-            </SelectTrigger>
-            <SelectContent id="eye_color">
-              {colors.map((color, i) => (
-                <SelectItem key={`${color}-${i}`} value={color}>
-                  {color}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => void addAttribute("Eyes", eyeColor)}
-            className="absolute right-0 bottom-0"
-            disabled={Boolean(pendingAttributeAdditions.Eyes)}
-            aria-label={
-              pendingAttributeAdditions.Eyes
-                ? `Adding ${pendingAttributeAdditions.Eyes}`
-                : `Add ${eyeColor} Eyes`
-            }
-          >
-            {pendingAttributeAdditions.Eyes ? (
-              <>
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                <span aria-live="polite">Adding</span>
-              </>
-            ) : (
-              <ChevronsLeft className="h-5 w-5" />
-            )}
-          </Button>
+          <Label htmlFor="eye_color">Eye color</Label>
+          <div className="flex items-center gap-1">
+            <Select
+              onValueChange={(e) => setEyeColor(e as Color)}
+              defaultValue={eyeColor}
+              value={eyeColor}
+              disabled={Boolean(pendingAttributeAdditions.Eyes)}
+            >
+              <SelectTrigger id="eye_color" className="min-w-0">
+                <SelectValue placeholder={`None`} />
+              </SelectTrigger>
+              <SelectContent>
+                {colors.map((color, i) => (
+                  <SelectItem key={`${color}-${i}`} value={color}>
+                    {color}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              size="icon"
+              onClick={() => void addAttribute("Eyes", eyeColor)}
+              className="shrink-0"
+              disabled={Boolean(pendingAttributeAdditions.Eyes)}
+              aria-label={
+                pendingAttributeAdditions.Eyes
+                  ? `Adding ${pendingAttributeAdditions.Eyes}`
+                  : `Add ${eyeColor} Eyes`
+              }
+            >
+              {pendingAttributeAdditions.Eyes ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span className="sr-only" aria-live="polite">
+                    Adding
+                  </span>
+                </>
+              ) : (
+                <Plus className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
+          </div>
         </div>
         <div
-          className="relative mt-3"
+          className="min-w-0 space-y-1"
           aria-busy={Boolean(pendingAttributeAdditions.Skin)}
         >
-          <Select
-            onValueChange={(e) => setSkinColor(e as SkinColor)}
-            defaultValue={skinColor}
-            value={skinColor}
-            disabled={Boolean(pendingAttributeAdditions.Skin)}
-          >
-            <Label htmlFor="skin_color">Skin color</Label>
-            <SelectTrigger>
-              <SelectValue placeholder={`None`} />
-            </SelectTrigger>
-            <SelectContent id="skin_color">
-              {skin_colors.map((color, i) => (
-                <SelectItem key={`${color}-${i}`} value={color}>
-                  {color}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => void addAttribute("Skin", skinColor)}
-            className="absolute right-0 bottom-0"
-            disabled={Boolean(pendingAttributeAdditions.Skin)}
-            aria-label={
-              pendingAttributeAdditions.Skin
-                ? `Adding ${pendingAttributeAdditions.Skin}`
-                : `Add ${skinColor} Skin`
-            }
-          >
-            {pendingAttributeAdditions.Skin ? (
-              <>
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                <span aria-live="polite">Adding</span>
-              </>
-            ) : (
-              <ChevronsLeft className="h-5 w-5" />
-            )}
-          </Button>
+          <Label htmlFor="skin_color">Skin color</Label>
+          <div className="flex items-center gap-1">
+            <Select
+              onValueChange={(e) => setSkinColor(e as SkinColor)}
+              defaultValue={skinColor}
+              value={skinColor}
+              disabled={Boolean(pendingAttributeAdditions.Skin)}
+            >
+              <SelectTrigger id="skin_color" className="min-w-0">
+                <SelectValue placeholder={`None`} />
+              </SelectTrigger>
+              <SelectContent>
+                {skin_colors.map((color, i) => (
+                  <SelectItem key={`${color}-${i}`} value={color}>
+                    {color}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              size="icon"
+              onClick={() => void addAttribute("Skin", skinColor)}
+              className="shrink-0"
+              disabled={Boolean(pendingAttributeAdditions.Skin)}
+              aria-label={
+                pendingAttributeAdditions.Skin
+                  ? `Adding ${pendingAttributeAdditions.Skin}`
+                  : `Add ${skinColor} Skin`
+              }
+            >
+              {pendingAttributeAdditions.Skin ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span className="sr-only" aria-live="polite">
+                    Adding
+                  </span>
+                </>
+              ) : (
+                <Plus className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
+          </div>
         </div>
         <div
-          className="relative mt-3"
+          className="min-w-0 space-y-1"
           aria-busy={Boolean(pendingAttributeAdditions.Hair)}
         >
-          <Select
-            onValueChange={(e) => setHairColor(e as Color)}
-            defaultValue={hairColor}
-            value={hairColor}
-            disabled={Boolean(pendingAttributeAdditions.Hair)}
-          >
-            <Label htmlFor="hair_color">Hair color</Label>
-            <SelectTrigger>
-              <SelectValue placeholder={`None`} />
-            </SelectTrigger>
-            <SelectContent id="hair_color">
-              {colors.map((color, i) => (
-                <SelectItem key={`${color}-${i}`} value={color}>
-                  {color}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => void addAttribute("Hair", hairColor)}
-            className="absolute right-0 bottom-0"
-            disabled={Boolean(pendingAttributeAdditions.Hair)}
-            aria-label={
-              pendingAttributeAdditions.Hair
-                ? `Adding ${pendingAttributeAdditions.Hair}`
-                : `Add ${hairColor} Hair`
-            }
-          >
-            {pendingAttributeAdditions.Hair ? (
-              <>
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                <span aria-live="polite">Adding</span>
-              </>
-            ) : (
-              <ChevronsLeft className="h-5 w-5" />
-            )}
-          </Button>
+          <Label htmlFor="hair_color">Hair color</Label>
+          <div className="flex items-center gap-1">
+            <Select
+              onValueChange={(e) => setHairColor(e as Color)}
+              defaultValue={hairColor}
+              value={hairColor}
+              disabled={Boolean(pendingAttributeAdditions.Hair)}
+            >
+              <SelectTrigger id="hair_color" className="min-w-0">
+                <SelectValue placeholder={`None`} />
+              </SelectTrigger>
+              <SelectContent>
+                {colors.map((color, i) => (
+                  <SelectItem key={`${color}-${i}`} value={color}>
+                    {color}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              size="icon"
+              onClick={() => void addAttribute("Hair", hairColor)}
+              className="shrink-0"
+              disabled={Boolean(pendingAttributeAdditions.Hair)}
+              aria-label={
+                pendingAttributeAdditions.Hair
+                  ? `Adding ${pendingAttributeAdditions.Hair}`
+                  : `Add ${hairColor} Hair`
+              }
+            >
+              {pendingAttributeAdditions.Hair ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span className="sr-only" aria-live="polite">
+                    Adding
+                  </span>
+                </>
+              ) : (
+                <Plus className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

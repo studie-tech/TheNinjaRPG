@@ -420,8 +420,9 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
   );
 
   return (
-    <>
+    <div className="grid grid-cols-[min(7rem,35%)_minmax(0,1fr)] items-start gap-3 px-3 sm:grid-cols-[min(9rem,30%)_minmax(0,1fr)]">
       <CharacterPreview
+        className="w-full sm:row-span-2"
         user={{
           gender,
           spriteBodyStyle: body,
@@ -439,7 +440,7 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
         control={form.control}
         name="spriteBodyStyle"
         render={({ field }) => (
-          <FormItem className="mx-auto mb-4 w-full max-w-64">
+          <FormItem className="min-w-0 gap-1 self-center">
             <FormLabel>Body style</FormLabel>
             <Select
               value={field.value ?? (gender === "Female" ? "female" : "male")}
@@ -459,25 +460,22 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           </FormItem>
         )}
       />
-      <div className="grid w-full grid-cols-1 gap-4 px-3 sm:grid-cols-3">
+      <div className="col-span-2 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:col-span-1 sm:grid-cols-3">
         <FormField
           control={form.control}
           name="hair_color"
           render={({ field }) => (
-            <FormItem className="min-w-0">
+            <FormItem className="min-w-0 gap-1">
               <FormLabel>Hair color</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>{option_colors}</SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Attribute 1</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -485,20 +483,17 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           control={form.control}
           name="eye_color"
           render={({ field }) => (
-            <FormItem className="min-w-0">
+            <FormItem className="min-w-0 gap-1">
               <FormLabel>Eye color</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>{option_colors}</SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Attribute 2</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -506,34 +501,30 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           control={form.control}
           name="skin_color"
           render={({ field }) => (
-            <FormItem className="min-w-0">
+            <FormItem className="min-w-0 gap-1">
               <FormLabel>Skin color</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>{option_skins}</SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Attribute 3</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
-      </div>
-      <div className="grid w-full grid-cols-1 gap-4 px-3 sm:grid-cols-3">
+
         <FormField
           control={form.control}
           name="attribute_1"
           render={({ field }) => (
-            <FormItem className="min-w-0">
-              <FormLabel>Attribute #1</FormLabel>
+            <FormItem className="min-w-0 gap-1">
+              <FormLabel>Trait 1</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
@@ -547,10 +538,7 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                     ))}
                 </SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Customize</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -558,11 +546,11 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           control={form.control}
           name="attribute_2"
           render={({ field }) => (
-            <FormItem className="min-w-0">
-              <FormLabel>Attribute #2</FormLabel>
+            <FormItem className="min-w-0 gap-1">
+              <FormLabel>Trait 2</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
@@ -576,10 +564,7 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                     ))}
                 </SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Customize</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -587,11 +572,11 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           control={form.control}
           name="attribute_3"
           render={({ field }) => (
-            <FormItem className="min-w-0">
-              <FormLabel>Attribute #3</FormLabel>
+            <FormItem className="min-w-0 gap-1">
+              <FormLabel>Trait 3</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
@@ -605,15 +590,12 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                     ))}
                 </SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Customize</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
       </div>
-    </>
+    </div>
   );
 };
 
