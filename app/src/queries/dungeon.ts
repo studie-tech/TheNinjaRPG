@@ -36,6 +36,7 @@ import {
 } from "@/drizzle/schema";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
+import { activityCompletionExtras } from "@/server/utils/achievementObjectives";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import type { DungeonContent, DungeonRunState } from "@/validators/dungeon";
 
@@ -865,3 +866,46 @@ const expiredDungeonState = (run: { state: DungeonRunState; status?: string }) =
       ? `The ${DUNGEON_LOBBY_SECONDS / 60}-minute dungeon lobby expired.`
       : "The one-hour dungeon deadline expired.",
 });
+/** Confirm reward balances and relations after the receipt transaction commits. */
+export const findDungeonRewardUserCache = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    columns: {
+      money: true,
+      seichiSilver: true,
+      earnedExperience: true,
+      petExperience: true,
+      reputationPoints: true,
+      reputationPointsTotal: true,
+      villagePrestige: true,
+      skillPoints: true,
+      medicalExperience: true,
+      huntingExperience: true,
+      craftingExperience: true,
+      gatheringExperience: true,
+      sageMasteryExperience: true,
+      level: true,
+      rank: true,
+      villageId: true,
+      bloodlineId: true,
+      isAi: true,
+      ninjutsuMastery: true,
+      genjutsuMastery: true,
+      taijutsuMastery: true,
+      bukijutsuMastery: true,
+      bloodlineMastery: true,
+      sageMastery: true,
+      masteryRanks: true,
+      sageModeId: true,
+    },
+    extras: (table) => activityCompletionExtras(table.userId),
+    with: {
+      clan: { columns: { id: true, points: true } },
+      village: { columns: { id: true, tokens: true } },
+      sageMode: true,
+      titles: { with: { title: true } },
+    },
+  });

@@ -43,13 +43,13 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { DungeonContent, DungeonRewardReceipt } from "@/validators/dungeon";
 import { getSearchValidator } from "@/validators/register";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Show entry requirements, human or companion squads, readiness and completion claims. */
 export default function DungeonPage() {
   // Reuse the account's calibrated server clock for deadlines, as other game timers do.
-  const { data: user, timeDiff } = useRequiredUserData();
+  const { data: user, timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
   const router = useRouter();
-  const utils = api.useUtils();
   const [selectedPets, setSelectedPets] = useState<string[]>([]);
   const collection = api.pets.getCollection.useQuery(undefined, { enabled: !!user });
   const [message, setMessage] = useState("");
@@ -74,31 +74,32 @@ export default function DungeonPage() {
     refetchInterval: 3000,
   });
   /** Show expected rejections beside the action and refresh party/account state after a mutation. */
-  const refresh = async (response: { success: boolean; message: string }) => {
+  const refresh = async (response: UserDeltaResponse, revision: number | undefined) => {
+    if (response.success || response.userPatch)
+      await updateUser(response.userPatch, { revision });
     setMessage(response.success ? "" : response.message);
     if (response.success) setAbandonId(null);
     showMutationToast(response);
-    await Promise.all([
-      state.refetch(),
-      available.refetch(),
-      utils.profile.getUser.invalidate(),
-    ]);
+    await Promise.all([state.refetch(), available.refetch()]);
   };
   const create = api.coop.dungeon.create.useMutation({
-    onSuccess: refresh,
+    onMutate: prepareUserUpdate,
+    onSuccess: (response, _variables, revision) => refresh(response, revision),
     onError: (e) => setMessage(e.message),
   });
   const act = api.coop.dungeon.act.useMutation({
-    onSuccess: async (response, input) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (response, input, revision) => {
       if (response.success && input.action === "invite") form.reset();
-      await refresh(response);
+      await refresh(response, revision);
     },
     onError: (e) => setMessage(e.message),
   });
   const claim = api.coop.dungeon.claim.useMutation({
-    onSuccess: async (response) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (response, _variables, revision) => {
       if (response.success) setIsHistoryOpen(true);
-      await refresh(response);
+      await refresh(response, revision);
     },
     onError: (e) => setMessage(e.message),
   });

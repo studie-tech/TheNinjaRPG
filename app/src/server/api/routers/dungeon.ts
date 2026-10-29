@@ -62,8 +62,10 @@ import type { DrizzleClient } from "@/server/db";
 import { launchCoopEncounter } from "@/server/utils/coop";
 import { expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import { dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
+import { getDungeonRewardUserPatch } from "@/server/utils/dungeonUserCache";
 import { notifyMapLocationsChanged } from "@/server/utils/mapLocations";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { getBattleUserPatch } from "@/server/utils/socialUserCache";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
 import {
@@ -384,7 +386,7 @@ export const dungeonRouter = createTRPCRouter({
           return errorResponse("You already joined another dungeon.");
         throw error;
       }
-      return { success: true, message: "Lobby created.", id };
+      return { success: true, message: "Lobby created.", userPatch: {}, id };
     }),
   /** Apply one party version; membership changes also commit their cross-run reservation. */
   act: protectedProcedure
@@ -400,7 +402,10 @@ export const dungeonRouter = createTRPCRouter({
       if (!run || !user) return errorResponse("Dungeon not found.");
       if (run.expiresAt && run.expiresAt.getTime() <= Date.now()) {
         await expireDungeonRun(ctx.drizzle, run);
-        return errorResponse("The dungeon deadline expired.");
+        return {
+          ...errorResponse("The dungeon deadline expired."),
+          userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+        };
       }
       const { action } = input;
       const transition = transitionCoopParty(
@@ -463,7 +468,7 @@ export const dungeonRouter = createTRPCRouter({
         const expiresAt = run.state.entryPaidAt
           ? (run.expiresAt ?? secondsFromNow(DUNGEON_RUN_SECONDS))
           : secondsFromNow(DUNGEON_RUN_SECONDS);
-        return launchCoopEncounter({
+        const result = await launchCoopEncounter({
           reserve: async ({ battleId }) => {
             const claimed = await updateDungeonRunForReserve(
               ctx.drizzle,
@@ -503,6 +508,10 @@ export const dungeonRouter = createTRPCRouter({
           recover: ({ battleId }) =>
             rollbackDungeonStart(ctx.drizzle, run, battleId, run.version + 1),
         });
+        return {
+          ...result,
+          userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+        };
       }
 
       const queueChanged = new Error("Dungeon queue claim changed");
@@ -534,7 +543,7 @@ export const dungeonRouter = createTRPCRouter({
             : updateParty(ctx.drizzle),
         );
         return saved
-          ? { success: true, message: "Party updated." }
+          ? { success: true, message: "Party updated.", userPatch: {} }
           : errorResponse("The party changed. Refresh and try again.");
       } catch (error) {
         if (error === queueChanged)
@@ -561,6 +570,11 @@ export const dungeonRouter = createTRPCRouter({
           success: true,
           message: "Rewards already delivered.",
           reward: member.reward,
+          userPatch: await getDungeonRewardUserPatch(
+            ctx.drizzle,
+            user,
+            member.reward.rewards,
+          ),
         };
       if (
         run.status !== "COMPLETED" ||
@@ -651,7 +665,16 @@ export const dungeonRouter = createTRPCRouter({
         }),
       );
       return receipt
-        ? { success: true, message: "Completion rewards delivered.", reward: receipt }
+        ? {
+            success: true,
+            message: "Completion rewards delivered.",
+            reward: receipt,
+            userPatch: await getDungeonRewardUserPatch(
+              ctx.drizzle,
+              user,
+              receipt.rewards,
+            ),
+          }
         : errorResponse("Rewards were already claimed. Refresh to view your receipt.");
     }),
 });
