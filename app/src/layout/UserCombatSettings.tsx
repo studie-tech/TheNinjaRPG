@@ -168,7 +168,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </div>
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
-              <p className="font-semibold text-sm">Show aggro halos</p>
+              <p className="font-semibold text-sm">Show aggro meters</p>
               <p className="text-muted-foreground text-xs">
                 Compare team aggro against NPCs; hover or tap for details
               </p>
@@ -176,7 +176,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
             <Switch
               checked={config.showAggro}
               onCheckedChange={config.toggleAggro}
-              aria-label="Toggle aggro halo visibility"
+              aria-label="Toggle aggro meter visibility"
             />
           </div>
           <div className="flex items-center justify-between gap-3">

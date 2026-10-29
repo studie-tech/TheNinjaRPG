@@ -196,20 +196,28 @@ export const createCombatActors = (
             if (!scope.isDisposed()) {
               current.art = art;
               artRoot.addChild(art.container);
-              // Portrait pins, clan badges and atlas-failure portraits can exceed the LPC figure's head.
-              // Shift the retained meters once after loading, using non-LPC artwork bounds.
+              // Portrait and badge bounds keep HUD rows above art and ground cues below it.
+              // LPC frame padding is transparent, so preserve its compact positioning.
               if (!(current.user.isAi && current.user.isOriginal)) {
                 const { hp, sp, cp, threat } = current;
-                const top = art.entries.reduce(
-                  (height, entry) =>
-                    entry.character || entry.description.kind === "tombstone"
-                      ? height
-                      : Math.max(height, entry.bounds.maxY),
-                  0,
-                );
+                const { selection, hover, identity } = current;
+                let top = 0,
+                  bottom = Infinity;
+                for (const entry of art.entries) {
+                  if (entry.character || entry.description.kind === "tombstone")
+                    continue;
+                  top = Math.max(top, entry.bounds.maxY);
+                  bottom = Math.min(bottom, entry.bounds.minY);
+                }
                 const offset = Math.max(0, top + tile.height * 0.16 - hudTop);
                 for (const meter of [hp, sp, cp, threat])
                   if (meter) meter.container.y += offset;
+                const groundOffset = Math.min(
+                  0,
+                  bottom - selection.getLocalBounds().maxY - tile.height * 0.02,
+                );
+                for (const marker of [selection, hover, identity])
+                  marker.y += groundOffset;
               }
               updateVisual(current);
             }

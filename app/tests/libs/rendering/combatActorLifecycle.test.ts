@@ -92,12 +92,12 @@ describe("combat actor reconciliation", () => {
       expect(meter.y - meter.height / 2).toBeGreaterThan(tile.height * (isAi ? 1.7 : 1.4));
     }
   });
-  it.each([false, true])("keeps every HUD row above portrait artwork, including failed LPC atlases=%s", async (failedAtlas) => {
+  it.each([false, true])("keeps HUD and ground cues clear of portrait artwork, including failed LPC atlases=%s", async (failedAtlas) => {
     if (failedAtlas) {
       vi.spyOn(characters, "createLpcCharacter").mockRejectedValue(new Error("Atlas unavailable"));
       vi.spyOn(console, "warn").mockImplementation(() => {});
     }
-    const { actors, root, user, battle, grid } = await setup(false, failedAtlas ? resolveSpriteAppearance({}) : undefined);
+    const { actors, root, selection, hover, identity, user, battle, grid } = await setup(false, failedAtlas ? resolveSpriteAppearance({}) : undefined);
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
     const art = root.getChildByLabel("combat-art")!;
     const top = art.getLocalBounds().maxY;
@@ -105,14 +105,24 @@ describe("combat actor reconciliation", () => {
     const meters = ["combat-health", "combat-stamina", "combat-chakra", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
     const positions = meters.map((meter) => meter.y);
     for (const meter of meters) expect(meter.y + meter.getLocalBounds().minY).toBeGreaterThan(top);
+    const markers = [selection, hover, identity], groundPositions = markers.map((marker) => marker.y);
+    for (const marker of markers) expect(marker.y + marker.getLocalBounds().maxY).toBeLessThan(art.getLocalBounds().minY);
+    const frame = { now: 1000, delta: 0, reducedMotion: true };
+    actors.animate(frame, user.userId, undefined);
+    expect(selection.visible).toBe(true); expect(hover.visible).toBe(false);
+    actors.animate(frame, "other", user.userId);
+    expect(selection.visible).toBe(false); expect(hover.visible).toBe(true);
     actors.sync({ battle }); actors.sync({ battle });
     expect(meters.map((meter) => meter.y)).toEqual(positions);
+    expect(markers.map((marker) => marker.y)).toEqual(groundPositions);
   });
   it("retains the compact HUD position when LPC artwork loads successfully", async () => {
     const { root, user, grid } = await setup(false, resolveSpriteAppearance({}));
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
     expect(root.getChildByLabel("combat-health")?.y).toBeCloseTo(tile.height * 1.58);
     expect(root.getChildByLabel("combat-aggro")?.y).toBeCloseTo(tile.height * 1.665);
+    for (const label of ["combat-selection", "combat-hover", "combat-original"])
+      expect(root.getChildByLabel(label)?.y).toBe(0);
   });
   it("shows distinct selection and hover states without rebuilding their geometry", async () => {
     const { actors, selection, hover, health, user } = await setup();
