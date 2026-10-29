@@ -16,12 +16,13 @@ import { type UserEvent, usePusherHandler } from "@/layout/PusherHandler";
 import * as toast from "@/libs/toast";
 import { createEventState } from "@/libs/tournament/events";
 import * as routing from "@/utils/routing";
-import { UserContext } from "@/utils/UserContext";
+import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { eventTournamentConfigSchema } from "@/validators/tournament";
 import { ensureDom } from "../setup/dom.mjs";
 
 const testApi = createTRPCReact<AppRouter>();
+const { UserContext } = userContext;
 const key = getQueryKey(testApi.profile.getUser, undefined, "query");
 const clients: QueryClient[] = [];
 const router = {
@@ -50,6 +51,8 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     tournament: testApi.tournament, profile: testApi.profile, useUtils: testApi.useUtils,
   });
+  // Bun retains module mocks across suites; read this fixture's live provider.
+  vi.spyOn(userContext, "useUserData").mockImplementation(() => useContext(UserContext));
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
 });
