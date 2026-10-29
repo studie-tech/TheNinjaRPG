@@ -50,6 +50,18 @@ describe("combat actor reconciliation", () => {
     actors.animate({ now: 1017, delta: 1 / 60, reducedMotion: true }, user.userId, undefined);
     expect(actors.animate({ now: 1034, delta: 0, reducedMotion: true }, user.userId, undefined)).toBe(false);
   });
+  it("returns to the completed tile when a snapshot changes target mid-step", async () => {
+    const { actors, root, user, battle, step } = await setup();
+    const start = root.position.clone();
+    user.longitude = 4; actors.sync({ battle });
+    actors.animate({ now: 1000, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
+    expect(root.position).not.toEqual(start);
+    user.longitude = 3; actors.sync({ battle });
+    for (let tick = 0; tick < 60; tick++) actors.animate({ now: 1017 + tick * 1000 / 60, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
+    expect(root.position).toEqual(start);
+    expect(step).not.toHaveBeenCalled();
+    expect(actors.animate({ now: 3000, delta: 0, reducedMotion: false }, user.userId, undefined)).toBe(false);
+  });
   it("hides empty threat tracks and reuses them when aggro changes", async () => {
     const { actors, threat, highest, user, battle } = await setup();
     const aggro = new Map([[user.userId, { enmity: 0, ratio: 0, isHighest: false }]]);
