@@ -60,9 +60,10 @@ export const CharacterPreview = ({
           let start = 0;
           game.setUpdate((frame) => {
             if (!start) start = frame.now;
+            // Show the front first so appearance edits are visible as soon as they load.
             const direction = frame.reducedMotion
               ? 2
-              : Math.floor((frame.now - start) / 3000) % 4;
+              : (2 + Math.floor((frame.now - start) / 3000)) % 4;
             actor.render(frame, animation, direction as 0 | 1 | 2 | 3);
           });
           setReady(true);
