@@ -1134,7 +1134,7 @@ describeWithDatabase("staff user-id rename", () => {
     expect(intent?.newUserId).toBe(NEW_USER_ID);
     await expect(
       caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
-    ).resolves.toEqual({ success: true, message: "UserId updated" });
+    ).resolves.toEqual({ success: true, message: "UserId updated", userPatch: {} });
     const [oldUser, newUser, entitlement, transfer, message] = await Promise.all([
       database.query.userData.findFirst({
         columns: { userId: true },
@@ -1169,7 +1169,7 @@ describeWithDatabase("staff user-id rename", () => {
     const caller = await callerFor(staffRouter, STAFF);
     await expect(
       caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
-    ).resolves.toEqual({ success: true, message: "UserId updated" });
+    ).resolves.toEqual({ success: true, message: "UserId updated", userPatch: {} });
 
     await expect(
       grantStorePurchase(database, {
