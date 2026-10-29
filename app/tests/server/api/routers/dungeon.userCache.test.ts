@@ -1,17 +1,21 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { dungeon, dungeonMember, dungeonRun, gameSetting, quest, questHistory, userData, userRewards, userVote, village } from "@/drizzle/schema";
+import { battle, dungeon, dungeonMember, dungeonRun, gameSetting, quest, questHistory, userData, userRewards, userVote, village } from "@/drizzle/schema";
 import * as dungeonQueries from "@/queries/dungeon";
 import * as skillQueries from "@/queries/skillTree";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import * as profileQueries from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { settleDungeonBattle } from "@/server/utils/dungeon";
+import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { userDeltaResponseSchema } from "@/validators/userCache";
+import { type UserDeltaResponse, userDeltaResponseSchema } from "@/validators/userCache";
+import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../../setup/dungeon";
 import { insertQuests, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
@@ -22,6 +26,18 @@ const userId = "dungeon-cache-player";
 const goal = (profile: Profile, id: string) => profile.userData?.questData?.find((entry) => entry.id === id)?.goals[0];
 const clients: QueryClient[] = [];
 
+type ClaimCallbacks = {
+  onMutate: () => number | undefined;
+  onSuccess: (response: UserDeltaResponse, input: unknown, revision: number | undefined) => Promise<void>;
+};
+
+const page = readFileSync(join(import.meta.dirname, "../../../../src/app/[shell]/dungeon/page.tsx"), "utf8");
+const refreshSource = page.slice(page.indexOf("  const refresh ="), page.indexOf("  const create ="));
+const claimSource = page.slice(page.indexOf("  const claim ="), page.indexOf("  const runs ="));
+// Exercise the page's shared refresh and actual claim callback with the production cache merger.
+const transpiler = new (require("bun").Transpiler)({ loader: "tsx" }) as { transformSync(source: string): string };
+const claimFactory = transpiler.transformSync(`function createCallbacks() { ${refreshSource} ${claimSource} return claim; }`);
+
 /** Use the production merge against a warmed profile and count any fallback profile read. */
 const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -30,13 +46,20 @@ const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
   const refetch = vi.fn(read);
   client.setQueryDefaults(key, { queryFn: refetch });
   client.setQueryData(key, initial);
-  return { client, key, refetch, current: () => client.getQueryData<Profile>(key)! };
+  const refetchState = vi.fn(async () => undefined);
+  const callbacks = new Function("prepareUserUpdate", "updateUser", "api", "state", "setMessage", "setAbandonId", "showMutationToast", "setIsHistoryOpen", "user", `${claimFactory}\nreturn createCallbacks();`)(
+    () => prepareUserUpdate(client, key),
+    (patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options),
+    { coop: { dungeon: { claim: { useMutation: (options: ClaimCallbacks) => options } } } },
+    { refetch: refetchState }, vi.fn(), vi.fn(), vi.fn(), vi.fn(), initial.userData,
+  ) as ClaimCallbacks;
+  return { client, key, refetch, refetchState, callbacks, current: () => client.getQueryData<Profile>(key)! };
 };
 
 describeWithDatabase("confirmed dungeon reward progression", () => {
   beforeEach(async () => {
     stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected HTTP request in dungeon cache tests" });
-    await resetTables(dungeonMember, dungeonRun, dungeon, questHistory, quest, userRewards, userVote, userData, gameSetting, village);
+    await resetTables(battle, dungeonMember, dungeonRun, dungeon, questHistory, quest, userRewards, userVote, userData, gameSetting, village);
     await insertUsers([{ userId, username: "DungeonCache", role: "USER", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,
       money: 0, earnedExperience: 0, reputationPoints: 0, reputationPointsTotal: 0, medicalExperience: 0,
@@ -103,7 +126,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     expect(goal(cache.current(), "reward-progress")).toEqual(goal(await profile.getUser(), "reward-progress"));
   });
 
-  it("keeps scalar-only claims narrow and preserves progression settled at battle completion", async () => {
+  it("keeps scalar-only claims and receipt replay narrow after completion was reconciled", async () => {
     const db = await getTestDatabase();
     const profile = callerForDatabase(profileRouter, userId, db);
     await profile.getUser();
@@ -111,14 +134,63 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     const initial = await profile.getUser();
     expect(goal(initial, "dungeon-completion")).toMatchObject({ done: true, value: 1 });
     const cache = cachedProfile(initial, () => profile.getUser());
-    const revision = prepareUserUpdate(cache.client, cache.key);
-    const response = userDeltaResponseSchema.parse(await api.claim({ id: "completed-run" }));
-    expect(response.userPatch).not.toHaveProperty("questData");
-    expect(response.achievementProgress).toBeUndefined();
-    await updateUserCache(cache.client, cache.key, response.userPatch, { revision });
+    const hydration = vi.spyOn(profileQueries, "fetchUpdatedUser");
+    for (let claim = 0; claim < 2; claim++) {
+      const revision = cache.callbacks.onMutate();
+      const response = userDeltaResponseSchema.parse(await api.claim({ id: "completed-run" }));
+      expect(response.userPatch).not.toHaveProperty("questData");
+      expect(response.achievementProgress).toBeUndefined();
+      await cache.callbacks.onSuccess(response, undefined, revision);
+    }
+    expect(hydration).not.toHaveBeenCalled();
     expect(cache.refetch).not.toHaveBeenCalled();
     expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 10, dungeonsCompleted: 1 });
     expect(goal(cache.current(), "dungeon-completion")).toEqual(goal(initial, "dungeon-completion"));
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, earnedExperience: 10 });
+  });
+
+  it.each([false, true])("reconciles a polled completion through the claim callback (delayed profile refresh: %s)", async (delayedRefresh) => {
+    const db = await getTestDatabase();
+    const profile = callerForDatabase(profileRouter, userId, db);
+    const initial = await profile.getUser();
+    expect(goal(initial, "dungeon-completion")).toMatchObject({ done: false, value: 0 });
+    const cache = cachedProfile(initial, () => profile.getUser());
+    const meta = dungeonBattleState({ runState: { memberIds: [userId], invitedIds: [], readyIds: [], floor: 4, clearedFloors: [0, 1, 2, 3], message: "" } });
+    const content = dungeonContent();
+    content.rewards.tokens = 0;
+    content.rewards.prestige = 0;
+    await db.insert(dungeonRun).values({ id: "run", dungeonId: "definition", leaderId: userId, content,
+      state: meta.runState, status: "FIGHTING", version: 1, battleId: "fight", expiresAt: new Date(meta.expiresAt), createdAt: new Date() });
+    await db.insert(dungeonMember).values({ runId: "run", userId });
+    await db.update(userData).set({ status: "BATTLE", battleId: "fight" }).where(eq(userData.userId, userId));
+    const fight = makeCompleteBattle({ id: "fight", battleType: "QUEST", version: 0, round: 0, width: 12, height: 10,
+      rewardScaling: 0, forceKeepPools: true, activeUserId: userId, createdAt: new Date(), updatedAt: new Date(), roundStartAt: new Date(), background: "default",
+      usersState: [makeUser({ userId, direction: "left" }), makeUser({ userId: "enemy", direction: "right", isAi: true, curHealth: 0 })],
+      extraState: { dungeon: meta, energyRegeneration: { [userId]: 0 }, energyCapacity: { [userId]: 100 } } });
+    await db.insert(battle).values(fight);
+    expect(await settleDungeonBattle(db, fight, 0)).toBe(true);
+    const api = callerForDatabase(dungeonRouter, userId, db);
+    const state = await api.getState();
+    expect(state.runs[0]).toMatchObject({ status: "COMPLETED" });
+    expect(state.members[0]?.reward).toBeNull();
+    const savedBeforeClaim = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+    expect(savedBeforeClaim?.questData?.find((entry) => entry.id === "dungeon-completion")?.goals[0]?.done).not.toBe(true);
+    // The callback was created from the older render. Its functional patch must inspect the live cache.
+    if (delayedRefresh) cache.client.setQueryData(cache.key, await profile.getUser());
+    for (let claim = 0; claim < 2; claim++) {
+      const revision = cache.callbacks.onMutate();
+      const response = userDeltaResponseSchema.parse(await api.claim({ id: "run" }));
+      expect(response.success).toBe(true);
+      expect(response.userPatch).not.toHaveProperty("questData");
+      await cache.callbacks.onSuccess(response, undefined, revision);
+      expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 10, dungeonsCompleted: 1 });
+      expect(goal(cache.current(), "dungeon-completion")).toMatchObject({ done: true, value: 1 });
+      expect(cache.current().achievementProgress?.find((entry) => entry.questId === "dungeon-completion")).toBeDefined();
+      expect(cache.refetch).toHaveBeenCalledTimes(delayedRefresh ? 0 : 1);
+    }
+    expect(cache.refetchState).toHaveBeenCalledTimes(2);
+    expect(goal(cache.current(), "dungeon-completion")).toEqual(goal(await profile.getUser(), "dungeon-completion"));
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, earnedExperience: 10 });
   });
 
   it.each(["unavailable", "missing", "mastery unavailable"] as const)("keeps delivered receipts successful and reconciles the profile when confirmation is %s", async (failure) => {
@@ -132,12 +204,12 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
       if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
       else confirmation.mockRejectedValueOnce(new Error("Dungeon confirmation unavailable"));
     }
-    const revision = prepareUserUpdate(cache.client, cache.key);
+    const revision = cache.callbacks.onMutate();
     const result = userDeltaResponseSchema.parse(await api.claim({ id: "completed-run" }));
     expect(result.success).toBe(true);
     expect(result.userPatch).toBeUndefined();
     expect(result.userDelta).toBeUndefined();
-    await updateUserCache(cache.client, cache.key, result.userPatch, { revision, delta: result.userDelta });
+    await cache.callbacks.onSuccess(result, undefined, revision);
     expect(cache.refetch).toHaveBeenCalledTimes(1);
     expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 10, dungeonsCompleted: 1 });
     expect((await api.claim({ id: "completed-run" })).success).toBe(true);
@@ -165,15 +237,16 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     const cache = cachedProfile(await profile.getUser(), () => profile.getUser());
     const api = await completedRun({ reward_ninjutsu_experience: 5, reward_village_membership: "AKIKAZE" });
     for (let claim = 0; claim < 2; claim++) {
-      const revision = prepareUserUpdate(cache.client, cache.key);
+      const revision = cache.callbacks.onMutate();
       const response = userDeltaResponseSchema.parse(await api.claim({ id: "completed-run" }));
       expect(response.success).toBe(true);
-      await updateUserCache(cache.client, cache.key, response.userPatch, { revision,
-        achievementProgress: response.achievementProgress });
+      expect(response.userPatch?.questData).toBeDefined();
+      await cache.callbacks.onSuccess(response, undefined, revision);
       expect(cache.refetch).not.toHaveBeenCalled();
       expect(cache.current().userData).toMatchObject({ money: 100, ninjutsuMastery: 15,
         effectiveMasteries: { ninjutsuMastery: 15 }, isOutlaw: false,
         villageId: "reward-village", village: { id: "reward-village" }, dungeonsCompleted: 1 });
+      expect(goal(cache.current(), "dungeon-completion")).toMatchObject({ done: true, value: 1 });
     }
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, ninjutsuMastery: 15 });
   });

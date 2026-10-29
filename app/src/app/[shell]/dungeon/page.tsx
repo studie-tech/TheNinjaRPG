@@ -75,11 +75,19 @@ export default function DungeonPage() {
   });
   /** Show expected rejections beside the action and refresh party/account state after a mutation. */
   const refresh = async (response: UserDeltaResponse, revision: number | undefined) => {
+    const patch = response.userPatch;
     if (response.success || response.userPatch)
-      await updateUser(response.userPatch, {
-        revision,
-        achievementProgress: response.achievementProgress,
-      });
+      await updateUser(
+        patch?.dungeonsCompleted !== undefined && patch.questData === undefined
+          ? (current) =>
+              // A tab can claim from polling before receiving the battle-ended profile refresh.
+              current.dungeonsCompleted === patch.dungeonsCompleted ? patch : undefined
+          : patch,
+        {
+          revision,
+          achievementProgress: response.achievementProgress,
+        },
+      );
     setMessage(response.success ? "" : response.message);
     if (response.success) setAbandonId(null);
     showMutationToast(response);
