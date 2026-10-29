@@ -115,6 +115,7 @@ export const userPatchSchema = z.object({
   dailySageActivations: z.number().optional(),
   dailyMedicalMissions: z.number().optional(),
   dailyWarMissions: z.number().optional(),
+  dailyOverworldQuestRolls: z.number().optional(),
   missionsD: z.number().optional(),
   missionsC: z.number().optional(),
   missionsB: z.number().optional(),

@@ -82,7 +82,7 @@ const toPreviewResult = (data: {
 function SectorMapEditorContent() {
   const utils = api.useUtils();
   const searchParams = useSearchParams();
-  const { data: userData } = useUserData();
+  const { data: userData, updateUser, prepareUserUpdate } = useUserData();
   const canEdit = Boolean(userData && canChangeContent(userData.role));
   // Sector can be pre-selected via ?sector= (e.g. clicking a tile on the globe
   // in /manual/world), so editors land straight on that sector's maps.
@@ -330,14 +330,39 @@ function SectorMapEditorContent() {
   // renders structures (the preview's village query and the game scene)
   const { mutate: moveStructure, isPending: isMoving } =
     api.worldMap.moveStructure.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success)
+          await updateUser(
+            (current) => {
+              const moved = data.structure;
+              if (!moved) return undefined;
+              if (current.village?.id !== moved.villageId) return {};
+              const structures = current.village.structures;
+              if (!structures?.some((entry) => entry.id === moved.id)) return undefined;
+              return {
+                village: {
+                  id: moved.villageId,
+                  structures: structures.map((entry) =>
+                    entry.id === moved.id
+                      ? {
+                          ...entry,
+                          longitude: moved.longitude,
+                          latitude: moved.latitude,
+                        }
+                      : entry,
+                  ),
+                },
+              };
+            },
+            { revision },
+          );
         showMutationToast(data);
         setPendingMove(null);
         await Promise.all([
           utils.travel.getVillageInSector.invalidate(),
           utils.travel.getSectorData.invalidate(),
           utils.worldMap.getSectorWindow.invalidate(),
-          ...(data.success ? [utils.profile.getUser.invalidate()] : []),
         ]);
       },
     });

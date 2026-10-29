@@ -25,6 +25,7 @@ import {
   updateVillageStructureForMoveStructure,
 } from "@/queries/worldMap";
 import {
+  baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -439,6 +440,18 @@ export const worldMapRouter = createTRPCRouter({
         latitude: z.number().int().min(0),
       }),
     )
+    .output(
+      baseServerResponse.extend({
+        structure: z
+          .object({
+            id: z.string(),
+            villageId: z.string(),
+            longitude: z.number(),
+            latitude: z.number(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query + guard (parallel: the user fetch and the structure lookup keyed
       // on input.structureId — no dependency between them)
@@ -503,6 +516,12 @@ export const worldMapRouter = createTRPCRouter({
       return {
         success: true,
         message: `${structure.name} moved to ${to}`,
+        structure: {
+          id: structure.id,
+          villageId: structure.villageId,
+          longitude: input.longitude,
+          latitude: input.latitude,
+        },
       };
     }),
 });
