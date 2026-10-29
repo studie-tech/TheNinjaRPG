@@ -8,6 +8,8 @@ import {
 } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { canAssignExperience } from "@/libs/profile";
+import { isMockQuestHistoryRow } from "@/libs/quest";
+import { getReducedGainsDays } from "@/libs/train";
 import { getUserFactionNotifications } from "@/libs/userNotifications";
 import type {
   AchievementProgress,
@@ -238,12 +240,30 @@ const mergeUserChanges = <T extends object>(
 const isCacheObject = (value: unknown): value is Record<string, unknown> =>
   isPlainObject(value) && !(value instanceof Date);
 
-/** Keep navigation derived from profile fields in the same atomic cache update. */
+/** Keep public tracker confirmations and derived navigation in the same atomic cache update. */
 const mergeUserCache = (
   old: UserCache,
   user: User,
   achievementProgress?: AchievementProgress[],
 ): UserCache => {
+  if ("persistedQuestData" in user) {
+    const { persistedQuestData, ...savedUser } = user as User & UserCachePatch;
+    const persistedIds = new Set(persistedQuestData?.map((entry) => entry.id));
+    const virtualIds = new Set(
+      (achievementProgress ?? old.achievementProgress)
+        ?.filter(isMockQuestHistoryRow)
+        .map((entry) => entry.questId),
+    );
+    const virtualTrackers = old.userData?.questData?.filter(
+      (entry) => virtualIds.has(entry.id) && !persistedIds.has(entry.id),
+    );
+    user = {
+      ...savedUser,
+      questData: virtualTrackers?.length
+        ? [...(persistedQuestData ?? []), ...virtualTrackers]
+        : (persistedQuestData ?? null),
+    };
+  }
   const factionNotifications = getUserFactionNotifications(user);
   const previousFactionNames = new Set(
     getUserFactionNotifications(old.userData ?? undefined).map((entry) => entry.name),
@@ -269,6 +289,13 @@ const mergeUserCache = (
   if (user.isBanned) desired.push({ href: "/reports", name: "Banned!", color: "red" });
   if (user.isTradeBanned)
     desired.push({ href: "/reports", name: "Trade Banned!", color: "red" });
+  const reducedDays = getReducedGainsDays(user);
+  if (reducedDays > 0)
+    desired.push({
+      href: "/village",
+      name: `Slowed ${Math.ceil(reducedDays)} days`,
+      color: "red",
+    });
   for (const boostType of SHRINE_BOOST_TYPES) {
     const boost =
       getShrineBoost(
@@ -295,6 +322,7 @@ const mergeUserCache = (
         "Banned!",
         "Trade Banned!",
       ].includes(entry.name) &&
+      !(entry.href === "/village" && /^Slowed \d+ days$/.test(entry.name)) &&
       !previousFactionNames.has(entry.name) &&
       !(
         entry.href === "/shrine" &&

@@ -54,5 +54,5 @@ export const getPublicQuestTrackerPatch = async (
     questData,
     userQuests: definitions.map((quest) => ({ quest })),
   });
-  return { questData: publicUser.questData };
+  return { persistedQuestData: publicUser.questData };
 };

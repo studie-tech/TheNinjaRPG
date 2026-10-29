@@ -1,6 +1,8 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it } from "bun:test";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { VILLAGE_REDUCED_GAINS_DAYS } from "@/drizzle/constants";
+import { QuestTracker } from "@/validators/objectives";
 import type { KageDefenseSchedule } from "@/validators/kage";
 import type { WarMissionAttempt } from "@/validators/war";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -735,6 +737,31 @@ describe("shared mutation user response", () => {
 
 
 describe("progression cache reconciliation", () => {
+  it("retains only omitted virtual achievements in a persisted tracker confirmation", async () => {
+    const client = new QueryClient();
+    const virtual = QuestTracker.parse({ id: "virtual", goals: [{ id: "total", value: 50 }] });
+    const old = QuestTracker.parse({ id: "removed-mission" });
+    const published = QuestTracker.parse({ id: "removed-achievement" });
+    const saved = QuestTracker.parse({ id: "saved", goals: [{ id: "goal", value: 2 }] });
+    client.setQueryData(key, { userData: { ...profile(100).userData, questData: [old, virtual, published] }, achievementProgress: [
+      { id: "virtual", questId: "virtual" },
+      { id: "history", questId: "removed-achievement" },
+    ] });
+    await updateUserCache(client, key, { persistedQuestData: [saved] }, { revision: prepareUserUpdate(client, key) });
+    const cached = client.getQueryData<{ userData: NonNullable<UserWithRelations> }>(key)?.userData;
+    expect(cached?.questData).toEqual([saved, virtual]);
+    expect(cached).not.toHaveProperty("persistedQuestData");
+    client.clear();
+  });
+
+  it.each([false, true])("keeps complete tracker snapshots authoritative with explicit achievement metadata: %s", async (hasMetadata) => {
+    const client = new QueryClient();
+    client.setQueryData(key, { userData: { ...profile(100).userData, questData: [QuestTracker.parse({ id: "virtual" })] }, achievementProgress: [{ id: "virtual", questId: "virtual" }] });
+    await updateUserCache(client, key, { questData: [] }, { revision: prepareUserUpdate(client, key), achievementProgress: hasMetadata ? [] : undefined });
+    expect(client.getQueryData<{ userData: NonNullable<UserWithRelations> }>(key)?.userData.questData).toEqual([]);
+    client.clear();
+  });
+
   const progression = (earnedExperience: number, status: "AWAKE" | "BATTLE" | "HOSPITALIZED" = "AWAKE") => ({
     ...profile(100).userData,
     rank: "GENIN" as const, earnedExperience, status,
@@ -769,6 +796,22 @@ describe("progression cache reconciliation", () => {
 
 
 describe("notification effects during cache updates", () => {
+  it("adds, replaces and removes the reduced-gains notice after confirmed village timestamps", async () => {
+    const test = setup();
+    const mail = { href: "/inbox", name: "Mail", color: "blue" };
+    const old = new Date(Date.now() - 100 * 86400000);
+    test.client.setQueryData(key, { userData: { ...profile(100).userData, rank: "JONIN", joinedVillageAt: old }, notifications: [mail] });
+    for (const elapsedDays of [0, 2, 100]) {
+      await updateUserCache(test.client, key, { joinedVillageAt: new Date(Date.now() - elapsedDays * 86400000) }, { revision: prepareUserUpdate(test.client, key) });
+      const slowed = elapsedDays < VILLAGE_REDUCED_GAINS_DAYS
+        ? [{ href: "/village", name: `Slowed ${VILLAGE_REDUCED_GAINS_DAYS - elapsedDays} days`, color: "red" }]
+        : [];
+      expect(test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications).toEqual([mail, ...slowed]);
+    }
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
   it("adds and removes shrine notifications from confirmed settings without fetching", async () => {
     const test = setup();
     type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;

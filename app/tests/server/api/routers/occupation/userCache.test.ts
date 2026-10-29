@@ -23,21 +23,79 @@ describeWithDatabase("crafting user cache quest progress", () => {
   });
 
 
-  it("publishes the queue and production XP when cancelling starts the following craft", async () => {
+  it.each(["none", "mission", "achievement"] as const)("reconciles total XP goals when cancelling starts the following craft (%s)", async (questType) => {
     const db = await getTestDatabase();
+    if (questType !== "none") {
+      await insertQuests([{ id: "craft-total", questType, content: {
+        objectives: [AllObjectives.parse({ id: "total", task: "crafting_experience", value: 10 })],
+        reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+      } }]);
+      if (questType === "mission") {
+        await insertQuestHistory([{ userId: "crafter", questId: "craft-total", questType }]);
+        await db.update(userData).set({ questData: [QuestTracker.parse({ id: "craft-total", goals: [{ id: "total", value: 0, done: false }] })] }).where(eq(userData.userId, "crafter"));
+      }
+    }
     const caller = await callerFor(occupationRouter, "crafter");
     expect((await caller.craftItem({ itemId: "crafted", quantity: 1 })).success).toBe(true);
     expect((await caller.craftItem({ itemId: "crafted", quantity: 1 })).success).toBe(true);
     expect((await caller.craftItem({ itemId: "crafted", quantity: 1 })).success).toBe(true);
     const waiting = await db.query.userQueue.findMany();
     expect(waiting).toHaveLength(2);
+    const profile = await callerFor(profileRouter, "crafter");
+    const initial = await profile.getUser();
+    if (questType !== "none") expect(initial.userData?.questData?.find((entry) => entry.id === "craft-total")?.goals[0]).toMatchObject({ value: 5, done: false });
+    const key = [["profile", "getUser"], { type: "query" }];
+    const client = new QueryClient();
+    client.setQueryData(key, initial);
+    let reads = 0;
+    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return profile.getUser(); } });
+    const stop = observer.subscribe(() => undefined);
     await db.update(userItem).set({ craftingFinishedAt: new Date(Date.now() - 60000) });
-    const result = await caller.cancelQueuedCraft({ queueId: waiting[0]!.id });
-    expect(result.success).toBe(true);
-    expect(result.userPatch?.queue).toEqual([]);
-    expect(result.userPatch?.craftingExperience).toBe(10);
-    expect(result.userPatch?.cookingJobs).toEqual([]);
-    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "crafter") }))?.craftingExperience).toBe(result.userPatch?.craftingExperience);
+    try {
+      const revision = prepareUserUpdate(client, key);
+      const result = await caller.cancelQueuedCraft({ queueId: waiting[0]!.id });
+      expect(result.success).toBe(true);
+      expect(result.userPatch).toBeUndefined();
+      expect(result.userDelta).toBeUndefined();
+      await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta });
+      const authoritative = await profile.getUser();
+      const cached = client.getQueryData<typeof initial>(key)!;
+      expect(cached.userData?.queue).toEqual([]);
+      expect(cached.userData?.craftingExperience).toBe(10);
+      expect(cached.userData?.cookingJobs).toEqual([]);
+      expect(cached.userData?.questData).toEqual(authoritative.userData?.questData);
+      expect(cached.achievementProgress).toMatchObject(authoritative.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry));
+      if (questType !== "none") expect(cached.userData?.questData?.find((entry) => entry.id === "craft-total")?.goals[0]).toMatchObject({ value: 10, done: true });
+      expect(reads).toBe(1);
+    } finally { stop(); client.clear(); }
+  });
+
+  it("keeps a warmed virtual achievement when cancellation does not start another craft", async () => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "craft-total", questType: "achievement", content: {
+      objectives: [AllObjectives.parse({ id: "total", task: "crafting_experience", value: 10 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    const profile = await callerFor(profileRouter, "crafter");
+    const initial = await profile.getUser();
+    expect(initial.userData?.questData?.[0]?.goals[0]).toMatchObject({ value: 0, done: false });
+    await db.insert(userQueue).values({ id: "waiting-craft", userId: "crafter", kind: "CRAFT", position: 0, itemId: "crafted", quantity: 1, materials: [], durationSeconds: 60, startsAt: new Date(Date.now() + 3600000), finishesAt: new Date(Date.now() + 3660000) });
+    const key = [["profile", "getUser"], { type: "query" }];
+    const client = new QueryClient();
+    client.setQueryData(key, initial);
+    let reads = 0;
+    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return profile.getUser(); } });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      const revision = prepareUserUpdate(client, key);
+      const result = await (await callerFor(occupationRouter, "crafter")).cancelQueuedCraft({ queueId: "waiting-craft" });
+      expect(result.userPatch).toBeDefined();
+      await updateUserCache(client, key, result.userPatch, { revision });
+      const cached = client.getQueryData<typeof initial>(key)!;
+      expect(cached.userData?.questData).toEqual(initial.userData?.questData);
+      expect(cached.achievementProgress).toEqual(initial.achievementProgress);
+      expect(reads).toBe(0);
+    } finally { stop(); client.clear(); }
   });
 
   it("keeps returned materials and cancellation successful when optional confirmation fails", async () => {
@@ -83,7 +141,7 @@ describeWithDatabase("crafting user cache quest progress", () => {
       const result = await (await callerFor(occupationRouter, "crafter")).cancelQueuedCraft({ queueId: "waiting-craft" });
       expect(result.success).toBe(true);
       expect(result.userPatch).toBeDefined();
-      const goal = result.userPatch?.questData?.find((tracker) => tracker.id === privateTracker.id)?.goals[0];
+      const goal = result.userPatch?.persistedQuestData?.find((tracker) => tracker.id === privateTracker.id)?.goals[0];
       expect(goal).toMatchObject({ id: "target", value: 0, done: false });
       if (visible) expect(goal).toMatchObject({ sector: 723, longitude: 41, latitude: 37 });
       else {
@@ -110,7 +168,7 @@ describeWithDatabase("crafting user cache quest progress", () => {
     await db.insert(userQueue).values({ id: "waiting-craft", userId: "crafter", kind: "CRAFT", position: 0, itemId: "crafted", quantity: 1, materials: [], durationSeconds: 60, startsAt: new Date(Date.now() + 3600000), finishesAt: new Date(Date.now() + 3660000) });
     const result = await (await callerFor(occupationRouter, "crafter")).cancelQueuedCraft({ queueId: "waiting-craft" });
     expect(result.success).toBe(true);
-    const goal = result.userPatch?.questData?.[0]?.goals[0];
+    const goal = result.userPatch?.persistedQuestData?.[0]?.goals[0];
     expect(goal).toMatchObject({ id: "target", value: 2 });
     expect(goal).not.toHaveProperty("sector");
     expect(goal).not.toHaveProperty("longitude");

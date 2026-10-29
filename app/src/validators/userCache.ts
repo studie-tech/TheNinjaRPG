@@ -197,6 +197,8 @@ export const userPatchSchema = z.object({
   masteryQueueHead: z.number().optional(),
   trainingSpeed: z.enum(TrainingSpeeds).optional(),
   questData: z.array(QuestTracker).nullable().optional(),
+  /** Persisted trackers omit virtual achievements retained in the warmed profile. */
+  persistedQuestData: z.array(QuestTracker).nullable().optional(),
   userQuests: z
     .custom<NonNullable<UserWithRelations>["userQuests"]>(Array.isArray)
     .optional(),
