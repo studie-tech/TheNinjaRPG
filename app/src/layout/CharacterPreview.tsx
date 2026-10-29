@@ -37,6 +37,7 @@ export const CharacterPreview = ({
           onError: () => setError(true),
         });
         dispose = game.dispose;
+        game.canvas.style.height = "auto";
         try {
           const actor = await createLpcCharacter(
             game,

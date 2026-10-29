@@ -146,7 +146,9 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         {!item && <p>Could not find this item</p>}
         {item && (
           <>
-            <LpcEquipmentFields control={form.control} />
+            <fieldset disabled={isUpdating || isFurnitureMeasuring}>
+              <LpcEquipmentFields control={form.control} />
+            </fieldset>
             <EditContent
               schema={ItemValidatorRawSchema}
               form={form as unknown as UseFormReturn<ZodItemType, any>}
