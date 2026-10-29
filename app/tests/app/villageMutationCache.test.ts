@@ -12,11 +12,16 @@ const flows = [
 ];
 
 describe.each(flows)("village.$procedure profile updates", ({ file, procedure }) => {
-  it.each([{ achievementProgress: [] }, { achievementProgress: [{ questId: "destination-achievement" }] }])("replaces achievement progress with $achievementProgress without a profile refetch", async ({ achievementProgress }) => {
+  it.each([
+    { description: "replaces empty achievement progress locally", achievementProgress: [] },
+    { description: "replaces destination achievement progress locally", achievementProgress: [{ questId: "destination-achievement" }] },
+    { description: "refetches unavailable progression without repeating a debit", achievementProgress: undefined },
+  ])("$description", async ({ achievementProgress }) => {
     const client = new QueryClient();
-    const initial = { userData: { userId: "actor", villageId: "old" }, achievementProgress: [{ questId: "source-achievement" }] };
+    const initial = { userData: { userId: "actor", villageId: "old", reputationPoints: 100 }, achievementProgress: [{ questId: "source-achievement" }] };
+    const canonical = { userData: { userId: "actor", villageId: "new", reputationPoints: 100, userQuests: [{ questId: "child-mission" }] }, achievementProgress: [{ questId: "destination-achievement" }] };
     client.setQueryData(key, initial);
-    const getUser = vi.fn(async () => initial);
+    const getUser = vi.fn(async () => canonical);
     const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
     const unsubscribe = observer.subscribe(() => {});
     const source = readFileSync(join(import.meta.dirname, "../../src", file), "utf8");
@@ -30,9 +35,15 @@ describe.each(flows)("village.$procedure profile updates", ({ file, procedure })
       vi.fn(), vi.fn(),
     ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
     try {
-      await options.onSuccess({ success: true, userPatch: { villageId: "new", village: { id: "new" } }, achievementProgress }, undefined, options.onMutate());
-      expect(client.getQueryData<{ achievementProgress: unknown[] }>(key)?.achievementProgress).toEqual([...achievementProgress]);
-      expect(getUser).not.toHaveBeenCalled();
+      await options.onSuccess({ success: true, userPatch: achievementProgress ? { villageId: "new", village: { id: "new" } } : undefined, achievementProgress, userDelta: undefined }, undefined, options.onMutate());
+      if (achievementProgress) {
+        expect(client.getQueryData<{ achievementProgress: unknown[] }>(key)?.achievementProgress).toEqual([...achievementProgress]);
+        expect(getUser).not.toHaveBeenCalled();
+      } else {
+        expect(getUser).toHaveBeenCalledTimes(1);
+        expect(client.getQueryData(key)).toEqual(canonical);
+      }
+      expect(client.getQueryData<typeof initial>(key)?.userData.reputationPoints).toBe(100);
     } finally { unsubscribe(); client.clear(); }
   });
 });
