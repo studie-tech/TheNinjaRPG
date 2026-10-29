@@ -6,6 +6,8 @@ import {
   craftingRequirement,
   item,
   jutsu,
+  quest,
+  questHistory,
   trainingLog,
   userData,
   userItem,
@@ -1073,7 +1075,7 @@ describeWithDatabase("mastery training queue", () => {
 
 describeWithDatabase("lazy queue settlement", () => {
   beforeEach(async () => {
-    await resetTables(userQueue, userJutsu, jutsu, trainingLog, userVote, userData, bloodline);
+    await resetTables(userQueue, userJutsu, jutsu, trainingLog, userVote, questHistory, quest, userData, bloodline);
   });
 
   it("starts a level that came due while offline, backdated, on the next refresh", async () => {
@@ -1131,7 +1133,7 @@ describeWithDatabase("lazy queue settlement", () => {
  */
 describeWithDatabase("queue round trips", () => {
   beforeEach(async () => {
-    await resetTables(userQueue, userJutsu, jutsu, trainingLog, userVote, userData, bloodline);
+    await resetTables(userQueue, userJutsu, jutsu, trainingLog, userVote, questHistory, quest, userData, bloodline);
   });
 
   const trips = async (work: () => Promise<unknown>) => (await recordQueries(work)).roundTrips;
