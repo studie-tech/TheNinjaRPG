@@ -11,7 +11,7 @@ import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
-/** Idempotent delivery confirms balances and advances objectives affected by purchased reputation. */
+/** Confirm purchase balances and project objectives affected by reputation changes. */
 export const getPurchaseUserUpdate = (
   client: DrizzleClient,
   userId: string,
@@ -32,6 +32,8 @@ export const getPurchaseUserUpdate = (
     ]).catch(() => undefined);
     if (!confirmation?.[0]) return fallback;
     const [saved, achievements, bootstrap] = confirmation;
+    // Canonical profile reads deliver these messages and clear their durable counters.
+    if (saved.unreadNotifications || saved.unreadRecruitRewards) return fallback;
     const candidates = saved
       ? [
           ...saved.userQuests.filter((entry) => entry.quest),

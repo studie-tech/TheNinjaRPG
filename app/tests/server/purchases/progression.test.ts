@@ -1,29 +1,54 @@
-import { QueryClient } from "@tanstack/react-query";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { QueryClient, type QueryKey } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { STORE_REP_PRODUCTS } from "@/drizzle/constants";
-import { gameSetting, quest, questHistory, storePurchase, storeUserIdAlias, userData, userVote } from "@/drizzle/schema";
+import { gameSetting, notification, paypalSubscription, quest, questHistory, storePurchase, storeUserIdAlias, stripePayment, userData, userVote } from "@/drizzle/schema";
 import * as purchaseQueries from "@/queries/purchases";
 import * as profileQueries from "@/queries/profile";
 import * as profileApi from "@/server/api/routers/profile";
+import { paypalRouter } from "@/server/api/routers/paypal";
 import { profileRouter } from "@/server/api/routers/profile";
 import { purchasesRouter } from "@/server/api/routers/purchases";
 import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 import { grantStorePurchase } from "@/server/utils/purchases/grant";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { calcFedUgradeCost } from "@/utils/paypal";
+import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { failStatements } from "../../setup/statements";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 import { countUserReads } from "../../setup/userReads";
 
 const userId = "purchase-progress-player";
 type Profile = Awaited<ReturnType<ReturnType<typeof profileRouter.createCaller>["getUser"]>>;
 const goal = (profile: Profile | undefined) => profile?.userData?.questData?.find((entry) => entry.id === "purchase-progress")?.goals.find((entry) => entry.id === "purchase-goal");
+const upgradeCost = calcFedUgradeCost("NORMAL", "GOLD")!;
+const seedUpgrade = async (source: "paypal" | "stripe") => {
+  const db = await getTestDatabase();
+  await db.update(userData).set({ federalStatus: "NORMAL", reputationPoints: upgradeCost * 3, reputationPointsTotal: upgradeCost * 3 }).where(eq(userData.userId, userId));
+  if (source === "paypal") {
+    await db.insert(paypalSubscription).values({ id: "upgrade-period", subscriptionId: "upgrade-period", createdById: userId, affectedUserId: userId, federalStatus: "NORMAL", status: "ACTIVE" });
+  } else {
+    await db.insert(stripePayment).values({ id: "upgrade-period", checkoutId: "upgrade-checkout", createdById: userId, affectedUserId: userId, federalStatus: "NORMAL", amountCents: 500, reputationPoints: 0, purchasedAt: new Date(), grantedAt: new Date(), expiresAt: new Date(Date.now() + 86400000) });
+  }
+};
+const upgradeCallbacks = (cache: QueryClient, key: QueryKey) => {
+  const source = readFileSync(join(import.meta.dirname, "../../../src/app/[shell]/points/page.tsx"), "utf8");
+  const callbacks = source.slice(source.indexOf("api.paypal.upgradeSubscription.useMutation(")).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+  if (!callbacks) throw new Error("Subscription upgrade callbacks were not found");
+  return new Function("prepareUserUpdate", "updateUser", "showMutationToast", "props", "onError", `return (${callbacks});`)(
+    () => prepareUserUpdate(cache, key),
+    (patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(cache, key, patch, options),
+    vi.fn(), {}, vi.fn(),
+  ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
+};
 
 describeWithDatabase("purchase reputation progression", () => {
   beforeEach(async () => {
-    await resetTables(storePurchase, storeUserIdAlias, questHistory, quest, userVote, userData, gameSetting);
+    await resetTables(paypalSubscription, stripePayment, storePurchase, storeUserIdAlias, notification, questHistory, quest, userVote, userData, gameSetting);
     await insertUsers([{ userId, username: "PurchaseProgress", role: "USER", rank: "JONIN", level: 50, primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true, regeneration: 0, money: 0, reputationPoints: 0, reputationPointsTotal: 0, updatedAt: new Date(), regenAt: new Date() }]);
     const db = await getTestDatabase();
     await db.insert(userVote).values({ id: "purchase-progress-vote", userId, secret: "payment1", lastVoteAt: new Date() });
@@ -120,5 +145,109 @@ describeWithDatabase("purchase reputation progression", () => {
     await db.update(userData).set({ reputationPoints: 5, reputationPointsTotal: 5 }).where(eq(userData.userId, userId));
     const result = await getPurchaseUserUpdate(db, userId);
     expect(result.userPatch?.questData?.find((entry) => entry.id === "purchase-progress")?.goals[0]).toMatchObject({ value: 5, done: true });
+  });
+
+  it.each((["paypal", "stripe"] as const).flatMap((source) => (["none", "mission", "achievement"] as const).map((questType) => ({ source, questType }))))("merges $source upgrade balances and $questType reputation progress without a profile refetch", async ({ source, questType }) => {
+    await seedUpgrade(source);
+    if (questType !== "none") {
+      await insertQuests([{ id: "purchase-progress", questType, hidden: false,
+        content: { objectives: [SimpleObjective.parse({ id: "purchase-goal", task: "reputation_points", value: upgradeCost * 4 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+      if (questType === "mission") await insertQuestHistory([{ userId, questId: "purchase-progress", questType }]);
+    }
+    const profile = await callerFor(profileRouter, userId);
+    const initial = await profile.getUser();
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["upgrade-profile"];
+    const read = vi.fn(() => profile.getUser());
+    cache.setQueryDefaults(key, { queryFn: read });
+    cache.setQueryData(key, initial);
+    const callbacks = upgradeCallbacks(cache, key);
+    const revision = callbacks.onMutate();
+    const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
+    try {
+      const caller = await callerFor(paypalRouter, userId);
+      const result = await caller.upgradeSubscription({ userId, plan: "GOLD" });
+      expect(result.success).toBe(true);
+      expect(hydration).toHaveBeenCalledTimes(questType === "none" ? 0 : 1);
+      expect(result.userDelta).toEqual({});
+      await callbacks.onSuccess(result, undefined, revision);
+      expect(read).not.toHaveBeenCalled();
+      const cached = cache.getQueryData<Profile>(key);
+      expect(cached?.userData).toMatchObject({ federalStatus: "GOLD", reputationPoints: upgradeCost * 2, reputationPointsTotal: upgradeCost * 2 });
+      if (questType !== "none") expect(goal(cached)).toMatchObject({ value: upgradeCost * 2, done: false });
+      const canonical = await profile.getUser();
+      expect(cached?.userData?.questData).toEqual(canonical.userData?.questData);
+      expect(cached?.achievementProgress).toMatchObject(canonical.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry));
+      const replay = await caller.upgradeSubscription({ userId, plan: "GOLD" });
+      expect(replay.success).toBe(false);
+      expect(replay.userPatch).toBeUndefined();
+      expect(replay.userDelta).toBeUndefined();
+      expect(await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ reputationPoints: upgradeCost * 2, reputationPointsTotal: upgradeCost * 2 });
+    } finally { cache.clear(); }
+  });
+
+  it.each((["paypal", "stripe"] as const).flatMap((source) => (["missing", "unavailable", "announcement", "recruit reward"] as const).map((failure) => ({ source, failure }))))("reconciles a committed $source upgrade for $failure", async ({ source, failure }) => {
+    await seedUpgrade(source);
+    const hasFeedback = failure === "announcement" || failure === "recruit reward";
+    if (!hasFeedback) {
+      await insertQuests([{ id: "purchase-progress", questType: "achievement", hidden: false,
+        content: { objectives: [SimpleObjective.parse({ id: "purchase-goal", task: "reputation_points", value: upgradeCost * 4 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    }
+    const db = await getTestDatabase();
+    const profile = await callerFor(profileRouter, userId);
+    const initial = await profile.getUser();
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["unconfirmed-upgrade-profile"];
+    const read = vi.fn(() => profile.getUser());
+    cache.setQueryDefaults(key, { queryFn: read });
+    cache.setQueryData(key, initial);
+    const callbacks = upgradeCallbacks(cache, key);
+    const revision = callbacks.onMutate();
+    const confirmation = vi.spyOn(purchaseQueries, "findPurchaseUserSnapshot");
+    if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
+    else if (failure === "unavailable") confirmation.mockRejectedValueOnce(new Error("Upgrade confirmation unavailable"));
+    else {
+      await db.insert(notification).values({ userId, content: "A new event has started." });
+      await db.update(userData).set(failure === "announcement" ? { unreadNotifications: 1 } : { unreadRecruitRewards: 1 }).where(eq(userData.userId, userId));
+    }
+    try {
+      const caller = await callerFor(paypalRouter, userId);
+      const result = await caller.upgradeSubscription({ userId, plan: "GOLD" });
+      expect(result.success).toBe(true);
+      expect(result.userPatch).toBeUndefined();
+      expect(result.userDelta).toBeUndefined();
+      expect(result.achievementProgress).toBeUndefined();
+      await callbacks.onSuccess(result, undefined, revision);
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(cache.getQueryData<Profile>(key)?.userData).toMatchObject({ federalStatus: "GOLD", reputationPoints: upgradeCost * 2, reputationPointsTotal: upgradeCost * 2 });
+      if (hasFeedback) {
+        const name = failure === "announcement" ? "A new event has started." : "Your recruits earned you 1 rank milestone reward";
+        expect(cache.getQueryData<Profile>(key)?.notifications).toContainEqual(expect.objectContaining({ color: "toast", name }));
+        expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ unreadNotifications: 0, unreadRecruitRewards: 0 });
+      } else expect(goal(cache.getQueryData(key))).toMatchObject({ value: upgradeCost * 2 });
+      expect((await caller.upgradeSubscription({ userId, plan: "GOLD" })).success).toBe(false);
+      expect(await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ reputationPoints: upgradeCost * 2 });
+    } finally { cache.clear(); }
+  });
+
+  it.each(["paypal", "stripe"] as const)("propagates failed %s upgrade writes without confirming a purchase", async (source) => {
+    await seedUpgrade(source);
+    const db = await getTestDatabase();
+    const confirmation = vi.spyOn(purchaseQueries, "findPurchaseUserSnapshot");
+    const caller = callerForDatabase(paypalRouter, userId, failStatements(db, userData));
+    await expect(caller.upgradeSubscription({ userId, plan: "GOLD" })).rejects.toThrow("Statement failed on purpose");
+    expect(confirmation).not.toHaveBeenCalled();
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ federalStatus: "NORMAL", reputationPoints: upgradeCost * 3, reputationPointsTotal: upgradeCost * 3 });
+  });
+
+  it.each(["paypal", "stripe"] as const)("propagates canonical progression errors after a committed %s upgrade", async (source) => {
+    await seedUpgrade(source);
+    await insertQuests([{ id: "purchase-progress", questType: "achievement", hidden: false,
+      content: { objectives: [SimpleObjective.parse({ id: "purchase-goal", task: "reputation_points", value: upgradeCost * 4 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    vi.spyOn(profileApi, "fetchUpdatedUser").mockRejectedValueOnce(new Error("Upgrade progression unavailable"));
+    const caller = await callerFor(paypalRouter, userId);
+    await expect(caller.upgradeSubscription({ userId, plan: "GOLD" })).rejects.toThrow("Upgrade progression unavailable");
+    expect(await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ federalStatus: "GOLD", reputationPoints: upgradeCost * 2, reputationPointsTotal: upgradeCost * 2 });
+    expect((await caller.upgradeSubscription({ userId, plan: "GOLD" })).success).toBe(false);
   });
 });

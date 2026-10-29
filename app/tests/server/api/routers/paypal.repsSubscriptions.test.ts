@@ -131,7 +131,7 @@ describeWithDatabase("reputation-funded subscriptions", () => {
       ),
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
-    expect(results.find((result) => result.success)).toMatchObject({ userPatch: { federalStatus: "GOLD" }, userDelta: { reputationPoints: -cost, reputationPointsTotal: -cost } });
+    expect(results.find((result) => result.success)).toMatchObject({ userPatch: { federalStatus: "GOLD", reputationPoints: cost * (ATTEMPTS - 1), reputationPointsTotal: cost * (ATTEMPTS - 1) }, userDelta: {} });
     expect(await readUser(BUYER)).toMatchObject({
       federalStatus: "GOLD",
       reputationPoints: cost * (ATTEMPTS - 1),
