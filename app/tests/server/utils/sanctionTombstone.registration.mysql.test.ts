@@ -1,3 +1,4 @@
+import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
 import { eq, sql } from "drizzle-orm";
@@ -431,7 +432,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
             profileRouter,
             "Concurrent",
             database,
-          ).confirmDeletion({ userId: "Concurrent" }),
+          ).confirmDeletion({ userId: "Concurrent", confirmation: CHARACTER_DELETION_CONFIRMATION }),
         ).toMatchObject({ success: true });
         expect(await register("Concurrent")).toMatchObject({ success: true });
         await database.insert(forumSection).values({ id: "section", name: "General", summary: "", policy: {} });
@@ -546,7 +547,7 @@ describeWithDatabase("registration claims current sanction sources", () => {
               profileRouter,
               "LateOriginal",
               database,
-            ).confirmDeletion({ userId: "LateOriginal" }),
+            ).confirmDeletion({ userId: "LateOriginal", confirmation: CHARACTER_DELETION_CONFIRMATION }),
           ).toMatchObject({ success: true });
         else {
           await deleteAccount("LateOriginal");

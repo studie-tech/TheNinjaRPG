@@ -31,6 +31,7 @@ import {
   Trophy,
   Type,
   Upload,
+  UserRound,
   Users,
   Zap,
 } from "lucide-react";
@@ -79,13 +80,13 @@ import {
   COST_SWAP_VILLAGE,
   COST_TAVERN_COLOR_CHANGE,
   getTavernColorChangeCost,
+  MAX_ATTRIBUTES,
   TavernColorPresets,
 } from "@/drizzle/constants";
 import type { Bloodline, Village } from "@/drizzle/schema";
 import { useAutoCombatSetting } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_OPTIONS, useFontScale } from "@/hooks/useFontScale";
-import Accordion from "@/layout/Accordion";
 import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import AvatarImage from "@/layout/Avatar";
@@ -94,6 +95,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { CharacterDeletionSettings } from "@/layout/DeleteUserButton";
 import { DiscordLinkSettings } from "@/layout/DiscordLinkSettings";
 import { ElementalMastery } from "@/layout/ElementalMastery";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -102,6 +104,10 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import NindoChange from "@/layout/NindoChange";
 import { ParentalControls } from "@/layout/ParentalControls";
+import {
+  type ProfileSettingsGroup,
+  ProfileSettingsNavigation,
+} from "@/layout/ProfileSettingsNavigation";
 import { ReadingSettings } from "@/layout/ReadingSettings";
 import { CurrentSageMode } from "@/layout/SageMode";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
@@ -174,330 +180,375 @@ import {
   updateUserPreferencesSchema,
 } from "@/validators/user";
 
-/** Render account settings, including display-only title selection from the player's collection. */
+/** Profile settings retain each editor's own save, eligibility, and confirmation flow. */
 export function ProfileEdit() {
-  // State
   const { data: userData } = useRequiredUserData();
-  const [activeElement, setActiveElement] = useState("AI Avatar");
   const { data: emailReminder } = api.misc.getPersonalEmailReminder.useQuery();
   const { data: discordStatus } = api.discord.getStatus.useQuery();
 
-  // Loaders
   if (!userData) return <Loader explanation="Loading profile page..." />;
 
-  // Labels describe bloodline grants independently of the active trained element.
   const bloodlineElements = Array.from(new Set(getBloodlineElements(userData)));
-
-  return (
-    <ContentBox title="Edit Profile" subtitle="Customize Character" padding={false}>
-      <div className="grid grid-cols-1">
-        <Accordion
-          title="AI Avatar"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Generate a new avatar"
-          icon={Sparkles}
-          onClick={setActiveElement}
-        >
-          <NewAiAvatar />
-        </Accordion>
-        <Accordion
-          title="Previous Avatar"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Choose an old avatar"
-          icon={History}
-          onClick={setActiveElement}
-        >
-          <HistoricalAiAvatar contentType="user" />
-        </Accordion>
-        <Accordion
-          title="Custom Avatar"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Upload a custom avatar"
-          selectedSubtitle={`Avatar size is limited based on federal support status`}
-          icon={Upload}
-          onClick={setActiveElement}
-        >
-          <AvatarChange />
-        </Accordion>
-        <Accordion
-          title="Parental Controls"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Manage tavern access and approved players"
-          icon={Shield}
-          onClick={setActiveElement}
-        >
-          <ParentalControls />
-        </Accordion>
-        <Accordion
-          title="User Blacklist"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Filter away toxic profiles from your feeds"
-          icon={Ban}
-          onClick={setActiveElement}
-        >
-          <UserBlacklistControl />
-        </Accordion>
-        <Accordion
-          title="Nindo"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Your personal way of the ninja"
-          icon={PenLine}
-          onClick={setActiveElement}
-        >
-          <OwnNindoChange />
-        </Accordion>
-        <Accordion
-          title="Marriage"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Manage Marriage"
-          icon={Heart}
-          onClick={setActiveElement}
-        >
-          <Marriage />
-        </Accordion>
-        <Accordion
-          title="Activity Rewards"
-          selectedTitle={activeElement}
-          unselectedSubtitle="View and claim your daily activity streak"
-          icon={Trophy}
-          onClick={setActiveElement}
-        >
-          <ActivityStreakPanel />
-        </Accordion>
-        <Accordion
-          title="Name Change"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Change your username"
-          selectedSubtitle={`You can change your username for ${COST_CHANGE_USERNAME} reputation points. You
-          have ${userData.reputationPoints} reputation points.`}
-          icon={Type}
-          onClick={setActiveElement}
-        >
-          <NameChange />
-        </Accordion>
-        <Accordion
-          title="Titles"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Choose a collected title for your profile and tavern posts"
-          selectedSubtitle="Bonuses from all collected titles apply, whichever title you display."
-          icon={Tag}
-          onClick={setActiveElement}
-        >
-          <Titles />
-        </Accordion>
-        <Accordion
-          title="Tavern Colors"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Customize your tavern username and title colors"
-          selectedSubtitle={`Each color change costs ${COST_TAVERN_COLOR_CHANGE} reputation points. You have ${userData.reputationPoints} reputation points.`}
-          icon={Palette}
-          onClick={setActiveElement}
-        >
-          <TavernColors />
-        </Accordion>
-        <Accordion
-          title="Change Gender"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Change the gender of your character"
-          selectedSubtitle={`Change your gender for ${COST_CHANGE_GENDER} reputation points. You
-          have ${userData.reputationPoints} reputation points.`}
-          icon={Users}
-          onClick={setActiveElement}
-        >
-          <ChangeGender />
-        </Accordion>
-        <Accordion
-          title="Attribute Management"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Change character attributes"
-          selectedSubtitle={`You can select a total of 5 attributes!`}
-          icon={SlidersHorizontal}
-          onClick={setActiveElement}
-        >
-          <AttributeChange />
-        </Accordion>
-        <Accordion
-          title="Reset Stats"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Redistribute your combat stat points"
-          selectedSubtitle={`You can redistribute your stats for ${COST_RESET_STATS} reputation points. You
-          have ${userData.reputationPoints} reputation points. You have ${round(getRedistributableStatTotal(userData))} combat stat points to distribute.`}
-          icon={BarChart3}
-          onClick={setActiveElement}
-        >
-          <ResetStats />
-        </Accordion>
-        <Accordion
-          title="Reset Skills"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Reset all skill tree investments"
-          icon={RotateCcw}
-          selectedSubtitle={
-            isStaffMember(userData)
-              ? `You can reset your skill tree and get all spent skill points back for free as a staff member. You have ${userData.reputationPoints} reputation points.`
-              : `You can reset your skill tree and get all spent skill points back for ${COST_SKILL_RESET} reputation points. You have ${userData.reputationPoints} reputation points.`
-          }
-          onClick={setActiveElement}
-        >
-          <ResetSkills />
-        </Accordion>
-        <Accordion
-          title="Reset Bloodright"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Refund all Bloodright investments"
-          icon={RotateCcw}
-          onClick={setActiveElement}
-        >
-          <ResetBloodright />
-        </Accordion>
-        {emailReminder && (
-          <Accordion
-            title="Email Reminder Settings"
-            selectedTitle={activeElement}
-            unselectedSubtitle="Manage your email notification preferences"
-            icon={Mail}
-            onClick={setActiveElement}
-          >
-            <EmailReminderSettings emailReminder={emailReminder} />
-          </Accordion>
-        )}
-        {discordStatus?.enabled && (
-          <Accordion
-            title="Discord"
-            selectedTitle={activeElement}
-            unselectedSubtitle={
-              discordStatus.link
-                ? `Linked to ${discordStatus.link.discordUsername}`
-                : "Link your Discord account to join the server"
-            }
-            icon={MessageCircle}
-            onClick={setActiveElement}
-          >
-            <DiscordLinkSettings />
-          </Accordion>
-        )}
-        <Accordion
-          title="Re-Roll Elements"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Re-roll your primary elements"
-          icon={Dices}
-          selectedSubtitle={
-            <div>
-              <p className="pb-3">
-                You can re-roll your elements for {COST_REROLL_ELEMENT} reputation
-                points. You have {userData.reputationPoints} reputation points. You can
-                only re-roll elements which are not currently overwritten by a
-                bloodline.
+  const reputationBalance = `You have ${userData.reputationPoints} reputation points.`;
+  const groups: ProfileSettingsGroup[] = [
+    {
+      id: "appearance",
+      title: "Profile & appearance",
+      description: "Avatar, name, nindo, titles, and character appearance",
+      icon: UserRound,
+      settings: [
+        {
+          id: "avatar",
+          title: "Avatar",
+          description: "Generate, restore, or upload your profile image",
+          keywords: "AI previous historical custom picture photo",
+          icon: SwitchCamera,
+          content: <AvatarSettings />,
+        },
+        {
+          id: "name",
+          title: "Name change",
+          description: "Change your character's username",
+          icon: Type,
+          notice: `Change your username for ${COST_CHANGE_USERNAME} reputation points. ${reputationBalance}`,
+          content: <NameChange />,
+        },
+        {
+          id: "nindo",
+          title: "Nindo",
+          description: "Write your personal way of the ninja",
+          keywords: "biography bio signature",
+          icon: PenLine,
+          content: <OwnNindoChange />,
+        },
+        {
+          id: "titles",
+          title: "Titles",
+          description: "Choose a title for your profile and tavern posts",
+          icon: Tag,
+          notice:
+            "Bonuses from all collected titles apply, whichever title you display.",
+          content: <Titles />,
+        },
+        {
+          id: "tavern-colors",
+          title: "Tavern colors",
+          description: "Customize your username and title colors",
+          icon: Palette,
+          notice: `Each color change costs ${COST_TAVERN_COLOR_CHANGE} reputation points. ${reputationBalance}`,
+          content: <TavernColors />,
+        },
+        {
+          id: "gender",
+          title: "Gender",
+          description: "Change your character's gender",
+          icon: Users,
+          notice: `Change your gender for ${COST_CHANGE_GENDER} reputation points. ${reputationBalance}`,
+          content: <ChangeGender />,
+        },
+        {
+          id: "attributes",
+          title: "Character attributes",
+          description: "Customize your appearance and in-game character",
+          keywords: "hair skin eyes beard sprite body clothing outfit",
+          icon: SlidersHorizontal,
+          notice: `You can select a total of ${MAX_ATTRIBUTES} attributes.`,
+          content: <AttributeChange />,
+        },
+      ],
+    },
+    {
+      id: "combat",
+      title: "Character & combat",
+      description: "Battle preferences, elements, bloodline, and stat resets",
+      icon: Swords,
+      settings: [
+        {
+          id: "preferences",
+          title: "Combat preferences",
+          description: "Battle settings, elemental mastery, and AI behavior",
+          keywords: "automatic auto combat damage generals description",
+          icon: Swords,
+          content: (
+            <>
+              <ElementalMastery />
+              <BattleSettingsEdit userId={userData.userId} />
+            </>
+          ),
+        },
+        {
+          id: "elements",
+          title: "Re-roll elements",
+          description: "Re-roll your primary and secondary elements",
+          icon: Dices,
+          notice: (
+            <>
+              <p>
+                Re-roll your elements for {COST_REROLL_ELEMENT} reputation points.{" "}
+                {reputationBalance} Only elements not overwritten by a bloodline can be
+                re-rolled.
               </p>
-
-              {userData.primaryElement ? (
-                <p>
-                  Current primary element: {userData.primaryElement}{" "}
-                  {bloodlineElements.length > 0 &&
-                    `- Overwritten by bloodline (${bloodlineElements.join(", ")})`}
+              {userData.primaryElement && (
+                <p className="mt-2">
+                  Current primary element: {userData.primaryElement}
                 </p>
-              ) : undefined}
-              {userData.secondaryElement ? (
-                <p>
-                  Current secondary element: {userData.secondaryElement}{" "}
-                  {bloodlineElements.length > 0 &&
-                    `- Overwritten by bloodline (${bloodlineElements.join(", ")})`}
-                </p>
-              ) : undefined}
-            </div>
-          }
-          onClick={setActiveElement}
-        >
-          <RerollElement />
-        </Accordion>
-        <Accordion
-          title="Combat Preferences"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Customize battle preferences and AI behavior"
-          selectedSubtitle=""
-          icon={Swords}
-          onClick={setActiveElement}
-        >
-          <ElementalMastery />
-          <BattleSettingsEdit userId={userData.userId} />
-        </Accordion>
-        <Accordion
-          title="Mobile Navigation"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Customize mobile navigation bar buttons"
-          selectedSubtitle="Choose which shortcuts appear on mobile"
-          icon={Smartphone}
-          onClick={setActiveElement}
-        >
-          <MobileNavSettings />
-        </Accordion>
-        <Accordion
-          title="Display Settings"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Adjust text size, fonts, spacing, and reading colors"
-          selectedSubtitle="Choose comfortable reading preferences"
-          icon={Settings}
-          onClick={setActiveElement}
-        >
-          <FontScaleSettings />
-        </Accordion>
-        <Accordion
-          title="Swap Bloodline"
-          selectedTitle={activeElement}
-          unselectedSubtitle="Change your bloodline of choice"
-          selectedSubtitle={
-            isStaffMember(userData)
-              ? `You can swap your bloodline to any bloodline your character has previously possessed for free as a staff member. You must still wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`
-              : `You can swap your bloodline to any bloodline your character has previously possessed for ${COST_SWAP_BLOODLINE} reputation points. You must wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Note: Bloodlines purchased directly before 14/06/2025 have not been recorded and can therefore not be swapped. You have ${userData.reputationPoints} reputation points.`
-          }
-          icon={Droplets}
-          onClick={setActiveElement}
-        >
-          <SwapBloodline />
-        </Accordion>
-        <Accordion
-          title="Sage Mode"
-          selectedTitle={activeElement}
-          unselectedSubtitle="View or remove your sage mode"
-          selectedSubtitle={
-            userData.sageModeId
-              ? "Your awakened sage mode."
-              : "You have not awakened a sage mode yet."
-          }
-          icon={Sparkles}
-          onClick={setActiveElement}
-        >
-          {userData.sageModeId ? (
+              )}
+              {userData.secondaryElement && (
+                <p>Current secondary element: {userData.secondaryElement}</p>
+              )}
+              {bloodlineElements.length > 0 && (
+                <p>Overwritten by bloodline: {bloodlineElements.join(", ")}</p>
+              )}
+            </>
+          ),
+          content: <RerollElement />,
+        },
+        {
+          id: "bloodline",
+          title: "Swap bloodline",
+          description: "Switch to a bloodline you have previously possessed",
+          icon: Droplets,
+          notice: `${isStaffMember(userData) ? "Swap your bloodline for free as a staff member." : `Paid bloodline swaps cost ${COST_SWAP_BLOODLINE} reputation points. Eligible supporters can use their available free swap.`} You must wait ${BLOODLINE_SWAP_COOLDOWN_HOURS} hours between swaps. Bloodlines purchased directly before 14/06/2025 have not been recorded and cannot be swapped. ${reputationBalance}`,
+          content: <SwapBloodline />,
+        },
+        {
+          id: "sage-mode",
+          title: "Sage mode",
+          description: "View or remove your awakened sage mode",
+          icon: Sparkles,
+          content: userData.sageModeId ? (
             <CurrentSageMode sageModeId={userData.sageModeId} embedded />
           ) : (
-            <p className="p-3 italic">You have not awakened a sage mode yet.</p>
-          )}
-        </Accordion>
-        {canSwapVillage(userData.role) && (
-          <Accordion
-            title="Swap Village"
-            selectedTitle={activeElement}
-            unselectedSubtitle="Change your village of choice"
-            selectedSubtitle={`You can swap your current village for another for ${COST_SWAP_VILLAGE} reputation points. You have ${userData.reputationPoints} reputation points.`}
-            icon={Tent}
-            onClick={setActiveElement}
-          >
-            <SwapVillage />
-          </Accordion>
-        )}
-        {userData && isStaffRole(userData.role) && (
-          <Accordion
-            title="Management Commands"
-            selectedTitle={activeElement}
-            unselectedSubtitle="Staff Management Commands"
-            icon={Shield}
-            onClick={setActiveElement}
-          >
-            <ManagementCommands user={userData} />
-          </Accordion>
-        )}
-      </div>
+            <p className="text-sm">You have not awakened a sage mode yet.</p>
+          ),
+        },
+        {
+          id: "stats",
+          title: "Reset stats",
+          description: "Redistribute your combat stat points",
+          icon: BarChart3,
+          notice: `Redistribute your stats for ${COST_RESET_STATS} reputation points. ${reputationBalance} You have ${round(getRedistributableStatTotal(userData))} combat stat points to distribute.`,
+          content: <ResetStats />,
+        },
+        {
+          id: "skills",
+          title: "Reset skills",
+          description: "Refund your skill tree investments",
+          icon: RotateCcw,
+          notice: `${isStaffMember(userData) ? "Reset your skill tree and get all spent skill points back for free as a staff member." : `Skills and Bloodright share your monthly allowance of free resets. Paid skill resets cost ${COST_SKILL_RESET} reputation points.`} ${reputationBalance}`,
+          content: <ResetSkills />,
+        },
+        {
+          id: "bloodright",
+          title: "Reset Bloodright",
+          description: "Refund all Bloodright investments",
+          icon: RotateCcw,
+          content: <ResetBloodright />,
+        },
+        ...(canSwapVillage(userData.role)
+          ? [
+              {
+                id: "village",
+                title: "Swap village",
+                description: "Move your character to another village",
+                icon: Tent,
+                notice: `Swap your village for ${COST_SWAP_VILLAGE} reputation points. ${reputationBalance}`,
+                content: <SwapVillage />,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      id: "display",
+      title: "Display & navigation",
+      description: "Text size, reading comfort, and mobile shortcuts",
+      icon: Settings,
+      settings: [
+        {
+          id: "reading",
+          title: "Display settings",
+          description: "Adjust text size, fonts, spacing, and reading colors",
+          keywords: "accessibility font scale contrast",
+          icon: Settings,
+          content: <FontScaleSettings />,
+        },
+        {
+          id: "mobile",
+          title: "Mobile navigation",
+          description: "Choose the shortcuts in your mobile navigation bar",
+          keywords: "phone buttons menu",
+          icon: Smartphone,
+          content: <MobileNavSettings />,
+        },
+      ],
+    },
+    {
+      id: "privacy",
+      title: "Connections & privacy",
+      description: "Parental controls, blacklist, marriage, and linked accounts",
+      icon: Shield,
+      settings: [
+        {
+          id: "parental-controls",
+          title: "Parental controls",
+          description: "Manage tavern access and approved players",
+          keywords: "safety messages pin",
+          icon: Shield,
+          content: <ParentalControls />,
+        },
+        {
+          id: "blacklist",
+          title: "User blacklist",
+          description: "Manage players hidden from your feeds",
+          keywords: "block ignore safety",
+          icon: Ban,
+          content: <UserBlacklistControl />,
+        },
+        {
+          id: "marriage",
+          title: "Marriage",
+          description: "Manage your marriage and proposals",
+          icon: Heart,
+          content: <Marriage />,
+        },
+        ...(discordStatus?.enabled
+          ? [
+              {
+                id: "discord",
+                title: "Discord",
+                description: discordStatus.link
+                  ? `Linked to ${discordStatus.link.discordUsername}`
+                  : "Link your Discord account to join the server",
+                icon: MessageCircle,
+                content: <DiscordLinkSettings />,
+              },
+            ]
+          : []),
+        ...(emailReminder
+          ? [
+              {
+                id: "email",
+                title: "Email reminders",
+                description: "Manage your email notification preferences",
+                icon: Mail,
+                content: <EmailReminderSettings emailReminder={emailReminder} />,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      id: "activity",
+      title: "Activity rewards",
+      description: "Your daily streak, progress, and claimable rewards",
+      icon: Trophy,
+      settings: [
+        {
+          id: "rewards",
+          title: "Daily activity streak",
+          description: "View your progress and claim activity rewards",
+          icon: Trophy,
+          content: <ActivityStreakPanel />,
+        },
+      ],
+    },
+    ...(isStaffRole(userData.role)
+      ? [
+          {
+            id: "staff",
+            title: "Staff tools",
+            description: "Management commands for your staff role",
+            icon: Shield,
+            settings: [
+              {
+                id: "management",
+                title: "Management commands",
+                description: "Access staff character and game management tools",
+                icon: Shield,
+                content: <ManagementCommands user={userData} />,
+              },
+            ],
+          },
+        ]
+      : []),
+    {
+      id: "deletion",
+      title: "Delete character",
+      description: userData.deletionAt
+        ? "Manage or cancel your deletion request"
+        : "Review the waiting period and permanent deletion process",
+      icon: Trash2,
+      destructive: true,
+      settings: [
+        {
+          id: "character",
+          title: "Delete character",
+          description: "Manage your character's deletion request",
+          keywords: "account remove cancel timer",
+          icon: Trash2,
+          content: <CharacterDeletionSettings userData={userData} />,
+        },
+      ],
+    },
+  ];
+
+  return (
+    <ContentBox title="Profile settings" padding={false}>
+      <ProfileSettingsNavigation
+        groups={groups}
+        summary={
+          <div className="flex items-center gap-4">
+            <AvatarImage
+              href={userData.avatar}
+              alt={userData.username}
+              size={56}
+              className="border-border/20 m-0 h-14 w-14 shrink-0 rounded-xl"
+            />
+            <div className="min-w-0">
+              <p className="text-lg font-semibold break-words">{userData.username}</p>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Your character. Your preferences.
+              </p>
+            </div>
+          </div>
+        }
+      />
     </ContentBox>
+  );
+}
+
+function AvatarSettings() {
+  return (
+    <Tabs defaultValue="generate">
+      <TabsList className="mb-4 flex h-auto w-full flex-wrap gap-1">
+        <TabsTrigger value="generate" className="min-h-10 flex-1 gap-2">
+          <Sparkles aria-hidden="true" className="h-4 w-4" />
+          Generate
+        </TabsTrigger>
+        <TabsTrigger value="previous" className="min-h-10 flex-1 gap-2">
+          <History aria-hidden="true" className="h-4 w-4" />
+          Previous
+        </TabsTrigger>
+        <TabsTrigger value="upload" className="min-h-10 flex-1 gap-2">
+          <Upload aria-hidden="true" className="h-4 w-4" />
+          Upload
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="generate">
+        <NewAiAvatar />
+      </TabsContent>
+      <TabsContent value="previous">
+        <HistoricalAiAvatar contentType="user" />
+      </TabsContent>
+      <TabsContent value="upload">
+        <p className="text-muted-foreground mb-3 text-sm">
+          Upload a custom avatar. Image size limits depend on your federal support
+          status.
+        </p>
+        <AvatarChange />
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -1154,56 +1205,61 @@ const NewAiAvatar: React.FC = () => {
   if (createAvatar.isPending) return <Loader explanation="Processing" />;
 
   return (
-    <div className="flex">
-      <div className="basis-1/3">
-        {userData && (
-          <AvatarImage
-            href={userData.avatar}
-            alt={userData.username}
-            refetchUserData={true}
-            size={512}
-            priority
-          />
-        )}
-      </div>
-      <div className="basis-2/3">
-        <h2 className="font-bold">Current Attributes</h2>
-        <div className="ml-5 grid grid-cols-2">
-          <li key="rank">
-            {userData?.rank ? capitalizeFirstLetter(userData.rank) : ""}
-          </li>
-          {userAttributes.data?.map((attribute) => (
-            <li key={attribute.id}>{attribute.attribute}</li>
-          ))}
+    <div className="@container/avatar">
+      <div className="grid gap-5 @min-[400px]/avatar:grid-cols-[144px_minmax(0,1fr)]">
+        <div>
+          {userData && (
+            <AvatarImage
+              href={userData.avatar}
+              alt={userData.username}
+              refetchUserData={true}
+              size={512}
+              priority
+              className="w-36"
+            />
+          )}
         </div>
-        <h2 className="mt-5 font-bold">Create a new avatar</h2>
+        <div className="min-w-0">
+          <h3 className="font-semibold">Current attributes</h3>
+          <ul className="mt-2 grid list-inside list-disc gap-x-3 gap-y-1 text-sm @min-[480px]/avatar:grid-cols-2">
+            <li key="rank">
+              {userData?.rank ? capitalizeFirstLetter(userData.rank) : ""}
+            </li>
+            {userAttributes.data?.map((attribute) => (
+              <li key={attribute.id}>{attribute.attribute}</li>
+            ))}
+          </ul>
+          <h3 className="mt-5 font-semibold">Create a new avatar</h3>
 
-        {userData && userData?.reputationPoints > 0 ? (
-          <>
-            <p className="italic">- Costs 1 reputation point</p>
-            <Confirm
-              title="Confirm Avatar Change"
-              button={
-                <Button id="create" className="w-full">
-                  <SwitchCamera className="mr-2 h-5 w-5" />
-                  New Avatar
-                </Button>
-              }
-              onAccept={(e) => {
-                e.preventDefault();
-                createAvatar.mutate();
-              }}
-            >
-              Changing your avatar will cost 1 reputation point. We would love to enable
-              unlimited re-creations, but the model generating the avatars runs on
-              NVidia A100 GPU cluster, and each generation costs a little bit of money.
-              We are working on a solution to make this free, but for now, we need to
-              charge a small fee to cover the cost of the GPU cluster.
-            </Confirm>
-          </>
-        ) : (
-          <p className="text-red-500">Requires 1 reputation point</p>
-        )}
+          {userData && userData?.reputationPoints > 0 ? (
+            <>
+              <p className="text-muted-foreground mb-3 text-sm">
+                Costs 1 reputation point
+              </p>
+              <Confirm
+                title="Confirm Avatar Change"
+                button={
+                  <Button id="create" className="min-h-11 w-full">
+                    <SwitchCamera className="mr-2 h-5 w-5" />
+                    New Avatar
+                  </Button>
+                }
+                onAccept={(e) => {
+                  e.preventDefault();
+                  createAvatar.mutate();
+                }}
+              >
+                Changing your avatar will cost 1 reputation point. We would love to
+                enable unlimited re-creations, but the model generating the avatars runs
+                on NVidia A100 GPU cluster, and each generation costs a little bit of
+                money. We are working on a solution to make this free, but for now, we
+                need to charge a small fee to cover the cost of the GPU cluster.
+              </Confirm>
+            </>
+          ) : (
+            <p className="text-red-500">Requires 1 reputation point</p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1241,6 +1297,9 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
     data: historicalAvatars,
     fetchNextPage,
     hasNextPage,
+    isPending,
+    isError,
+    refetch,
   } = api.avatar.getHistoricalAvatars.useInfiniteQuery(
     {
       relationId: props.relationId,
@@ -1300,36 +1359,63 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
   });
 
   const loading = updateAvatar.isPending || deleteAvatar.isPending;
-  if (loading) return <Loader explanation="Processing" />;
+  if (loading || isPending)
+    return <Loader explanation={loading ? "Processing" : "Loading previous avatars"} />;
+  if (isError)
+    return (
+      <div role="alert" className="space-y-3 text-sm">
+        <p>Could not load your previous avatars.</p>
+        <Button type="button" onClick={() => void refetch()}>
+          Try again
+        </Button>
+      </div>
+    );
 
   return (
     <>
+      {pageAvatars?.length === 0 && (
+        <p className="text-muted-foreground py-6 text-center text-sm">
+          No previous avatars yet. Generate an avatar to start your collection.
+        </p>
+      )}
       {pageAvatars && (
-        <div className="flex flex-wrap">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-3">
           {pageAvatars.map((avatar, i) => (
-            <button
-              type="button"
-              key={avatar.id}
-              className="relative my-2 basis-1/6"
-              disabled={props.disabled}
-              onClick={() => {
-                if (disabledRef.current) return;
-                updateGenerationRef.current = operationGenerationRef.current;
-                updateAvatar.mutate({ avatar: avatar.id, type: props.contentType });
-              }}
-              ref={i === pageAvatars.length - 1 ? setLastElement : null}
-            >
-              <AvatarImage
-                href={avatar.avatar}
-                alt={userData?.username ?? "User Avatar"}
-                hover_effect={true}
-                size={200}
-                className={size === "square" ? "aspect-square" : "aspect-auto"}
-              />
+            <div key={avatar.id} className="relative">
+              <button
+                type="button"
+                aria-label={`Use saved avatar ${i + 1}`}
+                className="focus-visible:outline-ring w-full rounded-2xl focus-visible:outline-2 disabled:opacity-50"
+                disabled={props.disabled}
+                onClick={() => {
+                  if (disabledRef.current) return;
+                  updateGenerationRef.current = operationGenerationRef.current;
+                  updateAvatar.mutate({ avatar: avatar.id, type: props.contentType });
+                }}
+                ref={i === pageAvatars.length - 1 ? setLastElement : null}
+              >
+                <AvatarImage
+                  href={avatar.avatar}
+                  alt={userData?.username ?? "User Avatar"}
+                  hover_effect={true}
+                  size={200}
+                  className={`w-full ${size === "square" ? "aspect-square" : "aspect-auto"}`}
+                />
+              </button>
               <Confirm
                 title="Confirm Deletion"
+                disabled={props.disabled}
                 button={
-                  <Trash2 className="absolute top-0 right-[8%] h-9 w-9 cursor-pointer rounded-full border-2 border-black bg-amber-100 fill-slate-500 p-1 hover:text-orange-500" />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    aria-label={`Delete saved avatar ${i + 1}`}
+                    disabled={props.disabled}
+                    className="border-border/20 absolute top-1 right-1 h-8 w-8 rounded-full border"
+                  >
+                    <Trash2 aria-hidden="true" className="h-4 w-4" />
+                  </Button>
                 }
                 onAccept={(e) => {
                   e.preventDefault();
@@ -1340,7 +1426,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
                 You are about to delete an avatar. Note that this action is permanent.
                 Are you sure?
               </Confirm>
-            </button>
+            </div>
           ))}
         </div>
       )}
@@ -2391,7 +2477,7 @@ const TavernColors: React.FC = () => {
   ];
 
   return (
-    <div className="grid gap-6 p-4 md:grid-cols-2">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-5">
       {controls.map((control) => {
         const cost = getTavernColorChangeCost(control.value);
         const unchanged = control.value === control.current;
@@ -2408,21 +2494,24 @@ const TavernColors: React.FC = () => {
             : undefined;
 
         return (
-          <section key={control.target} className="space-y-4 rounded-lg border p-4">
+          <section
+            key={control.target}
+            className="border-border/20 space-y-4 rounded-lg border p-4"
+          >
             <fieldset>
               <legend className="font-semibold text-lg">{control.label}</legend>
               <p className="mb-3 text-muted-foreground text-sm">
                 Current: {TAVERN_COLOR_STYLES[control.current].label}. Every change
                 costs {COST_TAVERN_COLOR_CHANGE} reputation.
               </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
                 {TavernColorPresets.map((preset) => {
                   const style = TAVERN_COLOR_STYLES[preset];
                   const selected = control.value === preset;
                   return (
                     <label
                       key={preset}
-                      className={`flex cursor-pointer items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors hover:bg-poppopover ${
+                      className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-border/30 p-2 text-left text-sm transition-colors hover:bg-poppopover ${
                         selected ? "ring-2 ring-primary" : ""
                       } ${updateColor.isPending ? "cursor-not-allowed opacity-50" : ""}`}
                     >
@@ -2504,7 +2593,7 @@ const TavernColors: React.FC = () => {
           </section>
         );
       })}
-      <p className="text-muted-foreground text-sm md:col-span-2">
+      <p className="text-muted-foreground col-span-full text-sm">
         Username and title choices are purchased independently. Tavern colors never
         appear in inbox, support, forums, or other posts. Staff role styling remains
         authoritative, while Default keeps the existing supporter username style.

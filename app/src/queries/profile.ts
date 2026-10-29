@@ -30,6 +30,7 @@ import {
   ACTIVE_VOTING_SITES,
   ALLIANCEHALL_LAT,
   ALLIANCEHALL_LONG,
+  CHARACTER_DELETION_DELAY_DAYS,
   COST_CHANGE_USERNAME,
   type CombatStatName,
   IMG_AVATAR_DEFAULT,
@@ -100,7 +101,7 @@ import { hashIp } from "@/server/utils/ipHash";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
-import { getTimeOfLastReset, secondsFromNow } from "@/utils/time";
+import { DAY_S, getTimeOfLastReset, secondsFromNow } from "@/utils/time";
 import type { GetPublicUsersSchema, TavernColorChangeSchema } from "@/validators/user";
 
 /** Build the `userData` update for `GET`. */
@@ -1507,7 +1508,9 @@ export const updateUserDataForToggleDeletionTimer = (
   client
     .update(userData)
     .set({
-      deletionAt: target.deletionAt ? null : new Date(Date.now() + 2 * 86400000),
+      deletionAt: target.deletionAt
+        ? null
+        : secondsFromNow(CHARACTER_DELETION_DELAY_DAYS * DAY_S),
     })
     .where(eq(userData.userId, input.userId));
 

@@ -8,7 +8,6 @@ import {
   PawPrint,
   Settings,
   Share2,
-  Trash2,
   Trophy,
   UserRound,
   Wrench,
@@ -38,7 +37,6 @@ import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import { DashboardSettings } from "@/layout/DashboardSettings";
-import DeleteUserButton from "@/layout/DeleteUserButton";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import LevelUpBtn from "@/layout/LevelUpBtn";
 import Link from "@/layout/Link";
@@ -75,14 +73,12 @@ const profileTabs = [
   "History",
   "Edit Character",
   "Sharing",
-  "Delete Character",
 ] as const;
 const iconProfileTabs = [
   "Achievements",
   "History",
   "Edit Character",
   "Sharing",
-  "Delete Character",
 ] as const;
 const tutorialProfileTabs = ["Character", "Pet", ...iconProfileTabs] as const;
 type ProfileTab = (typeof profileTabs)[number];
@@ -94,7 +90,6 @@ const profileTabValues: Record<ProfileTab, string> = {
   History: "history",
   "Edit Character": "edit",
   Sharing: "sharing",
-  "Delete Character": "delete",
 };
 
 export function Profile() {
@@ -195,9 +190,6 @@ export function Profile() {
                 <Wrench className="h-[20px] w-[20px]" aria-hidden="true" />
               ),
               Sharing: <Share2 className="h-[20px] w-[20px]" aria-hidden="true" />,
-              "Delete Character": (
-                <Trash2 className="h-[20px] w-[20px]" aria-hidden="true" />
-              ),
             }}
             iconOnlyOptions={profileTabs}
             labelClassName={(option) =>
@@ -209,7 +201,7 @@ export function Profile() {
             counts={{ Sharing: newInRecruit }}
             listClassName="w-full flex-nowrap justify-start gap-[4px]"
             itemClassName={(option) =>
-              `shrink-0 w-[min(44px,calc((100cqw_-_28px)/8))] ${option === "Pet" ? "mr-auto" : "mr-0"} ${option === "Dashboard" || option === "Character" || option === "Pet" ? "@min-[480px]:w-auto" : ""}`
+              `shrink-0 w-[min(44px,calc((100cqw_-_24px)/7))] ${option === "Pet" ? "mr-auto" : "mr-0"} ${option === "Dashboard" || option === "Character" || option === "Pet" ? "@min-[480px]:w-auto" : ""}`
             }
             className="min-h-[44px] w-full min-w-0 @min-[480px]:px-[12px] px-0 text-base"
           />
@@ -248,22 +240,6 @@ export function Profile() {
           <Suspense fallback={<Loader explanation="Loading sharing..." />}>
             <ProfileSharing />
           </Suspense>
-        </TabsContent>
-        <TabsContent value="delete">
-          <ContentBox
-            title="Delete Character"
-            subtitle="Review your account deletion options"
-          >
-            <p className="mb-4">
-              Open the deletion details to review the waiting period and confirm or
-              cancel your request.
-            </p>
-            <DeleteUserButton
-              userData={userData}
-              label="Review deletion details"
-              className="min-h-11 gap-2 rounded-md border px-4 hover:bg-muted"
-            />
-          </ContentBox>
         </TabsContent>
       </Tabs>
     </div>

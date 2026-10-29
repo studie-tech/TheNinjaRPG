@@ -37,6 +37,9 @@ export type TradeableCurrencyType = (typeof TRADEABLE_CURRENCY_TYPES)[number];
 // Occupation config
 export const OCCUPATION_CHANGE_COOLDOWN_DAYS = 3;
 
+export const CHARACTER_DELETION_DELAY_DAYS = 2;
+export const CHARACTER_DELETION_CONFIRMATION = "Delete my character";
+
 export const PollOptionTypes = ["text", "user"] as const;
 export type PollOptionType = (typeof PollOptionTypes)[number];
 

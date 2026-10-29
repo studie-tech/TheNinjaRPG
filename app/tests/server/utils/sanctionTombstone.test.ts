@@ -1,3 +1,4 @@
+import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
@@ -132,6 +133,7 @@ const pauseWebDeletion = async () => {
   });
   const deleting = (await callerFor(profileRouter, SANCTIONED)).confirmDeletion({
     userId: SANCTIONED,
+    confirmation: CHARACTER_DELETION_CONFIRMATION,
   });
   await entered;
   return { deleting, release };
@@ -314,7 +316,7 @@ describeWithDatabase("sanction tombstones", () => {
         );
       const deleting = profileRouter
         .createCaller({ drizzle: deletionClient, userId: SANCTIONED } as never)
-        .confirmDeletion({ userId: SANCTIONED });
+        .confirmDeletion({ userId: SANCTIONED, confirmation: CHARACTER_DELETION_CONFIRMATION });
       await deletionEntered;
       try {
         if (decision !== "unchanged")
@@ -1025,7 +1027,7 @@ describeWithDatabase("sanction tombstones", () => {
     stubClerk({ [SANCTIONED]: identity("silenced@example.com") });
     const caller = await callerFor(profileRouter, SANCTIONED);
 
-    expect(await caller.toggleDeletionTimer({ userId: SANCTIONED })).toMatchObject({
+    expect(await caller.toggleDeletionTimer({ userId: SANCTIONED, confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({
       success: true,
     });
     const database = await getTestDatabase();
@@ -1033,7 +1035,7 @@ describeWithDatabase("sanction tombstones", () => {
       .update(userData)
       .set({ deletionAt: new Date(Date.now() - 1000) })
       .where(eq(userData.userId, SANCTIONED));
-    expect(await caller.confirmDeletion({ userId: SANCTIONED })).toMatchObject({
+    expect(await caller.confirmDeletion({ userId: SANCTIONED, confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({
       success: true,
     });
 
