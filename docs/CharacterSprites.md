@@ -79,9 +79,10 @@ recolouring and repacking, and links each source and chosen licence.
 publicly accessible for web and native players. Hashed PNG URLs use immutable
 cache headers; the mutable credits file does not.
 
-The migration adds nullable item and variant overrides plus the player's body
-choice. Apply it before deploying code that selects these columns. Existing rows
-use the catalogue and attribute defaults without a content backfill.
+The [LPC migration](../app/drizzle/migrations/0126_safe_microchip.sql) adds nullable
+item and variant overrides plus the player's body choice. Apply the journaled
+migrations through this migration before deploying code that selects these columns.
+Existing rows use the catalogue and attribute defaults without a content backfill.
 
 Tests under `app/tests/libs/lpc/` validate creation choices, mappings, attribution,
 PNG transparency, hashes and frame bounds. Rendering tests cover repeated attacks,
