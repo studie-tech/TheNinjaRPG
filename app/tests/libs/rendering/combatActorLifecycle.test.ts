@@ -31,11 +31,10 @@ const setup = async (isAi = true, spriteAppearance?: SpriteAppearance) => {
   const root = actors.container.children[0]!;
   const selection = root.getChildByLabel("combat-selection") as Graphics;
   const hover = root.getChildByLabel("combat-hover") as Graphics;
-  const identity = root.getChildByLabel("combat-original") as Graphics;
   const threat = root.getChildByLabel("combat-aggro") as Container;
   const highest = threat.getChildByLabel("combat-aggro-highest") as Graphics;
   const health = root.getChildByLabel("combat-health") as Container;
-  return { actors, root, selection, hover, identity, threat, highest, health, user, battle, grid, owned, step };
+  return { actors, root, selection, hover, threat, highest, health, user, battle, grid, owned, step };
 };
 
 describe("combat actor reconciliation", () => {
@@ -87,10 +86,10 @@ describe("combat actor reconciliation", () => {
     }
   });
   it.each([false, true])("keeps ground cues beneath artwork and the HUD above the head for NPC=%s", async (isAi) => {
-    const { root, selection, hover, identity, threat, health, user, grid } = await setup(isAi);
+    const { root, selection, hover, threat, health, user, grid } = await setup(isAi);
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
     const art = root.getChildByLabel("combat-art")!;
-    for (const marker of [selection, hover, identity]) {
+    for (const marker of [selection, hover]) {
       expect(root.getChildIndex(marker)).toBeLessThan(root.getChildIndex(art));
       expect(marker.getLocalBounds().maxY).toBeLessThan(tile.height * 0.5);
     }
@@ -105,7 +104,7 @@ describe("combat actor reconciliation", () => {
       vi.spyOn(characters, "createLpcCharacter").mockRejectedValue(new Error("Atlas unavailable"));
       vi.spyOn(console, "warn").mockImplementation(() => {});
     }
-    const { actors, root, selection, hover, identity, user, battle, grid } = await setup(false, failedAtlas ? resolveSpriteAppearance({}) : undefined);
+    const { actors, root, selection, hover, user, battle, grid } = await setup(false, failedAtlas ? resolveSpriteAppearance({}) : undefined);
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
     const art = root.getChildByLabel("combat-art")!;
     const top = art.getLocalBounds().maxY;
@@ -113,13 +112,15 @@ describe("combat actor reconciliation", () => {
     const meters = ["combat-health", "combat-stamina", "combat-chakra", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
     const positions = meters.map((meter) => meter.y);
     for (const meter of meters) expect(meter.y + meter.getLocalBounds().minY).toBeGreaterThan(top);
-    const markers = [selection, hover, identity], groundPositions = markers.map((marker) => marker.y);
-    for (const marker of markers) expect(marker.y + marker.getLocalBounds().maxY).toBeLessThan(art.getLocalBounds().minY);
+    const markers = [selection, hover], groundPositions = markers.map((marker) => marker.y);
+    for (const marker of markers) expect(marker.y + marker.getLocalBounds().maxY - marker.pivot.y).toBeLessThan(art.getLocalBounds().minY);
     const frame = { now: 1000, delta: 0, reducedMotion: true };
     actors.animate(frame, user.userId, undefined);
     expect(selection.visible).toBe(true); expect(hover.visible).toBe(false);
     actors.animate(frame, "other", user.userId);
     expect(selection.visible).toBe(false); expect(hover.visible).toBe(true);
+    actors.animate({ now: 450, delta: 0, reducedMotion: false }, user.userId, undefined);
+    expect(selection.y + (selection.getLocalBounds().maxY - selection.pivot.y) * selection.scale.y).toBeLessThan(art.getLocalBounds().minY);
     actors.sync({ battle }); actors.sync({ battle });
     expect(meters.map((meter) => meter.y)).toEqual(positions);
     expect(markers.map((marker) => marker.y)).toEqual(groundPositions);
@@ -129,8 +130,10 @@ describe("combat actor reconciliation", () => {
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
     expect(root.getChildByLabel("combat-health")?.y).toBeCloseTo(tile.height * 1.5);
     expect(root.getChildByLabel("combat-aggro")?.y).toBeCloseTo(tile.height * 1.6);
-    for (const label of ["combat-selection", "combat-hover", "combat-original"])
-      expect(root.getChildByLabel(label)?.y).toBe(0);
+    for (const label of ["combat-selection", "combat-hover"]) {
+      const marker = root.getChildByLabel(label)!;
+      expect(marker.y).toBe(marker.pivot.y);
+    }
   });
   it.each(["helmet", "crown", "horns"])("clears tall %s artwork with every HUD row without moving ground cues", async (profile) => {
     const appearance = resolveSpriteAppearance({});
@@ -141,8 +144,10 @@ describe("combat actor reconciliation", () => {
     const meters = ["combat-health", "combat-stamina", "combat-chakra", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
     const positions = meters.map((meter) => meter.y);
     for (const meter of meters) expect(meter.y + meter.getLocalBounds().minY).toBeGreaterThan(frameTop);
-    for (const label of ["combat-selection", "combat-hover", "combat-original"])
-      expect(root.getChildByLabel(label)?.y).toBe(0);
+    for (const label of ["combat-selection", "combat-hover"]) {
+      const marker = root.getChildByLabel(label)!;
+      expect(marker.y).toBe(marker.pivot.y);
+    }
     actors.sync({ battle }); actors.sync({ battle });
     expect(meters.map((meter) => meter.y)).toEqual(positions);
   });
@@ -172,21 +177,30 @@ describe("combat actor reconciliation", () => {
     }
     expect(root.children[0]?.position).toMatchObject({ x: tile.width / 2, y: footY });
   });
-  it("gently pulses selection opacity without moving its center and freezes for reduced motion", async () => {
+  it("pulses selection size and opacity around a fixed foot point and freezes for reduced motion", async () => {
     const { actors, selection, hover, user } = await setup(false, resolveSpriteAppearance({}));
-    const bounds = selection.getLocalBounds().clone();
     const geometry = selection.context;
+    const center = selection.toGlobal(selection.pivot);
     actors.animate({ now: 450, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
     expect(selection.alpha).toBeCloseTo(1);
+    expect(selection.scale.x).toBeCloseTo(1.08);
+    expect(selection.scale.y).toBeCloseTo(1.08);
+    expect(selection.toGlobal(selection.pivot)).toEqual(center);
     actors.animate({ now: 1350, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
     expect(selection.alpha).toBeCloseTo(0.7);
-    expect(selection.getLocalBounds()).toEqual(bounds);
+    expect(selection.scale.x).toBe(1);
+    expect(selection.toGlobal(selection.pivot)).toEqual(center);
     expect(selection.context).toBe(geometry);
     expect(hover.alpha).toBe(1);
+    expect(hover.scale.x).toBe(1);
     for (const now of [1800, 2250]) {
       actors.animate({ now, delta: 1 / 60, reducedMotion: true }, user.userId, undefined);
       expect(selection.alpha).toBe(1);
+      expect(selection.scale.x).toBe(1);
     }
+    actors.animate({ now: 450, delta: 0, reducedMotion: false }, user.userId, undefined);
+    actors.animate({ now: 450, delta: 0, reducedMotion: false }, "other", undefined);
+    expect(selection.scale.x).toBe(1);
   });
   it("shows distinct selection and hover states without rebuilding their geometry", async () => {
     const { actors, selection, hover, health, user, grid } = await setup();
@@ -207,31 +221,45 @@ describe("combat actor reconciliation", () => {
     expect(selection.context.instructions).toEqual(selectedGeometry);
     expect(hover.context.instructions).toEqual(hoverGeometry);
   });
-  it("marks original players and the viewer's summons without including decoration in hits", async () => {
-    const player = await setup(false);
-    expect(player.identity.visible).toBe(true);
-    player.user.isOriginal = false; player.actors.sync({ battle: player.battle });
-    expect(player.identity.visible).toBe(false);
-    const npc = await setup();
-    expect(npc.identity.visible).toBe(false);
-    npc.user.isSummon = true; npc.user.controllerId = "viewer";
-    npc.actors.sync({ battle: npc.battle, playerId: "viewer" });
-    expect(npc.identity.visible).toBe(true);
-    const tile = npc.grid.getHex({ col: npc.user.longitude, row: npc.user.latitude })!;
-    const point = npc.root.toGlobal({ x: tile.width / 2, y: tile.height * 0.06 });
-    expect(npc.actors.hit(point.x, point.y)).toBeNull();
-    npc.actors.sync({ battle: npc.battle, playerId: "other" });
-    expect(npc.identity.visible).toBe(false);
+  it("identifies clones with gray rings without adding a chevron or hit target", async () => {
+    const { actors, root, selection, hover, user, battle, grid } = await setup(false);
+    user.isOriginal = false; user.isSummon = true;
+    actors.sync({ battle });
+    const frame = { now: 450, delta: 0, reducedMotion: false };
+    actors.animate(frame, "other", undefined);
+    expect(root.getChildByLabel("combat-original")).toBeNull();
+    expect(selection.visible).toBe(true); expect(selection.tint).toBe(0xd1d5db);
+    expect(selection.alpha).toBe(0.55); expect(selection.scale.x).toBe(1);
+    actors.animate(frame, "other", user.userId);
+    expect(selection.alpha).toBe(1); expect(hover.visible).toBe(false);
+    actors.animate(frame, user.userId, user.userId);
+    expect(selection.tint).toBe(0xd1d5db); expect(selection.scale.x).toBeCloseTo(1.08);
+    const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
+    const point = selection.toGlobal({ x: tile.width / 2, y: tile.height * 0.21 });
+    expect(actors.hit(point.x, point.y)).toBeNull();
+  });
+  it("keeps ordinary summons and auto-battle originals out of clone styling", async () => {
+    const { actors, selection, hover, user, battle } = await setup(false);
+    const frame = { now: 450, delta: 0, reducedMotion: true };
+    for (const patch of [{ isOriginal: true, isSummon: true }, { isOriginal: false, isSummon: false }]) {
+      Object.assign(user, patch); actors.sync({ battle });
+      actors.animate(frame, "other", undefined);
+      expect(selection.visible).toBe(false);
+      actors.animate(frame, user.userId, undefined);
+      expect(selection.visible).toBe(true); expect(selection.tint).toBe(0xf0c56b);
+      actors.animate(frame, "other", user.userId);
+      expect(hover.visible).toBe(true); expect(hover.tint).toBe(0x9ae0e9);
+    }
   });
   it.each([{ curHealth: 0 }, { fledBattle: true }, { hidden: true }, { leftBattle: true }])("hides tactical cues for an inactive or hidden actor: %j", async (patch) => {
-    const { actors, selection, hover, identity, threat, health, user, battle } = await setup(false);
+    const { actors, selection, hover, threat, health, user, battle } = await setup(false);
     const aggro = new Map([[user.userId, { enmity: 100, ratio: 1, isHighest: true }]]);
     const frame = { now: 1000, delta: 1 / 60, reducedMotion: true };
     actors.sync({ battle, aggro }); actors.animate(frame, user.userId, user.userId);
     expect(selection.visible).toBe(true); expect(threat.visible).toBe(true);
     Object.assign(user, patch);
     actors.sync({ battle, aggro }); actors.animate(frame, user.userId, user.userId);
-    for (const marker of [selection, hover, identity, threat, health]) expect(marker.visible).toBe(false);
+    for (const marker of [selection, hover, threat, health]) expect(marker.visible).toBe(false);
   });
   it("removes absent actors and their asset scopes immediately", async () => {
     const { actors, root, battle, owned } = await setup();

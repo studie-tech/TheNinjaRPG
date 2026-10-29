@@ -9,6 +9,7 @@ import {
 import type { UserData } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
 import type { AggroDisplay } from "@/libs/combat/aggroDisplay";
+import { isClone } from "@/libs/combat/summon";
 import type { ReturnedBattle, ReturnedUserState } from "@/libs/combat/types";
 import {
   getClan,
@@ -99,23 +100,9 @@ export const createCombatActors = (
         );
         const selection = groundSelection(tile, true, groundY),
           hover = groundSelection(tile, false, groundY);
-        const identity = new Graphics()
-          .poly([
-            tile.width * 0.44,
-            tile.height * 0.09,
-            tile.width * 0.5,
-            tile.height * 0.02,
-            tile.width * 0.56,
-            tile.height * 0.09,
-            tile.width * 0.5,
-            tile.height * 0.065,
-          ])
-          .fill(0xf0c56b)
-          .stroke({ color: 0x15232c, width: tile.width * 0.015 });
-        identity.label = "combat-original";
         artRoot.label = "combat-art";
         // Ground cues stay below artwork; the compact HUD clears both LPC heads and NPC portraits.
-        root.addChild(shadowSprite, selection, hover, identity, artRoot);
+        root.addChild(shadowSprite, selection, hover, artRoot);
         // Contiguous full-height rows keep all resource colors readable at mobile map scale.
         const meterWidth = tile.width / 2,
           meterHeight = tile.height / 10;
@@ -190,7 +177,6 @@ export const createCombatActors = (
           cp,
           selection,
           hover,
-          identity,
           threat,
           highestThreat,
           shadow: shadowSprite,
@@ -217,7 +203,7 @@ export const createCombatActors = (
               // Headgear can fill the LPC frame; ordinary frames retain their compact HUD.
               if (!(current.user.isAi && current.user.isOriginal)) {
                 const { hp, sp, cp, threat } = current;
-                const { selection, hover, identity } = current;
+                const { selection, hover } = current;
                 let top = 0,
                   bottom = Infinity;
                 for (const entry of art.entries) {
@@ -248,8 +234,7 @@ export const createCombatActors = (
                   0,
                   bottom - selection.getLocalBounds().maxY - tile.height * 0.02,
                 );
-                for (const marker of [selection, hover, identity])
-                  marker.y += groundOffset;
+                for (const marker of [selection, hover]) marker.y += groundOffset;
               }
               updateVisual(current);
             }
@@ -294,12 +279,9 @@ export const createCombatActors = (
     record.root.visible = !user.hidden && !user.leftBattle;
     const displayed = alive && record.root.visible;
     record.shadow.visible = displayed;
-    record.identity.visible =
-      displayed &&
-      user.isOriginal &&
-      (user.isAi
-        ? !!user.isSummon && user.controllerId === snapshot.playerId
-        : "curStamina" in user);
+    // Clone identity uses the same rings as selection, without another ground marker.
+    record.selection.tint = isClone(user) ? 0xd1d5db : 0xf0c56b;
+    record.hover.tint = isClone(user) ? 0xd1d5db : 0x9ae0e9;
     for (const entry of record.art?.entries ?? []) {
       entry.sprite.visible =
         entry.description.kind === "tombstone" ? !alive && user.isOriginal : alive;
@@ -348,6 +330,7 @@ export const createCombatActors = (
       scheduleExpiry();
     }
     let moving = false;
+    const pulse = (Math.sin((frame.now * Math.PI) / 900) + 1) / 2;
     for (const record of records.values()) {
       const { user, root, target } = record;
       const waypoint = record.path[record.pathIndex] ?? target;
@@ -431,13 +414,22 @@ export const createCombatActors = (
       }
       moving ||= Math.hypot(root.x + target.center.x, root.y + target.center.y) > 0.01;
       const displayed = record.alive && root.visible;
-      record.selection.visible = displayed && user.userId === selectedId;
-      // Breathe through opacity so the retained ring stays centered on planted feet.
-      record.selection.alpha = frame.reducedMotion
-        ? 1
-        : 0.85 + Math.sin((frame.now * Math.PI) / 900) * 0.15;
-      record.hover.visible =
-        displayed && user.userId === hoveredId && user.userId !== selectedId;
+      const isSelected = user.userId === selectedId;
+      const isHovered = user.userId === hoveredId;
+      const clone = isClone(user);
+      record.selection.visible = displayed && (isSelected || clone);
+      // A quiet gray ring identifies idle clones; only selection breathes around the feet.
+      record.selection.alpha = isSelected
+        ? frame.reducedMotion
+          ? 1
+          : 0.7 + pulse * 0.3
+        : isHovered
+          ? 1
+          : 0.55;
+      record.selection.scale.set(
+        isSelected && !frame.reducedMotion ? 1 + pulse * 0.08 : 1,
+      );
+      record.hover.visible = displayed && isHovered && !isSelected && !clone;
       const visible =
         displayed && (user.userId === selectedId || user.userId === hoveredId);
       record.hp.container.visible = visible;
@@ -562,7 +554,7 @@ export const combatActorParts = (
   return parts;
 };
 
-/** Thin ground ellipses identify controlled and hovered fighters without obscuring the terrain. */
+/** Foot-centered rings distinguish clones and selection without obscuring the terrain. */
 const groundSelection = (tile: TerrainHex, selected: boolean, y: number) => {
   const x = tile.width / 2;
   const rx = tile.width * 0.17,
@@ -572,18 +564,20 @@ const groundSelection = (tile: TerrainHex, selected: boolean, y: number) => {
     .stroke({ color: 0x15232c, alpha: 0.55, width: tile.width * 0.025 })
     .ellipse(x, y, rx, ry)
     .stroke({
-      color: selected ? 0xf0c56b : 0x9ae0e9,
+      color: 0xffffff,
       alpha: selected ? 0.8 : 0.65,
       width: tile.width * (selected ? 0.012 : 0.01),
     });
   marker.label = selected ? "combat-selection" : "combat-hover";
+  // Matching pivot and position preserves placement while scaling around the foot point.
+  marker.pivot.set(x, y);
+  marker.position.set(x, y);
   marker.visible = false;
   return marker;
 };
 
 export type CombatActorSnapshot = {
   battle: ReturnedBattle;
-  playerId?: string;
   viewer?: Pick<UserData, "userId" | "avatar" | "avatarLight" | "username">;
   aggro?: AggroDisplay;
 };
@@ -609,7 +603,6 @@ type Fighter = {
   cp: Meter | null;
   selection: Graphics;
   hover: Graphics;
-  identity: Graphics;
   threat: Meter;
   highestThreat: Graphics;
   shadow: Sprite;

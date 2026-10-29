@@ -989,7 +989,6 @@ const Combat: React.FC<CombatProps> = (props) => {
         action: props.action,
         actions: precomputedActions,
         userId: props.userId,
-        playerId: suid,
         viewer: userData,
         aggro: config.showAggro ? aggro : undefined,
         timeDiff,

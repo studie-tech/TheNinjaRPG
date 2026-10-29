@@ -166,7 +166,6 @@ export const createCombatScene = async (options: {
       actors.sync({
         battle: snapshot.battle,
         viewer: snapshot.viewer,
-        playerId: snapshot.playerId,
         aggro: snapshot.aggro,
       });
       const affected = new Set<string>();
@@ -390,7 +389,6 @@ export type CombatHover = {
 export type CombatSceneSnapshot = {
   battle: ReturnedBattle;
   userId: string;
-  playerId?: string;
   viewer?: Pick<UserData, "userId" | "avatar" | "avatarLight" | "username">;
   action?: CombatAction;
   actions: CombatAction[];

@@ -168,7 +168,6 @@ export const createBattlefieldPreview = async (
   const getSnapshot = (): CombatSceneSnapshot => ({
     battle,
     userId: casterId,
-    playerId: casterId,
     actions: [],
     timeDiff: 0,
     assets,
