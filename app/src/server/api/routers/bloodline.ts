@@ -1220,7 +1220,10 @@ const bloodlineCachePatch = async (
   // The canonical read owns collection receipts, quest admission and tracker retirement.
   if (hasQuestEligibilityChange || needsCollectionProgression || needsQuestBootstrap)
     return undefined;
-  const saved = await findBloodlineCacheState(client, user.userId);
+  // The lineage grant and debit are committed; optional confirmation can refetch the profile.
+  const saved = await findBloodlineCacheState(client, user.userId).catch(
+    () => undefined,
+  );
   if (!saved || saved.bloodlineId !== (line?.id ?? null)) return undefined;
   return {
     ...saved,

@@ -10,6 +10,7 @@ import { villageMissionRouter } from "@/server/api/routers/villageMission";
 import { kageRouter } from "@/server/api/routers/kage";
 import { commitQuestObjectiveRewards, questsRouter } from "@/server/api/routers/quests";
 import * as socials from "@/libs/socials";
+import * as socialQueries from "@/queries/socialUserCache";
 import { recordVillageMissionProgress } from "@/server/utils/villageMission";
 import { accrueVillageStructureMaintenance } from "@/server/utils/villageMaintenance";
 import { insertUsers, insertQuests, insertQuestHistory } from "../../../setup/factories";
@@ -221,6 +222,25 @@ describeWithDatabase("Village Missions and maintenance on real MySQL", () => {
     expect((await state())?.activeMission).toBeNull();
     await caller.select({ villageId: "v1" });
     expect((await caller.get({ id: "v1" }))?.mission?.objectives[0]?.current).toBe(0);
+  });
+
+  it.each(["unavailable", "missing"] as const)("keeps the consumed mission receipt and token payout when confirmation is %s", async (failure) => {
+    const db = await getTestDatabase();
+    const caller = await leader();
+    await caller.select({ villageId: "v1" });
+    const missionId = (await state())!.activeMission!.id;
+    await recordVillageMissionProgress(db, "v1", "member", { combined_mission_effort: 14 });
+    const confirmation = spyOn(socialQueries, "findVillageUserCache");
+    if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
+    else confirmation.mockRejectedValueOnce(new Error("Village mission confirmation unavailable"));
+    try {
+      const result = await caller.claim({ villageId: "v1", missionId });
+      expect(result.success).toBe(true);
+      expect(result.userPatch).toBeUndefined();
+      expect(result.userDelta).toBeUndefined();
+      expect((await caller.claim({ villageId: "v1", missionId })).success).toBe(false);
+      expect(await state()).toMatchObject({ tokens: 600_000, activeMission: null });
+    } finally { confirmation.mockRestore(); }
   });
 
   it.each([[100_000, 113_000], [50, 57]])("rounds %s Village Mission tokens with the claiming Kage's loyalty exactly once", async (rewardTokens, expectedTokens) => {

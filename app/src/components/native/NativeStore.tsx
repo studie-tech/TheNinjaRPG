@@ -284,23 +284,8 @@ export default function NativeStore() {
     );
     if (generation !== bindingGeneration.current || snapshot.userId !== accountId)
       return;
-    if (!snapshot.userPatch) {
-      await utils.profile.getUser.cancel();
-      if (generation === bindingGeneration.current) {
-        utils.profile.getUser.setData(undefined, (current) =>
-          current?.userData?.userId === accountId
-            ? {
-                ...current,
-                userData: undefined,
-                achievementProgress: [],
-                notifications: [],
-              }
-            : current,
-        );
-      }
-      return;
-    }
-    await updateUser(snapshot.userPatch, {
+    // Missing confirmation reconciles the character through the canonical profile query.
+    await updateUser(snapshot.userPatch ?? undefined, {
       revision,
       achievementProgress: snapshot.achievementProgress,
     });

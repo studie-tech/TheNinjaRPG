@@ -264,20 +264,22 @@ export const clanRouter = createTRPCRouter({
       const result = await retryOnDeadlock(() =>
         executeResultForUpgradeHideoutToStronghold(ctx.drizzle, guards),
       );
-      return result.rowsAffected > 0
-        ? {
-            success: true,
-            message: "Stronghold restored successfully",
-            userDelta: {
-              clan: { id: fetchedClan.id, bank: -STRONGHOLD_REESTABLISH_COST },
-            },
-            userPatch: {
-              village: await findVillageUserCache(ctx.drizzle, clanHideout.id),
-            },
-          }
-        : errorResponse(
-            "Stronghold could not be restored; refresh the faction and check its balance and membership",
-          );
+      if (result.rowsAffected === 0)
+        return errorResponse(
+          "Stronghold could not be restored; refresh the faction and check its balance and membership",
+        );
+      const savedVillage = await findVillageUserCache(
+        ctx.drizzle,
+        clanHideout.id,
+      ).catch(() => undefined);
+      return {
+        success: true,
+        message: "Stronghold restored successfully",
+        userDelta: savedVillage
+          ? { clan: { id: fetchedClan.id, bank: -STRONGHOLD_REESTABLISH_COST } }
+          : undefined,
+        userPatch: savedVillage ? { village: savedVillage } : undefined,
+      };
     }),
   clanDonate: protectedProcedure
     .meta({
@@ -645,12 +647,15 @@ export const clanRouter = createTRPCRouter({
       if (result.rowsAffected === 0) return errorResponse("Failed to reduce money");
       // Mutate
       await insertClanForCreateClan(ctx.drizzle, clanId, villageData, input, user);
+      const savedClan = await findClanUserCache(ctx.drizzle, clanId).catch(
+        () => undefined,
+      );
       // Create
       return {
         success: true,
         message: `${groupLabel} created`,
-        userDelta: { money: -CLAN_CREATE_RYO_COST },
-        userPatch: { clanId, clan: await findClanUserCache(ctx.drizzle, clanId) },
+        userDelta: savedClan ? { money: -CLAN_CREATE_RYO_COST } : undefined,
+        userPatch: savedClan ? { clanId, clan: savedClan } : undefined,
       };
     }),
   editClan: protectedProcedure
@@ -922,13 +927,19 @@ export const clanRouter = createTRPCRouter({
         isMemberAssassin,
         assasinField,
       );
+      const savedClan =
+        user.clanId === clanData.id
+          ? await findClanUserCache(ctx.drizzle, clanData.id).catch(() => undefined)
+          : undefined;
       // Create
       return {
         success: true,
         message: "Member demoted",
         userPatch:
           user.clanId === clanData.id
-            ? { clan: await findClanUserCache(ctx.drizzle, clanData.id) }
+            ? savedClan
+              ? { clan: savedClan }
+              : undefined
             : {},
       };
     }),
@@ -1485,7 +1496,9 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: `Left ${groupLabel} battle`,
-        userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId),
+        userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId).catch(
+          () => undefined,
+        ),
       };
     }),
   kickFromClanBattle: protectedProcedure
@@ -1535,7 +1548,7 @@ export const clanRouter = createTRPCRouter({
         message: `Kicked from ${groupLabel} battle`,
         userPatch:
           input.targetId === ctx.userId
-            ? await findQueueUserCache(ctx.drizzle, ctx.userId)
+            ? await findQueueUserCache(ctx.drizzle, ctx.userId).catch(() => undefined)
             : {},
       };
     }),
@@ -1571,7 +1584,9 @@ export const clanRouter = createTRPCRouter({
       return {
         success: true,
         message: "Clan battle deleted and participants released",
-        userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId),
+        userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId).catch(
+          () => undefined,
+        ),
       };
     }),
   initiateClanBattle: protectedProcedure

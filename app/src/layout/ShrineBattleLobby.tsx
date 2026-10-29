@@ -90,11 +90,10 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
     api.shrine.leaveShrineBattle.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
         showMutationToast(data);
         if (data.success) {
           await utils.shrine.getShrineBattles.invalidate();

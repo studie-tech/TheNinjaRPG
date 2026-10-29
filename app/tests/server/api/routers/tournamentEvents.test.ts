@@ -1,4 +1,5 @@
 import { fetchEvent, fetchEventNoticeState } from "@/queries/tournamentEvents";
+import * as eventQueries from "@/queries/tournamentEvents";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
@@ -94,6 +95,23 @@ describeWithDatabase("event tournament persistence", () => {
       expect(measured.result?.eventData?.status).toBe(status);
       expect(measured.statements.filter((statement) => /from .Tournament./i.test(statement))).toHaveLength(1);
     }
+  });
+
+  it("preserves a published event when optional actor confirmation fails", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "staff", role: "CODER" }]);
+    const staff = await callerFor(tournamentRouter, "staff");
+    const created = await staff.saveEvent({ config: eventConfig("Publish confirmation") });
+    if (!("tournamentId" in created)) throw new Error(created.message);
+    const original = eventQueries.findEventActorCacheState;
+    vi.spyOn(eventQueries, "findEventActorCacheState")
+      .mockImplementationOnce(original)
+      .mockRejectedValueOnce(new Error("Event confirmation unavailable"));
+    const result = await staff.manageEvent({ tournamentId: created.tournamentId, action: "PUBLISH" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.eventNotices).toBeUndefined();
+    expect(await db.query.tournament.findFirst()).toMatchObject({ eventData: { status: "REGISTRATION" } });
   });
 
   it.each([false, true])("refreshes an expired event after its synchronization claim (competing: %s)", async (competing) => {

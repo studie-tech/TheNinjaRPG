@@ -364,7 +364,8 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     await completed("owned");
     const skipped = await a.claim({id: "owned"});
     expect(skipped).toMatchObject({success: true, reward: {jutsus: [], grantedDrops: [], rewards: {reward_jutsus: []}}});
-    expect(await a.claim({id: "owned"})).toEqual({...skipped, message: "Rewards already delivered."});
+    if (!("reward" in skipped)) throw new Error("Missing dungeon receipt");
+    expect(await a.claim({id: "owned"})).toMatchObject({success: true, message: "Rewards already delivered.", reward: skipped.reward});
     const techniques = await callerFor(jutsuRouter, "a");
     expect((await techniques.forget({id: "owned"})).success).toBe(true);
     await completed("forgotten");

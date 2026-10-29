@@ -121,9 +121,9 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
-        userPatch: {
-          village: await findVillageUserCache(ctx.drizzle, input.villageId),
-        },
+        userPatch: await findVillageUserCache(ctx.drizzle, input.villageId)
+          .then((saved) => (saved ? { village: saved } : undefined))
+          .catch(() => undefined),
         message: current
           ? "Village Mission rerolled. Progress starts again for the new mission."
           : "Village Mission selected",
@@ -146,9 +146,9 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
-        userPatch: {
-          village: await findVillageUserCache(ctx.drizzle, input.villageId),
-        },
+        userPatch: await findVillageUserCache(ctx.drizzle, input.villageId)
+          .then((saved) => (saved ? { village: saved } : undefined))
+          .catch(() => undefined),
         message:
           "Village Mission cancelled without penalty. A new mission can be selected immediately.",
       };
@@ -199,9 +199,9 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
-        userPatch: {
-          village: await findVillageUserCache(ctx.drizzle, input.villageId),
-        },
+        userPatch: await findVillageUserCache(ctx.drizzle, input.villageId)
+          .then((saved) => (saved ? { village: saved } : undefined))
+          .catch(() => undefined),
         message: `${rewardTokens.toLocaleString()} tokens awarded to the village`,
       };
     }),

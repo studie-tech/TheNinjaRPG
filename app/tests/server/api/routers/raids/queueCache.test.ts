@@ -26,6 +26,7 @@ import {
 } from "../../../../setup/testDatabase";
 import { beforeStatements } from "../../../../setup/statements";
 import { fetchUpdatedUser } from "@/routers/profile";
+import * as socialQueries from "@/queries/socialUserCache";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { queueEnergy } from "../../../../setup/queues";
 
@@ -151,6 +152,27 @@ describeWithDatabase("raid join committed queue", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
+  it("preserves the started battle and queue receipt when optional battle confirmation fails", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));
+    await db.update(mpvpBattleQueue).set({ createdAt: new Date(0) }).where(eq(mpvpBattleQueue.id, "cache-team"));
+    await db.insert(mpvpBattleUser).values({ id: "starter", userId: "queue-sql-user", clanBattleId: "cache-team", side: "ATTACKER", slot: 0 });
+    await fetchUpdatedUser({ client: db, userId: "queue-sql-user" });
+    vi.spyOn(combat, "initiateBattle").mockImplementation(async () => {
+      await db.update(userData).set({ status: "BATTLE", battleId: "confirmed-raid" }).where(eq(userData.userId, "queue-sql-user"));
+      return { success: true, message: "Started", battleId: "confirmed-raid" };
+    });
+    vi.spyOn(socialQueries, "findBattleUserCache").mockRejectedValueOnce(new Error("Battle confirmation unavailable"));
+    const api = await callerFor(raidsRouter, "queue-sql-user");
+    const result = await api.startRaidBattle({ teamId: "cache-team" });
+    expect(result).toMatchObject({ success: true, battleId: "confirmed-raid" });
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "queue-sql-user") })).toMatchObject({ status: "BATTLE", battleId: "confirmed-raid" });
+    expect(await db.query.mpvpBattleQueue.findFirst({ where: eq(mpvpBattleQueue.id, "cache-team") })).toMatchObject({ battleId: "confirmed-raid" });
+    expect((await api.startRaidBattle({ teamId: "cache-team" })).success).toBe(false);
+    expect(combat.initiateBattle).toHaveBeenCalledTimes(1);
+  });
   it.each([true, false])("confirms saved admission fields after raid start, success=%s", async (success) => {
     const db = await getTestDatabase();
     await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));

@@ -1008,7 +1008,9 @@ export const shrineRouter = createTRPCRouter({
           await wakeQueuedUser(ctx.drizzle, user.userId);
           return {
             ...errorResponse("Shrine battle expired"),
-            userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId),
+            userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId).catch(
+              () => undefined,
+            ),
           };
         }
         return errorResponse("Not in this shrine battle queue");

@@ -13,6 +13,7 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import * as socialQueries from "@/queries/socialUserCache";
 import { clanRouter } from "@/server/api/routers/clan";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
@@ -87,6 +88,19 @@ describeWithDatabase("clan queue claim ownership", () => {
       slot: 0,
     });
   };
+
+  it("keeps a completed queue departure successful when optional status confirmation fails", async () => {
+    const db = await getTestDatabase();
+    await oldMembership();
+    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "leader"));
+    vi.spyOn(socialQueries, "findQueueUserCache").mockRejectedValueOnce(new Error("Queue confirmation unavailable"));
+    const result = await callerForDatabase(clanRouter, "leader", db).leaveClanBattle({ clanBattleId: "old" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(await storedUser()).toEqual({ status: "AWAKE", battleId: null });
+    expect(await db.query.mpvpBattleUser.findMany()).toEqual([]);
+  });
 
   for (const operation of ["challenge", "join"] as const) {
     const join = (client: Awaited<ReturnType<typeof getTestDatabase>>) => {

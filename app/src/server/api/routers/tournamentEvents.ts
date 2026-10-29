@@ -932,11 +932,18 @@ const eventActionCacheUpdate = async (
   before: NonNullable<Awaited<ReturnType<typeof findEventActorCacheState>>>,
   beforeReceipt: Awaited<ReturnType<typeof findEventActorRewardReceipt>>,
 ) => {
-  const [actor, receipt, notices] = await Promise.all([
+  const confirmation = await Promise.all([
     findEventActorCacheState(client, userId),
     findEventActorRewardReceipt(client, tournamentId, userId),
     fetchEventNoticeState(client, userId),
-  ]);
+  ]).catch(() => undefined);
+  if (!confirmation)
+    return {
+      userPatch: undefined,
+      eventNotices: undefined,
+      isEventParticipant: undefined,
+    };
+  const [actor, receipt, notices] = confirmation;
   const startedBattle =
     actor?.status === "BATTLE" &&
     !!actor.battleId &&

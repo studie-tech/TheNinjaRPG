@@ -630,7 +630,9 @@ export const occupationRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       const cancelled = await cancelQueuedCraft(ctx.drizzle, ctx.userId, input.queueId);
       if (!cancelled) return errorResponse("That queued craft already started");
-      const saved = await findCraftingCacheState(ctx.drizzle, ctx.userId);
+      const saved = await findCraftingCacheState(ctx.drizzle, ctx.userId).catch(
+        () => undefined,
+      );
       // Queue starts persist ordinary trackers; automatic achievements and team effects
       // still require the canonical progression flow before publishing a cache update.
       const changedIds = new Set(

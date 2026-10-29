@@ -162,19 +162,24 @@ export const miscRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could insert notificaiton in db" };
       } else {
-        const receipt = await findAnnouncementReceipt(ctx.drizzle, ctx.userId);
+        const receipt = await findAnnouncementReceipt(ctx.drizzle, ctx.userId).catch(
+          () => undefined,
+        );
         const count = receipt?.unreadNotifications ?? 0;
-        const [unread, acknowledged] =
+        const unread =
           count > 0
-            ? await Promise.all([
-                listNotificationForGetUser(ctx.drizzle, { unreadNotifications: count }),
-                acknowledgeAnnouncements(ctx.drizzle, ctx.userId, count),
-              ])
-            : [[], undefined];
+            ? await listNotificationForGetUser(ctx.drizzle, {
+                unreadNotifications: count,
+              }).catch(() => undefined)
+            : undefined;
+        // A failed optional read leaves the announcement available to canonical hydration.
+        const acknowledged = unread
+          ? await acknowledgeAnnouncements(ctx.drizzle, ctx.userId, count)
+          : undefined;
         return {
           success: true,
           message: "Notification sent",
-          ...(acknowledged?.rowsAffected
+          ...(acknowledged?.rowsAffected && unread
             ? {
                 userPatch: { unreadNotifications: 0 },
                 announcements: unread.map((entry) => entry.content),

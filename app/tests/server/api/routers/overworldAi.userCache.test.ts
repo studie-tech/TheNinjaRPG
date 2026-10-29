@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { overworldAiPlacement, overworldAiPlacementQuest, quest, questHistory, userData, userQuestAttempt } from "@/drizzle/schema";
+import * as overworldQueries from "@/queries/overworldAi";
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { AllObjectives } from "@/validators/objectives";
@@ -49,6 +50,24 @@ describeWithDatabase("overworld interaction profile updates", () => {
     const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") });
     expect(result.userPatch?.dailyOverworldQuestRolls).toBe(saved?.dailyOverworldQuestRolls);
     expect(result.userPatch?.activeNpcQuestId).toBe(saved?.activeNpcQuestId);
+  });
+
+  it("omits the partial progression patch after a committed NPC assignment when confirmation fails", async () => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "cache-npc-quest", questType: "overworld", hidden: false, maxAttempts: 10, maxCompletes: 10, content: {
+      objectives: [AllObjectives.parse({ id: "train", task: "stats_trained", value: 50 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    await db.insert(overworldAiPlacementQuest).values({ placementId: "cache-giver", questId: "cache-npc-quest", chance: 100 });
+    const { caller } = await prepared();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    vi.spyOn(overworldQueries, "findOverworldInteractionUserCache").mockRejectedValueOnce(new Error("NPC confirmation unavailable"));
+    const result = await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") })).toMatchObject({ dailyOverworldQuestRolls: 1, activeNpcQuestId: "cache-npc-quest" });
+    expect(await db.query.questHistory.findMany()).toHaveLength(1);
   });
   it("publishes a dialog objective's confirmed payout and updated trackers", async () => {
     const db = await getTestDatabase();

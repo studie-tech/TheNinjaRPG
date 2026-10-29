@@ -22,6 +22,11 @@ export const getRewardUserUpdate = async (input: {
   progression?: ReturnType<typeof getUserProgressionUpdate>;
 }) => {
   const { client, userId, rewards, granted } = input;
+  const fallback = {
+    userPatch: undefined,
+    userDelta: undefined,
+    achievementProgress: undefined,
+  };
   const needsRelations =
     input.requiresRelations ||
     getRewardUserDelta(rewards) === undefined ||
@@ -31,6 +36,7 @@ export const getRewardUserUpdate = async (input: {
   const hydrated = needsRelations
     ? await withRequestScope(() => fetchUpdatedUser({ client, userId }))
     : undefined;
+  if (needsRelations && !hydrated?.user) return fallback;
   // Hydration can settle queued costs and rewards; reuse its confirmed counters.
   const counters = hydrated?.user
     ? {
@@ -58,14 +64,18 @@ export const getRewardUserUpdate = async (input: {
           ? { id: hydrated.user.village.id, tokens: hydrated.user.village.tokens }
           : undefined,
       }
-    : await findRewardUserSnapshot(client, userId);
-  const membership =
+    : // Confirmation is optional cache data after the payout has committed.
+      await findRewardUserSnapshot(client, userId).catch(() => undefined);
+  if (!counters) return fallback;
+  const needsMembership =
     hydrated?.user &&
     (rewards.reward_village_membership !== "NONE" ||
       rewards.reward_prestige < 0 ||
-      hydrated.user.villageId !== (hydrated.user.village?.id ?? null))
-      ? await getMembershipUserPatch(client, hydrated.user)
-      : undefined;
+      hydrated.user.villageId !== (hydrated.user.village?.id ?? null));
+  const membership = needsMembership
+    ? await getMembershipUserPatch(client, hydrated.user)
+    : undefined;
+  if (needsMembership && !membership) return fallback;
   const progression = hydrated?.user
     ? getUserProgressionUpdate(hydrated.user, hydrated.publishedAchievementIds)
     : input.progression;

@@ -1,8 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { STORE_REP_PRODUCTS } from "@/drizzle/constants";
 import { gameSetting, quest, questHistory, storePurchase, storeUserIdAlias, userData, userVote } from "@/drizzle/schema";
+import * as purchaseQueries from "@/queries/purchases";
+import * as profileQueries from "@/queries/profile";
+import * as profileApi from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
 import { purchasesRouter } from "@/server/api/routers/purchases";
 import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
@@ -24,6 +27,51 @@ describeWithDatabase("purchase reputation progression", () => {
     await insertUsers([{ userId, username: "PurchaseProgress", role: "USER", rank: "JONIN", level: 50, primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true, regeneration: 0, money: 0, reputationPoints: 0, reputationPointsTotal: 0, updatedAt: new Date(), regenAt: new Date() }]);
     const db = await getTestDatabase();
     await db.insert(userVote).values({ id: "purchase-progress-vote", userId, secret: "payment1", lastVoteAt: new Date() });
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(["snapshot unavailable", "snapshot missing", "catalogue unavailable", "bootstrap unavailable"] as const)("reconciles a delivered native purchase when confirmation is %s", async (failure) => {
+    const db = await getTestDatabase();
+    const profile = await callerFor(profileRouter, userId);
+    const initial = await profile.getUser();
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["unavailable-purchase-profile"];
+    const read = vi.fn(() => profile.getUser());
+    cache.setQueryDefaults(key, { queryFn: read });
+    cache.setQueryData(key, initial);
+    const revision = prepareUserUpdate(cache, key);
+    const purchase = { userId, transactionId: "confirmed-native-purchase", productId: STORE_REP_PRODUCTS[0]!.productId, store: "APPLE" as const, isSandbox: false, purchasedAt: new Date(), raw: {} };
+    expect(await grantStorePurchase(db, purchase)).toMatchObject({ status: "granted" });
+    if (failure === "snapshot missing") vi.spyOn(purchaseQueries, "findPurchaseUserSnapshot").mockResolvedValueOnce(undefined);
+    else if (failure === "snapshot unavailable") vi.spyOn(purchaseQueries, "findPurchaseUserSnapshot").mockRejectedValueOnce(new Error("Purchase confirmation unavailable"));
+    else if (failure === "catalogue unavailable") vi.spyOn(profileQueries, "fetchAchievementCatalogue").mockRejectedValueOnce(new Error("Purchase catalogue unavailable"));
+    else vi.spyOn(profileApi, "fetchQuestBootstrap").mockRejectedValueOnce(new Error("Purchase bootstrap unavailable"));
+    try {
+      const result = await (await callerFor(purchasesRouter, userId)).userSnapshot();
+      expect(result.userPatch).toBeNull();
+      expect(result.achievementProgress).toBeUndefined();
+      await updateUserCache(cache, key, result.userPatch ?? undefined, { revision, achievementProgress: result.achievementProgress });
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(cache.getQueryData<typeof initial>(key)?.userData?.reputationPoints).toBe(STORE_REP_PRODUCTS[0]!.reputationPoints);
+      expect(await grantStorePurchase(db, purchase)).toMatchObject({ status: "duplicate" });
+      expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ reputationPoints: STORE_REP_PRODUCTS[0]!.reputationPoints });
+    } finally { cache.clear(); }
+  });
+
+  it("omits the known-empty delta when confirmation has no character", async () => {
+    const db = await getTestDatabase();
+    await db.delete(userData).where(eq(userData.userId, userId));
+    const result = await getPurchaseUserUpdate(db, userId);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+  });
+
+  it("propagates canonical purchase progression errors", async () => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "purchase-progress", questType: "achievement", hidden: false,
+      content: { objectives: [SimpleObjective.parse({ id: "purchase-goal", task: "reputation_points", value: 1 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    vi.spyOn(profileApi, "fetchUpdatedUser").mockRejectedValueOnce(new Error("Purchase progression unavailable"));
+    await expect(getPurchaseUserUpdate(db, userId)).rejects.toThrow("Purchase progression unavailable");
   });
 
   it.each(["payment", "native"] as const)("merges %s confirmation and reputation progression without refetching", async (source) => {

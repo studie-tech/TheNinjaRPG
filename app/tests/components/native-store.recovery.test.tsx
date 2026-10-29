@@ -336,6 +336,22 @@ describe("NativeStore purchase recovery", () => {
     expect(testMocks().updateUser).not.toHaveBeenCalled();
   });
 
+  it("reconciles through the canonical profile when a balance confirmation is unavailable", async () => {
+    let onState: ((state: { isActive: boolean }) => void) | undefined;
+    capacitorWindow.Capacitor!.Plugins.App = {
+      addListener: (_event: string, callback: typeof onState) => {
+        onState = callback;
+        return { remove: vi.fn().mockResolvedValue(undefined) };
+      },
+    };
+    testMocks().fetchSnapshot.mockResolvedValue({ userId: "player-1", userPatch: null, achievementProgress: undefined });
+    render(<NativeStore />);
+    await waitFor(() => expect(onState).toBeDefined());
+    act(() => onState?.({ isActive: true }));
+    await waitFor(() => expect(testMocks().updateUser).toHaveBeenCalledWith(undefined, { revision: 1, achievementProgress: undefined }));
+    expect(testUser().data?.userId).toBe("player-1");
+  });
+
   it("shows a recoverable error when resume verification fails", async () => {
     let onState: ((state: { isActive: boolean }) => void) | undefined;
     capacitorWindow.Capacitor!.Plugins.App = {

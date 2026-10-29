@@ -464,7 +464,7 @@ export const staffRouter = createTRPCRouter({
       ]);
       const sources = user.isAi
         ? undefined
-        : await fetchMasterySources(ctx.drizzle, ctx.userId);
+        : await fetchMasterySources(ctx.drizzle, ctx.userId).catch(() => undefined);
       return {
         userPatch: sources
           ? {
@@ -472,7 +472,9 @@ export const staffRouter = createTRPCRouter({
               effectiveMasteries: effectiveMasteries({ ...user, ...sources }),
               maxEnergy: calcMaxEnergy({ ...user, ...sources }),
             }
-          : {},
+          : user.isAi
+            ? {}
+            : undefined,
         success: true,
         message: `All gear has been unequipped for all non-AI users.`,
       };
@@ -949,12 +951,16 @@ export const staffRouter = createTRPCRouter({
       const failed = moves.find((move) => move.status === "rejected");
       if (failed) throw failed.reason;
       const savedVillage = user.villageId
-        ? await findVillageUserCache(ctx.drizzle, user.villageId)
+        ? await findVillageUserCache(ctx.drizzle, user.villageId).catch(() => undefined)
         : undefined;
       return {
         success: true,
         message: "UserId updated",
-        userPatch: savedVillage ? { village: savedVillage } : {},
+        userPatch: user.villageId
+          ? savedVillage
+            ? { village: savedVillage }
+            : undefined
+          : {},
       };
     }),
   // Delete referral from user
@@ -1225,10 +1231,13 @@ const getForceAwakeUserUpdate = async (
   userId: string,
   endedAt: Date,
 ) => {
-  const [saved, histories] = await Promise.all([
+  const confirmation = await Promise.all([
     findQueueUserCache(client, userId),
     listClosedPyramidHistoriesForForceAwake(client, userId, endedAt),
-  ]);
+  ]).catch(() => undefined);
+  if (!confirmation?.[0])
+    return { userPatch: undefined, closedPyramidHistories: undefined };
+  const [saved, histories] = confirmation;
   return {
     userPatch: saved,
     closedPyramidHistories: histories.flatMap((entry) =>

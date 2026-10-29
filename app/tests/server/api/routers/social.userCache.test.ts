@@ -3,8 +3,11 @@ import { eq } from "drizzle-orm";
 import { clan, item, quest, questHistory, userItem, mpvpBattleQueue, mpvpBattleUser, userData, village, war } from "@/drizzle/schema";
 import { fetchActiveShrineLobbies, fetchAllActiveWars } from "@/queries/profile";
 import { findQueueUserCache } from "@/queries/socialUserCache";
+import * as socialQueries from "@/queries/socialUserCache";
+import * as profileQueries from "@/queries/profile";
+import * as skillQueries from "@/queries/skillTree";
 import { withRequestScope } from "@/server/requestScope";
-import { getBattleUserPatch, getMembershipUserPatch, getShrineLobbyUserPatch } from "@/server/utils/socialUserCache";
+import { getBattleUserPatch, getMembershipUserPatch, getShrineLobbyUserPatch, getVillageChangeUserUpdate, getWarAllegianceUserPatch } from "@/server/utils/socialUserCache";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { makeEffect } from "../../../libs/combat/helpers/battleScenario";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
@@ -14,7 +17,7 @@ import { insertItems, insertQuests, insertUserItems, insertUsers } from "../../.
 import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 describeWithDatabase("confirmed social profile projections", () => {
-  afterEach(resetServerModuleStubs);
+  afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
   beforeEach(async () => {
     await resetTables(questHistory, quest, userItem, item, mpvpBattleUser, mpvpBattleQueue, war, clan, userData, village);
     const db = await getTestDatabase();
@@ -49,6 +52,33 @@ describeWithDatabase("confirmed social profile projections", () => {
       const patch = await getShrineLobbyUserPatch(db, "projection-user", "old");
       expect(patch?.shrineBattles.map((entry) => entry.id)).toEqual(["fresh-shrine"]);
     });
+  });
+
+  it("requires a complete membership projection when its independent notice read fails", async () => {
+    const db = await getTestDatabase();
+    const user = (await db.query.userData.findFirst({ where: eq(userData.userId, "projection-user") }))!;
+    vi.spyOn(profileQueries, "fetchAllActiveWars").mockRejectedValueOnce(new Error("Membership notices unavailable"));
+    expect(await getMembershipUserPatch(db, user)).toBeUndefined();
+  });
+
+  it("reconciles war and shrine projections after failed confirmation reads", async () => {
+    const db = await getTestDatabase();
+    vi.spyOn(socialQueries, "findWarUserCache").mockRejectedValueOnce(new Error("War confirmation unavailable"));
+    expect(await getWarAllegianceUserPatch(db, "projection-user")).toBeUndefined();
+    vi.spyOn(profileQueries, "fetchActiveShrineLobbies").mockRejectedValueOnce(new Error("Shrine confirmation unavailable"));
+    expect(await getShrineLobbyUserPatch(db, "projection-user", "old")).toBeUndefined();
+  });
+
+  it("omits the battle patch when private mastery sources cannot be confirmed", async () => {
+    const db = await getTestDatabase();
+    vi.spyOn(skillQueries, "fetchMasterySources").mockRejectedValueOnce(new Error("Mastery sources unavailable"));
+    expect(await getBattleUserPatch(db, "projection-user")).toBeUndefined();
+  });
+
+  it("propagates side-effecting village progression errors before membership confirmation", async () => {
+    const db = await getTestDatabase();
+    stubProfile("fetchUpdatedUser", async () => { throw new Error("Village progression unavailable"); });
+    await expect(getVillageChangeUserUpdate(db, "projection-user")).rejects.toThrow("Village progression unavailable");
   });
 
   it("publishes a newer combat retained by conditional queue cleanup", async () => {

@@ -419,7 +419,9 @@ export const overworldAiRouter = createTRPCRouter({
       const interactionPatch = (hasProgressionSnapshot = false) =>
         requiresUserRefresh && !hasProgressionSnapshot
           ? undefined
-          : findOverworldInteractionUserCache(ctx.drizzle, ctx.userId);
+          : findOverworldInteractionUserCache(ctx.drizzle, ctx.userId).catch(
+              () => undefined,
+            );
 
       // 1) Bound-objective sub-path (defeat_opponents | dialog | deliver_item).
       const boundCandidates = getBoundObjectiveCandidates(activeUser);
@@ -873,16 +875,19 @@ export const overworldAiRouter = createTRPCRouter({
         chosen.quest.questType !== "war"
           ? getUserProgressionUpdate(activeUser, publishedAchievementIds)
           : undefined;
+      const confirmedInteraction = cacheUpdate
+        ? await interactionPatch(true)
+        : undefined;
       return {
         success: true,
         message: result.message,
         grantedQuestId: chosen.quest.id,
-        ...(cacheUpdate
+        ...(cacheUpdate && confirmedInteraction
           ? {
               ...cacheUpdate,
               userPatch: {
                 ...cacheUpdate.userPatch,
-                ...(await interactionPatch(true)),
+                ...confirmedInteraction,
               },
             }
           : {}),

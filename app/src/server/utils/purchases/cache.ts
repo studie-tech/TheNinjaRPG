@@ -19,11 +19,19 @@ export const getPurchaseUserUpdate = (
   Pick<UserDeltaResponse, "userPatch" | "userDelta" | "achievementProgress">
 > =>
   withRequestScope(async () => {
-    const [saved, achievements, bootstrap] = await Promise.all([
+    const fallback = {
+      userPatch: undefined,
+      userDelta: undefined,
+      achievementProgress: undefined,
+    };
+    const confirmation = await Promise.all([
       findPurchaseUserSnapshot(client, userId),
       fetchAchievementCatalogue(client),
       fetchQuestBootstrap(client, userId),
-    ]);
+      // These reads only confirm a delivery; canonical progression below can write.
+    ]).catch(() => undefined);
+    if (!confirmation?.[0]) return fallback;
+    const [saved, achievements, bootstrap] = confirmation;
     const candidates = saved
       ? [
           ...saved.userQuests.filter((entry) => entry.quest),
@@ -61,6 +69,7 @@ export const getPurchaseUserUpdate = (
           requiresRelations: true,
         })
       : undefined;
+    if (needsProgression && !progression?.userPatch) return fallback;
     return {
       userPatch: saved
         ? {
