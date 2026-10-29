@@ -62,7 +62,7 @@ import type { DrizzleClient } from "@/server/db";
 import { launchCoopEncounter } from "@/server/utils/coop";
 import { expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import { dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
-import { getDungeonRewardUserPatch } from "@/server/utils/dungeonUserCache";
+import { getDungeonRewardUserUpdate } from "@/server/utils/dungeonUserCache";
 import { notifyMapLocationsChanged } from "@/server/utils/mapLocations";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getBattleUserPatch } from "@/server/utils/socialUserCache";
@@ -566,11 +566,11 @@ export const dungeonRouter = createTRPCRouter({
           success: true,
           message: "Rewards already delivered.",
           reward: member.reward,
-          userPatch: await getDungeonRewardUserPatch(
+          ...(await getDungeonRewardUserUpdate(
             ctx.drizzle,
             user,
             member.reward.rewards,
-          ),
+          )),
         };
       if (
         run.status !== "COMPLETED" ||
@@ -665,11 +665,7 @@ export const dungeonRouter = createTRPCRouter({
             success: true,
             message: "Completion rewards delivered.",
             reward: receipt,
-            userPatch: await getDungeonRewardUserPatch(
-              ctx.drizzle,
-              user,
-              receipt.rewards,
-            ),
+            ...(await getDungeonRewardUserUpdate(ctx.drizzle, user, receipt.rewards)),
           }
         : errorResponse("Rewards were already claimed. Refresh to view your receipt.");
     }),

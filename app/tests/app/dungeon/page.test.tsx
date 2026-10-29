@@ -10,12 +10,14 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as Countdown from "@/layout/Countdown";
 import * as Loader from "@/layout/Loader";
 import * as UserContext from "@/utils/UserContext";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { ensureDom } from "../../setup/dom.mjs";
 import { dungeonContent } from "../../setup/dungeon";
 
 type PartyState = RouterOutputs["coop"]["dungeon"]["getState"];
 type RunStatus = PartyState["runs"][number]["status"];
 type Available = RouterOutputs["coop"]["dungeon"]["getAvailable"];
+type ClaimCallbacks = { onSuccess: (response: UserDeltaResponse, input: { id: string }, revision: number | undefined) => Promise<void> };
 const clients: QueryClient[] = [];
 
 afterEach(() => {
@@ -47,6 +49,8 @@ const mount = (status: RunStatus | null, availableFn: () => Promise<Available>, 
   const actCall = vi.fn();
   const createCall = vi.fn();
   const claimCall = vi.fn();
+  const updateUser = vi.fn(async () => {});
+  let claimCallbacks: ClaimCallbacks;
   const stateQuery = vi.fn(stateFn);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ profile: { getUser: { refetch: vi.fn(async () => undefined) } } }),
@@ -56,16 +60,17 @@ const mount = (status: RunStatus | null, availableFn: () => Promise<Available>, 
       getState: { useQuery: (_input: unknown, options: object) => useQuery({ ...options, queryKey: ["state"], queryFn: stateQuery }) },
       create: { useMutation: () => ({ isPending: false, mutate: createCall }) },
       act: { useMutation: () => ({ isPending: false, mutate: actCall }) },
-      claim: { useMutation: () => ({ isPending: false, mutate: claimCall }) },
+      claim: { useMutation: (options: ClaimCallbacks) => { claimCallbacks = options; return { isPending: false, mutate: claimCall }; } },
     } },
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { userId: "a", sector: 1 }, timeDiff: 1234 } as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { userId: "a", sector: 1 }, timeDiff: 1234, updateUser, prepareUserUpdate: () => 42 } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
   vi.spyOn(Loader, "default").mockImplementation(({ explanation }: { explanation?: string }) => <div>{explanation}</div>);
   const countdown = vi.spyOn(Countdown, "default").mockImplementation(() => <span>30 minutes</span>);
   const view = render(<QueryClientProvider client={queryClient}><DungeonPage /></QueryClientProvider>);
-  return { view, queryClient, stateQuery, actCall, createCall, claimCall, countdown };
+  return { view, queryClient, stateQuery, actCall, createCall, claimCall, countdown, updateUser,
+    respondToClaim: (response: UserDeltaResponse) => claimCallbacks.onSuccess(response, { id: "run" }, 42) };
 };
 
 const scenarios = [
@@ -73,6 +78,14 @@ const scenarios = [
   { status: "BETWEEN", label: "Enter next floor", command: "start" },
   { status: "PAUSED", label: "Resume and ready up", command: "resume" },
 ] as const;
+
+it("forwards confirmed achievement progress with the claim's captured profile revision", async () => {
+  const { view, updateUser, respondToClaim } = mount("COMPLETED", async () => []);
+  await waitFor(() => expect(view.getByRole("button", { name: "Claim completion rewards" })).toBeDefined());
+  const response = { success: true, message: "Completion rewards delivered.", userPatch: { medicalExperience: 1 }, achievementProgress: [] };
+  await act(async () => respondToClaim(response));
+  expect(updateUser).toHaveBeenCalledWith(response.userPatch, { revision: 42, achievementProgress: response.achievementProgress });
+});
 
 it("does not show an older ended run beside a newer completion", async () => {
   const data = partyState("COMPLETED");

@@ -3,31 +3,42 @@ import { effectiveMasteries } from "@/libs/mastery";
 import { calcMaxEnergy } from "@/libs/profile";
 import { findDungeonRewardUserCache } from "@/queries/dungeon";
 import { fetchMasterySources } from "@/queries/skillTree";
+import { getRewardUserDelta } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
-import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
-import type { PostProcessedRewards } from "@/validators/rewards";
+import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
+import {
+  PostProcessedRewardSchema,
+  type PostProcessedRewards,
+} from "@/validators/rewards";
 
-/** Return committed completion balances; private sources supply only public derived values. */
-export const getDungeonRewardUserPatch = async (
+/** Confirm receipt balances and reconcile progression when the delivered reward affects it. */
+export const getDungeonRewardUserUpdate = async (
   client: DrizzleClient,
   before: UserData,
   rewards: PostProcessedRewards | undefined,
 ) => {
-  const [saved, sources, membership] = await Promise.all([
+  if (!rewards || getRewardUserDelta(rewards) === undefined)
+    return getRewardUserUpdate({
+      client,
+      userId: before.userId,
+      rewards: rewards ?? PostProcessedRewardSchema.parse({}),
+      granted: { titles: [], badges: [], sageModes: [] },
+      requiresRelations: true,
+    });
+  // Completion is counted when the final battle settles; its battle-ended profile
+  // refresh reconciles trackers before this scalar-only receipt is delivered.
+  const [saved, sources] = await Promise.all([
     findDungeonRewardUserCache(client, before.userId),
     fetchMasterySources(client, before.userId),
-    (rewards?.reward_village_membership ?? "NONE") !== "NONE" ||
-    (rewards?.reward_titles?.length ?? 0) > 0
-      ? getMembershipUserPatch(client, before)
-      : undefined,
   ]);
-  if (!saved) return undefined;
+  if (!saved) return { userPatch: undefined };
   const sourceUser = { ...saved, ...sources };
   const { bloodlineId: _bloodlineId, isAi: _isAi, ...patch } = saved;
   return {
-    ...patch,
-    ...membership,
-    effectiveMasteries: effectiveMasteries(sourceUser),
-    maxEnergy: calcMaxEnergy(sourceUser),
+    userPatch: {
+      ...patch,
+      effectiveMasteries: effectiveMasteries(sourceUser),
+      maxEnergy: calcMaxEnergy(sourceUser),
+    },
   };
 };
