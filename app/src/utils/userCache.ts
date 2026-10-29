@@ -198,6 +198,19 @@ const mergeUserChanges = <T extends object>(
     )
       continue;
     if (amount === undefined && value === original[field]) continue;
+    // Mission assignments and complete shrine settings are saved JSON snapshots.
+    if (
+      amount === undefined &&
+      isCacheObject(value) &&
+      (field === "activeMission" ||
+        (field === "shrineSettings" &&
+          Array.isArray(value.unlockedAiIds) &&
+          Array.isArray(value.activeAiIds) &&
+          isCacheObject(value.activeBoosts)))
+    ) {
+      updated[field] = value;
+      continue;
+    }
     if (isCacheObject(value) || isCacheObject(amount)) {
       const merged = mergeUserChanges(
         isCacheObject(original[field]) ? original[field] : {},

@@ -10,15 +10,14 @@ import {
   getDashboardContentPriority,
 } from "@/libs/profileDashboard";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 export function DashboardSettings({
   userData,
-  updateUser,
 }: {
   userData: NonNullable<UserWithRelations>;
-  updateUser?: (data: Partial<UserWithRelations>) => Promise<void>;
 }) {
-  const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const [priority, setPriority] = useState(() =>
     getDashboardContentPriority(userData.dashboardContentPriority),
   );
@@ -29,13 +28,13 @@ export function DashboardSettings({
     setRemember(userData.rememberProfileTab);
   }, [userData.userId, userData.dashboardContentPriority, userData.rememberProfileTab]);
   const save = api.profile.updatePreferences.useMutation({
-    onSuccess: async (result, input) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _input, revision) => {
       if (!result.success) {
         setMessage(result.message);
         return;
       }
-      if (updateUser) await updateUser(input);
-      else await utils.profile.getUser.invalidate();
+      await updateUser(result.userPatch, { revision });
       setMessage("Dashboard preferences saved.");
     },
     onError: (error) => setMessage(error.message),

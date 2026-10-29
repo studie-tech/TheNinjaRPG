@@ -60,7 +60,7 @@ export default function CombatPage() {
   // Data from the DB
   const setBattleAtom = useSetAtom(userBattleAtom);
   const utils = api.useUtils();
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { data, isLoading, isSuccess, isError, isFetching, refetch } =
     api.combat.getBattle.useQuery(
       { battleId: userData?.battleId },
@@ -70,13 +70,16 @@ export default function CombatPage() {
   // Mutation for handing turns to / taking them back from the user's AI profile
   const { mutate: toggleAutoCombat, isPending: isTogglingAutoCombat } =
     api.combat.toggleAutoCombat.useMutation({
-      onMutate: () => setAutoCombatError(undefined),
-      onSuccess: async (result) => {
+      onMutate: () => {
+        setAutoCombatError(undefined);
+        return prepareUserUpdate();
+      },
+      onSuccess: async (result, _input, revision) => {
         setAutoCombatError(result.success ? undefined : result.message);
         if (result.message) showMutationToast(result);
         await Promise.all([
           utils.combat.getBattle.invalidate(),
-          utils.profile.getUser.invalidate(),
+          ...(result.success ? [updateUser(result.userPatch, { revision })] : []),
         ]);
       },
       onError: (error) => setAutoCombatError(error.message),
@@ -183,7 +186,7 @@ export default function CombatPage() {
   // Reconcile from the server without clearing held results or a newer battle.
   useEffect(() => {
     if (isBattleMissing) {
-      if (userData?.battleId) void utils.profile.getUser.invalidate();
+      if (userData?.battleId) void utils.profile.getUser.refetch();
       if (battle?.id === userData?.battleId && battle?.extraState.dungeon && !results) {
         router.push("/dungeon");
       }

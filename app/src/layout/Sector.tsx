@@ -423,7 +423,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       void utils.coop.dungeon.getAvailable.invalidate();
       // Active runs carry their private presentation in the profile snapshot.
       if (userRef.current?.userQuests.some((entry) => !entry.completed && !entry.endAt))
-        void utils.profile.getUser.invalidate();
+        void utils.profile.getUser.refetch();
     };
     channel.bind("updated", update);
     return () => {
@@ -1188,7 +1188,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     pendingCrossRef.current = null;
     pendingWorldTargetRef.current = null;
     setTarget(null);
-    await utils.profile.getUser.invalidate();
+    await utils.profile.getUser.refetch();
     if (!mountedRef.current) return;
     const freshUser = utils.profile.getUser.getData()?.userData;
     if (freshUser) {
@@ -1305,7 +1305,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       } else {
         // Navigation can outlive a committed move. Refresh rather than apply an
         // older location over a later action in this account's profile cache.
-        await utils.profile.getUser.invalidate();
+        await utils.profile.getUser.refetch();
       }
     },
   });

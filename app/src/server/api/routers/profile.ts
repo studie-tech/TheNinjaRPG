@@ -568,11 +568,14 @@ export const profileRouter = createTRPCRouter({
   updatePreferences: protectedProcedure
     .meta({ mcp: { description: "Update user game preferences" } })
     .input(updateUserPreferencesSchema)
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({ userPatch: updateUserPreferencesSchema.optional() }),
+    )
     .mutation(async ({ ctx, input }) => {
       const result = await updateUserDataForUpdatePreferences(ctx.drizzle, input, ctx);
       return {
         success: result.rowsAffected > 0,
+        userPatch: result.rowsAffected > 0 ? input : undefined,
         message:
           result.rowsAffected > 0
             ? "Updated preferences"

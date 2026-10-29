@@ -59,7 +59,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id }) => {
       }
     },
     onError: async () => {
-      await utils.profile.getUser.invalidate();
+      await utils.profile.getUser.refetch();
     },
     onSettled: () => {
       document.body.style.cursor = "default";

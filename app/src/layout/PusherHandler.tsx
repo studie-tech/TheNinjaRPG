@@ -97,7 +97,7 @@ export const usePusherHandler = (
           }
         } else if (data.type === "battleEnded") {
           await utils.profile.getUser.cancel();
-          await utils.profile.getUser.invalidate();
+          await utils.profile.getUser.refetch();
           void utils.combat.getBattle.invalidate();
           if (data.dungeonRunId) {
             void utils.coop.dungeon.getState.invalidate();
@@ -106,7 +106,7 @@ export const usePusherHandler = (
         } else if (data.type === "questTeam") {
           // Membership changes affect the roster, personal quest projection and reward offers.
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            utils.profile.getUser.refetch(),
             utils.coop.quest.overview.invalidate(),
             utils.quests.getPendingRewardChoices.invalidate(),
           ]);
@@ -126,7 +126,7 @@ export const usePusherHandler = (
         } else if (data.type === "eventTournament") {
           // Invitations and substitutions can make an idle tab a ready-check participant.
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            utils.profile.getUser.refetch(),
             utils.tournament.getEventNotices.invalidate(),
             utils.tournament.getEvent.invalidate(),
             utils.tournament.listEvents.invalidate(),

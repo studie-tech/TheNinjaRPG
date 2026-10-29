@@ -397,10 +397,10 @@ export const useAutoCombatSetting = (): [boolean, (enabled: boolean) => void] =>
     onSuccess: async (data) => {
       if (data.success) return;
       showMutationToast(data);
-      await utils.profile.getUser.invalidate();
+      await utils.profile.getUser.refetch();
     },
     onError: async () => {
-      await utils.profile.getUser.invalidate();
+      await utils.profile.getUser.refetch();
     },
   });
   const enabled = userData?.defaultAutoCombat ?? true;
