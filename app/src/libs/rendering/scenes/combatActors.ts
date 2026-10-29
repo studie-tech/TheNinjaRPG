@@ -18,6 +18,7 @@ import {
 } from "@/libs/combat/util";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { lpcFacing } from "@/libs/lpc/catalog";
+import lpcProfiles from "@/libs/lpc/profiles.json";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
 import { createSoftShadowTexture } from "@/libs/rendering/primitives/shadow";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
@@ -204,15 +205,30 @@ export const createCombatActors = (
               current.art = art;
               artRoot.addChild(art.container);
               // Portrait and badge bounds keep HUD rows above art and ground cues below it.
-              // LPC frame padding is transparent, so preserve its compact positioning.
+              // Headgear can fill the LPC frame; ordinary frames retain their compact HUD.
               if (!(current.user.isAi && current.user.isOriginal)) {
                 const { hp, sp, cp, threat } = current;
                 const { selection, hover, identity } = current;
                 let top = 0,
                   bottom = Infinity;
                 for (const entry of art.entries) {
-                  if (entry.character || entry.description.kind === "tombstone")
+                  if (entry.description.kind === "tombstone") continue;
+                  if (entry.character) {
+                    const hasHeadgear = entry.description.character?.layers.some(
+                      ({ profile }) => {
+                        const definition = (lpcProfiles as Record<string, unknown>)[
+                          profile
+                        ];
+                        return (
+                          typeof definition === "string" &&
+                          /^headwear\/(?:coverings|hats|helmets)\//.test(definition)
+                        );
+                      },
+                    );
+                    if (hasHeadgear) top = Math.max(top, entry.bounds.maxY);
+                    // Transparent frame padding does not constrain the ground markers.
                     continue;
+                  }
                   top = Math.max(top, entry.bounds.maxY);
                   bottom = Math.min(bottom, entry.bounds.minY);
                 }

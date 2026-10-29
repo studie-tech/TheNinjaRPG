@@ -124,6 +124,20 @@ describe("combat actor reconciliation", () => {
     for (const label of ["combat-selection", "combat-hover", "combat-original"])
       expect(root.getChildByLabel(label)?.y).toBe(0);
   });
+  it.each(["helmet", "crown", "horns"])("clears tall %s artwork with every HUD row without moving ground cues", async (profile) => {
+    const appearance = resolveSpriteAppearance({});
+    appearance.layers.push({ profile, color: "gray" });
+    const { actors, root, user, battle, grid } = await setup(false, appearance);
+    const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
+    const frameTop = tile.height * 1.35;
+    const meters = ["combat-health", "combat-stamina", "combat-chakra", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
+    const positions = meters.map((meter) => meter.y);
+    for (const meter of meters) expect(meter.y + meter.getLocalBounds().minY).toBeGreaterThan(frameTop);
+    for (const label of ["combat-selection", "combat-hover", "combat-original"])
+      expect(root.getChildByLabel(label)?.y).toBe(0);
+    actors.sync({ battle }); actors.sync({ battle });
+    expect(meters.map((meter) => meter.y)).toEqual(positions);
+  });
   it("keeps resource rows full-height and separates amber threat from their distinct colors", async () => {
     const { root, user, grid } = await setup(false, resolveSpriteAppearance({}));
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
