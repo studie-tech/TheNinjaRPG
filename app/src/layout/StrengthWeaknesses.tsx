@@ -267,8 +267,8 @@ export const GraphsTab: React.FC<GraphsTabProps> = ({ userData }) => {
     const masteryCtx = masteryChartRef?.current?.getContext("2d");
     const combatCtx = combatChartRef?.current?.getContext("2d");
     if (masteryCtx && combatCtx && userData) {
-      let masteryChart: Chart | undefined;
-      let combatChart: Chart | undefined;
+      let masteryChart: Chart<"radar"> | undefined;
+      let combatChart: Chart<"bar"> | undefined;
       let cancelled = false;
       setChartFailed(false);
       void (async () => {
