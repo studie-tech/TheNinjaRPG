@@ -16,7 +16,7 @@ describe("bundled LPC artwork", () => {
   });
   it("ships every referenced atlas with intact transparency, dimensions and content hashes", async () => {
     const dimensions = new Map<string, { width: number; height: number }>();
-    for (const layers of Object.values(lpcCatalog.entries)) for (const sheet of layers) {
+    for (const layers of Object.values(lpcCatalog.entries)) for (const sheet of layers.flatMap((sheet) => [sheet, ...sheet.travel ? [sheet.travel] : []])) {
       if (!dimensions.has(sheet.image)) {
         const bytes = new Uint8Array(await readFile(new URL(`../../../public${sheet.image}`, import.meta.url)));
         expect(createHash("sha256").update(bytes).digest("hex").slice(0, 24)).toBe(sheet.image.replace(/^\/lpc\//, "").replace(/\.png$/, ""));
@@ -37,7 +37,22 @@ describe("bundled LPC artwork", () => {
         expect((Math.floor(index / layout.columns) + 1) * layout.cell).toBeLessThanOrEqual(bounds.height);
       }
     }
-  }, 60000);
+  }, 120000);
+  it("uses one slash alternative, and supplies compact resting/movement poses for every silhouette", () => {
+    const sword = lpcCatalog.entries["sword/male/gray/blue"]!;
+    expect(sword.filter((sheet) => lpcCatalog.layouts[sheet.layout]!.clips.slash)).toHaveLength(2);
+    for (const sheets of Object.values(lpcCatalog.entries)) {
+      expect(sheets.some((sheet) => !!sheet.travel)).toBe(true);
+      for (const sheet of sheets) if (sheet.travel) {
+        const layout = lpcCatalog.layouts[sheet.travel.layout]!;
+        expect(Object.keys(layout.clips).sort()).toEqual(["idle", "walk"]);
+        for (const direction of [0, 1, 2, 3] as const) {
+          expect(lpcFrame(sheet.travel, "idle", direction, 0)).not.toBeNull();
+          expect(lpcFrame(sheet.travel, "walk", direction, 100)).not.toBeNull();
+        }
+      }
+    }
+  });
   it("retains attribution for every imported profile and pins the upstream revision", () => {
     expect(lpcCatalog.revision).toMatch(/^[a-f0-9]{40}$/);
     for (const key of Object.keys(lpcCatalog.entries)) expect(credits.some((entry) => entry.profile === key.split("/")[0] && entry.authors.length && entry.chosenLicense && entry.urls.length)).toBe(true);

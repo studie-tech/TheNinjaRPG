@@ -295,6 +295,15 @@ export const createTravelScene = async (options: {
       }
       transform();
       actors.container.position.copyFrom(entry.position);
+      const halfWidth = game.renderer.width / (2 * scale());
+      const halfHeight = game.renderer.height / (2 * scale());
+      if (camera)
+        actors.setViewport({
+          minX: camera.x - halfWidth - entry.position.x,
+          maxX: camera.x + halfWidth - entry.position.x,
+          minY: camera.y - halfHeight - entry.position.y,
+          maxY: camera.y + halfHeight - entry.position.y,
+        });
       const actorSnapshot: TravelActorsSnapshot = { ...snapshot, grid: entry.grid };
       if (
         actorsDirty ||
@@ -312,8 +321,6 @@ export const createTravelScene = async (options: {
         actors.sync(actorSnapshot);
       }
       actors.animate(frame);
-      const halfWidth = game.renderer.width / (2 * scale());
-      const halfHeight = game.renderer.height / (2 * scale());
       for (const rendered of sectors.values()) {
         const margin = rendered.margin;
         const visible =

@@ -46,7 +46,11 @@ export const createWorldSprites = async (
     descriptions.map(async (description) => {
       if (description.character) {
         try {
-          const character = await createLpcCharacter(game, description.character);
+          const character = await createLpcCharacter(
+            game,
+            description.character,
+            description.characterMode,
+          );
           return { texture: null, description, character };
         } catch (error) {
           if (game.signal.aborted) throw error;

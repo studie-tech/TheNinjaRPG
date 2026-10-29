@@ -7,9 +7,10 @@ import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/
 export const createLpcCharacter = async (
   game: GameRenderer,
   appearance: SpriteAppearance,
+  mode: "all" | "travel" = "all",
 ) => {
   const parts = appearance.layers.flatMap((layer) => {
-    const sheets = spriteLayerSheets(appearance, layer);
+    const sheets = spriteLayerSheets(appearance, layer, mode);
     // Oversized weapons split held and attack poses across separate sheets.
     const authored = new Set(
       sheets.flatMap((sheet) =>
@@ -64,7 +65,11 @@ export const createLpcCharacter = async (
       const sample = lpcFrame(
         entry.sheet,
         state,
-        direction,
+        entry.layer.mirror && (direction === 1 || direction === 3)
+          ? direction === 1
+            ? 3
+            : 1
+          : direction,
         frame.now - startedAt,
         frame.reducedMotion,
       );

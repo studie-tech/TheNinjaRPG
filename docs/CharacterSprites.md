@@ -5,6 +5,11 @@ scene lifecycle. Character creation and profile attribute management preview the
 same appearance recipe. Body style is independent of gender; existing characters
 derive their initial style from gender until the player selects one.
 
+Sector actors and idle/walk previews use compact movement atlases. Combat loads
+the attack poses. Sector actors outside a padded viewport do not acquire texture
+leases; moving the viewport into their area installs them from the latest snapshot,
+and departing actors release their resources through their existing render scope.
+
 ## Appearance and content
 
 `app/src/libs/lpc/appearance.ts` resolves saved skin, eye and hair colours, all
@@ -24,7 +29,9 @@ variant name can supply its colour while inheriting the item's silhouette.
 LPC equivalents for fans, throwing stars, rings, bracelets, tattoos and scars use
 original pixel details aligned to the authored head or hand poses. LPC poses that
 are absent on a particular layer hold its available pose; an authored attack pose
-replaces that layer's held weapon sheets. Mercenary and ANBU anonymity uses uniform
+replaces that layer's held weapon sheets. Forward and reverse weapon slashes are
+alternatives. Weapons with no authored idle pose hold their initial attack pose
+while resting or walking. Mercenary and ANBU anonymity uses uniform
 recipes without identifiable hair or equipment. Existing AI portrait artwork is
 preserved.
 

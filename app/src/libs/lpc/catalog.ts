@@ -11,7 +11,7 @@ export type LpcLayout = {
   columns: number;
   clips: Partial<Record<LpcAnimation, number[][]>>;
 };
-export type LpcSheet = { image: string; z: number; layout: number };
+export type LpcSheet = { image: string; z: number; layout: number; travel?: LpcSheet };
 export const lpcCatalog = source as unknown as {
   revision: string;
   entries: Record<string, LpcSheet[]>;
@@ -22,6 +22,7 @@ export const lpcCatalog = source as unknown as {
 export const spriteLayerSheets = (
   appearance: SpriteAppearance,
   layer: SpriteLayer,
+  mode: "all" | "travel" = "all",
 ): LpcSheet[] => {
   const head = layer.profile.startsWith("head-");
   const color = layer.color === "blonde" ? "yellow" : layer.color;
@@ -29,7 +30,9 @@ export const spriteLayerSheets = (
   const fallback = `${layer.profile}/${appearance.body}/${head || layer.profile === "body" ? "light" : "gray"}/blue`;
   const sheets = lpcCatalog.entries[key] ?? lpcCatalog.entries[fallback];
   if (!sheets) throw new Error(`Sprite selection is not bundled: ${key}`);
-  return sheets;
+  return mode === "travel"
+    ? sheets.flatMap((sheet) => (sheet.travel ? [sheet.travel] : []))
+    : sheets;
 };
 
 export const lpcFrame = (

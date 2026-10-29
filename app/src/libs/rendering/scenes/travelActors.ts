@@ -23,7 +23,7 @@ import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createRenderScope } from "@/libs/rendering/scope";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
-import { isObjectChainVisible } from "@/libs/rendering/visibility";
+import { isObjectChainVisible, type WorldBounds } from "@/libs/rendering/visibility";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -40,8 +40,41 @@ export const createTravelActors = (game: GameRenderer) => {
   let hovered: string | null = null;
   let paths: PathCalculator | null = null;
   let pathGrid: Grid<TerrainHex> | null = null;
-  const sync = (snapshot: TravelActorsSnapshot) => {
-    if (pathGrid !== snapshot.grid) {
+  let actorSector: number | null = null;
+  let sourceSnapshot: TravelActorsSnapshot | null = null;
+  let viewport: WorldBounds | null = null;
+  let visibleKey = "";
+  const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
+    const bounds = viewport;
+    const visibleUsers = !bounds
+      ? snapshot.users
+      : snapshot.users.filter((user) => {
+          if (user.userId === snapshot.viewer?.userId) return true;
+          const tile = snapshot.grid.getHex({
+            col: user.longitude,
+            row: user.latitude,
+          });
+          return (
+            tile &&
+            -tile.center.x >= bounds.minX - tile.width * 3 &&
+            -tile.center.x <= bounds.maxX + tile.width * 3 &&
+            -tile.center.y >= bounds.minY - tile.height * 3 &&
+            -tile.center.y <= bounds.maxY + tile.height * 3
+          );
+        });
+    return { ...snapshot, users: visibleUsers };
+  };
+  const userKey = (snapshot: TravelActorsSnapshot) =>
+    snapshot.users
+      .map((user) => `${user.userId}:${user.npcPlacementId ?? ""}`)
+      .join("|");
+  const reconcile = (snapshot: TravelActorsSnapshot) => {
+    if (pathGrid !== snapshot.grid || actorSector !== snapshot.sector) {
+      // Snapshots use sector-local coordinates; interpolation cannot cross their origins.
+      for (const record of records.values()) record.scope.dispose();
+      records.clear();
+      byRoot.clear();
+      actorSector = snapshot.sector;
       pathGrid = snapshot.grid;
       paths = new PathCalculator(snapshot.grid);
     }
@@ -58,7 +91,11 @@ export const createTravelActors = (game: GameRenderer) => {
       }
     }
     for (const recipe of recipes) {
-      const signature = JSON.stringify([recipe.parts, recipe.counter]);
+      const signature = JSON.stringify([
+        recipe.parts,
+        recipe.counter,
+        recipe.user?.allianceStatus,
+      ]);
       const previous = records.get(recipe.key);
       if (previous?.signature === signature) {
         if (previous.recipe.tile !== recipe.tile) {
@@ -223,7 +260,10 @@ export const createTravelActors = (game: GameRenderer) => {
         record.facing = lpcFacing(dx, dy, record.facing);
         const step = frame.reducedMotion
           ? distance
-          : Math.min(distance, recipe.tile.width * frame.delta * 6);
+          : Math.min(
+              distance,
+              recipe.tile.width * frame.delta * 6 * Math.max(1, record.path.length),
+            );
         record.x += (dx / distance) * step;
         record.y += (dy / distance) * step;
         if (step === distance) {
@@ -243,9 +283,24 @@ export const createTravelActors = (game: GameRenderer) => {
     }
     container.children.sort((a, b) => b.position.y - a.position.y);
   };
+  const sync = (snapshot: TravelActorsSnapshot) => {
+    sourceSnapshot = snapshot;
+    const visible = visibleSnapshot(snapshot);
+    visibleKey = userKey(visible);
+    reconcile(visible);
+  };
   return {
     container,
     sync,
+    setViewport: (bounds: WorldBounds) => {
+      viewport = bounds;
+      if (!sourceSnapshot) return;
+      const visible = visibleSnapshot(sourceSnapshot);
+      const key = userKey(visible);
+      if (key === visibleKey) return;
+      visibleKey = key;
+      reconcile(visible);
+    },
     hit,
     animate,
     hover: (next: string | null) => {
@@ -453,7 +508,7 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
       0.5,
       1,
       user.spriteAppearance
-        ? { character: user.spriteAppearance }
+        ? { character: user.spriteAppearance, characterMode: "travel" }
         : user.isNpc
           ? { rendition: 256 }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },

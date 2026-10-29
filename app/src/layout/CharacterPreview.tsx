@@ -38,7 +38,11 @@ export const CharacterPreview = ({
         });
         dispose = game.dispose;
         try {
-          const actor = await createLpcCharacter(game, JSON.parse(signature));
+          const actor = await createLpcCharacter(
+            game,
+            JSON.parse(signature),
+            animation === "idle" || animation === "walk" ? "travel" : "all",
+          );
           if (controller.signal.aborted) return;
           actor.sprite.position.set(128, 125);
           actor.sprite.scale.set(128);
@@ -75,7 +79,7 @@ export const CharacterPreview = ({
       />
       <figcaption className="text-muted-foreground min-h-6 text-sm" role="status">
         {error
-          ? "Character preview unavailable. Your choices are still saved."
+          ? "Character preview unavailable. You can continue editing your character."
           : ready
             ? "Your ninja"
             : "Loading character preview…"}

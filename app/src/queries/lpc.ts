@@ -22,7 +22,7 @@ export const updateSpriteBodyStyle = (
 export const spriteUserRelations = {
   attributes: { columns: { attribute: true } },
   items: {
-    columns: { equipped: true, quantity: true, activeVariantId: true },
+    columns: { id: true, equipped: true, quantity: true, activeVariantId: true },
     where: and(
       ne(userItem.equipped, "NONE"),
       gt(userItem.quantity, 0),

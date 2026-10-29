@@ -224,6 +224,7 @@ const WALL_CORNERS = [
  */
 export type WorldSpriteDescription = {
   character?: import("@/validators/lpc").SpriteAppearance;
+  characterMode?: "all" | "travel";
   id: string;
   kind: string;
   image: string;

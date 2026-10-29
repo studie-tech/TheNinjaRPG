@@ -51,6 +51,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { readCampaignSource } from "@/libs/campaignSource";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { secureRandomInt } from "@/utils/math";
 import { useUserData } from "@/utils/UserContext";
 import {
   attributes,
@@ -853,7 +854,7 @@ const getRandomizedFormValues = () => {
     eye_color: colors[Math.floor(Math.random() * colors.length)] ?? colors[0],
     skin_color:
       skin_colors[Math.floor(Math.random() * skin_colors.length)] ?? skin_colors[0],
-    gender: genders[Math.floor(Math.random() * genders.length)] ?? genders[0],
+    gender: genders[secureRandomInt(genders.length)] ?? genders[0],
   };
 };
 

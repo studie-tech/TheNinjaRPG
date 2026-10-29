@@ -1,10 +1,10 @@
 import { expect, it } from "bun:test";
-import { performBattleAction, userItemToAction } from "@/libs/combat/actions";
+import { availableUserActions, performBattleAction, userItemToAction } from "@/libs/combat/actions";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance, withSpriteEquipment } from "@/libs/lpc/appearance";
 import { makeBattleUser, makeBattleUserItem, makeBattleWithWeapon, makeCompleteBattle } from "../combat/helpers/battleScenario";
 
-it("removes broken gear from the captured appearance and emits a unique attack cue in memory", () => {
+it("removes broken gear and preserves its attack cue through a batched end-turn", () => {
   const owned = makeBattleUserItem({ durability: 3 });
   const base = resolveSpriteAppearance({ attributes: ["Long Hair"] });
   const equipment = { [owned.id]: { slot: "HAND_1", profile: "katana", color: "red" } };
@@ -28,4 +28,8 @@ it("removes broken gear from the captured appearance and emits a unique attack c
   expect(wearer.spriteAppearance).toEqual(base);
   expect(wearer.spriteAction).toMatchObject({ animation: "slash", longitude: 4, latitude: 3 });
   expect(wearer.spriteAction?.id).not.toBe("previous");
+  const cue = wearer.spriteAction;
+  const wait = availableUserActions(newBattle, user.userId, true, true).find((action) => action.id === "wait")!;
+  const finished = performBattleAction({ battle: newBattle, action: wait, grid: getBattleGrid(1, newBattle), contextUserId: user.userId, actorId: user.userId, longitude: user.longitude, latitude: user.latitude }).newBattle;
+  expect(finished.usersState.find((entry) => entry.userId === user.userId)?.spriteAction).toEqual(cue);
 });

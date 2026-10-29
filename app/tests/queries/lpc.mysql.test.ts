@@ -37,6 +37,21 @@ describeWithDatabase("sprite appearance database snapshots", () => {
     expect(user?.attributes).toHaveLength(2);
     expect(user?.items[0]?.activeVariant?.lpcColor).toBe("red");
   });
+  it("retains both worn copies of the same weapon in a sector appearance", async () => {
+    const client = await getTestDatabase() as unknown as DrizzleClient;
+    await insertItems([{ id: "sprite-blades", name: "Twin knives", slot: "HAND", itemType: "WEAPON", weaponType: "DAGGER", lpcProfile: "dagger" }]);
+    await insertUserItems([
+      { id: "sprite-left", userId: "sprite-owner", itemId: "sprite-blades", equipped: "HAND_1" },
+      { id: "sprite-right", userId: "sprite-owner", itemId: "sprite-blades", equipped: "HAND_2" },
+    ]);
+    const [users] = await fetchSectorWindowData(client, "viewer", 724);
+    const user = users.find((entry) => entry.userId === "sprite-owner")!;
+    const appearance = resolveSpriteAppearance(user);
+    expect(appearance.layers.filter((layer) => layer.profile === "dagger")).toEqual([
+      { slot: "HAND_1", profile: "dagger", color: "gray" },
+      { slot: "HAND_2", profile: "dagger", color: "gray", mirror: true },
+    ]);
+  });
   it("preserves the selected appearance in inventory responses used by equipment cache patches", async () => {
     const client = await getTestDatabase() as unknown as DrizzleClient;
     const inventories = await Promise.all([

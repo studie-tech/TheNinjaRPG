@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Container, Sprite, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, Graphics, Sprite, Texture } from "pixi.js";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import { lpcCatalog } from "@/libs/lpc/catalog";
+import { lpcCatalog, lpcFrame } from "@/libs/lpc/catalog";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
@@ -39,6 +39,22 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("layered LPC actors", () => {
+  it("keeps mirrored off-hand thrusts facing the same direction as the body", async () => {
+    const { game } = gameFixture();
+    const actor = await characters.createLpcCharacter(game, { version: 1, body: "male", layers: [{ profile: "dagger", color: "blue", mirror: true }] });
+    const sheets = lpcCatalog.entries["dagger/male/blue/blue"]!;
+    for (const direction of [1, 3] as const) {
+      actor.render(frame(1000), "thrust", direction, true);
+      const sprites = actor.sprite.children as Sprite[];
+      for (const [index, child] of sprites.entries()) {
+        if (!child.visible) continue;
+        const expected = lpcFrame(sheets[index]!, "thrust", direction === 1 ? 3 : 1, 0)!;
+        expect(child.texture.frame.x).toBe(expected.x);
+        expect(child.texture.frame.y).toBe(expected.y);
+        expect(child.scale.x).toBeLessThan(0);
+      }
+    }
+  });
   it("walks toward sector updates, keeps canonical equipment and snaps reduced motion", async () => {
     const { game } = gameFixture();
     let resolveLoaded: (() => void) | undefined;
@@ -56,12 +72,17 @@ describe("layered LPC actors", () => {
     const grid = getBattleGrid(40, battle, { x: -20, y: -20 });
     const snapshot: TravelActorsSnapshot = { grid, viewer, users: [user], sector: 724, minBracket: -1, showUsers: true, friendlyAttack: false, structureObjectiveIds: new Set() };
     const actors = createTravelActors(game);
+    const tileBounds = grid.getHex({ col: 3, row: 1 })!;
+    const farTile = grid.getHex({ col: 11, row: 9 })!;
+    snapshot.users.push({ ...user, userId: "distant-owner", longitude: 11, latitude: 9 });
+    actors.setViewport({ minX: -tileBounds.center.x, maxX: -tileBounds.center.x, minY: -tileBounds.center.y, maxY: -tileBounds.center.y });
     const stage = new Container(); stage.addChild(actors.container);
     cleanups.push(() => stage.destroy({ children: true, texture: false, textureSource: false }));
     actors.sync(snapshot); await loaded;
     // Artwork attaches after the async factory and scene aggregation finish.
     await new Promise((resolve) => setTimeout(resolve, 0));
     const root = actors.container.children[0]!;
+    expect(actors.container.children).toHaveLength(1);
     actors.animate(frame(1000));
     const before = root.position.clone();
     user.longitude = 4;
@@ -74,11 +95,34 @@ describe("layered LPC actors", () => {
     expect(root.x).toBeCloseTo(-tile.center.x);
     expect(root.y).toBeCloseTo(-tile.center.y);
     expect(renders[0]!.mock.calls.at(-1)?.[1]).toBe("idle");
+    user.longitude = 11;
+    actors.sync(snapshot);
+    for (let tick = 0; tick < 30; tick++) actors.animate(frame(1400 + tick * 1000 / 60));
+    expect(root.x).toBeCloseTo(-grid.getHex({ col: 11, row: 1 })!.center.x);
     // The server recipe takes precedence over a stale cached profile body style.
     expect(create.mock.calls[0]?.[1]).toEqual(appearance);
     expect(renders).toHaveLength(1);
-    snapshot.users = []; actors.sync(snapshot);
+    expect((root.children[0] as Graphics).context.fillStyle.color).toBe(0x3c80bb);
+    user.allianceStatus = "ENEMY";
+    actors.sync(snapshot);
+    const hostile = actors.container.children[0]!;
     expect(root.destroyed).toBe(true);
+    expect((hostile.children[0] as Graphics).context.fillStyle.color).toBe(0xb84040);
+    actors.setViewport({ minX: -farTile.center.x, maxX: -farTile.center.x, minY: -farTile.center.y, maxY: -farTile.center.y });
+    expect(actors.container.children).toHaveLength(2);
+    const distant = actors.container.children.find((child) => child !== hostile)!;
+    actors.setViewport({ minX: -tileBounds.center.x, maxX: -tileBounds.center.x, minY: -tileBounds.center.y, maxY: -tileBounds.center.y });
+    expect(distant.destroyed).toBe(true);
+    expect(actors.container.children).toHaveLength(1);
+    user.longitude = 0;
+    snapshot.sector = 725;
+    snapshot.grid = getBattleGrid(40, battle, { x: -20, y: -20 });
+    actors.sync(snapshot); actors.animate(frame(2500));
+    expect(hostile.destroyed).toBe(true);
+    const crossed = actors.container.children[0]!;
+    expect(crossed.x).toBeCloseTo(-snapshot.grid.getHex({ col: 0, row: 1 })!.center.x);
+    snapshot.users = []; actors.sync(snapshot);
+    expect(crossed.destroyed).toBe(true);
   });
   it("selects attack sheets instead of held weapons and restarts repeated attacks", async () => {
     const { game, source, owned } = gameFixture();

@@ -29,6 +29,7 @@ if subprocess.check_output(["git", "-C", str(SOURCE), "rev-parse", "HEAD"], text
     raise SystemExit("LPC checkout must be at the pinned revision " + REVISION)
 FILES = set(subprocess.check_output(["git", "-C", str(SOURCE), "ls-tree", "-r", "--name-only", "HEAD"], text=True).splitlines())
 def load_definition(path):
+    """Resolve an upstream definition, merging body-specific selections and credits."""
     if isinstance(path, str):
         return json.loads((SOURCE / "sheet_definitions" / path).read_text())
     result = {"credits": []}
@@ -45,6 +46,7 @@ def load_definition(path):
     return result
 
 definitions = {key: load_definition(path) for key, path in PROFILES.items()}
+definitions["boomerang"]["resting_pose_fallback"] = True
 for profile, template in {"tattoo": "head-hard", "scar": "head-hard", "fan": "gloves", "shuriken": "gloves", "ring": "gloves", "bracelet": "gloves"}.items():
     definitions[profile] = copy.deepcopy(definitions[template])
     definitions[profile]["supplement"] = profile
@@ -72,11 +74,13 @@ catalog, credits, generated = {}, [], set()
 images = {}
 
 def read_image(path):
+    """Cache source PNGs as RGBA so palette and alpha processing share one decoder."""
     if path not in images:
         images[path] = Image.open(SOURCE / path).convert("RGBA")
     return images[path]
 
 def palette(material, color):
+    """Choose a six-shade material ramp, including coloured metal adaptations."""
     values = palettes[material]
     aliases = {"yellow": "blonde", "gray": "grey", "ivory": "white", "gold": "yellow", "silver": "gray"}
     selected = values.get(color) or values.get(aliases.get(color))
@@ -87,6 +91,7 @@ def palette(material, color):
     return selected or values.get("light" if material == "body" else bases[material])
 
 def recolor(image, definition, color, eyes, source_variant):
+    """Apply authored ramps or legacy tinting without changing the alpha channel."""
     config = definition.get("recolors", {})
     configs = list(config.values()) if "color_1" in config else [config]
     replacements = {}
@@ -113,12 +118,19 @@ def recolor(image, definition, color, eyes, source_variant):
     return indexed.convert("RGBA")
 
 def candidates(definition, layer, body, state, color):
+    """Locate source poses while keeping alternative slash animations mutually exclusive."""
     path = layer.get(body)
     if not path:
         return []
     custom = layer.get("custom_animation", "")
     animation = "walk" if state == "idle" else state
-    if custom and not custom.startswith(animation + "_"):
+    stem = custom.removesuffix("_oversize").removesuffix("_128")
+    if stem == "slash_reverse":
+        # Forward and reverse slash are alternatives, not simultaneous layers.
+        if any(value.get("custom_animation", "").removesuffix("_oversize").removesuffix("_128") == "slash" for key, value in definition.items() if key.startswith("layer_")):
+            return []
+        stem = "slash"
+    if custom and stem != animation:
         return []
     variants = definition.get("variants", [])
     variant = (color if color in variants else (variants[0] if variants else None))
@@ -140,6 +152,7 @@ def candidates(definition, layer, body, state, color):
     return found
 
 def pack(definition, layer, body, color, eyes):
+    """Collect directional frames and produce combat and compact movement atlases."""
     clips, frames, cell = {}, [], 64
     for state, cycle in CYCLES.items():
         options = candidates(definition, layer, body, state, color)
@@ -169,13 +182,33 @@ def pack(definition, layer, body, color, eyes):
         clips[state] = directions
     if not frames:
         return None
+    if definition.get("resting_pose_fallback") and "idle" not in clips:
+        # Some authored weapons supply only an attack. Hold its initial pose at rest.
+        resting = [[indices[0]] for indices in next(iter(clips.values()))]
+        clips["idle"] = resting
+        clips["walk"] = resting
+    packed = write_atlas(frames, clips, cell, definition, layer, color, eyes, pathlib.Path(path).stem)
+    travel_clips, travel_frames = {}, []
+    for state in ["idle", "walk"]:
+        if state not in clips:
+            continue
+        travel_clips[state] = []
+        for indices in clips[state]:
+            travel_clips[state].append(list(range(len(travel_frames), len(travel_frames) + len(indices))))
+            travel_frames.extend(frames[i] for i in indices)
+    if travel_frames:
+        packed["travel"] = write_atlas(travel_frames, travel_clips, cell, definition, layer, color, eyes, pathlib.Path(path).stem, compact=True)
+    return packed
+
+def write_atlas(frames, clips, cell, definition, layer, color, eyes, source_variant, compact=False):
+    """Pack bounded PNGs, record their content hashes, and retain authored frame indices."""
     # WebGL 1 guarantees 2048px textures, including on older native/web devices.
-    columns = min(16, 2048 // cell)
+    columns = min(9 if compact else 16, 2048 // cell)
     atlas = Image.new("RGBA", (cell * columns, cell * ((len(frames) + columns - 1) // columns)))
     for i, frame in enumerate(frames):
         # Oversized weapons are centered on the same 64px actor origin.
         atlas.alpha_composite(frame, ((i % columns) * cell + (cell - frame.width) // 2, (i // columns) * cell + (cell - frame.height) // 2))
-    atlas = recolor(atlas, definition, color, eyes, pathlib.Path(path).stem)
+    atlas = recolor(atlas, definition, color, eyes, source_variant)
     data = io.BytesIO()
     atlas.save(data, format="PNG", optimize=True)
     digest = hashlib.sha256(data.getvalue()).hexdigest()[:24]
@@ -255,7 +288,7 @@ for profile, definition in definitions.items():
 # Empty source metadata is never silently published; compatibility comes from actual frames.
 layouts, layout_ids = [], {}
 for layers in catalog.values():
-    for layer in layers:
+    for layer in [part for layer in layers for part in [layer, *([layer["travel"]] if "travel" in layer else [])]]:
         layout = {"cell": layer.pop("cell"), "columns": layer.pop("columns"), "clips": layer.pop("clips")}
         key = json.dumps(layout, sort_keys=True)
         if key not in layout_ids:
