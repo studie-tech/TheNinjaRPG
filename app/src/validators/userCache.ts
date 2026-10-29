@@ -233,6 +233,8 @@ export const userPatchSchema = z.object({
       ),
     )
     .optional(),
+  anbuId: z.string().nullable().optional(),
+  anbuSquad: z.custom<NonNullable<UserWithRelations>["anbuSquad"]>().optional(),
   clanId: z.string().nullable().optional(),
   villageId: z.string().nullable().optional(),
   sector: z.number().optional(),

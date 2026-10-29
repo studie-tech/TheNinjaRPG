@@ -146,6 +146,7 @@ export const updateUserCache = async (
 };
 
 const USER_RELATIONS = {
+  anbuSquad: "anbuId",
   clan: "clanId",
   village: "villageId",
   bloodline: "bloodlineId",

@@ -1,20 +1,47 @@
 import { RANKED_ENTRY_COST } from "@/drizzle/constants";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { rankedSeason, rankedUserRewards, userData, village } from "@/drizzle/schema";
+import { anbuSquad, war, rankedSeason, rankedUserRewards, userData, village } from "@/drizzle/schema";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
+import { fetchUpdatedUser } from "@/server/api/routers/profile";
+import { withRequestScope } from "@/server/requestScope";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("ranked season reward loyalty", () => {
   beforeEach(async () => {
-    await resetTables(rankedUserRewards, rankedSeason, userData, village);
+    await resetTables(rankedUserRewards, rankedSeason, userData, village, anbuSquad, war);
     const db = await getTestDatabase();
     await db.insert(village).values({ id: "reward-village", name: "Reward village", kageId: "", tokens: 0 });
     await insertUsers([{ userId: "claimant", villageId: "reward-village", joinedVillageAt: new Date(Date.now() - 100 * 86_400_000), villagePrestige: 0, money: 0 }]);
     await db.insert(rankedSeason).values({ id: "season", name: "Season", description: "", startDate: new Date(0), endDate: new Date(0), rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_tokens: 1000, reward_prestige: 1000, reward_money: 1000 }) }] });
     await db.insert(rankedUserRewards).values({ id: "prize", userId: "claimant", seasonId: "season", division: "Wood" });
+  });
+
+  it("retains confirmed ANBU points through the shared response parser after a warmed read", async () => {
+    const db = await getTestDatabase();
+    await db.insert(anbuSquad).values({ id: "reward-squad", name: "Reward squad", image: "", villageId: "reward-village", kageOrderId: "", leaderOrderId: "" });
+    await db.update(userData).set({ anbuId: "reward-squad" }).where(eq(userData.userId, "claimant"));
+    await db.update(rankedSeason).set({ rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_anbupoints: 50 }) }] }).where(eq(rankedSeason.id, "season"));
+    const result = await withRequestScope(async () => {
+      await fetchUpdatedUser({ client: db, userId: "claimant" });
+      return (await callerFor(pvpRankRouter, "claimant")).claimSeasonRewards();
+    });
+    expect(result).toMatchObject({ success: true, userPatch: { anbuId: "reward-squad", anbuSquad: { id: "reward-squad", name: "Reward squad", points: 50 } } });
+    const parsed = userDeltaResponseSchema.parse(result);
+    expect(parsed.userPatch).toMatchObject({ anbuId: "reward-squad", anbuSquad: { id: "reward-squad", points: 50 }, sageModeId: null, sageMode: null });
+    expect(await db.query.anbuSquad.findFirst({ where: eq(anbuSquad.id, "reward-squad") })).toMatchObject({ points: 50 });
+  });
+
+  it("rebuilds faction notices when a reward moves the player to a different village", async () => {
+    const db = await getTestDatabase();
+    await db.insert(village).values({ id: "new-village", name: "AKIKAZE", sector: 2, kageId: "" });
+    await db.insert(war).values({ id: "former-war", type: "SECTOR_WAR", status: "ACTIVE", attackerVillageId: "other-village", defenderVillageId: "reward-village", sector: 30 });
+    await db.update(rankedSeason).set({ rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_village_membership: "AKIKAZE" }) }] }).where(eq(rankedSeason.id, "season"));
+    const result = await (await callerFor(pvpRankRouter, "claimant")).claimSeasonRewards();
+    expect(result).toMatchObject({ success: true, userPatch: { villageId: "new-village", village: { id: "new-village" }, activeWars: [] } });
   });
 
   it("returns derived progression for rank rewards without another profile request", async () => {

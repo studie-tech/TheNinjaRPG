@@ -1897,7 +1897,7 @@ export const findUserDataForQueryUpdatedUser = (
         },
       },
       anbuSquad: {
-        columns: { name: true },
+        columns: { id: true, name: true, points: true },
       },
       loadout: {
         columns: { jutsuIds: true },

@@ -1,5 +1,5 @@
 import type { UserData, UserQuest } from "@/drizzle/schema";
-import type { QuestContentType } from "@/validators/objectives";
+import type { QuestContentType, QuestTrackerType } from "@/validators/objectives";
 
 /** Shared feedback for server rejections and the isolated-run boundary. */
 export const ISOLATED_PYRAMID_MESSAGE =
@@ -69,3 +69,24 @@ export const isPyramidRestrictedProcedure = (path: string) =>
     "comments.fetchConversationComment",
     "staff.forceAwake",
   ].includes(path);
+
+/** Drop recovered history by receipt identity while retaining any newer run's tracker. */
+export const removeClosedPyramidHistories = (
+  user: { userQuests: UserQuest[]; questData: QuestTrackerType[] | null },
+  closed: readonly { id: string; questId: string; endAt: Date }[],
+) => {
+  const closedIds = new Set(closed.map((entry) => entry.id));
+  const userQuests = user.userQuests.filter((entry) => !closedIds.has(entry.id));
+  const remainingQuestIds = new Set(userQuests.map((entry) => entry.questId));
+  const closedQuestIds = new Set(
+    closed
+      .filter((entry) => !remainingQuestIds.has(entry.questId))
+      .map((entry) => entry.questId),
+  );
+  return {
+    userQuests,
+    questData:
+      user.questData?.filter((tracker) => !closedQuestIds.has(tracker.id)) ??
+      user.questData,
+  };
+};

@@ -110,6 +110,7 @@ import Table from "@/layout/Table";
 import { TransactionHistory } from "@/layout/TransactionHistory";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { canAttackBracket, getExpBracket, showUserRank } from "@/libs/profile";
+import { removeClosedPyramidHistories } from "@/libs/questRun";
 import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
 import { isRetryableTrpcError } from "@/utils/error";
@@ -612,7 +613,17 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     onSuccess: async (result, _variables, revision) => {
       const response: UserDeltaResponse = result;
       if (response.success || response.userPatch)
-        await updateUser(response.userPatch, { revision });
+        await updateUser(
+          response.userPatch
+            ? (current) => ({
+                ...response.userPatch,
+                ...(result.closedPyramidHistories?.length
+                  ? removeClosedPyramidHistories(current, result.closedPyramidHistories)
+                  : {}),
+              })
+            : undefined,
+          { revision },
+        );
     },
   });
 

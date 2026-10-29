@@ -30,7 +30,7 @@ import { findStoreUserIdAlias, insertStoreUserIdAlias } from "@/queries/purchase
 import { deleteRankedQueueForUser } from "@/queries/pvprank";
 import { clearQueueBattleId, deleteQueueById, listQueueMembers } from "@/queries/raids";
 import { deleteUserSkills, fetchMasterySources } from "@/queries/skillTree";
-import { findVillageUserCache } from "@/queries/socialUserCache";
+import { findQueueUserCache, findVillageUserCache } from "@/queries/socialUserCache";
 import {
   applyDevelopmentBackup,
   clearDevelopmentBackupTarget,
@@ -127,6 +127,7 @@ import {
   insertUserBadgeForInsertUserBadge,
   insertUserItemForCloneUserForDebug,
   insertUserJutsuForCloneUserForDebug,
+  listClosedPyramidHistoriesForForceAwake,
   listContentBackupForGetBackups,
   listHistoricalIpForGetUserHistoricalIps,
   listQuestHistoryForCloneUserForDebug,
@@ -477,7 +478,13 @@ export const staffRouter = createTRPCRouter({
       };
     }),
   forceAwake: protectedProcedure
-    .output(userDeltaResponseSchema)
+    .output(
+      userDeltaResponseSchema.extend({
+        closedPyramidHistories: z
+          .array(z.object({ id: z.string(), questId: z.string(), endAt: z.date() }))
+          .optional(),
+      }),
+    )
     .input(
       z.object({
         userId: z.string(),
@@ -556,11 +563,15 @@ export const staffRouter = createTRPCRouter({
       };
       const pusher = getServerPusher();
       void updateUserOnMap(pusher, targetUser.sector, output);
+      const recoveryUpdate =
+        input.userId === ctx.userId
+          ? await getForceAwakeUserUpdate(ctx.drizzle, ctx.userId, endedAt)
+          : { userPatch: {} };
       // Done
       return {
-        userPatch: input.userId === ctx.userId ? undefined : {},
         success: true,
         message: "You have changed user's state to awake",
+        ...recoveryUpdate,
       };
     }),
   insertUserBadge: protectedProcedure
@@ -1207,4 +1218,21 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
 
   // Final batch: Delete main userData record (must be last)
   await deleteUserDataForDeleteUserInternal(client, userId);
+};
+
+const getForceAwakeUserUpdate = async (
+  client: DrizzleClient,
+  userId: string,
+  endedAt: Date,
+) => {
+  const [saved, histories] = await Promise.all([
+    findQueueUserCache(client, userId),
+    listClosedPyramidHistoriesForForceAwake(client, userId, endedAt),
+  ]);
+  return {
+    userPatch: saved,
+    closedPyramidHistories: histories.flatMap((entry) =>
+      entry.endAt ? [{ ...entry, endAt: entry.endAt }] : [],
+    ),
+  };
 };
