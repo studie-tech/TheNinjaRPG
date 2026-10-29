@@ -82,15 +82,23 @@ export const createCombatActors = (
         const scope = createRenderScope(game),
           root = new Container(),
           artRoot = new Container();
-        const figureScale = parts.some((part) => part.character) ? LPC_COMBAT_SCALE : 1;
+        const character = parts.find((part) => part.character);
+        const figureScale = character ? LPC_COMBAT_SCALE : 1;
+        // LPC feet sit near row 60 of the 64px frame; ground cues share that contact point.
+        const groundY = character
+          ? character.y - character.size * (0.5 - 4 / 64)
+          : tile.height * 0.28;
         const shadowSprite = new Sprite(shadow);
         shadowSprite.anchor.set(0.5);
         shadowSprite.width = tile.width * 0.8 * figureScale;
         shadowSprite.height = tile.height * 0.5 * figureScale;
         shadowSprite.scale.y *= -1;
-        shadowSprite.position.set(tile.width / 2, tile.height * 0.3 * figureScale);
-        const selection = groundSelection(tile, true, figureScale),
-          hover = groundSelection(tile, false, figureScale);
+        shadowSprite.position.set(
+          tile.width / 2,
+          character ? groundY : tile.height * 0.3,
+        );
+        const selection = groundSelection(tile, true, groundY),
+          hover = groundSelection(tile, false, groundY);
         const identity = new Graphics()
           .poly([
             tile.width * 0.44,
@@ -108,14 +116,12 @@ export const createCombatActors = (
         artRoot.label = "combat-art";
         // Ground cues stay below artwork; the compact HUD clears both LPC heads and NPC portraits.
         root.addChild(shadowSprite, selection, hover, identity, artRoot);
-        // Full-height, separated rows preserve the resource colors at mobile map scale.
+        // Contiguous full-height rows keep all resource colors readable at mobile map scale.
         const meterWidth = tile.width / 2,
-          meterHeight = tile.height / 10,
-          meterGap = tile.height * 0.025,
-          meterStep = meterHeight + meterGap;
+          meterHeight = tile.height / 10;
         const lastMeterIndex = "curChakra" in user ? 2 : "curStamina" in user ? 1 : 0;
         const hudClearance =
-          lastMeterIndex * meterStep + meterHeight / 2 + tile.height * 0.03;
+          lastMeterIndex * meterHeight + meterHeight / 2 + tile.height * 0.03;
         const hudTop =
           tile.height * (user.isAi && user.isOriginal ? 1.71 : 1.07) + hudClearance;
         const meter = (color: number, index: number) =>
@@ -124,7 +130,7 @@ export const createCombatActors = (
             height: meterHeight,
             color,
             x: (tile.width - meterWidth) / 2,
-            y: hudTop - index * meterStep,
+            y: hudTop - index * meterHeight,
           });
         const hp = meter(0xb22222, 0);
         const sp = "curStamina" in user ? meter(0x008000, 1) : null;
@@ -137,7 +143,7 @@ export const createCombatActors = (
           height: meterHeight,
           color: 0xfbbf24,
           x: (tile.width - meterWidth) / 2,
-          y: hudTop + meterHeight + meterGap * 2,
+          y: hudTop + meterHeight,
         });
         threat.container.label = "combat-aggro";
         const highestThreat = new Graphics()
@@ -421,6 +427,10 @@ export const createCombatActors = (
       moving ||= Math.hypot(root.x + target.center.x, root.y + target.center.y) > 0.01;
       const displayed = record.alive && root.visible;
       record.selection.visible = displayed && user.userId === selectedId;
+      // Breathe through opacity so the retained ring stays centered on planted feet.
+      record.selection.alpha = frame.reducedMotion
+        ? 1
+        : 0.85 + Math.sin((frame.now * Math.PI) / 900) * 0.15;
       record.hover.visible =
         displayed && user.userId === hoveredId && user.userId !== selectedId;
       const visible =
@@ -548,9 +558,8 @@ export const combatActorParts = (
 };
 
 /** Thin ground ellipses identify controlled and hovered fighters without obscuring the terrain. */
-const groundSelection = (tile: TerrainHex, selected: boolean, figureScale: number) => {
-  const x = tile.width / 2,
-    y = tile.height * 0.28 * figureScale;
+const groundSelection = (tile: TerrainHex, selected: boolean, y: number) => {
+  const x = tile.width / 2;
   const rx = tile.width * 0.17,
     ry = tile.height * 0.07;
   const marker = new Graphics()

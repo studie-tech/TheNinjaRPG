@@ -86,7 +86,7 @@ describe("combat actor reconciliation", () => {
       expect(root.getChildIndex(marker)).toBeLessThan(root.getChildIndex(art));
       expect(marker.getLocalBounds().maxY).toBeLessThan(tile.height * 0.5);
     }
-    expect(threat.y - threat.height / 2).toBeGreaterThan(health.y + health.height / 2);
+    expect(threat.y - threat.height / 2).toBeCloseTo(health.y + health.height / 2);
     for (const label of ["combat-health", "combat-stamina", "combat-chakra"]) {
       const meter = root.getChildByLabel(label)!;
       expect(meter.y - meter.height / 2).toBeGreaterThan(tile.height * (isAi ? 1.7 : 1.4));
@@ -119,8 +119,8 @@ describe("combat actor reconciliation", () => {
   it("retains the compact HUD position when LPC artwork loads successfully", async () => {
     const { root, user, grid } = await setup(false, resolveSpriteAppearance({}));
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
-    expect(root.getChildByLabel("combat-health")?.y).toBeCloseTo(tile.height * 1.4);
-    expect(root.getChildByLabel("combat-aggro")?.y).toBeCloseTo(tile.height * 1.55);
+    expect(root.getChildByLabel("combat-health")?.y).toBeCloseTo(tile.height * 1.35);
+    expect(root.getChildByLabel("combat-aggro")?.y).toBeCloseTo(tile.height * 1.45);
     for (const label of ["combat-selection", "combat-hover", "combat-original"])
       expect(root.getChildByLabel(label)?.y).toBe(0);
   });
@@ -138,7 +138,7 @@ describe("combat actor reconciliation", () => {
     actors.sync({ battle }); actors.sync({ battle });
     expect(meters.map((meter) => meter.y)).toEqual(positions);
   });
-  it("keeps resource rows full-height and separates amber threat from their distinct colors", async () => {
+  it("keeps distinct resource and amber threat rows full-height and contiguous", async () => {
     const { root, user, grid } = await setup(false, resolveSpriteAppearance({}));
     const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
     const meters = ["combat-chakra", "combat-stamina", "combat-health", "combat-aggro"].map((label) => root.getChildByLabel(label)!);
@@ -149,8 +149,35 @@ describe("combat actor reconciliation", () => {
       expect(meter.children[0]).toMatchObject({ tint: 0x000000 });
     }
     const gaps = meters.slice(1).map((meter, index) => meter.y - meter.height / 2 - (meters[index]!.y + meters[index]!.height / 2));
-    for (const gap of gaps) expect(gap).toBeGreaterThan(0);
-    expect(gaps[2]).toBeGreaterThan(gaps[0]!);
+    for (const gap of gaps) expect(gap).toBeCloseTo(0);
+  });
+  it("centers LPC ground rings and shadows on the authored foot contact point", async () => {
+    const { root, selection, hover, user, grid } = await setup(false, resolveSpriteAppearance({}));
+    const tile = grid.getHex({ col: user.longitude, row: user.latitude })!;
+    const art = root.getChildByLabel("combat-art")!.children[0]!.children[0]!;
+    const footY = art.y - Math.abs(art.scale.y) * (0.5 - 4 / 64);
+    for (const marker of [selection, hover]) {
+      const bounds = marker.getLocalBounds();
+      expect((bounds.minX + bounds.maxX) / 2).toBeCloseTo(art.x);
+      expect((bounds.minY + bounds.maxY) / 2).toBeCloseTo(footY);
+    }
+    expect(root.children[0]?.position).toMatchObject({ x: tile.width / 2, y: footY });
+  });
+  it("gently pulses selection opacity without moving its center and freezes for reduced motion", async () => {
+    const { actors, selection, hover, user } = await setup(false, resolveSpriteAppearance({}));
+    const bounds = selection.getLocalBounds().clone();
+    const geometry = selection.context;
+    actors.animate({ now: 450, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
+    expect(selection.alpha).toBeCloseTo(1);
+    actors.animate({ now: 1350, delta: 1 / 60, reducedMotion: false }, user.userId, undefined);
+    expect(selection.alpha).toBeCloseTo(0.7);
+    expect(selection.getLocalBounds()).toEqual(bounds);
+    expect(selection.context).toBe(geometry);
+    expect(hover.alpha).toBe(1);
+    for (const now of [1800, 2250]) {
+      actors.animate({ now, delta: 1 / 60, reducedMotion: true }, user.userId, undefined);
+      expect(selection.alpha).toBe(1);
+    }
   });
   it("shows distinct selection and hover states without rebuilding their geometry", async () => {
     const { actors, selection, hover, health, user, grid } = await setup();
