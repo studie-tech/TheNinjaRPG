@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ContentTypes } from "@/drizzle/constants";
+import { COST_GENERATE_AVATAR, ContentTypes } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import {
   createThumbnail,
@@ -40,7 +40,7 @@ export const avatarRouter = createTRPCRouter({
       if (!user) {
         return errorResponse("User not found. Please try again in a moment.");
       }
-      if (user.reputationPoints < 1) {
+      if (user.reputationPoints < COST_GENERATE_AVATAR) {
         return errorResponse("Not enough reputation points");
       }
       if (user.isBanned) return errorResponse("You are banned");
@@ -63,7 +63,7 @@ export const avatarRouter = createTRPCRouter({
           success: true,
           message: "Avatar created",
           userPatch,
-          userDelta: { reputationPoints: -1 },
+          userDelta: { reputationPoints: -COST_GENERATE_AVATAR },
         };
       } else {
         return errorResponse("Failed to upload avatar");

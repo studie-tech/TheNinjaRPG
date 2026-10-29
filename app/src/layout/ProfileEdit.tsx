@@ -73,6 +73,7 @@ import {
   BLOODLINE_SWAP_FREE_DAYS,
   COST_CHANGE_GENDER,
   COST_CHANGE_USERNAME,
+  COST_GENERATE_AVATAR,
   COST_REROLL_ELEMENT,
   COST_RESET_STATS,
   COST_SKILL_RESET,
@@ -1231,10 +1232,10 @@ const NewAiAvatar: React.FC = () => {
           </ul>
           <h3 className="mt-5 font-semibold">Create a new avatar</h3>
 
-          {userData && userData?.reputationPoints > 0 ? (
+          {userData && userData.reputationPoints >= COST_GENERATE_AVATAR ? (
             <>
               <p className="text-muted-foreground mb-3 text-sm">
-                Costs 1 reputation point
+                Costs {COST_GENERATE_AVATAR} reputation point
               </p>
               <Confirm
                 title="Confirm Avatar Change"
@@ -1249,15 +1250,18 @@ const NewAiAvatar: React.FC = () => {
                   createAvatar.mutate();
                 }}
               >
-                Changing your avatar will cost 1 reputation point. We would love to
-                enable unlimited re-creations, but the model generating the avatars runs
-                on NVidia A100 GPU cluster, and each generation costs a little bit of
-                money. We are working on a solution to make this free, but for now, we
-                need to charge a small fee to cover the cost of the GPU cluster.
+                Changing your avatar will cost {COST_GENERATE_AVATAR} reputation point.
+                We would love to enable unlimited re-creations, but the model generating
+                the avatars runs on NVidia A100 GPU cluster, and each generation costs a
+                little bit of money. We are working on a solution to make this free, but
+                for now, we need to charge a small fee to cover the cost of the GPU
+                cluster.
               </Confirm>
             </>
           ) : (
-            <p className="text-red-500">Requires 1 reputation point</p>
+            <p className="text-red-500">
+              Requires {COST_GENERATE_AVATAR} reputation point
+            </p>
           )}
         </div>
       </div>
@@ -1299,6 +1303,8 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
     hasNextPage,
     isPending,
     isError,
+    isFetchNextPageError,
+    isFetching,
     refetch,
   } = api.avatar.getHistoricalAvatars.useInfiniteQuery(
     {
@@ -1358,21 +1364,32 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
     },
   });
 
+  const errorNotice = isError ? (
+    <div role="alert" className="space-y-3 text-sm">
+      <p>
+        {!historicalAvatars
+          ? "Could not load your previous avatars."
+          : isFetchNextPageError
+            ? "Could not load more avatars."
+            : "Could not refresh your previous avatars."}
+      </p>
+      <Button
+        type="button"
+        disabled={isFetching}
+        onClick={() => void (isFetchNextPageError ? fetchNextPage() : refetch())}
+      >
+        Try again
+      </Button>
+    </div>
+  ) : null;
   const loading = updateAvatar.isPending || deleteAvatar.isPending;
   if (loading || isPending)
     return <Loader explanation={loading ? "Processing" : "Loading previous avatars"} />;
-  if (isError)
-    return (
-      <div role="alert" className="space-y-3 text-sm">
-        <p>Could not load your previous avatars.</p>
-        <Button type="button" onClick={() => void refetch()}>
-          Try again
-        </Button>
-      </div>
-    );
+  if (isError && !historicalAvatars) return errorNotice;
 
   return (
     <>
+      {errorNotice}
       {pageAvatars?.length === 0 && (
         <p className="text-muted-foreground py-6 text-center text-sm">
           No previous avatars yet. Generate an avatar to start your collection.

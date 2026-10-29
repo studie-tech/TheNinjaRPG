@@ -1530,6 +1530,7 @@ export const KILLING_NOTORIETY_GAIN = 5;
 
 // Reputation cost config
 export const STARTING_REPUTATION_POINTS = 11;
+export const COST_GENERATE_AVATAR = 1;
 export const COST_CHANGE_USERNAME = 5;
 export const COST_CHANGE_GENDER = 5;
 export const COST_TAVERN_COLOR_CHANGE = 10;

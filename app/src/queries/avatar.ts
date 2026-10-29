@@ -2,6 +2,7 @@
  * Database access for avatar; authorization and transaction scopes stay in callers.
  */
 import { and, desc, eq, gt, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { COST_GENERATE_AVATAR } from "@/drizzle/constants";
 import { historicalAvatar, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
@@ -31,9 +32,14 @@ export const updateUserDataForCreateAvatar = (
     .update(userData)
     .set({
       ...userPatch,
-      reputationPoints: sql`${userData.reputationPoints} - 1`,
+      reputationPoints: sql`${userData.reputationPoints} - ${COST_GENERATE_AVATAR}`,
     })
-    .where(and(eq(userData.userId, ctx.userId), gt(userData.reputationPoints, 0)));
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        gte(userData.reputationPoints, COST_GENERATE_AVATAR),
+      ),
+    );
 
 /** Build the `historicalAvatar` insert for `createAvatar`. */
 export const insertHistoricalAvatarForCreateAvatar = (
