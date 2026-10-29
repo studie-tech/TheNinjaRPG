@@ -13,6 +13,8 @@ import {
 import {
   attemptCapReached,
   getBoundObjectiveCandidates,
+  getNewTrackers,
+  getQuestTargetSectorsToCheck,
   getReward,
   isAvailableUserQuests,
   isMockQuestHistoryRow,
@@ -32,6 +34,7 @@ import {
   fetchQuestNamesBindingPlacement,
   fetchQuestsBindingPlacement,
   findOverworldAiPlacementForUpsertPlacement,
+  findOverworldInteractionUserCache,
   findUserDataForUpsertPlacement,
   insertOverworldAiPlacementForUpsertPlacement,
   insertOverworldAiPlacementQuestForUpsertPlacement,
@@ -48,7 +51,7 @@ import { fetchUser } from "@/queries/profile";
 import { listQuestForGetAllNames, listQuestsByIds } from "@/queries/quests";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUserItems } from "@/routers/item";
-import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
 import { startQuestPartyEncounter } from "@/routers/questParty";
 import {
   assignQuestToUser,
@@ -66,10 +69,12 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { claimActiveNpcQuest } from "@/server/utils/concurrency";
 import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
+import { getBattleUserPatch } from "@/server/utils/socialUserCache";
 import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
 import { OverworldPlacementSchema } from "@/validators/overworldAi";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Shown when a player asks an NPC for a mission while their single active-NPC-mission slot is
  *  still held — both on the pre-roll slot decision and when the atomic claim loses a race. */
@@ -327,7 +332,7 @@ export const overworldAiRouter = createTRPCRouter({
       }),
     )
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         battleId: z.string().optional(),
         grantedQuestId: z.string().optional(),
         /** The interaction completed a quest whose reward the player now picks. */
@@ -356,7 +361,18 @@ export const overworldAiRouter = createTRPCRouter({
       // relations + settings. The battle snapshot is re-fetched/regenerated inside
       // initiateBattle, reward paths use atomic SQL increments, and isolated quest
       // assignment settles pending pools in its guarded entry write.
-      const [placement, { user: activeUser, settings }, useritems] = await Promise.all([
+      const [
+        placement,
+        {
+          user: activeUser,
+          settings,
+          requiresUserRefresh,
+          requiresProgressionRefresh,
+          publishedAchievementIds,
+          progressionQuestCandidates,
+        },
+        useritems,
+      ] = await Promise.all([
         fetchPlacement(ctx.drizzle, input.placementId),
         fetchUpdatedUser({
           client: ctx.drizzle,
@@ -398,6 +414,12 @@ export const overworldAiRouter = createTRPCRouter({
       // inventory fetched above for an unequipped delivery item to be consumed.
       const userForTrackers = { ...activeUser, items: useritems, useritems };
       const ownedItemIds = useritems.map((i) => i.itemId);
+      const noUserChange = requiresUserRefresh ? undefined : {};
+      // Daily-roll and slot writes are independent of quest assignment; confirm them after either outcome.
+      const interactionPatch = (hasProgressionSnapshot = false) =>
+        requiresUserRefresh && !hasProgressionSnapshot
+          ? undefined
+          : findOverworldInteractionUserCache(ctx.drizzle, ctx.userId);
 
       // 1) Bound-objective sub-path (defeat_opponents | dialog | deliver_item).
       const boundCandidates = getBoundObjectiveCandidates(activeUser);
@@ -417,8 +439,8 @@ export const overworldAiRouter = createTRPCRouter({
 
       if (bound) {
         if (activeUser.questParty?.questId === bound.questId) {
-          if (bound.objective.task === "defeat_opponents")
-            return startQuestPartyEncounter({
+          if (bound.objective.task === "defeat_opponents") {
+            const battle = await startQuestPartyEncounter({
               client: ctx.drizzle,
               user: activeUser,
               userId: ctx.userId,
@@ -426,6 +448,11 @@ export const overworldAiRouter = createTRPCRouter({
               objectiveId: bound.objective.id,
               atPlacementIds: new Set([placement.id]),
             });
+            return {
+              ...battle,
+              userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+            };
+          }
           if (
             bound.objective.task === "dialog" &&
             activeUser.questParty.leaderId !== ctx.userId
@@ -474,7 +501,12 @@ export const overworldAiRouter = createTRPCRouter({
                 : [],
           });
           return battle.success
-            ? { success: true, message: "Battle started", battleId: battle.battleId }
+            ? {
+                success: true,
+                message: "Battle started",
+                battleId: battle.battleId,
+                userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+              }
             : errorResponse(battle.message);
         }
 
@@ -492,6 +524,7 @@ export const overworldAiRouter = createTRPCRouter({
             // Empty message suppresses showMutationToast on the client (see item.ts /
             // combat.ts convention); the dialog modal opens off `data.dialog`, not the message.
             message: "",
+            userPatch: noUserChange,
             dialog: {
               objectiveId: bound.objective.id,
               // description / sceneBackground / sceneCharacters are baseObjectiveFields,
@@ -574,10 +607,36 @@ export const overworldAiRouter = createTRPCRouter({
           ? [...claim.postNotifications, REWARD_CHOICE_READY_MESSAGE]
           : claim.postNotifications;
 
+        const refreshed = getNewTrackers(userForTrackers, [{ task: "any" }]);
+        userForTrackers.questData = refreshed.trackers;
+        const projectedIds = new Set(
+          userForTrackers.userQuests.map((entry) => entry.questId),
+        );
+        const cacheUpdate =
+          !requiresProgressionRefresh &&
+          claim.userCacheEligible &&
+          claim.userDelta !== undefined &&
+          refreshed.consequences.length === 0 &&
+          getQuestTargetSectorsToCheck(userForTrackers, userForTrackers.questData ?? [])
+            .length === 0 &&
+          !progressionQuestCandidates.some(
+            (entry) =>
+              entry.quest.questType === "achievement" &&
+              !projectedIds.has(entry.questId) &&
+              isAvailableUserQuests({ ...entry.quest, ...entry }, userForTrackers, true)
+                .check,
+          )
+            ? getUserProgressionUpdate(userForTrackers, publishedAchievementIds)
+            : undefined;
+        const { earnedExperience: _earned, ...balanceDelta } = claim.userDelta ?? {};
+        const { updatedAt: _updatedAt, ...userPatch } = cacheUpdate?.userPatch ?? {};
         return {
           success: true,
           message: messages.join(" ") || "Interaction complete",
           rewardChoicePending: claim.rewardChoicePending,
+          ...(cacheUpdate
+            ? { ...cacheUpdate, userPatch, userDelta: balanceDelta }
+            : {}),
         };
       }
 
@@ -593,7 +652,12 @@ export const overworldAiRouter = createTRPCRouter({
           scaleGains: 1,
         });
         return battle.success
-          ? { success: true, message: "Battle started", battleId: battle.battleId }
+          ? {
+              success: true,
+              message: "Battle started",
+              battleId: battle.battleId,
+              userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+            }
           : errorResponse(battle.message);
       }
 
@@ -616,7 +680,11 @@ export const overworldAiRouter = createTRPCRouter({
       // Each pool row carries its own per-quest grant chance.
       const poolQuestIds = placement.questPool.map((p) => p.questId);
       if (poolQuestIds.length === 0) {
-        return { success: true, message: "The NPC has nothing for you." };
+        return {
+          success: true,
+          message: "The NPC has nothing for you.",
+          userPatch: noUserChange,
+        };
       }
       const now = new Date();
       const poolPromise = listQuestsByIds(ctx.drizzle, poolQuestIds);
@@ -680,6 +748,7 @@ export const overworldAiRouter = createTRPCRouter({
         return {
           success: true,
           message: "The NPC has nothing available for you right now.",
+          userPatch: noUserChange,
         };
       }
 
@@ -691,7 +760,11 @@ export const overworldAiRouter = createTRPCRouter({
           (q) => q.questId === activeNpcQuestId && !q.endAt,
         );
       if (slottedQuestIsActive) {
-        return { success: true, message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE };
+        return {
+          success: true,
+          message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE,
+          userPatch: noUserChange,
+        };
       }
 
       // Consume one daily roll via CAS before rolling so a failed roll still costs a slot.
@@ -739,7 +812,11 @@ export const overworldAiRouter = createTRPCRouter({
         : undefined;
       if (!chosen) {
         await attemptPromise;
-        return { success: true, message: "The NPC had nothing for you this time." };
+        return {
+          success: true,
+          message: "The NPC had nothing for you this time.",
+          userPatch: await interactionPatch(),
+        };
       }
       // Claim the single active-NPC-mission slot atomically before granting. If the slot is
       // already taken (e.g. a concurrent interaction won the race), don't grant a second one.
@@ -752,7 +829,11 @@ export const overworldAiRouter = createTRPCRouter({
         }),
       ]);
       if (!claimed) {
-        return { success: true, message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE };
+        return {
+          success: true,
+          message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE,
+          userPatch: await interactionPatch(),
+        };
       }
       // Release the slot we just claimed on ANY assign failure — a `!success` return or an
       // unexpected throw — so a failed assign never strands the player behind a claim that
@@ -781,12 +862,30 @@ export const overworldAiRouter = createTRPCRouter({
       if (!result.success) {
         // Assign failed (e.g. cap/availability raced).
         await releaseClaimedSlot();
-        return errorResponse(result.message);
+        return {
+          ...errorResponse(result.message),
+          userPatch: await interactionPatch(),
+        };
       }
+      const cacheUpdate =
+        result.userCacheEligible &&
+        !requiresProgressionRefresh &&
+        chosen.quest.questType !== "war"
+          ? getUserProgressionUpdate(activeUser, publishedAchievementIds)
+          : undefined;
       return {
         success: true,
         message: result.message,
         grantedQuestId: chosen.quest.id,
+        ...(cacheUpdate
+          ? {
+              ...cacheUpdate,
+              userPatch: {
+                ...cacheUpdate.userPatch,
+                ...(await interactionPatch(true)),
+              },
+            }
+          : {}),
       };
     }),
 });

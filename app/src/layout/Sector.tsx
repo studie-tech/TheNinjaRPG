@@ -1401,23 +1401,19 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const { mutate: interactNpc, isPending: isInteracting } =
     api.overworldAi.interactWithOverworldAi.useMutation({
       /** Applies battle/dialog results and refreshes state after an overworld NPC interaction. */
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+          achievementProgress: data.achievementProgress,
+        });
         showMutationToast(data);
-        if (data.success && data.battleId) {
-          await updateUser({
-            status: "BATTLE",
-            battleId: data.battleId,
-            updatedAt: new Date(),
-          });
-        } else if (data.success && data.dialog) {
+        if (data.success && data.dialog) {
           setNpcDialog(data.dialog);
-        } else {
-          // Refresh sector data (the NPC may have moved/disappeared) and the user profile so
-          // a completed bound objective or granted mission shows immediately in the logbook.
-          await Promise.all([
-            utils.travel.getSectorData.invalidate(),
-            utils.profile.getUser.invalidate(),
-          ]);
+        } else if (!data.success || !data.battleId) {
+          // Placements and public quest locations can change with the interaction.
+          await utils.travel.getSectorData.invalidate();
         }
         if (data.rewardChoicePending) {
           void openRewardChoice();
