@@ -29,7 +29,10 @@ describeWithDatabase("character colors and exclusive traits", () => {
     expect((await api.insertAttribute({ attribute, color })).success).toBe(true);
     const rows = await api.getUserAttributes();
     expect(rows).toHaveLength(seedAttributes.length);
-    expect(getCharacterAttributes(rows.map((row) => row.attribute))).toMatchObject({ [attribute]: color, traits: seedAttributes.slice(0, 5) });
+    const appearance = getCharacterAttributes(rows.map((row) => row.attribute));
+    expect(appearance).toMatchObject({ [attribute]: color });
+    // Attribute queries do not define row order; palette changes preserve the exact trait set.
+    expect(appearance.traits.sort()).toEqual(seedAttributes.slice(0, 5).sort());
     expect(resolveSpriteAppearance({ attributes: rows }).layers.find((layer) => layer.slot === slot)).toMatchObject(expected);
   });
 
