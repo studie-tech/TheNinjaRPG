@@ -23,6 +23,8 @@ import {
 } from "@/drizzle/constants";
 import {
   conversation,
+  dungeonMember,
+  dungeonRun,
   mpvpBattleQueue,
   mpvpBattleUser,
   quest,
@@ -342,7 +344,13 @@ export const updateUserDataForReadyToQueue = (
   client
     .update(userData)
     .set({ status: "AWAKE", travelFinishAt: null, battleId: null })
-    .where(and(eq(userData.userId, userId), eq(userData.status, user.status)));
+    .where(
+      and(
+        eq(userData.userId, userId),
+        eq(userData.status, user.status),
+        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+      ),
+    );
 
 /**
  * Build the `userData` update for `readyToQueue`, setting `travelFinishAt` and
@@ -795,7 +803,13 @@ export const updateUserDataForCheckAndCleanupExpiredRaid = (
   client
     .update(userData)
     .set({ status: "AWAKE", battleId: null })
-    .where(and(eq(userData.status, "QUEUED"), inArray(userData.userId, userIds)));
+    .where(
+      and(
+        eq(userData.status, "QUEUED"),
+        inArray(userData.userId, userIds),
+        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+      ),
+    );
 
 /** Build the `mpvpBattleUser` deletion for `rollbackJoinRaidQueue`, using predicates on `userId` and `clanBattleId`. */
 export const deleteMpvpBattleUserForRollbackJoinRaidQueue = (
@@ -844,7 +858,11 @@ export const updateUserDataForRollbackStartRaidBattle = (
     .update(userData)
     .set({ status: "AWAKE" })
     .where(
-      and(inArray(userData.userId, attackerUserIds), eq(userData.status, "QUEUED")),
+      and(
+        inArray(userData.userId, attackerUserIds),
+        eq(userData.status, "QUEUED"),
+        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+      ),
     );
 
 /** Build the `conversation` insert for `ensureRaidChatConversation`, updating duplicate keys. */
