@@ -117,6 +117,9 @@ export const RichInput = (props: RichInputProps) => {
     field.onChange(html);
   });
   const onSelectionChange = useEffectEvent(() => {
+    // Quill blanks the style select for plain text or a blurred editor; show Paragraph.
+    const styleSelect = toolbarRef.current?.querySelector("select");
+    if (styleSelect && styleSelect.selectedIndex < 0) styleSelect.selectedIndex = 0;
     const editor = quillRef.current;
     const range = editor?.getSelection();
     if (range && editor) {
@@ -572,7 +575,7 @@ export const RichInput = (props: RichInputProps) => {
       // The compact row draws the frame; the field itself stays borderless.
       className={
         props.compact
-          ? "min-h-0 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
+          ? "min-h-0 resize-none border-0 bg-transparent px-[8px] py-[6px] shadow-none focus-visible:ring-0"
           : undefined
       }
       style={{ minHeight: height }}
@@ -803,26 +806,32 @@ export const RichInput = (props: RichInputProps) => {
           )}
         </Popover>
         {props.compact ? (
-          <div className="flex min-w-0 items-end gap-1 p-1">
+          // Each side sits in a 32px slot matching the editor's line box, so buttons
+          // line up with the text and stay on the last line as it grows.
+          <div className="rich-input-compact flex min-w-0 items-end gap-1 p-1">
             {!props.plainText && (
-              <Button
-                type="button"
-                size="icon"
-                variant={toolbarOpen ? "secondary" : "ghost"}
-                className="h-8 w-8 shrink-0 text-xs font-bold"
-                title="Formatting"
-                aria-label="Formatting"
-                aria-pressed={toolbarOpen}
-                aria-controls={`${props.id}-toolbar`}
-                onClick={() => setToolbarOpen(!toolbarOpen)}
-              >
-                Aa
-              </Button>
+              <div className="flex h-[32px] shrink-0 items-center">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={toolbarOpen ? "secondary" : "ghost"}
+                  className="h-8 w-8 shrink-0 text-xs font-bold"
+                  title="Formatting"
+                  aria-label="Formatting"
+                  aria-pressed={toolbarOpen}
+                  aria-controls={`${props.id}-toolbar`}
+                  onClick={() => setToolbarOpen(!toolbarOpen)}
+                >
+                  Aa
+                </Button>
+              </div>
             )}
             <div className="max-h-40 min-w-0 flex-1 overflow-y-auto">
               {editorElement}
             </div>
-            <div className="flex shrink-0 items-center gap-0.5">{editorActions}</div>
+            <div className="flex h-[32px] shrink-0 items-center gap-0.5">
+              {editorActions}
+            </div>
           </div>
         ) : (
           editorElement

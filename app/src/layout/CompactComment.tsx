@@ -151,13 +151,14 @@ export function CompactComment(props: CompactCommentProps) {
               </ActionButton>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" collisionPadding={8}>
+              {/* The popover closes on outside clicks; the picker's own handler would
+                  also catch the click that reopens it. */}
               <EmojiPicker
                 perLine={8}
                 onSelect={(native) => {
                   props.toggleReaction?.(native);
                   setEmojiOpen(false);
                 }}
-                onClickOutside={() => setEmojiOpen(false)}
               />
             </PopoverContent>
           </Popover>

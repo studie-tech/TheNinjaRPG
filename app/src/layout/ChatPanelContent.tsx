@@ -257,7 +257,6 @@ function TavernPane({
   );
   const [conversationId, setConversationId] = useState<string>();
   const setMentions = useSetAtom(chatMentionsAtom);
-  const mutes = useChatMutes();
 
   const onConversationLoaded = useCallback(
     (id: string) => {
@@ -332,11 +331,7 @@ function TavernPane({
       toolbarEnd={
         <>
           {conversationId && (
-            <MuteButton
-              label={tavern}
-              muted={mutes.isMuted(conversationId)}
-              onToggle={() => mutes.toggleMute(conversationId)}
-            />
+            <MuteButton label={tavern} conversationId={conversationId} />
           )}
           <TavernMoreMenu />
         </>
@@ -524,8 +519,7 @@ function InboxPane({
               <>
                 <MuteButton
                   label={conversationTitle(selected, userData.userId)}
-                  muted={mutes.isMuted(selected.id)}
-                  onToggle={() => mutes.toggleMute(selected.id)}
+                  conversationId={selected.id}
                 />
                 <ConversationMenu convo={selected} meId={userData.userId} />
                 {hideRail && newConversation}
@@ -793,24 +787,36 @@ function PhoneChatList({ onOpen }: { onOpen: (chat: PhoneChat) => void }) {
   );
 }
 
+/**
+ * Bell for one conversation. While all chat is muted it shows muted and turns
+ * "mute all" off; otherwise it mutes or unmutes this conversation.
+ */
 function MuteButton({
   label,
-  muted,
-  onToggle,
+  conversationId,
 }: {
   label: string;
-  muted: boolean;
-  onToggle: () => void;
+  conversationId: string;
 }) {
+  const mutes = useChatMutes();
+  const muted = mutes.isSilenced(conversationId);
+  const action = mutes.chatMuted
+    ? "Unmute all chat notifications"
+    : muted
+      ? `Unmute ${label}`
+      : `Mute ${label}`;
   return (
     <Button
       variant="ghost"
       size="icon"
       className="w-[32px]"
       aria-pressed={muted}
-      aria-label={muted ? `Unmute ${label}` : `Mute ${label}`}
-      title={muted ? `Unmute ${label}` : `Mute ${label}`}
-      onClick={onToggle}
+      aria-label={action}
+      title={action}
+      disabled={mutes.isPending}
+      onClick={() =>
+        mutes.chatMuted ? mutes.setChatMuted(false) : mutes.toggleMute(conversationId)
+      }
     >
       {muted ? (
         <BellOff className="h-[16px] w-[16px]" />
