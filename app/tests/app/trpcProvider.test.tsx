@@ -382,6 +382,30 @@ it("keeps ordinary action failures as separate notices", async () => {
   ]);
 });
 
+it("does not retry a rate-limited query back into the same limiter window", async () => {
+  const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+    Response.json([
+      {
+        error: superjson.serialize({
+          message: "Too many requests for this page. Please wait a moment and try again.",
+          code: -32029,
+          data: { code: "TOO_MANY_REQUESTS" },
+        }),
+      },
+    ]),
+  );
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  const { trpc } = mountProvider(session("a"));
+  await expect(
+    queryClient.fetchQuery({
+      queryKey: getQueryKey(testApi.misc.getSetting, { name: "x" }, "query"),
+      queryFn: () => trpc.misc.getSetting.query({ name: "x" }),
+      retryDelay: 0,
+    }),
+  ).rejects.toThrow("Too many requests");
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
 const fetchFailure = (message = "Failed to fetch") => {
   const error = new TypeError(message);
   error.stack = `${message}\n    at fetch (fetch:1:1)`;
