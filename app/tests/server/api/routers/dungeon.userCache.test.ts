@@ -4,11 +4,12 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { battle, clan, dungeon, dungeonMember, dungeonRun, gameSetting, quest, questHistory, userData, userRewards, userVote, village } from "@/drizzle/schema";
+import { battle, clan, dungeon, dungeonMember, dungeonRun, gameSetting, mpvpBattleQueue, mpvpBattleUser, quest, questHistory, userData, userRewards, userVote, village } from "@/drizzle/schema";
 import { activeDungeonNotification } from "@/libs/dungeon";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import * as profileQueries from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
+import { shrineRouter } from "@/server/api/routers/shrine";
 import { settleDungeonBattle } from "@/server/utils/dungeon";
 import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
@@ -21,6 +22,7 @@ import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 type Profile = RouterOutputs["profile"]["getUser"];
+type DungeonState = RouterOutputs["coop"]["dungeon"]["getState"];
 const userId = "dungeon-cache-player";
 /** Select the goal compared between cached and canonical dungeon progress. */
 const goal = (profile: Profile, id: string) => profile.userData?.questData?.find((entry) => entry.id === id)?.goals[0];
@@ -40,7 +42,7 @@ const transpiler = new (require("bun").Transpiler)({ loader: "tsx" }) as { trans
 const claimFactory = transpiler.transformSync(`function createCallbacks() { ${refreshSource} ${claimSource} return { ...claim, refresh }; }`);
 
 /** Use the production merge against a warmed profile and count any fallback profile read. */
-const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
+const cachedProfile = (initial: Profile, read: () => Promise<Profile>, priorState?: DungeonState) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   const key = ["dungeon-cache-profile"];
@@ -49,20 +51,28 @@ const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
   client.setQueryData(key, initial);
   const observer = new QueryObserver(client, { queryKey: key, queryFn: refetch, staleTime: Infinity });
   subscriptions.push(observer.subscribe(() => {}));
-  const refetchState = vi.fn(async () => undefined);
+  const actor = async () => callerForDatabase(dungeonRouter, userId, await getTestDatabase());
+  const refetchState = vi.fn(async () => {
+    try { return { data: await (await actor()).getState(), isError: false }; }
+    catch (error) { return { data: priorState, isError: true, error }; }
+  });
+  const refetchAvailable = vi.fn(async () => ({ data: await (await actor()).getAvailable({ sector: initial.userData?.sector ?? 1 }) }));
+  const showMutationToast = vi.fn();
+  const setMessage = vi.fn();
+  const setAbandonId = vi.fn();
   const callbacks = new Function("prepareUserUpdate", "updateUser", "api", "state", "available", "setMessage", "setAbandonId", "showMutationToast", "setIsHistoryOpen", "activeDungeonNotification", "user", `${claimFactory}\nreturn createCallbacks();`)(
     () => prepareUserUpdate(client, key),
     (patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options),
     { coop: { dungeon: { claim: { useMutation: (options: ClaimCallbacks) => options } } } },
-    { refetch: refetchState }, { refetch: vi.fn(async () => undefined) }, vi.fn(), vi.fn(), vi.fn(), vi.fn(), activeDungeonNotification, initial.userData,
+    { data: priorState, refetch: refetchState }, { refetch: refetchAvailable }, setMessage, setAbandonId, showMutationToast, vi.fn(), activeDungeonNotification, initial.userData,
   ) as ClaimCallbacks & { refresh: (response: UserDeltaResponse, revision: number | undefined) => Promise<void> };
-  return { client, key, refetch, refetchState, callbacks, current: () => client.getQueryData<Profile>(key)! };
+  return { client, key, refetch, refetchState, refetchAvailable, showMutationToast, setMessage, setAbandonId, callbacks, current: () => client.getQueryData<Profile>(key)! };
 };
 
 describeWithDatabase("confirmed dungeon reward progression", () => {
   beforeEach(async () => {
     stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected HTTP request in dungeon cache tests" });
-    await resetTables(battle, dungeonMember, dungeonRun, dungeon, questHistory, quest, userRewards, userVote, userData, gameSetting, clan, village);
+    await resetTables(battle, dungeonMember, dungeonRun, dungeon, mpvpBattleUser, mpvpBattleQueue, questHistory, quest, userRewards, userVote, userData, gameSetting, clan, village);
     await insertUsers([{ userId, username: "DungeonCache", role: "USER", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,
       money: 0, earnedExperience: 0, reputationPoints: 0, reputationPointsTotal: 0, medicalExperience: 0,
@@ -125,6 +135,63 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     expect(canonical.notifications.filter((entry) => entry.href === "/dungeon")).toEqual([activeDungeonNotification]);
   });
 
+  it.each(["accept", "queued", "busy", "read-error", "other-queue", "live"] as const)("reconciles the mandatory state refresh after %s", async (scenario) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ sector: 1 }).where(eq(userData.userId, userId));
+    await db.insert(dungeon).values({ id: "definition", content: dungeonContent(), updatedAt: new Date() });
+    await insertUsers([{ userId: "squad-host", username: "SquadHost", sector: 1, status: "AWAKE" }]);
+    const host = callerForDatabase(dungeonRouter, "squad-host", db);
+    const actor = callerForDatabase(dungeonRouter, userId, db);
+    const accepts = scenario === "accept" || scenario === "other-queue";
+    const created = await (accepts ? host : actor).create({ id: "definition" });
+    if (!created.success || !("id" in created)) throw Error("Missing host squad");
+    if (accepts)
+      expect((await host.act({ id: created.id, action: "invite", userId })).success).toBe(true);
+    if (scenario === "busy")
+      await db.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, userId));
+    if (scenario === "other-queue") {
+      await db.insert(village).values({ id: "shrine-village", name: "Shrine village", sector: 1, kageId: "host" });
+      await db.update(userData).set({ villageId: "shrine-village", isOutlaw: false }).where(eq(userData.userId, userId));
+      await db.insert(mpvpBattleQueue).values({ id: "shrine-queue", battleType: "SHRINE_BATTLE", attackerEntityId: "shrine-village", defenderEntityId: "enemy", sector: 1, createdAt: new Date() });
+    }
+    const profile = callerForDatabase(profileRouter, userId, db);
+    const initial = await profile.getUser();
+    const priorState = await actor.getState();
+    const cache = cachedProfile(initial, () => profile.getUser(), priorState);
+    const revision = cache.callbacks.onMutate();
+    const deadline = new Date(Date.now() + 1500);
+    await db.update(dungeonRun).set({ expiresAt: deadline }).where(eq(dungeonRun.id, created.id));
+    // The mutation commits while live; only its required state read crosses the deadline.
+    const response = userDeltaResponseSchema.parse(await actor.act({ id: created.id,
+      action: accepts ? "accept" : "invite", ...(accepts ? {} : { userId: "squad-host" }) }));
+    if (accepts) expect(response).toMatchObject({ success: true, userPatch: { status: "QUEUED" } });
+    else expect(response).toMatchObject({ success: true, userPatch: {} });
+    expect(deadline.getTime()).toBeGreaterThan(Date.now());
+    if (scenario !== "live") await new Promise((resolve) => setTimeout(resolve, Math.max(0, deadline.getTime() - Date.now()) + 50));
+    if (scenario === "read-error")
+      vi.spyOn(db.query.userData, "findMany").mockImplementationOnce(() => { throw Error("Roster read failed after expiry"); });
+    if (scenario === "other-queue") {
+      const readUsers = db.query.userData.findMany.bind(db.query.userData);
+      vi.spyOn(db.query.userData, "findMany").mockImplementationOnce(((input: Parameters<typeof readUsers>[0]) => (async () => {
+        // Another tab can join a shrine after expiry releases the dungeon, before roster reads.
+        expect(await callerForDatabase(shrineRouter, userId, db).joinShrineBattle({ shrineBattleId: "shrine-queue", side: "ATTACKER" })).toMatchObject({ success: true });
+        return readUsers(input);
+      })()) as never);
+    }
+    await cache.callbacks.refresh(response, revision);
+    await expect(cache.refetchState.mock.results[0]?.value).resolves.toMatchObject({ isError: scenario === "read-error" });
+    expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, created.id) })).toMatchObject({ status: scenario === "live" ? "LOBBY" : "ENDED" });
+    expect(await db.query.dungeonMember.findFirst({ where: eq(dungeonMember.userId, userId) })).toMatchObject({ activeUserId: scenario === "live" ? userId : null });
+    expect(cache.current().userData?.status).toBe(scenario === "live" || scenario === "other-queue" ? "QUEUED" : scenario === "busy" ? "ASLEEP" : "AWAKE");
+    expect(cache.current().notifications.some((entry) => entry.name === activeDungeonNotification.name)).toBe(scenario === "live");
+    expect(cache.refetch).toHaveBeenCalledTimes(Number(scenario !== "live"));
+    expect(cache.refetchState).toHaveBeenCalledTimes(1);
+    expect(cache.refetchAvailable).toHaveBeenCalledTimes(1);
+    expect(cache.showMutationToast).toHaveBeenCalledTimes(1);
+    expect(cache.setMessage).toHaveBeenCalledWith(response.success ? "" : response.message);
+    expect(cache.setAbandonId).toHaveBeenCalledTimes(Number(response.success));
+  }, 15000);
+
   it.each([
     ["reputation_points", "reward_reputation", "reputationPointsTotal"],
     ["medical_experience", "reward_medical_experience", "medicalExperience"],
@@ -176,6 +243,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     if (reservation === "newer") {
       await db.insert(dungeonRun).values({ id: "newer-run", dungeonId: "definition", leaderId: userId, content: dungeonContent(), status: "LOBBY", createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000), state: { ...dungeonBattleState().runState, memberIds: [userId] } });
       await db.insert(dungeonMember).values({ runId: "newer-run", userId, activeUserId: userId });
+      await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, userId));
     }
     const initial = await profile.getUser();
     expect(goal(initial, "dungeon-completion")).toMatchObject({ done: true, value: 1 });

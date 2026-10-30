@@ -67,7 +67,7 @@ const setup = (file: string, procedure: string) => {
   const factory = transpiler.transformSync(`function callbackOptions() { ${shared} return (${callbacks}); }`);
   // Execute the production callbacks with the real cache merger, matching userItemsRefresh.test.ts.
   const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", "showRewardToast", "recoverUser", "state", "setMessage", "setAbandonId", "form", "pushToCombat", "router", "board", "onStarted", "setNpcDialog", "openRewardChoice", "available", "activeDungeonNotification", `${factory}\nreturn callbackOptions();`)(
-    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: invalidate }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), { push: vi.fn() }, { refetch: invalidate }, undefined, vi.fn(), vi.fn(), { refetch: invalidate }, activeDungeonNotification,
+    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: async () => { await invalidate(); return { data: { users: [], members: [{ runId: "squad", userId: "actor", activeUserId: "actor" }] }, isError: false }; } }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), { push: vi.fn() }, { refetch: invalidate }, undefined, vi.fn(), vi.fn(), { refetch: invalidate }, activeDungeonNotification,
   ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   return {
     client, getUser, invalidate, updateUser, options, profile,
