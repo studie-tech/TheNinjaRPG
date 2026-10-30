@@ -1048,6 +1048,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           if (!snapshot) throw new Error("Battlefield snapshot unavailable");
           return {
             ...snapshot,
+            weatherTime: Date.now() - snapshot.timeDiff,
             assets: gameAssetsRef.current.assets,
             requestedIds: gameAssetsRef.current.requestedIds,
             inspect: !isTouchInputRef.current || touchDetailsOpenRef.current,
