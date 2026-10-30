@@ -35,11 +35,9 @@ export const dungeonAdmission = (
   const history = data.history.filter(
     (row) => row.userId === user.userId && row.dungeonId === dungeonId,
   );
-  const attempts = history.flatMap((row) =>
-    row.state.entryPaidAt ? [row.state.entryPaidAt] : [],
-  );
+  const attempts = history.flatMap((row) => (row.entryPaidAt ? [row.entryPaidAt] : []));
   const completions = history.flatMap((row) =>
-    row.reward ? [row.reward.claimedAt ?? row.createdAt.getTime()] : [],
+    row.hasReward ? [row.claimedAt ?? row.createdAt.getTime()] : [],
   );
   return {
     requirements,

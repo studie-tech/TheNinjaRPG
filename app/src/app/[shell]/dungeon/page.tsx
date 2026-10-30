@@ -485,8 +485,8 @@ export default function DungeonPage() {
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    Choose two fully generated, battle-ready companions who are not on a
-                    task.{" "}
+                    Choose {DUNGEON_SOLO_PETS} fully generated, battle-ready companions
+                    who are not on a task.{" "}
                     <Link href="/pets" className="text-primary underline">
                       Manage companions
                     </Link>

@@ -303,7 +303,7 @@ export const dungeonRouter = createTRPCRouter({
           .length(DUNGEON_SOLO_PETS)
           .refine(
             (ids) => new Set(ids).size === ids.length,
-            "Choose two different companions.",
+            `Choose ${DUNGEON_SOLO_PETS} different companions.`,
           )
           .optional(),
       }),
@@ -347,7 +347,7 @@ export const dungeonRouter = createTRPCRouter({
         )
       )
         return errorResponse(
-          "Choose two fully generated, battle-ready companions who are not on a task.",
+          `Choose ${DUNGEON_SOLO_PETS} fully generated, battle-ready companions who are not on a task.`,
         );
       const lineup = selectedPets?.flatMap((pet) =>
         pet ? [{ id: pet.id, name: pet.name, avatar: pet.avatar }] : [],

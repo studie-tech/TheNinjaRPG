@@ -674,8 +674,18 @@ export const listDungeonEntryHistory = (
     .select({
       userId: dungeonMember.userId,
       dungeonId: dungeonRun.dungeonId,
-      state: dungeonRun.state,
-      reward: dungeonMember.reward,
+      entryPaidAt: sql`JSON_EXTRACT(${dungeonRun.state}, '$.entryPaidAt')`.mapWith(
+        (value: string | number | null) =>
+          value === null || value === "null" ? null : Number(value),
+      ),
+      claimedAt: sql`JSON_EXTRACT(${dungeonMember.reward}, '$.claimedAt')`.mapWith(
+        (value: string | number | null) =>
+          value === null || value === "null" ? null : Number(value),
+      ),
+      hasReward:
+        sql`COALESCE(JSON_TYPE(${dungeonMember.reward}) = 'OBJECT', FALSE)`.mapWith(
+          (value: string | number) => Number(value) === 1,
+        ),
       createdAt: dungeonRun.createdAt,
     })
     .from(dungeonMember)
@@ -699,6 +709,14 @@ export const listDungeonEntryInventory = (
   userIds: string[],
 ) =>
   client.query.userItem.findMany({
+    columns: {
+      id: true,
+      userId: true,
+      itemId: true,
+      quantity: true,
+      storedAtHome: true,
+      isInAuction: true,
+    },
     where: and(
       inArray(userItem.userId, userIds),
       gt(userItem.quantity, 0),

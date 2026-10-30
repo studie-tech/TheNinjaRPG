@@ -95,7 +95,10 @@ export const getQuestEntryCharges = (
   attempt: Pick<UserQuest, "entryPaid"> & {
     quest: { content: Pick<QuestContentType, "entryItems"> };
   },
-  items: readonly UserItem[],
+  items: readonly Pick<
+    UserItem,
+    "id" | "itemId" | "quantity" | "storedAtHome" | "isInAuction"
+  >[],
 ) => {
   const charges: {
     id: string;

@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { battle, dungeonMember, dungeonRun, item, mpvpBattleUser, rankedPvpQueue, userData, userItem, questHistory, userPet } from "@/drizzle/schema";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
 import { grantDungeonPetExperience, listExpiredDungeonRuns } from "@/queries/dungeon";
@@ -42,6 +42,24 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
     expect(dungeonAdmission(data, info.users[0]!, "definition", info.content).error).toContain("maximum dungeon attempts");
     expect(dungeonAdmission(data, info.users[0]!, "another", info.content).error).toBeNull();
   });
+  for (const receipt of ["unclaimed", "JSON null", "legacy", "dated"] as const) {
+    it(`enforces completion caps for ${receipt} receipts`, async () => {
+      const info = await admission();
+      const createdAt = new Date("2023-11-14T22:13:20.123Z");
+      const entryPaidAt = 1700000000321;
+      const hasReward = receipt === "legacy" || receipt === "dated";
+      const claimedAt = receipt === "dated" ? 1700000000456 : undefined;
+      info.content.requirements.maxAttempts = null;
+      info.content.requirements.maxCompletes = 1;
+      await info.client.update(dungeonRun).set({state: {...info.state, entryPaidAt}, createdAt});
+      await info.client.update(dungeonMember).set({reward: hasReward ? {money: 0, experience: 0, tokens: 0, prestige: 0, items: [], jutsus: [], claimedAt} : receipt === "JSON null" ? sql`CAST('null' AS JSON)` : null}).where(eq(dungeonMember.userId, "a"));
+      const result = dungeonAdmission(await fetchDungeonEntryData(info.client, ["a"]), info.users[0]!, "definition", info.content);
+      expect(result.attempts).toEqual([entryPaidAt]);
+      expect(result.completions).toEqual(hasReward ? [claimedAt ?? createdAt.getTime()] : []);
+      if (hasReward) expect(result.error).toContain("maximum dungeon completions");
+      else expect(result.error).toBeNull();
+    });
+  }
   it("refunds all debits and the attempt if battle creation fails after payment", async () => {
     const info = await admission();
     await expect(commitDungeonEntryBattle({ ...info, createBattle: async () => { throw new Error("battle insert failed"); } })).rejects.toThrow("battle insert failed");
