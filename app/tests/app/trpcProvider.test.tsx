@@ -125,6 +125,7 @@ const recoveryFlows = [
   { file: "Bloodline.tsx", procedure: "bloodline.roll" },
 ];
 
+/** Capture production callbacks on the real Provider client to verify recovery feedback. */
 const profileRecoveryCallbacks = ({
   file,
   procedure,

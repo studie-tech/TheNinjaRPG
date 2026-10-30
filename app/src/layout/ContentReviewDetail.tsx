@@ -106,6 +106,7 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
   const [isApproveArmed, setIsApproveArmed] = useState(false);
   const [hasPickedReason, setHasPickedReason] = useState(false);
 
+  /** Refresh decision views and confirm queue notices, reconciling missing counts. */
   const refresh = async (revision: number | undefined) => {
     await Promise.all([
       utils.contentReview.getQueue.invalidate(),

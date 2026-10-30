@@ -110,6 +110,7 @@ import type { DrizzleClient } from "../../db";
 
 const pusher = getServerPusher();
 
+/** Include the acting moderator's visible queue count with decision confirmation. */
 const reportDecisionResponseSchema = userDeltaResponseSchema.extend({
   pendingReportCount: z.number().optional(),
 });

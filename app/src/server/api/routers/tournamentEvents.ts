@@ -65,6 +65,7 @@ import {
 
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
+/** Carry the actor's participation and actionable notices with event outcomes. */
 const eventActionResponse = userDeltaResponseSchema.extend({
   eventNotices: z
     .array(

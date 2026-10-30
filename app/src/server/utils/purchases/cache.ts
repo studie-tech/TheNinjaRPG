@@ -11,7 +11,11 @@ import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
-/** Confirm purchase balances and project objectives affected by reputation changes. */
+/**
+ * Confirm delivered purchase balances and reputation-dependent progression.
+ * Optional confirmation can be withheld; required hydration errors propagate.
+ * Preserve consumed progression feedback independently of cache confirmation.
+ */
 export const getPurchaseUserUpdate = (
   client: DrizzleClient,
   userId: string,

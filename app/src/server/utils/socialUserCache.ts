@@ -27,7 +27,11 @@ import { withRequestScope } from "@/server/requestScope";
 import { getPublicQuestTrackerPatch } from "@/server/utils/questUserCache";
 import { fetchMercenaryWarId } from "@/server/utils/warMercenary";
 
-/** Village changes alter automatic quest admission and membership-dependent progression together. */
+/**
+ * Advance and project membership-dependent quests after a village change.
+ * Hydration can commit quest effects, so its errors remain mutation errors.
+ * Return consumed feedback even when state needs canonical reconciliation.
+ */
 export const getVillageChangeUserUpdate = async (
   client: DrizzleClient,
   userId: string,

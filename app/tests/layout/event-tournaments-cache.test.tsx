@@ -35,6 +35,7 @@ type Connection = {
   socket_id?: string;
   receive: (event: UserEvent) => Promise<void>;
 };
+/** Seed participation and invitation notices independently for event cache assertions. */
 const snapshot = (participant: boolean, invitation = false) => ({
   userData: { userId: "player", role: "USER", status: "AWAKE", battleId: null, money: 100 },
   isEventParticipant: participant,
@@ -63,6 +64,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Mount one tab with its own profile cache and the production Pusher handler. */
 const LiveTab = ({ actor }: { actor: boolean }) => {
   const defaults = useContext(UserContext);
   const pusher = usePusherHandler("player");
@@ -80,6 +82,7 @@ const LiveTab = ({ actor }: { actor: boolean }) => {
   );
 };
 
+/** Drive actor and observer tabs through production cache and event handlers. */
 const setup = (action: Action, options: {
   eventAfterResponse?: boolean;
   lostResponse?: boolean;

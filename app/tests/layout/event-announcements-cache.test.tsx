@@ -25,6 +25,7 @@ type Success = (data: Result, variables: unknown, revision: number | undefined) 
 let onSuccess: Success;
 const history = vi.fn(async () => undefined);
 const shown = Object.assign(vi.fn((_options: Parameters<typeof toastUi.toast>[0]) => "test"), toastUi.toast);
+/** Seed actor state and unrelated notices for announcement delivery races. */
 const snapshot = () => ({
   userData: { userId: "actor", username: "Actor", role: "OWNER", money: 100, unreadNotifications: 0 },
   notifications: [{ href: "/inbox", name: "Inbox", color: "blue" }],
@@ -69,6 +70,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Capture the rendered announcement mutation with production cache reconciliation. */
 const setup = () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(queryClient);

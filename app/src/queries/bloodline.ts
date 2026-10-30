@@ -752,6 +752,7 @@ export const insertActionLogForUpdateBloodline = (
     relatedImage: user.avatarLight || user.avatar || IMG_AVATAR_DEFAULT,
   });
 
+/** Keep passive inputs in one snapshot for both lineage cache projections. */
 const bloodlineCacheUserRelations = {
   bloodline: true,
   activeReskin: true,

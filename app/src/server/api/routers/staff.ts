@@ -1226,6 +1226,10 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
   await deleteUserDataForDeleteUserInternal(client, userId);
 };
 
+/**
+ * Read the target's current state and closed isolated runs after a staff wake attempt.
+ * Withhold cache data if either confirmation fails.
+ */
 const getForceAwakeUserUpdate = async (
   client: DrizzleClient,
   userId: string,

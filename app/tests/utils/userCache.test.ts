@@ -13,6 +13,7 @@ const profile = (money: number) => ({
   userData: { money, reputationPoints: 30 } as NonNullable<UserWithRelations>,
   notifications: ["preserved"],
 });
+/** Build complete mission snapshots to verify replacement rather than object merging. */
 const warMission = (id: string): WarMissionAttempt => ({
   id, warId: "war", questId: "quest", objectiveId: "objective",
   sideVillageId: "village", villageId: "village", sector: 1,

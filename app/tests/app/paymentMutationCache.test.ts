@@ -13,6 +13,7 @@ const flows = [
   { file: "app/[shell]/points/page.tsx", procedure: "paypal.resolveTransaction" },
 ];
 
+/** Run production purchase callbacks against the shared revision-aware cache updater. */
 const setup = (file: string, procedure: string, progress: AchievementProgress[]) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const profile = {
