@@ -97,10 +97,10 @@ describe("world art skinning", () => {
     expect(resolveWorldStructure("https://uploadthing.b-cdn.net/f/custom.webp", "/academy")).toBeUndefined();
     expect(resolveWorldStructure(image, "/hospital")).toBeUndefined();
   });
-  it("keeps all nine Wake Island services visually distinct and source-aligned", () => {
+  it("keeps Wake Island services and its shrine visually distinct and source-aligned", () => {
     const buildings = Object.values(WORLD_STRUCTURE_ART).filter((art) => art.village === "Wake Island");
-    expect(buildings).toHaveLength(9);
-    expect(new Set(buildings.map((art) => art.sourceImage)).size).toBe(9);
+    expect(buildings).toHaveLength(10);
+    expect(new Set(buildings.map((art) => art.sourceImage)).size).toBe(10);
     for (const art of buildings) expect(worldAssetSource(art.filepath)?.material).toBe(art.material);
   });
   it("keeps every settlement's stair contacts and material frames inside its published artwork", () => {

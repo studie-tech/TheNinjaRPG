@@ -78,7 +78,10 @@ import { worldMotionHeading } from "@/libs/rendering/worldArt";
 import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
 import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
-import { createGenericStructure } from "@/libs/sector-map/structures";
+import {
+  createGenericStructure,
+  createShrineStructure,
+} from "@/libs/sector-map/structures";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { sectorGridNeighbors } from "@/libs/sector-map/world-grid";
@@ -90,7 +93,6 @@ import type {
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
-import { getBiomeAtSectorAnchor } from "@/libs/travel";
 import { isTutorialCaptureStep } from "@/libs/tutorial";
 import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
@@ -2676,36 +2678,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 export default Sector;
 
 /**
- * Identity of the synthetic shrine, which is created once for the sector state
- * and again for the rendered scene. Both copies must share an id so a hit test
- * hit on the shrine sprite resolves back to a structure, the same way it does
- * for database-backed buildings.
- */
-const SECTOR_SHRINE_ID = "sector-shrine";
-
-/**
  * Mobile browsers synthesize a click on whatever sits under a dialog after the
  * overlay unmounts from the same tap. Keep the sector canvas deaf for that
  * window so closing scouting cannot also walk to a tile.
  */
 const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
-
-const createShrineStructure = (map: NormalizedSectorMap, globalTileType: number) => {
-  const shrineAnchor = map.anchors.find((anchor) => anchor.key === "shrine.default");
-  return {
-    ...createGenericStructure({
-      name: "Sector Shrine",
-      route: "/shrine",
-      image:
-        WAR_SHRINE_IMAGE_BY_BIOME[
-          getBiomeAtSectorAnchor(map, "shrine.default", globalTileType)
-        ],
-      longitude: shrineAnchor?.x ?? 10,
-      latitude: shrineAnchor?.y ?? 5,
-    }),
-    id: SECTOR_SHRINE_ID,
-  };
-};
 
 interface SorroundingUsersProps {
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;

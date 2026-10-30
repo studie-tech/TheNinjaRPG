@@ -2186,20 +2186,14 @@ export const WAR_RECAPTURE_THRESHOLD = 0.25; // Threshold for recapture (25% of 
 export const SHRINE_STATUSES = ["ACTIVE", "CAPTURED"] as const; // Status tracking for shrine capture/recovery cycles
 export type ShrineStatus = (typeof SHRINE_STATUSES)[number];
 export const WAR_SHRINE_IMAGE =
-  "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxtEfghWZsq9k0Von5rUfP6OgQ2TyptCKHS4u.webp";
-/**
- * Sector-map shrine sprite per sector biome, so the shrine's baked ground
- * patch matches the terrain it stands on (water sectors use the desert
- * variant - the tiles beneath become a sand island).
- */
+  "https://ui0arpl8sm.ufs.sh/f/world-shrine-akikaze-c1602b7764686d7d1bdf028f.webp";
+/** Shrine architecture follows the biome; map terrain supplies the ground beneath its foundation. */
 export const WAR_SHRINE_IMAGE_BY_BIOME: Record<CombatBiome, string> = {
-  ocean:
-    "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJe7TE7RyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp",
+  ocean: "https://ui0arpl8sm.ufs.sh/f/world-shrine-horizon-e0f90ae3ed79479bc27838e4.webp",
   ground: WAR_SHRINE_IMAGE,
-  dessert:
-    "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJe7TE7RyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp",
-  ice: "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJco2C06SnxBpQqGNDcTHbLmYz8uXAl3oa54ti.webp",
-  snow: "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJco2C06SnxBpQqGNDcTHbLmYz8uXAl3oa54ti.webp",
+  dessert: "https://ui0arpl8sm.ufs.sh/f/world-shrine-shirohana-6f2547d00c466af2aa8d400c.webp",
+  ice: "https://ui0arpl8sm.ufs.sh/f/world-shrine-hyorin-577db546f0abfb28385b835d.webp",
+  snow: "https://ui0arpl8sm.ufs.sh/f/world-shrine-hyorin-577db546f0abfb28385b835d.webp",
   arena: WAR_SHRINE_IMAGE,
   default: WAR_SHRINE_IMAGE,
 };
