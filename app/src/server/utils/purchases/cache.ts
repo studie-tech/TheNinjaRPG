@@ -67,15 +67,7 @@ export const getKnownPurchaseUserUpdate = (
 };
 
 /** Read-only recovery observes asynchronous deliveries without settling profile progression. */
-export const getPurchaseUserUpdate = (
-  client: DrizzleClient,
-  userId: string,
-): Promise<
-  Pick<
-    UserDeltaResponse,
-    "userPatch" | "userDelta" | "achievementProgress" | "announcements"
-  >
-> =>
+export const getPurchaseUserUpdate = (client: DrizzleClient, userId: string) =>
   withRequestScope(async () => {
     const inputs = await fetchPurchaseUserCacheInputs(client, userId).catch(
       () => undefined,

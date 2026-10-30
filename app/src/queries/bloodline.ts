@@ -753,34 +753,22 @@ export const insertActionLogForUpdateBloodline = (
     relatedImage: user.avatarLight || user.avatar || IMG_AVATAR_DEFAULT,
   });
 
-/** Keep passive inputs in one snapshot for both lineage cache projections. */
-const bloodlineCacheUserRelations = {
-  bloodline: true,
-  activeReskin: true,
-  clan: true,
-  village: { with: { structures: true } },
-  raidBuffs: true,
-  titles: true,
-  userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
-  items: {
-    where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
-    with: { item: true, imbuements: { with: { item: true } } },
-  },
-} as const;
-
-/** Load passive sources required to project a lineage change without quest hydration. */
-export const fetchBloodlineCacheUser = (client: DrizzleClient, userId: string) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    with: bloodlineCacheUserRelations,
-  });
-
 /** Load quest eligibility alongside passive sources for a lineage change. */
 export const fetchBloodlineProgressionUser = (client: DrizzleClient, userId: string) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
     with: {
-      ...bloodlineCacheUserRelations,
+      bloodline: true,
+      activeReskin: true,
+      clan: true,
+      village: { with: { structures: true } },
+      raidBuffs: true,
+      titles: true,
+      userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
+      items: {
+        where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
+        with: { item: true, imbuements: { with: { item: true } } },
+      },
       userQuests: userQuestHistoryRelation,
       completedQuests: completedQuestHistoryRelation,
     },

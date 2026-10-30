@@ -1277,7 +1277,6 @@ export const raidsRouter = createTRPCRouter({
         rewards: displayRewards,
         ...getRewardUserUpdate({
           rewards: processedRewards,
-          granted,
           requiresRelations:
             snapshot.requiresProgressionRefresh || (threshold.effects?.length ?? 0) > 0,
           progression: getUserProgressionUpdate(user, snapshot.publishedAchievementIds),

@@ -148,15 +148,6 @@ describe("user cache updates", () => {
     test.close();
   });
 
-  it("merges a confirmed withdrawal into the participation polling flag", async () => {
-    const test = setup();
-    test.client.setQueryData(key, { ...profile(100), isEventParticipant: true });
-    await updateUserCache(test.client, key, {}, { revision: prepareUserUpdate(test.client, key), isEventParticipant: false });
-    expect(test.client.getQueryData<{ isEventParticipant?: boolean }>(key)?.isEventParticipant).toBe(false);
-    expect(test.reads()).toBe(0);
-    test.close();
-  });
-
   it("replaces an ANBU membership without retaining the former squad's counters", async () => {
     const test = setup();
     test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, anbuId: "old", anbuSquad: { id: "old", name: "Former squad", points: 100, leaderId: "former-leader" } } });

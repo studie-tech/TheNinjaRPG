@@ -18,7 +18,7 @@ describeWithDatabase("purchase balance confirmation", () => {
     const db = await getTestDatabase();
     const caller = await callerFor(purchasesRouter, "buyer");
     const first = await caller.userSnapshot();
-    expect(first).toEqual({ userId: "buyer", achievementProgress: undefined, userPatch: { money: 10, reputationPoints: 20, reputationPointsTotal: 40, federalStatus: "GOLD" } });
+    expect(first).toEqual({ userId: "buyer", userPatch: { money: 10, reputationPoints: 20, reputationPointsTotal: 40, federalStatus: "GOLD" } });
     await db.update(userData).set({ reputationPoints: 28, reputationPointsTotal: 48, federalStatus: "NONE" }).where(eq(userData.userId, "buyer"));
     expect(await caller.userSnapshot()).toMatchObject({ userPatch: { reputationPoints: 28, reputationPointsTotal: 48, federalStatus: "NONE" } });
     expect(await getPurchaseUserUpdate(db, "buyer")).toEqual({ userPatch: (await caller.userSnapshot()).userPatch ?? undefined, userDelta: {} });
@@ -26,6 +26,6 @@ describeWithDatabase("purchase balance confirmation", () => {
   it("reports a missing character without inventing a balance", async () => {
     const db = await getTestDatabase();
     await db.delete(userData).where(eq(userData.userId, "buyer"));
-    expect(await (await callerFor(purchasesRouter, "buyer")).userSnapshot()).toEqual({ userId: "buyer", userPatch: null, achievementProgress: undefined });
+    expect(await (await callerFor(purchasesRouter, "buyer")).userSnapshot()).toEqual({ userId: "buyer", userPatch: null });
   });
 });

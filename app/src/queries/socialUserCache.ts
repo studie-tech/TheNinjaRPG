@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
-/** Raw regeneration sources preloaded alongside clan membership writes. */
+/** Raw regeneration sources for membership and event boost projections. */
 export const findMembershipUserCache = (
   client: Pick<DrizzleClient, "query">,
   userId: string,

@@ -129,7 +129,6 @@ export const pvpRankRouter = createTRPCRouter({
 
       const cacheUpdate = getRewardUserUpdate({
         rewards: processedRewards,
-        granted,
       });
       return {
         success: true,

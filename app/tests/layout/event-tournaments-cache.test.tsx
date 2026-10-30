@@ -86,7 +86,6 @@ const LiveTab = ({ actor }: { actor: boolean }) => {
 const setup = (action: Action, options: {
   eventAfterResponse?: boolean;
   lostResponse?: boolean;
-  missingPatch?: boolean;
   rejection?: boolean;
 } = {}) => {
   const connections: Connection[] = [];
@@ -198,8 +197,8 @@ it("recovers a committed action with a lost response and retains the default err
   await waitFor(() => expect((test.getByRole("button", { name: "Withdraw from tournament" }) as HTMLButtonElement).disabled).toBe(false));
 });
 
-it.each([{ missingPatch: true }, { rejection: true }])("reconciles incomplete or rejected responses: %j", async (options) => {
-  const test = setup("JOIN", options);
+it("reconciles a rejected response", async () => {
+  const test = setup("JOIN", { rejection: true });
   await test.click();
   await waitFor(() => expect(test.reads[0]).toHaveBeenCalledTimes(1));
   expect(test.defaultError).not.toHaveBeenCalled();

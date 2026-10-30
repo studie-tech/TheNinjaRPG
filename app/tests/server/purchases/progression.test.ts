@@ -87,7 +87,6 @@ describeWithDatabase("purchase reputation progression", () => {
     const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
     const result = source === "native" ? await (await callerFor(purchasesRouter, userId)).userSnapshot() : await getPurchaseUserUpdate(db, userId);
     expect(result.userPatch).toBeFalsy();
-    expect(result.announcements).toBeUndefined();
     expect(hydration).not.toHaveBeenCalled();
     expect(await db.query.questHistory.findFirst({ where: eq(questHistory.questId, "purchase-child") })).toBeUndefined();
     const canonical = await profile.getUser();
@@ -116,8 +115,7 @@ describeWithDatabase("purchase reputation progression", () => {
     try {
       const result = await (await callerFor(purchasesRouter, userId)).userSnapshot();
       expect(result.userPatch).toBeNull();
-      expect(result.achievementProgress).toBeUndefined();
-      await updateUserCache(cache, key, result.userPatch ?? undefined, { revision, achievementProgress: result.achievementProgress });
+      await updateUserCache(cache, key, result.userPatch ?? undefined, { revision });
       expect(read).toHaveBeenCalledTimes(1);
       expect(cache.getQueryData<typeof initial>(key)?.userData?.reputationPoints).toBe(STORE_REP_PRODUCTS[0]!.reputationPoints);
       expect(await grantStorePurchase(db, purchase)).toMatchObject({ status: "duplicate" });
@@ -164,7 +162,7 @@ describeWithDatabase("purchase reputation progression", () => {
     const result = source === "native" ? await (await callerFor(purchasesRouter, userId)).userSnapshot() : await getPurchaseUserUpdate(db, userId);
     expect(result.userPatch).toBeFalsy();
     expect(hydration).not.toHaveBeenCalled();
-    await updateUserCache(cache, key, result.userPatch ?? undefined, { revision, achievementProgress: "achievementProgress" in result ? result.achievementProgress : undefined });
+    await updateUserCache(cache, key, result.userPatch ?? undefined, { revision });
     expect(read).toHaveBeenCalledTimes(1);
     expect(goal(cache.getQueryData(key))).toMatchObject({ done: true, value: product.reputationPoints });
     expect(cache.getQueryData<Profile>(key)?.userData?.reputationPoints).toBe(product.reputationPoints);

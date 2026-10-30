@@ -16,8 +16,6 @@ export const purchasesRouter = createTRPCRouter({
     return {
       userId: ctx.userId,
       userPatch: update.userPatch ?? null,
-      achievementProgress: update.achievementProgress,
-      ...(update.announcements ? { announcements: update.announcements } : {}),
     };
   }),
   /**

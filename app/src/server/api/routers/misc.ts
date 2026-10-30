@@ -18,7 +18,6 @@ import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamese
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import { calcActiveUserRegen } from "@/libs/profile";
 import { hasEnergyQueue } from "@/libs/queue";
-import { fetchBloodlineCacheUser } from "@/queries/bloodline";
 import {
   deleteEmailReminderForDeleteEmailReminder,
   fetchEmailReminder,
@@ -50,6 +49,7 @@ import {
   updateUserDataForSubmitNotification,
 } from "@/queries/misc";
 import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
+import { findMembershipUserCache } from "@/queries/socialUserCache";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -246,7 +246,7 @@ export const miscRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, settings] = await Promise.all([
-        fetchBloodlineCacheUser(ctx.drizzle, ctx.userId),
+        findMembershipUserCache(ctx.drizzle, ctx.userId),
         fetchAllGameSettings(ctx.drizzle),
       ]);
       if (!user) return errorResponse("User not found");
