@@ -43,7 +43,7 @@ describeWithDatabase("dungeon jutsu loadouts", () => {
     );
     await insertUsers([
       ...members.map((userId) => ({
-        userId, username: userId, status: "AWAKE", rank: "JONIN", level: 50,
+        userId, username: userId, status: "AWAKE" as const, rank: "JONIN" as const, level: 50,
         experience: 20_000_000, sector: 1, villageId: "home", defaultAutoCombat: false,
         curHealth: 100, maxHealth: 100, curChakra: 100, maxChakra: 100,
         curStamina: 100, maxStamina: 100, updatedAt: new Date(), regenAt: new Date(),
