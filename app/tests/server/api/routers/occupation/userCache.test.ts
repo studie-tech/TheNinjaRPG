@@ -8,7 +8,7 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
+import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../../setup/testDatabase";
 
 describeWithDatabase("crafting user cache quest progress", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -111,6 +111,34 @@ describeWithDatabase("crafting user cache quest progress", () => {
     expect((await caller.cancelQueuedCraft({ queueId: waiting.id })).success).toBe(false);
     expect(await db.query.userQueue.findMany()).toEqual([]);
     expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "material-stack") })).toMatchObject({ quantity: 19 });
+  });
+
+  it("starts and reschedules crafts by queue position after cancellation", async () => {
+    const db = await getTestDatabase();
+    await insertItems(["first", "second", "third"].map((id) => ({ id, name: id, canBeCrafted: true, stackSize: 1, craftingExperience: 1 })));
+    const scheduledAt = Date.now() + 3600000;
+    for (const [id, position, itemId] of [
+      ["a-third", 3, "third"],
+      ["b-second", 2, "second"],
+      ["c-first", 1, "first"],
+      ["z-cancelled", 0, "crafted"],
+    ] as const) {
+      await db.insert(userQueue).values({ id, position, itemId, userId: "crafter", kind: "CRAFT", quantity: 1, durationSeconds: 600, materials: [], startsAt: new Date(scheduledAt + position * 600000), finishesAt: new Date(scheduledAt + (position + 1) * 600000) });
+    }
+    // Refresh statistics so a fresh database does not mask ordering with its position index.
+    await runRawSql("ANALYZE TABLE UserQueue");
+    const result = await (await callerFor(occupationRouter, "crafter")).cancelQueuedCraft({ queueId: "z-cancelled" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    const outputs = await db.query.userItem.findMany({ where: eq(userItem.itemId, "first") });
+    expect(outputs).toHaveLength(1);
+    expect((await db.query.userItem.findMany()).map((entry) => entry.itemId).sort()).toEqual(["first", "material"]);
+    const waiting = await db.query.userQueue.findMany({ orderBy: (row, { asc }) => asc(row.position) });
+    expect(waiting.map((entry) => entry.itemId)).toEqual(["second", "third"]);
+    expect(waiting[0]?.startsAt).toEqual(outputs[0]?.craftingFinishedAt);
+    expect(waiting[0]?.finishesAt?.getTime()).toBe(waiting[0]!.startsAt!.getTime() + 600000);
+    expect(waiting[1]?.startsAt).toEqual(waiting[0]?.finishesAt);
+    expect(waiting[1]?.finishesAt?.getTime()).toBe(waiting[1]!.startsAt!.getTime() + 600000);
   });
 
   it.each([

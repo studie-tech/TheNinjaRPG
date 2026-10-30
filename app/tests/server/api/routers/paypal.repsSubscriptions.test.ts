@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { paypalSubscription, userData } from "@/drizzle/schema";
+import { paypalSubscription, quest, questHistory, userData } from "@/drizzle/schema";
 import { paypalRouter } from "@/server/api/routers/paypal";
 import { calcFedUgradeCost, fedStatusRepsCost } from "@/utils/paypal";
 import { insertUsers } from "../../../setup/factories";
@@ -40,7 +40,7 @@ const staleGifteeClient = (database: DrizzleClient): DrizzleClient =>
 
 describeWithDatabase("reputation-funded subscriptions", () => {
   beforeEach(async () => {
-    await resetTables(paypalSubscription, userData);
+    await resetTables(paypalSubscription, questHistory, quest, userData);
   });
 
   it("charges a single purchase when concurrent requests buy the same entitlement", async () => {
