@@ -867,7 +867,7 @@ const expiredDungeonState = (run: { state: DungeonRunState; status?: string }) =
       : "The one-hour dungeon deadline expired.",
 });
 
-/** Confirm reward balances and relations after receipt delivery commits. */
+/** Confirm scalar reward balances and mastery state; membership rewards use a full profile. */
 export const findDungeonRewardUserCache = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
@@ -890,7 +890,6 @@ export const findDungeonRewardUserCache = (
       sageMasteryExperience: true,
       level: true,
       rank: true,
-      villageId: true,
       bloodlineId: true,
       isAi: true,
       ninjutsuMastery: true,
@@ -904,8 +903,6 @@ export const findDungeonRewardUserCache = (
     },
     extras: (table) => activityCompletionExtras(table.userId),
     with: {
-      clan: { columns: { id: true, points: true } },
-      village: { columns: { id: true, tokens: true } },
       sageMode: true,
       titles: { with: { title: true } },
     },

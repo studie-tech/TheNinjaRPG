@@ -4,7 +4,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { battle, dungeon, dungeonMember, dungeonRun, gameSetting, quest, questHistory, userData, userRewards, userVote, village } from "@/drizzle/schema";
+import { battle, clan, dungeon, dungeonMember, dungeonRun, gameSetting, quest, questHistory, userData, userRewards, userVote, village } from "@/drizzle/schema";
 import * as dungeonQueries from "@/queries/dungeon";
 import * as skillQueries from "@/queries/skillTree";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
@@ -60,7 +60,7 @@ const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
 describeWithDatabase("confirmed dungeon reward progression", () => {
   beforeEach(async () => {
     stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected HTTP request in dungeon cache tests" });
-    await resetTables(battle, dungeonMember, dungeonRun, dungeon, questHistory, quest, userRewards, userVote, userData, gameSetting, village);
+    await resetTables(battle, dungeonMember, dungeonRun, dungeon, questHistory, quest, userRewards, userVote, userData, gameSetting, clan, village);
     await insertUsers([{ userId, username: "DungeonCache", role: "USER", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,
       money: 0, earnedExperience: 0, reputationPoints: 0, reputationPointsTotal: 0, medicalExperience: 0,
@@ -148,6 +148,50 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 10, dungeonsCompleted: 1 });
     expect(goal(cache.current(), "dungeon-completion")).toEqual(goal(initial, "dungeon-completion"));
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, earnedExperience: 10 });
+  });
+
+  it.each([null, "other-village"])("preserves unrelated membership snapshots on scalar claim and replay after the village changes to %s", async (villageId) => {
+    const db = await getTestDatabase();
+    await db.insert(village).values([
+      { id: "cached-village", name: "Cached village", sector: 1, kageId: "" },
+      { id: "other-village", name: "Other village", sector: 2, kageId: "" },
+    ]);
+    await db.insert(clan).values({ id: "cached-clan", name: "Cached clan", image: "clan.png",
+      villageId: "cached-village", founderId: userId, leaderId: userId, leaderOrderId: "order" });
+    await db.update(userData).set({ isOutlaw: false, villageId: "cached-village", clanId: "cached-clan" }).where(eq(userData.userId, userId));
+    const profile = callerForDatabase(profileRouter, userId, db);
+    await profile.getUser();
+    const api = await completedRun();
+    const initial = await profile.getUser();
+    expect(goal(initial, "dungeon-completion")?.done).toBe(true);
+    expect(initial.userData?.village?.name).toBe("Cached village");
+    expect(initial.userData?.clan?.name).toBe("Cached clan");
+    const cache = cachedProfile(initial, () => profile.getUser());
+    const hydration = vi.spyOn(profileQueries, "fetchUpdatedUser");
+    // Scalar receipts leave unrelated membership snapshots intact.
+    await db.update(userData).set({ villageId, clanId: null }).where(eq(userData.userId, userId));
+    for (const money of [100, 109]) {
+      if (money === 109) await db.update(userData).set({ money }).where(eq(userData.userId, userId));
+      const revision = cache.callbacks.onMutate();
+      const response = userDeltaResponseSchema.parse(await api.claim({ id: "completed-run" }));
+      expect(response.success).toBe(true);
+      await cache.callbacks.onSuccess(response, undefined, revision);
+      expect(cache.current().userData?.villageId).toBe("cached-village");
+      expect(cache.current().userData?.village).toEqual(initial.userData?.village);
+      expect(cache.current().userData?.clanId).toBe("cached-clan");
+      expect(cache.current().userData?.clan).toEqual(initial.userData?.clan);
+      expect(cache.current().userData?.money).toBe(money);
+      expect(cache.current().userData?.earnedExperience).toBe(10);
+      expect(cache.current().userData?.dungeonsCompleted).toBe(1);
+      expect(goal(cache.current(), "dungeon-completion")).toEqual(goal(initial, "dungeon-completion"));
+    }
+    expect(hydration).not.toHaveBeenCalled();
+    expect(cache.refetch).not.toHaveBeenCalled();
+    const saved = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+    expect(saved?.villageId).toBe(villageId);
+    expect(saved?.clanId).toBeNull();
+    expect(saved?.money).toBe(109);
+    expect(saved?.earnedExperience).toBe(10);
   });
 
   it.each([false, true])("reconciles a polled completion through the claim callback (delayed profile refresh: %s)", async (delayedRefresh) => {
