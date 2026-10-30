@@ -37,6 +37,11 @@ export type TradeableCurrencyType = (typeof TRADEABLE_CURRENCY_TYPES)[number];
 // Occupation config
 export const OCCUPATION_CHANGE_COOLDOWN_DAYS = 3;
 
+/** Waiting period before a character can be explicitly deleted. */
+export const CHARACTER_DELETION_DELAY_DAYS = 2;
+/** Verbatim confirmation for self-service timer creation and permanent deletion. */
+export const CHARACTER_DELETION_CONFIRMATION = "Delete my character";
+
 export const PollOptionTypes = ["text", "user"] as const;
 export type PollOptionType = (typeof PollOptionTypes)[number];
 
@@ -1527,6 +1532,8 @@ export const KILLING_NOTORIETY_GAIN = 5;
 
 // Reputation cost config
 export const STARTING_REPUTATION_POINTS = 11;
+/** Shared charge for avatar affordability checks, guarded debit, and cache delta. */
+export const COST_GENERATE_AVATAR = 1;
 export const COST_CHANGE_USERNAME = 5;
 export const COST_CHANGE_GENDER = 5;
 export const COST_TAVERN_COLOR_CHANGE = 10;

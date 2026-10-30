@@ -1,3 +1,4 @@
+import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingReceipt, huntingSession, item, mpvpBattleUser, questHistory, rankedPvpQueue, sectorMap, storeUserIdAlias, userData, userItem } from "@/drizzle/schema";
@@ -317,10 +318,10 @@ describeWithDatabase("staff changes during hunting admission", () => {
   it("allows a hunter to delete their own account and accepted session", async () => {
     const { db } = await prepare();
     const profile = callerForDatabase(profileRouter, "hunter", db);
-    expect((await profile.toggleDeletionTimer({ userId: "hunter" })).success).toBe(true);
+    expect((await profile.toggleDeletionTimer({ userId: "hunter", confirmation: CHARACTER_DELETION_CONFIRMATION })).success).toBe(true);
     const target = (await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") }))!;
     setSystemTime(new Date(target.deletionAt!.getTime() + 1));
-    expect(await profile.confirmDeletion({ userId: "hunter" })).toMatchObject({ success: true });
+    expect(await profile.confirmDeletion({ userId: "hunter", confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({ success: true });
     expect(await db.query.huntingSession.findMany()).toHaveLength(0);
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") })).toBeUndefined();
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "enemy") })).toBeDefined();

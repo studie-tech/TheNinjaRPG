@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   ACTIVE_VOTING_SITES,
   BasicElementName,
+  CHARACTER_DELETION_CONFIRMATION,
   COST_CHANGE_USERNAME,
   type CombatStatName,
   CombatStatNames,
@@ -1284,8 +1285,8 @@ export const profileRouter = createTRPCRouter({
         // Add deletion timer to notifications
         if (user?.deletionAt) {
           notifications?.push({
-            href: "/profile",
-            name: "Being deleted",
+            href: "/profile?tab=edit&settings=deletion&setting=character",
+            name: "Deletion requested",
             color: "red",
           });
         }
@@ -2238,9 +2239,12 @@ export const profileRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       return await fetchRecruitMilestoneSummary(ctx.drizzle, ctx.userId);
     }),
-  // Toggle deletion of user
+  /**
+   * Start or cancel the waiting period. Confirmation is optional for cancellation
+   * and staff moderation; self-service starts require the exact phrase.
+   */
   toggleDeletionTimer: protectedProcedure
-    .input(z.object({ userId: z.string() }))
+    .input(z.object({ userId: z.string(), confirmation: z.string().optional() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
@@ -2253,16 +2257,25 @@ export const profileRouter = createTRPCRouter({
       if (ctx.userId !== input.userId && !canDeleteUsers(user.role)) {
         return errorResponse("You can't delete other users");
       }
-      // Muate
+      if (
+        ctx.userId === input.userId &&
+        !target.deletionAt &&
+        input.confirmation !== CHARACTER_DELETION_CONFIRMATION
+      ) {
+        return errorResponse(
+          `Type "${CHARACTER_DELETION_CONFIRMATION}" to start the deletion timer.`,
+        );
+      }
+      // Mutate
       await updateUserDataForToggleDeletionTimer(ctx.drizzle, target, input);
       return { success: true, message: "Deletion timer toggled" };
     }),
-  // Delete user
+  /** Enforce the elapsed wait and self-confirmation before the deletion safeguards run. */
   confirmDeletion: protectedProcedure
     .meta({
       mcp: { description: "Confirm and execute account deletion" },
     })
-    .input(z.object({ userId: z.string() }))
+    .input(z.object({ userId: z.string(), confirmation: z.string().optional() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
@@ -2276,6 +2289,14 @@ export const profileRouter = createTRPCRouter({
       }
       if (ctx.userId !== input.userId && !canSeeSecretData(user.role)) {
         return errorResponse("You can't delete other users");
+      }
+      if (
+        ctx.userId === input.userId &&
+        input.confirmation !== CHARACTER_DELETION_CONFIRMATION
+      ) {
+        return errorResponse(
+          `Type "${CHARACTER_DELETION_CONFIRMATION}" to permanently delete your character.`,
+        );
       }
       if (target.anbuId) {
         return errorResponse("Please leave ANBU first.");

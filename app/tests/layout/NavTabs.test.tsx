@@ -50,7 +50,7 @@ const options = ["Dashboard", "Character", "Achievements"];
 
 describe("optional tab remembering", () => {
   it("keeps responsive icon tabs named and keyboard accessible", async () => {
-    const iconOptions = ["Dashboard", "Character", "Achievements", "Sharing", "Delete Character"];
+    const iconOptions = ["Dashboard", "Character", "Achievements", "Sharing", "History"];
     const view = render(
       <Tabs defaultValue="Character">
         <NavTabs
@@ -61,10 +61,10 @@ describe("optional tab remembering", () => {
           labelClassName={(option) => option === "Dashboard" || option === "Character" ? "@min-[480px]:not-sr-only" : ""}
           accessibleTabs
           label="Profile sections"
-          values={{ "Delete Character": "delete" }}
+          values={{ History: "history" }}
         />
         <TabsContent value="Achievements">Your achievements</TabsContent>
-        <TabsContent value="delete">Deletion details</TabsContent>
+        <TabsContent value="history">History details</TabsContent>
       </Tabs>,
     );
     expect(view.getAllByRole("tab")).toHaveLength(5);
@@ -73,8 +73,8 @@ describe("optional tab remembering", () => {
     fireEvent.keyDown(character, { key: "ArrowRight" });
     await waitFor(() => expect(view.getByRole("tabpanel", { name: "Achievements" }).textContent).toBe("Your achievements"));
     fireEvent.keyDown(document.activeElement as HTMLElement, { key: "End" });
-    await waitFor(() => expect(view.getByRole("tabpanel", { name: "Delete Character" }).textContent).toBe("Deletion details"));
-    expect(document.activeElement).toBe(view.getByRole("tab", { name: "Delete Character" }));
+    await waitFor(() => expect(view.getByRole("tabpanel", { name: "History" }).textContent).toBe("History details"));
+    expect(document.activeElement).toBe(view.getByRole("tab", { name: "History" }));
   });
   it("associates icon tab panels with labels containing spaces using stable values", () => {
     const view = render(
