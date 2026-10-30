@@ -2,7 +2,7 @@
 import { describe, expect, it } from "bun:test";
 import { CombatStatNames, SCALED_AI_STAT_BUDGET_SHARE } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
-import { calcLevelRequirements, MAX_STORED_POOL } from "@/libs/profile";
+import { calcHP, calcLevelRequirements, MAX_STORED_POOL, scaleUserStats } from "@/libs/profile";
 import { scaleEditedAi } from "../../../../../src/server/api/routers/profile";
 
 // Row _-LABA3r7vwogsQ4O3ALq in data/ai.sql: a specialist whose six stats hold more than
@@ -102,15 +102,11 @@ describe("scaleEditedAi", () => {
     for (const stat of CombatStatNames) expect(edited[stat]).toBe(1_669_560);
   });
 
-  // THENINJARPG-2Z2: Rust Ferret (level 120, pools x15) scaled to 90,750 HP, which the
-  // smallint unsigned pool columns reject with "Out of range value for column 'curHealth'".
-  it("caps pools to what the database columns can store", () => {
+  it("caps chakra and stamina to what their database columns can store", () => {
     const stored = { ...makeClown(), level: 120, poolsMultiplier: 15 } as UserData;
     const edited = { ...stored } as UserData;
     scaleEditedAi(stored, edited);
     for (const pool of [
-      edited.curHealth,
-      edited.maxHealth,
       edited.curChakra,
       edited.maxChakra,
       edited.curStamina,
@@ -118,5 +114,36 @@ describe("scaleEditedAi", () => {
     ]) {
       expect(pool).toBe(MAX_STORED_POOL);
     }
+  });
+});
+
+
+describe("custom AI health scaling", () => {
+  it("saves and rescales fixed HP independently of level and pool multiplier", () => {
+    const stored = makeClown();
+    const edited = { ...stored, level: 120, aiHealthOverride: 5_000_000 };
+    scaleEditedAi(stored, edited);
+    expect(edited.curHealth).toBe(5_000_000);
+    expect(edited.maxHealth).toBe(5_000_000);
+    expect(edited.maxChakra).toBe(18_150);
+    expect(edited.maxStamina).toBe(18_150);
+    edited.level = 50;
+    scaleUserStats(edited, "ai");
+    expect(edited.curHealth).toBe(5_000_000);
+    expect(edited.maxHealth).toBe(5_000_000);
+  });
+
+  it("restores automatic health when the override is cleared", () => {
+    const stored = { ...makeClown(), aiHealthOverride: 5_000_000 };
+    const edited = { ...stored, aiHealthOverride: null };
+    scaleEditedAi(stored, edited);
+    expect(edited.maxHealth).toBe(calcHP(edited.level) * edited.poolsMultiplier);
+    expect(edited.curHealth).toBe(edited.maxHealth);
+  });
+
+  it("does not apply AI overrides to player scaling", () => {
+    const player = { ...makeClown(), aiHealthOverride: 5_000_000 };
+    scaleUserStats(player, "player");
+    expect(player.maxHealth).toBe(calcHP(player.level) * player.poolsMultiplier);
   });
 });

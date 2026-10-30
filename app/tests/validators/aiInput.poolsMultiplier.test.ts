@@ -2,8 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { maxPoolsMultiplier } from "@/libs/profile";
 import { insertAiSchema } from "@/validators/aiInput";
 
-// THENINJARPG-2Z2: the AI editor accepted pool modifiers whose pools overflow the
-// smallint unsigned pool columns, so the save failed with a raw database error.
 const makeAi = (level: number, poolsMultiplier: number) => ({
   userId: "R9JRTtK3cZubEWUMbEkfL",
   username: "Rust Ferret",
@@ -44,5 +42,22 @@ describe("insertAiSchema poolsMultiplier", () => {
           "Pool modifier 15 at level 120 would push HP/CP/SP above the maximum of 65,535. Use at most 10 at this level.",
       }),
     ]);
+  });
+});
+
+
+describe("insertAiSchema custom HP", () => {
+  it.each([1, 65_536, 5_000_000])("accepts %s HP independently of the pool modifier", (hp) => {
+    expect(insertAiSchema.parse({ ...makeAi(120, 1), aiHealthOverride: hp }).aiHealthOverride).toBe(hp);
+  });
+
+  it.each([undefined, null, ""])("uses automatic health for an empty override (%s)", (hp) => {
+    expect(insertAiSchema.parse({ ...makeAi(120, 1), aiHealthOverride: hp }).aiHealthOverride).toBeNull();
+  });
+
+  it.each([0, -1, 5_000_001, 1.5, "invalid"])("rejects invalid HP: %s", (hp) => {
+    const result = insertAiSchema.safeParse({ ...makeAi(120, 1), aiHealthOverride: hp });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(["aiHealthOverride"]);
   });
 });

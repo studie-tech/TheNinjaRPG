@@ -120,6 +120,7 @@ const AI_EDITABLE_KEYS = [
   "sageMastery",
   "statsMultiplier",
   "poolsMultiplier",
+  "aiHealthOverride",
   "strength",
   "intelligence",
   "willpower",

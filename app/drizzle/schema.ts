@@ -2648,8 +2648,8 @@ export const userData = mysqlTable(
     lastIp: varchar("lastIp", { length: 191 }),
     username: varchar("username", { length: 191 }).notNull(),
     gender: varchar("gender", { length: 191 }).notNull(),
-    curHealth: smallint("curHealth", { unsigned: true }).default(100).notNull(),
-    maxHealth: smallint("maxHealth", { unsigned: true }).default(100).notNull(),
+    curHealth: int("curHealth", { unsigned: true }).default(100).notNull(),
+    maxHealth: int("maxHealth", { unsigned: true }).default(100).notNull(),
     curChakra: smallint("curChakra", { unsigned: true }).default(100).notNull(),
     maxChakra: smallint("maxChakra", { unsigned: true }).default(100).notNull(),
     curEnergy: double("curEnergy").default(100).notNull(),
@@ -2703,6 +2703,8 @@ export const userData = mysqlTable(
     sageMastery: double("sageMastery").default(10).notNull(),
     statsMultiplier: double("statsMultiplier").default(1).notNull(),
     poolsMultiplier: double("poolsMultiplier").default(1).notNull(),
+    /** Fixed AI health; null uses level and pool multiplier scaling. */
+    aiHealthOverride: int("aiHealthOverride", { unsigned: true }),
     primaryElement: mysqlEnum("primaryElement", consts.ElementNames),
     secondaryElement: mysqlEnum("secondaryElement", consts.ElementNames),
     reputationPoints: float("reputationPoints")
