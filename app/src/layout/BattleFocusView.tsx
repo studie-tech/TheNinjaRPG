@@ -23,6 +23,7 @@ import { useUserData } from "@/utils/UserContext";
 export function BattleFocusView({
   battle,
   controlledActorId,
+  swapFocusPanels = false,
   timer,
   field,
   fieldRatio,
@@ -48,7 +49,9 @@ export function BattleFocusView({
   if (!mounted) return null;
 
   const me = battle?.usersState.find((user) => user.userId === controlledActorId);
-  const fighters = (battle?.usersState ?? []).filter((user) => !user.isSummon);
+  const fighters = (battle?.usersState ?? []).filter(
+    (user) => !user.isSummon || user.userId === controlledActorId,
+  );
   const allies = me ? fighters.filter((user) => user.direction === me.direction) : [];
   const enemies = me ? fighters.filter((user) => user.direction !== me.direction) : [];
 
@@ -121,12 +124,22 @@ export function BattleFocusView({
       <main aria-label="Battle" className="flex min-h-0 min-w-0 flex-col gap-[8px]">
         <div className="shrink-0">{timer}</div>
         {fieldBox}
-        <div className="max-h-[42%] shrink-0 overflow-y-auto overscroll-contain">
-          {dock}
-        </div>
+        <section
+          aria-label={swapFocusPanels ? "Battle history" : "Battle actions"}
+          className={cn(
+            "min-h-0 shrink-0",
+            swapFocusPanels
+              ? "flex h-[30%] max-h-[240px] flex-col"
+              : "max-h-[42%] overflow-y-auto overscroll-contain",
+          )}
+        >
+          {swapFocusPanels ? panels : dock}
+        </section>
       </main>
       <aside
-        aria-label="Opponents and battle log"
+        aria-label={
+          swapFocusPanels ? "Opponents and actions" : "Opponents and battle log"
+        }
         className="flex min-h-0 flex-col gap-[8px]"
       >
         <div className="flex max-h-[55%] shrink-0 flex-col gap-[8px] overflow-y-auto overscroll-contain">
@@ -139,7 +152,12 @@ export function BattleFocusView({
             />
           ))}
         </div>
-        {panels}
+        <section
+          aria-label={swapFocusPanels ? "Battle actions" : "Battle history"}
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+        >
+          {swapFocusPanels ? dock : panels}
+        </section>
       </aside>
     </div>
   ) : (
@@ -327,6 +345,8 @@ function FighterCard({
 interface BattleFocusViewProps {
   battle: BattleState["battle"];
   controlledActorId?: string;
+  /** Desktop preference: history below the field and actions below the opponents. */
+  swapFocusPanels?: boolean;
   timer: ReactNode;
   field: ReactNode;
   /** Height per width of the battlefield; undefined while results replace it. */

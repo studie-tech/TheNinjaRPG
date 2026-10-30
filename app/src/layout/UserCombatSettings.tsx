@@ -76,7 +76,7 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
             <div className="flex flex-col">
               <p className="font-semibold text-sm">Battle focus</p>
               <p className="text-muted-foreground text-xs">
-                Full-window battle screen with the log beside the field
+                Full-window battlefield, actions and battle history
               </p>
             </div>
             <Switch
@@ -85,6 +85,21 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
               aria-label="Toggle battle focus"
             />
           </div>
+          {config.battleFocus && (
+            <div className="hidden items-center justify-between gap-3 lg:flex">
+              <div className="flex flex-col">
+                <p className="font-semibold text-sm">Swap actions and log</p>
+                <p className="text-muted-foreground text-xs">
+                  On desktop, put the log below the field and actions beside it
+                </p>
+              </div>
+              <Switch
+                checked={config.swapFocusPanels}
+                onCheckedChange={config.setSwapFocusPanels}
+                aria-label="Swap actions and log"
+              />
+            </div>
+          )}
         </section>
 
         <section className="space-y-3 rounded-lg border p-3">

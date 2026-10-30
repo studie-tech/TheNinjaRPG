@@ -284,6 +284,10 @@ export const useCombatPreferences = () => {
     "combatBattleFocus",
     true,
   );
+  const [swapFocusPanels, setSwapFocusPanels] = useLocalStorage<boolean>(
+    "combatFocusSwapActionsAndLog",
+    false,
+  );
 
   const toggleGridNumbers = useCallback(
     () => setShowGridNumbers(!showGridNumbers),
@@ -319,6 +323,8 @@ export const useCombatPreferences = () => {
     () => ({
       battleFocus,
       setBattleFocus,
+      swapFocusPanels,
+      setSwapFocusPanels,
       showGridNumbers,
       setShowGridNumbers,
       toggleGridNumbers,
@@ -349,6 +355,8 @@ export const useCombatPreferences = () => {
     [
       battleFocus,
       setBattleFocus,
+      swapFocusPanels,
+      setSwapFocusPanels,
       showGridNumbers,
       setShowGridNumbers,
       toggleGridNumbers,
