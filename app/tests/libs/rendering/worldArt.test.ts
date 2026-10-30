@@ -114,6 +114,16 @@ describe("world art skinning", () => {
       expect(source.material).toBe(art.material); expect(source.surfaces).toBe(art.surfaces);
     }
   });
+  it("keeps structure pixel density consistent with displayed world heights", () => {
+    for (const art of Object.values(WORLD_STRUCTURE_ART)) {
+      const source = worldAssetSource(art.filepath)!;
+      expect(source.width).toBeLessThanOrEqual(1024);
+      expect(source.height).toBeLessThanOrEqual(1024);
+      const pixelsPerHex = art.frame.height / art.height;
+      expect(pixelsPerHex).toBeGreaterThanOrEqual(55);
+      expect(pixelsPerHex).toBeLessThanOrEqual(75);
+    }
+  });
   it("uses persisted materials only while their source image and service still match", () => {
     const art = WORLD_STRUCTURE_ART["horizon/townhall"]!;
     const configured = { ...art, height: art.height + .1 };

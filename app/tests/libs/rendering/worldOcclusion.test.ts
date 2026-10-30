@@ -216,18 +216,21 @@ describe("authored foliage under local lights", () => {
   });
 });
 
-describe("published shrine shadow geometry", () => {
-  it.skipIf(!worldArtDirectory).each(Object.entries(WORLD_ASSET_SOURCES).filter(([key]) => key.startsWith("/world-art/shrine-")))(
-    "fits the exact shadow geometry budget for %s",
-    (key, asset) => {
+describe("published structure shadow geometry", () => {
+  it.skipIf(!worldArtDirectory).each(Object.entries(WORLD_ASSET_SOURCES)
+    .filter(([key]) => /^\/world-art\/(settlement|shrine)-/.test(key))
+    .flatMap(([key, asset]) => asset.frames.map((frame, index) => [key, index, asset, frame] as const)))(
+    "fits the exact shadow geometry budget for %s frame %i",
+    (key, _index, asset, rectangle) => {
       const definitions = JSON.parse(readFileSync(worldArtFile(key.replace(".webp", ".surfaces.json")), "utf8")) as AuthoredMaterialFrame[];
       const { width, height } = asset;
+      const w = rectangle[2]!, h = rectangle[3]!;
       const pixels = new Uint8Array(width * height * 4);
       const texture = new Texture({ source: new BufferImageSource({ resource: pixels, width, height }) });
       const source: WorldMaterial = { texture, pixels, width, height, shape: "building", frames: new Map(), surfaceFrames: definitions };
-      const frame = worldMaterialFrame(source, new Rectangle(...definitions[0]!.frame)), field = createWorldOcclusion();
+      const frame = worldMaterialFrame(source, new Rectangle(rectangle[0], rectangle[1], rectangle[2], rectangle[3])), field = createWorldOcclusion();
       try {
-        field.update([record("shrine", [], { volumes: frame.volumes, transform: new Float32Array([width, 0, 0, -height, -width / 2, height]), height })],
+        field.update([record("structure", [], { volumes: frame.volumes, transform: new Float32Array([w, 0, 0, -h, -w / 2, h]), height: h })],
           { minX: -256, minY: -256, maxX: 256, maxY: 256 });
         expect(field.error).toBeNull();
         expect(field.instanceCount).toBe(1);
