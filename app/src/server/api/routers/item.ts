@@ -225,6 +225,7 @@ import {
   updateItemForUpdate,
   updateItemLoadoutForEvolveItem,
   updateItemLoadoutForRenameLoadout,
+  updateItemLoadoutForSetLoadoutHotkeys,
   updateItemLoadoutForToggleEquip,
   updateItemLoadoutForUnequipAllItems,
   updateItemPurchaseCounterForBuy,
@@ -339,7 +340,7 @@ import {
   UserUnlockedVariantResponseSchema,
   upsertItemVariantInputSchema,
 } from "@/validators/item";
-import { renameLoadoutSchema } from "@/validators/loadout";
+import { renameLoadoutSchema, setLoadoutHotkeysSchema } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import {
   ObjectiveReward,
@@ -3455,7 +3456,7 @@ export const itemRouter = createTRPCRouter({
         "item",
         loadouts.length,
         maxLoadouts,
-        { itemData: [] as ItemLoadout["itemData"] },
+        { itemData: [] as ItemLoadout["itemData"], hotkeys: {} },
         new Date(),
       );
       return backfillLoadouts<ItemLoadout>({
@@ -3528,6 +3529,24 @@ export const itemRouter = createTRPCRouter({
         : result;
     }),
 
+  setLoadoutHotkeys: protectedProcedure
+    .meta({ mcp: { description: "Set the battle hotkeys of a item loadout" } })
+    .input(setLoadoutHotkeysSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const result = await updateItemLoadoutForSetLoadoutHotkeys(
+        ctx.drizzle,
+        input,
+        ctx,
+      );
+      // MySQL reports no affected row when the keys did not change, so confirm
+      // ownership before calling an unchanged save a failure.
+      if (result.rowsAffected === 0) {
+        const exists = await findItemLoadoutForRenameLoadout(ctx.drizzle, input, ctx);
+        if (!exists) return errorResponse("Loadout not found");
+      }
+      return { success: true, message: "Hotkeys saved" };
+    }),
   renameLoadout: protectedProcedure
     .meta({ mcp: { description: "Rename an item loadout" } })
     .input(renameLoadoutSchema)

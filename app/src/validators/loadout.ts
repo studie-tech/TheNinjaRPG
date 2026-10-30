@@ -1,11 +1,19 @@
 import { z } from "zod";
 import { LOADOUT_NAME_MAX_LENGTH } from "@/drizzle/constants";
+import { hotkeyMapSchema } from "@/libs/combat/hotkeys";
 
 export const renameLoadoutSchema = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(1).max(LOADOUT_NAME_MAX_LENGTH),
 });
 export type RenameLoadoutSchema = z.infer<typeof renameLoadoutSchema>;
+
+/** Replace one loadout's battle keys; used by both jutsu and item loadouts. */
+export const setLoadoutHotkeysSchema = z.object({
+  id: z.string().min(1).max(191),
+  hotkeys: hotkeyMapSchema,
+});
+export type SetLoadoutHotkeysSchema = z.infer<typeof setLoadoutHotkeysSchema>;
 
 /** Fit the maximum entry count even when JSON escapes every ID character. */
 export const LOADOUT_SHARE_MAX_LENGTH = 128 * 1024;
