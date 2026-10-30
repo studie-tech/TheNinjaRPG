@@ -21,12 +21,13 @@ const descriptions = (locations: MapLocation[], assets = [asset], mapObjects = o
 
 describe("sector scenery recipes", () => {
   it("gives imported faction buildings matched materials and paving outside themed settlements", () => {
-    const art = WORLD_STRUCTURE_ART["syndicate/bank"]!;
+    const art = { ...WORLD_STRUCTURE_ART["syndicate/bank"]!, sourceImage: "uploaded-faction-bank.webp", filepath: "uploaded-faction-atlas.webp" };
     const structure = { ...createGenericStructure({ name: "Bank", route: art.route, image: art.sourceImage, longitude: 3, latitude: 4 }), worldArt: art };
     const sprite = descriptions([], [], [], [structure])[0]!;
     expect(sprite.worldMaterial).toEqual({ material: art.material, surfaces: art.surfaces });
     expect(sprite.entrance).toMatchObject({ hasCourt: true, courtSlope: art.courtSlope });
     expect(sprite.frame).toEqual(art.frame);
+    expect(sprite).toMatchObject({ image: art.filepath, rendition: 0 });
   });
   it("draws one building for co-located objectives with an independent pin", () => {
     const sprites = descriptions([location, { ...location, id: "second" }]);
