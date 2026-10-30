@@ -58,14 +58,14 @@ const main = async () => {
         const decoded = await sharp(bytes).ensureAlpha().raw().toBuffer();
         if (!original.equals(decoded)) throw new Error(`Pixel mismatch: ${name}`);
         const metadata = await sharp(bytes).metadata();
+        // Exact RGBA comparison includes alpha; a solid trimmed crop can omit encoded alpha.
         if (
-          !metadata.hasAlpha ||
           !metadata.width ||
           !metadata.height ||
           metadata.width > 2048 ||
           metadata.height > 2048
         ) {
-          throw new Error(`Invalid atlas bounds or transparency: ${name}`);
+          throw new Error(`Invalid atlas bounds: ${name}`);
         }
         bounds.set(name, { width: metadata.width, height: metadata.height });
         const id = `lpc-${createHash("sha256").update(bytes).digest("hex").slice(0, 24)}.${extension}`;
@@ -123,10 +123,22 @@ const main = async () => {
     const name = basename(sheet.image);
     const size = bounds.get(name)!;
     const layout = catalog.layouts[sheet.layout]!;
+    const width = layout.trim?.width ?? layout.cell;
+    const height = layout.trim?.height ?? layout.cell;
+    const gutter = layout.trim ? 1 : 0;
+    if (
+      layout.trim &&
+      (layout.trim.x < 0 ||
+        layout.trim.y < 0 ||
+        layout.trim.x + width > layout.cell ||
+        layout.trim.y + height > layout.cell)
+    ) {
+      throw new Error(`Frame outside logical character bounds: ${name}`);
+    }
     for (const frame of Object.values(layout.clips).flat(2)) {
       if (
-        ((frame % layout.columns) + 1) * layout.cell > size.width ||
-        (Math.floor(frame / layout.columns) + 1) * layout.cell > size.height
+        (frame % layout.columns) * (width + gutter * 2) + gutter + width > size.width ||
+        Math.floor(frame / layout.columns) * (height + gutter * 2) + gutter + height > size.height
       ) {
         throw new Error(`Frame outside atlas bounds: ${name}`);
       }

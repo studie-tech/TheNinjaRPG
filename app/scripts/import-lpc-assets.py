@@ -208,6 +208,9 @@ def write_atlas(frames, clips, cell, definition, layer, color, eyes, source_vari
         # Oversized weapons are centered on the same 64px actor origin.
         atlas.alpha_composite(frame, ((i % columns) * cell + (cell - frame.width) // 2, (i // columns) * cell + (cell - frame.height) // 2))
     atlas = recolor(atlas, definition, color, eyes, source_variant)
+    trim = None
+    if compact:
+        atlas, columns, clips, trim = pack_movement_frames(atlas, clips, cell, columns)
     data = io.BytesIO()
     atlas.save(data, format="PNG", optimize=True)
     digest = hashlib.sha256(data.getvalue()).hexdigest()[:24]
@@ -215,7 +218,54 @@ def write_atlas(frames, clips, cell, definition, layer, color, eyes, source_vari
     generated.add(name)
     if not (OUT / name).exists():
         (OUT / name).write_bytes(data.getvalue())
-    return {"image": name, "cell": cell, "columns": columns, "z": layer["zPos"], "clips": clips}
+    return {"image": name, "cell": cell, "columns": columns, "z": layer["zPos"], "clips": clips, **({"trim": trim} if trim else {})}
+
+def pack_movement_frames(atlas, clips, cell, columns):
+    """Trim shared transparent margins and deduplicate poses without changing their timing or origin."""
+    # Invisible RGB cannot affect nearest-sampled artwork; preserve every alpha and visible RGBA value.
+    atlas = Image.composite(atlas, Image.new("RGBA", atlas.size), atlas.getchannel("A").point(lambda alpha: 255 if alpha else 0))
+    indices = sorted({index for directions in clips.values() for frames in directions for index in frames})
+    frames = {index: atlas.crop((index % columns * cell, index // columns * cell, (index % columns + 1) * cell, (index // columns + 1) * cell)) for index in indices}
+    bounds = [box for frame in frames.values() if (box := frame.getchannel("A").getbbox())]
+    box = (min(b[0] for b in bounds), min(b[1] for b in bounds), max(b[2] for b in bounds), max(b[3] for b in bounds)) if bounds else (0, 0, 1, 1)
+    width, height = box[2] - box[0], box[3] - box[1]
+    unique, lookup, remap = [], {}, {}
+    for index, frame in frames.items():
+        cropped = frame.crop(box)
+        key = cropped.tobytes()
+        if key not in lookup:
+            lookup[key] = len(unique)
+            unique.append(cropped)
+        remap[index] = lookup[key]
+    stride_x, stride_y = width + 2, height + 2
+    # Keep the existing uniform grid, choosing the smallest bounded allocation with a square tie-break.
+    choices = []
+    for count in range(1, min(len(unique), 2048 // stride_x) + 1):
+        rows = (len(unique) + count - 1) // count
+        w, h = count * stride_x, rows * stride_y
+        if h <= 2048:
+            choices.append(((w * h, abs(w - h), max(w, h), w), count, w, h))
+    _, columns, w, h = min(choices)
+    packed = Image.new("RGBA", (w, h))
+    for index, cropped in enumerate(unique):
+        x, y = index % columns * stride_x + 1, index // columns * stride_y + 1
+        packed.paste(cropped, (x, y))
+        # Extruded pixels stay outside the sampled rectangle, avoiding neighbouring-frame seams.
+        packed.paste(cropped.crop((0, 0, width, 1)), (x, y - 1))
+        packed.paste(cropped.crop((0, height - 1, width, height)), (x, y + height))
+        packed.paste(cropped.crop((0, 0, 1, height)), (x - 1, y))
+        packed.paste(cropped.crop((width - 1, 0, width, height)), (x + width, y))
+        for dx, dy, sx, sy in [(-1, -1, 0, 0), (width, -1, width - 1, 0), (-1, height, 0, height - 1), (width, height, width - 1, height - 1)]:
+            packed.putpixel((x + dx, y + dy), cropped.getpixel((sx, sy)))
+    for index, original in frames.items():
+        frame = remap[index]
+        x, y = frame % columns * stride_x + 1, frame // columns * stride_y + 1
+        restored = Image.new("RGBA", (cell, cell))
+        restored.paste(packed.crop((x, y, x + width, y + height)), box[:2])
+        if restored.tobytes() != original.tobytes():
+            raise ValueError(f"Movement packing changed frame {index}")
+    clips = {state: [[remap[index] for index in frames] for frames in directions] for state, directions in clips.items()}
+    return packed, columns, clips, {"x": box[0], "y": box[1], "width": width, "height": height}
 
 def supplement(template, profile, direction, color):
     """Original pixel details follow the authored head/hand pose, never a fixed screen position."""
@@ -288,7 +338,7 @@ for profile, definition in definitions.items():
 layouts, layout_ids = [], {}
 for layers in catalog.values():
     for layer in [part for layer in layers for part in [layer, *([layer["travel"]] if "travel" in layer else [])]]:
-        layout = {"cell": layer.pop("cell"), "columns": layer.pop("columns"), "clips": layer.pop("clips")}
+        layout = {"cell": layer.pop("cell"), "columns": layer.pop("columns"), "clips": layer.pop("clips"), **({"trim": layer.pop("trim")} if "trim" in layer else {})}
         key = json.dumps(layout, sort_keys=True)
         if key not in layout_ids:
             layout_ids[key] = len(layouts)

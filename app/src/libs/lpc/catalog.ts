@@ -10,6 +10,8 @@ import type {
 export type LpcLayout = {
   cell: number;
   columns: number;
+  /** Shared logical crop; movement atlases keep one extruded pixel outside each frame. */
+  trim?: { x: number; y: number; width: number; height: number };
   clips: Partial<Record<LpcAnimation, number[][]>>;
 };
 /** A layer's full poses and its optional movement-only atlas share the same visual selection. */
@@ -65,10 +67,16 @@ export const lpcFrame = (
       : Math.min(step, frames.length - 1);
   const frame = frames[index] ?? frames[0];
   if (frame === undefined) return null;
+  const width = layout.trim?.width ?? layout.cell;
+  const height = layout.trim?.height ?? layout.cell;
+  const gutter = layout.trim ? 1 : 0;
   return {
-    x: (frame % layout.columns) * layout.cell,
-    y: Math.floor(frame / layout.columns) * layout.cell,
+    x: (frame % layout.columns) * (width + gutter * 2) + gutter,
+    y: Math.floor(frame / layout.columns) * (height + gutter * 2) + gutter,
     size: layout.cell,
+    width,
+    height,
+    trim: layout.trim,
   };
 };
 

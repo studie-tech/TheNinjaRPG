@@ -18,12 +18,21 @@ describe("published LPC artwork", () => {
       expect(url.search).toBe("");
       const layout = lpcCatalog.layouts[sheet.layout]!;
       expect(layout).toBeDefined();
-      expect(layout.cell * layout.columns).toBeLessThanOrEqual(2048);
+      const width = layout.trim?.width ?? layout.cell;
+      const height = layout.trim?.height ?? layout.cell;
+      const gutter = layout.trim ? 1 : 0;
+      expect((width + gutter * 2) * layout.columns).toBeLessThanOrEqual(2048);
+      if (layout.trim) {
+        expect(layout.trim.x).toBeGreaterThanOrEqual(0);
+        expect(layout.trim.y).toBeGreaterThanOrEqual(0);
+        expect(layout.trim.x + width).toBeLessThanOrEqual(layout.cell);
+        expect(layout.trim.y + height).toBeLessThanOrEqual(layout.cell);
+      }
       for (const directions of Object.values(layout.clips)) {
         expect(directions).toHaveLength(4);
         for (const indices of directions) for (const index of indices) {
           expect(index).toBeGreaterThanOrEqual(0);
-          expect((Math.floor(index / layout.columns) + 1) * layout.cell).toBeLessThanOrEqual(2048);
+          expect((Math.floor(index / layout.columns) + 1) * (height + gutter * 2)).toBeLessThanOrEqual(2048);
         }
       }
     }
@@ -46,6 +55,23 @@ describe("published LPC artwork", () => {
   it("retains attribution for every imported profile and pins the upstream revision", () => {
     expect(lpcCatalog.revision).toMatch(/^[a-f0-9]{40}$/);
     for (const key of Object.keys(lpcCatalog.entries)) expect(credits.some((entry) => entry.profile === key.split("/")[0] && entry.authors.length && entry.chosenLicense && entry.urls.length)).toBe(true);
+  });
+  it("bounds movement texture memory while retaining every authored idle and walk step", () => {
+    const images = new Map<string, number>();
+    for (const sheets of Object.values(lpcCatalog.entries)) for (const parent of sheets) {
+      const sheet = parent.travel;
+      if (!sheet) continue;
+      const layout = lpcCatalog.layouts[sheet.layout]!;
+      expect(layout.trim).toBeDefined();
+      const trim = layout.trim!;
+      for (const state of ["idle", "walk"] as const) {
+        expect(layout.clips[state]!.map((frames) => frames.length)).toEqual(lpcCatalog.layouts[parent.layout]!.clips[state]!.map((frames) => frames.length));
+      }
+      const count = Math.max(...Object.values(layout.clips).flat(2)) + 1;
+      images.set(sheet.image, layout.columns * (trim.width + 2) * Math.ceil(count / layout.columns) * (trim.height + 2) * 4);
+    }
+    // The complete movement catalogue bounds distinct visible outfits independently of sharing.
+    expect([...images.values()].reduce((sum, bytes) => sum + bytes, 0)).toBeLessThan(80 * 1024 * 1024);
   });
   it("uses the authored four directions, freezes reduced motion and clamps one-shot frames", () => {
     expect([lpcFacing(0, 1), lpcFacing(-1, 0), lpcFacing(0, -1), lpcFacing(1, 0)]).toEqual([0, 1, 2, 3]);

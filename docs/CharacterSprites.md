@@ -17,6 +17,13 @@ The texture cache's 16 MiB limit covers idle entries; active texture memory depe
 on the distinct visible appearances. Releasing a scope prevents late installation
 but does not cancel shared image downloads.
 
+Movement atlases remove shared transparent margins and store identical poses once.
+Their clips retain every authored step and its timing. A logical crop restores each
+layer's full-size origin through Pixi's native `orig`/`trim`, with an extruded pixel
+around each stored frame. Texture sources own frame views shared across actors;
+disposing one actor releases its lease without destroying another actor's views.
+GPU unload keeps those views valid for context restoration; source eviction destroys them.
+
 ## Appearance and content
 
 `app/src/libs/lpc/appearance.ts` resolves saved skin, eye and hair colours, all
@@ -73,6 +80,9 @@ Running the game needs neither Python nor the upstream generator. The import scr
 consumes artwork and attribution metadata from a pinned revision and stages
 content-addressed PNG atlases in the gitignored `app/scripts/.artifacts/lpc/` directory.
 Atlas dimensions stay within WebGL 1's guaranteed 2048px texture size.
+Movement packing reconstructs every logical frame and verifies all visible RGBA
+pixels and alpha values before writing an atlas. Recolouring precedes packing so
+palette quantization sees the complete authored frame grid.
 
 From the repository root:
 
