@@ -1,5 +1,6 @@
 "use client";
 
+import { useStore } from "jotai";
 import Pusher from "pusher-js";
 import { useEffect, useState } from "react";
 import type { UserWithRelations } from "@/api/routers/profile";
@@ -8,6 +9,13 @@ import { ToastAction } from "@/components/ui/toast";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import Link from "@/layout/Link";
+import {
+  addInboxNotification,
+  chatMentionsAtom,
+  chatPanelAtom,
+  chatViewingAtom,
+  isConversationMuted,
+} from "@/libs/chatPanel";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat, usePublicPathname } from "@/utils/routing";
 
@@ -23,6 +31,7 @@ export type UserEvent = {
   dungeonRunId?: string;
   alertType?: string;
   sector?: number;
+  conversationId?: string;
 };
 
 export const usePusherHandler = (
@@ -39,6 +48,7 @@ export const usePusherHandler = (
 
   // tRPC utility
   const utils = api.useUtils();
+  const store = useStore();
 
   // Pusher connection
   const [pusher, setPusher] = useState<Pusher | undefined>(undefined);
@@ -137,18 +147,44 @@ export const usePusherHandler = (
           void utils.comments.getUserConversations.invalidate();
           void utils.comments.getConversationComments.reset();
         } else if (data.type === "newInbox") {
-          if (!pathname.includes("/inbox")) {
-            showMutationToast({
-              success: true,
-              message: "You have a new message",
-              duration: data.duration,
-              title: "Notification!",
-              action: (
-                <ToastAction altText="To Inbox">
-                  <Link href="/inbox">To Inbox</Link>
-                </ToastAction>
-              ),
-            });
+          void utils.comments.getUserConversations.invalidate();
+          // Read mutes and the open panel at event time; this listener outlives renders.
+          const cachedUser = utils.profile.getUser.getData()?.userData;
+          const isViewing =
+            !!data.conversationId && store.get(chatViewingAtom) === data.conversationId;
+          if (!isConversationMuted(cachedUser, data.conversationId) && !isViewing) {
+            await utils.profile.getUser.cancel();
+            utils.profile.getUser.setData(undefined, (old) =>
+              old
+                ? ({
+                    ...old,
+                    notifications: addInboxNotification(old.notifications),
+                  } as typeof old)
+                : old,
+            );
+            if (!pathname.includes("/inbox")) {
+              showMutationToast({
+                success: true,
+                message: "You have a new message",
+                duration: data.duration,
+                title: "Notification!",
+                action: (
+                  <ToastAction
+                    altText="Open chat"
+                    onClick={() =>
+                      store.set(chatPanelAtom, (current) => ({
+                        ...current,
+                        openRequested: true,
+                        tab: "inbox",
+                        conversationId: data.conversationId,
+                      }))
+                    }
+                  >
+                    Open chat
+                  </ToastAction>
+                ),
+              });
+            }
           }
         } else if (data.type === "userMessage" || data.type === "homeInvitation") {
           if (data.type === "homeInvitation")
@@ -185,12 +221,24 @@ export const usePusherHandler = (
             ),
           });
         } else if (data.type === "pinged") {
-          showMutationToast({
-            success: true,
-            message: data.message ?? "You have been pinged",
-            duration: data.duration,
-            title: "Notification!",
-          });
+          const cachedUser = utils.profile.getUser.getData()?.userData;
+          const conversationId = data.conversationId;
+          const isViewing =
+            !!conversationId && store.get(chatViewingAtom) === conversationId;
+          if (!isConversationMuted(cachedUser, conversationId) && !isViewing) {
+            if (conversationId) {
+              store.set(chatMentionsAtom, (old) => ({
+                ...old,
+                [conversationId]: (old[conversationId] ?? 0) + 1,
+              }));
+            }
+            showMutationToast({
+              success: true,
+              message: data.message ?? "You have been pinged",
+              duration: data.duration,
+              title: "Notification!",
+            });
+          }
         }
       });
       // Listen on clanId channel
@@ -241,7 +289,7 @@ export const usePusherHandler = (
         pusher.disconnect();
       };
     }
-  }, [userId, clanId, villageId, router, utils]);
+  }, [userId, clanId, villageId, router, utils, store]);
 
   return pusher;
 };

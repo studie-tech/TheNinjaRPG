@@ -50,12 +50,17 @@ export interface NewConversationPromptProps {
     federalStatus: FederalStatus;
   };
   newButton: React.ReactNode;
+  /** Open the form right away, e.g. when messaging a player from the chat panel. */
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (props) => {
   const { data: userData } = useRequiredUserData();
   const maxUsers = 5;
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(
+    props.defaultOpen ?? false,
+  );
   const createSubmissionRef = useRef(false);
 
   const create = useForm<CreateConversationSchema>({
@@ -111,6 +116,7 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
       if (data.success) {
         create.reset();
         setIsCreateDialogOpen(false);
+        props.onOpenChange?.(false);
         if (data.conversationId) props.setSelectedConvo?.(data.conversationId);
       }
     },
@@ -143,7 +149,9 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
   ) => {
     setIsCreateDialogOpen((current) => {
       const next = typeof value === "function" ? value(current) : value;
-      return !next && createSubmissionRef.current ? current : next;
+      const resolved = !next && createSubmissionRef.current ? current : next;
+      if (resolved !== current) props.onOpenChange?.(resolved);
+      return resolved;
     });
   };
 

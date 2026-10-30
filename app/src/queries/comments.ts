@@ -415,11 +415,19 @@ export const updateConversationForCreateConversationComment = (
 export const updateUserDataForCreateConversationComment = (
   client: Pick<DrizzleClient, "update">,
   usersIdsInConvo: string[],
+  conversationId: string,
 ) =>
   client
     .update(userData)
     .set({ inboxNews: sql`${userData.inboxNews} + 1` })
-    .where(inArray(userData.userId, usersIdsInConvo));
+    .where(
+      and(
+        inArray(userData.userId, usersIdsInConvo),
+        // Muted chat stays readable but no longer counts as new inbox news.
+        eq(userData.chatMuted, false),
+        sql`NOT JSON_CONTAINS(${userData.mutedConversationIds}, JSON_QUOTE(${conversationId}))`,
+      ),
+    );
 
 /** Build the `userData` update for `createConversationComment`, setting `tavernMessages`, using predicates on `userId`. */
 export const updateUserDataForCreateConversationComment2 = (
