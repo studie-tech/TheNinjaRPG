@@ -23,9 +23,9 @@
   line-height: 1.55;
 }
 .theme-frame {
-  /* Classic's 1280px frame reserves 500px for sidebars, 6rem for scroll art
-     and 1.5rem for content padding. Keep the same usable content width. */
-  --theme-content-width: calc(1280px - 500px - 7.5rem);
+  /* Match Pixel's usable desktop width: a 1440px frame minus its 500px
+     sidebars, 16px outer inset, 1rem column gaps and 1.5rem/2px padding/border. */
+  --theme-content-width: calc(1440px - 500px - 16px - 1rem - 1.5rem - 2px);
   --theme-main-padding: clamp(1rem, 1.8vw, 1.75rem);
   --theme-main-border-width: 2px;
   --theme-main-width: calc(
