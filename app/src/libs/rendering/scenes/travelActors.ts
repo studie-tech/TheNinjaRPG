@@ -231,14 +231,21 @@ export const createTravelActors = (
   const hit = (x: number, y: number): TravelActorHit | null => {
     // Overlay controls take priority even when another actor's body overlaps them.
     for (const controlsOnly of [true, false]) {
-      for (let i = container.children.length - 1; i >= 0; i--) {
-        const root = container.children[i];
+      const overlayControls = controlsOnly
+        ? layers?.overlay.renderLayerChildren
+        : undefined;
+      const children = overlayControls ?? container.children;
+      for (let i = children.length - 1; i >= 0; i--) {
+        const child = children[i];
+        // Overlay paint order follows art attachment, independently of actor foot depth.
+        const root = overlayControls ? child?.parent?.parent : child;
         const record = root ? byRoot.get(root) : undefined;
         if (!record?.art) continue;
         for (let j = record.art.entries.length - 1; j >= 0; j--) {
           const entry = record.art.entries[j];
           if (
             !entry ||
+            (overlayControls && entry.sprite !== child) ||
             isActorControl(entry.description.kind) !== controlsOnly ||
             !isObjectChainVisible(entry.sprite)
           )

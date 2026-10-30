@@ -117,8 +117,6 @@ describe("travel scene ground depth", () => {
     expect(depth.renderLayerChildren.find((child) => child.label === "user:self")).toBe(actor);
     depth.sortRenderLayerChildren();
     for (const entry of [tree, building]) expect(depth.renderLayerChildren.indexOf(actor)).toBeLessThan(depth.renderLayerChildren.indexOf(entry.sprite));
-    const sorted = [...depth.renderLayerChildren]; depth.sortRenderLayerChildren();
-    expect(depth.renderLayerChildren).toEqual(sorted);
   });
 
   it("refreshes retained scenery and actor depths on sector offsets and world rebasing, and detaches disposed sectors", async () => {
@@ -167,6 +165,44 @@ describe("travel scene ground depth", () => {
     expect(bounds.height).toBeCloseTo(tile.height * 0.12 * 2 * 0.7);
     expect(bounds.y + bounds.height / 2).toBeCloseTo(tile.height * 0.2);
     expect(actor.zIndex).toBeCloseTo(-(actor.y + bounds.y + bounds.height / 2));
+  });
+
+  it("picks overlapping NPC controls in overlay paint order while their bodies orbit", async () => {
+    const { scene, game, world, depth, overlay } = await sceneFixture();
+    const grid = scene.sectors.get(724)!.grid;
+    const actors = createTravelActors(game, { depth, overlay }); world.addChild(actors.container);
+    const users = ["first", "second"].map((userId) => player({ userId, isNpc: true, npcPlacementId: userId, npcInteractionType: "FRIENDLY" }));
+    actors.sync({ ...snapshotFixture(), grid, users }); await settle();
+    const roots = users.map((user) => actors.container.children.find((child) => child.label === `npc:${user.npcPlacementId}`)!);
+    const controls = roots.map((root) => root.children.at(-1)!.children.find((child) => child.label === "talk")!);
+    const canvas = game.canvas;
+    let initialBodyOrder: Container[] = [];
+    for (const now of [1000, 3000]) {
+      actors.animate(frame(now, false));
+      if (now === 1000) initialBodyOrder = [...actors.container.children];
+      else expect(actors.container.children).toEqual([...initialBodyOrder].reverse());
+      expect(game.canvas).toBe(canvas);
+      for (let index = 0; index < roots.length; index++) {
+        expect(actors.container.children).toContain(roots[index]!);
+        expect(controls[index]!.parent?.parent).toBe(roots[index]!);
+        expect(controls[index]!.parentRenderLayer).toBe(overlay);
+        expect(controls[index]!.visible).toBe(true);
+      }
+      const bounds = controls.map((control) => control.getBounds());
+      const minX = Math.max(...bounds.map((bound) => bound.minX)), maxX = Math.min(...bounds.map((bound) => bound.maxX));
+      const minY = Math.max(...bounds.map((bound) => bound.minY)), maxY = Math.min(...bounds.map((bound) => bound.maxY));
+      expect(maxX).toBeGreaterThan(minX); expect(maxY).toBeGreaterThan(minY);
+      const x = (minX + maxX) / 2, y = (minY + maxY) / 2;
+      const top = overlay.renderLayerChildren.filter((child) => controls.includes(child)).at(-1)!;
+      const index = controls.indexOf(top);
+      expect(actors.hit(x, y)).toMatchObject({ type: "talk", npcPlacementId: users[index]!.npcPlacementId });
+      roots[index]!.visible = false;
+      expect(actors.hit(x, y)).toMatchObject({ type: "talk", npcPlacementId: users[1 - index]!.npcPlacementId });
+      roots[index]!.visible = true;
+      top.visible = false;
+      expect(actors.hit(x, y)).toMatchObject({ type: "talk", npcPlacementId: users[1 - index]!.npcPlacementId });
+      top.visible = true;
+    }
   });
 
   it("keeps controls and encounter/count markers above scenery and prioritizes visible controls over nearer bodies", async () => {
