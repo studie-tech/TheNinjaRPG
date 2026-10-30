@@ -31,7 +31,6 @@ import {
   NonActionItemTypes,
   PoolTypes,
   PvpBattleTypes,
-  QuestBattleTypes,
   RANKS_RESTRICTED_FROM_PVP,
   REGEN_SECONDS,
   SECTOR_HEIGHT,
@@ -82,7 +81,11 @@ import {
 } from "@/libs/combat/database";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
-import { getBattleSpawnLocations, supportsNpcAllies } from "@/libs/combat/participants";
+import {
+  fitsBattleUsage,
+  getBattleSpawnLocations,
+  supportsNpcAllies,
+} from "@/libs/combat/participants";
 import { addPetsToBattle, petsAllowedInBattle } from "@/libs/combat/pets";
 import {
   applyEffects,
@@ -3910,10 +3913,7 @@ export const processUsersForBattle = async (
     const ownSector = user.sector === user.village?.sector;
     const inVillage = calcIsInVillage({ x: user.longitude, y: user.latitude });
 
-    // Quest battles exclude PVP-only content, all other battles PVE-only content
-    const isQuestBattle = QuestBattleTypes.includes(battleType);
-    const fitsBattle = (usage: BattleUsageType) =>
-      isQuestBattle ? usage !== "PVP" : usage !== "PVE";
+    const fitsBattle = (usage: BattleUsageType) => fitsBattleUsage(battleType, usage);
 
     const requirementSkills = user.userSkills;
     user.activeSkillIds = inputUser.isAi
