@@ -1257,7 +1257,11 @@ export default function MyJutsu() {
             kind="jutsu"
             actions={userJutsus
               .filter((uj) => uj.equipped)
-              .map((uj) => ({ id: uj.jutsuId, name: uj.jutsu.name }))}
+              .map((uj) => ({
+                id: uj.jutsuId,
+                name: uj.jutsu.name,
+                hidden: uj.jutsu.hidden,
+              }))}
           />
         </ContentBox>
       )}
