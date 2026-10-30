@@ -61,8 +61,14 @@ export type GameSettingsUser = Pick<
   | "preferredGeneral2"
 >;
 
+/** The profile page that contains game, profile and account settings. */
+export const SETTINGS_HREF = "/profile?tab=edit";
+
+type GameSettingsSection = "all" | "audio" | "display" | "effects";
+
 interface GameSettingsProps {
   onNavigate?: () => void;
+  section?: GameSettingsSection;
   userData?: GameSettingsUser | null;
   updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
   trigger?: "audio" | "settings";
@@ -494,6 +500,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
   userData,
   updateUser,
   onNavigate,
+  section = "all",
 }) => {
   const {
     audioEnabled,
@@ -590,20 +597,9 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
 
   const handleLayoutChange = useSelectGameLayout();
 
-  return (
-    <Tabs value={activeSettingsTab} onValueChange={setSettingsTab} className="min-w-0">
-      <TabsList aria-label="Settings categories" className="flex-nowrap">
-        <TabsTrigger value="audio" className="min-h-9 flex-1 px-2 text-xs">
-          Audio
-        </TabsTrigger>
-        <TabsTrigger value="layout" className="min-h-9 flex-1 px-2 text-xs">
-          Game layout
-        </TabsTrigger>
-        <TabsTrigger value="effects" className="min-h-9 flex-1 px-2 text-xs">
-          Visual effects
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="audio" className="space-y-3 pt-2">
+  const sections = {
+    audio: (
+      <div className="space-y-3 pt-2">
         <p className="text-base font-semibold">Audio</p>
         <div className="divide-border/50 divide-y">
           <SettingsToggle
@@ -652,8 +648,10 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
             Click anywhere to start audio.
           </p>
         )}
-      </TabsContent>
-      <TabsContent value="layout" className="space-y-3 pt-2">
+      </div>
+    ),
+    layout: (
+      <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between gap-2">
           <p className="text-base font-semibold">Game layout</p>
           <Link
@@ -696,10 +694,35 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
           </Button>
         )}
         <NativeSettingsEntry onNavigate={onNavigate} />
-      </TabsContent>
-      <TabsContent value="effects" className="space-y-3 pt-2">
+      </div>
+    ),
+    effects: (
+      <div className="space-y-3 pt-2">
         <VisualEffectsSettings />
-      </TabsContent>
+      </div>
+    ),
+  };
+
+  if (section !== "all") {
+    return sections[section === "display" ? "layout" : section];
+  }
+
+  return (
+    <Tabs value={activeSettingsTab} onValueChange={setSettingsTab} className="min-w-0">
+      <TabsList aria-label="Settings categories" className="flex-nowrap">
+        <TabsTrigger value="audio" className="min-h-9 flex-1 px-2 text-xs">
+          Audio
+        </TabsTrigger>
+        <TabsTrigger value="layout" className="min-h-9 flex-1 px-2 text-xs">
+          Game layout
+        </TabsTrigger>
+        <TabsTrigger value="effects" className="min-h-9 flex-1 px-2 text-xs">
+          Visual effects
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="audio">{sections.audio}</TabsContent>
+      <TabsContent value="layout">{sections.layout}</TabsContent>
+      <TabsContent value="effects">{sections.effects}</TabsContent>
     </Tabs>
   );
 };
@@ -797,6 +820,7 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
   onNavigate,
   userData,
   updateUser,
+  section,
 }) => {
   return (
     <div className="p-4">
@@ -804,19 +828,21 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
         userData={userData}
         updateUser={updateUser}
         onNavigate={onNavigate}
+        section={section}
       />
     </div>
   );
 };
 
 /**
- * Categorized settings popover for the game header.
+ * Game header settings, with an audio shortcut linking to the settings page.
  */
 export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
   userData,
   updateUser,
   trigger = "audio",
   triggerClassName,
+  section,
 }) => {
   const { audioEnabled } = useGameSettings(userData);
   const isSettingsTrigger = trigger === "settings";
@@ -862,7 +888,18 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           userData={userData}
           updateUser={updateUser}
           onNavigate={() => setOpen(false)}
+          section={section}
         />
+        {section === "audio" && (
+          <Link
+            href={SETTINGS_HREF}
+            onClick={() => setOpen(false)}
+            className="text-primary mt-3 flex min-h-11 items-center gap-2 border-t pt-3 text-sm font-medium hover:underline"
+          >
+            <Settings className="h-4 w-4" aria-hidden="true" />
+            All settings
+          </Link>
+        )}
       </PopoverContent>
     </Popover>
   );
