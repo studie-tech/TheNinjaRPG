@@ -77,14 +77,45 @@ export default function DungeonPage() {
   /** Show expected rejections beside the action and refresh party/account state after a mutation. */
   const refresh = async (response: UserDeltaResponse, revision: number | undefined) => {
     showMutationToast(response);
+    setMessage(response.success ? "" : response.message);
+    if (response.success) setAbandonId(null);
+    const [refreshed] = await Promise.all([state.refetch(), available.refetch()]);
     const patch = response.userPatch;
     // Admission can settle timed work before returning an expected rejection.
     await updateUser(
-      patch?.dungeonsCompleted !== undefined && patch.questData === undefined
-        ? (current) =>
+      patch || response.userDelta
+        ? (current) => {
+            const actor = refreshed.data?.users.find(
+              (actor) => actor.userId === current.userId,
+            );
+            // Reading party state can expire a run and release its profile/reservation.
+            if (
+              refreshed.isError ||
+              (actor && actor.status !== (patch?.status ?? current.status)) ||
+              (patch?.status === "QUEUED" &&
+                !refreshed.data?.members.some(
+                  (member) => member.activeUserId === current.userId,
+                )) ||
+              state.data?.members.some(
+                (member) =>
+                  member.activeUserId === current.userId &&
+                  !refreshed.data?.members.some(
+                    (next) =>
+                      next.runId === member.runId &&
+                      next.activeUserId === current.userId,
+                  ),
+              )
+            )
+              return undefined;
             // A tab can claim from polling before receiving the battle-ended profile refresh.
-            current.dungeonsCompleted === patch.dungeonsCompleted ? patch : undefined
-        : patch,
+            return patch?.dungeonsCompleted !== undefined &&
+              patch.questData === undefined
+              ? current.dungeonsCompleted === patch.dungeonsCompleted
+                ? patch
+                : undefined
+              : (patch ?? {});
+          }
+        : undefined,
       {
         revision,
         ...(response.userDelta ? { delta: response.userDelta } : {}),
@@ -108,9 +139,6 @@ export default function DungeonPage() {
           : {}),
       },
     );
-    setMessage(response.success ? "" : response.message);
-    if (response.success) setAbandonId(null);
-    await Promise.all([state.refetch(), available.refetch()]);
   };
   const create = api.coop.dungeon.create.useMutation({
     onMutate: prepareUserUpdate,
