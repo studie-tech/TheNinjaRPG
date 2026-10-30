@@ -336,6 +336,11 @@ export const useCombatPreferences = () => {
     DEFAULT_LAYOUT_ORDER,
   );
   const [useTabs, setUseTabs] = useLocalStorage<boolean>("combatUseTabs", false);
+  // Full-window battle screen; off shows the battle inside the game layout.
+  const [battleFocus, setBattleFocus] = useLocalStorage<boolean>(
+    "combatBattleFocus",
+    true,
+  );
 
   const toggleGridNumbers = useCallback(
     () => setShowGridNumbers(!showGridNumbers),
@@ -369,6 +374,8 @@ export const useCombatPreferences = () => {
 
   return useMemo(
     () => ({
+      battleFocus,
+      setBattleFocus,
       showGridNumbers,
       setShowGridNumbers,
       toggleGridNumbers,
@@ -397,6 +404,8 @@ export const useCombatPreferences = () => {
       resetLayoutOrder,
     }),
     [
+      battleFocus,
+      setBattleFocus,
       showGridNumbers,
       setShowGridNumbers,
       toggleGridNumbers,

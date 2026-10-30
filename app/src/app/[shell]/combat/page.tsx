@@ -1,6 +1,7 @@
 "use client";
 
 import { useAtom, useSetAtom } from "jotai";
+import { Maximize2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -13,6 +14,7 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import { useBattleHotkeys } from "@/hooks/useBattleHotkeys";
 import ActionTimer from "@/layout/ActionTimer";
 import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
+import { BattleFocusView } from "@/layout/BattleFocusView";
 import { ActionSelector } from "@/layout/CombatActions";
 import { CombatElementalSealNotice } from "@/layout/CombatElementalSealNotice";
 import CombatHistory from "@/layout/CombatHistory";
@@ -326,6 +328,33 @@ export default function CombatPage() {
     [actionId, setActionId],
   );
 
+  /** Shares the same handover guards and feedback in settings and the focus view. */
+  const renderAutoControl = useCallback(() => {
+    if (!battle || !canToggleAutoCombat || results) return null;
+    // The tutorial teaches manual fighting; it only offers the switch to hand back a
+    // battle that is already running on auto.
+    if (isTutorialRunning && !isAutoCombatActive) return null;
+    return (
+      <AutoCombatControl
+        key={battle.id}
+        isActive={isAutoCombatActive}
+        isPending={isTogglingAutoCombat}
+        requiresConfirmation={ManualStartBattleTypes.includes(battle.battleType)}
+        error={autoCombatError}
+        onChange={(enabled) => toggleAutoCombat({ battleId: battle.id, enabled })}
+      />
+    );
+  }, [
+    battle,
+    canToggleAutoCombat,
+    results,
+    isAutoCombatActive,
+    isTutorialRunning,
+    isTogglingAutoCombat,
+    autoCombatError,
+    toggleAutoCombat,
+  ]);
+
   // Component renderers
   const renderTimer = useCallback(() => {
     if (!battle || !user || !isInBattle || !battleState) {
@@ -347,30 +376,26 @@ export default function CombatPage() {
           battle={battle}
           isPending={battleState.isPending}
           options={
-            <UserCombatSettings
-              config={config}
-              userData={userData}
-              autoCombatControl={
-                // The tutorial teaches manual fighting; it only offers the switch to
-                // hand back a battle that is already running on auto.
-                canToggleAutoCombat &&
-                !results &&
-                (!isTutorialRunning || isAutoCombatActive) ? (
-                  <AutoCombatControl
-                    key={battle.id}
-                    isActive={isAutoCombatActive}
-                    isPending={isTogglingAutoCombat}
-                    requiresConfirmation={ManualStartBattleTypes.includes(
-                      battle.battleType,
-                    )}
-                    error={autoCombatError}
-                    onChange={(enabled) =>
-                      toggleAutoCombat({ battleId: battle.id, enabled })
-                    }
-                  />
-                ) : undefined
-              }
-            />
+            <>
+              {!config.battleFocus && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10"
+                  aria-label="Battle focus"
+                  title="Battle focus: full-window battle screen"
+                  onClick={() => config.setBattleFocus(true)}
+                >
+                  <Maximize2 className="h-5 w-5" />
+                </Button>
+              )}
+              <UserCombatSettings
+                config={config}
+                userData={userData}
+                autoCombatControl={renderAutoControl()}
+              />
+            </>
           }
         />
       </div>
@@ -387,12 +412,7 @@ export default function CombatPage() {
     controlledActorId,
     config,
     userData,
-    canToggleAutoCombat,
-    isAutoCombatActive,
-    isTutorialRunning,
-    isTogglingAutoCombat,
-    autoCombatError,
-    toggleAutoCombat,
+    renderAutoControl,
   ]);
 
   const renderBattlefield = useCallback(() => {
@@ -436,7 +456,8 @@ export default function CombatPage() {
     toggleAutoCombat,
   ]);
 
-  const renderActions = useCallback(() => {
+  /** Focus uses compact icons while retaining action selection and editable hotkeys. */
+  const renderActions = useCallback((focus = false) => {
     if (!isInBattle || !battle || isAutoCombatActive) return null;
     return (
       <div
@@ -451,14 +472,14 @@ export default function CombatPage() {
           className="p-1"
           showBgColor={true}
           eagerImages={true}
-          showLabels={showActionLabels}
+          showLabels={!focus && showActionLabels}
           selectedId={actionId}
           combatMode={true}
           userActionPoints={user?.actionPoints}
           battle={battle}
           userId={controlledActorId}
-          gridClassNameOverwrite={actionGridClass}
-          aspectRatioClass={actionAspect}
+          gridClassNameOverwrite={focus ? FOCUS_ACTION_GRID : actionGridClass}
+          aspectRatioClass={focus ? "aspect-square" : actionAspect}
           onClick={handleActionClick}
           hotkeys={hotkeys.byAction}
           onAssignHotkey={(item) =>
@@ -622,6 +643,73 @@ export default function CombatPage() {
     );
   }
 
+  // Both layouts expose the same hotkey editor for the controlled actor's actions.
+  const hotkeyDialog = (
+    <HotkeyCaptureDialog
+      target={hotkeyTarget}
+      currentKey={hotkeyTarget ? hotkeys.byAction[hotkeyTarget.id] : undefined}
+      onAssign={(key) =>
+        hotkeyTarget &&
+        hotkeys.setHotkey(
+          hotkeyTarget.kind,
+          hotkeyTarget.id,
+          key,
+          Object.fromEntries(actions.map((action) => [action.id, action.name])),
+        )
+      }
+      onClose={() => setHotkeyTarget(null)}
+    />
+  );
+
+  if (config.battleFocus && battle) {
+    return (
+      <>
+        <BattleFocusView
+          battle={battle}
+          controlledActorId={controlledActorId}
+          timer={renderTimer()}
+          field={renderBattlefield()}
+          fieldRatio={
+            results ? undefined : getBattlefieldHeightRatio(battle.width, battle.height)
+          }
+          dock={
+            <>
+              {renderActions(true)}
+              {actionId && !results && !isAutoCombatActive && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  <span className="text-green-700">Green</span>: affected ·{" "}
+                  <span className="text-red-500">Red</span>: not affected ·{" "}
+                  <span className="text-blue-500">Blue</span>: move
+                  {hotkeys.byAction.wait &&
+                    ` · ${hotkeys.byAction.wait.toUpperCase()}: end turn`}
+                </p>
+              )}
+            </>
+          }
+          autoControl={renderAutoControl()}
+          log={
+            <CombatHistory
+              battleId={battle.id}
+              battleVersion={battle.version}
+              battleRound={battle.round}
+              results={results}
+            />
+          }
+          timeline={
+            <CombatTimeline
+              battleId={battle.id}
+              battle={battle}
+              battleVersion={battle.version}
+              showBasicActions={config.showBasicActions}
+            />
+          }
+          onShowLayout={() => config.setBattleFocus(false)}
+        />
+        {hotkeyDialog}
+      </>
+    );
+  }
+
   // Determine which components are tabbed vs standalone
   const tabbedIds: CombatLayoutComponentId[] = ["actions", "timeline", "battlelog"];
 
@@ -662,20 +750,11 @@ export default function CombatPage() {
           </div>
         </div>
       )}
-      <HotkeyCaptureDialog
-        target={hotkeyTarget}
-        currentKey={hotkeyTarget ? hotkeys.byAction[hotkeyTarget.id] : undefined}
-        onAssign={(key) =>
-          hotkeyTarget &&
-          hotkeys.setHotkey(
-            hotkeyTarget.kind,
-            hotkeyTarget.id,
-            key,
-            Object.fromEntries(actions.map((action) => [action.id, action.name])),
-          )
-        }
-        onClose={() => setHotkeyTarget(null)}
-      />
+      {hotkeyDialog}
     </div>
   );
 }
+
+/** Battle focus packs every action into one grid of icons that wraps as needed. */
+const FOCUS_ACTION_GRID =
+  "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1 max-lg:grid-cols-6";

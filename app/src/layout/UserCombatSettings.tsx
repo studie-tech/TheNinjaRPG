@@ -125,12 +125,14 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                 checked={config.showGridNumbers}
                 onCheckedChange={config.toggleGridNumbers}
               />
-              <SettingsToggle
-                label="Small action icons"
-                description="Hide labels and fit more per row"
-                checked={config.useSmallActions}
-                onCheckedChange={config.toggleSmallActions}
-              />
+              {!config.battleFocus && (
+                <SettingsToggle
+                  label="Small action icons"
+                  description="Hide labels and fit more per row"
+                  checked={config.useSmallActions}
+                  onCheckedChange={config.toggleSmallActions}
+                />
+              )}
               <SettingsToggle
                 label="Aggro meters"
                 description="Team aggro against NPCs; tap for details"
@@ -147,6 +149,15 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </TabsContent>
           <TabsContent value="layout" className="space-y-3 pt-2">
             <p className="text-base font-semibold">Combat layout</p>
+            <SettingsToggle
+              label="Battle focus"
+              description="Full-window battlefield with compact actions, log and timeline"
+              checked={config.battleFocus}
+              onCheckedChange={config.setBattleFocus}
+            />
+            {/* Focus owns its panels; these preferences configure the game layout. */}
+            {!config.battleFocus && (
+              <>
             <div className="divide-border/50 divide-y">
               <SettingsToggle
                 label="Show battle log"
@@ -218,6 +229,8 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
                 itemClassName="py-1.5"
               />
             </div>
+              </>
+            )}
             <div className="border-t">
               <SettingsToggle
                 label="Light layout"
