@@ -53,7 +53,7 @@ import { questSceneOf } from "@/libs/contentReview/questScene";
 import { showMutationToast } from "@/libs/toast";
 import { formatSoundLength, formatTimeAgo } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { withUserNotificationCount } from "@/utils/userNotificationCounts";
+import { withContentReviewCount } from "@/utils/userNotificationCounts";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
 
 interface ContentReviewDetailProps {
@@ -132,11 +132,7 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
         {
           revision,
           notifications: (current) =>
-            withUserNotificationCount(
-              current,
-              "contentReview",
-              counts.statuses.PENDING ?? 0,
-            ),
+            withContentReviewCount(current, counts.statuses.PENDING ?? 0),
         },
       );
   };

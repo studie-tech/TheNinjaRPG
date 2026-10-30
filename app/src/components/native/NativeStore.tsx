@@ -284,16 +284,9 @@ export default function NativeStore() {
     );
     if (generation !== bindingGeneration.current || snapshot.userId !== accountId)
       return;
-    if (snapshot.announcements?.length)
-      showMutationToast({
-        success: true,
-        message: "OK",
-        announcements: snapshot.announcements,
-      });
     // Missing confirmation reconciles the character through the canonical profile query.
     await updateUser(snapshot.userPatch ?? undefined, {
       revision,
-      achievementProgress: snapshot.achievementProgress,
     });
   }, [player?.userId, prepareUserUpdate, updateUser, utils]);
   useEffect(() => {
