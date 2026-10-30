@@ -476,7 +476,14 @@ export const huntingRouter = createTRPCRouter({
         0,
       );
       return result.success
-        ? { ...result, userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId) }
+        ? {
+            ...result,
+            userPatch: await getBattleUserPatch(
+              ctx.drizzle,
+              ctx.userId,
+              result.requiresUserRefresh,
+            ),
+          }
         : result;
     }),
 });

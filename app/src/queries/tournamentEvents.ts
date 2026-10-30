@@ -18,7 +18,10 @@ export const fetchEventUser = async (client: DrizzleClient, id: string) => {
   const [user, mastered] = await Promise.all([
     client.query.userData.findFirst({
       where: eq(userData.userId, id),
-      with: { queue: { columns: { id: true } } },
+      with: {
+        queue: { columns: { id: true } },
+        cookingJobs: { columns: { id: true } },
+      },
     }),
     client.query.userJutsu.findMany({
       where: and(eq(userJutsu.userId, id), gte(userJutsu.level, JUTSU_TRAIN_LEVEL_CAP)),
@@ -339,7 +342,7 @@ export const findEventActorCacheState = (client: DrizzleClient, userId: string) 
       currentlyTrainingMastery: true,
       currentlyTrainingElement: true,
     },
-    with: { queue: { columns: { id: true } } },
+    with: { queue: { columns: { id: true } }, cookingJobs: { columns: { id: true } } },
   });
 
 /** Detect a payout to the acting account while synchronization advances this event. */

@@ -949,9 +949,11 @@ const eventActionCacheUpdate = async (
     actor?.status === "BATTLE" &&
     !!actor.battleId &&
     actor.battleId !== before.battleId;
+  // A launch can settle queued work and Cooking beyond the pool-only patch.
   const safeLaunch =
     startedBattle &&
     before.queue.length === 0 &&
+    before.cookingJobs.length === 0 &&
     !before.currentlyTrainingMastery &&
     !before.currentlyTrainingElement;
   const canProject =

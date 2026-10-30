@@ -1,7 +1,12 @@
+import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, userData, userItem } from "@/drizzle/schema";
+import { actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, quest, questHistory, trainingLog, userCookingJob, userData, userItem, userQueue } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { profileRouter } from "@/routers/profile";
+import * as cookingSettlement from "@/server/utils/cooking";
+import * as queueSettlement from "@/server/utils/userQueue";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { huntingRouter } from "@/routers/hunting";
 import { IncreaseHuntingYield } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
@@ -13,7 +18,7 @@ import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, re
 describeWithDatabase("Hunting lifecycle", () => {
   beforeEach(async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json([{ result: [59, 60] }]));
-    await resetTables(actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, userData, userItem);
+    await resetTables(actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, quest, questHistory, trainingLog, userCookingJob, userData, userItem, userQueue);
     await insertUsers([{ userId: "hunter", occupation: "HUNTER", status: "AWAKE", huntingExperience: 123, sector: 1 }, { userId: "staff", role: "CODING-ADMIN" }, { userId: "enemy", isAi: true }]);
     await insertItems([{ id: "hide", canBeHunted: true }, { id: "tusk", canBeHunted: true }]);
     const db = await getTestDatabase();
@@ -30,6 +35,64 @@ describeWithDatabase("Hunting lifecycle", () => {
     if (!session) throw Error("Missing session");
     return { hunter, session };
   };
+  it.each(["none", "jutsu", "craft", "cooking", "queue-failure", "cooking-failure"] as const)("reconciles admission settlement with a warmed profile (%s)", async (settlement) => {
+    const { hunter, session } = await accept();
+    const db = await getTestDatabase();
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0, money: 100, cookingExperience: 0 }).where(eq(userData.userId, "hunter"));
+    await db.update(huntingSession).set({ readyAt: new Date(0) });
+    const hasQueue = ["jutsu", "craft", "queue-failure"].includes(settlement);
+    const hasCooking = settlement.startsWith("cooking");
+    if (hasQueue) await db.insert(userQueue).values({ id: "deleted-content-job", userId: "hunter", kind: settlement === "craft" ? "CRAFT" : "JUTSU", position: 1, jutsuId: "deleted-jutsu", itemId: "deleted-craft", materials: [], reservedRyo: 321, durationSeconds: 1, startsAt: new Date(Date.now() + 3600_000), finishesAt: new Date(Date.now() + 3601_000) });
+    if (hasCooking) await db.insert(userCookingJob).values({ id: "cooking", userId: "hunter", experience: 99, finishesAt: new Date(Date.now() + 3600_000) });
+    const profile = await callerFor(profileRouter, "hunter");
+    const initial = await profile.getUser();
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["hunting-admission-profile"];
+    const read = vi.fn(() => profile.getUser());
+    cache.setQueryDefaults(key, { queryFn: read });
+    cache.setQueryData(key, initial);
+    const revision = prepareUserUpdate(cache, key);
+    try {
+      // These receipts become due after the page's profile snapshot.
+      if (hasQueue) await db.update(userQueue).set({ startsAt: new Date(0), finishesAt: new Date(1000) });
+      if (hasCooking) await db.update(userCookingJob).set({ finishesAt: new Date(0) });
+      if (settlement === "queue-failure") {
+        const settle = queueSettlement.settleDueTimedQueues;
+        vi.spyOn(queueSettlement, "settleDueTimedQueues").mockImplementationOnce(async (...args) => {
+          await settle(...args);
+          throw new Error("Queue settlement failed after its writes");
+        });
+      }
+      if (settlement === "cooking-failure") {
+        const settle = cookingSettlement.settleCookingExperience;
+        vi.spyOn(cookingSettlement, "settleCookingExperience").mockImplementationOnce(async (...args) => {
+          await settle(...args);
+          throw new Error("Cooking settlement failed after its writes");
+        });
+      }
+      const response = await hunter.start({ id: session.id });
+      expect(response.success).toBe(true);
+      await updateUserCache(cache, key, response.userPatch, { revision });
+      const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "hunter") });
+      const cached = cache.getQueryData<typeof initial>(key)!.userData;
+      expect(saved?.money).toBe(hasQueue && settlement !== "craft" ? 421 : 100);
+      expect(saved?.cookingExperience).toBe(hasCooking ? 99 : 0);
+      expect(cached?.money).toBe(saved?.money);
+      expect(cached?.cookingExperience).toBe(saved?.cookingExperience);
+      expect(cached?.queue).toHaveLength(0);
+      expect(cached?.cookingJobs).toHaveLength(0);
+      expect(cached?.status).toBe("BATTLE");
+      expect(cached?.battleId).toBe(saved?.battleId);
+      expect(read).toHaveBeenCalledTimes(settlement === "none" ? 0 : 1);
+      if (settlement === "none") expect(response.userPatch).toHaveProperty("status", "BATTLE");
+      else {
+        expect(response.userPatch).toBeUndefined();
+        expect(response.userDelta).toBeUndefined();
+      }
+    } finally { cache.clear(); }
+  });
   it("persists a personal location on refresh and reserves only one session", async () => {
     const hunter = await callerFor(huntingRouter, "hunter");
     const results = await Promise.all(["contract", "second"].map((contractId) => hunter.accept({ habitatId: "forest", contractId, version: null })));

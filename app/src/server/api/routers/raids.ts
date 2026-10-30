@@ -1151,7 +1151,12 @@ export const raidsRouter = createTRPCRouter({
             success: true,
             message: "Raid battle started",
             battleId: result.battleId,
-            ...(await confirmRaidBattleUpdate(ctx.drizzle, ctx.userId, initialUpdate)),
+            ...(await confirmRaidBattleUpdate(
+              ctx.drizzle,
+              ctx.userId,
+              initialUpdate,
+              result.requiresUserRefresh,
+            )),
           };
         } else {
           await rollbackStartRaidBattle({
@@ -1164,7 +1169,12 @@ export const raidsRouter = createTRPCRouter({
 
           return {
             ...errorResponse(result.message ?? "Failed to start battle"),
-            ...(await confirmRaidBattleUpdate(ctx.drizzle, ctx.userId, initialUpdate)),
+            ...(await confirmRaidBattleUpdate(
+              ctx.drizzle,
+              ctx.userId,
+              initialUpdate,
+              true,
+            )),
           };
         }
       } catch (err) {
@@ -1539,8 +1549,9 @@ const confirmRaidBattleUpdate = async (
   client: DrizzleClient,
   userId: string,
   initial: ReturnType<typeof getRaidSnapshotUpdate>,
+  requiresUserRefresh = false,
 ) => {
-  const saved = await getBattleUserPatch(client, userId);
+  const saved = await getBattleUserPatch(client, userId, requiresUserRefresh);
   return {
     ...initial,
     userPatch:
