@@ -627,7 +627,11 @@ export default function MyItems() {
                   ui.quantity > 0 &&
                   !NonActionItemTypes.includes(ui.item.itemType),
               )
-              .map((ui) => ({ id: ui.itemId, name: ui.item.name }))
+              .map((ui) => ({
+                id: ui.itemId,
+                name: ui.item.name,
+                hidden: ui.item.hidden,
+              }))
               .filter(
                 (action, index, list) =>
                   list.findIndex((other) => other.id === action.id) === index,
