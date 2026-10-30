@@ -1,10 +1,13 @@
 import { z } from "zod";
 
-/** AUTO inherits content mapping; NONE explicitly hides a worn item's visual layer. */
+/** AUTO inherits the base item; NONE explicitly hides a worn item's visual layer. */
 export const lpcEquipmentProfiles = [
   "AUTO",
   "NONE",
   "bandana",
+  "headband",
+  "wide-hat",
+  "glasses",
   "hood",
   "mask",
   "crown",
@@ -41,6 +44,10 @@ export const lpcEquipmentProfiles = [
   "hammer",
   "flail",
   "bow",
+  "crossbow",
+  "club",
+  "trident",
+  "whip",
   "boomerang",
   "shield",
   "gem",
@@ -67,7 +74,7 @@ export const lpcColors = [
 ] as const;
 /** Atlas body keys are independent of the player's gender selection. */
 export const lpcBodyStyles = ["male", "female"] as const;
-/** Nullable overrides preserve automatic mapping for existing items and variants. */
+/** Nullable variant fields inherit the item; unconfigured items have no equipment layer. */
 export const lpcItemFields = z.object({
   lpcProfile: z.enum(lpcEquipmentProfiles).nullable().default(null),
   lpcColor: z.enum(lpcColors).nullable().default(null),

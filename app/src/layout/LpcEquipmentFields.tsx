@@ -84,7 +84,9 @@ export const LpcEquipmentFields = <
                   {lpcEquipmentProfiles.map((value) => (
                     <SelectItem key={value} value={value}>
                       {value === "AUTO"
-                        ? "Automatic content mapping"
+                        ? variant
+                          ? "Inherit item appearance"
+                          : "Not configured"
                         : value === "NONE"
                           ? "Hidden on character"
                           : value}
@@ -118,7 +120,9 @@ export const LpcEquipmentFields = <
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="AUTO">Automatic content mapping</SelectItem>
+                  <SelectItem value="AUTO">
+                    {variant ? "Inherit item colour" : "Default gray"}
+                  </SelectItem>
                   {lpcColors.map((value) => (
                     <SelectItem key={value} value={value}>
                       {value}

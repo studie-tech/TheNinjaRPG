@@ -22,25 +22,25 @@ afterEach(() => {
 });
 
 describe("staff equipment preview", () => {
-  it("updates the worn layer with unsaved overrides and restores automatic mapping when cleared", async () => {
+  it("updates unsaved equipment fields and hides unconfigured base equipment", async () => {
     const { result } = renderHook(() => useForm<Fields>({ defaultValues: { lpcProfile: "leather", lpcColor: "gold" } }));
     const view = render(<LpcEquipmentFields control={result.current.control} item={item} />);
     const appearance = () => JSON.parse(view.getByTestId("appearance").textContent!) as SpriteAppearance;
     expect(appearance().layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "leather", color: "gold" });
 
     await act(async () => { result.current.setValue("lpcProfile", null); result.current.setValue("lpcColor", null); });
-    expect(appearance().layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "plate", color: "blue" });
+    expect(appearance().layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "shirt", color: "black" });
 
     await act(async () => { result.current.setValue("lpcProfile", "NONE"); });
     expect(view.getByLabelText("Hidden on character")).toBeTruthy();
     expect(appearance().layers.find((layer) => layer.slot === "shirt")?.profile).toBe("shirt");
   });
 
-  it("inherits saved base equipment, uses the variant's name palette, and previews either body", async () => {
+  it("inherits saved item fields independently of variant names and previews either body", async () => {
     const { result } = renderHook(() => useForm<Fields>({ defaultValues: { lpcProfile: null, lpcColor: null } }));
     const view = render(<LpcEquipmentFields control={result.current.control} item={item} variant={{ name: "Crimson edition" }} />);
     const appearance = () => JSON.parse(view.getByTestId("appearance").textContent!) as SpriteAppearance;
-    expect(appearance().layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "plate", color: "red" });
+    expect(appearance().layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "plate", color: "blue" });
 
     await act(async () => { result.current.setValue("lpcProfile", "robe"); result.current.setValue("lpcColor", "green"); });
     expect(appearance().layers.find((layer) => layer.slot === "shirt")).toMatchObject({ profile: "robe", color: "green" });

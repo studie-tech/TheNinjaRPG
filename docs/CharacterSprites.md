@@ -42,14 +42,13 @@ exclusive within each group. The shared attribute resolver displays deterministi
 choices for conflicting saved rows; selecting or removing a group replaces or
 clears its old choices. Bald hides scalp hair while retaining the hair palette for beards.
 
-`content.json` contains ID-specific visual mappings for the item catalogue.
-`inferItemProfile` and `inferItemColor` cover subsequently authored content by
-slot, weapon family and name. These are visual interpretations using the supplied
-LPC silhouettes, rather than reproductions of item portrait artwork. The item and
-variant editors expose silhouette and palette overrides. Silhouettes resolve by
-variant override, item override, catalogue mapping, then family inference. Palettes
-resolve by variant override, variant name, item override, catalogue mapping, item
-name, then grey. A variant name can supply its colour while inheriting the item's silhouette.
+Item and variant rows store their LPC silhouette and palette. Each unset variant
+field inherits the corresponding item field. Unconfigured items are hidden, and
+an unset item palette uses gray. Names, descriptions and item IDs do not select
+artwork. The staff editors preview these saved fields and inheritance for both
+body styles. Select Hidden on character to explicitly suppress an equipment layer.
+Clothing replaces the corresponding base garment; cloaks, jewellery and partial
+leg armour and waist skirts remain layered over the base clothing.
 
 `profiles.json` selects upstream definitions for both supported bodies. Missing
 LPC equivalents for fans, throwing stars, rings, bracelets, tattoos and scars use
@@ -76,6 +75,8 @@ opening a transaction or locking an account row between separate reads and write
 ## Rebuilding artwork
 
 The published frame catalogue is checked in; sprite binaries are stored in UploadThing.
+The complete movement catalogue stays within a 96 MiB RGBA texture-pixel budget;
+only the distinct artwork used by visible characters is leased at runtime.
 Running the game needs neither Python nor the upstream generator. The import script
 consumes artwork and attribution metadata from a pinned revision and stages
 content-addressed PNG atlases in the gitignored `app/scripts/.artifacts/lpc/` directory.
@@ -113,10 +114,11 @@ introducing a new silhouette, then import again. The script selects only require
 source blobs and removes obsolete staged PNGs. Keep its `REVISION` synchronized
 with the checked-out upstream revision when deliberately upgrading the source.
 
-To refresh catalogue mappings, supply a JSON array with `id`, `name`, `slot`,
-`itemType` and `weaponType` to `app/scripts/map-lpc-content.ts` using Bun. Review the
-generated mappings; preserve deliberate ID-specific choices or place durable staff
-overrides on the corresponding item. Variant overrides remain in the database.
+The `0130_lpc_item_appearances.sql` data migration fills audited appearances on
+existing items and variants. Apply it before deploying the resolver. It preserves
+configured staff fields independently and skips rows whose portrait changed since
+inspection; skipped or subsequently authored content can be configured in the
+item/variant editor. No player inventory rewrite is required.
 
 ## Distribution and validation
 
@@ -129,7 +131,7 @@ versioned UploadThing URLs.
 The [LPC migration](../app/drizzle/migrations/0129_superb_polaris.sql) adds nullable
 item and variant overrides plus the player's body choice. Apply the journaled
 migrations through this migration before deploying code that selects these columns.
-Existing rows use the catalogue and attribute defaults without a content backfill.
+Apply the appearance data migration after these columns exist. Character attributes continue to supply the base appearance.
 
 Tests under `app/tests/libs/lpc/` validate creation choices, mappings, attribution,
 published asset URLs and frame bounds. The publication command validates lossless

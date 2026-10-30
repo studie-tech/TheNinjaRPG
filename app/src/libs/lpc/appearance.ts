@@ -1,4 +1,3 @@
-import contentMappings from "@/libs/lpc/content.json";
 import type {
   LpcColor,
   LpcEquipmentProfile,
@@ -7,138 +6,15 @@ import type {
 } from "@/validators/lpc";
 import { getCharacterAttributes } from "@/validators/register";
 
-/**
- * Choose silhouettes by variant override, item override, catalogue mapping, then family inference.
- * Palettes prefer variant overrides/names before item overrides and catalogue/name defaults.
- */
+/** Saved variant fields inherit the item independently; names and IDs never select artwork. */
 export const resolveItemSprite = (item: SpriteItem, variant?: SpriteVariant | null) => {
-  const saved = (
-    contentMappings as Record<string, { profile: LpcEquipmentProfile; color: LpcColor }>
-  )[item.id ?? ""];
   const profile =
     variant?.lpcProfile && variant.lpcProfile !== "AUTO"
       ? variant.lpcProfile
       : item.lpcProfile && item.lpcProfile !== "AUTO"
         ? item.lpcProfile
-        : (saved?.profile ?? inferItemProfile(item));
-  // Variant names intentionally participate even when they use the base item's silhouette.
-  const color =
-    variant?.lpcColor ??
-    (variant ? inferItemColor(variant.name ?? "") : null) ??
-    item.lpcColor ??
-    saved?.color ??
-    inferItemColor(item.name ?? "") ??
-    "gray";
-  return { profile, color };
-};
-
-/** Every slot and weapon family has an explicit mapping, including non-wearable content. */
-export const inferItemProfile = (item: SpriteItem): LpcEquipmentProfile => {
-  const name = (item.name ?? "").normalize("NFKC").toLowerCase();
-  if (
-    [
-      "FURNITURE",
-      "MATERIAL",
-      "COOKING",
-      "MEAL",
-      "CONSUMABLE",
-      "CRYSTAL",
-      "OTHER",
-    ].includes(item.itemType ?? "")
-  )
-    return "NONE";
-  if (/mask|balaclava|veil/.test(name) && !/blade|edge|break/.test(name)) return "mask";
-  if (/crown/.test(name)) return "crown";
-  if (/cloak|shroud/.test(name)) return "cloak";
-  if (/necklace|amulet|pendant|medallion/.test(name)) return "necklace";
-  if (/earring/.test(name)) return "piercing";
-  if (/bracelet/.test(name)) return "bracelet";
-  if (/\bring\b/.test(name)) return "ring";
-  if (/beads/.test(name)) return "beads";
-  if (/sash|sealing cord/.test(name)) return "sash";
-  if (
-    /gem|crystal|shard|marrow|talisman|charm|crest|pride|aegis/.test(name) &&
-    item.weaponType === "NONE"
-  )
-    return "gem";
-  const weapons: Record<string, LpcEquipmentProfile> = {
-    SWORD: /katana|tachi|masamune|yaiba/.test(name) ? "katana" : "sword",
-    DAGGER: "dagger",
-    AXE: "axe",
-    HAMMER: "hammer",
-    STAFF: "staff",
-    POLEARM: "spear",
-    SICKLE: "sickle",
-    FLAIL: "flail",
-    CHAIN: "flail",
-    BOW: "bow",
-    FAN: "fan",
-    SHURIKEN: "shuriken",
-    FIST_WEAPON: "gloves",
-  };
-  if (item.weaponType && weapons[item.weaponType]) return weapons[item.weaponType]!;
-  if (/sword|blade|edge|fang|kaiken/.test(name)) return "sword";
-  if (/kunai|dart|knife/.test(name)) return "dagger";
-  if (/rod|conduit/.test(name)) return "staff";
-  switch (item.slot) {
-    case "HEAD":
-      return /hood|zukin/.test(name)
-        ? "hood"
-        : /helm/.test(name)
-          ? "helmet"
-          : "bandana";
-    case "CHEST":
-      return /jacket/.test(name)
-        ? "leather"
-        : /coat|shozoku|robe/.test(name)
-          ? "robe"
-          : "plate";
-    case "LEGS":
-      return /skirt|tasset/.test(name)
-        ? "skirt"
-        : /hakama|pants/.test(name)
-          ? "pants"
-          : "leggings";
-    case "FEET":
-      return /greave/.test(name)
-        ? "footarmour"
-        : /sandal|sole/.test(name)
-          ? "sandals"
-          : /tabi/.test(name)
-            ? "tabi"
-            : "boots";
-    case "HAND":
-      return item.itemType === "ARMOR" || item.itemType === "ACCESSORY"
-        ? "armarmour"
-        : "dagger";
-    case "WAIST":
-      return "belt";
-    case "KEYSTONE":
-      return "gem";
-    case "THROWN":
-      return "shuriken";
-    case "ITEM":
-      return item.itemType === "WEAPON" ? "gem" : "necklace";
-    default:
-      return "NONE";
-  }
-};
-
-/** Infer a palette from content names, leaving unmatched names to the caller's fallback. */
-export const inferItemColor = (name: string): LpcColor | null => {
-  const value = name.toLowerCase();
-  const colors: [RegExp, LpcColor][] = [
-    [/crimson|blood|fire|flam|ember|molten|scorch|red|wrath/, "red"],
-    [/azure|blue|sky|storm|frost|ice|yuki|snow/, "blue"],
-    [/forest|grove|leaf|sylvan|gaea|earth|thorn|green/, "green"],
-    [/void|shadow|night|black|obsidian|dusk|eclipse/, "black"],
-    [/purple|cosmic|aether/, "purple"],
-    [/sun|solar|gold|pride/, "gold"],
-    [/silver|white|diamond|crystal|mercy/, "silver"],
-    [/wood|rugged|leather|brown/, "brown"],
-    [/orange|kitsune/, "orange"],
-  ];
-  return colors.find(([pattern]) => pattern.test(value))?.[1] ?? null;
+        : "NONE";
+  return { profile, color: variant?.lpcColor ?? item.lpcColor ?? "gray" };
 };
 
 /**
@@ -245,16 +121,29 @@ export const resolveSpriteEquipment = (items: SpriteUser["items"]) => {
       owned.item.variants?.find((v) => v.id === owned.activeVariantId);
     const visual = resolveItemSprite(owned.item, variant);
     if (visual.profile === "NONE") continue;
+    // Replace base clothing only for garments that cover it; accessories remain additive.
     const slot =
       (
         {
-          HEAD: "bandana",
-          CHEST: "shirt",
-          LEGS: "legs",
-          FEET: "feet",
-          WAIST: "waist",
+          shirt: "shirt",
+          robe: "shirt",
+          leather: "shirt",
+          plate: "shirt",
+          chainmail: "shirt",
+          pants: "legs",
+          leggings: "legs",
+          boots: "feet",
+          tabi: "feet",
+          sandals: "feet",
+          footarmour: "feet",
+          bandana: "bandana",
+          headband: "bandana",
+          hood: "bandana",
+          helmet: "bandana",
+          "wide-hat": "bandana",
+          crown: "bandana",
         } as Record<string, string>
-      )[owned.equipped] ?? owned.equipped;
+      )[visual.profile] ?? owned.equipped;
     result[owned.id ?? owned.item.id ?? owned.equipped] = {
       slot,
       profile: visual.profile,
