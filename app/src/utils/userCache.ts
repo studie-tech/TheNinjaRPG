@@ -290,7 +290,11 @@ const mergeUserCache = (
   if (user.status === "HOSPITALIZED")
     desired.push({ href: "/hospital", name: "In hospital", color: "red" });
   if (user.deletionAt)
-    desired.push({ href: "/profile", name: "Being deleted", color: "red" });
+    desired.push({
+      href: "/profile?tab=edit&settings=deletion&setting=character",
+      name: "Deletion requested",
+      color: "red",
+    });
   if (user.isBanned) desired.push({ href: "/reports", name: "Banned!", color: "red" });
   if (user.isTradeBanned)
     desired.push({ href: "/reports", name: "Trade Banned!", color: "red" });
@@ -323,7 +327,7 @@ const mergeUserCache = (
         "Assign XP",
         "In combat",
         "In hospital",
-        "Being deleted",
+        "Deletion requested",
         "Banned!",
         "Trade Banned!",
       ].includes(entry.name) &&
