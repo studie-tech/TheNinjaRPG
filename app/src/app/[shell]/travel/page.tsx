@@ -11,6 +11,7 @@ import {
   Loader2,
   Locate,
   MapPinned,
+  Maximize2,
   Radar,
   Search,
   Swords,
@@ -192,6 +193,7 @@ function Travel() {
 
   const [activeTab, setActiveTab] = useState<string>("");
   const [focusSector, setFocusSector] = useState<number | null>(null);
+  const [isWorldExpanded, setWorldExpanded] = useState(false);
 
   const searchParams = useSearchParams();
   const [locationRequest, setLocationRequest] = useState<TravelLocation | null>(null);
@@ -875,6 +877,8 @@ function Travel() {
           showSorrounding={showSorrounding}
           showActive={showOtherUsers}
           autoAttackMode={autoAttackMode}
+          isWorldExpanded={isWorldExpanded}
+          setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
           setTarget={setTargetPosition}
           setPosition={setCurrentPosition}
@@ -891,6 +895,7 @@ function Travel() {
     showSorrounding,
     showOtherUsers,
     autoAttackMode,
+    isWorldExpanded,
     villages,
   ]);
 
@@ -1305,6 +1310,18 @@ function Travel() {
                 </Form>
               </PopoverContent>
             </Popover>
+            {!isGlobal && activeTab !== "" && (
+              <button
+                type="button"
+                aria-label="Expand world"
+                aria-expanded={isWorldExpanded}
+                disabled={!SectorComponent}
+                className="mr-2 hover:text-orange-500 disabled:opacity-50"
+                onClick={() => setWorldExpanded(true)}
+              >
+                <Maximize2 className="h-7 w-7" />
+              </button>
+            )}
             {activeTab === globalLink && (
               <TooltipProvider delayDuration={50}>
                 <Tooltip>

@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Grid } from "honeycomb-grid";
 import { useAtomValue } from "jotai";
-import { Maximize2, Minimize2, Swords } from "lucide-react";
+import { Minimize2, Swords } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -127,6 +127,8 @@ interface SectorProps {
   showSorrounding: boolean;
   showActive: boolean;
   autoAttackMode: boolean;
+  isWorldExpanded: boolean;
+  setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
   setTarget: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
   setPosition: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
@@ -178,7 +180,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     props;
   const sectorMap = centerEntry.map;
   const { setTarget: setMovementTarget, setPosition } = props;
-  const [isWorldExpanded, setWorldExpanded] = useState(false);
+  const { isWorldExpanded, setWorldExpanded } = props;
   useEffect(() => {
     if (!isWorldExpanded) return;
     const overflow = document.body.style.overflow;
@@ -196,7 +198,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       document.body.style.overflow = overflow;
       document.removeEventListener("keydown", onEscape);
     };
-  }, [isWorldExpanded]);
+  }, [isWorldExpanded, setWorldExpanded]);
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
@@ -2285,20 +2287,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     >
       <div className="relative">
         <div id="tutorial-travel-sector" ref={mountRef}></div>
-        <Button
-          type="button"
-          size="icon"
-          variant="outline"
-          className="absolute bottom-3 left-1/2 z-30 h-[44px] w-[44px] -translate-x-1/2"
-          aria-label={isWorldExpanded ? "Exit expanded world" : "Expand world"}
-          onClick={() => setWorldExpanded((expanded) => !expanded)}
-        >
-          {isWorldExpanded ? (
-            <Minimize2 className="h-4 w-4" />
-          ) : (
-            <Maximize2 className="h-4 w-4" />
-          )}
-        </Button>
         <aside
           aria-label="Map compass and neighboring sectors"
           className="pointer-events-none absolute top-3 left-3 z-10 rounded-lg border bg-background/90 p-2 text-center text-xs shadow-md backdrop-blur-sm"
@@ -2331,11 +2319,25 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             Gold lines mark sector borders
           </div>
         </aside>
-        <DayNightIndicator
-          className="absolute top-3 right-3 z-10 rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm"
-          previewDate={lightingPreviewDate}
-          onPreviewDateChange={setLightingPreviewDate}
-        />
+        <div className="absolute top-3 right-3 z-10 flex items-start gap-2">
+          <DayNightIndicator
+            className="rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm"
+            previewDate={lightingPreviewDate}
+            onPreviewDateChange={setLightingPreviewDate}
+          />
+          {isWorldExpanded && (
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="bg-background/90"
+              aria-label="Exit expanded world"
+              onClick={() => setWorldExpanded(false)}
+            >
+              <Minimize2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       {travel.error && <WebGlError />}
       {inspectedLocations && (
