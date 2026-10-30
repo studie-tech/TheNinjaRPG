@@ -12,9 +12,9 @@ const grid = { getHex: ({ col, row }: { col: number; row: number }) => {
 const location: MapLocation = { id: "tower", sector: 724, longitude: 3, latitude: 4, name: "Tower", description: "A tower.", assetId: "art", scale: 1 };
 const asset = { id: "art", imageUrl: "tower.png", renderScale: 2.4 };
 const objects = [{ id: "tree", type: "decoration", x: 3, y: 4, assetKey: "tree" }];
-const descriptions = (locations: MapLocation[], assets = [asset], mapObjects = objects, structures: VillageStructure[] = []) => sectorSpriteDescriptions({ grid, map: { objects: mapObjects } as NormalizedSectorMap,
+const descriptions = (locations: MapLocation[], assets = [asset], mapObjects = objects, structures: VillageStructure[] = []) => sectorSpriteDescriptions({ grid, map: { sector: 0, objects: mapObjects } as NormalizedSectorMap,
   structures, wall: null, lightLayout: false, locations, mapAssets: assets,
-  decorations: new Map([["tree", { filepath: "tree.png", renderScale: 2 } as DecorationAsset]]),
+  decorations: new Map([["tree", { key: "tree", filepath: "tree.png", renderScale: 2 } as DecorationAsset]]),
 });
 
 describe("sector scenery recipes", () => {

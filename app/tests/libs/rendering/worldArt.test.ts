@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import sharp from "sharp";
 import { GROUND_DETAIL_ART, resolveWorldDecoration, resolveWorldTerrain } from "@/libs/rendering/worldArt";
 import { CIVIC_STRUCTURES, WOODLAND_STRUCTURES, resolveWorldStructure } from "@/libs/rendering/worldStructures";
 import stockImages from "@/libs/rendering/villageBuildingImages.json";
@@ -37,12 +38,23 @@ describe("world art skinning", () => {
     }
   });
 
-  it("shares sixteen small cutouts across biome-specific stock ground cover", () => {
+  it("shares sixteen native pixel cutouts with clear atlas gutters across biome-specific stock ground cover", async () => {
+    const { data, info } = await sharp(new URL("../../../public/world-art/ground-details.webp", import.meta.url).pathname).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    expect(info.width * info.height * 4).toBeLessThanOrEqual(16 * 1024);
     expect(GROUND_DETAIL_ART).toHaveLength(16);
     for (const [index, asset] of GROUND_DETAIL_ART.entries()) {
       const { x, y, width, height } = asset.frame!;
-      expect(x + width).toBeLessThanOrEqual(192);
-      expect(y + height).toBeLessThanOrEqual(192);
+      expect(x + width).toBeLessThanOrEqual(info.width);
+      expect(y + height).toBeLessThanOrEqual(info.height);
+      expect(Math.max(width, height)).toBeLessThanOrEqual(14);
+      let covered = 0;
+      for (let v = 0; v < height; v++) for (let u = 0; u < width; u++) {
+        const alpha = data[((y + v) * info.width + x + u) * 4 + 3]!;
+        expect([0, 255]).toContain(alpha);
+        if (u === 0 || v === 0 || u === width - 1 || v === height - 1) expect(alpha).toBe(0);
+        if (alpha) covered++;
+      }
+      expect(covered).toBeGreaterThan(0);
       expect(asset.renderScale).toBeLessThanOrEqual(0.36);
       for (const other of GROUND_DETAIL_ART.slice(index + 1)) {
         const frame = other.frame!;
