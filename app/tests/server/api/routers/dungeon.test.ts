@@ -26,7 +26,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const a = await callerFor(dungeonRouter, "a");
     const result = await a.create({id: "definition"});
     if (!result.success || !("id" in result)) throw Error("Lobby creation failed");
-    return {a, id: result.id};
+    return {a, id: result.id, result};
   };
 
   /** Capture rewards in a fully cleared run for completion-delivery regressions. */
@@ -104,6 +104,16 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const { a, id } = await lobby();
     await db.update(dungeonRun).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(dungeonRun.id, id));
     expect((await a.getState()).runs[0]).toMatchObject({ id, status: "ENDED", battleId: null });
+  });
+
+  it("reconciles an implicit lobby expiry before confirming a party action", async () => {
+    const db = await getTestDatabase();
+    const { a, id } = await lobby();
+    await db.update(dungeonRun).set({ expiresAt: null, createdAt: new Date(0) }).where(eq(dungeonRun.id, id));
+    expect(await a.act({ id, action: "ready" })).toMatchObject({ success: false, userPatch: undefined });
+    expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) })).toMatchObject({ status: "ENDED" });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "a") })).toMatchObject({ status: "AWAKE" });
+    expect(await db.query.dungeonMember.findFirst({ where: eq(dungeonMember.runId, id) })).toMatchObject({ activeUserId: null });
   });
 
   it("loads lobby membership and invitations through the state query", async () => {
@@ -262,10 +272,13 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     expect(run?.state).toMatchObject({memberIds: ["a"], invitedIds: [], readyIds: []});
   });
   it("requires an invitation, three members and unanimous readiness", async () => {
-    const {a, id} = await lobby(); const b = await callerFor(dungeonRouter, "b");
+    const {a, id, result} = await lobby(); const b = await callerFor(dungeonRouter, "b");
+    expect(result).toMatchObject({ userPatch: { status: "QUEUED" } });
     expect((await b.act({id, action: "accept"})).success).toBe(false);
-    expect((await a.act({id, action: "invite", userId: "b"})).success).toBe(true);
-    expect((await b.act({id, action: "accept"})).success).toBe(true);
+    expect(await a.act({id, action: "invite", userId: "b"})).toMatchObject({ success: true, userPatch: {} });
+    expect(await b.act({id, action: "accept"})).toMatchObject({ success: true, userPatch: { status: "QUEUED" } });
+    const db = await getTestDatabase();
+    expect(await db.query.userData.findFirst({where: eq(userData.userId, "b")})).toMatchObject({ status: "QUEUED" });
     expect((await b.act({id, action: "pause"})).success).toBe(false);
     expect((await a.act({id, action: "start"})).success).toBe(false);
     expect((await a.claim({id})).success).toBe(false);
@@ -281,7 +294,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const result = await a.act({ id, action: "start" });
     expect(result).toMatchObject({ success: false, message: "A dungeon enemy is unavailable" });
     expect("userPatch" in result && result.userPatch).toBeFalsy();
-    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "a") })).toMatchObject({ cookingExperience: 23, status: "AWAKE", battleId: null });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "a") })).toMatchObject({ cookingExperience: 23, status: "QUEUED", battleId: null });
     expect(await db.query.userCookingJob.findMany()).toHaveLength(0);
     expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) })).toMatchObject({ status: "LOBBY", battleId: null });
   });

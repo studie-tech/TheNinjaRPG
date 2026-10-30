@@ -55,6 +55,7 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { getWorldCyclePosition } from "@/libs/dayNight";
+import { activeDungeonNotification } from "@/libs/dungeon";
 import { elementalGainRoom } from "@/libs/elementalMastery";
 import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
@@ -829,13 +830,7 @@ export const profileRouter = createTRPCRouter({
           );
           if (claim.rowsAffected === 1) user.status = "QUEUED";
         }
-        notifications.push({
-          href: "/dungeon",
-          name: "Active Dungeon Squad",
-          color: "green",
-          alwaysShow: true,
-          notificationCount: 1,
-        });
+        notifications.push(activeDungeonNotification);
       }
       // Ignore stale invitations for disabled or terminal teams, as the discovery page does.
       const invitations = questInvitations.filter(
