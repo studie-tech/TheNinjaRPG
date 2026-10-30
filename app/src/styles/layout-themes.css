@@ -311,11 +311,15 @@ html[data-game-frame="panel"] img:is([alt="signup-decor-left"], [alt="signup-dec
     border-left: 3px solid var(--theme-accent);
   }
   html[data-game-layout="3-sakura-courtyard"] .theme-frame {
+    max-width: calc(100% - 16px);
     grid-template-columns: 210px minmax(0, var(--theme-main-width)) 226px;
     grid-template-areas: "brand brand brand" "nav nav nav" "player main world" "footer footer footer";
     --theme-radius: 18px;
   }
   html[data-game-layout="17-obsidian-council"] .theme-frame {
+    /* Pixel's inset and column gaps leave room for the council's padded borders. */
+    max-width: calc(100% - 16px);
+    column-gap: 0.5rem;
     grid-template-columns: 248px minmax(0, var(--theme-main-width)) 220px;
     grid-template-areas: "brand brand brand" "world nav player" "world main player" "footer footer footer";
     --theme-radius: 5px;
