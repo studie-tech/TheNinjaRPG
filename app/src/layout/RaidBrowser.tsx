@@ -170,6 +170,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
             delta: data.userDelta,
             achievementProgress: data.achievementProgress,
           });
+        else void updateUser(undefined, { revision });
         if (data.success) void util.profile.getDashboard.invalidate();
       },
     });
