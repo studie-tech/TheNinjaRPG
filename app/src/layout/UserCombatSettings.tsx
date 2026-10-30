@@ -156,6 +156,16 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
               onCheckedChange={config.setBattleFocus}
             />
             {/* Focus owns its panels; these preferences configure the game layout. */}
+            {config.battleFocus && (
+              <div className="hidden lg:block">
+                <SettingsToggle
+                  label="Swap actions and log"
+                  description="Put the log below the field and actions beside it"
+                  checked={config.swapFocusPanels}
+                  onCheckedChange={config.setSwapFocusPanels}
+                />
+              </div>
+            )}
             {!config.battleFocus && (
               <>
             <div className="divide-border/50 divide-y">

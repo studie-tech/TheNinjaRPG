@@ -667,6 +667,7 @@ export default function CombatPage() {
         <BattleFocusView
           battle={battle}
           controlledActorId={controlledActorId}
+          swapFocusPanels={config.swapFocusPanels}
           timer={renderTimer()}
           field={renderBattlefield()}
           fieldRatio={
