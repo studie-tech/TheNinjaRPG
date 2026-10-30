@@ -12,6 +12,7 @@ import {
   HP_PER_LVL,
   MAX_EXPERIENCE_LEVEL,
   MAX_MASTERY_CAP,
+  MAX_STORED_POOL,
   MasteryNames,
   PLAYER_LEVEL_XP_BASE_FACTOR,
   PLAYER_LEVEL_XP_HIGH_FACTOR,
@@ -269,14 +270,11 @@ export function capUserStats(user: UserData, rank: UserRank = user.rank) {
   if (user.sageMastery > MAX_MASTERY_CAP) user.sageMastery = MAX_MASTERY_CAP;
 }
 
-/** Largest value the UserData pool columns (smallint unsigned) can store. */
-export const MAX_STORED_POOL = 65_535;
-
-/** Highest pools multiplier whose HP, CP and SP at this level still fit the pool columns. */
+/** Highest whole pool modifier that keeps HP, CP and SP within the content cap. */
 export const maxPoolsMultiplier = (level: number) =>
   Math.floor(MAX_STORED_POOL / Math.max(calcHP(level), calcCP(level), calcSP(level)));
 
-/** Cap pools to what the UserData columns can store, so saving the row cannot overflow. */
+/** Keep stored AI pools within the content cap. */
 export const clampStoredPools = (
   user: Pick<
     UserData,

@@ -3777,7 +3777,7 @@ export const scaleEditedAi = (stored: UserData, edited: UserData) => {
     }
   }
   scaleUserStats(edited, "ai", { reweight });
-  // Battles keep scaled pools in memory, but the saved row must fit its smallint columns.
+  // Keep stored HP, CP and SP within the content cap.
   clampStoredPools(edited);
 };
 

@@ -164,4 +164,20 @@ describe("manual AI editing", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0]?.[0]).toMatchObject({ data: { preferredGeneral1: null, preferredGeneral2: null, primaryElement: null } });
   });
+  it("saves large pool modifiers and permits correcting values above the pool cap", async () => {
+    ai.level = 99;
+    vi.spyOn(EditContent, "EditContent").mockImplementation((props) => (
+      <ActualEditContent {...props} formData={props.formData.filter(({ id }) => id === "poolsMultiplier")} />
+    ));
+    const view = await mount();
+    const input = view.getByRole("spinbutton", { name: /Pool Modifier/ });
+    fireEvent.input(input, { target: { value: "1001" } });
+    fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
+    await waitFor(() => expect(toast.showFormErrorsToast).toHaveBeenCalled());
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.input(input, { target: { value: "1000" } });
+    fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.lastCall?.[0].data.poolsMultiplier).toBe(1000);
+  });
 });

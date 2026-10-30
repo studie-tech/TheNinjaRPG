@@ -2,8 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { maxPoolsMultiplier } from "@/libs/profile";
 import { insertAiSchema } from "@/validators/aiInput";
 
-// THENINJARPG-2Z2: the AI editor accepted pool modifiers whose pools overflow the
-// smallint unsigned pool columns, so the save failed with a raw database error.
 const makeAi = (level: number, poolsMultiplier: number) => ({
   userId: "R9JRTtK3cZubEWUMbEkfL",
   username: "Rust Ferret",
@@ -29,20 +27,29 @@ const makeAi = (level: number, poolsMultiplier: number) => ({
 });
 
 describe("insertAiSchema poolsMultiplier", () => {
-  it("accepts the largest multiplier whose pools fit the columns", () => {
-    expect(maxPoolsMultiplier(120)).toBe(10);
-    expect(insertAiSchema.safeParse(makeAi(120, 10)).success).toBe(true);
+  it("accepts modifiers above 50 while the scaled pools stay within five million", () => {
+    expect(maxPoolsMultiplier(120)).toBe(826);
+    expect(insertAiSchema.safeParse(makeAi(120, 826)).success).toBe(true);
+    expect(insertAiSchema.safeParse(makeAi(120, 15)).success).toBe(true);
   });
 
-  it("explains the limit when the multiplier would overflow the pools", () => {
-    const result = insertAiSchema.safeParse(makeAi(120, 15));
+  it("accepts a modifier that reaches the pool cap exactly", () => {
+    expect(insertAiSchema.safeParse(makeAi(99, 1000)).success).toBe(true);
+  });
+
+  it("explains the limit when a modifier would exceed the pool cap", () => {
+    const result = insertAiSchema.safeParse(makeAi(99, 1001));
     expect(result.success).toBe(false);
     expect(result.error?.issues).toEqual([
       expect.objectContaining({
         path: ["poolsMultiplier"],
         message:
-          "Pool modifier 15 at level 120 would push HP/CP/SP above the maximum of 65,535. Use at most 10 at this level.",
+          "Pool modifier 1001 at level 99 would push HP/CP/SP above the maximum of 5,000,000. Use at most 1000 at this level.",
       }),
     ]);
+  });
+
+  it.each([0, -1, "invalid"])("rejects an invalid pool modifier: %s", (poolsMultiplier) => {
+    expect(insertAiSchema.safeParse({ ...makeAi(99, 1), poolsMultiplier }).success).toBe(false);
   });
 });

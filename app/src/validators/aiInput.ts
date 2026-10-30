@@ -1,8 +1,8 @@
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { ElementNames } from "@/drizzle/constants";
+import { ElementNames, MAX_STORED_POOL } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
-import { MAX_STORED_POOL, maxPoolsMultiplier } from "@/libs/profile";
+import { maxPoolsMultiplier } from "@/libs/profile";
 import {
   AllTags,
   rejectActivityBonuses,
@@ -55,7 +55,7 @@ export const insertAiSchema = createInsertSchema(userData)
       bloodlineMastery: z.coerce.number().min(10),
       sageMastery: z.coerce.number().min(10),
       statsMultiplier: z.coerce.number().min(1).max(50),
-      poolsMultiplier: z.coerce.number().min(1).max(50),
+      poolsMultiplier: z.coerce.number().min(1),
       strength: z.coerce.number().min(10),
       intelligence: z.coerce.number().min(10),
       willpower: z.coerce.number().min(10),
