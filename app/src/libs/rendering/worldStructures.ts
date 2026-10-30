@@ -1,148 +1,43 @@
-import type { CombatBiome } from "@/drizzle/constants";
-import climateFrames from "@/libs/rendering/villageBuildingFrames.json";
-import stockBuildingImages from "@/libs/rendering/villageBuildingImages.json";
-import { isBunnyCdnUrl, transformImageUrl } from "@/utils/image";
+import published from "@/libs/rendering/worldStructures.json";
+import { transformImageUrl } from "@/utils/image";
 
 export const WORLD_STRUCTURE_ANCHOR_Y = 0.88;
 
-/** Stock village buildings share roof, stone and lighting treatments while keeping distinct silhouettes. */
-export const WOODLAND_STRUCTURES = [
-  ["/academy", 24, 69, 296, 273, 98, 263],
-  ["/missionhall", 337, 86, 292, 258, 91, 248],
-  ["/hospital", 644, 86, 281, 260, 71, 250],
-  ["/ramenshop", 949, 86, 285, 262, 87, 253],
-  ["/anbu", 17, 354, 279, 317, 90.14, 298.53],
-  ["/battlearena", 318, 395, 310, 281, 95, 265],
-  ["/itemshop", 643, 423, 297, 249, 88, 235],
-  ["/blackmarket", 962, 433, 273, 241, 90, 223],
-  ["/science", 19, 686, 290, 272, 70, 257],
-  ["/townhall", 324, 690, 301, 269, 147, 265],
-  ["/traininggrounds", 647, 732, 295, 240, 87, 230],
-  ["/home", 963, 723, 273, 246, 68, 225],
-  ["/clanhall", 21, 978, 301, 234, 112, 225],
-  ["/bank", 345, 970, 283, 247, 90, 238],
-  ["/auctionhouse", 643, 986, 298, 241, 99, 228],
-  ["/shrine", 959, 993, 277, 234, 103, 225],
-] as const;
+/** Settlement kits retain distinct architecture while sharing physical material and camera contracts. */
+export const WORLD_STRUCTURE_ART = published as Record<
+  string,
+  StructureArt & { village: string; sector: number }
+>;
 
-/** Civic destinations keep recognizable service silhouettes within the same village material palette. */
-export const CIVIC_STRUCTURES = [
-  ["/souvenirs", 9, 185, 373, 336, 3.4, 125, 320],
-  ["/minigames", 388, 144, 388, 387, 3.6, 120, 368],
-  ["/historybuilding", 780, 113, 387, 411, 4, 126, 394],
-  ["/globalanbuhq", 1168, 12, 358, 515, 5.7, 114, 501],
-  ["/colosseum", 8, 586, 408, 382, 3.6, 125, 366],
-  ["/pets", 421, 607, 355, 365, 3.5, 130, 342],
-  ["/adminbuilding", 780, 568, 387, 404, 4.2, 106, 386],
-] as const;
+const byImage = new Map(
+  Object.values(WORLD_STRUCTURE_ART).map((art) => [
+    `${art.route}:${transformImageUrl(art.sourceImage)}`,
+    art,
+  ]),
+);
 
-/** Storeys and door openings set each archetype’s scale relative to a walking character. */
-const BUILDING_HEIGHTS: Record<string, number> = {
-  "/academy": 4.3,
-  "/missionhall": 3.6,
-  "/hospital": 3.7,
-  "/ramenshop": 3.3,
-  "/anbu": 4.5,
-  "/battlearena": 3.5,
-  "/itemshop": 3.2,
-  "/blackmarket": 2.8,
-  "/science": 3.3,
-  "/townhall": 4.4,
-  "/traininggrounds": 3.3,
-  "/home": 3.1,
-  "/clanhall": 3.5,
-  "/bank": 3.5,
-  "/auctionhouse": 3.4,
-  "/shrine": 3.3,
-};
-
-const structuresByImage = new Map<string, StructureArt>([
-  ...WOODLAND_STRUCTURES.map(
-    ([key, x, y, width, height, stairX, stairY], index) =>
-      [
-        key as string,
-        {
-          filepath: "/world-art/village-buildings.webp",
-          frame: { x: x - 2, y: y - 2, width: width + 4, height: height + 4 },
-          stair: { x: stairX, y: stairY },
-          shadow: 0.2,
-          height: BUILDING_HEIGHTS[key] ?? 3.5,
-          index,
-        },
-      ] as const,
-  ),
-  ...CIVIC_STRUCTURES.map(
-    ([key, x, y, width, height, scale, stairX, stairY]) =>
-      [
-        key as string,
-        {
-          filepath: "/world-art/civic-buildings.webp",
-          frame: { x, y, width, height },
-          stair: { x: stairX, y: stairY },
-          shadow: 0.2,
-          height: scale,
-          index: -1,
-        },
-      ] as const,
-  ),
-]);
-
-/** Recognize bundled images across the supported CDN hostnames; custom building art stays intact. */
+/** Changing a structure's image or service invalidates metadata belonging to another piece of artwork. */
 export const resolveWorldStructure = (
   image: string,
   route: string,
-  biome?: CombatBiome,
-  sector?: number,
+  configured?: StructureArt | null,
 ) => {
-  const source = transformImageUrl(image);
-  if (!isBunnyCdnUrl(source)) return undefined;
-  const filename = new URL(source).pathname
-    .split("/")
-    .at(-1)
-    ?.replace(/\.webp$/i, "");
-  const sources = (stockBuildingImages as Record<string, string[]>)[route];
-  const art =
-    filename && sources?.includes(filename) ? structuresByImage.get(route) : undefined;
-  if (!art) return undefined;
-  // Horizon's cedar lookout keeps the civic hall's physical height and stair contact.
-  if (sector === 301 && route === "/townhall")
-    return {
-      ...art,
-      filepath: "/world-art/horizon-watch-hall.webp",
-      frame: { x: 0, y: 0, width: 305, height: 273 },
-      stair: { x: 150, y: 266 },
-    };
-  const climate =
-    biome === "ice" || biome === "snow"
-      ? "snow"
-      : biome === "dessert"
-        ? "desert"
-        : null;
-  const frame = climate ? climateFrames[climate][art.index] : undefined;
-  if (!climate || !frame) return art;
-  const [x, y, width, height, stairX, stairY] = frame;
+  const key = transformImageUrl(image).split(/[?#]/)[0] ?? image;
   if (
-    x === undefined ||
-    y === undefined ||
-    width === undefined ||
-    height === undefined ||
-    stairX === undefined ||
-    stairY === undefined
+    configured &&
+    configured.route === route &&
+    transformImageUrl(configured.sourceImage) === key
   )
-    return art;
-  return {
-    ...art,
-    filepath: `/world-art/village-buildings-${climate}.webp`,
-    frame: { x, y, width, height },
-    stair: { x: stairX, y: stairY },
-  };
+    return configured;
+  return byImage.get(`${route}:${key}`);
 };
 
-/** Frame-local stair contacts keep streets, courts and artwork on the same ground point. */
+/** Frame-local stair contacts align navigation, paving and artwork at the published entrance. */
 export const getWorldStructureEntrance = (
   position: { x: number; y: number },
   height: number,
-  art?: Pick<StructureArt, "frame" | "stair">,
+  art?: Pick<StructureArt, "frame" | "stair"> &
+    Partial<Pick<StructureArt, "courtSlope" | "route">>,
 ) => ({
   x:
     position.x +
@@ -154,22 +49,82 @@ export const getWorldStructureEntrance = (
       : -(1 - WORLD_STRUCTURE_ANCHOR_Y)) *
       height,
   width: height * 0.26,
+  courtSlope: art?.courtSlope ?? 0.18,
+  courtScale:
+    art?.route &&
+    [
+      "/townhall",
+      "/shrine",
+      "/globalanbuhq",
+      "/adminbuilding",
+      "/colosseum",
+      "/historybuilding",
+    ].includes(art.route)
+      ? 1
+      : 0.55,
 });
 
-/** Court geometry and canopy clearance share the same ground-plane footprint. */
-export const getWorldForecourtSize = (hexHeight: number, hasPrecinct = false) => ({
-  width: hexHeight * (hasPrecinct ? 7 : 3.5),
-  depth: hexHeight * (hasPrecinct ? 3 : 1.8),
-  overlap: hexHeight * (hasPrecinct ? 0.6 : 0.45),
+/** Civic courts are broader than ordinary doorsteps; rear courses overlap the foundation. */
+export const getWorldForecourtSize = (
+  hexHeight: number,
+  hasPrecinct = false,
+  scale = 1,
+) => ({
+  width: hexHeight * (hasPrecinct ? 7 : 3.5 * scale),
+  depth: hexHeight * (hasPrecinct ? 3 : 1.8 * scale),
+  overlap: hexHeight * (hasPrecinct ? 0.6 : 0.45 * scale),
 });
 
-/** An atlas view with physical height and an optional climate-variant slot. */
-type StructureArt = {
+/** Front stone courses and their receding edges use the building's ground-plane axes. */
+export const getWorldForecourtPoint = (
+  entrance: StructureEntrance,
+  x: number,
+  y: number,
+): [number, number] => [
+  entrance.x + x - y * 0.75,
+  entrance.y - x * (entrance.courtSlope ?? 0.18) - y * 0.45,
+];
+
+/** Vegetation clearance encloses the same angled footprint used to draw the paving. */
+export const getWorldForecourtBounds = (
+  hexHeight: number,
+  entrance: StructureEntrance,
+) => {
+  const { width, depth, overlap } = getWorldForecourtSize(
+    hexHeight,
+    entrance.hasPrecinct,
+    entrance.courtScale,
+  );
+  const points = [-width / 2, width / 2].flatMap((x) =>
+    [-overlap, depth].map((y) => getWorldForecourtPoint(entrance, x, y)),
+  );
+  return {
+    minX: Math.min(...points.map(([x]) => x)),
+    maxX: Math.max(...points.map(([x]) => x)),
+    minY: Math.min(...points.map(([, y]) => y)),
+    maxY: Math.max(...points.map(([, y]) => y)),
+  };
+};
+
+/** Published albedo, packed normal/height pixels and closed source-space geometry form one immutable asset. */
+export type StructureArt = {
+  route: string;
+  sourceImage: string;
   filepath: string;
+  material: string;
+  surfaces: string;
   frame: { x: number; y: number; width: number; height: number };
-  /** Lowest visible stair-front center, in pixels relative to the resolved frame. */
+  /** Lowest stair-front centre, measured in pixels relative to the atlas frame. */
   stair: { x: number; y: number };
   shadow: number;
   height: number;
-  index: number;
+  courtSlope: number;
+};
+
+type StructureEntrance = {
+  x: number;
+  y: number;
+  courtSlope?: number;
+  courtScale?: number;
+  hasPrecinct?: boolean;
 };

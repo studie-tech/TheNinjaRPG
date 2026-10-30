@@ -911,6 +911,13 @@
       "when": 1793345093830,
       "tag": "0130_lpc_item_appearances",
       "breakpoints": false
+    },
+    {
+      "idx": 131,
+      "version": "5",
+      "when": 1793383030299,
+      "tag": "0131_mighty_thor",
+      "breakpoints": false
     }
   ]
 }

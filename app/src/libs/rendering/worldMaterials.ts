@@ -1,10 +1,12 @@
 import { BufferImageSource, Rectangle, Texture } from "pixi.js";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
+import {
+  type WorldAssetSource,
+  worldAssetSource,
+} from "@/libs/rendering/worldAssetSources";
 import type { WorldShadowShape } from "@/libs/rendering/worldShadows";
-import worldSurfaceAtlases from "@/libs/rendering/worldSurfaceAtlases.json";
 
-const authored = new Set(worldSurfaceAtlases);
 const loaded = new Map<string, WorldMaterial>();
 const materials = createLeaseCache<WorldMaterial>({
   load: async (key) => {
@@ -12,27 +14,27 @@ const materials = createLeaseCache<WorldMaterial>({
       image,
       shape,
       rendition = 128,
+      source,
     } = JSON.parse(key) as {
       image: string;
       shape: WorldShadowShape;
       rendition?: number;
+      source?: Pick<WorldAssetSource, "material" | "surfaces">;
     };
     const assets = createSceneAssets();
     try {
       const [albedo, material, surfaces] = await Promise.all([
-        assets.texture(image, rendition, "nearest"),
-        authored.has(image)
-          ? assets
-              .texture(image.replace(/\.webp$/, ".material.png"), 128, "nearest")
-              .catch((error: unknown) => {
-                console.warn(
-                  "Authored material unavailable; using a physical fallback",
-                  error,
-                );
-                return null;
-              })
+        assets.texture(image, source ? 0 : rendition, "nearest"),
+        source
+          ? assets.texture(source.material, 0, "nearest").catch((error: unknown) => {
+              console.warn(
+                "Authored material unavailable; using a physical fallback",
+                error,
+              );
+              return null;
+            })
           : null,
-        authored.has(image) ? readAuthoredSurfaces(image) : null,
+        source ? readAuthoredSurfaces(source.surfaces) : null,
       ]);
       const width = albedo.source.pixelWidth,
         height = albedo.source.pixelHeight;
@@ -110,10 +112,16 @@ export const acquireWorldMaterial = (
   image: string,
   shape: WorldShadowShape,
   rendition = 128,
-) =>
-  materials.acquire(
-    JSON.stringify({ image, shape: authored.has(image) ? "column" : shape, rendition }),
+  materialSource?: Pick<WorldAssetSource, "material" | "surfaces">,
+) => {
+  const published = materialSource ?? worldAssetSource(image);
+  const source = published
+    ? { material: published.material, surfaces: published.surfaces }
+    : undefined;
+  return materials.acquire(
+    JSON.stringify({ image, shape: source ? "column" : shape, rendition, source }),
   );
+};
 
 /** Shared frame samples retain source UVs and authored heights across animation and mirrored poses. */
 export const worldMaterialFrame = (
@@ -519,9 +527,9 @@ const readPixels = (texture: Texture, width: number, height: number) => {
 };
 
 /** Atlas geometry loads on demand and shares its material lease and idle-cache lifetime. */
-const readAuthoredSurfaces = async (image: string) => {
+const readAuthoredSurfaces = async (url: string) => {
   try {
-    const response = await fetch(image.replace(/\.webp$/, ".surfaces.json"));
+    const response = await fetch(url);
     if (!response.ok)
       throw new Error(`World surface request failed: ${response.status}`);
     const text = await response.text();

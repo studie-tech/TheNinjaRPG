@@ -60,7 +60,7 @@ export const createSectorPreview = async (options: {
       terrainRegistry,
       villageType ?? null,
     );
-    const roads = planVillageLandscape(grid, structures, villageWallPlan, sector);
+    const roads = planVillageLandscape(grid, structures, villageWallPlan);
     const descriptions = sectorSpriteDescriptions({
       map,
       grid,

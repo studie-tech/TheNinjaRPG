@@ -4075,6 +4075,8 @@ export const villageStructure = mysqlTable(
     route: varchar("route", { length: 191 }).default("").notNull(),
     image: varchar("image", { length: 191 }).notNull(),
     villageId: varchar("villageId", { length: 191 }).notNull(),
+    // Atlas, numerical material and stair geometry travel with each structure's published artwork.
+    worldArt: json("worldArt").$type<import("@/libs/rendering/worldStructures").StructureArt>(),
     // Signed: -1/-1 is the long-standing "not on the map" sentinel used by
     // non-physical structures (Walls, Protectors) in every environment
     longitude: smallint("longitude").default(10).notNull(),

@@ -20,6 +20,7 @@ import {
 } from "@/libs/rendering/worldArt";
 import type { WorldShadowShape } from "@/libs/rendering/worldShadows";
 import {
+  getWorldForecourtBounds,
   getWorldForecourtSize,
   getWorldStructureEntrance,
   resolveWorldStructure,
@@ -292,8 +293,7 @@ export const sectorSpriteDescriptions = (options: {
     const art = resolveWorldStructure(
       structure.image,
       structure.route,
-      tile.spec?.battleBiome,
-      map.sector,
+      structure.worldArt,
     );
     // Co-located stock services share one campus; their destination actions remain independent.
     const campus = `${structure.longitude},${structure.latitude}`;
@@ -305,6 +305,9 @@ export const sectorSpriteDescriptions = (options: {
       kind: "structure",
       image: art?.filepath ?? structure.image,
       frame: art?.frame,
+      worldMaterial: art
+        ? { material: art.material, surfaces: art.surfaces }
+        : undefined,
       shadow: art?.shadow,
       shadowCaster: art ? "building" : undefined,
       light: art ? 0.6 : undefined,
@@ -314,11 +317,7 @@ export const sectorSpriteDescriptions = (options: {
       entrance: art
         ? {
             ...getWorldStructureEntrance(tile, height, art),
-            hasCourt:
-              !!theme &&
-              ["/townhall", "/shrine", "/globalanbuhq", "/adminbuilding"].includes(
-                structure.route,
-              ),
+            hasCourt: true,
             hasPrecinct: !!theme?.shrinePrecinct && structure.route === "/shrine",
           }
         : undefined,
@@ -381,15 +380,7 @@ export const sectorSpriteDescriptions = (options: {
     const h = grid.toArray()[0]?.height ?? 0;
     const courts = sprites.flatMap(({ entrance }) => {
       if (!entrance?.hasCourt) return [];
-      const { width, depth, overlap } = getWorldForecourtSize(h, entrance.hasPrecinct);
-      return [
-        {
-          minX: entrance.x - width / 2,
-          maxX: entrance.x + width / 2,
-          minY: entrance.y - depth,
-          maxY: entrance.y + overlap,
-        },
-      ];
+      return [getWorldForecourtBounds(h, entrance)];
     });
     // Clear full canopies from paved approaches; creator-supplied scenery stays authoritative.
     for (let index = sprites.length - 1; index >= 0; index--) {
@@ -431,15 +422,17 @@ export const sectorSpriteDescriptions = (options: {
     const approaches = sprites.flatMap(({ entrance }) => {
       if (!entrance) return [];
       const court = entrance.hasCourt
-        ? getWorldForecourtSize(h, entrance.hasPrecinct)
+        ? getWorldForecourtSize(h, entrance.hasPrecinct, entrance.courtScale)
         : { width: entrance.width + h * 0.4, depth: h * 0.9, overlap: h * 0.2 };
       return [
-        {
-          minX: entrance.x - court.width / 2,
-          maxX: entrance.x + court.width / 2,
-          minY: entrance.y - court.depth,
-          maxY: entrance.y + court.overlap,
-        },
+        entrance.hasCourt
+          ? getWorldForecourtBounds(h, entrance)
+          : {
+              minX: entrance.x - court.width / 2,
+              maxX: entrance.x + court.width / 2,
+              minY: entrance.y - court.depth,
+              maxY: entrance.y + court.overlap,
+            },
       ];
     });
     const accepted: WorldSpriteDescription[] = [];
@@ -516,7 +509,8 @@ const villageGardenDescriptions = (
       (structure) =>
         ["/townhall", "/shrine", "/globalanbuhq", "/adminbuilding"].includes(
           structure.route,
-        ) && resolveWorldStructure(structure.image, structure.route),
+        ) &&
+        resolveWorldStructure(structure.image, structure.route, structure.worldArt),
     )
     .slice(0, 2);
   for (const structure of centers) {
@@ -557,8 +551,7 @@ const villageGardenDescriptions = (
         const art = resolveWorldStructure(
           structure.image,
           structure.route,
-          tile.spec?.battleBiome,
-          sector,
+          structure.worldArt,
         );
         if (!art) continue;
         const entrance = getWorldStructureEntrance(tile, tile.height * art.height, art);
@@ -985,6 +978,8 @@ export type WorldSpriteDescription = {
   id: string;
   kind: string;
   image: string;
+  /** Persisted numerical maps can accompany custom or catalogue structure artwork. */
+  worldMaterial?: { material: string; surfaces: string };
   /** Pixel rectangle in a shared atlas; the scene owns only the texture view. */
   frame?: { x: number; y: number; width: number; height: number };
   /** Movement-only artwork shares the scene clock and returns to the original texture when stopped. */
@@ -1006,6 +1001,8 @@ export type WorldSpriteDescription = {
     width: number;
     hasCourt?: boolean;
     hasPrecinct?: boolean;
+    courtSlope?: number;
+    courtScale?: number;
   };
   x: number;
   y: number;

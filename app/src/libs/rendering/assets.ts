@@ -1,5 +1,6 @@
 import { Assets, type Texture } from "pixi.js";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
+import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import { textureImageUrl } from "@/utils/image";
 
 const IDLE_TEXTURE_BUDGET = 16 * 1024 * 1024;
@@ -30,7 +31,7 @@ export const createSceneAssets = () => {
     /** width requests a CDN rendition in pixels; it does not size the displayed sprite. */
     texture: (path: string, width = 50, sampling: "linear" | "nearest" = "linear") => {
       if (disposed) return Promise.reject(new Error("Scene assets are disposed"));
-      const source = textureImageUrl(path, width);
+      const source = worldAssetSource(path)?.image ?? textureImageUrl(path, width);
       // Sampling is immutable for a shared source; nearest art owns a separate decoded source.
       const url =
         sampling === "nearest" ? `${source.split("#")[0]}#tnr-nearest` : source;

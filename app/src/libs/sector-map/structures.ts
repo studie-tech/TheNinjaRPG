@@ -14,6 +14,7 @@ export const createGenericStructure = (info: {
     name: info.name,
     route: info.route,
     image: info.image,
+    worldArt: null,
     villageId: "unknown",
     longitude: info.longitude,
     latitude: info.latitude,

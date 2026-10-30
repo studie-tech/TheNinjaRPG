@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
 import type { VillageStructure } from "@/drizzle/schema";
 import { MAX_SECTOR_GROUND_DETAILS, sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
-import stockImages from "@/libs/rendering/villageBuildingImages.json";
+import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
 import { WORLD_UNDERSTORY } from "@/libs/rendering/worldArt";
 import { getWorldStructureEntrance, resolveWorldStructure } from "@/libs/rendering/worldStructures";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
@@ -26,7 +26,7 @@ const fixture = (biome: "ground" | "snow" | "dessert" = "ground", size = 32) => 
     anchors: [], exits: [], metadata: { importedAt: "2026-01-01T00:00:00Z", source: "tiled" },
   };
   const structures = [{ id: "hospital", route: "/hospital", hasPage: 1, longitude: 10, latitude: 12,
-    image: `https://uploadthing.b-cdn.net/f/${stockImages["/hospital"][0]}.webp` }] as VillageStructure[];
+    image: WORLD_STRUCTURE_ART["akikaze/hospital"]!.sourceImage }] as VillageStructure[];
   const { grid, villageWallPlan: wall } = prepareSectorGrid(1024, alea(1), 1, structures, map, mergeTerrainSpecs([]), "VILLAGE");
   const roads = new Set(Array.from({ length: size }, (_, col) => `${col},8`));
   const render = (lightLayout = false, decorations = DECORATION_ASSETS_BY_KEY) => sectorSpriteDescriptions({ grid, map, structures, wall, roads, decorations, lightLayout });

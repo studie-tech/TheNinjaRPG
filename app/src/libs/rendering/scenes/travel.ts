@@ -356,12 +356,7 @@ export const createTravelScene = async (options: {
               entry.villageType,
             ));
           }
-          const roads = planVillageLandscape(
-            grid,
-            entry.structures,
-            villageWallPlan,
-            entry.sector,
-          );
+          const roads = planVillageLandscape(grid, entry.structures, villageWallPlan);
           const descriptions = sectorSpriteDescriptions({
             map: entry.map,
             grid,

@@ -5,8 +5,8 @@ import type { VillageStructure } from "@/drizzle/schema";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
 import { sectorSpriteDescriptions, type WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
-import stockImages from "@/libs/rendering/villageBuildingImages.json";
-import { getWorldStructureEntrance, resolveWorldStructure } from "@/libs/rendering/worldStructures";
+import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
+import { getWorldForecourtPoint, getWorldStructureEntrance, resolveWorldStructure } from "@/libs/rendering/worldStructures";
 import { getVillageRoadLayout, isOnVillageRoad, planVillageLandscape } from "@/libs/rendering/villageLandscape";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
@@ -29,7 +29,7 @@ const town = () => {
     ["/academy", 1, 2], ["/hospital", 6, 1], ["/missionhall", 6, 6],
   ] as const).map(([route, longitude, latitude]) => ({
     route, longitude, latitude, hasPage: 1,
-    image: `https://uploadthing.b-cdn.net/f/${stockImages[route as keyof typeof stockImages][0]}.webp`,
+    image: WORLD_STRUCTURE_ART[`akikaze${route}`]!.sourceImage,
   })) as VillageStructure[];
   return { grid, structures, map };
 };
@@ -64,7 +64,7 @@ describe("village landscape", () => {
     const { grid, map, structures } = town();
     const tile = grid.getHex({ col: 2, row: 4 })!;
     const tower = { ...structures[0]!, id: "tower", route: "/anbu", longitude: 2, latitude: 4,
-      image: `https://uploadthing.b-cdn.net/f/${stockImages["/anbu"][0]}.webp` };
+      image: WORLD_STRUCTURE_ART["akikaze/anbu"]!.sourceImage };
     const height = tile.height * resolveWorldStructure(tower.image, tower.route)!.height;
     const entrance = getWorldStructureEntrance(tile, height, resolveWorldStructure(tower.image, tower.route)!);
     const art = sectorSpriteDescriptions({ grid, map, structures: [tower], wall: null, lightLayout: false, decorations: DECORATION_ASSETS_BY_KEY });
@@ -92,7 +92,7 @@ describe("village landscape", () => {
   it("clears bundled tree canopies from landmark approaches while retaining custom artwork", () => {
     const { grid, structures, map } = town();
     const landmark = { ...structures[0]!, route: "/townhall", longitude: 2, latitude: 2,
-      image: `https://uploadthing.b-cdn.net/f/${stockImages["/townhall"][0]}.webp` };
+      image: WORLD_STRUCTURE_ART["akikaze/townhall"]!.sourceImage };
     const building = grid.getHex({ col: 2, row: 2 })!;
     const contact = getWorldStructureEntrance(building, building.height * resolveWorldStructure(landmark.image, landmark.route)!.height, resolveWorldStructure(landmark.image, landmark.route)!);
     const foreground = grid.pointToHex({ x: contact.x, y: contact.y - building.height })!;
@@ -243,7 +243,8 @@ describe("village landscape", () => {
     const service = structures[0]!, tile = grid.getHex({ col: service.longitude, row: service.latitude })!;
     const art = resolveWorldStructure(service.image, service.route)!;
     const contact = getWorldStructureEntrance(tile, tile.height * art.height, art);
-    const landing = routeGrid.pointToHex({ x: contact.x, y: contact.y - tile.height * .7 })!;
+    const [x, y] = getWorldForecourtPoint(contact, 0, tile.height * .7);
+    const landing = routeGrid.pointToHex({ x, y })!;
     expect(new PathCalculator(routeGrid).getShortestPath(routeGrid.getHex({ col: 0, row: 7 })!, landing)).toBeDefined();
     expect(roads.has("0,6")).toBe(true);
     expect(roads.has("0,7")).toBe(true);
@@ -281,12 +282,13 @@ describe("village landscape", () => {
     const paved = buildSectorTerrainData(grid, alea(1), false, options);
     const added = paved.surface.slice(plain.surface.length);
     expect(added.length).toBeGreaterThan(0);
-    // Flagstone rows follow the front steps; depth recedes without a lateral shear.
+    // Stone courses follow the front facade; their receding edges share the diagonal approach.
     for (let index = 0; index < added.length; index += 12) {
-      expect(added[index]).toBe(added[index + 10]);
-      expect(added[index + 2]).toBe(added[index + 4]);
-      expect(added[index + 1]).toBe(added[index + 3]);
-      expect(added[index + 5]).toBe(added[index + 11]);
+      const dx = added[index + 2]! - added[index]!, dy = added[index + 3]! - added[index + 1]!;
+      expect(dx).toBeGreaterThan(0);
+      expect(Math.abs(dy + dx * .18)).toBeLessThanOrEqual(1);
+      expect(added[index + 10]!).toBeLessThan(added[index]!);
+      expect(added[index + 11]!).toBeLessThan(added[index + 1]!);
     }
     for (let index = 0; index < added.length; index += 2) expect(grid.pointToHex({ x: added[index]!, y: added[index + 1]! })?.spec?.isWater).toBe(false);
     expect(paved.faceOffsets).toEqual(plain.faceOffsets);

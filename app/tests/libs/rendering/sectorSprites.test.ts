@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import type { VillageStructure } from "@/drizzle/schema";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
+import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
+import { createGenericStructure } from "@/libs/sector-map/structures";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { MapLocation } from "@/validators/mapLocation";
@@ -18,6 +20,14 @@ const descriptions = (locations: MapLocation[], assets = [asset], mapObjects = o
 });
 
 describe("sector scenery recipes", () => {
+  it("gives imported faction buildings matched materials and paving outside themed settlements", () => {
+    const art = WORLD_STRUCTURE_ART["syndicate/bank"]!;
+    const structure = { ...createGenericStructure({ name: "Bank", route: art.route, image: art.sourceImage, longitude: 3, latitude: 4 }), worldArt: art };
+    const sprite = descriptions([], [], [], [structure])[0]!;
+    expect(sprite.worldMaterial).toEqual({ material: art.material, surfaces: art.surfaces });
+    expect(sprite.entrance).toMatchObject({ hasCourt: true, courtSlope: art.courtSlope });
+    expect(sprite.frame).toEqual(art.frame);
+  });
   it("draws one building for co-located objectives with an independent pin", () => {
     const sprites = descriptions([location, { ...location, id: "second" }]);
     expect(sprites).toHaveLength(2);

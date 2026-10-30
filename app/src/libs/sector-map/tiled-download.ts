@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import {
@@ -249,6 +250,7 @@ export interface SpriteFile {
  * edge misbehaves (stale CORS cache, transient 5xx), the origin still works.
  */
 const spriteUrlCandidates = (filepath: string) => {
+  filepath = worldAssetSource(filepath)?.image ?? filepath;
   const candidates = [filepath];
   const mirrored = filepath.match(/uploadthing\.b-cdn\.net\/(.+)$/);
   if (mirrored?.[1]) candidates.push(`https://utfs.io/${mirrored[1]}`);
@@ -301,7 +303,17 @@ const fetchSpriteFile = async (asset: DecorationAsset): Promise<SpriteFile> => {
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const raw = await response.arrayBuffer();
-        const bitmap = await createImageBitmap(new Blob([raw]));
+        // Tiled palette entries use the same native atlas crop as the world renderer.
+        const frame = asset.frame;
+        const bitmap = frame
+          ? await createImageBitmap(
+              new Blob([raw]),
+              frame.x,
+              frame.y,
+              frame.width,
+              frame.height,
+            )
+          : await createImageBitmap(new Blob([raw]));
         const { bytes, width, height } = await toPngSprite(bitmap);
         bitmap.close();
         return {
