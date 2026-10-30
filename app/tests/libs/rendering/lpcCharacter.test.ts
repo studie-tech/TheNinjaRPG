@@ -3,7 +3,7 @@ import { Assets, BufferImageSource, Container, Graphics, Sprite, Texture } from 
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import { lpcCatalog, lpcFrame } from "@/libs/lpc/catalog";
+import { lpcCatalog, lpcFrame, type LpcLayout } from "@/libs/lpc/catalog";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
@@ -40,6 +40,90 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("layered LPC actors", () => {
+  it("shares immutable source-owned frame views across independently animated actors", async () => {
+    const { game, source, owned } = gameFixture();
+    const appearance: SpriteAppearance = { version: 1, body: "male", layers: [{ profile: "body", color: "light" }] };
+    const [first, second] = await Promise.all([
+      characters.createLpcCharacter(game, appearance),
+      characters.createLpcCharacter(game, appearance),
+    ]);
+    const firstPart = first.sprite.children[0] as Sprite;
+    const secondPart = second.sprite.children[0] as Sprite;
+    expect(firstPart.texture).toBe(secondPart.texture);
+    first.render(frame(1000), "walk", 2, true);
+    second.render(frame(1000), "walk", 2, true);
+    const standing = secondPart.texture;
+    expect(firstPart.texture).toBe(standing);
+    first.render(frame(1090), "walk", 2);
+    const walking = firstPart.texture;
+    expect(walking).not.toBe(standing);
+    expect(secondPart.texture).toBe(standing);
+    const imageSource = source.source;
+    expect(imageSource.listenerCount("destroy")).toBe(1);
+    const listeners = imageSource.listenerCount("resize");
+    [...owned][0]!();
+    expect(first.sprite.destroyed).toBe(true);
+    expect(second.sprite.destroyed).toBe(false);
+    expect(standing.destroyed).toBe(false);
+    expect(walking.destroyed).toBe(false);
+    imageSource.unload();
+    expect(imageSource.destroyed).toBe(false);
+    expect(walking.destroyed).toBe(false);
+    second.render(frame(1090), "walk", 2);
+    expect(secondPart.texture).toBe(walking);
+    expect(imageSource.listenerCount("resize")).toBe(listeners);
+    const replacement = gameFixture();
+    const third = await characters.createLpcCharacter(replacement.game, appearance);
+    third.render(frame(1000), "walk", 2, true);
+    third.render(frame(1090), "walk", 2);
+    const replacementPart = third.sprite.children[0] as Sprite;
+    expect(replacementPart.texture).not.toBe(walking);
+    expect(replacementPart.texture.source).toBe(replacement.source.source);
+    imageSource.destroy();
+    expect(standing.destroyed).toBe(true);
+    expect(walking.destroyed).toBe(true);
+    expect(imageSource.listenerCount("resize")).toBe(0);
+    expect(imageSource.listenerCount("destroy")).toBe(0);
+    expect(replacementPart.texture.destroyed).toBe(false);
+  });
+  it("preserves packed frame geometry, mirrored scale and unit-square hit bounds", async () => {
+    const { game } = gameFixture();
+    const key = "body/male/light/blue";
+    const original = lpcCatalog.entries[key]!;
+    const layoutCount = lpcCatalog.layouts.length;
+    cleanups.push(() => { lpcCatalog.entries[key] = original; lpcCatalog.layouts.splice(layoutCount); });
+    const base: LpcLayout = { cell: 64, columns: 1, trim: { x: 12, y: 6, width: 20, height: 40 }, clips: { idle: [[0], [0], [0], [0]], walk: [[0], [0], [0], [0]] } };
+    const layouts = [
+      base,
+      { ...base, cell: 128 },
+      { ...base, trim: { ...base.trim!, width: 21 } },
+      { ...base, trim: { ...base.trim!, height: 41 } },
+      { ...base, trim: { ...base.trim!, x: 13 } },
+      { ...base, trim: { ...base.trim!, y: 7 } },
+      base,
+    ];
+    const views: Texture[] = [];
+    for (const [index, layout] of layouts.entries()) {
+      lpcCatalog.entries[key] = [{ image: `packed-${index}`, z: 1, layout: lpcCatalog.layouts.push(layout) - 1 }];
+      const actor = await characters.createLpcCharacter(game, { version: 1, body: "male", layers: [{ profile: "body", color: "light", mirror: true }] });
+      const part = actor.sprite.children[0] as Sprite;
+      views.push(part.texture);
+      expect(part.texture.frame).toMatchObject({ x: 1, y: 1, width: layout.trim!.width, height: layout.trim!.height });
+      expect(part.texture.orig).toMatchObject({ x: 0, y: 0, width: layout.cell, height: layout.cell });
+      expect(part.texture.trim).toMatchObject(layout.trim!);
+      expect(part.scale.x).toBe(-1 / 64);
+      expect(part.scale.y).toBe(1 / 64);
+      expect(part.width).toBe(layout.cell / 64);
+      expect(part.height).toBe(layout.cell / 64);
+      expect(part.visualBounds).toMatchObject({ minX: layout.trim!.x - layout.cell / 2, minY: layout.trim!.y - layout.cell / 2, maxX: layout.trim!.x + layout.trim!.width - layout.cell / 2, maxY: layout.trim!.y + layout.trim!.height - layout.cell / 2 });
+      expect(actor.sprite.boundsArea).toMatchObject({ x: -0.5, y: -0.5, width: 1, height: 1 });
+      actor.render(frame(90), "walk", 3);
+      expect(part.scale.x).toBe(-1 / 64);
+      expect(part.scale.y).toBe(1 / 64);
+    }
+    expect(new Set(views).size).toBe(layouts.length - 1);
+    expect(views.at(-1)).toBe(views[0]);
+  });
   it("keeps mirrored off-hand thrusts facing the same direction as the body", async () => {
     const { game } = gameFixture();
     const actor = await characters.createLpcCharacter(game, { version: 1, body: "male", layers: [{ profile: "dagger", color: "blue", mirror: true }] });
@@ -144,8 +228,10 @@ describe("layered LPC actors", () => {
     for (let i = 0; i < sprites.length; i++) expect(sprites[i]!.visible).toBe(!!lpcCatalog.layouts[sheets[i]!.layout]!.clips.walk);
     for (const cleanup of owned) cleanup();
     expect(actor.sprite.destroyed).toBe(true);
-    expect(first.destroyed).toBe(true);
+    expect(first.destroyed).toBe(false);
     expect(source.source.destroyed).toBe(false);
+    source.source.destroy();
+    expect(first.destroyed).toBe(true);
   });
   it("cancels a character that finishes loading after its scene is disposed", async () => {
     const { game, controller } = gameFixture();
