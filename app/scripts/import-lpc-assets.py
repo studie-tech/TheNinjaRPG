@@ -23,7 +23,8 @@ PROFILES = json.loads((LIB / "profiles.json").read_text())
 COLORS = ["black", "blue", "brown", "gray", "green", "orange", "purple", "red", "white", "yellow", "gold", "silver"]
 SKINS = ["light", "black", "olive", "ivory"]
 EYES = ["blue", "black", "brown", "gray", "green", "red", "yellow", "white"]
-CYCLES = {"idle": [0], "walk": list(range(1, 9)), "slash": list(range(6)), "thrust": list(range(8)), "spellcast": list(range(7)), "shoot": list(range(13)), "hurt": list(range(6))}
+# Authored idles hold the first pose twice; stand retains the neutral walking column.
+CYCLES = {"stand": [0], "idle": [0, 0, 1], "combat": [0, 0, 1], "walk": list(range(1, 9)), "slash": list(range(6)), "thrust": list(range(8)), "spellcast": list(range(7)), "shoot": list(range(13)), "hurt": list(range(6))}
 subprocess.run(["git", "-C", str(SOURCE), "rev-parse", "--verify", REVISION + "^{commit}"], check=True, stdout=subprocess.DEVNULL)
 if subprocess.check_output(["git", "-C", str(SOURCE), "rev-parse", "HEAD"], text=True).strip() != REVISION:
     raise SystemExit("LPC checkout must be at the pinned revision " + REVISION)
@@ -138,7 +139,7 @@ def candidates(definition, layer, body, state, color):
     if not path:
         return []
     custom = layer.get("custom_animation", "")
-    animation = "walk" if state == "idle" else state
+    animation = {"stand": "walk", "combat": "combat_idle"}.get(state, state)
     stem = custom.removesuffix("_oversize").removesuffix("_128")
     if custom == "tool_whip":
         stem = "slash"
@@ -187,10 +188,15 @@ def pack(definition, layer, body, color, eyes):
         cycle = range(columns) if layer.get("custom_animation") == "tool_whip" else cycle
         directions = []
         for direction in range(4):
-            indices = []
+            indices, columns_used = [], {}
             for frame in cycle:
                 if frame >= columns:
                     continue
+                # Repeated idle holds share one stored pose while retaining the authored timeline.
+                if frame in columns_used:
+                    indices.append(columns_used[frame])
+                    continue
+                columns_used[frame] = len(frames)
                 indices.append(len(frames))
                 row = 0 if rows == 1 else direction
                 cropped = image.crop((frame * size, row * size, (frame + 1) * size, (row + 1) * size))
@@ -204,15 +210,15 @@ def pack(definition, layer, body, color, eyes):
         clips["shoot"] = clips["thrust"]
     if not frames:
         return None
-    if definition.get("resting_pose_fallback") and "idle" not in clips:
+    if definition.get("resting_pose_fallback") and "stand" not in clips:
         # A reverse attack's last column matches the body's neutral first pose.
         poses = definition.get("body_poses", {}).get(next(iter(clips)), {}).get("frames")
         resting = [[indices[poses[direction].index(0) if poses else 0]] for direction, indices in enumerate(next(iter(clips.values()))) ]
-        clips["idle"] = resting
+        clips["stand"] = resting
         clips["walk"] = resting
     packed = write_atlas(frames, clips, cell, definition, layer, color, eyes, pathlib.Path(path).stem)
     travel_clips, travel_frames = {}, []
-    for state in ["idle", "walk"]:
+    for state in ["stand", "idle", "walk"]:
         if state not in clips:
             continue
         travel_clips[state] = []

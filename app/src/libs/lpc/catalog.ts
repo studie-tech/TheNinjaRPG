@@ -9,6 +9,9 @@ import type {
 /** Authored attack columns share one clock across weapons, bodies and clothing. */
 export const LPC_ATTACK_FRAME_MS = 80;
 
+/** Authored idle holds are sampled together across every visible layer of an actor. */
+export const LPC_IDLE_FRAME_MS = 200;
+
 /** Authored frame indices can be sparse; cell and columns locate them in the packed atlas. */
 export type LpcLayout = {
   cell: number;
@@ -49,8 +52,8 @@ export const spriteLayerSheets = (
 };
 
 /**
- * Sample elapsed milliseconds: idle/walk loop, attacks clamp, and reduced motion holds the first pose.
- * Missing clips fall back to an authored idle/walk pose; scene code owns cue expiry.
+ * Sample elapsed milliseconds: resting/walking cycles loop, attacks clamp, and reduced motion holds the first pose.
+ * Missing clips use the neutral held pose; scene code owns cue expiry.
  */
 export const lpcFrame = (
   sheet: LpcSheet,
@@ -63,13 +66,19 @@ export const lpcFrame = (
   if (!layout) throw new Error("Missing sprite layout");
   const frames =
     layout.clips[state]?.[direction] ??
+    layout.clips.stand?.[direction] ??
     layout.clips.idle?.[direction] ??
     layout.clips.walk?.[direction];
   if (!frames?.length) return null;
-  const duration = state === "walk" ? 90 : state === "idle" ? 200 : LPC_ATTACK_FRAME_MS;
+  const duration =
+    state === "walk"
+      ? 90
+      : state === "idle" || state === "combat"
+        ? LPC_IDLE_FRAME_MS
+        : LPC_ATTACK_FRAME_MS;
   const step = reducedMotion ? 0 : Math.floor(Math.max(0, elapsed) / duration);
   const index =
-    state === "idle" || state === "walk"
+    state === "idle" || state === "combat" || state === "walk"
       ? step % frames.length
       : Math.min(step, frames.length - 1);
   const frame = frames[index] ?? frames[0];

@@ -44,9 +44,11 @@ describe("published LPC artwork", () => {
       expect(sheets.some((sheet) => !!sheet.travel)).toBe(true);
       for (const sheet of sheets) if (sheet.travel) {
         const layout = lpcCatalog.layouts[sheet.travel.layout]!;
-        expect(Object.keys(layout.clips).sort()).toEqual(["idle", "walk"]);
+        expect(layout.clips.stand).toBeDefined();
+        expect(layout.clips.walk).toBeDefined();
+        expect(Object.keys(layout.clips).every((state) => ["stand", "idle", "walk"].includes(state))).toBe(true);
         for (const direction of [0, 1, 2, 3] as const) {
-          expect(lpcFrame(sheet.travel, "idle", direction, 0)).not.toBeNull();
+          expect(lpcFrame(sheet.travel, "stand", direction, 0)).not.toBeNull();
           expect(lpcFrame(sheet.travel, "walk", direction, 100)).not.toBeNull();
         }
       }
@@ -56,7 +58,7 @@ describe("published LPC artwork", () => {
     expect(lpcCatalog.revision).toMatch(/^[a-f0-9]{40}$/);
     for (const key of Object.keys(lpcCatalog.entries)) expect(credits.some((entry) => entry.profile === key.split("/")[0] && entry.authors.length && entry.chosenLicense && entry.urls.length)).toBe(true);
   });
-  it("bounds movement texture memory while retaining every authored idle and walk step", () => {
+  it("bounds movement texture memory while retaining authored resting and walking steps", () => {
     const images = new Map<string, number>();
     for (const sheets of Object.values(lpcCatalog.entries)) for (const parent of sheets) {
       const sheet = parent.travel;
@@ -64,8 +66,8 @@ describe("published LPC artwork", () => {
       const layout = lpcCatalog.layouts[sheet.layout]!;
       expect(layout.trim).toBeDefined();
       const trim = layout.trim!;
-      for (const state of ["idle", "walk"] as const) {
-        expect(layout.clips[state]!.map((frames) => frames.length)).toEqual(lpcCatalog.layouts[parent.layout]!.clips[state]!.map((frames) => frames.length));
+      for (const state of ["stand", "idle", "walk"] as const) {
+        expect(layout.clips[state]?.map((frames) => frames.length)).toEqual(lpcCatalog.layouts[parent.layout]!.clips[state]?.map((frames) => frames.length));
       }
       const count = Math.max(...Object.values(layout.clips).flat(2)) + 1;
       images.set(sheet.image, layout.columns * (trim.width + 2) * Math.ceil(count / layout.columns) * (trim.height + 2) * 4);
@@ -90,9 +92,25 @@ describe("published LPC artwork", () => {
         for (const direction of [0, 1, 2, 3] as const) {
           expect(pose!.frames[direction]).toHaveLength(layout.clips[state]![direction]!.length);
           expect(pose!.frames[direction]!.every((index) => index >= 0 && index < (pose!.animation === "thrust" ? 8 : 6))).toBe(true);
-          if (profile === "club") expect(layout.clips.idle![direction]).toEqual([layout.clips.slash![direction]![5]!]);
+          if (profile === "club") expect(layout.clips.stand![direction]).toEqual([layout.clips.slash![direction]![5]!]);
         }
       }
+    }
+  });
+  it("keeps authored breathing holds distinct from neutral and weapon fallback poses", () => {
+    for (const body of ["male", "female"] as const) {
+      const base = lpcCatalog.entries[`body/${body}/light/blue`]![0]!;
+      const layout = lpcCatalog.layouts[base.layout]!;
+      for (const state of ["idle", "combat"] as const) for (const frames of layout.clips[state]!) {
+        expect(frames).toHaveLength(3);
+        expect(frames[0]).toBe(frames[1]);
+        expect(frames[1]).not.toBe(frames[2]);
+      }
+      expect(lpcFrame(base, "combat", 2, 600)).toEqual(lpcFrame(base, "combat", 2, 0));
+      const held = lpcCatalog.entries[`club/${body}/brown/blue`]![0]!;
+      expect(lpcCatalog.layouts[held.layout]!.clips.idle).toBeUndefined();
+      expect(lpcCatalog.layouts[held.layout]!.clips.combat).toBeUndefined();
+      expect(lpcFrame(held, "stand", 2, 600)).toEqual(lpcFrame(held, "stand", 2, 0));
     }
   });
 });
