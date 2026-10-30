@@ -1,9 +1,10 @@
 import { beforeEach, expect, it, afterEach, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { actionLog, aiProfile, battle, clan, dungeon, dungeonMember, dungeonRun, mpvpBattleQueue, mpvpBattleUser, petSpecies, quest, userData, userPet, village } from "@/drizzle/schema";
+import { actionLog, aiProfile, battle, clan, dungeon, dungeonMember, dungeonRun, mpvpBattleQueue, mpvpBattleUser, petSpecies, quest, tournament, tournamentMatch, userData, userPet, village } from "@/drizzle/schema";
 import { updateUserDataForDeleteClanBattle, updateUserDataForRemoveFromClan, updateUserDataForRemoveFromClan2, updateUserDataForUndoClanBattleJoin } from "@/queries/clan";
 import { updateUserDataForCheckAndCleanupExpiredRaid, updateUserDataForReadyToQueue, updateUserDataForRollbackStartRaidBattle } from "@/queries/raids";
+import { updateUserDataForJoinMatch } from "@/queries/tournament";
 import type { DrizzleClient } from "@/server/db";
 import { clanRouter } from "@/server/api/routers/clan";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
@@ -12,6 +13,7 @@ import { raidsRouter, checkAndCleanupExpiredRaid } from "@/server/api/routers/ra
 import { RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { combatRouter } from "@/server/api/routers/combat";
+import { tournamentRouter } from "@/server/api/routers/tournament";
 import { Pusher } from "@/libs/pusher";
 import { makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";
 import { dungeonContent } from "../../setup/dungeon";
@@ -20,11 +22,11 @@ import { initialPetSpecies } from "../../libs/pets/helpers/species";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
-describeWithDatabase("clan and raid release preserve dungeon reservations", () => {
+describeWithDatabase("activity releases preserve dungeon reservations", () => {
   beforeEach(async () => {
     stubRateLimitTransport();
     vi.spyOn(Pusher.prototype,"trigger").mockResolvedValue(undefined);
-    await resetTables(actionLog, aiProfile, battle, clan, dungeon, dungeonMember, dungeonRun, mpvpBattleQueue, mpvpBattleUser, petSpecies, quest, userData, userPet, village);
+    await resetTables(actionLog, aiProfile, battle, clan, dungeon, dungeonMember, dungeonRun, mpvpBattleQueue, mpvpBattleUser, petSpecies, quest, tournament, tournamentMatch, userData, userPet, village);
     const db = await getTestDatabase();
     await db.insert(village).values({id:"v", name:"V", sector:1, kageId:"leader"});
     await db.insert(clan).values({id:"clan", name:"Clan", image:"/clan.webp", villageId:"v", founderId:"leader", leaderId:"leader", leaderOrderId:"order"});
@@ -42,6 +44,8 @@ describeWithDatabase("clan and raid release preserve dungeon reservations", () =
     ["raid readiness", (db: DrizzleClient) => updateUserDataForReadyToQueue(db, "member", {status:"QUEUED"})],
     ["raid expiry", (db: DrizzleClient) => updateUserDataForCheckAndCleanupExpiredRaid(db, ["member"])],
     ["raid start rollback", (db: DrizzleClient) => updateUserDataForRollbackStartRaidBattle(db, ["member"])],
+    ["tournament first participant", (db: DrizzleClient) => updateUserDataForJoinMatch(db, {userId1:"member",userId2:"leader"})],
+    ["tournament second participant", (db: DrizzleClient) => updateUserDataForJoinMatch(db, {userId1:"leader",userId2:"member"})],
   ] as const;
   it.each(releases)("%s preserves live dungeon queues and releases ordinary queues with terminal receipts", async (_name, release) => {
     const db = await getTestDatabase();
@@ -57,6 +61,38 @@ describeWithDatabase("clan and raid release preserve dungeon reservations", () =
       expect(owner?.status).toBe(status && status !== "COMPLETED" && status !== "ENDED" ? "QUEUED" : "AWAKE");
       if (_name === "clan removal" || _name === "clan disband") expect(owner?.clanId).toBeNull();
     }
+  });
+  const createTournamentMatch = async (actor = "member") => {
+    const db = await getTestDatabase();
+    const startedAt = new Date(Date.now() - 10000);
+    await db.insert(aiProfile).values({id:"Default",userId:"member",rules:[]});
+    await db.insert(tournament).values({id:"tour",name:"Clan tournament",image:"/test.webp",description:"",type:"CLAN",status:"IN_PROGRESS",round:1,rewards:ObjectiveReward.parse({}),startedAt,roundStartedAt:startedAt});
+    await db.insert(tournamentMatch).values({id:"match",tournamentId:"tour",round:1,match:1,state:"WAITING",userId1:actor,userId2:actor === "member" ? "leader" : "member",startedAt});
+  };
+  it.each(["member","leader"])("preserves both dungeon participant positions when %s starts their tournament match", async actor => {
+    const db = await getTestDatabase();
+    await createTournamentMatch(actor);
+    const created = await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]});
+    expect(created.success).toBe(true);
+    const pets = await callerFor(petsRouter,"member");
+    expect((await pets.updatePet({petId:"one",battleEnabled:false})).success).toBe(false);
+    await (await callerFor(tournamentRouter,actor)).joinMatch({matchId:"match",tournamentId:"tour"});
+    expect(await db.query.userData.findFirst({where:eq(userData.userId,"member")})).toMatchObject({status:"QUEUED",battleId:null});
+    expect(await db.query.dungeonMember.findFirst()).toMatchObject({activeUserId:"member"});
+    expect(await db.query.dungeonRun.findFirst()).toMatchObject({status:"LOBBY"});
+    expect((await pets.updatePet({petId:"one",battleEnabled:false})).success).toBe(false);
+  });
+  it.each([null,"COMPLETED","ENDED"] as const)("starts ordinary tournament battles with dungeon receipt %s", async status => {
+    const db = await getTestDatabase();
+    await createTournamentMatch();
+    if (status) {
+      expect((await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]})).success).toBe(true);
+      await db.update(dungeonRun).set({status});
+    }
+    const result = await (await callerFor(tournamentRouter,"leader")).joinMatch({matchId:"match",tournamentId:"tour"});
+    expect(result.battleId).toBeString();
+    expect(await db.query.userData.findFirst({where:eq(userData.userId,"member")})).toMatchObject({status:"BATTLE",battleId:result.battleId});
+    expect(await db.query.userData.findFirst({where:eq(userData.userId,"leader")})).toMatchObject({status:"BATTLE",battleId:result.battleId});
   });
   it("keeps a clan-kicked solo player's dungeon queue and selected pets reserved", async () => {
     const db = await getTestDatabase();

@@ -76,7 +76,7 @@ export const fetchMatch = async (client: DrizzleClient, matchId: string) => {
 import { inArray, isNull, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-import { clan, userData } from "@/drizzle/schema";
+import { clan, dungeonMember, dungeonRun, userData } from "@/drizzle/schema";
 
 /** Build the `clan` update for `createTournament`, setting `bank`, using predicates on `id`. */
 export const updateClanForCreateTournament = (
@@ -133,7 +133,7 @@ export const insertTournamentMatchForJoinTournament = (
     startedAt: tournamentData.startedAt,
   });
 
-/** Build the `userData` update for `joinMatch`, setting `status` and `curHealth`, using predicates on `userId`. */
+/** Wake tournament participants without releasing live dungeon reservations. */
 export const updateUserDataForJoinMatch = (
   client: Pick<DrizzleClient, "update">,
   matchData: { userId1: string; userId2: null | string },
@@ -145,7 +145,10 @@ export const updateUserDataForJoinMatch = (
       curHealth: sql`CASE WHEN ${userData.curHealth} < 0 THEN 1 ELSE ${userData.curHealth} END`,
     })
     .where(
-      inArray(userData.userId, [matchData.userId1 ?? "", matchData.userId2 ?? ""]),
+      and(
+        inArray(userData.userId, [matchData.userId1 ?? "", matchData.userId2 ?? ""]),
+        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+      ),
     );
 
 /** Build deletion of all matches in a tournament. */
