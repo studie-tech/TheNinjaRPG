@@ -65,10 +65,7 @@ import {
   updateVillageForUpgradeShrine,
   updateVillageForUpgradeShrine2,
 } from "@/queries/shrine";
-import {
-  findQueueUserCache,
-  findVillageBoostUserCache,
-} from "@/queries/socialUserCache";
+import { findVillageBoostUserCache } from "@/queries/socialUserCache";
 import {
   fetchAlliances,
   findVillageById,
@@ -1008,9 +1005,9 @@ export const shrineRouter = createTRPCRouter({
           await wakeQueuedUser(ctx.drizzle, user.userId);
           return {
             ...errorResponse("Shrine battle expired"),
-            userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId).catch(
-              () => undefined,
-            ),
+            userPatch: requiresUserRefresh
+              ? undefined
+              : await getShrineLobbyUserPatch(ctx.drizzle, ctx.userId, user.villageId),
           };
         }
         return errorResponse("Not in this shrine battle queue");
