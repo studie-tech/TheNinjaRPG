@@ -4,18 +4,15 @@ import { AlertCircle } from "lucide-react";
 import dynamic from "next/dynamic";
 import type React from "react";
 import { useEffect, useState } from "react";
-import { api } from "@/app/_trpc/client";
-import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { GameSettingsPanel } from "@/layout/GameSettings";
+import { GameSettingsPanel, SETTINGS_HREF } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { hasTutorialReminder } from "@/layout/TutorialSettings";
 import { cn } from "@/libs/shadui";
-import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
-import { type TicketType, TicketTypes } from "@/validators/misc";
 
 /**
  * ChatBox brings the AI SDK (`ai`, `@ai-sdk/react` and its swr dependency), and this button sits
@@ -35,44 +32,21 @@ interface LowerRightHelpProps {
 
 const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
   const { data: userData, updateUser } = useUserData();
-  const [showActive, setShowActive] = useLocalStorage<TicketType>(
+  const [showActive, setShowActive] = useLocalStorage<HelpTab>(
     "ticketType2",
     "ai_support",
   );
   const [isOpen, setIsOpen] = useState(false);
 
-  // Mutation to toggle tutorial
-  const { mutate: toggleTutorial, isPending: isTogglingTutorial } =
-    api.profile.updatePreferences.useMutation({
-      onSuccess: async (result, input) => {
-        if (!result.success) {
-          showMutationToast(result);
-          return;
-        }
-        await updateUser(input);
-        setIsOpen(false);
-      },
-    });
+  // Tutorial is off while starter or tier quests are still open
+  const showTutorialNotification = hasTutorialReminder(userData);
 
-  // Check if user has incomplete starter or tier quests with tutorial disabled
-  const hasIncompleteStarterOrTierQuests =
-    userData?.userQuests.some(
-      (uq) => ["starter", "tier"].includes(uq.quest.questType) && uq.completed === 0,
-    ) ?? false;
-
-  // Show notification when tutorial is off but there are incomplete quests
-  const showTutorialNotification =
-    userData?.tutorialOn === false && hasIncompleteStarterOrTierQuests;
-
-  const safeTicketType = getValidTicketType(showActive);
-  const setShowActiveSafe = (value: string) => setShowActive(getValidTicketType(value));
+  const safeTab = getValidHelpTab(showActive);
+  const setShowActiveSafe = (value: string) => setShowActive(getValidHelpTab(value));
 
   useEffect(() => {
-    if (showActive !== safeTicketType) setShowActive(safeTicketType);
-  }, [showActive, safeTicketType, setShowActive]);
-
-  // Ensure defaultValue is always a valid string
-  const safeDefaultValue = safeTicketType;
+    if (showActive !== safeTab) setShowActive(safeTab);
+  }, [showActive, safeTab, setShowActive]);
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -107,22 +81,28 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
           </div>
         ) : (
           <Tabs
-            defaultValue={safeDefaultValue}
+            defaultValue={safeTab}
             className="flex min-h-0 flex-col gap-3"
             onValueChange={setShowActiveSafe}
           >
-            <TabsList className="grid w-full shrink-0 grid-cols-4 text-center">
+            {showTutorialNotification && (
+              <Link
+                href={TUTORIAL_SETTINGS_HREF}
+                onClick={() => setIsOpen(false)}
+                className="flex shrink-0 items-start gap-2 rounded-lg border border-orange-500 bg-orange-500/10 p-3 text-sm"
+              >
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+                <span>
+                  You have active quests and the tutorial is off.{" "}
+                  <span className="font-semibold text-orange-500 underline">
+                    Turn it on in Settings
+                  </span>
+                </span>
+              </Link>
+            )}
+            <TabsList className="grid w-full shrink-0 grid-cols-2 text-center">
               <TabsTrigger value="ai_support">Ask AI</TabsTrigger>
               <TabsTrigger value="human_support">Human</TabsTrigger>
-              <TabsTrigger value="audio_settings">Settings</TabsTrigger>
-              <TabsTrigger value="tutorial_settings" className="relative">
-                Tutorial
-                {showTutorialNotification && (
-                  <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs">
-                    !
-                  </span>
-                )}
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent
@@ -187,70 +167,6 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
                 />
               </div>
             </TabsContent>
-
-            <TabsContent
-              value="audio_settings"
-              className="mt-0 min-h-0 w-full overflow-y-auto"
-            >
-              <p className="mb-2 font-bold text-lg">Game Settings</p>
-              <div className="max-h-[400px] overflow-y-auto">
-                <GameSettingsPanel
-                  userData={userData}
-                  updateUser={updateUser}
-                  onNavigate={() => setIsOpen(false)}
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent
-              value="tutorial_settings"
-              className="mt-0 min-h-0 w-full overflow-y-auto"
-            >
-              <p className="mb-2 font-bold text-lg">Tutorial Settings</p>
-              <div className="space-y-4">
-                <p className="text-sm">
-                  The tutorial helps new players learn the game mechanics. You can
-                  enable or disable it at any time.
-                </p>
-                {showTutorialNotification && (
-                  <div className="flex items-start gap-3 rounded-lg border border-orange-500 bg-orange-500/10 p-4">
-                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-orange-500" />
-                    <div className="space-y-1">
-                      <p className="font-semibold text-orange-500">
-                        You have active quests!
-                      </p>
-                      <p className="text-muted-foreground text-sm">
-                        Enable the tutorial to get guidance on your current starter or
-                        tier quests. The tutorial assistant will help you complete them.
-                      </p>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="font-semibold">Tutorial Mode</p>
-                    <p className="text-muted-foreground text-sm">
-                      {userData?.tutorialOn
-                        ? "Currently enabled"
-                        : "Currently disabled"}
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      toggleTutorial({ tutorialOn: !userData?.tutorialOn });
-                    }}
-                    disabled={isTogglingTutorial}
-                    variant={userData?.tutorialOn ? "destructive" : "default"}
-                  >
-                    {isTogglingTutorial
-                      ? "Updating..."
-                      : userData?.tutorialOn
-                        ? "Disable Tutorial"
-                        : "Enable Tutorial"}
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
           </Tabs>
         )}
       </PopoverContent>
@@ -260,8 +176,11 @@ const LowerRightHelpBtn: React.FC<LowerRightHelpProps> = (props) => {
 
 export default LowerRightHelpBtn;
 
-/** Normalize persisted preferences and values received from the tab control. */
-const getValidTicketType = (value: unknown): TicketType =>
-  typeof value === "string" && TicketTypes.includes(value as TicketType)
-    ? (value as TicketType)
-    : "ai_support";
+const HELP_TABS = ["ai_support", "human_support"] as const;
+type HelpTab = (typeof HELP_TABS)[number];
+
+const TUTORIAL_SETTINGS_HREF = `${SETTINGS_HREF}&settings=help&setting=tutorial`;
+
+/** Normalize persisted tabs, including the Settings and Tutorial tabs that moved to the settings page. */
+const getValidHelpTab = (value: unknown): HelpTab =>
+  HELP_TABS.find((tab) => tab === value) ?? "ai_support";

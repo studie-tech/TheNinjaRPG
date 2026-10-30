@@ -45,8 +45,15 @@ import type { UserWithRelations } from "@/routers/profile";
 import { playPreloadedAudio, preloadAudioBuffers } from "@/utils/audio";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
+/** The settings page, which holds every game, profile and account setting. */
+export const SETTINGS_HREF = "/profile?tab=edit";
+
+/** Which part of the game settings to show: sound, layout and display, or both. */
+export type GameSettingsSection = "all" | "audio" | "display";
+
 interface GameSettingsProps {
   onNavigate?: () => void;
+  section?: GameSettingsSection;
   userData?: UserWithRelations | null;
   updateUser?: (data: Partial<UserWithRelations>) => Promise<void>;
   trigger?: "audio" | "settings";
@@ -488,6 +495,7 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
   userData,
   updateUser,
   variant = "panel",
+  section = "all",
   onNavigate,
 }) => {
   const {
@@ -583,189 +591,205 @@ const GameSettingsContent: React.FC<GameSettingsContentProps> = ({
   const sectionClass = isPanel ? "space-y-4" : "space-y-3";
   const textClass = isPanel ? "text-sm" : "text-xs text-muted-foreground";
   const headerClass = "text-lg font-bold";
+  const showAudio = section !== "display";
+  const showDisplay = section !== "audio";
 
   return (
     <div className={sectionClass}>
-      <div>
-        <p className={headerClass}>Music</p>
-        <div className="flex items-center justify-between">
+      {showAudio && (
+        <>
           <div>
-            <p className={textClass}>Background soundtrack</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {audioEnabled ? "Playing" : "Paused"}
-              </p>
-            )}
+            <p className={headerClass}>Music</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={textClass}>Background soundtrack</p>
+                {isPanel && (
+                  <p className="text-muted-foreground text-xs">
+                    {audioEnabled ? "Playing" : "Paused"}
+                  </p>
+                )}
+              </div>
+              <Switch
+                checked={!!audioEnabled}
+                onCheckedChange={handleMusicToggle}
+                aria-label="Toggle music"
+              />
+            </div>
           </div>
-          <Switch
-            checked={!!audioEnabled}
-            onCheckedChange={handleMusicToggle}
-            aria-label="Toggle music"
-          />
-        </div>
-      </div>
 
-      <div>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <p className={textClass}>Nindo Audio</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                Embedded iframe audio control
-              </p>
-            )}
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <p className={textClass}>Nindo Audio</p>
+                {isPanel && (
+                  <p className="text-muted-foreground text-xs">
+                    Embedded iframe audio control
+                  </p>
+                )}
+              </div>
+              <Switch
+                checked={!isIframesMuted}
+                onCheckedChange={(checked) => setIframesMuted(!checked)}
+                aria-label="Toggle embedded iframe audio"
+              />
+            </div>
           </div>
-          <Switch
-            checked={!isIframesMuted}
-            onCheckedChange={(checked) => setIframesMuted(!checked)}
-            aria-label="Toggle embedded iframe audio"
-          />
-        </div>
-      </div>
 
-      <div>
-        <p className={headerClass}>Sound effects</p>
-        <div className="flex items-center justify-between">
           <div>
-            <p className={textClass}>Combat SFX</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {sfxOn ? "Enabled" : "Disabled"}
-              </p>
-            )}
+            <p className={headerClass}>Sound effects</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={textClass}>Combat SFX</p>
+                {isPanel && (
+                  <p className="text-muted-foreground text-xs">
+                    {sfxOn ? "Enabled" : "Disabled"}
+                  </p>
+                )}
+              </div>
+              <Switch
+                checked={!!sfxOn}
+                onCheckedChange={setSfxEnabled}
+                aria-label="Toggle sound effects"
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <div>
+                <p className={textClass}>Button SFX</p>
+                {isPanel && (
+                  <p className="text-muted-foreground text-xs">
+                    {buttonSfxOn ? "Enabled" : "Disabled"}
+                  </p>
+                )}
+              </div>
+              <Switch
+                checked={!!buttonSfxOn}
+                onCheckedChange={handleButtonSfxToggle}
+                aria-label="Toggle button sound effects"
+              />
+            </div>
           </div>
-          <Switch
-            checked={!!sfxOn}
-            onCheckedChange={setSfxEnabled}
-            aria-label="Toggle sound effects"
-          />
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <div>
-            <p className={textClass}>Button SFX</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {buttonSfxOn ? "Enabled" : "Disabled"}
-              </p>
-            )}
-          </div>
-          <Switch
-            checked={!!buttonSfxOn}
-            onCheckedChange={handleButtonSfxToggle}
-            aria-label="Toggle button sound effects"
-          />
-        </div>
-      </div>
 
-      {(sfxOn || buttonSfxOn) && (
-        <div className="space-y-2">
-          <div>
-            <p className={textClass}>
-              {isPanel ? "SFX Volume" : `SFX Volume (${Math.round(sfxVolume * 100)}%)`}
-            </p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                Current volume: {Math.round(sfxVolume * 100)}%
-              </p>
-            )}
-          </div>
-          <UncontrolledSliderField
-            id="sfxVolume"
-            label=""
-            value={Math.round(sfxVolume * 100)}
-            min={0}
-            max={100}
-            setValue={handleSfxVolumeChange}
-          />
-        </div>
+          {(sfxOn || buttonSfxOn) && (
+            <div className="space-y-2">
+              <div>
+                <p className={textClass}>
+                  {isPanel
+                    ? "SFX Volume"
+                    : `SFX Volume (${Math.round(sfxVolume * 100)}%)`}
+                </p>
+                {isPanel && (
+                  <p className="text-muted-foreground text-xs">
+                    Current volume: {Math.round(sfxVolume * 100)}%
+                  </p>
+                )}
+              </div>
+              <UncontrolledSliderField
+                id="sfxVolume"
+                label=""
+                value={Math.round(sfxVolume * 100)}
+                min={0}
+                max={100}
+                setValue={handleSfxVolumeChange}
+              />
+            </div>
+          )}
+        </>
       )}
 
-      <div>
-        <p className={headerClass}>Display</p>
-        <div className="mb-4 space-y-2">
-          <div className="flex items-start gap-2">
-            <LayoutTemplate className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div>
-              <p className={textClass}>Game Layout</p>
-            </div>
-          </div>
-          <GameLayoutPicker layout={activeLayout} onLayoutChange={handleLayoutChange} />
-          <Link
-            href="/layouts"
-            className="inline-flex min-h-11 items-center text-primary text-sm underline"
-          >
-            Explore game layouts
-          </Link>
-        </div>
-        {isClassicLayout && (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={textClass}>Lighter Layout</p>
-              {isPanel && (
-                <p className="text-muted-foreground text-xs">
-                  {lightLayout ? "Enabled" : "Disabled"}
-                </p>
-              )}
-            </div>
-            <Switch
-              checked={!!lightLayout}
-              onCheckedChange={setLightLayout}
-              aria-label="Toggle lighter layout"
-            />
-          </div>
-        )}
-        <div
-          className={`flex items-center justify-between ${isClassicLayout ? "mt-3" : ""}`}
-        >
+      {showDisplay && (
+        <>
           <div>
-            <p className={textClass}>Day/night map overlays</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {showDayNightMapOverlays ? "Enabled" : "Disabled"}
-              </p>
+            {/* The settings page titles this section itself. */}
+            {section === "all" && <p className={headerClass}>Display</p>}
+            <div className="mb-4 space-y-2">
+              <div className="flex items-start gap-2">
+                <LayoutTemplate className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className={textClass}>Game Layout</p>
+                </div>
+              </div>
+              <GameLayoutPicker
+                layout={activeLayout}
+                onLayoutChange={handleLayoutChange}
+              />
+              <Link
+                href="/layouts"
+                className="inline-flex min-h-11 items-center text-primary text-sm underline"
+              >
+                Explore game layouts
+              </Link>
+            </div>
+            {isClassicLayout && (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={textClass}>Lighter Layout</p>
+                  {isPanel && (
+                    <p className="text-muted-foreground text-xs">
+                      {lightLayout ? "Enabled" : "Disabled"}
+                    </p>
+                  )}
+                </div>
+                <Switch
+                  checked={!!lightLayout}
+                  onCheckedChange={setLightLayout}
+                  aria-label="Toggle lighter layout"
+                />
+              </div>
             )}
-          </div>
-          <Switch
-            checked={!!showDayNightMapOverlays}
-            onCheckedChange={setShowDayNightMapOverlays}
-            aria-label="Toggle day/night map overlays"
-          />
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <div>
-            <p className={textClass}>Swap sidebars</p>
-            {isPanel && (
-              <p className="text-muted-foreground text-xs">
-                {swapSidebars
-                  ? "Player and world panels on opposite sides"
-                  : "Layout default"}
-              </p>
-            )}
-          </div>
-          <Switch
-            checked={!!swapSidebars}
-            onCheckedChange={setSwapSidebars}
-            aria-label="Swap sidebars"
-          />
-        </div>
-        {lightLayoutChanged && (
-          <div className={isPanel ? "mt-3" : "mt-2"}>
-            <Button
-              onClick={handleRefreshPage}
-              variant="default"
-              size="sm"
-              className="w-full"
+            <div
+              className={`flex items-center justify-between ${isClassicLayout ? "mt-3" : ""}`}
             >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              {isPanel ? "Refresh to Apply Changes" : "Refresh to Apply"}
-            </Button>
+              <div>
+                <p className={textClass}>Day/night map overlays</p>
+                {isPanel && (
+                  <p className="text-muted-foreground text-xs">
+                    {showDayNightMapOverlays ? "Enabled" : "Disabled"}
+                  </p>
+                )}
+              </div>
+              <Switch
+                checked={!!showDayNightMapOverlays}
+                onCheckedChange={setShowDayNightMapOverlays}
+                aria-label="Toggle day/night map overlays"
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <div>
+                <p className={textClass}>Swap sidebars</p>
+                {isPanel && (
+                  <p className="text-muted-foreground text-xs">
+                    {swapSidebars
+                      ? "Player and world panels on opposite sides"
+                      : "Layout default"}
+                  </p>
+                )}
+              </div>
+              <Switch
+                checked={!!swapSidebars}
+                onCheckedChange={setSwapSidebars}
+                aria-label="Swap sidebars"
+              />
+            </div>
+            {lightLayoutChanged && (
+              <div className={isPanel ? "mt-3" : "mt-2"}>
+                <Button
+                  onClick={handleRefreshPage}
+                  variant="default"
+                  size="sm"
+                  className="w-full"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  {isPanel ? "Refresh to Apply Changes" : "Refresh to Apply"}
+                </Button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <NativeSettingsEntry onNavigate={onNavigate} />
+          <NativeSettingsEntry onNavigate={onNavigate} />
+        </>
+      )}
 
-      {requiresInteraction && audioEnabled && (
+      {showAudio && requiresInteraction && audioEnabled && (
         <p
           className={
             isPanel
@@ -787,6 +811,7 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
   onNavigate,
   userData,
   updateUser,
+  section,
 }) => {
   return (
     <div className="p-4">
@@ -794,6 +819,7 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
         userData={userData}
         updateUser={updateUser}
         variant="panel"
+        section={section}
         onNavigate={onNavigate}
       />
     </div>
@@ -801,13 +827,15 @@ export const GameSettingsPanel: React.FC<GameSettingsProps> = ({
 };
 
 /**
- * Audio settings popover button (for use in navbar/header)
+ * Settings popover button (for use in navbar/header). With `section="audio"` it is a
+ * quick sound switch that links to the full settings page.
  */
 export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
   userData,
   updateUser,
   trigger = "audio",
   triggerClassName,
+  section,
 }) => {
   const { audioEnabled } = useGameSettings(userData);
   const isSettingsTrigger = trigger === "settings";
@@ -849,8 +877,19 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           userData={userData}
           updateUser={updateUser}
           variant="popover"
+          section={section}
           onNavigate={() => setOpen(false)}
         />
+        {section === "audio" && (
+          <Link
+            href={SETTINGS_HREF}
+            onClick={() => setOpen(false)}
+            className="text-primary mt-3 flex min-h-11 items-center gap-2 border-t pt-3 text-sm font-medium hover:underline"
+          >
+            <Settings className="h-4 w-4" aria-hidden="true" />
+            All settings
+          </Link>
+        )}
       </PopoverContent>
     </Popover>
   );
