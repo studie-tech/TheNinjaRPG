@@ -24,7 +24,7 @@ const flows = [
 const setup = (file: string, procedure: string) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const profile = {
-    userData: { userId: "actor", money: 100, reputationPoints: 30, bloodlineId: null, bloodline: null, villageId: "home", village: { id: "home", type: "HIDEOUT" }, items: [{ id: "gear" }], loadout: { jutsuIds: ["jutsu"] }, userSkills: [{ id: "skill" }], skillPoints: 0, maxEnergy: 200 } as unknown as NonNullable<UserWithRelations>,
+    userData: { userId: "actor", status: "AWAKE", pveFights: 7, curHealth: 321, curChakra: 222, curStamina: 111, curEnergy: 37, money: 100, reputationPoints: 30, bloodlineId: null, bloodline: null, villageId: "home", village: { id: "home", type: "HIDEOUT" }, items: [{ id: "gear" }], loadout: { jutsuIds: ["jutsu"] }, userSkills: [{ id: "skill" }], skillPoints: 0, maxEnergy: 200 } as unknown as NonNullable<UserWithRelations>,
     achievementProgress: [{ questId: "preserved" }],
   };
   client.setQueryData(key, profile);
@@ -40,7 +40,12 @@ const setup = (file: string, procedure: string) => {
     skillTree: { getUserSkills: leaf },
     quests: { allianceBuilding: leaf },
     occupation: { getCraftingQueue: leaf },
-    raids: { getRaidDetails: leaf },
+    raids: { getRaidDetails: leaf, getUserRaidQueue: leaf },
+    shrine: { getShrineBattles: leaf },
+    clan: { getClanBattles: leaf },
+    hunting: { getBoard: leaf, getSession: leaf },
+    combat: { getBattle: leaf },
+    travel: { getSectorData: leaf },
     profile: { getDashboard: leaf },
     territoryWar: { invalidate },
   };
@@ -58,8 +63,8 @@ const setup = (file: string, procedure: string) => {
   const transpiler = new (require("bun").Transpiler)({ loader: "tsx" }) as { transformSync(source: string): string };
   const factory = transpiler.transformSync(`function callbackOptions() { ${shared} return (${callbacks}); }`);
   // Execute the production callbacks with the real cache merger, matching userItemsRefresh.test.ts.
-  const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", "showRewardToast", "recoverUser", "state", "setMessage", "setAbandonId", "form", "pushToCombat", "router", `${factory}\nreturn callbackOptions();`)(
-    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: invalidate }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), {},
+  const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", "showRewardToast", "recoverUser", "state", "setMessage", "setAbandonId", "form", "pushToCombat", "router", "board", "onStarted", "setNpcDialog", "openRewardChoice", `${factory}\nreturn callbackOptions();`)(
+    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: invalidate }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), { push: vi.fn() }, { refetch: invalidate }, undefined, vi.fn(), vi.fn(),
   ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   return {
     client, getUser, invalidate, updateUser, options, profile,
@@ -129,4 +134,63 @@ describe.each(flows.filter(({ procedure }) => ["quests.startQuest", "bloodline.s
       expect(test.value()?.userData).toMatchObject({ cookingExperience: 23, cookingJobs: [] });
     } finally { test.close(); }
   });
+});
+
+
+const admissionFlows = [
+  { file: "layout/HuntingBoard.tsx", procedure: "hunting.start" },
+  { file: "app/[shell]/dungeon/page.tsx", procedure: "coop.dungeon.act" },
+  { file: "layout/ShrineBattleLobby.tsx", procedure: "shrine.initiateShrineBattle" },
+  { file: "layout/Objective.tsx", procedure: "quests.retryBattle" },
+  { file: "layout/Sector.tsx", procedure: "overworldAi.interactWithOverworldAi" },
+  { file: "layout/RaidBrowser.tsx", procedure: "raids.startRaidBattle" },
+  { file: "layout/Clan.tsx", procedure: "clan.initiateClanBattle" },
+  { file: "app/[shell]/territory-war/page.tsx", procedure: "territoryWar.startBattle" },
+];
+
+describe.each(admissionFlows)("$procedure admission deltas", ({ file, procedure }) => {
+  it("applies the actor's fight increment and raw pools together without a profile read", async () => {
+    const test = setup(file, procedure);
+    try {
+      const userPatch = { status: "BATTLE", battleId: "admission" };
+      await test.options.onSuccess({ success: true, battleId: "admission", userPatch, userDelta: { pveFights: 1 } }, {}, test.options.onMutate());
+      await test.updateUser.mock.results[0]?.value;
+      expect(test.value()?.userData).toMatchObject({ ...userPatch, pveFights: 8, curHealth: 321, curChakra: 222, curStamina: 111, curEnergy: 37 });
+      expect(test.getUser).not.toHaveBeenCalled();
+      expect(test.updateUser).toHaveBeenCalledTimes(1);
+    } finally { test.close(); }
+  });
+
+  it("reconciles an admission that withholds both patch and delta", async () => {
+    const test = setup(file, procedure);
+    const settled = { ...test.profile, userData: { ...test.profile.userData, status: "BATTLE" as const, battleId: "admission", pveFights: 8 } };
+    test.getUser.mockResolvedValue(settled);
+    try {
+      await test.options.onSuccess({ success: true, battleId: "admission", userPatch: undefined, userDelta: undefined }, {}, test.options.onMutate());
+      await test.updateUser.mock.results[0]?.value;
+      expect(test.value()?.userData).toMatchObject({ status: "BATTLE", pveFights: 8 });
+      expect(test.getUser).toHaveBeenCalledTimes(1);
+      expect(test.updateUser).toHaveBeenCalledTimes(1);
+    } finally { test.close(); }
+  });
+});
+
+it("keeps a known patch-only dungeon party change local when no delta is returned", async () => {
+  const test = setup("app/[shell]/dungeon/page.tsx", "coop.dungeon.act");
+  try {
+    await test.options.onSuccess({ success: true, userPatch: {} }, {}, test.options.onMutate());
+    await test.updateUser.mock.results[0]?.value;
+    expect(test.getUser).not.toHaveBeenCalled();
+    expect(test.value()?.userData).toEqual(test.profile.userData);
+  } finally { test.close(); }
+});
+
+it("keeps a known no-battle retry projection local when no delta is returned", async () => {
+  const test = setup("layout/Objective.tsx", "quests.retryBattle");
+  try {
+    await test.options.onSuccess({ success: true, userPatch: {} }, {}, test.options.onMutate());
+    await test.updateUser.mock.results[0]?.value;
+    expect(test.getUser).not.toHaveBeenCalled();
+    expect(test.value()?.userData).toEqual(test.profile.userData);
+  } finally { test.close(); }
 });

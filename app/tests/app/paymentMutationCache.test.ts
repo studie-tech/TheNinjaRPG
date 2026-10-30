@@ -8,9 +8,6 @@ import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOpti
 const key = [["profile", "getUser"], { type: "query" }];
 const flows = [
   { file: "app/[shell]/points/StoreCheckout.tsx", procedure: "paypal.captureStoreOrder" },
-  { file: "layout/StripePayments.tsx", procedure: "stripe.resolveSession" },
-  { file: "app/[shell]/points/page.tsx", procedure: "paypal.resolveSubscription" },
-  { file: "app/[shell]/points/page.tsx", procedure: "paypal.resolveTransaction" },
 ];
 
 /** Run production purchase callbacks against the shared revision-aware cache updater. */
@@ -26,6 +23,7 @@ const setup = (file: string, procedure: string, progress: AchievementProgress[])
   const unsubscribe = observer.subscribe(() => {});
   const leaf = { invalidate: vi.fn(async () => undefined) };
   const utils = {
+    profile: { getUser: { invalidate: () => client.invalidateQueries({ queryKey: key }) } },
     paypal: { getRecentRepsCount: leaf, getPaypalTransactions: leaf, getStoreBundles: leaf },
     stripe: { getPayments: leaf, getPendingCheckouts: leaf, getSubscriptions: leaf },
     item: { getUserItems: leaf, getUserItemsWithVariants: leaf },
@@ -95,4 +93,36 @@ describe.each(flows)("$procedure purchase confirmation", ({ file, procedure }) =
       expect(test.getUser).not.toHaveBeenCalled();
     } finally { test.close(); }
   });
+});
+
+it("applies a newly delivered scalar purchase once without a profile read", async () => {
+  const test = setup("app/[shell]/points/StoreCheckout.tsx", "paypal.captureStoreOrder", []);
+  try {
+    await test.options.onSuccess({ success: true, message: "Delivered", userPatch: {}, userDelta: { money: 50, reputationPoints: 73, reputationPointsTotal: 73 } }, undefined, test.options.onMutate());
+    expect(test.value()?.userData).toMatchObject({ money: 150, reputationPoints: 73, reputationPointsTotal: 73 });
+    expect(test.getUser).not.toHaveBeenCalled();
+  } finally { test.close(); }
+});
+
+describe.each([
+  { file: "layout/StripePayments.tsx", procedure: "stripe.resolveSession" },
+  { file: "app/[shell]/points/page.tsx", procedure: "paypal.resolveSubscription" },
+  { file: "app/[shell]/points/page.tsx", procedure: "paypal.resolveTransaction" },
+])("$procedure receipt recovery", ({ file, procedure }) => {
+  it("reconciles provider outcomes with one canonical profile read", async () => {
+    const test = setup(file, procedure, []);
+    try {
+      await test.options.onSuccess({ success: true, message: "Delivered" }, undefined, undefined);
+      expect(test.getUser).toHaveBeenCalledTimes(1);
+      expect(test.updateUser).not.toHaveBeenCalled();
+    } finally { test.close(); }
+  });
+});
+
+it("reconciles partial transaction delivery after an unsuccessful lookup", async () => {
+  const test = setup("app/[shell]/points/page.tsx", "paypal.resolveTransaction", []);
+  try {
+    await test.options.onSuccess({ success: false, message: "One receipt failed after another delivered" }, undefined, undefined);
+    expect(test.getUser).toHaveBeenCalledTimes(1);
+  } finally { test.close(); }
 });

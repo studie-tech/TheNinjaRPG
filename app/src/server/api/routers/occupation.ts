@@ -38,7 +38,7 @@ import {
 import { fetchItemWithCraftingRequirements, insertUserItems } from "@/queries/item";
 import {
   deleteUserItemImbuementForRemoveImbuement,
-  findCraftingCacheState,
+  findCraftingQueueState,
   findUserItemImbuementForRemoveImbuement,
   insertUserCookingJobForCraftItem,
   insertUserItemForRemoveImbuement,
@@ -68,7 +68,6 @@ import {
   updateUserItemQuantityAtomically,
 } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
-import { getPublicQuestTrackerPatch } from "@/server/utils/questUserCache";
 import {
   appendQueueEntries,
   cancelQueuedCraft,
@@ -78,6 +77,7 @@ import {
   lastQueuePosition,
   returnCraftMaterials,
   settleCraftingQueue,
+  toQueuedCraft,
 } from "@/server/utils/userQueue";
 import { getQueueTotalCapacity } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
@@ -627,46 +627,29 @@ export const occupationRouter = createTRPCRouter({
     .input(cancelQueuedJobInputSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-      const cancelled = await cancelQueuedCraft(ctx.drizzle, ctx.userId, input.queueId);
+      const snapshot = await findCraftingQueueState(ctx.drizzle, ctx.userId);
+      if (!snapshot) return errorResponse("User not found");
+      const cancelled = await cancelQueuedCraft(
+        ctx.drizzle,
+        ctx.userId,
+        input.queueId,
+        snapshot.queue.filter((row) => row.kind === "CRAFT").map(toQueuedCraft),
+      );
       if (!cancelled) return errorResponse("That queued craft already started");
-      const saved = await findCraftingCacheState(ctx.drizzle, ctx.userId).catch(
-        () => undefined,
-      );
-      // Queue starts persist event counters without evaluating total XP objectives or
-      // virtual achievements; changed XP requires the canonical progression flow.
-      const changedIds = new Set(
-        (saved?.questData ?? [])
-          .filter(
-            (entry) =>
-              JSON.stringify(entry) !==
-              JSON.stringify(user.questData?.find((old) => old.id === entry.id)),
-          )
-          .map((entry) => entry.id),
-      );
-      const canProject =
-        saved &&
-        saved.craftingExperience === user.craftingExperience &&
-        !saved.userQuests.some(
-          (entry) =>
-            changedIds.has(entry.questId) &&
-            (entry.quest.teamEnabled ||
-              ["tier", "daily", "achievement"].includes(entry.quest.questType)),
-        );
-      const publicTrackers = canProject
-        ? await getPublicQuestTrackerPatch(ctx.drizzle, saved)
-        : undefined;
+      // With no remaining craft, cancellation changes only this receipt and inventory.
+      // Starting/rescheduling another craft can settle progression and needs recovery.
       return {
         success: true,
         message: "Queued craft cancelled, materials returned",
         userPatch:
-          saved && publicTrackers
+          cancelled.remaining === 0 &&
+          !cancelled.entry.materials?.some((material) =>
+            snapshot.items.some((entry) => entry.id === material.userItemId),
+          )
             ? {
-                updatedAt: saved.updatedAt,
-                craftingExperience: saved.craftingExperience,
-                ...publicTrackers,
-                queue: saved.queue,
-                cookingJobs: saved.cookingJobs,
+                queue: snapshot.queue
+                  .filter((row) => row.id !== cancelled.entry.id)
+                  .map(({ item: _item, ...row }) => row),
               }
             : undefined,
       };

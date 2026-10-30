@@ -5,13 +5,12 @@ import { eq } from "drizzle-orm";
 import { STRONGHOLD_REESTABLISH_COST } from "@/drizzle/constants";
 import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";
-import * as socialQueries from "@/queries/socialUserCache";
 import { clanRouter } from "@/server/api/routers/clan";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { syncStrongholdMembership } from "@/server/utils/faction";
 import { insertUsers } from "../../../../setup/factories";
-import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../../../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../../setup/testDatabase";
 
 const legacyDowngradeBackfill = readFileSync(resolve(process.cwd(), "drizzle/migrations/0076_brave_nico_minoru.sql"), "utf8").split(";").find((statement) => statement.includes("SET `wasDowngraded` = 1"));
 
@@ -26,20 +25,20 @@ describeWithDatabase("Stronghold membership and restoration", () => {
   beforeEach(async () => { await resetTables(actionLog, clan, userData, village); });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["unavailable", "missing"] as const)("keeps a paid restoration successful and omits both cache fields when confirmation is %s", async (failure) => {
+  it("returns the known restored village fields and bank debit without a confirmation SELECT", async () => {
     await seedFaction("HIDEOUT");
     const db = await getTestDatabase();
     const caller = await callerFor(clanRouter, "leader");
-    const confirmation = vi.spyOn(socialQueries, "findVillageUserCache");
-    if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
-    else confirmation.mockRejectedValueOnce(new Error("Stronghold confirmation unavailable"));
-    const result = await caller.upgradeHideoutToStronghold({ clanId: "faction" });
+    const measured = await recordQueries(() => caller.upgradeHideoutToStronghold({ clanId: "faction" }));
+    const result = measured.result;
     expect(result.success).toBe(true);
-    expect(result.userPatch).toBeUndefined();
-    expect(result.userDelta).toBeUndefined();
+    const savedVillage = await db.query.village.findFirst();
+    expect(result.userPatch?.village).toEqual({ id: "stronghold", type: "STRONGHOLD", belowMemberMinimumSince: null, lastMaintenancePaidAt: savedVillage?.lastMaintenancePaidAt });
+    expect(result.userDelta).toEqual({ clan: { id: "faction", bank: -STRONGHOLD_REESTABLISH_COST } });
+    const lastWrite = measured.statements.map((statement) => /^\s*update /i.test(statement)).lastIndexOf(true);
+    expect(measured.statements.slice(lastWrite + 1).filter((statement) => /^select /i.test(statement))).toEqual([]);
     expect((await caller.upgradeHideoutToStronghold({ clanId: "faction" })).success).toBe(false);
     expect(await db.query.clan.findFirst()).toMatchObject({ bank: STRONGHOLD_REESTABLISH_COST });
-    expect(await db.query.village.findFirst()).toMatchObject({ type: "STRONGHOLD" });
   });
 
   it("starts immediately, resets on recovery, and downgrades after 72 hours", async () => {

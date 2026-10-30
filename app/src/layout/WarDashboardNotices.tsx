@@ -20,7 +20,7 @@ export const WarDashboardNotices = () => {
     success: boolean;
     message: string;
   } | null>(null);
-  const { timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
+  const { timeDiff } = useRequiredUserData();
   const utils = api.useUtils();
   const claims = api.war.getWarPointClaims.useQuery(undefined, {
     refetchInterval: 60000,
@@ -31,12 +31,11 @@ export const WarDashboardNotices = () => {
   const convert = api.war.convertWarPoints.useMutation({
     onMutate: () => {
       setFeedback(null);
-      return prepareUserUpdate();
     },
-    onSuccess: async (result, _variables, revision) => {
+    onSuccess: async (result) => {
       setFeedback(result);
       void utils.war.getWarPointClaims.invalidate();
-      if (result.success) await updateUser(result.userPatch, { revision });
+      if (result.success) await utils.profile.getUser.invalidate();
     },
     onError: (error) => setFeedback({ success: false, message: error.message }),
   });

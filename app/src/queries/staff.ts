@@ -2036,19 +2036,3 @@ export const applyDevelopmentBackup = (
   client: Pick<PlanetScaleClient, "execute">,
   sqlText: string,
 ) => client.execute(sqlText);
-
-/** Confirm exactly the Pyramid histories closed by a particular recovery statement. */
-export const listClosedPyramidHistoriesForForceAwake = (
-  client: Pick<DrizzleClient, "query">,
-  userId: string,
-  endedAt: Date,
-) =>
-  client.query.questHistory.findMany({
-    columns: { id: true, questId: true, endAt: true },
-    where: and(
-      eq(questHistory.userId, userId),
-      eq(questHistory.questType, "battlepyramid"),
-      eq(questHistory.completed, 0),
-      eq(questHistory.endAt, endedAt),
-    ),
-  });

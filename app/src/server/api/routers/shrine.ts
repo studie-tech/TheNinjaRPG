@@ -72,7 +72,7 @@ import {
   findVillageBySector,
 } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
-import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
 import {
   createTRPCRouter,
   errorResponse,
@@ -83,7 +83,6 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 // Pusher instance
-import { getShrineLobbyUserPatch } from "@/server/utils/socialUserCache";
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
@@ -769,6 +768,7 @@ export const shrineRouter = createTRPCRouter({
 
       // Create new shrine battle queue with rollback on failure
       const shrineBattleId = nanoid();
+      const createdAt = new Date();
       const result = await queueAwakeUser(ctx.drizzle, user);
       if (result.rowsAffected === 0) return errorResponse("Was not awake?");
 
@@ -780,6 +780,7 @@ export const shrineRouter = createTRPCRouter({
           attackerSide,
           targetSector,
           input,
+          createdAt,
         );
 
         try {
@@ -814,7 +815,28 @@ export const shrineRouter = createTRPCRouter({
         success: true,
         userPatch: requiresUserRefresh
           ? undefined
-          : await getShrineLobbyUserPatch(ctx.drizzle, ctx.userId, user.villageId),
+          : {
+              status: "QUEUED",
+              shrineBattles: [
+                ...((user as NonNullable<UserWithRelations>).shrineBattles ?? []),
+                ...(attackerSide === user.villageId ||
+                targetSector.villageId === user.villageId
+                  ? [
+                      {
+                        id: shrineBattleId,
+                        createdAt,
+                        battleType: "SHRINE_BATTLE" as const,
+                        attackerEntityId: attackerSide,
+                        defenderEntityId: targetSector.villageId,
+                        sector: input.sectorNumber,
+                        battleId: null,
+                        winnerId: null,
+                        territoryWarId: null,
+                      },
+                    ]
+                  : []),
+              ],
+            },
         message: `Shrine attack party created! Waiting for more attackers (min ${SHRINE_BATTLE_MIN_ATTACKERS})`,
       };
     }),
@@ -1002,35 +1024,48 @@ export const shrineRouter = createTRPCRouter({
         if (battle && battle.createdAt <= shrineLobbyStaleBefore) {
           // Lobby is confirmed stale — reset status immediately so the user
           // isn't blocked until the cron tick clears it.
-          await wakeQueuedUser(ctx.drizzle, user.userId);
+          const wake = await wakeQueuedUser(ctx.drizzle, user.userId);
           return {
             ...errorResponse("Shrine battle expired"),
-            userPatch: requiresUserRefresh
-              ? undefined
-              : await getShrineLobbyUserPatch(ctx.drizzle, ctx.userId, user.villageId),
+            userPatch:
+              !requiresUserRefresh && wake.rowsAffected === 1
+                ? {
+                    status: "AWAKE",
+                    shrineBattles:
+                      (user as NonNullable<UserWithRelations>).shrineBattles ?? [],
+                  }
+                : undefined,
           };
         }
         return errorResponse("Not in this shrine battle queue");
       }
 
       // Only update user status if we successfully deleted the queue entry
-      await wakeQueuedUser(ctx.drizzle, user.userId);
+      const wake = await wakeQueuedUser(ctx.drizzle, user.userId);
 
       // If no one left in queue, delete the battle queue
       const counts = await selectMpvpBattleUserForLeaveShrineBattle(ctx.drizzle, input);
       const remaining = counts[0]?.remaining ?? 0;
 
-      if (remaining === 0) {
-        // Only delete if battleId is still null (battle hasn't started)
-        await deleteUnclaimedBattleQueue(ctx.drizzle, input.shrineBattleId);
-      }
+      const removed =
+        remaining === 0
+          ? await deleteUnclaimedBattleQueue(ctx.drizzle, input.shrineBattleId)
+          : undefined;
 
       return {
         success: true,
         message: "Left shrine battle queue",
-        userPatch: requiresUserRefresh
-          ? undefined
-          : await getShrineLobbyUserPatch(ctx.drizzle, ctx.userId, user.villageId),
+        userPatch:
+          !requiresUserRefresh &&
+          wake.rowsAffected === 1 &&
+          (remaining > 0 || removed?.rowsAffected === 1)
+            ? {
+                status: "AWAKE",
+                shrineBattles: (
+                  (user as NonNullable<UserWithRelations>).shrineBattles ?? []
+                ).filter((entry) => remaining > 0 || entry.id !== input.shrineBattleId),
+              }
+            : undefined,
       };
     }),
 
@@ -1184,6 +1219,7 @@ export const shrineRouter = createTRPCRouter({
       const result = await initiateBattle(
         {
           userIds: attackerIds,
+          cacheUserId: ctx.userId,
           targetIds: defenderIds,
           client: ctx.drizzle,
           biome: "default",
@@ -1215,17 +1251,23 @@ export const shrineRouter = createTRPCRouter({
           success: true,
           message: "Shrine battle initiated!",
           battleId: result.battleId,
+          userDelta:
+            !requiresUserRefresh && !requiresProgressionRefresh && result.userPatch
+              ? result.userDelta
+              : undefined,
           userPatch:
             requiresUserRefresh ||
             requiresProgressionRefresh ||
             result.requiresUserRefresh
               ? undefined
-              : await getShrineLobbyUserPatch(
-                  ctx.drizzle,
-                  ctx.userId,
-                  user.villageId,
-                  true,
-                ),
+              : result.userPatch
+                ? {
+                    ...result.userPatch,
+                    shrineBattles: (
+                      (user as NonNullable<UserWithRelations>).shrineBattles ?? []
+                    ).filter((entry) => entry.id !== input.shrineBattleId),
+                  }
+                : undefined,
         };
       }
 

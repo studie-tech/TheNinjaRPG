@@ -1175,7 +1175,7 @@ export const executeRowsForReconcileFederalStatuses = (
       SET ${userData.federalStatus} = ${federalStatus}
       WHERE ${and(inArray(userData.userId, ids), eligible)}`);
 
-/** Confirm balances and the quest eligibility inputs affected by asynchronous reputation grants. */
+/** Read balances and quest eligibility for purchase recovery and known grant projections. */
 export const findPurchaseUserSnapshot = (
   client: Pick<DrizzleClient, "query">,
   userId: string,

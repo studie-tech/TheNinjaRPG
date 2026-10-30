@@ -29,8 +29,6 @@ import {
   fetchEventNoticeState,
   fetchEventUser,
   findBattleForSyncEventTournament,
-  findEventActorCacheState,
-  findEventActorRewardReceipt,
   findTournamentMatchForSyncEventTournament,
   insertTournamentForSaveEvent,
   insertTournamentMatchForLaunchEventGame,
@@ -64,21 +62,6 @@ import {
 } from "@/validators/tournament";
 
 import { userDeltaResponseSchema } from "@/validators/userCache";
-
-/** Carry the actor's participation and actionable notices with event outcomes. */
-const eventActionResponse = userDeltaResponseSchema.extend({
-  eventNotices: z
-    .array(
-      z.object({
-        tournamentId: z.string(),
-        name: z.string(),
-        message: z.string(),
-        deadline: z.number(),
-      }),
-    )
-    .optional(),
-  isEventParticipant: z.boolean().optional(),
-});
 
 export const eventTournamentProcedures = {
   /** Return invitations and open ready checks that still need this player's response. */
@@ -184,12 +167,11 @@ export const eventTournamentProcedures = {
         originSocketId: z.string().max(128).optional(),
       }),
     )
-    .output(eventActionResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, target, beforeReceipt] = await Promise.all([
-        findEventActorCacheState(ctx.drizzle, ctx.userId),
+      const [user, target] = await Promise.all([
+        findUserRoleById(ctx.drizzle, ctx.userId),
         input.userId ? fetchEventUser(ctx.drizzle, input.userId) : undefined,
-        findEventActorRewardReceipt(ctx.drizzle, input.tournamentId, ctx.userId),
       ]);
       if (!canManageTournaments(user?.role ?? "USER"))
         return errorResponse("Tournament staff access required");
@@ -362,18 +344,7 @@ export const eventTournamentProcedures = {
             input.userId === ctx.userId ? input.originSocketId : undefined,
           );
       }
-      return result.success && user
-        ? {
-            ...result,
-            ...(await eventActionCacheUpdate(
-              ctx.drizzle,
-              ctx.userId,
-              input.tournamentId,
-              user,
-              beforeReceipt,
-            )),
-          }
-        : result;
+      return result;
     }),
   /** Manage registration, advisory readiness and match acceptance through the event version guard. */
   participateEvent: protectedProcedure
@@ -382,12 +353,9 @@ export const eventTournamentProcedures = {
         originSocketId: z.string().max(128).optional(),
       }),
     )
-    .output(eventActionResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const [user, beforeReceipt] = await Promise.all([
-        fetchEventUser(ctx.drizzle, ctx.userId),
-        findEventActorRewardReceipt(ctx.drizzle, input.tournamentId, ctx.userId),
-      ]);
+      const user = await fetchEventUser(ctx.drizzle, ctx.userId);
       if (!user || user.isAi || user.isBanned)
         return errorResponse("An active player account is required");
       await syncEventTournament(ctx.drizzle, input.tournamentId);
@@ -476,18 +444,7 @@ export const eventTournamentProcedures = {
         if (["JOIN", "WITHDRAW", "DECLINE"].includes(input.action))
           await notifyEventParticipant(ctx.userId, input.originSocketId);
       }
-      return result.success && user
-        ? {
-            ...result,
-            ...(await eventActionCacheUpdate(
-              ctx.drizzle,
-              ctx.userId,
-              input.tournamentId,
-              user,
-              beforeReceipt,
-            )),
-          }
-        : result;
+      return result;
     }),
 };
 
@@ -923,61 +880,4 @@ const notifyEventParticipant = async (userId: string, originSocketId?: string) =
       ...(originSocketId ? { originSocketId } : {}),
     }),
   ]);
-};
-
-/** Reconcile event navigation and confirmed launches; new reward receipts use canonical reward hydration. */
-const eventActionCacheUpdate = async (
-  client: DrizzleClient,
-  userId: string,
-  tournamentId: string,
-  before: NonNullable<Awaited<ReturnType<typeof findEventActorCacheState>>>,
-  beforeReceipt: Awaited<ReturnType<typeof findEventActorRewardReceipt>>,
-) => {
-  const confirmation = await Promise.all([
-    findEventActorCacheState(client, userId),
-    findEventActorRewardReceipt(client, tournamentId, userId),
-    fetchEventNoticeState(client, userId),
-  ]).catch(() => undefined);
-  if (!confirmation)
-    return {
-      userPatch: undefined,
-      eventNotices: undefined,
-      isEventParticipant: undefined,
-    };
-  const [actor, receipt, notices] = confirmation;
-  const startedBattle =
-    actor?.status === "BATTLE" &&
-    !!actor.battleId &&
-    actor.battleId !== before.battleId;
-  // A launch can settle queued work and Cooking beyond the pool-only patch.
-  const safeLaunch =
-    startedBattle &&
-    before.queue.length === 0 &&
-    before.cookingJobs.length === 0 &&
-    !before.currentlyTrainingMastery &&
-    !before.currentlyTrainingElement;
-  const canProject =
-    actor &&
-    (beforeReceipt || !receipt) &&
-    (actor.updatedAt.getTime() === before.updatedAt.getTime() || safeLaunch);
-  return {
-    userPatch: canProject
-      ? {
-          status: actor.status,
-          battleId: actor.battleId,
-          ...(startedBattle
-            ? {
-                updatedAt: actor.updatedAt,
-                curHealth: actor.curHealth,
-                curChakra: actor.curChakra,
-                curStamina: actor.curStamina,
-                curEnergy: actor.curEnergy,
-                regenAt: actor.regenAt,
-              }
-            : {}),
-        }
-      : undefined,
-    eventNotices: notices.notices,
-    isEventParticipant: notices.isEventParticipant,
-  };
 };

@@ -41,7 +41,6 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { getBattleUserPatch } from "@/server/utils/socialUserCache";
 import { canChangeContent } from "@/utils/permissions";
 import {
   acceptHuntingContractSchema,
@@ -452,6 +451,7 @@ export const huntingRouter = createTRPCRouter({
       const result = await initiateBattle(
         {
           client: ctx.drizzle,
+          cacheUserId: ctx.userId,
           userIds: [ctx.userId],
           targetIds: [contract.aiId],
           sector: user.sector,
@@ -475,16 +475,7 @@ export const huntingRouter = createTRPCRouter({
         "HUNTING",
         0,
       );
-      return result.success
-        ? {
-            ...result,
-            userPatch: await getBattleUserPatch(
-              ctx.drizzle,
-              ctx.userId,
-              result.requiresUserRefresh,
-            ),
-          }
-        : result;
+      return result;
     }),
 });
 

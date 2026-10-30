@@ -8,7 +8,6 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { stripePurchaseSchema } from "@/validators/stripe";
 
@@ -103,7 +102,6 @@ export const StripeCheckoutButton = ({
 
 /** Resolve redirect status with visible retry and refresh receipts even for held payments. */
 export const StripePaymentReturn = () => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -121,14 +119,7 @@ export const StripePaymentReturn = () => {
       setMessage("Could not close checkout yet. Please reload to try again."),
   });
   const resolve = api.stripe.resolveSession.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (result, _variables, revision) => {
-      if (result.success && result.announcements?.length)
-        showMutationToast({
-          success: true,
-          message: "OK",
-          announcements: result.announcements,
-        });
+    onSuccess: async (result) => {
       setMessage(result.message);
       // Held payments write receipts too; only successful delivery clears the retry URL.
       await Promise.all([
@@ -136,11 +127,7 @@ export const StripePaymentReturn = () => {
         utils.stripe.getPendingCheckouts.invalidate(),
         ...(result.success
           ? [
-              updateUser(result.userPatch, {
-                revision,
-                delta: result.userDelta,
-                achievementProgress: result.achievementProgress,
-              }),
+              utils.profile.getUser.invalidate(),
               utils.paypal.getRecentRepsCount.invalidate(),
               utils.stripe.getSubscriptions.invalidate(),
             ]

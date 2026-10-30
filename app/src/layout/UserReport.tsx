@@ -50,10 +50,8 @@ import {
 } from "@/utils/permissions";
 import { reportCommentColor, reportCommentExplain } from "@/utils/reports";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { withUserNotificationCount } from "@/utils/userNotificationCounts";
 import type { ReportCommentSchema } from "@/validators/reports";
 import { reportCommentSchema } from "@/validators/reports";
-import type { UserDeltaResponse } from "@/validators/userCache";
 
 interface UserReportProps {
   report: UserReport & {
@@ -85,12 +83,7 @@ interface UserReportProps {
 const DisplayUserReport: React.FC<UserReportProps> = (props) => {
   const report = props.report;
 
-  const {
-    data: userData,
-    timeDiff,
-    prepareUserUpdate,
-    updateUser,
-  } = useRequiredUserData();
+  const { data: userData, timeDiff } = useRequiredUserData();
 
   const { data: comments } = api.comments.getReportComments.useInfiniteQuery(
     { id: report.id, limit: 100 },
@@ -127,10 +120,8 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
   const utils = api.useUtils();
 
   const refreshAfterSuccess = async (
-    data: BaseServerResponse &
-      Partial<UserDeltaResponse> & { pendingReportCount?: number },
+    data: BaseServerResponse,
     refreshUser: boolean,
-    revision?: number,
   ) => {
     showMutationToast(data);
     if (data.success) {
@@ -138,62 +129,36 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
         utils.reports.getAll.invalidate(),
         utils.reports.get.invalidate(),
         utils.comments.getReportComments.invalidate(),
-        ...(refreshUser
-          ? [
-              updateUser(data.userPatch, {
-                revision,
-                delta: data.userDelta,
-                notifications: (current) =>
-                  data.pendingReportCount === undefined
-                    ? current
-                    : withUserNotificationCount(
-                        current,
-                        "reports",
-                        data.pendingReportCount,
-                      ),
-              }),
-            ]
-          : []),
+        ...(refreshUser ? [utils.profile.getUser.invalidate()] : []),
       ]);
       reset();
     }
   };
 
-  const onSuccess = (
-    data: UserDeltaResponse & { pendingReportCount?: number },
-    _variables: unknown,
-    revision: number | undefined,
-  ) => refreshAfterSuccess(data, true, revision);
+  const onSuccess = (data: BaseServerResponse) => refreshAfterSuccess(data, true);
 
   const banUser = api.reports.ban.useMutation({
-    onMutate: prepareUserUpdate,
     onSuccess,
   });
   const tradebanUser = api.reports.tradeBan.useMutation({
-    onMutate: prepareUserUpdate,
     onSuccess,
   });
   const clearReport = api.reports.clear.useMutation({
-    onMutate: prepareUserUpdate,
     onSuccess,
   });
   const createComment = api.comments.createReportComment.useMutation({
     onSuccess: (data) => refreshAfterSuccess(data, false),
   });
   const escalateReport = api.reports.escalate.useMutation({
-    onMutate: prepareUserUpdate,
     onSuccess,
   });
   const silenceUser = api.reports.silence.useMutation({
-    onMutate: prepareUserUpdate,
     onSuccess,
   });
   const timeoutUser = api.reports.timeout.useMutation({
-    onMutate: prepareUserUpdate,
     onSuccess,
   });
   const warnUser = api.reports.warn.useMutation({
-    onMutate: prepareUserUpdate,
     onSuccess,
   });
 

@@ -19,7 +19,7 @@ import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectiv
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
 import { failStatements } from "../../setup/statements";
-import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 import { countUserReads } from "../../setup/userReads";
 
 const userId = "purchase-progress-player";
@@ -219,10 +219,14 @@ describeWithDatabase("purchase reputation progression", () => {
     const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
     try {
       const caller = await callerFor(paypalRouter, userId);
-      const result = await caller.upgradeSubscription({ userId, plan: "GOLD" });
+      const trace = await recordQueries(() => caller.upgradeSubscription({ userId, plan: "GOLD" }));
+      const result = trace.result;
+      const write = trace.statements.findIndex((statement) => /^\s*UPDATE /i.test(statement));
+      expect(write).toBeGreaterThan(0);
+      expect(trace.statements.slice(write + 1).filter((statement) => /^\s*SELECT /i.test(statement))).toEqual([]);
       expect(result.success).toBe(true);
       expect(hydration).not.toHaveBeenCalled();
-      expect(result.userDelta).toEqual(questType === "none" ? {} : undefined);
+      expect(result.userDelta).toEqual(questType === "none" ? { reputationPoints: -upgradeCost, reputationPointsTotal: -upgradeCost } : undefined);
       await callbacks.onSuccess(result, undefined, revision);
       expect(read).toHaveBeenCalledTimes(questType === "none" ? 0 : 1);
       const cached = cache.getQueryData<Profile>(key);
@@ -239,7 +243,7 @@ describeWithDatabase("purchase reputation progression", () => {
     } finally { cache.clear(); }
   });
 
-  it.each((["paypal", "stripe"] as const).flatMap((source) => (["missing", "unavailable", "announcement", "recruit reward"] as const).map((failure) => ({ source, failure }))))("reconciles a committed $source upgrade for $failure", async ({ source, failure }) => {
+  it.each((["paypal", "stripe"] as const).flatMap((source) => (["catalogue", "bootstrap", "announcement", "recruit reward"] as const).map((failure) => ({ source, failure }))))("reconciles a committed $source upgrade for $failure", async ({ source, failure }) => {
     await seedUpgrade(source);
     const hasFeedback = failure === "announcement" || failure === "recruit reward";
     if (!hasFeedback) {
@@ -257,9 +261,8 @@ describeWithDatabase("purchase reputation progression", () => {
     observeProfile(cache, key, read);
     const callbacks = upgradeCallbacks(cache, key);
     const revision = callbacks.onMutate();
-    const confirmation = vi.spyOn(purchaseQueries, "findPurchaseUserSnapshot");
-    if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
-    else if (failure === "unavailable") confirmation.mockRejectedValueOnce(new Error("Upgrade confirmation unavailable"));
+    if (failure === "catalogue") vi.spyOn(profileQueries, "fetchAchievementCatalogue").mockRejectedValueOnce(new Error("Catalogue unavailable"));
+    else if (failure === "bootstrap") vi.spyOn(profileApi, "fetchQuestBootstrap").mockRejectedValueOnce(new Error("Bootstrap unavailable"));
     else {
       await db.insert(notification).values({ userId, content: "A new event has started." });
       await db.update(userData).set(failure === "announcement" ? { unreadNotifications: 1 } : { unreadRecruitRewards: 1 }).where(eq(userData.userId, userId));
@@ -284,13 +287,13 @@ describeWithDatabase("purchase reputation progression", () => {
     } finally { cache.clear(); }
   });
 
-  it.each(["paypal", "stripe"] as const)("propagates failed %s upgrade writes without confirming a purchase", async (source) => {
+  it.each(["paypal", "stripe"] as const)("propagates failed %s upgrade writes after loading eligibility", async (source) => {
     await seedUpgrade(source);
     const db = await getTestDatabase();
     const confirmation = vi.spyOn(purchaseQueries, "findPurchaseUserSnapshot");
     const caller = callerForDatabase(paypalRouter, userId, failStatements(db, userData));
     await expect(caller.upgradeSubscription({ userId, plan: "GOLD" })).rejects.toThrow("Statement failed on purpose");
-    expect(confirmation).not.toHaveBeenCalled();
+    expect(confirmation).toHaveBeenCalledTimes(1);
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ federalStatus: "NORMAL", reputationPoints: upgradeCost * 3, reputationPointsTotal: upgradeCost * 3 });
   });
 

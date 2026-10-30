@@ -232,20 +232,14 @@ export const VillageMission = ({
 
 export const VillageStructureMaintenance = ({ villageId }: { villageId: string }) => {
   const utils = api.useUtils();
-  const { updateUser, prepareUserUpdate } = useRequiredUserData();
   const [message, setMessage] = useState("");
   const { data, isPending, isError, refetch } = api.village.get.useQuery(
     { id: villageId },
     { enabled: !!villageId },
   );
   const pay = api.kage.payStructureMaintenance.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+    onSuccess: async (data) => {
+      if (data.success) await utils.profile.getUser.invalidate();
       const result = data;
       setMessage(result.message ?? "");
       showMutationToast(result);

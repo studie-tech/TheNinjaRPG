@@ -657,12 +657,10 @@ export const skillTreeRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Fetch user data to check permissions
-      const snapshot = await fetchUpdatedUser({
+      const { user } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
-
-      const { user } = snapshot;
       if (!user) return errorResponse("User not found");
 
       // Check if user has permission to unequip all users
@@ -720,23 +718,8 @@ export const skillTreeRouter = createTRPCRouter({
       // Log the action
       await insertActionLogForResetAllUsersSkillPoints2(ctx.drizzle, ctx, user);
 
-      const activeSkills = (
-        await fetchUserSkills(ctx.drizzle, ctx.userId).catch(() => undefined)
-      )?.filter((entry) => entry.activated);
-      const progression =
-        snapshot.requiresProgressionRefresh === false && activeSkills
-          ? getUserProgressionUpdate(
-              { ...user, userSkills: activeSkills },
-              snapshot.publishedAchievementIds,
-            )
-          : undefined;
+      // Batch deletion cannot bound concurrent inserts or the caller's final skill sources.
       return {
-        ...(progression
-          ? {
-              ...progression,
-              userPatch: { ...progression.userPatch, userSkills: activeSkills },
-            }
-          : {}),
         success: true,
         message: `Reset skill trees (${totalDeleted} entries cleared)`,
       };

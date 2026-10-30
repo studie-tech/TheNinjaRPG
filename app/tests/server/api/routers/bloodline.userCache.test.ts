@@ -4,14 +4,13 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { BLOODLINE_COST, PITY_BLOODLINE_ROLLS, ROLL_CHANCE } from "@/drizzle/constants";
 import { actionLog, bloodline, bloodlineRolls, gameSetting, quest, questHistory, userData, userVote } from "@/drizzle/schema";
-import * as bloodlineQueries from "@/queries/bloodline";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { profileRouter } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { BloodlineCollection, QuestTracker, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../setup/factories";
-import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 import { countUserReads } from "../../../setup/userReads";
 
 const userId = "lineage-collector";
@@ -125,16 +124,17 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
     } finally { unsubscribe(); client.clear(); }
   });
 
-  it("keeps a bloodline swap local when collection history is unchanged", async () => {
+  it("keeps a null-lineage swap canonical when its passive source is hydrated", async () => {
     const db = await getTestDatabase();
     await db.insert(bloodline).values({ id: "unowned-lineage", name: "Unowned Lineage", rank: "A", image: "", description: "Collection fixture", effects: [] });
     await db.insert(bloodlineRolls).values({ id: "previous-lineage", userId, bloodlineId: lineId, type: "ITEM" });
     const result = await callerForDatabase(bloodlineRouter, userId, db).swapBloodline({ bloodlineId: lineId });
-    expect(result).toMatchObject({ success: true, userPatch: { bloodlineId: lineId } });
-    expect(result.achievementProgress?.find((entry) => entry.questId === questId)).toBeDefined();
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.achievementProgress).toBeUndefined();
   });
 
-  it.each(["unavailable", "missing"] as const)("preserves a paid lineage acquisition and reconciles when confirmation is %s", async (failure) => {
+  it("applies a paid lineage acquisition without postwrite SELECTs or a profile read", async () => {
     const db = await getTestDatabase();
     await db.delete(quest).where(eq(quest.id, questId));
     const profile = callerForDatabase(profileRouter, userId, db);
@@ -146,19 +146,17 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
     client.setQueryData(key, initial);
     const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
     const unsubscribe = observer.subscribe(() => {});
-    const confirmation = vi.spyOn(bloodlineQueries, "findBloodlineCacheState");
-    if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
-    else confirmation.mockRejectedValueOnce(new Error("Lineage confirmation unavailable"));
     try {
       const revision = prepareUserUpdate(client, key);
       const api = callerForDatabase(bloodlineRouter, userId, db);
-      const result = await api.purchaseBloodline({ bloodlineId: lineId });
+      const { result, statements } = await recordQueries(() => api.purchaseBloodline({ bloodlineId: lineId }));
       expect(result.success).toBe(true);
-      expect(result.userPatch).toBeUndefined();
-      expect(result.userDelta).toBeUndefined();
-      expect(confirmation).toHaveBeenCalledTimes(1);
+      expect(result.userPatch?.bloodlineId).toBe(lineId);
+      expect(result.userDelta).toEqual({ reputationPoints: -BLOODLINE_COST.A });
+      const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
+      expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
       await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta });
-      expect(getUser).toHaveBeenCalledTimes(1);
+      expect(getUser).not.toHaveBeenCalled();
       expect(client.getQueryData<typeof initial>(key)?.userData).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A });
       expect((await api.purchaseBloodline({ bloodlineId: lineId })).success).toBe(false);
       expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A });
@@ -265,12 +263,13 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
     } finally { unsubscribe(); client.clear(); }
   });
 
-  it("keeps removal local with two profile reads when collection history is unchanged", async () => {
+  it("keeps a live-refund removal canonical without a confirmation read", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ bloodlineId: lineId }).where(eq(userData.userId, userId));
     const counted = countUserReads(db);
     const result = await callerForDatabase(bloodlineRouter, userId, counted.client).removeBloodline();
-    expect(result).toMatchObject({ success: true, userPatch: { bloodlineId: null } });
-    expect(counted.getReads()).toBe(2);
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(counted.getReads()).toBe(1);
   });
 });

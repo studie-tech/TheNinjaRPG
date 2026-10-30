@@ -29,7 +29,6 @@ import {
 } from "../../../../setup/testDatabase";
 import { beforeStatements } from "../../../../setup/statements";
 import { fetchUpdatedUser } from "@/routers/profile";
-import * as socialQueries from "@/queries/socialUserCache";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { queueEnergy } from "../../../../setup/queues";
 
@@ -170,7 +169,9 @@ describeWithDatabase("raid join committed queue", () => {
     await db.update(userData).set({ reputationPointsTotal: 20 }).where(eq(userData.userId, "queue-sql-user"));
     vi.spyOn(combat, "initiateBattle").mockImplementation(async () => {
       await db.update(userData).set({ status: "BATTLE", battleId: "started-raid" }).where(eq(userData.userId, "queue-sql-user"));
-      return { success: true, message: "Started", battleId: "started-raid", requiresUserRefresh: false };
+      return { success: true, message: "Started", battleId: "started-raid", requiresUserRefresh: false,
+        userPatch: { status: "BATTLE", battleId: "started-raid" }, userDelta: {},
+      };
     });
     const client = new QueryClient();
     const key = [["profile", "getUser"], { type: "query" }];
@@ -181,7 +182,7 @@ describeWithDatabase("raid join committed queue", () => {
     const result = await (await callerFor(raidsRouter, "queue-sql-user")).startRaidBattle({ teamId: "cache-team" });
     expect(result.success).toBe(true);
     expect(valueOf(result.userPatch?.questData)).toBe(20);
-    expect(result.userPatch?.persistedQuestData).toBeNull();
+    expect(result.userPatch?.persistedQuestData).toBeUndefined();
     expect(result.achievementProgress?.some((entry) => entry.questId === "cache-reputation-achievement")).toBe(true);
     await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
     const cached = client.getQueryData<typeof profile>(key);
@@ -191,7 +192,7 @@ describeWithDatabase("raid join committed queue", () => {
     client.clear();
   });
 
-  it("preserves the started battle and queue receipt when optional battle confirmation fails", async () => {
+  it("preserves the started battle and queue receipt when admission requires canonical recovery", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));
     await db.update(mpvpBattleQueue).set({ createdAt: new Date(0) }).where(eq(mpvpBattleQueue.id, "cache-team"));
@@ -201,7 +202,6 @@ describeWithDatabase("raid join committed queue", () => {
       await db.update(userData).set({ status: "BATTLE", battleId: "confirmed-raid" }).where(eq(userData.userId, "queue-sql-user"));
       return { success: true, message: "Started", battleId: "confirmed-raid", requiresUserRefresh: false };
     });
-    vi.spyOn(socialQueries, "findBattleUserCache").mockRejectedValueOnce(new Error("Battle confirmation unavailable"));
     const api = await callerFor(raidsRouter, "queue-sql-user");
     const result = await api.startRaidBattle({ teamId: "cache-team" });
     expect(result).toMatchObject({ success: true, battleId: "confirmed-raid" });
@@ -249,12 +249,15 @@ describeWithDatabase("raid join committed queue", () => {
     await fetchUpdatedUser({ client: db, userId: "queue-sql-user" });
     vi.spyOn(combat, "initiateBattle").mockImplementation(async () => {
       await db.update(userData).set({ status: success ? "BATTLE" : "QUEUED", battleId: success ? "started-raid" : null, curEnergy: 17, pveFights: 5 }).where(eq(userData.userId, "queue-sql-user"));
-      return success ? { success: true, message: "Started", battleId: "started-raid", requiresUserRefresh } : { success: false, message: "Admission rejected" };
+      return success ? { success: true, message: "Started", battleId: "started-raid", requiresUserRefresh,
+        userPatch: requiresUserRefresh ? undefined : { status: "BATTLE", battleId: "started-raid", curEnergy: 17 },
+        userDelta: requiresUserRefresh ? undefined : { pveFights: 1 },
+      } : { success: false, message: "Admission rejected" };
     });
     const result = await (await callerFor(raidsRouter, "queue-sql-user")).startRaidBattle({ teamId: "cache-team" });
     expect(result.success).toBe(success);
     if (success && !requiresUserRefresh) {
-      expect(result).toMatchObject({ userDelta: {}, userPatch: { status: "BATTLE", battleId: "started-raid", curEnergy: 17, pveFights: 5 } });
+      expect(result).toMatchObject({ userDelta: { pveFights: 1 }, userPatch: { status: "BATTLE", battleId: "started-raid", curEnergy: 17 } });
       expect(result.userPatch).not.toHaveProperty("items");
       expect(result.userPatch).not.toHaveProperty("bloodline");
     } else {
@@ -269,7 +272,9 @@ describeWithDatabase("raid join committed queue", () => {
       await db.update(userData).set({ status: "BATTLE", battleId: "newer-battle" }).where(eq(userData.userId, "queue-sql-user"));
     }]);
     const result = await callerForDatabase(raidsRouter, "queue-sql-user", client).readyToQueue();
-    expect(result).toMatchObject({ success: false, userPatch: { status: "BATTLE", battleId: "newer-battle" }, userDelta: {} });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
   });
 
   it("confirms the guarded wake when leaving after a newer combat starts", async () => {
@@ -283,7 +288,9 @@ describeWithDatabase("raid join committed queue", () => {
       await db.update(userData).set({ status: "BATTLE", battleId: "newer-battle" }).where(eq(userData.userId, "queue-sql-user"));
     }]);
     const result = await callerForDatabase(raidsRouter, "queue-sql-user", client).leaveRaidQueue();
-    expect(result).toMatchObject({ success: true, userPatch: { status: "BATTLE", battleId: "newer-battle" }, userDelta: {} });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
     expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
   });
 

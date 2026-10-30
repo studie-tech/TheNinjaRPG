@@ -127,9 +127,7 @@ export const pvpRankRouter = createTRPCRouter({
         reason: "RANKED_REWARDS",
       });
 
-      const cacheUpdate = await getRewardUserUpdate({
-        client: ctx.drizzle,
-        userId: ctx.userId,
+      const cacheUpdate = getRewardUserUpdate({
         rewards: processedRewards,
         granted,
       });

@@ -15,16 +15,11 @@ import {
   markConversationCommentReported,
   markForumPostReported,
 } from "@/queries/moderator";
-import {
-  deleteUserNindo,
-  fetchUser,
-  selectUserReportForGetUser,
-} from "@/queries/profile";
+import { deleteUserNindo, fetchUser } from "@/queries/profile";
 import {
   clearUserBanWithoutActiveReport,
   findConversationForGetInfraction,
   findUserReviewForUpsertStaffReview,
-  findUserSanctionSnapshot,
   insertHistoricalAvatarForUpdateUserAvatar,
   insertReportLogForClearNindo,
   insertReportLogForUpdateUserAvatar,
@@ -109,11 +104,6 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 import type { DrizzleClient } from "../../db";
 
 const pusher = getServerPusher();
-
-/** Include the acting moderator's visible queue count with decision confirmation. */
-const reportDecisionResponseSchema = userDeltaResponseSchema.extend({
-  pendingReportCount: z.number().optional(),
-});
 
 export const reportsRouter = createTRPCRouter({
   getReportSystemNames: protectedProcedure.query(async ({ ctx }) => {
@@ -402,7 +392,7 @@ export const reportsRouter = createTRPCRouter({
   // Ban a user. If no escalation: moderator-only. If escalated: admin-only
   ban: protectedProcedure
     .input(reportCommentSchema)
-    .output(reportDecisionResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -446,17 +436,12 @@ export const reportsRouter = createTRPCRouter({
       return {
         success: true,
         message: "User banned",
-        ...(await getReportDecisionUserUpdate(
-          ctx.drizzle,
-          ctx.userId,
-          report.reportedUserId,
-        )),
       };
     }),
   // Silence a user. If no escalation: moderator-only. If escalated: admin-only
   silence: protectedProcedure
     .input(reportCommentSchema)
-    .output(reportDecisionResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -500,17 +485,12 @@ export const reportsRouter = createTRPCRouter({
       return {
         success: true,
         message: "User silenced",
-        ...(await getReportDecisionUserUpdate(
-          ctx.drizzle,
-          ctx.userId,
-          report.reportedUserId,
-        )),
       };
     }),
   // Timeout: 1-hour silence. CONTENT-ADMIN and EVENT-ADMIN only.
   timeout: protectedProcedure
     .input(reportTimeoutSchema)
-    .output(reportDecisionResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, report] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -546,17 +526,12 @@ export const reportsRouter = createTRPCRouter({
       return {
         success: true,
         message: "User timed out (1 hour)",
-        ...(await getReportDecisionUserUpdate(
-          ctx.drizzle,
-          ctx.userId,
-          report.reportedUserId,
-        )),
       };
     }),
   // Issue warning to user
   warn: protectedProcedure
     .input(reportCommentSchema)
-    .output(reportDecisionResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -597,17 +572,12 @@ export const reportsRouter = createTRPCRouter({
       return {
         success: true,
         message: "User warned",
-        ...(await getReportDecisionUserUpdate(
-          ctx.drizzle,
-          ctx.userId,
-          report.reportedUserId,
-        )),
       };
     }),
   // Escalate a report to admin. Only if already banned, and no previous escalation
   escalate: protectedProcedure
     .input(reportCommentSchema)
-    .output(reportDecisionResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -627,16 +597,11 @@ export const reportsRouter = createTRPCRouter({
       return {
         success: true,
         message: "Report escalated",
-        ...(await getReportDecisionUserUpdate(
-          ctx.drizzle,
-          ctx.userId,
-          report.reportedUserId,
-        )),
       };
     }),
   clear: protectedProcedure
     .input(reportCommentSchema)
-    .output(reportDecisionResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -697,11 +662,6 @@ export const reportsRouter = createTRPCRouter({
       return {
         success: true,
         message: "Report cleared",
-        ...(await getReportDecisionUserUpdate(
-          ctx.drizzle,
-          ctx.userId,
-          report.reportedUserId,
-        )),
       };
     }),
   updateUserAvatar: protectedProcedure
@@ -804,7 +764,7 @@ export const reportsRouter = createTRPCRouter({
   // Trade ban a user - moderators can ban users from blackmarket and auction house
   tradeBan: protectedProcedure
     .input(reportCommentSchema)
-    .output(reportDecisionResponseSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -845,11 +805,6 @@ export const reportsRouter = createTRPCRouter({
       return {
         success: true,
         message: "User trade banned",
-        ...(await getReportDecisionUserUpdate(
-          ctx.drizzle,
-          ctx.userId,
-          report.reportedUserId,
-        )),
       };
     }),
 });
@@ -878,28 +833,4 @@ export const insertUserReport = async (
   const id = nanoid();
   await insertUserReportForInsertUserReport(client, id, info);
   return id;
-};
-
-/** Counts and self-target sanctions are confirmed after every completed decision. */
-const getReportDecisionUserUpdate = async (
-  client: DrizzleClient,
-  userId: string,
-  targetUserId: string | null,
-) => {
-  const confirmation = await Promise.all([
-    selectUserReportForGetUser(client),
-    userId === targetUserId ? findUserSanctionSnapshot(client, userId) : undefined,
-  ]).catch(() => undefined);
-  if (!confirmation || (userId === targetUserId && !confirmation[1]))
-    return {
-      userPatch: undefined,
-      userDelta: undefined,
-      pendingReportCount: undefined,
-    };
-  const [counts, sanctions] = confirmation;
-  return {
-    pendingReportCount: counts[0]?.count ?? 0,
-    userPatch: sanctions ?? {},
-    userDelta: {},
-  };
 };

@@ -74,6 +74,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         if (data.success)
           await updateUser(data.userPatch, {
             revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
             achievementProgress: data.achievementProgress,
           });
         else await utils.profile.getUser.invalidate();

@@ -52,7 +52,6 @@ import { fetchElderVote } from "@/queries/elder";
 import { incrementNotificationCounters } from "@/queries/misc";
 import { fetchUser } from "@/queries/profile";
 import { fetchQuest, listVisibleRaidQuests } from "@/queries/quests";
-import { findWarUserCache } from "@/queries/socialUserCache";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import {
   countVillageSectors,
@@ -136,7 +135,6 @@ import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { applyObjectiveWarAction, fetchWarRules } from "@/server/utils/objectiveWar";
 import { notifyWarVillages } from "@/server/utils/push/war";
-import { getWarAllegianceUserPatch } from "@/server/utils/socialUserCache";
 import {
   handleWarEnd,
   startApprovedVoteWar,
@@ -284,12 +282,7 @@ export const warRouter = createTRPCRouter({
         input.contractId,
         ctx.userId,
       );
-      return result.success
-        ? {
-            ...result,
-            userPatch: await getWarAllegianceUserPatch(ctx.drizzle, ctx.userId),
-          }
-        : result;
+      return result;
     }),
   /**
    * Let the player or employing Kage close a contract without refunding payment.
@@ -307,7 +300,6 @@ export const warRouter = createTRPCRouter({
         ? {
             success: true,
             message: "Mercenary contract closed. Payments are not refunded.",
-            userPatch: await getWarAllegianceUserPatch(ctx.drizzle, ctx.userId),
           }
         : errorResponse("Contract already closed or you are not authorized.");
     }),
@@ -524,9 +516,6 @@ export const warRouter = createTRPCRouter({
       return {
         success: true,
         message: "War mission started. Remain in this sector until completion.",
-        userPatch: await findWarUserCache(ctx.drizzle, ctx.userId).catch(
-          () => undefined,
-        ),
       };
     }),
   /** Consume the matching ready attempt inside the strategic effect's receipt boundary. */
@@ -598,9 +587,7 @@ export const warRouter = createTRPCRouter({
         ? {
             success: true,
             message: "War objective completed",
-            userPatch: await findWarUserCache(ctx.drizzle, ctx.userId).catch(
-              () => undefined,
-            ),
+            userPatch: { warMission: null },
           }
         : errorResponse(
             "The war or mission changed before completion. Refresh to continue.",
@@ -611,13 +598,15 @@ export const warRouter = createTRPCRouter({
     .input(completeWarMissionSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      await updateUserDataForCancelWarMission(ctx.drizzle, ctx, input);
+      const cancelled = await updateUserDataForCancelWarMission(
+        ctx.drizzle,
+        ctx,
+        input,
+      );
       return {
         success: true,
         message: "War mission cancelled",
-        userPatch: await findWarUserCache(ctx.drizzle, ctx.userId).catch(
-          () => undefined,
-        ),
+        userPatch: cancelled.rowsAffected ? { warMission: null } : undefined,
       };
     }),
   /** Enter shrine combat with the camp snapshot preloaded for later score settlement. */
@@ -685,9 +674,6 @@ export const warRouter = createTRPCRouter({
         ? {
             success: true,
             message: "All war points converted to prestige",
-            userPatch: await findWarUserCache(ctx.drizzle, ctx.userId).catch(
-              () => undefined,
-            ),
           }
         : errorResponse("No unclaimed war points remain in the conversion window");
     }),

@@ -48,6 +48,8 @@ export const userDeltaSchema = z.object({
   bloodlineMastery: z.number().optional(),
   sageMastery: z.number().optional(),
   dailyArenaFights: z.number().optional(),
+  pveFights: z.number().optional(),
+  dailyOverworldQuestRolls: z.number().optional(),
   dailySageActivations: z.number().optional(),
 
   bank: z.number().optional(),

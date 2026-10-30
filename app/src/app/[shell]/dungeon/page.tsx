@@ -86,6 +86,7 @@ export default function DungeonPage() {
         : patch,
       {
         revision,
+        ...(response.userDelta ? { delta: response.userDelta } : {}),
         achievementProgress: response.achievementProgress,
       },
     );

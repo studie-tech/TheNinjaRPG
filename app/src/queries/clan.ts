@@ -373,13 +373,14 @@ export const insertVillageForPurchaseHideout = (
 export const executeResultForUpgradeHideoutToStronghold = (
   client: Pick<DrizzleClient, "execute">,
   guards: undefined | SQL<unknown>,
+  lastMaintenancePaidAt = new Date(),
 ) =>
   client.execute(sql`
           UPDATE ${village}
           INNER JOIN ${clan} ON ${clan.villageId} = ${village.id}
           SET ${village.type} = 'STRONGHOLD',
               ${village.belowMemberMinimumSince} = NULL,
-              ${village.lastMaintenancePaidAt} = ${new Date()},
+              ${village.lastMaintenancePaidAt} = ${lastMaintenancePaidAt},
               ${clan.bank} = ${clan.bank} - ${STRONGHOLD_REESTABLISH_COST}
           WHERE ${guards}
         `);

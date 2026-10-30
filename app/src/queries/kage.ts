@@ -87,10 +87,11 @@ export const updateVillageForResignKage = (
   client: Pick<DrizzleClient, "update">,
   elder: { userId: string },
   user: { villageId: string },
+  leaderUpdatedAt = new Date(),
 ) =>
   client
     .update(village)
-    .set({ kageId: elder.userId, leaderUpdatedAt: new Date(), kageSchedule: null })
+    .set({ kageId: elder.userId, leaderUpdatedAt, kageSchedule: null })
     .where(eq(village.id, user.villageId));
 
 /**

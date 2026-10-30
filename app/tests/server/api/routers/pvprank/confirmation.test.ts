@@ -11,7 +11,7 @@ import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOpti
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 
 const userId = "reward-confirmation-player";
 const subscriptions: (() => void)[] = [];
@@ -29,7 +29,7 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
   });
   afterEach(() => { subscriptions.splice(0).forEach((stop) => stop()); vi.restoreAllMocks(); });
 
-  it.each(["unavailable", "missing"] as const)("reconciles the paid profile and clears the receipt through the actual callback when confirmation is %s", async (failure) => {
+  it("applies the confirmed payout through the actual callback without a postwrite SELECT", async () => {
     const db = await getTestDatabase();
     const api = await callerFor(pvpRankRouter, userId);
     const profileApi = await callerFor(profile.profileRouter, userId);
@@ -49,19 +49,17 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
     const options = new Function("utils", "prepareUserUpdate", "updateUser", "showRewardToast", `return (${callbacks});`)(
       { pvpRank: { getUnclaimedUserSeasonRewards: { invalidate } } }, () => prepareUserUpdate(cache, key), updateUser, vi.fn(),
     ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
-    const confirmation = vi.spyOn(questQueries, "findRewardUserSnapshot");
-    if (failure === "unavailable") confirmation.mockRejectedValueOnce(new Error("Reward confirmation unavailable"));
-    else confirmation.mockResolvedValueOnce(undefined);
     try {
       const revision = options.onMutate();
-      const result = await api.claimSeasonRewards();
+      const { result, statements } = await recordQueries(() => api.claimSeasonRewards());
+      const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
+      expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
       expect(result.success).toBe(true);
       if (!("rewards" in result)) throw new Error(result.message);
-      expect(result.userPatch).toBeUndefined();
-      expect(result.userDelta).toBeUndefined();
-      expect(confirmation).toHaveBeenCalledTimes(1);
+      expect(result.userPatch).toEqual({});
+      expect(result.userDelta).toMatchObject({ money: 100 });
       await options.onSuccess(result, undefined, revision);
-      expect(getUser).toHaveBeenCalledTimes(1);
+      expect(getUser).not.toHaveBeenCalled();
       expect(invalidate).toHaveBeenCalledTimes(1);
       expect(unclaimed).toEqual([]);
       expect(cache.getQueryData<typeof initial>(key)?.userData?.money).toBe(100);
@@ -71,12 +69,10 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
     } finally { stop(); cache.clear(); }
   });
 
-  it("propagates payout failures before attempting confirmation", async () => {
+  it("propagates payout failures without returning a successful cache update", async () => {
     const db = await getTestDatabase();
     vi.spyOn(questQueries, "updateUserDataForUpdateRewards").mockRejectedValueOnce(new Error("Reward payout unavailable"));
-    const confirmation = vi.spyOn(questQueries, "findRewardUserSnapshot");
     await expect((await callerFor(pvpRankRouter, userId)).claimSeasonRewards()).rejects.toThrow("Reward payout unavailable");
-    expect(confirmation).not.toHaveBeenCalled();
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 0 });
   });
 

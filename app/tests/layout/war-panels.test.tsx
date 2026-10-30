@@ -833,11 +833,11 @@ describe("war dashboard updates", () => {
     fireEvent.click(
       view.getAllByRole("button", { name: "Convert all war points" })[0]!,
     );
-    await act(() => convert.respond({ success: true, message: "Prestige granted", userPatch: { villagePrestige: 1250 } }));
+    await act(() => convert.respond({ success: true, message: "Prestige granted" }));
     expect(view.getByRole("status").textContent).toBe("Prestige granted");
     expect(invalidateClaims).toHaveBeenCalledTimes(2);
-    expect(invalidateUser).not.toHaveBeenCalled();
-    expect(updateUser).toHaveBeenCalledWith({ villagePrestige: 1250 }, { revision: 7 });
+    expect(invalidateUser).toHaveBeenCalledTimes(1);
+    expect(updateUser).not.toHaveBeenCalled();
   });
 
   it("refreshes expiring point claims without waiting for the next background poll", () => {

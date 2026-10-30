@@ -693,6 +693,7 @@ export const updateUserDataForUpdateBloodline = (
   bloodline: { id: undefined | string } | null,
   repCost: number,
   user: { userId: string; bloodlineId: null | string },
+  updatedAt = new Date(),
 ) =>
   client
     .update(userData)
@@ -702,7 +703,7 @@ export const updateUserDataForUpdateBloodline = (
       bloodlineReskinId: null,
       reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
       // Advance the whole-user version so a concurrent claimUserSnapshot CAS detects this write.
-      updatedAt: new Date(),
+      updatedAt,
     })
     .where(
       and(
@@ -782,21 +783,5 @@ export const fetchBloodlineProgressionUser = (client: DrizzleClient, userId: str
       ...bloodlineCacheUserRelations,
       userQuests: userQuestHistoryRelation,
       completedQuests: completedQuestHistoryRelation,
-    },
-  });
-
-/** Confirm fields changed by a lineage grant, including its SQL Bloodright refund. */
-export const findBloodlineCacheState = (client: DrizzleClient, userId: string) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: {
-      bloodlineId: true,
-      bloodlineReskinId: true,
-      bloodright: true,
-      bloodrightSpent: true,
-      reputationPoints: true,
-      seichiSilver: true,
-      regeneration: true,
-      updatedAt: true,
     },
   });

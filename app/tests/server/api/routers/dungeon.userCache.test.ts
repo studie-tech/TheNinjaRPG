@@ -5,8 +5,6 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { battle, clan, dungeon, dungeonMember, dungeonRun, gameSetting, quest, questHistory, userData, userRewards, userVote, village } from "@/drizzle/schema";
-import * as dungeonQueries from "@/queries/dungeon";
-import * as skillQueries from "@/queries/skillTree";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import * as profileQueries from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
@@ -19,7 +17,7 @@ import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battl
 import { dungeonBattleState, dungeonContent } from "../../../setup/dungeon";
 import { insertQuests, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
-import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 type Profile = RouterOutputs["profile"]["getUser"];
 const userId = "dungeon-cache-player";
@@ -78,9 +76,10 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
   });
   afterEach(() => { subscriptions.splice(0).forEach((stop) => stop()); clients.splice(0).forEach((client) => client.clear()); vi.restoreAllMocks(); });
 
-  const completedRun = async (rewards: Record<string, unknown> = {}) => {
+  const completedRun = async (rewards: Record<string, unknown> = {}, experience = 10) => {
     const db = await getTestDatabase();
     const content = dungeonContent();
+    content.rewards.experience = experience;
     content.rewards.tokens = 0;
     content.rewards.prestige = 0;
     content.rewards.drops = Object.keys(rewards).length ? [{ type: "package", id: "progress", chance: 100, quantity: 1,
@@ -137,7 +136,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     const db = await getTestDatabase();
     const profile = callerForDatabase(profileRouter, userId, db);
     await profile.getUser();
-    const api = await completedRun();
+    const api = await completedRun({}, 0);
     const initial = await profile.getUser();
     expect(goal(initial, "dungeon-completion")).toMatchObject({ done: true, value: 1 });
     const cache = cachedProfile(initial, () => profile.getUser());
@@ -151,9 +150,9 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     }
     expect(hydration).not.toHaveBeenCalled();
     expect(cache.refetch).not.toHaveBeenCalled();
-    expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 10, dungeonsCompleted: 1 });
+    expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 0, dungeonsCompleted: 1 });
     expect(goal(cache.current(), "dungeon-completion")).toEqual(goal(initial, "dungeon-completion"));
-    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, earnedExperience: 10 });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, earnedExperience: 0 });
   });
 
   it.each([null, "other-village"])("preserves unrelated membership snapshots on scalar claim and replay after the village changes to %s", async (villageId) => {
@@ -167,7 +166,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     await db.update(userData).set({ isOutlaw: false, villageId: "cached-village", clanId: "cached-clan" }).where(eq(userData.userId, userId));
     const profile = callerForDatabase(profileRouter, userId, db);
     await profile.getUser();
-    const api = await completedRun();
+    const api = await completedRun({}, 0);
     const initial = await profile.getUser();
     expect(goal(initial, "dungeon-completion")?.done).toBe(true);
     expect(initial.userData?.village?.name).toBe("Cached village");
@@ -187,7 +186,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
       expect(cache.current().userData?.clanId).toBe("cached-clan");
       expect(cache.current().userData?.clan).toEqual(initial.userData?.clan);
       expect(cache.current().userData?.money).toBe(money);
-      expect(cache.current().userData?.earnedExperience).toBe(10);
+      expect(cache.current().userData?.earnedExperience).toBe(0);
       expect(cache.current().userData?.dungeonsCompleted).toBe(1);
       expect(goal(cache.current(), "dungeon-completion")).toEqual(goal(initial, "dungeon-completion"));
     }
@@ -197,7 +196,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     expect(saved?.villageId).toBe(villageId);
     expect(saved?.clanId).toBeNull();
     expect(saved?.money).toBe(109);
-    expect(saved?.earnedExperience).toBe(10);
+    expect(saved?.earnedExperience).toBe(0);
   });
 
   it.each([false, true])("reconciles a polled completion through the claim callback (delayed profile refresh: %s)", async (delayedRefresh) => {
@@ -232,42 +231,37 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
       const revision = cache.callbacks.onMutate();
       const response = userDeltaResponseSchema.parse(await api.claim({ id: "run" }));
       expect(response.success).toBe(true);
-      expect(response.userPatch).not.toHaveProperty("questData");
+      if (response.userPatch) expect(response.userPatch).not.toHaveProperty("questData");
       await cache.callbacks.onSuccess(response, undefined, revision);
       expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 10, dungeonsCompleted: 1 });
       expect(goal(cache.current(), "dungeon-completion")).toMatchObject({ done: true, value: 1 });
       expect(cache.current().achievementProgress?.find((entry) => entry.questId === "dungeon-completion")).toBeDefined();
-      expect(cache.refetch).toHaveBeenCalledTimes(delayedRefresh ? 0 : 1);
+      expect(cache.refetch).toHaveBeenCalledTimes(1);
     }
     expect(cache.refetchState).toHaveBeenCalledTimes(2);
     expect(goal(cache.current(), "dungeon-completion")).toEqual(goal(await profile.getUser(), "dungeon-completion"));
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, earnedExperience: 10 });
   });
 
-  it.each(["unavailable", "missing", "mastery unavailable"] as const)("keeps delivered receipts successful and reconciles the profile when confirmation is %s", async (failure) => {
+  it("keeps a conditional companion XP grant canonical without postreceipt cache SELECTs", async () => {
     const db = await getTestDatabase();
     const profile = callerForDatabase(profileRouter, userId, db);
     const api = await completedRun();
     const cache = cachedProfile(await profile.getUser(), () => profile.getUser());
-    if (failure === "mastery unavailable") vi.spyOn(skillQueries, "fetchMasterySources").mockRejectedValueOnce(new Error("Mastery confirmation unavailable"));
-    else {
-      const confirmation = vi.spyOn(dungeonQueries, "findDungeonRewardUserCache");
-      if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
-      else confirmation.mockRejectedValueOnce(new Error("Dungeon confirmation unavailable"));
-    }
     const revision = cache.callbacks.onMutate();
-    const result = userDeltaResponseSchema.parse(await api.claim({ id: "completed-run" }));
+    const { result: raw, statements } = await recordQueries(() => api.claim({ id: "completed-run" }));
+    const result = userDeltaResponseSchema.parse(raw);
     expect(result.success).toBe(true);
     expect(result.userPatch).toBeUndefined();
     expect(result.userDelta).toBeUndefined();
+    const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
+    expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
     await cache.callbacks.onSuccess(result, undefined, revision);
     expect(cache.refetch).toHaveBeenCalledTimes(1);
     expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 10, dungeonsCompleted: 1 });
     expect((await api.claim({ id: "completed-run" })).success).toBe(true);
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, earnedExperience: 10 });
-    expect(await db.query.dungeonMember.findFirst()).toMatchObject({ reward: { money: 100 } });
   });
-
   it("delivers a relation-changing receipt without hydrating the profile inside the mutation", async () => {
     const db = await getTestDatabase();
     const profile = callerForDatabase(profileRouter, userId, db);

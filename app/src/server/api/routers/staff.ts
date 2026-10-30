@@ -30,7 +30,6 @@ import { findStoreUserIdAlias, insertStoreUserIdAlias } from "@/queries/purchase
 import { deleteRankedQueueForUser } from "@/queries/pvprank";
 import { clearQueueBattleId, deleteQueueById, listQueueMembers } from "@/queries/raids";
 import { deleteUserSkills, fetchMasterySources } from "@/queries/skillTree";
-import { findQueueUserCache, findVillageUserCache } from "@/queries/socialUserCache";
 import {
   applyDevelopmentBackup,
   clearDevelopmentBackupTarget,
@@ -127,7 +126,6 @@ import {
   insertUserBadgeForInsertUserBadge,
   insertUserItemForCloneUserForDebug,
   insertUserJutsuForCloneUserForDebug,
-  listClosedPyramidHistoriesForForceAwake,
   listContentBackupForGetBackups,
   listHistoricalIpForGetUserHistoricalIps,
   listQuestHistoryForCloneUserForDebug,
@@ -450,7 +448,10 @@ export const staffRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, sources] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchMasterySources(ctx.drizzle, ctx.userId),
+      ]);
       // Guard
       if (!canUnequipAllUsers(user)) {
         return errorResponse("You do not have permission to unequip all gear");
@@ -462,31 +463,27 @@ export const staffRouter = createTRPCRouter({
         updateUserItemForUnequipAllGear(ctx.drizzle),
         updateItemLoadoutForUnequipAllGear(ctx.drizzle),
       ]);
-      const sources = user.isAi
-        ? undefined
-        : await fetchMasterySources(ctx.drizzle, ctx.userId).catch(() => undefined);
       return {
-        userPatch: sources
-          ? {
-              items: [],
-              effectiveMasteries: effectiveMasteries({ ...user, ...sources }),
-              maxEnergy: calcMaxEnergy({ ...user, ...sources }),
-            }
-          : user.isAi
-            ? {}
-            : undefined,
+        userPatch:
+          !user.isAi && sources
+            ? {
+                items: [],
+                effectiveMasteries: effectiveMasteries({
+                  ...user,
+                  ...sources,
+                  items: [],
+                }),
+                maxEnergy: calcMaxEnergy({ ...user, ...sources, items: [] }),
+              }
+            : user.isAi
+              ? {}
+              : undefined,
         success: true,
         message: `All gear has been unequipped for all non-AI users.`,
       };
     }),
   forceAwake: protectedProcedure
-    .output(
-      userDeltaResponseSchema.extend({
-        closedPyramidHistories: z
-          .array(z.object({ id: z.string(), questId: z.string(), endAt: z.date() }))
-          .optional(),
-      }),
-    )
+    .output(userDeltaResponseSchema)
     .input(
       z.object({
         userId: z.string(),
@@ -565,15 +562,11 @@ export const staffRouter = createTRPCRouter({
       };
       const pusher = getServerPusher();
       void updateUserOnMap(pusher, targetUser.sector, output);
-      const recoveryUpdate =
-        input.userId === ctx.userId
-          ? await getForceAwakeUserUpdate(ctx.drizzle, ctx.userId, endedAt)
-          : { userPatch: {} };
       // Done
       return {
         success: true,
         message: "You have changed user's state to awake",
-        ...recoveryUpdate,
+        userPatch: input.userId === ctx.userId ? undefined : {},
       };
     }),
   insertUserBadge: protectedProcedure
@@ -950,17 +943,11 @@ export const staffRouter = createTRPCRouter({
       // races moves still in flight.
       const failed = moves.find((move) => move.status === "rejected");
       if (failed) throw failed.reason;
-      const savedVillage = user.villageId
-        ? await findVillageUserCache(ctx.drizzle, user.villageId).catch(() => undefined)
-        : undefined;
+
       return {
         success: true,
         message: "UserId updated",
-        userPatch: user.villageId
-          ? savedVillage
-            ? { village: savedVillage }
-            : undefined
-          : {},
+        userPatch: user.villageId ? undefined : {},
       };
     }),
   // Delete referral from user
@@ -1224,28 +1211,4 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
 
   // Final batch: Delete main userData record (must be last)
   await deleteUserDataForDeleteUserInternal(client, userId);
-};
-
-/**
- * Read the target's current state and closed isolated runs after a staff wake attempt.
- * Withhold cache data if either confirmation fails.
- */
-const getForceAwakeUserUpdate = async (
-  client: DrizzleClient,
-  userId: string,
-  endedAt: Date,
-) => {
-  const confirmation = await Promise.all([
-    findQueueUserCache(client, userId),
-    listClosedPyramidHistoriesForForceAwake(client, userId, endedAt),
-  ]).catch(() => undefined);
-  if (!confirmation?.[0])
-    return { userPatch: undefined, closedPyramidHistories: undefined };
-  const [saved, histories] = confirmation;
-  return {
-    userPatch: saved,
-    closedPyramidHistories: histories.flatMap((entry) =>
-      entry.endAt ? [{ ...entry, endAt: entry.endAt }] : [],
-    ),
-  };
 };

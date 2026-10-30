@@ -592,11 +592,13 @@ export const cancelQueuedJob = async (
   userId: string,
   kind: TimedQueueKind,
   queueId: string,
+  preloaded?: (QueuedJutsu | QueuedCraft)[],
 ) => {
   const waiting: (QueuedJutsu | QueuedCraft)[] =
-    kind === "JUTSU"
+    preloaded ??
+    (kind === "JUTSU"
       ? await fetchJutsuTrainingQueue(client, userId)
-      : await fetchCraftingQueue(client, userId);
+      : await fetchCraftingQueue(client, userId));
   const entry = waiting.find((row) => row.id === queueId);
   if (!entry) return null;
   if (!(await claimQueueRow(client, entry.id))) return null;
@@ -615,7 +617,7 @@ export const cancelQueuedJob = async (
         rest as QueuedJutsu[] | QueuedCraft[],
       )
     : 0;
-  return { entry, started };
+  return { entry, started, remaining: rest.length };
 };
 
 /**
@@ -638,7 +640,8 @@ export const cancelQueuedCraft = async (
   client: DrizzleClient,
   userId: string,
   queueId: string,
-) => !!(await cancelQueuedJob(client, userId, "CRAFT", queueId));
+  preloaded?: QueuedCraft[],
+) => cancelQueuedJob(client, userId, "CRAFT", queueId, preloaded);
 
 /**
  * Walk the waiting jobs in order: start each whose turn has come, then move the rest

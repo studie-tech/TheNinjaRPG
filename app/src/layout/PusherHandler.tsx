@@ -97,6 +97,12 @@ export const usePusherHandler = (
             void utils.combat.getBattle.invalidate();
           }
         } else if (data.type === "battleEnded") {
+          // The deleting socket recovers through its mutation response or transport-error callback.
+          if (
+            data.originSocketId &&
+            data.originSocketId === pusher.connection.socket_id
+          )
+            return;
           await utils.profile.getUser.cancel();
           await utils.profile.getUser.invalidate();
           void utils.combat.getBattle.invalidate();

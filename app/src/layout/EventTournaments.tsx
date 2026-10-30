@@ -5,7 +5,7 @@ import { Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,21 +66,19 @@ export const EventTournaments = ({
   };
   const [message, setMessage] = useState("");
   const manage = api.tournament.manageEvent.useMutation({
-    onMutate: reconcile.prepare,
     onSettled: reconcile.settle,
-    onSuccess: async (result, _variables, revision) => {
+    onSuccess: async (result) => {
       setMessage(result.message);
       showMutationToast(result);
-      await Promise.all([refresh(), reconcile.apply(result, revision)]);
+      await Promise.all([refresh(), reconcile.apply()]);
     },
   });
   const participate = api.tournament.participateEvent.useMutation({
-    onMutate: reconcile.prepare,
     onSettled: reconcile.settle,
-    onSuccess: async (result, _variables, revision) => {
+    onSuccess: async (result) => {
       setMessage(result.message);
       showMutationToast(result);
-      await Promise.all([refresh(), reconcile.apply(result, revision)]);
+      await Promise.all([refresh(), reconcile.apply()]);
     },
   });
   const event = details.data?.eventData;
@@ -621,16 +619,15 @@ const StaffTournamentControls = ({
   const utils = api.useUtils();
   const reconcile = useEventActionCache();
   const mutation = api.tournament.manageEvent.useMutation({
-    onMutate: reconcile.prepare,
     onSettled: reconcile.settle,
-    onSuccess: async (result, _variables, revision) => {
+    onSuccess: async (result) => {
       setMessage(result.message);
       showMutationToast(result);
       await Promise.all([
         utils.tournament.getEvent.invalidate(),
         utils.tournament.listEvents.invalidate(),
         utils.tournament.getEventNotices.invalidate(),
-        reconcile.apply(result, revision),
+        reconcile.apply(),
       ]);
     },
   });
@@ -810,12 +807,11 @@ const StaffTournamentControls = ({
 /** Display event timestamps in the player's browser locale and time zone. */
 const date = (value: number) => new Date(value).toLocaleString();
 
-/** Apply actor state, participation polling and actionable notices in the same accepted revision. */
+/** Reconcile synchronized launches, rewards and participation through the profile query. */
 const useEventActionCache = () => {
-  const { prepareUserUpdate, updateUser, pusher } = useUserData();
+  const { pusher } = useUserData();
   const utils = api.useUtils();
   return {
-    prepare: prepareUserUpdate,
     originSocketId: () => pusher?.connection.socket_id,
     // Preserve the global error toast while recovering an action whose response was lost.
     settle: (_result: unknown, error: unknown) => {
@@ -827,32 +823,6 @@ const useEventActionCache = () => {
           utils.tournament.getEventNotices.invalidate(),
         ]);
     },
-    apply: (
-      result: RouterOutputs["tournament"]["participateEvent"],
-      revision: number | undefined,
-    ) =>
-      result.success
-        ? updateUser(result.userPatch, {
-            revision,
-            isEventParticipant: result.isEventParticipant,
-            notifications: (current) =>
-              current
-                ? [
-                    ...current.filter(
-                      (entry) =>
-                        entry.color !== "toast" &&
-                        !/^\/tournaments\/[^/?#]+$/.test(entry.href),
-                    ),
-                    ...(result.eventNotices ?? []).map((notice) => ({
-                      href: `/tournaments/${notice.tournamentId}`,
-                      name: `${notice.message}: ${notice.name}`,
-                      color: "green" as const,
-                      notificationCount: 1,
-                      alwaysShow: true,
-                    })),
-                  ]
-                : current,
-          })
-        : utils.profile.getUser.invalidate(),
+    apply: () => utils.profile.getUser.invalidate(),
   };
 };

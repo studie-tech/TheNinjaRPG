@@ -22,7 +22,6 @@ import {
   STRIPE_CHECKOUT_RESERVATION_SECONDS,
   STRIPE_CHECKOUT_RETRY_SECONDS,
 } from "@/server/utils/purchases/allowance";
-import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 import { logError } from "@/server/utils/sentry";
 import {
   getStripe,
@@ -34,6 +33,7 @@ import {
 import { fulfillStripeSession } from "@/server/utils/stripe/fulfillment";
 import { dollars2reps, dynamicMonthlyRepCap, reps2dollars } from "@/utils/paypal";
 import { stripePurchaseSchema } from "@/validators/stripe";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Authenticated web checkout, recovery and management; provider objects establish payment. */
 export const stripeRouter = createTRPCRouter({
@@ -290,6 +290,7 @@ export const stripeRouter = createTRPCRouter({
           .max(255),
       }),
     )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const session = await getStripe().checkout.sessions.retrieve(input.sessionId);
       const checkout = session.metadata?.tnrCheckoutId
@@ -300,9 +301,6 @@ export const stripeRouter = createTRPCRouter({
       const outcome = await fulfillStripeSession(ctx.drizzle, input.sessionId);
       return {
         success: outcome === "fulfilled",
-        ...(outcome === "fulfilled"
-          ? await getPurchaseUserUpdate(ctx.drizzle, ctx.userId)
-          : {}),
         message:
           outcome === "fulfilled"
             ? "Your Stripe payment has been delivered."

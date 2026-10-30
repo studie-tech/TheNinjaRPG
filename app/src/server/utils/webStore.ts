@@ -174,6 +174,7 @@ export const deliverStoreOrder = async (
       return {
         success: true,
         message: `${order.name} delivered`,
+        delivery: { recipientId: order.recipientId, contents },
         purchase: {
           transactionId: input.captureId,
           name: order.name,

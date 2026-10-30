@@ -280,7 +280,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     await db.insert(dungeonMember).values(["b", "c"].map(userId => ({ runId: id, userId, activeUserId: userId })));
     const result = await a.act({ id, action: "start" });
     expect(result).toMatchObject({ success: false, message: "A dungeon enemy is unavailable" });
-    expect(result).toHaveProperty("userPatch", undefined);
+    expect("userPatch" in result && result.userPatch).toBeFalsy();
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "a") })).toMatchObject({ cookingExperience: 23, status: "AWAKE", battleId: null });
     expect(await db.query.userCookingJob.findMany()).toHaveLength(0);
     expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) })).toMatchObject({ status: "LOBBY", battleId: null });

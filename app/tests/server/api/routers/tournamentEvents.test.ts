@@ -104,20 +104,16 @@ describeWithDatabase("event tournament persistence", () => {
     }
   });
 
-  it("preserves a published event when optional actor confirmation fails", async () => {
+  it("uses canonical recovery after publishing and synchronizing an event", async () => {
     const db = await getTestDatabase();
     await insertUsers([{ userId: "staff", role: "CODER" }]);
     const staff = await callerFor(tournamentRouter, "staff");
     const created = await staff.saveEvent({ config: eventConfig("Publish confirmation") });
     if (!("tournamentId" in created)) throw new Error(created.message);
-    const original = eventQueries.findEventActorCacheState;
-    vi.spyOn(eventQueries, "findEventActorCacheState")
-      .mockImplementationOnce(original)
-      .mockRejectedValueOnce(new Error("Event confirmation unavailable"));
     const result = await staff.manageEvent({ tournamentId: created.tournamentId, action: "PUBLISH" });
     expect(result.success).toBe(true);
     expect(result.userPatch).toBeUndefined();
-    expect(result.eventNotices).toBeUndefined();
+    expect(result).not.toHaveProperty("eventNotices");
     expect(await db.query.tournament.findFirst()).toMatchObject({ eventData: { status: "REGISTRATION" } });
   });
 
@@ -155,8 +151,7 @@ describeWithDatabase("event tournament persistence", () => {
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("first", "event", { type: "eventTournament" });
     expect((await first.getEventNotices())[0]?.message).toBe("You have a tournament invitation");
     vi.spyOn(Pusher.prototype, "trigger").mockClear();
-    expect(await first.participateEvent({ tournamentId, action: "JOIN" })).toMatchObject({ success: true,
-      userPatch: { status: "AWAKE", battleId: null }, eventNotices: [], isEventParticipant: true });
+    expect(await first.participateEvent({ tournamentId, action: "JOIN" })).toMatchObject({ success: true });
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("first", "event", { type: "eventTournament" });
     expect(await first.getEventNotices()).toEqual([]);
     expect((await second.getEventNotices())[0]?.message).toBe("You have a tournament invitation");
@@ -608,7 +603,7 @@ describeWithDatabase("event tournament persistence", () => {
       if (hasCooking) await database.update(userCookingJob).set({ finishesAt: new Date(0) });
       const response = await accept(userId);
       expect(response.success).toBe(true);
-      await updateUserCache(cache, key, response.userPatch, { revision, isEventParticipant: response.isEventParticipant });
+      await updateUserCache(cache, key, response.userPatch, { revision,  });
       const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
       const cached = cache.getQueryData<typeof initial>(key)!.userData;
       expect(saved?.cookingExperience).toBe(hasCooking ? 99 : 0);
@@ -616,9 +611,8 @@ describeWithDatabase("event tournament persistence", () => {
       expect(cached?.cookingJobs).toHaveLength(0);
       expect(cached?.status).toBe("BATTLE");
       expect(cached?.battleId).toBe(saved?.battleId);
-      expect(read).toHaveBeenCalledTimes(hasCooking ? 1 : 0);
-      if (hasCooking) expect(response.userPatch).toBeUndefined();
-      else expect(response.userPatch).toHaveProperty("status", "BATTLE");
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(response.userPatch).toBeUndefined();
     } finally { unsubscribe(); cache.clear(); }
   });
   it("blocks open-world attacks on registered entrants until they withdraw", async () => {

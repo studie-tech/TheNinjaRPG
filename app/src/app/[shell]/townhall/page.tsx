@@ -935,19 +935,13 @@ const KageHall: React.FC<{
 
 /** Show the incumbent and public defenses, with reasoned staff takeover when permitted. */
 const KageChallenge = ({ user }: { user: NonNullable<UserWithRelations> }) => {
-  const { updateUser, prepareUserUpdate } = useRequiredUserData();
   const utils = api.useUtils();
   const [showTakeKageModal, setShowTakeKageModal] = useState(false);
   const [takeKageReason, setTakeKageReason] = useState("");
   const isKage = user.userId === user.village?.kageId;
   const { mutate: take, isPending: isTaking } = api.kage.takeKage.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+    onSuccess: async (data) => {
+      if (data.success) await utils.profile.getUser.invalidate();
       showMutationToast(data);
       if (data.success) {
         await Promise.all([

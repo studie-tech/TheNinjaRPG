@@ -22,6 +22,7 @@ import {
   findDungeonMemberForClaim,
   findDungeonMemberForCreate,
   findDungeonRequirementSources,
+  findDungeonRewardUserCache,
   findDungeonRunForAct,
   findMapAssetForSave,
   findUserDataForGetAvailable,
@@ -65,7 +66,6 @@ import { dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonE
 import { getDungeonRewardUserUpdate } from "@/server/utils/dungeonUserCache";
 import { notifyMapLocationsChanged } from "@/server/utils/mapLocations";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { getBattleUserPatch } from "@/server/utils/socialUserCache";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
 import {
@@ -400,7 +400,7 @@ export const dungeonRouter = createTRPCRouter({
         await expireDungeonRun(ctx.drizzle, run);
         return {
           ...errorResponse("The dungeon deadline expired."),
-          userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+          userPatch: undefined,
         };
       }
       const { action } = input;
@@ -479,6 +479,7 @@ export const dungeonRouter = createTRPCRouter({
             initiateBattle(
               {
                 client: ctx.drizzle,
+                cacheUserId: ctx.userId,
                 userIds: state.memberIds,
                 targetIds: floor.waves.flatMap((w) => w.aiIds),
                 biome: run.content.background,
@@ -504,15 +505,7 @@ export const dungeonRouter = createTRPCRouter({
           recover: ({ battleId }) =>
             rollbackDungeonStart(ctx.drizzle, run, battleId, run.version + 1),
         });
-        return {
-          ...result,
-          userPatch: await getBattleUserPatch(
-            ctx.drizzle,
-            ctx.userId,
-            !result.success ||
-              ("requiresUserRefresh" in result && result.requiresUserRefresh),
-          ),
-        };
+        return result;
       }
 
       const queueChanged = new Error("Dungeon queue claim changed");
@@ -562,7 +555,7 @@ export const dungeonRouter = createTRPCRouter({
       const [run, member, user] = await Promise.all([
         findDungeonRunForAct(ctx.drizzle, input),
         findDungeonMemberForClaim(ctx.drizzle, input, ctx),
-        findUserById(ctx.drizzle, ctx.userId),
+        findDungeonRewardUserCache(ctx.drizzle, ctx.userId),
       ]);
       if (!run || !member || !user || !run.state.memberIds.includes(ctx.userId))
         return errorResponse("You are not in this party.");
@@ -571,11 +564,7 @@ export const dungeonRouter = createTRPCRouter({
           success: true,
           message: "Rewards already delivered.",
           reward: member.reward,
-          ...(await getDungeonRewardUserUpdate(
-            ctx.drizzle,
-            user,
-            member.reward.rewards,
-          )),
+          ...getDungeonRewardUserUpdate(user, member.reward.rewards, true),
         };
       if (
         run.status !== "COMPLETED" ||
@@ -670,7 +659,7 @@ export const dungeonRouter = createTRPCRouter({
             success: true,
             message: "Completion rewards delivered.",
             reward: receipt,
-            ...(await getDungeonRewardUserUpdate(ctx.drizzle, user, receipt.rewards)),
+            ...getDungeonRewardUserUpdate(user, receipt.rewards),
           }
         : errorResponse("Rewards were already claimed. Refresh to view your receipt.");
     }),

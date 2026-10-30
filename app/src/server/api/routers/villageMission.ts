@@ -8,7 +8,6 @@ import {
   isVillageMissionAvailable,
 } from "@/libs/villageMission";
 import { fetchUser } from "@/queries/profile";
-import { findVillageUserCache } from "@/queries/socialUserCache";
 import { findVillageById } from "@/queries/village";
 import {
   listQuestForSelect,
@@ -121,9 +120,7 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
-        userPatch: await findVillageUserCache(ctx.drizzle, input.villageId)
-          .then((saved) => (saved ? { village: saved } : undefined))
-          .catch(() => undefined),
+
         message: current
           ? "Village Mission rerolled. Progress starts again for the new mission."
           : "Village Mission selected",
@@ -146,9 +143,7 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
-        userPatch: await findVillageUserCache(ctx.drizzle, input.villageId)
-          .then((saved) => (saved ? { village: saved } : undefined))
-          .catch(() => undefined),
+        userPatch: { village: { id: input.villageId, activeMission: null } },
         message:
           "Village Mission cancelled without penalty. A new mission can be selected immediately.",
       };
@@ -199,9 +194,8 @@ export const villageMissionRouter = createTRPCRouter({
         );
       return {
         success: true,
-        userPatch: await findVillageUserCache(ctx.drizzle, input.villageId)
-          .then((saved) => (saved ? { village: saved } : undefined))
-          .catch(() => undefined),
+        userPatch: { village: { id: input.villageId, activeMission: null } },
+        userDelta: { village: { id: input.villageId, tokens: rewardTokens } },
         message: `${rewardTokens.toLocaleString()} tokens awarded to the village`,
       };
     }),

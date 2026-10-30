@@ -1847,6 +1847,8 @@ export const initiateBattle = async (
     /** NPC template IDs on the initiating team; repeated IDs request separate copies. */
     allyAiIds?: string[];
     client: DrizzleClient;
+    /** Session actor whose bounded admission update may be returned to the caller. */
+    cacheUserId?: string;
     /** Shared launch contract; each activity keeps its own progress and settlement policy. */
     coop?: CoopEncounter;
     /** Current rules, guarded session/allowance versions and rewards preloaded for settlement. */
@@ -1898,7 +1900,14 @@ export const initiateBattle = async (
   },
   battleType: BattleType,
   scaleGains = 1,
-) => {
+): Promise<
+  import("@/validators/base").BaseServerResponse & {
+    battleId?: string;
+    requiresUserRefresh?: boolean;
+    userPatch?: import("@/validators/userCache").UserCachePatch;
+    userDelta?: import("@/validators/userCache").UserDelta;
+  }
+> => {
   const { longitude, latitude, sector, userIds, targetIds, client } = info;
   const dungeonEncounter = info.coop?.kind === "dungeon" ? info.coop : undefined;
   const questEncounter = info.coop?.kind === "quest" ? info.coop : undefined;
@@ -2162,6 +2171,10 @@ export const initiateBattle = async (
       }))
       .filter((row) => row.quantity > 0);
   }
+
+  const cacheActor = fetchedUsers.find(
+    (user) => user.userId === info.cacheUserId && !user.isAi && !user.isSummon,
+  );
 
   const profileCacheSnapshots = Object.fromEntries(
     fetchedUsers
@@ -3662,8 +3675,42 @@ export const initiateBattle = async (
     if (!dungeonEncounter) throw error;
     Sentry.captureException(error, { tags: { source: "dungeonBattlePublication" } });
   }
-  // Return the battle
-  return { success: true, message: "You have attacked", battleId, requiresUserRefresh };
+
+  // Ordinary admission leaves profile pools, trackers and passive sources unchanged.
+  // Training/pet-bank settlement and live immunity timers require canonical recovery.
+  const canProject =
+    !!cacheActor &&
+    !requiresUserRefresh &&
+    allParticipantIds.includes(cacheActor.userId) &&
+    !queuedParticipants.some((entry) => entry.user.userId === cacheActor.userId) &&
+    !["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType) &&
+    !warAggressorIds.includes(cacheActor.userId) &&
+    !bracketImmunityAggressorIds.includes(cacheActor.userId) &&
+    cacheActor.bracketImmunityLiftedUntil <= now;
+  const userPatch: import("@/validators/userCache").UserCachePatch | undefined =
+    canProject
+      ? {
+          status: "BATTLE",
+          battleId,
+          bracketImmunityPausedAt: null,
+          ...(stealthBreakUserIds.includes(cacheActor.userId)
+            ? { stealthActive: false, stealthActivatedAt: null }
+            : {}),
+        }
+      : undefined;
+  const userDelta: import("@/validators/userCache").UserDelta | undefined = userPatch
+    ? info.tournamentGame
+      ? {}
+      : { pveFights: 1 }
+    : undefined;
+  return {
+    success: true,
+    message: "You have attacked",
+    battleId,
+    requiresUserRefresh,
+    userPatch,
+    userDelta,
+  };
 };
 
 const summonCycleCause = Symbol("summonCycle");

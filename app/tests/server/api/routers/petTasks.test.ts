@@ -11,7 +11,7 @@ import type { PetTask } from "@/validators/petTasks";
 import { QuestReward } from "@/validators/rewardPackages";
 import { insertItems, insertPetSpecies, insertQuests, insertUserItems, insertUsers } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
-import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 const ownerId = "task-owner";
 const petId = "task-pet";
@@ -118,11 +118,25 @@ describeWithDatabase("companion profession task dispatch and rewards", () => {
     const result = await caller.collectPetTask(task);
     expect(result.success).toBe(true);
     expect(result.rewards).toMatchObject({ reward_money: 50, reward_exp: 20, reward_hunting_experience: 40 });
-    expect(result.userPatch).toMatchObject({ petTask: null, money: 1050, huntingExperience: 40, earnedExperience: 1020, petExperience: 797 });
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
     expect(await readOwner(database)).toMatchObject({ petTask: null, money: 1050, huntingExperience: 40, earnedExperience: 1020, petExperience: 797 });
     expect(await readHistory(database)).toMatchObject({ completed: 1, previousCompletes: 1, periodCompletes: 1 });
     expect((await caller.collectPetTask(task)).success).toBe(false);
     expect((await readOwner(database))?.money).toBe(1050);
+  });
+
+  it("projects a confirmed integer-only task payout without a cache confirmation query", async () => {
+    const database = await getTestDatabase();
+    await database.update(quest).set({ content: { ...content, reward: QuestReward.parse({ reward_money: 50 }) } }).where(eq(quest.id, contractId));
+    const task = await dueTask(database);
+    const snapshot = await fetchUpdatedUser({ client: database, userId: ownerId });
+    expect(snapshot.requiresProgressionRefresh).toBe(false);
+    const { result, statements } = await recordQueries(() => callerForDatabase(questsRouter, ownerId, database).collectPetTask(task));
+    expect(result).toMatchObject({ success: true, userPatch: { petTask: null }, userDelta: { money: 50 } });
+    const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
+    expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
+    expect(await readOwner(database)).toMatchObject({ petTask: null, money: 1050, petExperience: 777, huntingExperience: 0 });
   });
 
   it("dispatches and collects from accepted art while a cosmetic redraw lease is abandoned", async () => {

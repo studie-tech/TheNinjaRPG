@@ -79,7 +79,10 @@ export function HuntingBoard({
       if (result.success && "battleId" in result && result.battleId) {
         // Clear the previous result before publishing the new battle, as arena starts do.
         onStarted?.();
-        await updateUser(result.userPatch, { revision });
+        await updateUser(result.userPatch, {
+          revision,
+          ...(result.userDelta ? { delta: result.userDelta } : {}),
+        });
         await Promise.all([
           utils.hunting.getBoard.invalidate(),
           utils.hunting.getSession.invalidate(),

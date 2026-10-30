@@ -1403,7 +1403,15 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       /** Applies battle/dialog results and refreshes state after an overworld NPC interaction. */
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
-        await updateUser(data.userPatch, {
+        // Daily cron can reset the allowance while this tab still holds yesterday's count.
+        const patch =
+          data.dailyOverworldQuestRollsBefore === undefined
+            ? data.userPatch
+            : (current: NonNullable<UserWithRelations>) =>
+                current.dailyOverworldQuestRolls === data.dailyOverworldQuestRollsBefore
+                  ? data.userPatch
+                  : undefined;
+        await updateUser(patch, {
           revision,
           ...(data.userDelta ? { delta: data.userDelta } : {}),
           achievementProgress: data.achievementProgress,

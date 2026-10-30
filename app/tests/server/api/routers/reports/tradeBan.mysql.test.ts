@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { userData, userReport, userReportComment } from "@/drizzle/schema";
-import * as profileQueries from "@/queries/profile";
 import { reportsRouter } from "@/server/api/routers/reports";
 import { insertUsers } from "../../../../setup/factories";
 import {
@@ -46,7 +45,7 @@ describeWithDatabase("moderator trade ban removal", () => {
   it("lets a moderator lift a trade ban they imposed and records the decision", async () => {
     const db = await getTestDatabase();
     const staff = callerForDatabase(reportsRouter, "staff", db);
-    expect(await staff.tradeBan(decision)).toMatchObject({ success: true, pendingReportCount: 0, userPatch: {}, userDelta: {} });
+    expect(await staff.tradeBan(decision)).toMatchObject({ success: true });
     expect(
       await db.query.userData.findFirst({ where: eq(userData.userId, "target") }),
     ).toMatchObject({ isTradeBanned: true });
@@ -73,7 +72,7 @@ describeWithDatabase("moderator trade ban removal", () => {
       },
     ]);
 
-    expect(await staff.clear(decision)).toMatchObject({ success: true, pendingReportCount: 0, userPatch: {}, userDelta: {} });
+    expect(await staff.clear(decision)).toMatchObject({ success: true });
     expect(
       await db.query.userReport.findFirst({
         where: eq(userReport.id, decision.object_id),
@@ -97,14 +96,13 @@ describeWithDatabase("moderator trade ban removal", () => {
     );
   });
 
-  it("keeps a committed moderation decision successful when optional report counts fail", async () => {
+  it("keeps report count recovery canonical after a committed moderation decision", async () => {
     const db = await getTestDatabase();
-    vi.spyOn(profileQueries, "selectUserReportForGetUser").mockRejectedValueOnce(new Error("Report count unavailable"));
     const result = await callerForDatabase(reportsRouter, "staff", db).tradeBan(decision);
     expect(result.success).toBe(true);
     expect(result.userPatch).toBeUndefined();
     expect(result.userDelta).toBeUndefined();
-    expect(result.pendingReportCount).toBeUndefined();
+    expect(result).not.toHaveProperty("pendingReportCount");
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "target") })).toMatchObject({ isTradeBanned: true });
     expect(await db.query.userReportComment.findMany()).toHaveLength(1);
   });
