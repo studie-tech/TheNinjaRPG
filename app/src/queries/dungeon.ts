@@ -572,16 +572,36 @@ export const updateDungeonRunForExpireDungeonRun = (
       status: "ENDED",
       battleId: null,
       version: sql`${dungeonRun.version} + 1`,
-      state: {
-        ...run.state,
-        readyIds: [],
-        message:
-          run.status === "LOBBY"
-            ? `The ${DUNGEON_LOBBY_SECONDS / 60}-minute dungeon lobby expired.`
-            : "The one-hour dungeon deadline expired.",
-      },
+      state: expiredDungeonState(run),
     })
     .where(and(eq(dungeonRun.id, run.id), eq(dungeonRun.version, run.version)));
+
+/**
+ * End a battle-free run and release its own queue and memberships in one guarded update.
+ * Affected rows span all joined tables, rather than counting claimed runs alone.
+ */
+export const expireDungeonRunWithoutBattle = (
+  client: Pick<DrizzleClient, "execute">,
+  run: typeof dungeonRun.$inferSelect,
+) =>
+  // Resolve wake eligibility in the join before activeUserId is cleared. Missing or busy
+  // users must not prevent the run and membership cleanup from committing.
+  client.execute(sql`UPDATE ${dungeonRun}
+    LEFT JOIN ${dungeonMember} ON ${dungeonMember.runId} = ${dungeonRun.id}
+    LEFT JOIN ${userData} ON ${userData.userId} = ${dungeonMember.activeUserId}
+      AND ${userData.status} = 'QUEUED' AND ${userData.battleId} IS NULL
+    SET ${dungeonRun.status} = 'ENDED', ${dungeonRun.battleId} = NULL,
+      ${dungeonRun.version} = ${dungeonRun.version} + 1,
+      ${dungeonRun.state} = CAST(${JSON.stringify(expiredDungeonState(run))} AS JSON),
+      ${userData.status} = 'AWAKE', ${userData.updatedAt} = NOW(3),
+      ${dungeonMember.activeUserId} = NULL
+    WHERE ${dungeonRun.id} = ${run.id} AND ${dungeonRun.version} = ${run.version}
+      AND ${dungeonRun.status} = ${run.status}
+      AND ${dungeonRun.status} NOT IN ('ENDED', 'COMPLETED')
+      AND ${dungeonRun.battleId} IS NULL
+      AND (${dungeonRun.expiresAt} <= NOW(3) OR (${dungeonRun.status} = 'LOBBY'
+        AND ${dungeonRun.expiresAt} IS NULL
+        AND ${dungeonRun.createdAt} <= TIMESTAMPADD(SECOND, ${-DUNGEON_LOBBY_SECONDS}, NOW(3))))`);
 
 /** Build the `userData` update for `expireDungeonRun`, using predicates on `userId` and `battleId`. */
 export const updateUserDataForExpireDungeonRun = (
@@ -665,7 +685,7 @@ export const releaseDungeonQueue = (
       ),
     );
 
-/** Entry history remains independent of the inventory and current quest attempt. */
+/** Project durable entry/completion receipts, retaining creation time for legacy rewards. */
 export const listDungeonEntryHistory = (
   client: Pick<DrizzleClient, "select">,
   userIds: string[],
@@ -683,6 +703,7 @@ export const listDungeonEntryHistory = (
           value === null || value === "null" ? null : Number(value),
       ),
       hasReward:
+        // The driver can return SQL integer expressions as strings; "0" is not a receipt.
         sql`COALESCE(JSON_TYPE(${dungeonMember.reward}) = 'OBJECT', FALSE)`.mapWith(
           (value: string | number) => Number(value) === 1,
         ),
@@ -692,6 +713,7 @@ export const listDungeonEntryHistory = (
     .innerJoin(dungeonRun, eq(dungeonRun.id, dungeonMember.runId))
     .where(inArray(dungeonMember.userId, userIds));
 
+/** Load historical completion evidence independently of a quest's current attempt. */
 export const listDungeonPrerequisites = (
   client: Pick<DrizzleClient, "query">,
   userIds: string[],
@@ -704,6 +726,7 @@ export const listDungeonPrerequisites = (
     columns: { userId: true, questId: true },
   });
 
+/** Load carried, available item stacks for admission and the subsequent guarded debits. */
 export const listDungeonEntryInventory = (
   client: Pick<DrizzleClient, "query">,
   userIds: string[],
@@ -729,6 +752,7 @@ export const listDungeonEntryInventory = (
     ),
   });
 
+/** Resolve referenced catalog rows together for save validation and requirement labels. */
 export const findDungeonRequirementSources = (
   client: Pick<DrizzleClient, "query">,
   requirements: DungeonContent["requirements"],
@@ -769,7 +793,11 @@ export const markDungeonFloorPublished = (
       ),
     );
 
-/** Selected companions receive the same completion XP in their active or parked bank. */
+/**
+ * Grant selected companions completion XP in their active or parked bank.
+ * Call once per pet: a joined UPDATE writes the shared owner row only once, so
+ * mixing active and parked pets in one statement would make its XP delta ambiguous.
+ */
 export const grantDungeonPetExperience = (
   client: Pick<DrizzleClient, "execute">,
   userId: string,
@@ -827,3 +855,13 @@ export const claimDungeonStartRecovery = (
         sql`COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${dungeonRun.state}, '$.battlePublished')), 'false') = 'false'`,
       ),
     );
+
+/** Keep expiry notices and cleared readiness identical for both cleanup write paths. */
+const expiredDungeonState = (run: { state: DungeonRunState; status?: string }) => ({
+  ...run.state,
+  readyIds: [],
+  message:
+    run.status === "LOBBY"
+      ? `The ${DUNGEON_LOBBY_SECONDS / 60}-minute dungeon lobby expired.`
+      : "The one-hour dungeon deadline expired.",
+});

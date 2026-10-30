@@ -758,6 +758,7 @@ export const profileRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       const now = new Date();
       const currentDayCycleStartedAt = new Date(getWorldCyclePosition(now).cycleStart);
+      /** Reconcile the same profile shape before and after an expiry refresh signal. */
       const fetchUser = () =>
         fetchUpdatedUser({
           client: ctx.drizzle,

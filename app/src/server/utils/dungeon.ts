@@ -9,6 +9,7 @@ import {
   claimDungeonQueue,
   claimDungeonStartRecovery,
   clearDungeonActiveUsers,
+  expireDungeonRunWithoutBattle,
   findBattleForExpireDungeonRun,
   releaseDungeonQueue,
   updateDungeonRunForExpireDungeonRun,
@@ -113,7 +114,8 @@ export const settleDungeonBattle = async (
 /**
  * End an expired run, delete its battle, restore bound members and release reservations.
  * A loaded run version claims the whole cleanup; terminal, unexpired and stale snapshots
- * are no-ops. Fetch the battle only when needed for its preloaded energy recovery values.
+ * are no-ops. Runs without a battle use one joined update; battle-bearing expiry must
+ * also delete the battle and restore its preloaded energy recovery values atomically.
  * Return whether readers must refresh, including when a competing version won the expiry CAS.
  */
 export const expireDungeonRun = async (
@@ -131,12 +133,17 @@ export const expireDungeonRun = async (
     ["COMPLETED", "ENDED"].includes(run.status)
   )
     return false;
+  if (!run.battleId) {
+    await retryOnDeadlock(() => expireDungeonRunWithoutBattle(client, run));
+    // A competing floor can win the CAS; callers must reload even when no row changed.
+    return true;
+  }
   const settledAt = new Date();
-  const snapshot = run.battleId
-    ? await findBattleForExpireDungeonRun(client, { battleId: run.battleId })
-    : undefined;
-  // The terminal status disables future expiry, so battle removal, revival and reservation
-  // release must commit with it. A single run CAS cannot express those multi-table effects.
+  const snapshot = await findBattleForExpireDungeonRun(client, {
+    battleId: run.battleId,
+  });
+  // Removing the playable battle needs DELETE while terminal status and revival need UPDATE.
+  // MySQL cannot combine those in one statement; commit them together so failures stay retryable.
   await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
       const claim = await updateDungeonRunForExpireDungeonRun(tx, run);

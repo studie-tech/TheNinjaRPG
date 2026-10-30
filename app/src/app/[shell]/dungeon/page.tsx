@@ -44,7 +44,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import type { DungeonContent, DungeonRewardReceipt } from "@/validators/dungeon";
 import { getSearchValidator } from "@/validators/register";
 
-/** Show invitations, party readiness and completion claims through the authenticated dungeon router. */
+/** Show entry requirements, human or companion squads, readiness and completion claims. */
 export default function DungeonPage() {
   // Reuse the account's calibrated server clock for deadlines, as other game timers do.
   const { data: user, timeDiff } = useRequiredUserData();

@@ -14,6 +14,7 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getQuestEntryCharges } from "@/server/utils/questEntry";
 import type { DungeonContent, DungeonRunState } from "@/validators/dungeon";
 
+/** Allocate dungeon tickets with the quest allocator from one human's filtered inventory. */
 export const getDungeonEntryCharges = (
   { requiredItemId, requiredItemQuantity }: ReturnType<typeof dungeonRequirements>,
   inventory: Parameters<typeof getQuestEntryCharges>[1],
@@ -37,7 +38,7 @@ export const fetchDungeonEntryData = async (client: DrizzleClient, ids: string[]
   return { history, quests, inventory };
 };
 
-/** Every human pays and qualifies independently; companions do not consume extra tickets. */
+/** Derive one human's admission error and counts; companion slots consume no extra tickets. */
 export const dungeonAdmission = (
   data: Awaited<ReturnType<typeof fetchDungeonEntryData>>,
   user: Pick<UserData, "userId" | "level">,
@@ -77,10 +78,13 @@ export const dungeonAdmission = (
 };
 
 /**
- * A floor publication marker and battle inserts cannot be one guarded statement.
- * Commit them together so recovery cannot delete a committed battle. The first floor
- * also commits its entry receipt and item debits, leaving failed starts uncharged.
- * Unique active membership prevents a second run from charging this account concurrently.
+ * Publish a playable floor with every participant claim and any first-entry charges.
+ * MySQL cannot combine the battle/history INSERTs with guarded run/user/item UPDATEs.
+ * Battle reads make inserted rows playable immediately, so separate publication would
+ * expose an unpaid battle or leave a charged entry without a battle after an insert failure.
+ * Every floor needs one commit with its publication marker to exclude destructive recovery.
+ * Admission reads stay outside this short transaction; active membership serializes entry
+ * attempts per account, and guarded debits reject inventory changes before committing.
  */
 export const commitDungeonEntryBattle = async <T>({
   client,

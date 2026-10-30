@@ -495,7 +495,9 @@ export type StructureRoute = (typeof StructureRoutes)[number];
 
 /** Shared dungeon limits for content validation, party commands, combat and player-facing rules. */
 export const DUNGEON_PARTY_SIZE = 3;
+/** Bound the attack-protected wait for an unstarted dungeon squad. */
 export const DUNGEON_LOBBY_SECONDS = 15 * 60;
+/** Owned companions occupy the other combat slots in a solo dungeon squad. */
 export const DUNGEON_SOLO_PETS = 2;
 export const DUNGEON_RUN_SECONDS = 60 * 60;
 export const DUNGEON_MAX_TIERS = 4;

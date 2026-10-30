@@ -4,6 +4,7 @@ import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 import { expireDungeonRun } from "@/server/utils/dungeon";
 
+/** Give the bounded deadline sweep the shared maintenance execution budget. */
 export const maxDuration = 300;
 
 /** Release offline squads on their deadline, guarded by the shared minute lock and run CAS. */

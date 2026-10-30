@@ -3352,7 +3352,7 @@ export const initiateBattle = async (
   }
   /**
    * Persist the preloaded battle and return the participant claim and any settled failure.
-   * First payments, event launches and personal hunts await writes within their transaction session.
+   * Dungeon floors, first payments, event launches and hunts await their transaction's writes.
    * Other battles dispatch independent writes together and settle all siblings before cleanup.
    */
   const createBattle = async (client: DrizzleClient) => {
@@ -3446,8 +3446,8 @@ export const initiateBattle = async (
   };
   const attempt = info.questAttempt;
   let result: Awaited<ReturnType<typeof createBattle>>;
-  // Separate ticket stacks, a receipt and battle inserts must commit together on first payment.
-  // Later and no-ticket floors use the existing participant claim and compensation path.
+  // Every dungeon floor commits its playable battle with the publication/recovery fence.
+  // First entry additionally commits all ticket stacks and its attempt receipt in that commit.
   if (dungeonEncounter && extraState.dungeon) {
     const committed = await commitDungeonEntryBattle({
       client,

@@ -10,6 +10,7 @@ import {
   DUNGEON_MAX_WAVES,
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
+  MAX_ITEM_STACK_SIZE,
   MAX_PLAYER_LEVEL,
   RetryQuestDelays,
   SECTOR_HEIGHT,
@@ -27,7 +28,7 @@ export const dungeonRequirementsSchema = z.object({
   requiredItemName: z.string().optional(),
   prerequisiteQuestId: z.string().min(1).nullable().prefault(null),
   requiredItemId: z.string().min(1).nullable().prefault(null),
-  requiredItemQuantity: z.number().int().min(1).max(9999).prefault(1),
+  requiredItemQuantity: z.number().int().min(1).max(MAX_ITEM_STACK_SIZE).prefault(1),
   maxAttempts: z.number().int().min(1).nullable().prefault(null),
   maxCompletes: z.number().int().min(1).nullable().prefault(null),
   attemptDelay: z.enum(RetryQuestDelays).prefault("none"),
@@ -173,6 +174,7 @@ export type DungeonRunState = CoopRoster & {
 export type DungeonRewardReceipt = {
   /** Delivered direct drops and successful package rolls, scoped to the dungeon. */
   grantedDrops?: string[];
+  /** Successful delivery time for period caps; legacy receipts use the run's creation time. */
   claimedAt?: number;
   money: number;
   experience: number;

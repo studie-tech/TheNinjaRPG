@@ -1,4 +1,6 @@
+/** Cover atomic entry publication, compensation, queue ownership and companion XP. */
 import { beforeEach, expect, it } from "bun:test";
+import { DUNGEON_LOBBY_SECONDS } from "@/drizzle/constants";
 import { eq, sql } from "drizzle-orm";
 import { battle, dungeonMember, dungeonRun, item, mpvpBattleUser, rankedPvpQueue, userData, userItem, questHistory, userPet } from "@/drizzle/schema";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
@@ -10,7 +12,7 @@ import { commitDungeonEntryBattle, dungeonAdmission, fetchDungeonEntryData } fro
 import { makeCompleteBattle } from "../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../setup/dungeon";
 import { insertItems, insertUserItems, insertUsers } from "../../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import { describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   beforeEach(async () => {
@@ -19,6 +21,7 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
     await insertItems([{ id: "ticket" }]);
     await insertUserItems(["a", "b", "c"].map((userId) => ({ id: `ticket-${userId}`, itemId: "ticket", userId, quantity: 2 })));
   });
+  /** Prepare an unpublished first floor with independently owned tickets for every human. */
   const admission = async () => {
     const db = await getTestDatabase();
     const content = dungeonContent();
@@ -91,14 +94,71 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   });
   it("expires an offline lobby and releases only its own queued members", async () => {
     const info = await admission();
+    // A battle-free expiry must not acquire a transaction session, even through a wrapper.
+    const withoutTransactions = new Proxy(info.client, {
+      get(target, key, receiver) {
+        if (key === "transaction") return () => { throw new Error("Unexpected expiry transaction"); };
+        return Reflect.get(target, key, receiver);
+      },
+    });
     await info.client.update(dungeonRun).set({status: "LOBBY", battleId: null, expiresAt: new Date(Date.now()-1)});
     await info.client.update(userData).set({status: "BATTLE", battleId: "other"}).where(eq(userData.userId,"c"));
     const expired = await listExpiredDungeonRuns(info.client);
     expect(expired).toHaveLength(1);
-    await Promise.all(expired.map((run) => expireDungeonRun(info.client,run)));
+    const { statements } = await recordQueries(() => Promise.all(expired.map((run) => expireDungeonRun(withoutTransactions,run))));
     expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"a")}))?.status).toBe("AWAKE");
     expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"c")}))?.battleId).toBe("other");
     expect((await info.client.query.dungeonMember.findMany()).every((row) => row.activeUserId === null)).toBe(true);
+    expect(statements).toHaveLength(1);
+  });
+  it.each(["version", "status", "battle", "deadline"] as const)("refreshes a stale %s expiry without changing the current run or users", async (change) => {
+    const { client: db } = await admission();
+    await db.update(dungeonRun).set({status: "LOBBY", battleId: null, expiresAt: new Date(Date.now() - 1000)});
+    const stale = (await db.query.dungeonRun.findFirst())!;
+    const patch = change === "version" ? {version: stale.version + 1} : change === "status" ? {status: "BETWEEN" as const} : change === "battle" ? {battleId: "new-battle"} : {expiresAt: new Date(Date.now() + 3600000)};
+    await db.update(dungeonRun).set(patch);
+    const current = await db.query.dungeonRun.findFirst();
+    const members = await db.query.dungeonMember.findMany();
+    const users = await db.query.userData.findMany();
+    expect(await expireDungeonRun(db, stale)).toBe(true);
+    expect(await db.query.dungeonRun.findFirst()).toEqual(current);
+    expect(await db.query.dungeonMember.findMany()).toEqual(members);
+    expect(await db.query.userData.findMany()).toEqual(users);
+  });
+  it.each(["memberless", "missing profile"] as const)("ends a %s lobby without requiring a joined user", async (kind) => {
+    const { client: db } = await admission();
+    await db.update(dungeonRun).set({status: "LOBBY", battleId: null, expiresAt: new Date(Date.now() - 1000)});
+    if (kind === "memberless") await db.delete(dungeonMember);
+    else await db.delete(userData).where(eq(userData.userId, "a"));
+    await expireDungeonRun(db, (await db.query.dungeonRun.findFirst())!);
+    expect(await db.query.dungeonRun.findFirst()).toMatchObject({status: "ENDED"});
+    expect((await db.query.dungeonMember.findMany()).every(row => row.activeUserId === null)).toBe(true);
+  });
+  it.each([true, false])("applies the implicit lobby deadline when old=%s", async (old) => {
+    const { client: db } = await admission();
+    await db.update(dungeonRun).set({status: "LOBBY", battleId: null, expiresAt: null, createdAt: new Date(Date.now() - (old ? DUNGEON_LOBBY_SECONDS + 1 : 1) * 1000)});
+    expect(await expireDungeonRun(db, (await db.query.dungeonRun.findFirst())!)).toBe(old);
+    expect((await db.query.dungeonRun.findFirst())?.status).toBe(old ? "ENDED" : "LOBBY");
+  });
+  it("expires a run once under concurrent cleanup calls", async () => {
+    const { client: db } = await admission();
+    await db.update(dungeonRun).set({status: "PAUSED", battleId: null, expiresAt: new Date(Date.now() - 1000)});
+    const run = (await db.query.dungeonRun.findFirst())!;
+    await Promise.all([expireDungeonRun(db, run), expireDungeonRun(db, run)]);
+    expect(await db.query.dungeonRun.findFirst()).toMatchObject({status: "ENDED", version: run.version + 1});
+    expect((await db.query.userData.findMany()).every(row => row.status === "AWAKE")).toBe(true);
+  });
+  it("does not release a historical member's newer dungeon reservation", async () => {
+    const { client: db } = await admission();
+    await db.update(dungeonRun).set({status: "LOBBY", battleId: null, expiresAt: new Date(Date.now() - 1000)});
+    const run = (await db.query.dungeonRun.findFirst())!;
+    await db.update(dungeonMember).set({activeUserId: null}).where(eq(dungeonMember.userId, "a"));
+    await db.insert(dungeonRun).values({...run, id: "newer", version: 0, expiresAt: new Date(Date.now() + 3600000)});
+    await db.insert(dungeonMember).values({runId: "newer", userId: "a", activeUserId: "a"});
+    await expireDungeonRun(db, run);
+    expect(await db.query.userData.findFirst({where: eq(userData.userId, "a")})).toMatchObject({status: "QUEUED", battleId: null});
+    expect(await db.query.dungeonMember.findFirst({where: eq(dungeonMember.runId, "newer")})).toMatchObject({activeUserId: "a"});
+    expect(await db.query.dungeonRun.findFirst({where: eq(dungeonRun.id, "newer")})).toMatchObject({status: "LOBBY", version: 0});
   });
   it("retains a committed first floor when recovery arrives with an earlier missing-battle snapshot", async () => {
     const info = await admission();
@@ -117,6 +177,7 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
     const info = await admission();
     const stale = (await info.client.query.dungeonRun.findFirst())!;
     await rollbackDungeonStart(info.client, stale, "fight", 1);
+    /** Fail loudly if recovery's losing launcher reaches battle creation. */
     const createBattle = async () => { throw new Error("A fenced launcher must not create a battle"); };
     expect((await commitDungeonEntryBattle({ ...info, createBattle })).success).toBe(false);
     expect((await info.client.query.userItem.findMany()).every((row) => row.quantity === 2)).toBe(true);

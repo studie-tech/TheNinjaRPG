@@ -1,3 +1,4 @@
+/** Preserve dungeon reservations across other activities' releases and tournament awards. */
 import { beforeEach, expect, it, afterEach, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
@@ -63,6 +64,7 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
       if (_name === "clan removal" || _name === "clan disband") expect(owner?.clanId).toBeNull();
     }
   });
+  /** Seed the current contested final with swappable seats and a measurable prize. */
   const createTournamentMatch = async (actor = "member") => {
     const db = await getTestDatabase();
     const startedAt = new Date(Date.now() - 10000);

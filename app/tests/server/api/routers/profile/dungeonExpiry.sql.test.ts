@@ -1,3 +1,4 @@
+/** Keep profile data and navigation consistent with expiry and competing floor publication. */
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { battle, dungeonMember, dungeonRun, userData, userVote, village } from "@/drizzle/schema";
@@ -6,6 +7,7 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { makeCompleteBattle, makeUser } from "../../../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState, dungeonContent } from "../../../../setup/dungeon";
 import { insertUsers } from "../../../../setup/factories";
+import { beforeStatements } from "../../../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
 
 const USER_ID = "dungeon-profile-owner";
@@ -44,23 +46,15 @@ describeWithDatabase("profile dungeon expiry reconciliation", () => {
     const db = await getTestDatabase();
     const run = await seedRun("LOBBY", new Date(Date.now() - 1000));
     let started = false;
-    const raced = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key !== "transaction") return Reflect.get(target, key, receiver);
-        return async (callback: Parameters<typeof db.transaction>[0]) => {
-          if (!started) {
-            started = true;
-            // A launcher can pass its deadline check before expiry loads the same version.
-            const claim = await updateDungeonRunForReserve(db, "new-battle", new Date(Date.now() + 3600000), run, run.state);
-            expect(claim.rowsAffected).toBe(1);
-            await db.insert(battle).values(makeCompleteBattle({ id: "new-battle" }));
-            expect((await markDungeonFloorPublished(db, run.id, "new-battle", 1, { ...run.state, entryPaidAt: Date.now(), battlePublished: true })).rowsAffected).toBe(1);
-            await db.update(userData).set({ status: "BATTLE", battleId: "new-battle" }).where(eq(userData.userId, USER_ID));
-          }
-          return target.transaction(callback);
-        };
-      },
-    });
+    const raced = beforeStatements(db, dungeonRun, [async () => {
+      started = true;
+      // A launcher can pass its deadline check before expiry loads the same version.
+      const claim = await updateDungeonRunForReserve(db, "new-battle", new Date(Date.now() + 3600000), run, run.state);
+      expect(claim.rowsAffected).toBe(1);
+      await db.insert(battle).values(makeCompleteBattle({ id: "new-battle" }));
+      expect((await markDungeonFloorPublished(db, run.id, "new-battle", 1, { ...run.state, entryPaidAt: Date.now(), battlePublished: true })).rowsAffected).toBe(1);
+      await db.update(userData).set({ status: "BATTLE", battleId: "new-battle" }).where(eq(userData.userId, USER_ID));
+    }]);
     const response = await callerForDatabase(profileRouter, USER_ID, raced).getUser();
     expect(started).toBe(true);
     expect(await db.query.dungeonRun.findFirst()).toMatchObject({ status: "FIGHTING", battleId: "new-battle", version: 1 });
@@ -87,6 +81,7 @@ describeWithDatabase("profile dungeon expiry reconciliation", () => {
   });
 });
 
+/** Seed a reserved profile and its optional playable battle for expiry reconciliation. */
 const seedRun = async (status: "LOBBY" | "FIGHTING", expiresAt: Date) => {
   const db = await getTestDatabase();
   const meta = dungeonBattleState({

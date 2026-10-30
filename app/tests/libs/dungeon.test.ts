@@ -153,6 +153,7 @@ describe("dungeon combat rules", () => {
 
 describe("dungeon admission limits", () => {
   const now = new Date("2026-10-30T12:00:00Z");
+  /** Start from an eligible account so each test changes only its admission constraint. */
   const evidence = () => ({ requirements: dungeonContent().requirements, level: 50, questCompleted: true, itemQuantity: 3, attempts: [] as number[], completions: [] as number[] });
   it("keeps default dungeons unlimited and checks level, historical quest and each player's items", () => {
     const info = evidence();

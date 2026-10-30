@@ -21,6 +21,7 @@ import {
   DUNGEON_MAX_TIERS,
   DUNGEON_MAX_WAVES,
   ENCOUNTER_MAX_WAVE_DELAY_ROUNDS,
+  MAX_ITEM_STACK_SIZE,
   MAX_PLAYER_LEVEL,
   RetryQuestDelays,
 } from "@/drizzle/constants";
@@ -39,7 +40,7 @@ import {
   dungeonRequirementsSchema,
 } from "@/validators/dungeon";
 
-/** Edit authored tiers, waves and completion rewards using the same schema enforced by the server. */
+/** Edit encounters, entry requirements and rewards using the shared server validator. */
 export default function DungeonEditor() {
   const { data: user } = useUserData();
   const utils = api.useUtils();
@@ -406,7 +407,7 @@ export default function DungeonEditor() {
                   <Field label="Entry item quantity">
                     <NumberInput
                       min={1}
-                      max={9999}
+                      max={MAX_ITEM_STACK_SIZE}
                       value={content.requirements.requiredItemQuantity}
                       onValueChange={(requiredItemQuantity) =>
                         patch({

@@ -1,3 +1,4 @@
+/** Ordinary and delayed activity cleanup must preserve another live dungeon's reservation. */
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
@@ -50,10 +51,12 @@ import {
   resetTables,
 } from "../../setup/testDatabase";
 
+/** Read the actor after cleanup rather than trusting an earlier router snapshot. */
 const owner = async () =>
   (await (
     await getTestDatabase()
   ).query.userData.findFirst({ where: eq(userData.userId, "a") }))!;
+/** Create a solo reservation through the router and verify the selected pets are locked. */
 const createDungeon = async () => {
   const result = await (await callerFor(dungeonRouter, "a")).create({
     id: "definition",
@@ -70,6 +73,7 @@ const createDungeon = async () => {
   ).toBe(false);
   return result;
 };
+/** Assert the run, membership, account queue and selected pet restrictions remain intact. */
 const verifyReservedDungeon = async (status = "LOBBY") => {
   const db = await getTestDatabase();
   expect(await db.query.dungeonRun.findFirst()).toMatchObject({ status });
@@ -83,6 +87,7 @@ const verifyReservedDungeon = async (status = "LOBBY") => {
     ).success,
   ).toBe(false);
 };
+/** Leave an expired shrine through its router, retaining the stale roster cleanup will see. */
 const expiredShrineLeave = async () => {
   const db = await getTestDatabase();
   await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "a"));
