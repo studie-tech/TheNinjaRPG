@@ -75,6 +75,7 @@ import {
   travelAvatar,
 } from "@/libs/rendering/scenes/travelActors";
 import { worldMotionHeading } from "@/libs/rendering/worldArt";
+import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
 import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
 import { createGenericStructure } from "@/libs/sector-map/structures";
@@ -366,8 +367,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   timeDiffRef.current = timeDiff;
   const [lightingPreviewDate, setLightingPreviewDate] = useState<Date | null>(null);
   const lightingPreviewRef = useRef<Date | null>(null);
+  const [weatherPreview, setWeatherPreview] = useState<WorldWeather | null>(null);
+  const weatherPreviewRef = useRef<typeof weatherPreview>(null);
   // The render loop reads only an authorized local preview; gameplay keeps the server clock.
   lightingPreviewRef.current = isStaffRole(userData?.role) ? lightingPreviewDate : null;
+  weatherPreviewRef.current = isStaffRole(userData?.role) ? weatherPreview : null;
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
     {
@@ -2219,6 +2223,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
               !showSorroundingRef.current &&
               performance.now() >= ignoreMapClicksUntilRef.current,
             lightDate,
+            weather: weatherPreviewRef.current,
+            weatherTime: Date.now() - timeDiffRef.current,
             brightness: lightDate ? getWorldCycleBrightness(lightDate) : 1,
           };
         },
@@ -2330,6 +2336,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             className="rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm"
             previewDate={lightingPreviewDate}
             onPreviewDateChange={setLightingPreviewDate}
+            previewWeather={weatherPreview}
+            onPreviewWeatherChange={setWeatherPreview}
           />
           {isWorldExpanded && (
             <Button

@@ -32,6 +32,7 @@ import { prepareCombatTerrain } from "@/libs/rendering/scenes/combatTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
 import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { createWorldWeather, getWorldWeather } from "@/libs/rendering/worldWeather";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import { clamp } from "@/utils/math";
 
@@ -95,6 +96,7 @@ export const createCombatScene = async (options: {
         ? createWorldShadows(game, world)
         : undefined;
     const lightingLayer = shadows?.container ?? new Container();
+    const weather = createWorldWeather(game, options.lightLayout);
     const groundLayer = new RenderLayer(),
       depthLayer = new RenderLayer({ sortableChildren: true }),
       uiLayer = new RenderLayer();
@@ -143,6 +145,7 @@ export const createCombatScene = async (options: {
       art.container,
       lightingLayer,
       effects.ground,
+      weather.container,
       outlines,
       labels,
       uiLayer,
@@ -389,6 +392,12 @@ export const createCombatScene = async (options: {
       const lightDate = snapshot.cycleEnabled
         ? new Date(Date.now() - snapshot.timeDiff)
         : null;
+      weather.update(
+        frame,
+        getWorldWeather(snapshot.battle.background, snapshot.weatherTime ?? Number.NaN),
+        world.position,
+        lightDate ? getWorldCycleBrightness(lightDate) : WORLD_DAY_BRIGHTNESS,
+      );
       if (shadows)
         shadows.update(
           worldSunlight(lightDate),
@@ -485,6 +494,8 @@ export type CombatSceneSnapshot = {
   timeDiff: number;
   /** Public/static previews stay at noon unless the world cycle is explicitly enabled. */
   cycleEnabled?: boolean;
+  /** Live weather is independent of the day/night preference; static previews omit this clock. */
+  weatherTime?: number;
   assets: GameAsset[];
   requestedIds: ReadonlySet<string>;
   aggro?: AggroDisplay;

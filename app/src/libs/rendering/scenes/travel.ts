@@ -30,12 +30,18 @@ import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
 import { boundsOverlap } from "@/libs/rendering/visibility";
 import { hasWorldWaterDepth } from "@/libs/rendering/worldArt";
 import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import {
+  createWorldWeather,
+  getWorldWeather,
+  type WorldWeather,
+} from "@/libs/rendering/worldWeather";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { getBiomeFromTileType } from "@/libs/travel";
 import { clamp } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
 
@@ -85,6 +91,7 @@ export const createTravelScene = async (options: {
         ? createWorldShadows(game, world)
         : undefined;
     const lightingLayer = shadows?.container ?? new Container();
+    const weather = createWorldWeather(game, options.lightLayout);
     const route = createTravelPath(),
       actors = createTravelActors(
         game,
@@ -98,7 +105,14 @@ export const createTravelScene = async (options: {
       route.container,
       depthLayer,
     );
-    world.addChild(terrainLayer, artLayer, lightingLayer, uiLayer, actors.container);
+    world.addChild(
+      terrainLayer,
+      artLayer,
+      lightingLayer,
+      weather.container,
+      uiLayer,
+      actors.container,
+    );
     game.stage.addChild(world);
     const sectors = new Map<number, TravelSector>();
     const movements = new Map<string, TravelActorMovement>();
@@ -636,6 +650,19 @@ export const createTravelScene = async (options: {
         route.set(points, tile?.width ?? 50);
       }
       route.animate(frame, actors.feet(snapshot.viewer?.userId ?? ""), scale());
+      weather.update(
+        frame,
+        snapshot.weather ??
+          getWorldWeather(
+            getBiomeFromTileType(
+              snapshot.window.find((region) => region.sector === snapshot.sector)
+                ?.globalTileType ?? 1,
+            ),
+            snapshot.weatherTime ?? Number.NaN,
+          ),
+        world.position,
+        snapshot.brightness,
+      );
       // Physical lighting excludes the canvas UI and the actors' identity markers.
       game.canvas.style.filter = "none";
       if (shadows) {
@@ -696,6 +723,9 @@ export type TravelSnapshot = Omit<TravelActorsSnapshot, "grid"> & {
   >;
   /** Server-corrected cycle clock; null disables cycle-dependent directional lighting. */
   lightDate?: Date | null;
+  /** Local visual override; the server-corrected live clock supplies regional weather otherwise. */
+  weather?: WorldWeather | null;
+  weatherTime?: number;
   decorations: Map<string, DecorationAsset>;
   terrains: Map<string, TerrainSpec>;
   /** Change when terrain, decoration or map-asset content changes to invalidate static artwork. */

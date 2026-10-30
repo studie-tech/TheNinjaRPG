@@ -4,9 +4,17 @@ import { Moon, RotateCcw, SlidersHorizontal, Sun } from "lucide-react";
 import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useDayNightCycle } from "@/hooks/day-night-cycle";
 import Countdown from "@/layout/Countdown";
 import { getWorldCyclePosition, getWorldCycleState } from "@/libs/dayNight";
+import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { isStaffRole } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -14,19 +22,26 @@ type DayNightIndicatorProps = {
   className?: string;
   previewDate?: Date | null;
   onPreviewDateChange?: (date: Date | null) => void;
+  previewWeather?: WorldWeather | null;
+  onPreviewWeatherChange?: (weather: WorldWeather | null) => void;
 };
 
-/** Shows live world time, with an optional staff-only control for the owning map's lighting. */
+/** Shows live world time, with local staff controls for the owning map's lighting and weather. */
 export function DayNightIndicator({
   className,
   previewDate = null,
   onPreviewDateChange,
+  previewWeather = null,
+  onPreviewWeatherChange,
 }: DayNightIndicatorProps) {
   const dayNightCycle = useDayNightCycle();
   const { data: userData, timeDiff } = useUserData();
   const sliderId = useId();
+  const weatherId = useId(),
+    strengthId = useId();
   const canPreview = isStaffRole(userData?.role) && !!onPreviewDateChange;
   const selectedDate = canPreview ? previewDate : null;
+  const selectedWeather = canPreview && onPreviewWeatherChange ? previewWeather : null;
   const cycle = selectedDate ? getWorldCycleState(selectedDate) : dayNightCycle;
   const position = getWorldCyclePosition(selectedDate ?? dayNightCycle.now);
   // The inspection clock places dawn at 06:00 and dusk at 18:00, respecting each phase's duration.
@@ -51,8 +66,13 @@ export function DayNightIndicator({
         )}
       </span>
       <span className="text-muted-foreground block text-xs">
-        {selectedDate ? (
-          <>Preview · {clock}</>
+        {selectedDate || selectedWeather ? (
+          <>
+            Preview ·{" "}
+            {selectedDate
+              ? clock
+              : selectedWeather && WEATHER_LABELS[selectedWeather.kind]}
+          </>
         ) : (
           <>
             {cycle.phase === "day" ? "Night" : "Day"} in{" "}
@@ -75,7 +95,7 @@ export function DayNightIndicator({
           <PopoverTrigger asChild>
             <button
               type="button"
-              aria-label="Preview map lighting"
+              aria-label="Preview map lighting and weather"
               className="focus-visible:ring-ring block w-full cursor-pointer rounded-sm text-left outline-hidden focus-visible:ring-2"
             >
               {indicator}
@@ -83,15 +103,18 @@ export function DayNightIndicator({
           </PopoverTrigger>
           <PopoverContent align="end" sideOffset={8} className="z-[60] w-64 p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">Lighting preview</span>
+              <span className="text-sm font-medium">World preview</span>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 className="h-7 gap-1.5 px-2"
-                disabled={!selectedDate}
-                aria-label="Use live world time"
-                onClick={() => onPreviewDateChange?.(null)}
+                disabled={!selectedDate && !selectedWeather}
+                aria-label="Use live world conditions"
+                onClick={() => {
+                  onPreviewDateChange?.(null);
+                  onPreviewWeatherChange?.(null);
+                }}
               >
                 <RotateCcw className="h-3 w-3" />
                 Live
@@ -128,7 +151,65 @@ export function DayNightIndicator({
               <span>12:00</span>
               <span>23:59</span>
             </div>
-            <p className="text-muted-foreground mt-3 text-xs">Local lighting only</p>
+            {onPreviewWeatherChange && (
+              <div className="mt-3 space-y-2 border-t pt-3">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <label htmlFor={weatherId}>Weather</label>
+                  <Select
+                    value={selectedWeather?.kind ?? "auto"}
+                    onValueChange={(value) =>
+                      onPreviewWeatherChange(
+                        value === "auto"
+                          ? null
+                          : {
+                              kind: value as WorldWeather["kind"],
+                              intensity: selectedWeather?.intensity ?? 0.65,
+                            },
+                      )
+                    }
+                  >
+                    <SelectTrigger id={weatherId} className="h-8 w-36 px-2 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="z-[70]">
+                      <SelectItem value="auto">Regional</SelectItem>
+                      {Object.entries(WEATHER_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedWeather && selectedWeather.kind !== "clear" && (
+                  <div>
+                    <div className="flex justify-between text-xs">
+                      <label htmlFor={strengthId}>Weather strength</label>
+                      <output htmlFor={strengthId} className="tabular-nums">
+                        {Math.round(selectedWeather.intensity * 100)}%
+                      </output>
+                    </div>
+                    <input
+                      id={strengthId}
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={Math.round(selectedWeather.intensity * 100)}
+                      aria-valuetext={`${Math.round(selectedWeather.intensity * 100)}%`}
+                      className="focus-visible:outline-ring mt-1 h-5 w-full cursor-pointer appearance-none rounded-lg bg-orange-200 accent-orange-800 focus-visible:outline-2 focus-visible:outline-offset-2"
+                      onChange={(event) =>
+                        onPreviewWeatherChange({
+                          ...selectedWeather,
+                          intensity: Number(event.target.value) / 100,
+                        })
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            <p className="text-muted-foreground mt-3 text-xs">Local preview only</p>
           </PopoverContent>
         </Popover>
       ) : (
@@ -137,3 +218,10 @@ export function DayNightIndicator({
     </div>
   );
 }
+
+const WEATHER_LABELS: Record<WorldWeather["kind"], string> = {
+  clear: "Clear",
+  rain: "Rain",
+  snow: "Snow",
+  sandstorm: "Sandstorm",
+};

@@ -89,7 +89,7 @@ const rendererFixture = () => {
   } as unknown as runtime.GameRenderer;
   cleanups.push(game.dispose);
   vi.spyOn(runtime, "createGameRenderer").mockResolvedValue(game);
-  return { game, tick: () => update({ now: 0, delta: 0, reducedMotion: true }) };
+  return { game, tick: (frame: runtime.GameFrame = { now: 0, delta: 0, reducedMotion: true }) => update(frame) };
 };
 const expectAmbientOnly = () => {
   expect(worldShadows.createWorldShadows).not.toHaveBeenCalled();
@@ -127,7 +127,7 @@ const expectGroundOrder = (stage: Container, sprite: Container) => {
   const contact = owner!.getChildByLabel("scenery-shadows")!.children[0]!;
   const glow = owner!.getChildByLabel("scenery-lights")!.children[0]!;
   const drawn = drawOrder(stage);
-  const lastTerrain = Math.max(...drawn.flatMap((view, index) => view instanceof Mesh ? [index] : []));
+  const lastTerrain = Math.max(...drawn.flatMap((view, index) => view instanceof Mesh && view.label !== "weather-particles" ? [index] : []));
   expect(drawn.indexOf(contact)).toBeGreaterThan(lastTerrain);
   expect(drawn.indexOf(glow)).toBeGreaterThan(lastTerrain);
   const leaves = drawn.filter((view) => { let node: Container | null = view; while (node) { if (node === sprite) return true; node = node.parent; } return false; });
@@ -156,6 +156,44 @@ const startTravel = (snapshot: TravelSnapshot) => createTravelScene({
 });
 
 describe("world lighting precision fallback", () => {
+  it("draws staff precipitation above scenery but below pins on mediump devices", async () => {
+    const fixture = rendererFixture(), snapshot = travelSnapshot();
+    snapshot.weather = { kind: "rain", intensity: .8 };
+    await startTravel(snapshot);
+    fixture.tick({ now: 1000, delta: .016, reducedMotion: false });
+    const drawn = drawOrder(fixture.game.stage);
+    const weather = fixture.game.stage.getChildByLabel("weather-particles", true)!;
+    const body = fixture.game.stage.getChildByLabel("fixture-body", true)!;
+    const pin = fixture.game.stage.getChildByLabel("fixture-pin", true)!;
+    expect(weather).toBeDefined();
+    expect(drawn.indexOf(weather)).toBeGreaterThan(drawn.indexOf(body));
+    expect(drawn.indexOf(weather)).toBeLessThan(drawn.indexOf(pin));
+    expectAmbientOnly();
+    snapshot.weather = { kind: "clear", intensity: 0 };
+    fixture.tick({ now: 1016, delta: .016, reducedMotion: false });
+    expect(weather.parent?.visible).toBe(false);
+  });
+  it("keeps outdoor combat weather below pins independently of the lighting preference, while previews stay clear", async () => {
+    const fixture = rendererFixture();
+    const prepare = combatTerrain.prepareCombatTerrain;
+    vi.spyOn(combatTerrain, "prepareCombatTerrain").mockImplementation((...args) => ({ ...prepare(...args), scenery }));
+    const battle = makeCompleteBattle({ background: "ground", width: 12, height: 10, usersEffects: [], usersState: [] }) as unknown as ReturnedBattle;
+    const snapshot: CombatSceneSnapshot = { battle, userId: "self", actions: [], timeDiff: 0,
+      cycleEnabled: false, weatherTime: 180_000, assets: [], requestedIds: new Set(), active: true, sound: false,
+      volume: 0, showGridNumbers: false, inspect: false };
+    const scene = await createCombatScene({ mount: document.createElement("div"), signal: new AbortController().signal,
+      getSnapshot: () => snapshot, onError: vi.fn(), onTap() {}, onHover() {}, onZoom() {}, play() {}, initialZoom: 1, lightLayout: false });
+    await scene.renderAt(1000);
+    const weather = fixture.game.stage.getChildByLabel("weather-particles", true)!;
+    const pin = fixture.game.stage.getChildByLabel("fixture-pin", true)!;
+    const drawn = drawOrder(fixture.game.stage);
+    expect(drawn.indexOf(weather)).toBeGreaterThanOrEqual(0);
+    expect(drawn.indexOf(weather)).toBeLessThan(drawn.indexOf(pin));
+    delete snapshot.weatherTime;
+    await scene.renderAt(1016);
+    expect(weather.parent?.visible).toBe(false);
+    expectAmbientOnly();
+  });
   it("keeps the selected journey below bodies without a pointer and clears it when interaction is disabled", async () => {
     const fixture = rendererFixture(), snapshot = travelSnapshot();
     snapshot.nav = buildWindowNav([{ dx: 0, dy: 0, map }], 10);
