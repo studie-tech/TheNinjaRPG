@@ -205,6 +205,30 @@ describe("travel scene ground depth", () => {
     }
   });
 
+  it.each(["battle", "quest"] as const)("picks a visible %s marker above an overlapping NPC body", async (kind) => {
+    const { scene, game, world, depth, overlay } = await sceneFixture();
+    const grid = scene.sectors.get(724)!.grid;
+    const actors = createTravelActors(game, { depth, overlay }); world.addChild(actors.container);
+    const npc = player({ userId: "npc", isNpc: true, npcPlacementId: "npc", npcInteractionType: "FRIENDLY" });
+    const questViewer = { ...viewer, userQuests: [{ quest: { id: "quest", content: { objectives: [{ id: "goal", task: "move_to_location", sector: 724, longitude: 4, latitude: 4, image: "depth-quest.png" }] } } }], questData: [{ id: "quest", goals: [{ id: "goal", done: false }] }] } as unknown as UserWithRelations;
+    actors.sync({ ...snapshotFixture(), grid, viewer: kind === "quest" ? questViewer : viewer, users: kind === "battle" ? [npc, player({ userId: "fighter", status: "BATTLE", battleId: "battle" })] : [npc] });
+    actors.animate(frame()); await settle();
+    const root = actors.container.children.find((child) => child.label === (kind === "battle" ? "battle:battle" : "quest:goal"))!;
+    const npcRoot = actors.container.children.find((child) => child.label === "npc:npc")!;
+    const body = npcRoot.children.at(-1)!.children.find((child) => child.label === "avatar")!;
+    const talk = npcRoot.children.at(-1)!.children.find((child) => child.label === "talk")!;
+    const tile = grid.getHex({ col: 4, row: 4 })!;
+    const point = root.toGlobal({ x: tile.width * 0.5 - tile.height * 0.1, y: tile.height * 1.05 });
+    expect(actors.container.getChildIndex(root)).toBeLessThan(actors.container.getChildIndex(npcRoot));
+    expect(overlay.renderLayerChildren.indexOf(root)).toBeLessThan(overlay.renderLayerChildren.indexOf(talk));
+    expect(root.children.at(-1)!.children.some((child) => child.getBounds().containsPoint(point.x, point.y))).toBe(true);
+    expect(body.getBounds().containsPoint(point.x, point.y)).toBe(true);
+    expect(talk.getBounds().containsPoint(point.x, point.y)).toBe(false);
+    expect(actors.hit(point.x, point.y)).toMatchObject({ key: root.label, type: `${kind}Marker`, longitude: 4, latitude: 4 });
+    root.visible = false;
+    expect(actors.hit(point.x, point.y)).toMatchObject({ type: "avatar", npcPlacementId: "npc" });
+  });
+
   it("keeps controls and encounter/count markers above scenery and prioritizes visible controls over nearer bodies", async () => {
     const { scene, game, world, depth, overlay } = await sceneFixture();
     expect(world.getChildIndex(depth)).toBeLessThan(world.getChildIndex(overlay));
