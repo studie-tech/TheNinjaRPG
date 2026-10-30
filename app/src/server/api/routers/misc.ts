@@ -140,9 +140,7 @@ export const miscRouter = createTRPCRouter({
     }),
   submitNotification: protectedProcedure
     .input(z.object({ content: z.string().min(2).max(10000), senderId: z.string() }))
-    .output(
-      userDeltaResponseSchema.extend({ announcements: z.array(z.string()).optional() }),
-    )
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query data
       const [user, sender] = await Promise.all([

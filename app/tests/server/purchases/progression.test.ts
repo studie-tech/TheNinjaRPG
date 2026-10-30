@@ -15,7 +15,7 @@ import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 import { grantStorePurchase } from "@/server/utils/purchases/grant";
 import { calcFedUgradeCost } from "@/utils/paypal";
 import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
-import { SimpleObjective } from "@/validators/objectives";
+import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../../setup/factories";
 import { failStatements } from "../../setup/statements";
@@ -54,6 +54,34 @@ describeWithDatabase("purchase reputation progression", () => {
     await db.insert(userVote).values({ id: "purchase-progress-vote", userId, secret: "payment1", lastVoteAt: new Date() });
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it.each(["native", "web"] as const)("preserves consumed progression messages through a %s purchase fallback", async (source) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, userId));
+    const content = { reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] };
+    await insertQuests([
+      { id: "purchase-progress", questType: "mission", hidden: false, content: { ...content, objectives: [
+        SimpleObjective.parse({ id: "purchase-goal", task: "reputation_points", value: 1 }),
+      ] } },
+      { id: "purchase-effect", questType: "mission", hidden: false, content: { ...content, objectives: [
+        InstantNewQuestObjective.parse({ id: "start-child", task: "new_quest", newQuestIds: ["purchase-child"] }),
+      ] } },
+      { id: "purchase-child", name: "Purchase Child Mission", questType: "mission", hidden: false,
+        content: { ...content, objectives: [SimpleObjective.parse({ id: "arena", task: "arena_kills", value: 100 })] } },
+    ]);
+    await insertQuestHistory([{ userId, questId: "purchase-progress", questType: "mission" }]);
+    const profile = await callerFor(profileRouter, userId);
+    await profile.getUser();
+    expect(await grantStorePurchase(db, { userId, transactionId: "feedback-purchase", productId: STORE_REP_PRODUCTS[0]!.productId, store: "APPLE", isSandbox: false, purchasedAt: new Date(), raw: {} })).toMatchObject({ status: "granted" });
+    // An admitted quest can have an instant effect pending during purchase confirmation.
+    await insertQuestHistory([{ userId, questId: "purchase-effect", questType: "mission" }]);
+    const result = source === "native" ? await (await callerFor(purchasesRouter, userId)).userSnapshot() : await getPurchaseUserUpdate(db, userId);
+    expect(result.userPatch).toBeFalsy();
+    expect(result.announcements).toContain("Started new quest: Purchase Child Mission");
+    const canonical = await profile.getUser();
+    expect(canonical.userData?.userQuests.some((entry) => entry.questId === "purchase-child")).toBe(true);
+    expect(canonical.notifications.some((entry) => entry.name === "Started new quest: Purchase Child Mission")).toBe(false);
+  });
 
   it.each(["snapshot unavailable", "snapshot missing", "catalogue unavailable", "bootstrap unavailable"] as const)("reconciles a delivered native purchase when confirmation is %s", async (failure) => {
     const db = await getTestDatabase();

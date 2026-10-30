@@ -97,13 +97,13 @@ export default function VillageOverview() {
     api.village.leaveVillage.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
+        showMutationToast(data);
         if (data.success || data.userPatch)
           await updateUser(data.userPatch, {
             revision,
             achievementProgress: data.achievementProgress,
             ...(data.userDelta ? { delta: data.userDelta } : {}),
           });
-        showMutationToast(data);
       },
     });
 

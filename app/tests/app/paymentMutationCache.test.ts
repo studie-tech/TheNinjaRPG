@@ -30,6 +30,7 @@ const setup = (file: string, procedure: string, progress: AchievementProgress[])
     item: { getUserItems: leaf, getUserItemsWithVariants: leaf },
   };
   const updateUser = vi.fn((patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options));
+  const showMutationToast = vi.fn();
   const source = readFileSync(join(import.meta.dirname, "../../src", file), "utf8");
   const call = source.indexOf(`api.${procedure}.useMutation(`);
   const indent = source.slice(source.lastIndexOf("\n", call) + 1, call).match(/^\s*/)?.[0];
@@ -37,16 +38,29 @@ const setup = (file: string, procedure: string, progress: AchievementProgress[])
   if (!callbacks) throw new Error(`${procedure} callbacks were not found in ${file}`);
   // Execute production callbacks so dropping response metadata cannot hide behind a manual merge.
   const options = new Function("utils", "prepareUserUpdate", "updateUser", "showMutationToast", "setMessage", "setSessionId", "sendGTMEvent", "props", `return (${callbacks});`)(
-    utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), {},
+    utils, () => prepareUserUpdate(client, key), updateUser, showMutationToast, vi.fn(), vi.fn(), vi.fn(), {},
   ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   return {
-    client, getUser, updateUser, options, profile,
+    client, getUser, updateUser, options, profile, showMutationToast,
     value: () => client.getQueryData<typeof profile>(key),
     close: () => { unsubscribe(); client.clear(); },
   };
 };
 
 describe.each(flows)("$procedure purchase confirmation", ({ file, procedure }) => {
+  it("delivers consumed feedback before awaiting canonical recovery", async () => {
+    const test = setup(file, procedure, []);
+    let finish!: () => void;
+    test.updateUser.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const announcements = ["Started new quest: Purchase Child Mission"];
+    try {
+      const pending = test.options.onSuccess({ success: true, message: "Delivered", announcements }, undefined, undefined);
+      expect(test.showMutationToast).toHaveBeenCalledWith(expect.objectContaining({ announcements }));
+      finish();
+      await pending;
+      expect(test.showMutationToast).toHaveBeenCalledTimes(1);
+    } finally { test.close(); }
+  });
   it("refetches the canonical profile after delivery when confirmation cannot supply a patch", async () => {
     const test = setup(file, procedure, []);
     try {

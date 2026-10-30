@@ -16,7 +16,10 @@ export const getPurchaseUserUpdate = (
   client: DrizzleClient,
   userId: string,
 ): Promise<
-  Pick<UserDeltaResponse, "userPatch" | "userDelta" | "achievementProgress">
+  Pick<
+    UserDeltaResponse,
+    "userPatch" | "userDelta" | "achievementProgress" | "announcements"
+  >
 > =>
   withRequestScope(async () => {
     const fallback = {
@@ -71,7 +74,8 @@ export const getPurchaseUserUpdate = (
           requiresRelations: true,
         })
       : undefined;
-    if (needsProgression && !progression?.userPatch) return fallback;
+    if (needsProgression && !progression?.userPatch)
+      return { ...fallback, announcements: progression?.announcements };
     return {
       userPatch: saved
         ? {

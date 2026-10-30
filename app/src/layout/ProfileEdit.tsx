@@ -1470,13 +1470,13 @@ const SwapVillage: React.FC = () => {
   const { mutate: swap, isPending: isSwapping } = api.village.swapVillage.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
+      showMutationToast(data);
       if (data.success || data.userPatch)
         await updateUser(data.userPatch, {
           revision,
           achievementProgress: data.achievementProgress,
           ...(data.userDelta ? { delta: data.userDelta } : {}),
         });
-      showMutationToast(data);
     },
     onSettled: () => {
       document.body.style.cursor = "default";

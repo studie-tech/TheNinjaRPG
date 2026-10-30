@@ -296,7 +296,8 @@ describe("NativeStore purchase recovery", () => {
     });
     const achievementProgress = [{ questId: "native-reputation", completed: 0 }];
     const userPatch = { federalStatus: "NONE", reputationPoints: 18, reputationPointsTotal: 18, questData: [{ id: "native-reputation", goals: [{ id: "reputation", value: 18, done: true }] }] };
-    testMocks().fetchSnapshot.mockResolvedValue({ userId: "player-1", userPatch, achievementProgress });
+    const announcements = ["Started new quest: Purchase Child Mission"];
+    testMocks().fetchSnapshot.mockResolvedValue({ userId: "player-1", userPatch, achievementProgress, announcements });
     const view = render(<NativeStore />);
     await view.findByRole("button", { name: "Active" });
     await waitFor(() => expect(onState).toBeDefined());
@@ -310,6 +311,7 @@ describe("NativeStore purchase recovery", () => {
     await waitFor(() => expect(view.queryByRole("button", { name: "Active" })).toBeNull());
     await waitFor(() => expect(testMocks().updateUser).toHaveBeenCalled());
     expect(testMocks().updateUser).toHaveBeenCalledWith(userPatch, { revision: 1, achievementProgress });
+    expect(testMocks().toast).toHaveBeenCalledWith({ success: true, message: "OK", announcements });
     expect(invalidate).toHaveBeenCalledTimes(1);
     expect(testMocks().restore).not.toHaveBeenCalled();
     view.unmount();
@@ -332,8 +334,9 @@ describe("NativeStore purchase recovery", () => {
     await waitFor(() => expect(finish).toBeDefined());
     testUser().userId = undefined;
     view.rerender(<NativeStore />);
-    await act(async () => { finish?.({ userId: "player-1", userPatch: { reputationPoints: 500, federalStatus: "GOLD" } }); });
+    await act(async () => { finish?.({ userId: "player-1", userPatch: { reputationPoints: 500, federalStatus: "GOLD" }, announcements: ["Old account quest feedback"] }); });
     expect(testMocks().updateUser).not.toHaveBeenCalled();
+    expect(testMocks().toast).not.toHaveBeenCalledWith(expect.objectContaining({ announcements: ["Old account quest feedback"] }));
   });
 
   it("reconciles through the canonical profile when a balance confirmation is unavailable", async () => {
@@ -344,11 +347,13 @@ describe("NativeStore purchase recovery", () => {
         return { remove: vi.fn().mockResolvedValue(undefined) };
       },
     };
-    testMocks().fetchSnapshot.mockResolvedValue({ userId: "player-1", userPatch: null, achievementProgress: undefined });
+    const announcements = ["Started new quest: Purchase Child Mission"];
+    testMocks().fetchSnapshot.mockResolvedValue({ userId: "player-1", userPatch: null, achievementProgress: undefined, announcements });
     render(<NativeStore />);
     await waitFor(() => expect(onState).toBeDefined());
     act(() => onState?.({ isActive: true }));
     await waitFor(() => expect(testMocks().updateUser).toHaveBeenCalledWith(undefined, { revision: 1, achievementProgress: undefined }));
+    expect(testMocks().toast).toHaveBeenCalledWith({ success: true, message: "OK", announcements });
     expect(testUser().data?.userId).toBe("player-1");
   });
 

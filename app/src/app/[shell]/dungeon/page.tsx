@@ -75,6 +75,7 @@ export default function DungeonPage() {
   });
   /** Show expected rejections beside the action and refresh party/account state after a mutation. */
   const refresh = async (response: UserDeltaResponse, revision: number | undefined) => {
+    showMutationToast(response);
     const patch = response.userPatch;
     if (response.success || response.userPatch)
       await updateUser(
@@ -90,7 +91,6 @@ export default function DungeonPage() {
       );
     setMessage(response.success ? "" : response.message);
     if (response.success) setAbandonId(null);
-    showMutationToast(response);
     await Promise.all([state.refetch(), available.refetch()]);
   };
   const create = api.coop.dungeon.create.useMutation({

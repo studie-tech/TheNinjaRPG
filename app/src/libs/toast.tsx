@@ -130,6 +130,8 @@ export const triggerConfetti = async (
 export const showMutationToast = (data: {
   success: boolean;
   message: React.ReactNode;
+  /** Confirmed feedback that a later profile read cannot redeliver. */
+  announcements?: string[];
   title?: string;
   action?: ToastActionElement;
   variant?: "destructive" | "default";
@@ -180,6 +182,14 @@ export const showMutationToast = (data: {
       });
     }
   }
+  // Deliver consumed feedback before any caller awaits profile reconciliation.
+  data.announcements?.forEach((message) => {
+    showMutationToast({
+      success: true,
+      message: <div>{parseHtml(message)}</div>,
+      title: "Notification!",
+    });
+  });
 };
 
 /**
