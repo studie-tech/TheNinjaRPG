@@ -1014,9 +1014,7 @@ export const profileRouter = createTRPCRouter({
           KAGE_DEFENSE_REMINDER_HOURS * 3600_000;
         notifications.push({
           href: "/townhall",
-          name: isPaused
-            ? "Kage defense schedule required: deadline paused during war"
-            : `Publish your Kage defense schedule by ${setupDeadline.toISOString().slice(0, 16).replace("T", " ")} UTC or lose the Kage title`,
+          name: "Missing kage schedule!",
           color: isUrgent && !isPaused ? "red" : "blue",
           alwaysShow: true,
         });
