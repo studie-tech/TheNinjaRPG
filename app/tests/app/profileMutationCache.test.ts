@@ -136,7 +136,7 @@ describe.each(flows.filter(({ procedure }) => ["quests.startQuest", "bloodline.s
     try {
       await test.options.onSuccess({ success: false, message: "Action no longer available" }, undefined, test.options.onMutate());
       await test.updateUser.mock.results[0]?.value;
-      expect(test.updateUser).toHaveBeenCalledTimes(procedure === "coop.dungeon.act" ? 2 : 1);
+      expect(test.updateUser).toHaveBeenCalledTimes(1);
       expect(test.getUser).toHaveBeenCalledTimes(1);
       expect(test.value()?.userData).toMatchObject({ cookingExperience: 23, cookingJobs: [] });
     } finally { test.close(); }
@@ -177,7 +177,7 @@ describe.each(admissionFlows)("$procedure admission deltas", ({ file, procedure 
       await test.updateUser.mock.results[0]?.value;
       expect(test.value()?.userData).toMatchObject({ status: "BATTLE", pveFights: 8 });
       expect(test.getUser).toHaveBeenCalledTimes(1);
-      expect(test.updateUser).toHaveBeenCalledTimes(procedure === "coop.dungeon.act" ? 2 : 1);
+      expect(test.updateUser).toHaveBeenCalledTimes(1);
     } finally { test.close(); }
   });
 });
