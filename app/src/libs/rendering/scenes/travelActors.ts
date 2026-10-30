@@ -351,7 +351,7 @@ export const createTravelActors = (
           ? distance
           : Math.min(
               distance,
-              recipe.tile.width * frame.delta * 6 * Math.max(1, record.path.length),
+              recipe.tile.width * frame.delta * 3 * Math.max(1, record.path.length),
             );
         record.x += (dx / distance) * step;
         record.y += (dy / distance) * step;
