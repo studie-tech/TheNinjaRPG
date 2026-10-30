@@ -29,7 +29,7 @@ export function HotkeyCaptureDialog({
 }: {
   target: HotkeyTarget | null;
   currentKey?: string;
-  onAssign: (key: string) => void;
+  onAssign: (key: string) => boolean | null | void;
   onClose: () => void;
 }) {
   const [error, setError] = useState<string>();
@@ -40,8 +40,7 @@ export function HotkeyCaptureDialog({
     event.preventDefault();
     event.stopPropagation();
     if (event.key === "Backspace" || event.key === "Delete") {
-      onAssign("");
-      onClose();
+      if (onAssign("") !== false) onClose();
       return;
     }
     const key = toHotkey(event.key);
@@ -49,8 +48,7 @@ export function HotkeyCaptureDialog({
       setError("Use a letter, a number or one of - = [ ] ; ' , . /");
       return;
     }
-    onAssign(key);
-    onClose();
+    if (onAssign(key) !== false) onClose();
   });
 
   useEffect(() => {
@@ -83,8 +81,7 @@ export function HotkeyCaptureDialog({
           <Button
             variant="outline"
             onClick={() => {
-              onAssign("");
-              onClose();
+              if (onAssign("") !== false) onClose();
             }}
           >
             Remove hotkey
@@ -132,10 +129,8 @@ export function LoadoutHotkeysPanel({
   actions: { id: string; name: string; hidden?: boolean }[];
 }) {
   const { data: userData } = useUserData();
-  const hotkeys = useBattleHotkeys();
   // Match the battle and inventory grids, which hide hidden content from players.
   const canSeeHidden = !!userData && canChangeContent(userData.role);
-  const [target, setTarget] = useState<HotkeyTarget | null>(null);
   const rows: HotkeyTarget[] = [
     ...actions
       .filter((action) => !action.hidden || canSeeHidden)
@@ -149,14 +144,16 @@ export function LoadoutHotkeysPanel({
       : []),
   ];
   const names = Object.fromEntries(rows.map((row) => [row.id, row.name]));
+  const { hotkeys, assign, dialog } = useHotkeyAssignment(names);
   const hasLoadout =
     kind === "jutsu" ? hotkeys.hasJutsuLoadout : hotkeys.hasItemLoadout;
 
   return (
     <section aria-label="Battle hotkeys" className="space-y-2">
       <p className="text-muted-foreground text-sm">
-        Keys are saved with the selected {kind} loadout. In battle you can also
-        right-click an action to change its key.
+        Keys are saved with the selected {kind} loadout. You can also right-click an
+        equipped {kind === "jutsu" ? "jutsu" : "item"} above, or an action in battle. A
+        key used by any item loadout is reserved across jutsu loadouts, and vice versa.
       </p>
       {!hasLoadout ? (
         <p className="text-sm">Select a loadout to set its hotkeys.</p>
@@ -173,20 +170,40 @@ export function LoadoutHotkeysPanel({
               <HotkeyChip
                 label={row.name}
                 hotkey={hotkeys.byAction[row.id]}
-                onClick={() => setTarget(row)}
+                onClick={() => assign(row)}
               />
             </li>
           ))}
         </ul>
       )}
-      <HotkeyCaptureDialog
-        target={target}
-        currentKey={target ? hotkeys.byAction[target.id] : undefined}
-        onAssign={(key) =>
-          target && hotkeys.setHotkey(target.kind, target.id, key, names)
-        }
-        onClose={() => setTarget(null)}
-      />
+      {dialog}
     </section>
   );
+}
+
+/**
+ * Key assignment for a page: the current bindings, a function that opens the
+ * capture dialog for an action, and the dialog element to render once.
+ */
+export function useHotkeyAssignment(names: Record<string, string> = {}) {
+  const hotkeys = useBattleHotkeys();
+  const [target, setTarget] = useState<HotkeyTarget | null>(null);
+  const dialog = (
+    <HotkeyCaptureDialog
+      target={target}
+      currentKey={target ? hotkeys.byAction[target.id] : undefined}
+      onAssign={(key) =>
+        target &&
+        hotkeys.setHotkey(target.kind, target.id, key, {
+          ...Object.fromEntries(
+            BASIC_HOTKEY_ACTIONS.map((action) => [action.id, action.name]),
+          ),
+          ...names,
+          [target.id]: target.name,
+        })
+      }
+      onClose={() => setTarget(null)}
+    />
+  );
+  return { hotkeys, assign: setTarget, dialog };
 }

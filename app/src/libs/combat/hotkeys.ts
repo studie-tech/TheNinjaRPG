@@ -8,6 +8,8 @@ import { z } from "zod";
  */
 export type HotkeyMap = Record<string, string>;
 
+export type HotkeyKind = "jutsu" | "item";
+
 /** Keys that can be bound: letters, digits and a few punctuation keys. */
 export const HOTKEY_KEYS = [
   ..."abcdefghijklmnopqrstuvwxyz",
@@ -82,6 +84,41 @@ export const assignHotkey = (
     if ((defaults[id] ?? "") === value) delete next[id];
   }
   return { map: next, displaced };
+};
+
+/** Find a key used by the other kind in any saved loadout, including basic defaults. */
+export const findLoadoutHotkeyConflict = (
+  kind: HotkeyKind,
+  map: HotkeyMap,
+  otherLoadouts: { name: string; hotkeys: HotkeyMap | null }[],
+) => {
+  const keys = new Set(
+    Object.values(kind === "jutsu" ? { ...DEFAULT_BASIC_HOTKEYS, ...map } : map).filter(
+      Boolean,
+    ),
+  );
+  // Basic actions remain available even before a jutsu loadout has been created.
+  const loadouts =
+    kind === "item" && otherLoadouts.length === 0
+      ? [{ name: "", hotkeys: {} }]
+      : otherLoadouts;
+  for (const [index, loadout] of loadouts.entries()) {
+    const otherMap =
+      kind === "item"
+        ? { ...DEFAULT_BASIC_HOTKEYS, ...loadout.hotkeys }
+        : (loadout.hotkeys ?? {});
+    for (const [actionId, key] of Object.entries(otherMap)) {
+      if (key && keys.has(key)) {
+        const label = kind === "item" ? "jutsu" : "item";
+        return {
+          actionId,
+          key,
+          loadoutName: `${label} loadout "${loadout.name || `Loadout ${index + 1}`}"`,
+        };
+      }
+    }
+  }
+  return undefined;
 };
 
 /**
