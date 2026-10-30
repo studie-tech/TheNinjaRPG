@@ -164,26 +164,20 @@ describe("manual AI editing", () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0]?.[0]).toMatchObject({ data: { preferredGeneral1: null, preferredGeneral2: null, primaryElement: null } });
   });
-  it("saves custom HP and clears it back to automatic scaling through the number field", async () => {
-    ai.aiHealthOverride = 5_000_000;
+  it("saves large pool modifiers and permits correcting values above the pool cap", async () => {
+    ai.level = 99;
     vi.spyOn(EditContent, "EditContent").mockImplementation((props) => (
-      <ActualEditContent {...props} formData={props.formData.filter(({ id }) => id === "aiHealthOverride")} />
+      <ActualEditContent {...props} formData={props.formData.filter(({ id }) => id === "poolsMultiplier")} />
     ));
     const view = await mount();
-    const input = view.getByRole("spinbutton", { name: /HP Override/ });
-    expect((input as HTMLInputElement).value).toBe("5000000");
-    fireEvent.input(input, { target: { value: "5000001" } });
+    const input = view.getByRole("spinbutton", { name: /Pool Modifier/ });
+    fireEvent.input(input, { target: { value: "1001" } });
     fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
     await waitFor(() => expect(toast.showFormErrorsToast).toHaveBeenCalled());
     expect(save).not.toHaveBeenCalled();
-    fireEvent.input(input, { target: { value: "1000000" } });
+    fireEvent.input(input, { target: { value: "1000" } });
     fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.lastCall?.[0].data.aiHealthOverride).toBe(1_000_000);
-    fireEvent.input(input, { target: { value: "" } });
-    fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
-    expect(save.mock.lastCall?.[0].data.aiHealthOverride).toBeNull();
+    expect(save.mock.lastCall?.[0].data.poolsMultiplier).toBe(1000);
   });
-
 });

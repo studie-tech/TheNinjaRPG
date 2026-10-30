@@ -3777,7 +3777,7 @@ export const scaleEditedAi = (stored: UserData, edited: UserData) => {
     }
   }
   scaleUserStats(edited, "ai", { reweight });
-  // Keep health within the content cap and CP/SP within their smallint columns.
+  // Keep stored HP, CP and SP within the content cap.
   clampStoredPools(edited);
 };
 

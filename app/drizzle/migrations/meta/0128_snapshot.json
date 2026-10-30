@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "081408fa-d138-459f-a42f-d10571e250fa",
+  "id": "d67efefd-f181-406b-9bf3-c17da09c65c4",
   "prevId": "d7a2581b-bf27-4cd9-ae08-94d8ef55387b",
   "tables": {
     "AbEvent": {
@@ -17044,7 +17044,7 @@
         },
         "curChakra": {
           "name": "curChakra",
-          "type": "smallint unsigned",
+          "type": "int unsigned",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -17052,7 +17052,7 @@
         },
         "maxChakra": {
           "name": "maxChakra",
-          "type": "smallint unsigned",
+          "type": "int unsigned",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -17076,7 +17076,7 @@
         },
         "curStamina": {
           "name": "curStamina",
-          "type": "smallint unsigned",
+          "type": "int unsigned",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -17084,7 +17084,7 @@
         },
         "maxStamina": {
           "name": "maxStamina",
-          "type": "smallint unsigned",
+          "type": "int unsigned",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
@@ -17370,13 +17370,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 1
-        },
-        "aiHealthOverride": {
-          "name": "aiHealthOverride",
-          "type": "int unsigned",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "primaryElement": {
           "name": "primaryElement",

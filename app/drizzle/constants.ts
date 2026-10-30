@@ -1937,7 +1937,7 @@ export const CONSUMABLE_CRAFTING_TIMES_MINS: Record<CRAFTING_RANK, number> = {
 };
 
 // Ai profile config
-export const AI_MAX_HEALTH = 5_000_000;
+export const MAX_STORED_POOL = 5_000_000;
 export const AI_PROFILE_MAX_RULES = 20;
 
 // Training config

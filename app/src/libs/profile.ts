@@ -1,6 +1,5 @@
 import type { CombatStatName, MasteryName, UserRank } from "@/drizzle/constants";
 import {
-  AI_MAX_HEALTH,
   BasicElementName,
   CLAN_BOOST_MAX_LEVEL,
   CLAN_BOOST_PERCENT_PER_LEVEL,
@@ -13,6 +12,7 @@ import {
   HP_PER_LVL,
   MAX_EXPERIENCE_LEVEL,
   MAX_MASTERY_CAP,
+  MAX_STORED_POOL,
   MasteryNames,
   PLAYER_LEVEL_XP_BASE_FACTOR,
   PLAYER_LEVEL_XP_HIGH_FACTOR,
@@ -270,22 +270,19 @@ export function capUserStats(user: UserData, rank: UserRank = user.rank) {
   if (user.sageMastery > MAX_MASTERY_CAP) user.sageMastery = MAX_MASTERY_CAP;
 }
 
-/** Largest value the UserData chakra and stamina columns can store. */
-export const MAX_STORED_POOL = 65_535;
-
-/** Highest pools multiplier whose HP, CP and SP at this level still fit the pool columns. */
+/** Highest whole pool modifier that keeps HP, CP and SP within the content cap. */
 export const maxPoolsMultiplier = (level: number) =>
   Math.floor(MAX_STORED_POOL / Math.max(calcHP(level), calcCP(level), calcSP(level)));
 
-/** Cap pools to what the UserData columns can store, so saving the row cannot overflow. */
+/** Keep stored AI pools within the content cap. */
 export const clampStoredPools = (
   user: Pick<
     UserData,
     "curHealth" | "maxHealth" | "curStamina" | "maxStamina" | "curChakra" | "maxChakra"
   >,
 ) => {
-  user.curHealth = Math.min(user.curHealth, AI_MAX_HEALTH);
-  user.maxHealth = Math.min(user.maxHealth, AI_MAX_HEALTH);
+  user.curHealth = Math.min(user.curHealth, MAX_STORED_POOL);
+  user.maxHealth = Math.min(user.maxHealth, MAX_STORED_POOL);
   user.curStamina = Math.min(user.curStamina, MAX_STORED_POOL);
   user.maxStamina = Math.min(user.maxStamina, MAX_STORED_POOL);
   user.curChakra = Math.min(user.curChakra, MAX_STORED_POOL);
@@ -320,8 +317,7 @@ export function scaleUserStats(
     | "experience"
     | CombatStatName
     | MasteryName
-  > &
-    Partial<Pick<UserData, "aiHealthOverride">>,
+  >,
   statScale: StatScale,
   options: { reweight?: boolean } = {},
 ) {
@@ -329,10 +325,8 @@ export function scaleUserStats(
   const poolMod = user.poolsMultiplier ?? 1;
   const statMod = user.statsMultiplier ?? 1;
   // Pools
-  const health =
-    (statScale === "ai" ? user.aiHealthOverride : null) ?? calcHP(user.level) * poolMod;
-  user.curHealth = health;
-  user.maxHealth = health;
+  user.curHealth = calcHP(user.level) * poolMod;
+  user.maxHealth = calcHP(user.level) * poolMod;
   user.curStamina = calcSP(user.level) * poolMod;
   user.maxStamina = calcSP(user.level) * poolMod;
   user.curChakra = calcCP(user.level) * poolMod;

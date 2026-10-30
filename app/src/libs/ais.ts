@@ -2,7 +2,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import {
-  AI_MAX_HEALTH,
   AvatarFacings,
   BasicElementName,
   ElementNames,
@@ -136,11 +135,6 @@ export const useAiEditForm = (
     { id: "sageMastery", label: "Sage Mastery", type: "number" },
     { id: "statsMultiplier", type: "number", label: "Stat Multiplier [Go beyond cap]" },
     { id: "poolsMultiplier", type: "number", label: "Pool Modifier [Go beyond cap]" },
-    {
-      id: "aiHealthOverride",
-      type: "number",
-      label: `HP Override [blank: level × pool modifier; max ${AI_MAX_HEALTH.toLocaleString("en-US")}]`,
-    },
     { id: "strength", label: "Strength Focus", type: "number" },
     { id: "intelligence", label: "Intelligence Focus", type: "number" },
     { id: "willpower", label: "Willpower Focus", type: "number" },
