@@ -45,6 +45,7 @@ import {
 } from "@/drizzle/schema";
 
 import { filterRollableBloodlines } from "@/libs/bloodline";
+import { findLoadoutHotkeyConflict, hotkeyLabel } from "@/libs/combat/hotkeys";
 import {
   deletedReason,
   editedReason,
@@ -91,7 +92,6 @@ import {
   type MasterySources,
   missingMasteryRequirement,
 } from "@/libs/mastery";
-
 import { createPetFromSpecies } from "@/libs/pets/creation";
 import { getMaxPetRank, getPetCollectionCapacity } from "@/libs/pets/progression";
 import { calcMaxEnergy } from "@/libs/profile";
@@ -242,6 +242,7 @@ import {
   updateUserItemForUnequipAllItems,
   updateUserItemForUpdate,
 } from "@/queries/item";
+import { fetchJutsuLoadouts } from "@/queries/jutsu";
 import { findActionLogById } from "@/queries/logs";
 import { insertUserPet, listVisiblePetJutsu } from "@/queries/pets";
 import {
@@ -3489,6 +3490,19 @@ export const itemRouter = createTRPCRouter({
     .input(setLoadoutHotkeysSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
+      const [loadout, jutsuLoadouts] = await Promise.all([
+        findItemLoadoutForRenameLoadout(ctx.drizzle, input, ctx),
+        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
+      ]);
+      if (!loadout) return errorResponse("Loadout not found");
+      const conflict = findLoadoutHotkeyConflict("item", input.hotkeys, jutsuLoadouts);
+      if (conflict) {
+        return errorResponse(
+          `${hotkeyLabel(conflict.key)} is used in ${conflict.loadoutName}. Change it there first.`,
+        );
+      }
+      // Concurrent edits on this account can leave a reversible binding conflict;
+      // resolveHotkeys still gives each key one action without requiring a transaction.
       const result = await updateItemLoadoutForSetLoadoutHotkeys(
         ctx.drizzle,
         input,

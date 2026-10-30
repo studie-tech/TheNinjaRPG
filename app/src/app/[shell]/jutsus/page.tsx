@@ -37,7 +37,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
-import { LoadoutHotkeysPanel } from "@/layout/HotkeyControls";
+import { LoadoutHotkeysPanel, useHotkeyAssignment } from "@/layout/HotkeyControls";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, {
   getFilter,
@@ -420,6 +420,20 @@ export default function MyJutsu() {
     [userData, userItems, activeSkills],
   );
 
+  // Battle keys belong to the jutsu id; equipped tiles are keyed by the learned jutsu id.
+  const {
+    hotkeys,
+    assign: assignHotkey,
+    dialog: hotkeyDialog,
+  } = useHotkeyAssignment(
+    Object.fromEntries((userJutsus ?? []).map((uj) => [uj.jutsuId, uj.jutsu.name])),
+  );
+  const equippedHotkeys = Object.fromEntries(
+    (userJutsus ?? [])
+      .filter((uj) => uj.equipped && hotkeys.byAction[uj.jutsuId])
+      .map((uj) => [uj.id, hotkeys.byAction[uj.jutsuId] ?? ""]),
+  );
+
   // Derived calculations
   const curEquip = userJutsus?.filter((j) => j.equipped).length;
   const maxEquip = userData && calcJutsuEquipLimit(userData);
@@ -540,7 +554,14 @@ export default function MyJutsu() {
               showBgColor={false}
               showLabels={true}
               emptyText="No jutsu equipped. Select jutsu from the categories below to equip."
+              hotkeys={equippedHotkeys}
+              onAssignHotkey={(item) => {
+                const uj = userJutsus?.find((entry) => entry.id === item.id);
+                if (uj)
+                  assignHotkey({ id: uj.jutsuId, name: uj.jutsu.name, kind: "jutsu" });
+              }}
             />
+            {hotkeyDialog}
           </div>
         )}
 

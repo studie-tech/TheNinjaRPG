@@ -5,6 +5,8 @@ import { api } from "@/app/_trpc/client";
 import {
   assignHotkey,
   DEFAULT_BASIC_HOTKEYS,
+  findLoadoutHotkeyConflict,
+  type HotkeyKind,
   type HotkeyMap,
   hotkeyLabel,
   resolveHotkeys,
@@ -13,12 +15,12 @@ import { showMutationToast } from "@/libs/toast";
 import { useUserData } from "@/utils/UserContext";
 
 /** Which loadout a key is stored in: jutsu and basics, or items. */
-export type HotkeyKind = "jutsu" | "item";
+export type { HotkeyKind } from "@/libs/combat/hotkeys";
 
 /**
  * Battle keys of the active jutsu and item loadouts, and a setter that saves a
  * change to the right loadout. Keys move within a loadout; a key already used by
- * the other loadout is refused so one key never means two actions.
+ * any loadout of the other kind is refused so one key never means two actions.
  */
 export const useBattleHotkeys = (options: { enabled?: boolean } = {}) => {
   const { data: userData } = useUserData();
@@ -68,15 +70,10 @@ export const useBattleHotkeys = (options: { enabled?: boolean } = {}) => {
       showMutationToast({ success: false, message: "Select a loadout first" });
       return false;
     }
-    const other =
-      kind === "jutsu" ? itemMap : { ...DEFAULT_BASIC_HOTKEYS, ...jutsuMap };
-    const owner = key
-      ? Object.entries(other ?? {}).find(([, bound]) => bound === key)?.[0]
-      : undefined;
-    if (owner) {
+    if (!jutsuLoadouts || !itemLoadouts) {
       showMutationToast({
         success: false,
-        message: `${hotkeyLabel(key)} is used by ${names[owner] ?? "another action"} in your ${kind === "jutsu" ? "item" : "jutsu"} loadout`,
+        message: "Loadouts are not ready. Try again shortly.",
       });
       return false;
     }
@@ -87,6 +84,18 @@ export const useBattleHotkeys = (options: { enabled?: boolean } = {}) => {
       key,
       kind === "jutsu" ? DEFAULT_BASIC_HOTKEYS : {},
     );
+    const owner = findLoadoutHotkeyConflict(
+      kind,
+      map,
+      kind === "jutsu" ? itemLoadouts : jutsuLoadouts,
+    );
+    if (owner) {
+      showMutationToast({
+        success: false,
+        message: `${hotkeyLabel(owner.key)} is used by ${names[owner.actionId] ?? (kind === "jutsu" ? "an item" : "a jutsu or basic action")} in ${owner.loadoutName}. Change it there first.`,
+      });
+      return false;
+    }
     // Show the new keys at once; the save confirms or the refetch restores them.
     if (kind === "jutsu") {
       utils.jutsu.getLoadouts.setData(undefined, (rows) =>

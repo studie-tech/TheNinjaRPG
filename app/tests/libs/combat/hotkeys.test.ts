@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   assignHotkey,
   DEFAULT_BASIC_HOTKEYS,
+  findLoadoutHotkeyConflict,
   hotkeyMapSchema,
   MAX_LOADOUT_HOTKEYS,
   resolveHotkeys,
@@ -51,5 +52,31 @@ describe("battle hotkeys", () => {
       Array.from({ length: MAX_LOADOUT_HOTKEYS + 1 }, (_, i) => [`j${i}`, "q"]),
     );
     expect(hotkeyMapSchema.safeParse(big).success).toBe(false);
+  });
+
+  it("checks every loadout of the other kind in both directions", () => {
+    const loadouts = [
+      { name: "", hotkeys: {} },
+      { name: "Arena", hotkeys: { action: "q" } },
+    ];
+    expect(findLoadoutHotkeyConflict("jutsu", { jutsuA: "q" }, loadouts))
+      .toEqual({ key: "q", actionId: "action", loadoutName: 'item loadout "Arena"' });
+    expect(findLoadoutHotkeyConflict("item", { potion: "q" }, loadouts))
+      .toEqual({ key: "q", actionId: "action", loadoutName: 'jutsu loadout "Arena"' });
+    expect(findLoadoutHotkeyConflict("item", { potion: "2" }, loadouts)).toBeUndefined();
+    expect(findLoadoutHotkeyConflict("jutsu", { jutsuA: "" }, loadouts)).toBeUndefined();
+  });
+
+  it("reserves defaults until every jutsu loadout clears or reassigns them", () => {
+    const cleared = { name: "", hotkeys: { wait: "" } };
+    expect(findLoadoutHotkeyConflict("item", { potion: "w" }, [cleared])).toBeUndefined();
+    expect(findLoadoutHotkeyConflict("item", { potion: "w" }, [cleared, { name: "", hotkeys: null }]))
+      .toMatchObject({ key: "w", actionId: "wait", loadoutName: 'jutsu loadout "Loadout 2"' });
+    expect(findLoadoutHotkeyConflict("item", { potion: "w" }, []))
+      .toMatchObject({ key: "w", actionId: "wait" });
+    expect(findLoadoutHotkeyConflict("jutsu", {}, [{ name: "", hotkeys: { potion: "w" } }]))
+      .toMatchObject({ key: "w", actionId: "potion" });
+    expect(findLoadoutHotkeyConflict("jutsu", { wait: "" }, [{ name: "", hotkeys: { potion: "w" } }]))
+      .toBeUndefined();
   });
 });
