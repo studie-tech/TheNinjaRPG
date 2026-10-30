@@ -2147,6 +2147,8 @@ export const initiateBattle = async (
       message: "You do not have the required entry items in your inventory.",
     };
   const hasEntryCharges = entryCharges.length > 0;
+  // Entry receipts and consumed equipment extend beyond the bounded combat cache patch.
+  requiresUserRefresh ||= hasEntryCharges;
   // Consumed equipment/consumables must not contribute stats or remain usable in battle.
   for (const player of fetchedUsers.filter(
     (u) => u.userId === info.questAttempt?.userId,
