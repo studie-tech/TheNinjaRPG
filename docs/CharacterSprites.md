@@ -82,8 +82,8 @@ consumes artwork and attribution metadata from a pinned revision and stages
 content-addressed PNG atlases in the gitignored `app/scripts/.artifacts/lpc/` directory.
 Atlas dimensions stay within WebGL 1's guaranteed 2048px texture size.
 Movement packing reconstructs every logical frame and verifies all visible RGBA
-pixels and alpha values before writing an atlas. Recolouring precedes packing so
-palette quantization sees the complete authored frame grid.
+pixels and alpha values before writing an atlas. Recolouring replaces exact authored
+RGB values and retains each pixel's original alpha, including partially transparent edges.
 
 From the repository root:
 

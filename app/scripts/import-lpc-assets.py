@@ -127,12 +127,10 @@ def recolor(image, definition, color, eyes, source_variant):
             painted.putalpha(image.getchannel("A"))
             return painted
         return image
-    indexed = image.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
-    values = indexed.getpalette("RGBA")
-    for i in range(0, len(values), 4):
-        values[i:i + 3] = replacements.get(tuple(values[i:i + 3]), values[i:i + 3])
-    indexed.putpalette(values, "RGBA")
-    return indexed.convert("RGBA")
+    # Match authored RGB ramps exactly; palette quantization would round partially transparent pixels.
+    painted = Image.new("RGBA", image.size)
+    painted.putdata([(*replacements.get(pixel[:3], pixel[:3]), pixel[3]) for pixel in image.get_flattened_data()])
+    return painted
 
 def candidates(definition, layer, body, state, color):
     """Locate source poses while keeping alternative slash animations mutually exclusive."""
