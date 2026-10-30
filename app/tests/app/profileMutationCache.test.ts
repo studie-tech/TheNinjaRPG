@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "bun:test";
+import { activeDungeonNotification } from "@/libs/dungeon";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 
@@ -16,7 +18,7 @@ const flows = [
   { file: "layout/RaidBrowser.tsx", procedure: "raids.claimDamageReward", patch: { reputationPoints: 10 }, invalidations: 2 },
   { file: "layout/Clan.tsx", procedure: "clan.upgradeHideoutToStronghold", patch: { village: { id: "home", type: "STRONGHOLD" } }, invalidations: 0 },
   { file: "layout/OccupationCrafting.tsx", procedure: "occupation.cancelQueuedCraft", patch: { queue: [] }, invalidations: 2 },
-  { file: "app/[shell]/dungeon/page.tsx", procedure: "coop.dungeon.act", patch: { status: "BATTLE" } },
+  { file: "app/[shell]/dungeon/page.tsx", procedure: "coop.dungeon.act", patch: { status: "BATTLE" }, invalidations: 2 },
   { file: "app/[shell]/territory-war/page.tsx", procedure: "territoryWar.startBattle", patch: { status: "QUEUED" } },
 ];
 
@@ -26,6 +28,7 @@ const setup = (file: string, procedure: string) => {
   const profile = {
     userData: { userId: "actor", status: "AWAKE", pveFights: 7, curHealth: 321, curChakra: 222, curStamina: 111, curEnergy: 37, money: 100, reputationPoints: 30, bloodlineId: null, bloodline: null, villageId: "home", village: { id: "home", type: "HIDEOUT" }, items: [{ id: "gear" }], loadout: { jutsuIds: ["jutsu"] }, userSkills: [{ id: "skill" }], skillPoints: 0, maxEnergy: 200 } as unknown as NonNullable<UserWithRelations>,
     achievementProgress: [{ questId: "preserved" }],
+    notifications: [] as NavBarDropdownLink[],
   };
   client.setQueryData(key, profile);
   const getUser = vi.fn(async () => profile);
@@ -63,8 +66,8 @@ const setup = (file: string, procedure: string) => {
   const transpiler = new (require("bun").Transpiler)({ loader: "tsx" }) as { transformSync(source: string): string };
   const factory = transpiler.transformSync(`function callbackOptions() { ${shared} return (${callbacks}); }`);
   // Execute the production callbacks with the real cache merger, matching userItemsRefresh.test.ts.
-  const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", "showRewardToast", "recoverUser", "state", "setMessage", "setAbandonId", "form", "pushToCombat", "router", "board", "onStarted", "setNpcDialog", "openRewardChoice", `${factory}\nreturn callbackOptions();`)(
-    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: invalidate }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), { push: vi.fn() }, { refetch: invalidate }, undefined, vi.fn(), vi.fn(),
+  const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", "showRewardToast", "recoverUser", "state", "setMessage", "setAbandonId", "form", "pushToCombat", "router", "board", "onStarted", "setNpcDialog", "openRewardChoice", "available", "activeDungeonNotification", `${factory}\nreturn callbackOptions();`)(
+    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: invalidate }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), { push: vi.fn() }, { refetch: invalidate }, undefined, vi.fn(), vi.fn(), { refetch: invalidate }, activeDungeonNotification,
   ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   return {
     client, getUser, invalidate, updateUser, options, profile,
@@ -182,6 +185,21 @@ it("keeps a known patch-only dungeon party change local when no delta is returne
     await test.updateUser.mock.results[0]?.value;
     expect(test.getUser).not.toHaveBeenCalled();
     expect(test.value()?.userData).toEqual(test.profile.userData);
+  } finally { test.close(); }
+});
+
+it("adds confirmed dungeon navigation once without replaying consumed feedback", async () => {
+  const test = setup("app/[shell]/dungeon/page.tsx", "coop.dungeon.act");
+  const unrelated: NavBarDropdownLink = { href: "/inbox", name: "Mail", color: "blue" };
+  test.client.setQueryData(key, { ...test.profile, notifications: [unrelated, activeDungeonNotification, activeDungeonNotification, { href: "/news", name: "Consumed feedback", color: "toast" }] });
+  try {
+    await test.options.onSuccess({ success: true, userPatch: { status: "QUEUED" } }, { action: "accept" }, test.options.onMutate());
+    await test.updateUser.mock.results[0]?.value;
+    expect(test.value()?.userData).toMatchObject({ status: "QUEUED", money: 100 });
+    expect(test.value()?.notifications).toEqual([unrelated, activeDungeonNotification]);
+    expect(test.getUser).not.toHaveBeenCalled();
+    expect(test.invalidate).toHaveBeenCalledTimes(2);
+    expect(test.updateUser).toHaveBeenCalledTimes(1);
   } finally { test.close(); }
 });
 
