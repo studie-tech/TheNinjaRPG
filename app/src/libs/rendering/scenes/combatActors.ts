@@ -443,7 +443,7 @@ export const createCombatActors = (
       /** Equal traversal time across hex directions preserves walk poses; the fallback permits mid-step returns. */
       const step = frame.reducedMotion
         ? distance
-        : (segment || record.tile.height) * 4 * frame.delta * ease;
+        : (segment || record.tile.height) * 2 * frame.delta * ease;
       if (distance <= step || distance < 0.01) {
         root.position.set(tx, ty);
         if (record.tile !== waypoint) {
