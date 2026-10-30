@@ -281,7 +281,7 @@ export function ChatConversation({
               // The id names the form field the editor writes to.
               id="comment"
               refreshKey={editorKey}
-              height="36"
+              height="32"
               disabled={isCommenting}
               placeholder={placeholder ?? `Message ${conversation.title}…`}
               control={control}

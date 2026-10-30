@@ -65,9 +65,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // Save finished exchanges; a streaming answer is saved once it completes.
+  // Save once an answer completes or fails; a failed question stays to retry.
   useEffect(() => {
-    if (!storageKey || status !== "ready") return;
+    if (!storageKey || (status !== "ready" && status !== "error")) return;
     if (messages.some((message) => message.role === "user")) {
       safeLocalStorageSetItem(
         storageKey,
@@ -241,7 +241,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                     compact
                     id="message"
                     placeholder="Ask about the game…"
-                    height="40"
+                    height="32"
                     rows={1}
                     control={form.control}
                     disabled={isLoading}
