@@ -21,6 +21,8 @@ import {
 } from "@/drizzle/constants";
 import {
   clan,
+  dungeonMember,
+  dungeonRun,
   mpvpBattleQueue,
   mpvpBattleUser,
   notification,
@@ -232,7 +234,8 @@ export const executeRowsForCleanupTerritoryWarTeams = (
   expired: SQL<unknown>,
 ) =>
   client.execute(
-    sql`UPDATE UserData u INNER JOIN MpvpBattleUser m ON m.userId = u.userId INNER JOIN MpvpBattleQueue q ON q.id = m.clanBattleId INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId SET u.status = 'AWAKE' WHERE ${expired} AND u.status = 'QUEUED'`,
+    sql`UPDATE UserData u INNER JOIN MpvpBattleUser m ON m.userId = u.userId INNER JOIN MpvpBattleQueue q ON q.id = m.clanBattleId INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId SET u.status = 'AWAKE' WHERE ${expired} AND u.status = 'QUEUED'
+      AND NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = u.userId AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
   );
 
 /** Execute the database statement for `cleanupTerritoryWarTeams`. */

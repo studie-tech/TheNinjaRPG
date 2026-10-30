@@ -26,6 +26,8 @@ import {
   SHRINE_WEEKLY_MAINTENANCE_COST,
 } from "@/drizzle/constants";
 import {
+  dungeonMember,
+  dungeonRun,
   mpvpBattleQueue,
   mpvpBattleUser,
   sector,
@@ -189,6 +191,7 @@ export const updateUserDataForRunStaleShrineLobbyCleanup = (
       and(
         inArray(userData.userId, unclaimedUsersSubquery),
         eq(userData.status, "QUEUED"),
+        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
       ),
     );
 
@@ -570,16 +573,6 @@ export const insertMpvpBattleQueueForChallengeShrine = (
     defenderEntityId: targetSector.villageId,
     sector: input.sectorNumber,
   });
-
-/** Build the `userData` update for `challengeShrine`, setting `status`, using predicates on `userId`. */
-export const updateUserDataForChallengeShrine2 = (
-  client: Pick<DrizzleClient, "update">,
-  user: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({ status: "AWAKE" })
-    .where(eq(userData.userId, user.userId));
 
 /** Build the `mpvpBattleQueue` lookup for `joinShrineBattle`, using predicates on `id`, `battleType`, `createdAt`. */
 export const findMpvpBattleQueueForJoinShrineBattle = (

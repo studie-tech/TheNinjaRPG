@@ -863,6 +863,7 @@ export const updateUserDataForInitiateClanBattle = (
         inArray(userData.userId, allIds),
         eq(userData.status, "QUEUED"),
         isNull(userData.battleId),
+        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
         // Recheck membership and the reserved lobby at the write: deletion can
         // release surplus players into another queue after startup's final read.
         exists(
