@@ -8,11 +8,22 @@ import { WOODLAND_DECORATIONS } from "@/libs/rendering/worldArt";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
+import { createSceneAssets } from "@/libs/rendering/assets";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("world sprite atlas ownership", () => {
+  it("preserves native source URLs while positive rendition widths use the image CDN", async () => {
+    const load = vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
+    const assets = createSceneAssets();
+    cleanups.push(() => assets.dispose());
+    const image = "https://ui0arpl8sm.ufs.sh/f/native-material-source-test.png";
+    await assets.texture(image, 0, "nearest");
+    expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: `${image}#tnr-nearest` }));
+    await assets.texture(image, 64, "nearest");
+    expect(load).toHaveBeenCalledWith(expect.objectContaining({ src: "https://uploadthing.b-cdn.net/f/native-material-source-test.png?width=64#tnr-nearest" }));
+  });
   it("retains wind transforms between subpixel steps and restores a still pose for reduced motion", async () => {
     const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(16 * 16 * 4), width: 16, height: 16 }) });
     vi.spyOn(Assets, "load").mockImplementation(async () => texture);

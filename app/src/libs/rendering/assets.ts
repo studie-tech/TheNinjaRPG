@@ -28,10 +28,12 @@ export const createSceneAssets = () => {
   const owned = new Map<string, ReturnType<typeof textures.acquire>>();
   let disposed = false;
   return {
-    /** width requests a CDN rendition in pixels; it does not size the displayed sprite. */
+    /** Positive widths request a CDN rendition; zero preserves the exact native source URL. */
     texture: (path: string, width = 50, sampling: "linear" | "nearest" = "linear") => {
       if (disposed) return Promise.reject(new Error("Scene assets are disposed"));
-      const source = worldAssetSource(path)?.image ?? textureImageUrl(path, width);
+      const source =
+        worldAssetSource(path)?.image ??
+        (width === 0 ? path : textureImageUrl(path, width));
       // Sampling is immutable for a shared source; nearest art owns a separate decoded source.
       const url =
         sampling === "nearest" ? `${source.split("#")[0]}#tnr-nearest` : source;
