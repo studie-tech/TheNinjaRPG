@@ -187,7 +187,7 @@ describeWithDatabase("raid join committed queue", () => {
     const result = await (await callerFor(raidsRouter, "queue-sql-user")).startRaidBattle({ teamId: "cache-team" });
     expect(result.success).toBe(true);
     expect(valueOf(result.userPatch?.questData)).toBe(20);
-    expect(result.userPatch?.persistedQuestData).toBeUndefined();
+    expect(result.userPatch).not.toHaveProperty("persistedQuestData");
     expect(result.achievementProgress?.some((entry) => entry.questId === "cache-reputation-achievement")).toBe(true);
     await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
     const cached = client.getQueryData<typeof profile>(key);

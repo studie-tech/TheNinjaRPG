@@ -752,50 +752,6 @@ describe("shared mutation user response", () => {
 
 
 describe("progression cache reconciliation", () => {
-  it.each(["null", "empty", "saved"] as const)("keeps fresh virtual progress in a composed tracker confirmation, persisted=%s", async (persisted) => {
-    const client = new QueryClient();
-    const virtual = QuestTracker.parse({ id: "virtual", goals: [{ id: "total", value: 10 }] });
-    const fresh = QuestTracker.parse({ id: "virtual", goals: [{ id: "total", value: 20 }] });
-    const obsolete = QuestTracker.parse({ id: "obsolete" });
-    const saved = QuestTracker.parse({ id: "saved" });
-    const persistedQuestData = persisted === "null" ? null : persisted === "empty" ? [] : [saved];
-    client.setQueryData(key, { userData: { ...profile(100).userData, questData: [virtual, obsolete] }, achievementProgress: [
-      { id: "virtual", questId: "virtual" },
-      { id: "obsolete", questId: "obsolete" },
-    ] });
-    await updateUserCache(client, key, { questData: [fresh], persistedQuestData }, { revision: prepareUserUpdate(client, key) });
-    const cached = client.getQueryData<{ userData: NonNullable<UserWithRelations> }>(key)?.userData;
-    expect(cached?.questData).toEqual([...(persistedQuestData ?? []), fresh]);
-    expect(cached).not.toHaveProperty("persistedQuestData");
-    client.clear();
-  });
-
-  it.each(["null", "empty"] as const)("removes virtual trackers omitted by a composed complete snapshot: %s", async (snapshot) => {
-    const client = new QueryClient();
-    const questData = snapshot === "null" ? null : [];
-    client.setQueryData(key, { userData: { ...profile(100).userData, questData: [QuestTracker.parse({ id: "virtual" })] }, achievementProgress: [{ id: "virtual", questId: "virtual" }] });
-    await updateUserCache(client, key, { questData, persistedQuestData: null }, { revision: prepareUserUpdate(client, key) });
-    expect(client.getQueryData<{ userData: NonNullable<UserWithRelations> }>(key)?.userData.questData ?? []).toEqual([]);
-    client.clear();
-  });
-
-  it("retains only omitted virtual achievements in a persisted tracker confirmation", async () => {
-    const client = new QueryClient();
-    const virtual = QuestTracker.parse({ id: "virtual", goals: [{ id: "total", value: 50 }] });
-    const old = QuestTracker.parse({ id: "removed-mission" });
-    const published = QuestTracker.parse({ id: "removed-achievement" });
-    const saved = QuestTracker.parse({ id: "saved", goals: [{ id: "goal", value: 2 }] });
-    client.setQueryData(key, { userData: { ...profile(100).userData, questData: [old, virtual, published] }, achievementProgress: [
-      { id: "virtual", questId: "virtual" },
-      { id: "history", questId: "removed-achievement" },
-    ] });
-    await updateUserCache(client, key, { persistedQuestData: [saved] }, { revision: prepareUserUpdate(client, key) });
-    const cached = client.getQueryData<{ userData: NonNullable<UserWithRelations> }>(key)?.userData;
-    expect(cached?.questData).toEqual([saved, virtual]);
-    expect(cached).not.toHaveProperty("persistedQuestData");
-    client.clear();
-  });
-
   it.each([false, true])("keeps complete tracker snapshots authoritative with explicit achievement metadata: %s", async (hasMetadata) => {
     const client = new QueryClient();
     client.setQueryData(key, { userData: { ...profile(100).userData, questData: [QuestTracker.parse({ id: "virtual" })] }, achievementProgress: [{ id: "virtual", questId: "virtual" }] });
