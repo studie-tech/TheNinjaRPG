@@ -499,25 +499,7 @@ export function ProfileEdit() {
 
   return (
     <ContentBox title="Profile settings" padding={false}>
-      <ProfileSettingsNavigation
-        groups={groups}
-        summary={
-          <div className="flex items-center gap-4">
-            <AvatarImage
-              href={userData.avatar}
-              alt={userData.username}
-              size={56}
-              className="border-border/20 m-0 h-14 w-14 shrink-0 rounded-xl"
-            />
-            <div className="min-w-0">
-              <p className="text-lg font-semibold break-words">{userData.username}</p>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Your character. Your preferences.
-              </p>
-            </div>
-          </div>
-        }
-      />
+      <ProfileSettingsNavigation groups={groups} />
     </ContentBox>
   );
 }

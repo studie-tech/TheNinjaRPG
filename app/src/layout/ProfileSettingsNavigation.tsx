@@ -14,10 +14,8 @@ import { cn } from "@/libs/shadui";
  */
 export function ProfileSettingsNavigation({
   groups,
-  summary,
 }: {
   groups: ProfileSettingsGroup[];
-  summary: ReactNode;
 }) {
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
@@ -84,8 +82,7 @@ export function ProfileSettingsNavigation({
     <div className="@container/settings">
       {!activeGroup ? (
         <div className="p-4 sm:p-6">
-          {summary}
-          <div className="relative mt-5 mb-5">
+          <div className="relative mb-5">
             <label htmlFor={searchId} className="sr-only">
               Search settings
             </label>

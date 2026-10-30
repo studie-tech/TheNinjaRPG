@@ -59,7 +59,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const mount = (visibleGroups = groups) => render(<ProfileSettingsNavigation groups={visibleGroups} summary={<p>Player settings</p>} />);
+const mount = (visibleGroups = groups) => render(<ProfileSettingsNavigation groups={visibleGroups} />);
 
 it("starts with categories and mounts only the selected editor", () => {
   const view = mount();
@@ -142,7 +142,7 @@ it("recovers from unknown or no-longer-permitted destinations without mounting t
   const view = mount([...groups, staffGroup]);
   expect(view.getByRole("textbox", { name: "Staff draft" })).toBeTruthy();
   mounted.mockClear();
-  view.rerender(<ProfileSettingsNavigation groups={groups} summary={<p>Player settings</p>} />);
+  view.rerender(<ProfileSettingsNavigation groups={groups} />);
   expect(view.queryByRole("textbox", { name: "Staff draft" })).toBeNull();
   expect(view.getByRole("navigation", { name: "Settings categories" })).toBeTruthy();
   expect(mounted).not.toHaveBeenCalled();
