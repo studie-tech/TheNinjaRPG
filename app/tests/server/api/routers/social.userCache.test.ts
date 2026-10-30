@@ -3,7 +3,7 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { clan, item, quest, questHistory, userItem, mpvpBattleQueue, mpvpBattleUser, userData, village, war } from "@/drizzle/schema";
+import { clan, item, quest, questHistory, userItem, mpvpBattleQueue, mpvpBattleUser, userCookingJob, userData, village, war } from "@/drizzle/schema";
 import { fetchActiveShrineLobbies, fetchAllActiveWars } from "@/queries/profile";
 import { findQueueUserCache } from "@/queries/socialUserCache";
 import * as socialQueries from "@/queries/socialUserCache";
@@ -22,7 +22,7 @@ import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables }
 describeWithDatabase("confirmed social profile projections", () => {
   afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
   beforeEach(async () => {
-    await resetTables(questHistory, quest, userItem, item, mpvpBattleUser, mpvpBattleQueue, war, clan, userData, village);
+    await resetTables(questHistory, quest, userItem, item, mpvpBattleUser, mpvpBattleQueue, war, clan, userCookingJob, userData, village);
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "old", name: "Old village", sector: 10, kageId: "old-kage" },
@@ -135,13 +135,44 @@ describeWithDatabase("confirmed social profile projections", () => {
     } finally { stop(); client.clear(); }
   });
 
-  it("returns committed recovery when an expired shrine leave is rejected", async () => {
+  it.each([false, true])("reconciles expired shrine leave and notices (cooking settlement=%s)", async (settlesCooking) => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "projection-user"));
-    await db.insert(mpvpBattleQueue).values({ id: "expired-shrine", battleType: "SHRINE_BATTLE", attackerEntityId: "old", defenderEntityId: "new", createdAt: new Date(0) });
-    stubProfile("fetchUpdatedUser", async () => ({ user: await db.query.userData.findFirst({ where: eq(userData.userId, "projection-user") }) }));
-    const result = await callerForDatabase(shrineRouter, "projection-user", db).leaveShrineBattle({ shrineBattleId: "expired-shrine" });
-    expect(result).toMatchObject({ success: false, userPatch: { status: "AWAKE", battleId: null } });
+    await db.update(userData).set({ status: "QUEUED", rank: "JONIN", level: 50, cookingExperience: 0, regeneration: 0 }).where(eq(userData.userId, "projection-user"));
+    await db.insert(mpvpBattleQueue).values({ id: "expired-shrine", battleType: "SHRINE_BATTLE", attackerEntityId: "old", defenderEntityId: "new", sector: 30, createdAt: new Date() });
+    if (settlesCooking) {
+      await db.insert(userCookingJob).values({ id: "cooking-receipt", userId: "projection-user", experience: 99, finishesAt: new Date(Date.now() + 3600000) });
+    }
+    const profile = callerForDatabase(profileRouter, "projection-user", db);
+    const initial = await profile.getUser();
+    expect(initial.userData).toHaveProperty("shrineBattles.length", 1);
+    expect(initial.notifications).toContainEqual(expect.objectContaining({ name: "We are attacking Shrine (Sector 30)" }));
+    expect(initial.userData?.cookingExperience).toBe(0);
+    expect(initial.userData?.cookingJobs).toHaveLength(settlesCooking ? 1 : 0);
+    const key = [["profile", "getUser"], { type: "query" }];
+    const client = new QueryClient();
+    client.setQueryData(key, initial);
+    let reads = 0;
+    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return profile.getUser(); } });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      const revision = prepareUserUpdate(client, key);
+      await db.update(mpvpBattleQueue).set({ createdAt: new Date(0) }).where(eq(mpvpBattleQueue.id, "expired-shrine"));
+      if (settlesCooking) {
+        // The leave's opening hydration settles a receipt absent from its queue projection.
+        await db.update(userCookingJob).set({ finishesAt: new Date(Date.now() - 1000) }).where(eq(userCookingJob.id, "cooking-receipt"));
+      }
+      const result = await callerForDatabase(shrineRouter, "projection-user", db).leaveShrineBattle({ shrineBattleId: "expired-shrine" });
+      expect(result).toMatchObject({ success: false, message: "Shrine battle expired" });
+      if (settlesCooking) expect(result.userPatch).toBeUndefined();
+      else expect(result.userPatch).toMatchObject({ status: "AWAKE", battleId: null, shrineBattles: [] });
+      await updateUserCache(client, key, result.userPatch, { revision });
+      const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "projection-user") });
+      const cached = client.getQueryData<typeof initial>(key)!;
+      expect(saved).toMatchObject({ status: "AWAKE", cookingExperience: settlesCooking ? 99 : 0 });
+      expect(cached.userData).toMatchObject({ status: "AWAKE", battleId: null, shrineBattles: [], cookingExperience: saved?.cookingExperience, cookingJobs: [] });
+      expect(cached.notifications).not.toContainEqual(expect.objectContaining({ name: "We are attacking Shrine (Sector 30)" }));
+      expect(reads).toBe(settlesCooking ? 1 : 0);
+    } finally { stop(); client.clear(); }
   });
 
   it.each(["mission", "achievement"] as const)("masks remote hidden coordinates in a battle patch without a persisted %s history", async (questType) => {
