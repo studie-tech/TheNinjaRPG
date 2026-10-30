@@ -52,8 +52,7 @@ const gameFixture = () => {
   });
   return { game, stage, advance: (next = frame()) => update(next) };
 };
-const sceneFixture = async () => {
-  const state = snapshotFixture();
+const sceneFixture = async (state = snapshotFixture()) => {
   const fixture = gameFixture();
   const scene = await createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => ({ ...state }), onError: (error) => { throw error; }, onReady: () => {}, onTap: () => {}, onHover: () => {}, onZoom: () => {}, initialZoom: 1 });
   fixture.advance(); await settle();
@@ -71,6 +70,30 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("travel scene ground depth", () => {
+  it.each(["village", "structure", "landmark"] as const)("draws a same-tile actor behind a %s building and a front-adjacent actor in front", async (kind) => {
+    const state = snapshotFixture();
+    state.users = [player({ longitude: 8, latitude: 5 })];
+    if (kind !== "village") {
+      state.window[0]!.structures = [];
+      state.window[0]!.map.objects.push({ id: "building", type: kind, x: 8, y: 5, assetKey: "depth-building.png" });
+    }
+    const { scene, depth, advance } = await sceneFixture(state);
+    const sector = scene.sectors.get(724)!;
+    const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
+    const building = sector.art.entries.find((entry) => entry.description.id === "building")!;
+    const tile = sector.grid.getHex({ col: 8, row: 5 })!;
+    expect(actor.y).toBeCloseTo(-tile.center.y);
+    depth.sortRenderLayerChildren();
+    expect(depth.renderLayerChildren.indexOf(actor)).toBeLessThan(depth.renderLayerChildren.indexOf(building.sprite));
+    const placement = { x: building.sprite.x, y: building.sprite.y, width: building.sprite.width, height: building.sprite.height };
+    state.users = [player({ longitude: 8, latitude: 4 })]; state.actorRevision++;
+    advance();
+    expect(actor.y).toBeCloseTo(-sector.grid.getHex({ col: 8, row: 4 })!.center.y);
+    depth.sortRenderLayerChildren();
+    expect(depth.renderLayerChildren.indexOf(actor)).toBeGreaterThan(depth.renderLayerChildren.indexOf(building.sprite));
+    expect(building.sprite).toMatchObject(placement);
+  });
+
   it("interleaves the same moving actor with trees and buildings at their ground baselines", async () => {
     const { scene, state, depth, stage, advance } = await sceneFixture();
     const sector = scene.sectors.get(724)!;

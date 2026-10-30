@@ -74,15 +74,18 @@ export const sectorSpriteDescriptions = (options: {
         rotation: asset.randomRotation ? seed * Math.PI * 2 : 0,
       });
     } else {
+      const isBuilding = object.type === "structure" || object.type === "landmark";
+      const size = h * (isBuilding ? 2.4 : 1.2);
+      const y = tile.y + h / 8;
       sprites.push({
         id: object.id,
         kind: object.type,
         image: object.assetKey,
-        size:
-          h * (object.type === "structure" || object.type === "landmark" ? 2.4 : 1.2),
+        size,
         x: tile.x,
-        y: tile.y + h / 8,
-        groundY: tile.y + h / 8,
+        y,
+        // Depth follows the building base while its image remains centered.
+        groundY: y - (isBuilding ? size * (BUILDING_BASE_ANCHOR_Y - 0.5) : 0),
         rendition: 200,
       });
     }
@@ -92,14 +95,16 @@ export const sectorSpriteDescriptions = (options: {
     if (structure.hasPage === 0) continue;
     const tile = grid.getHex({ col: structure.longitude, row: structure.latitude });
     if (!tile) continue;
+    const size = tile.height * 3;
+    const y = tile.y + tile.height / 10;
     sprites.push({
       id: structure.id,
       kind: "structure",
       image: structure.image,
-      size: tile.height * 3,
+      size,
       x: tile.x,
-      y: tile.y + tile.height / 10,
-      groundY: tile.y + tile.height / 10,
+      y,
+      groundY: y - size * (BUILDING_BASE_ANCHOR_Y - 0.5),
       rendition: 200,
       structureId: structure.id,
     });
@@ -122,7 +127,7 @@ export const sectorSpriteDescriptions = (options: {
         x: tile.x,
         y: tile.y + tile.height / 10,
         groundY: tile.y,
-        anchorY: 0.85,
+        anchorY: BUILDING_BASE_ANCHOR_Y,
         rendition: 512,
         locationId: location.id,
       });
@@ -142,6 +147,9 @@ export const sectorSpriteDescriptions = (options: {
   }
   return sprites.sort((a, b) => b.groundY - a.groundY);
 };
+
+/** Upright building art meets the ground near its base, below its image center. */
+const BUILDING_BASE_ANCHOR_Y = 0.85;
 
 const villageWallDescriptions = (grid: Grid<TerrainHex>, plan: VillageWallPlan) => {
   const sprites: WorldSpriteDescription[] = [];
