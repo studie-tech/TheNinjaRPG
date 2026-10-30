@@ -9,6 +9,12 @@ import type { NormalizedSectorObject } from "@/libs/sector-map/types";
 export interface DecorationAsset {
   key: string;
   filepath: string;
+  /** Pixel rectangle in an atlas; absent for standalone images. */
+  frame?: { x: number; y: number; width: number; height: number };
+  /** Contact-shadow depth as a fraction of sprite height; capped to keep the footprint compact. */
+  shadow?: number;
+  /** Category height calibration for bundled art; multiplies authored size variation. */
+  heightScale?: number;
   /** Sway in the wind shader */
   windAffected?: boolean;
   /** Hidden when the player enables the small-object filter */
@@ -20,7 +26,41 @@ export interface DecorationAsset {
   renderScale?: number;
 }
 
+/** Bundled practice targets share their physical height in authored scenery and combat. */
+export const TRAINING_DUMMY_ASSET = {
+  key: "training.dummy",
+  filepath: "/world-art/training-dummy.webp",
+  frame: { x: 0, y: 0, width: 94, height: 192 },
+  renderScale: 0.82,
+  shadow: 0.18,
+} satisfies DecorationAsset;
+
 export const DECORATION_ASSETS: DecorationAsset[] = [
+  TRAINING_DUMMY_ASSET,
+  // Oasis scenery shares one atlas and keeps bare roots and stone feet on authored banks.
+  ...(
+    [
+      ["tree.desert.palm", 0, 0, 75, 108, 2.9, 0.22, true],
+      ["tree.desert.palm.leaning", 128, 0, 75, 100, 2.7, 0.2, true],
+      ["tree.desert.palm.young", 0, 128, 57, 67, 1.8, 0.15, true],
+      ["oasis.well", 128, 128, 37, 37, 1, 0.12, false],
+    ] as const
+  ).map(([key, x, y, width, height, renderScale, shadow, windAffected]) => ({
+    key,
+    filepath: "/world-art/oasis-village.webp",
+    frame: { x, y, width, height },
+    renderScale,
+    shadow,
+    windAffected,
+  })),
+  // Bare post feet let practice rails sit on dry ground without a planted garden base.
+  {
+    key: "training.rail",
+    filepath: "/world-art/practice-rail.webp",
+    frame: { x: 0, y: 0, width: 116, height: 87 },
+    renderScale: 0.65,
+    shadow: 0.1,
+  },
   {
     key: "grass.tuft",
     filepath:

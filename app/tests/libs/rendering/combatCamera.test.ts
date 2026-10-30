@@ -77,7 +77,7 @@ describe("combat camera gestures", () => {
   it("resumes tracking the rendered fighter when it moves instead of jumping to its destination", async () => {
     const { world, scene, drag, tick, refresh, user } = await setup();
     drag(40, 20);
-    const actors = world.children[5] as Container, actor = actors.getChildByLabel(user.userId)!;
+    const actors = world.children.find((child) => child.getChildByLabel(user.userId)) as Container, actor = actors.getChildByLabel(user.userId)!;
     const originalX = actor.x;
     const destination = scene.grid.getHex({ col: 10, row: user.latitude })!;
     const originalFocus = originalX + destination.width / 2;

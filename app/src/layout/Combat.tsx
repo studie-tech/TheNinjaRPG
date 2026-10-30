@@ -18,6 +18,7 @@ import {
   useBattleMaps,
   useCombatUpdates,
 } from "@/hooks/combat";
+import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
@@ -114,6 +115,7 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
+  const { showDayNightMapOverlays } = useDayNightMapOverlays();
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("combatZoom", 1.5);
 
   // References which shouldn't update
@@ -1019,6 +1021,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         viewer: userData,
         aggro: config.showAggro ? aggro : undefined,
         timeDiff,
+        cycleEnabled: showDayNightMapOverlays,
         assets: gameAssetsRef.current.assets,
         requestedIds: gameAssetsRef.current.requestedIds,
         active: isPageActive && !result,

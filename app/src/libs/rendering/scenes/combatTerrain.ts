@@ -60,6 +60,8 @@ export const prepareCombatTerrain = (
         color: look.spec.colors[look.variant] ?? look.spec.colors[0],
         texture: look.spec.textureUrl,
         depression: look.spec.depression,
+        isWater: look.spec.isWater,
+        waterDepth: look.spec.key === "ocean",
         waveOffset:
           look.spec.isWater && !lightLayout
             ? (Math.floor(prng() * 8) * Math.PI) / 4
