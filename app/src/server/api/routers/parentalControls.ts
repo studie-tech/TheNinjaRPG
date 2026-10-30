@@ -14,6 +14,7 @@ import {
   protectedProcedure,
   serverError,
 } from "@/server/api/trpc";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { hashParentalPin, verifyParentalPin } from "@/server/utils/parentalControls";
 import { parentalSettingsSchema } from "@/validators/parentalControls";
 
@@ -85,9 +86,13 @@ export const parentalControlsRouter = createTRPCRouter({
       let result: { rowsAffected: number };
       try {
         // The version guard and unique account key allow only one concurrent save or setup to win.
-        result = settings
-          ? await updateParentalControlForSave2(ctx.drizzle, values, ctx, input)
-          : await insertParentalControlForSave(ctx.drizzle, ctx, values);
+        // A deadlock rolls back this statement; retry its unique/version guard without
+        // repeating PIN verification or consuming another failed-attempt allowance.
+        result = await retryOnDeadlock(async () =>
+          settings
+            ? updateParentalControlForSave2(ctx.drizzle, values, ctx, input)
+            : insertParentalControlForSave(ctx.drizzle, ctx, values),
+        );
       } catch {
         // Drizzle errors include SQL parameters, including the PIN hash. Do not expose
         // this derived credential to response serialization or error telemetry.
