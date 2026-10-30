@@ -35,15 +35,28 @@ describe("progression-derived profile navigation", () => {
     test.close();
   });
 
+  it("adds and preserves the canonical deletion notice once alongside unrelated navigation", async () => {
+    const test = setup();
+    const notice: NavBarDropdownLink = { href: "/profile?tab=edit&settings=deletion&setting=character", name: "Deletion requested", color: "red" };
+    await updateUserCache(test.client, key, { deletionAt: new Date() }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value().notifications.filter((entry) => /delet/i.test(entry.name))).toEqual([notice]);
+    await updateUserCache(test.client, key, { gender: "Unknown" }, { revision: prepareUserUpdate(test.client, key) });
+    expect(test.value().notifications.filter((entry) => /delet/i.test(entry.name))).toEqual([notice]);
+    expect(test.value().notifications.some((entry) => entry.id === "unrelated")).toBe(true);
+    test.close();
+  });
+
   it("clears deletion and sanction notices from the same confirmed account update", async () => {
     const test = setup();
-    test.client.setQueryData(key, { ...test.value(), notifications: [
-      { href: "/profile", name: "Being deleted", color: "red" },
+    test.client.setQueryData(key, { ...test.value(), userData: { ...test.value().userData, deletionAt: new Date(), isBanned: true, isTradeBanned: true }, notifications: [
+      { href: "/profile?tab=edit&settings=deletion&setting=character", name: "Deletion requested", color: "red" },
       { href: "/reports", name: "Banned!", color: "red" },
       { href: "/reports", name: "Trade Banned!", color: "red" },
+      { id: "unrelated", href: "/mail", name: "Mail", color: "blue" },
     ] });
     await updateUserCache(test.client, key, { deletionAt: null, isBanned: false, isTradeBanned: false }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value().notifications.some((entry) => ["Being deleted", "Banned!", "Trade Banned!"].includes(entry.name))).toBe(false);
+    expect(test.value().notifications.some((entry) => ["Deletion requested", "Banned!", "Trade Banned!"].includes(entry.name))).toBe(false);
+    expect(test.value().notifications.some((entry) => entry.id === "unrelated")).toBe(true);
     test.close();
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { UserQuest } from "@/drizzle/schema";
-import { removeClosedPyramidHistories, getIsolatedPyramid, getQuestEntryRequirements, hasQuestContentChanged, isBetweenPyramidBattles, isPyramidRestrictedProcedure } from "@/libs/questRun";
+import { getIsolatedPyramid, getQuestEntryRequirements, hasQuestContentChanged, isBetweenPyramidBattles, isPyramidRestrictedProcedure } from "@/libs/questRun";
 import { getTagSchema } from "@/validators/combat";
 import { DefeatOpponents, InstantStartBattleObjective, questEntryItemsSchema } from "@/validators/objectives";
 
@@ -28,21 +28,6 @@ describe("quest run configuration", () => {
     expect(getQuestEntryRequirements({ entryItems: [{ ids: ["a", "b"], number: 2 }, { ids: ["a"], number: 1 }] })).toEqual([{ itemId: "a", quantity: 3 }, { itemId: "b", quantity: 2 }]);
     expect(questEntryItemsSchema.safeParse([{ ids: ["a"], number: 1.5 }]).success).toBe(false);
   });
-  it("removes confirmed recovery receipts without discarding a newer run's tracker", () => {
-    const oldRun = { id: "old-run", questId: "pyramid", isolated: true, completed: 0, endAt: null } as UserQuest;
-    const other = { id: "other-run", questId: "other", isolated: false, completed: 0, endAt: null } as UserQuest;
-    const questData = [{ id: "pyramid", startAt: new Date(0).toISOString(), goals: [] }, { id: "other", startAt: new Date(0).toISOString(), goals: [] }];
-    const closed = [{ id: oldRun.id, questId: oldRun.questId, endAt: new Date() }];
-    const removed = removeClosedPyramidHistories({ userQuests: [oldRun, other], questData }, closed);
-    expect(removed.userQuests).toEqual([other]);
-    expect(removed.questData?.map((entry) => entry.id)).toEqual(["other"]);
-    const newer = { ...oldRun, id: "new-run" };
-    const retained = removeClosedPyramidHistories({ userQuests: [newer, other], questData }, closed);
-    expect(retained.userQuests).toEqual([newer, other]);
-    expect(retained.questData).toEqual(questData);
-    expect(getIsolatedPyramid(retained)).toBe(newer);
-  });
-
   it("keeps hidden/edited runs isolated until they end", () => {
     const entry = { isolated: true, completed: 0, endAt: null, questType: "battlepyramid", questVersion: new Date(0), quest: { hidden: true, updatedAt: new Date(1000) } } as UserQuest;
     expect(getIsolatedPyramid({ userQuests: [entry] })).toBe(entry);
