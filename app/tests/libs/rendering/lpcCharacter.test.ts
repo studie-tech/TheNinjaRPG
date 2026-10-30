@@ -3,7 +3,7 @@ import { Assets, BufferImageSource, Container, Graphics, Sprite, Texture } from 
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import { lpcCatalog, lpcFrame, type LpcLayout } from "@/libs/lpc/catalog";
+import { lpcCatalog, lpcFrame, spriteLayerSheets, type LpcLayout } from "@/libs/lpc/catalog";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
@@ -40,6 +40,36 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("layered LPC actors", () => {
+  it.each([
+    { profile: "club", animation: "slash", bodyAnimation: "slash", frames: Array.from({ length: 4 }, () => [5, 4, 3, 2, 1, 0]) },
+    { profile: "whip", animation: "slash", bodyAnimation: "slash", frames: [[0, 1, 4, 5, 3, 2, 2, 1], [0, 1, 5, 4, 3, 3, 3, 2], [0, 1, 5, 4, 3, 3, 2, 1], [0, 1, 5, 4, 3, 3, 3, 2]] },
+    { profile: "crossbow", animation: "shoot", bodyAnimation: "thrust", frames: Array.from({ length: 4 }, () => [0, 1, 2, 3, 4, 5, 6, 7]) },
+  ] as const)("keeps $profile columns aligned with authored body/clothing poses", async ({ profile, animation, bodyAnimation, frames }) => {
+    const { game } = gameFixture();
+    for (const body of ["male", "female"] as const) for (const reducedMotion of [false, true]) for (const mirror of [false, true]) {
+      const appearance: SpriteAppearance = { version: 1, body, layers: [{ profile: "body", color: "light" }, { profile: "shirt", color: "black" }, { profile, color: "brown", mirror }] };
+      const actor = await characters.createLpcCharacter(game, appearance);
+      const parts = appearance.layers.flatMap((layer) => spriteLayerSheets(appearance, layer).map((sheet) => ({ layer, sheet })));
+      for (const direction of [0, 1, 2, 3] as const) {
+        actor.render(frame(1000, reducedMotion), animation, direction, true);
+        for (let step = 0; step <= frames[direction].length; step++) {
+          actor.render(frame(1000 + step * 80, reducedMotion), animation, direction);
+          const poseDirection = mirror && (direction === 1 || direction === 3) ? direction === 1 ? 3 : 1 : direction;
+          const pose = frames[poseDirection][Math.min(reducedMotion ? 0 : step, frames[poseDirection].length - 1)]!;
+          for (const [index, part] of parts.entries()) {
+            const weapon = part.layer.profile === profile;
+            const state = weapon ? animation : bodyAnimation;
+            const facing = weapon && mirror && (direction === 1 || direction === 3) ? direction === 1 ? 3 : 1 : direction;
+            const expected = lpcFrame(part.sheet, state, facing, weapon ? step * 80 : pose * 80, weapon && reducedMotion);
+            const child = actor.sprite.children[index] as Sprite;
+            expect(child.visible).toBe(!!expected);
+            if (expected) expect(child.texture.frame).toMatchObject({ x: expected.x, y: expected.y, width: expected.width, height: expected.height });
+          }
+        }
+      }
+      expect(actor.durations[animation]).toBe(frames[0].length * 80);
+    }
+  });
   it("shares immutable source-owned frame views across independently animated actors", async () => {
     const { game, source, owned } = gameFixture();
     const appearance: SpriteAppearance = { version: 1, body: "male", layers: [{ profile: "body", color: "light" }] };
@@ -318,5 +348,27 @@ describe("layered LPC actors", () => {
     expect(render.mock.calls.at(-1)?.[1]).toBe("idle");
     battle.usersState = []; actors.sync({ battle });
     expect(root?.destroyed).toBe(true);
+  });
+  it.each([{ profile: "whip", animation: "slash" }, { profile: "crossbow", animation: "shoot" }] as const)("expires $profile cues after their authored eight-frame cycle", async ({ profile, animation }) => {
+    const { game } = gameFixture();
+    const renders: ReturnType<typeof vi.fn>[] = [];
+    vi.spyOn(characters, "createLpcCharacter").mockImplementation(async (...args) => {
+      const actor = await originalCreate(...args);
+      const render = vi.fn(actor.render); renders.push(render);
+      return { ...actor, render };
+    });
+    const user = makeBattleUser("custom-actor", { isAi: false, isOriginal: true, longitude: 3, latitude: 1, spriteAppearance: { version: 1, body: "male", layers: [{ profile: "body", color: "light" }, { profile, color: "brown" }] } });
+    const battle = makeCompleteBattle({ usersState: [user], usersEffects: [], width: 12, height: 10 }) as unknown as ReturnedBattle;
+    const actors = createCombatActors(game, getBattleGrid(40, battle, { x: -20, y: -20 }), () => {});
+    const stage = new Container(); stage.addChild(actors.container);
+    cleanups.push(() => stage.destroy({ children: true, texture: false, textureSource: false }));
+    actors.sync({ battle }); await actors.ready();
+    actors.animate(frame(1000), user.userId, undefined);
+    user.spriteAction = { id: "custom-strike", animation, longitude: 3, latitude: 1 };
+    actors.sync({ battle }); actors.animate(frame(1100), user.userId, undefined);
+    actors.sync({ battle }); actors.animate(frame(1660), user.userId, undefined);
+    expect(renders[0]!.mock.calls.at(-1)?.[1]).toBe(animation);
+    actors.animate(frame(1740), user.userId, undefined);
+    expect(renders[0]!.mock.calls.at(-1)?.[1]).toBe("idle");
   });
 });

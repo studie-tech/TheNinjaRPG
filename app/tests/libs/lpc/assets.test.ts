@@ -71,12 +71,28 @@ describe("published LPC artwork", () => {
       images.set(sheet.image, layout.columns * (trim.width + 2) * Math.ceil(count / layout.columns) * (trim.height + 2) * 4);
     }
     // The complete movement catalogue bounds distinct visible outfits independently of sharing.
-    expect([...images.values()].reduce((sum, bytes) => sum + bytes, 0)).toBeLessThan(80 * 1024 * 1024);
+    expect([...images.values()].reduce((sum, bytes) => sum + bytes, 0)).toBeLessThan(96 * 1024 * 1024);
   });
   it("uses the authored four directions, freezes reduced motion and clamps one-shot frames", () => {
     expect([lpcFacing(0, 1), lpcFacing(-1, 0), lpcFacing(0, -1), lpcFacing(1, 0)]).toEqual([0, 1, 2, 3]);
     const sheet = lpcCatalog.entries["body/male/light/blue"]![0]!;
     expect(lpcFrame(sheet, "walk", 2, 10000, true)).toEqual(lpcFrame(sheet, "walk", 2, 0, true));
     expect(lpcFrame(sheet, "slash", 2, 10000)).toEqual(lpcFrame(sheet, "slash", 2, 20000));
+  });
+  it("records valid custom body timelines and a neutral held pose for reverse-slash weapons", () => {
+    for (const body of ["male", "female"] as const) for (const profile of ["club", "whip", "crossbow"]) {
+      const state = profile === "crossbow" ? "shoot" : "slash";
+      for (const sheet of lpcCatalog.entries[`${profile}/${body}/brown/blue`]!) {
+        const layout = lpcCatalog.layouts[sheet.layout]!;
+        const pose = layout.bodyPoses?.[state];
+        expect(pose).toBeDefined();
+        expect(pose!.frames).toHaveLength(4);
+        for (const direction of [0, 1, 2, 3] as const) {
+          expect(pose!.frames[direction]).toHaveLength(layout.clips[state]![direction]!.length);
+          expect(pose!.frames[direction]!.every((index) => index >= 0 && index < (pose!.animation === "thrust" ? 8 : 6))).toBe(true);
+          if (profile === "club") expect(layout.clips.idle![direction]).toEqual([layout.clips.slash![direction]![5]!]);
+        }
+      }
+    }
   });
 });

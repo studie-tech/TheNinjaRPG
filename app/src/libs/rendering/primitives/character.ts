@@ -1,5 +1,10 @@
 import { Container, Rectangle, Sprite, Texture, type TextureSource } from "pixi.js";
-import { lpcCatalog, lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
+import {
+  LPC_ATTACK_FRAME_MS,
+  lpcCatalog,
+  lpcFrame,
+  spriteLayerSheets,
+} from "@/libs/lpc/catalog";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
 
@@ -41,6 +46,30 @@ export const createLpcCharacter = async (
     sprite.addChild(child);
     return { ...part, child };
   });
+  const durations: Partial<Record<LpcAnimation, number>> = {};
+  const poseOwners = new Map<LpcAnimation, (typeof parts)[number]>();
+  for (const part of parts)
+    for (const [animation, directions] of Object.entries(
+      lpcCatalog.layouts[part.sheet.layout]!.clips,
+    ))
+      if (animation !== "idle" && animation !== "walk") {
+        const state = animation as LpcAnimation;
+        durations[state] = Math.max(
+          durations[state] ?? 0,
+          ...directions.map((frames) => frames.length * LPC_ATTACK_FRAME_MS),
+        );
+        if (
+          !poseOwners.has(state) &&
+          lpcCatalog.layouts[part.sheet.layout]?.bodyPoses?.[state]
+        )
+          poseOwners.set(state, part);
+      }
+  for (const [animation, part] of poseOwners)
+    durations[animation] = Math.max(
+      ...lpcCatalog.layouts[part.sheet.layout]!.bodyPoses![animation]!.frames.map(
+        (frames) => frames.length * LPC_ATTACK_FRAME_MS,
+      ),
+    );
   let state: LpcAnimation = "idle",
     direction: LpcDirection = 2,
     startedAt = 0,
@@ -58,10 +87,28 @@ export const createLpcCharacter = async (
       startedAt = frame.now;
     }
     direction = nextDirection;
+    // A custom weapon drives the body timeline while retaining its own authored columns.
+    const poseOwner = poseOwners.get(state);
+    const pose =
+      poseOwner && lpcCatalog.layouts[poseOwner.sheet.layout]!.bodyPoses![state]!;
+    const opposite = direction === 1 ? 3 : direction === 3 ? 1 : direction;
+    const poses = pose?.frames[poseOwner?.layer.mirror ? opposite : direction];
+    const elapsed = frame.now - startedAt;
+    const poseStep =
+      poses?.[
+        Math.min(
+          frame.reducedMotion
+            ? 0
+            : Math.floor(Math.max(0, elapsed) / LPC_ATTACK_FRAME_MS),
+          poses.length - 1,
+        )
+      ];
     for (const entry of layers) {
+      const usesBodyPose = pose && entry.layer !== poseOwner?.layer;
+      const animation = usesBodyPose ? pose.animation : state;
       if (
-        entry.authored.has(state) &&
-        !lpcCatalog.layouts[entry.sheet.layout]?.clips[state]
+        entry.authored.has(animation) &&
+        !lpcCatalog.layouts[entry.sheet.layout]?.clips[animation]
       ) {
         entry.child.visible = false;
         continue;
@@ -69,14 +116,10 @@ export const createLpcCharacter = async (
       // Flipping an off-hand pose reverses its horizontal facing, so sample the opposite row first.
       const sample = lpcFrame(
         entry.sheet,
-        state,
-        entry.layer.mirror && (direction === 1 || direction === 3)
-          ? direction === 1
-            ? 3
-            : 1
-          : direction,
-        frame.now - startedAt,
-        frame.reducedMotion,
+        animation,
+        entry.layer.mirror ? opposite : direction,
+        usesBodyPose ? (poseStep ?? 0) * LPC_ATTACK_FRAME_MS : elapsed,
+        usesBodyPose ? false : frame.reducedMotion,
       );
       entry.child.visible = !!sample;
       if (!sample) continue;
@@ -90,7 +133,7 @@ export const createLpcCharacter = async (
     if (!sprite.destroyed)
       sprite.destroy({ children: true, texture: false, textureSource: false });
   });
-  return { sprite, render };
+  return { sprite, render, durations };
 };
 
 const sourceFrames = new WeakMap<TextureSource, Map<string, Texture>>();

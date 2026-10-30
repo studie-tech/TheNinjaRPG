@@ -35,6 +35,7 @@ beforeEach(() => {
   createActor = vi.spyOn(character, "createLpcCharacter").mockImplementation(async () => ({
     sprite: new Container(),
     render: draw,
+    durations: {},
   }));
 });
 

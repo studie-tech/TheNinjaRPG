@@ -9,6 +9,7 @@ import copy
 import io
 import json
 import pathlib
+import re
 import subprocess
 import sys
 from PIL import Image, ImageDraw, ImageOps
@@ -45,7 +46,24 @@ def load_definition(path):
     return result
 
 definitions = {key: load_definition(path) for key, path in PROFILES.items()}
-definitions["boomerang"]["resting_pose_fallback"] = True
+# Custom weapon columns reference body frames in the pinned generator's data declaration.
+custom_animations = subprocess.check_output(["git", "-C", str(SOURCE), "show", "HEAD:sources/custom-animations.ts"], text=True)
+def body_pose(name):
+    """Read literal body-frame metadata without executing the upstream TypeScript module."""
+    match = re.search(r"\b" + re.escape(name) + r": \{.*?\bframes: (\[.*?\n    \]),", custom_animations, re.S)
+    if not match:
+        raise ValueError(f"Missing custom body poses: {name}")
+    rows = json.loads(re.sub(r",(\s*\])", r"\1", match[1]))
+    animation = rows[0][0].split("-")[0]
+    if len(rows) != 4 or any(not re.fullmatch(animation + "-" + direction + r",\d+", frame) for direction, frames in zip("nwse", rows) for frame in frames):
+        raise ValueError(f"Invalid custom body poses: {name}")
+    return {"animation": animation, "frames": [[int(frame.split(",")[1]) for frame in frames] for frames in rows]}
+
+definitions["club"]["body_poses"] = {"slash": body_pose("slash_reverse_oversize")}
+definitions["whip"]["body_poses"] = {"slash": body_pose("tool_whip")}
+definitions["crossbow"]["body_poses"] = {"shoot": {"animation": "thrust", "frames": [CYCLES["thrust"]] * 4}}
+for profile in ["boomerang", "club", "whip"]:
+    definitions[profile]["resting_pose_fallback"] = True
 for profile, template in {"tattoo": "head-hard", "scar": "head-hard", "fan": "gloves", "shuriken": "gloves", "ring": "gloves", "bracelet": "gloves"}.items():
     definitions[profile] = copy.deepcopy(definitions[template])
     definitions[profile]["supplement"] = profile
@@ -66,9 +84,9 @@ patterns = ["/sheet_definitions/", "/palette_definitions/", "/CREDITS.csv", "/LI
 subprocess.run(["git", "-C", str(SOURCE), "sparse-checkout", "set", "--no-cone", "--stdin"], input="\n".join(patterns), text=True, check=True)
 OUT.mkdir(parents=True, exist_ok=True)
 palettes = {}
-for material in ["body", "hair", "eye", "cloth", "metal"]:
+for material in ["body", "hair", "eye", "cloth", "metal", "wood"]:
     palettes[material] = json.loads((SOURCE / f"palette_definitions/{material}/{material}_ulpc.json").read_text())
-bases = {"body": "light", "hair": "orange", "eye": "blue", "cloth": "white", "metal": "steel"}
+bases = {"body": "light", "hair": "orange", "eye": "blue", "cloth": "white", "metal": "steel", "wood": "maple"}
 catalog, credits, generated = {}, [], set()
 images = {}
 
@@ -83,9 +101,8 @@ def palette(material, color):
     values = palettes[material]
     aliases = {"yellow": "blonde", "gray": "grey", "ivory": "white", "gold": "yellow", "silver": "gray"}
     selected = values.get(color) or values.get(aliases.get(color))
-    if not selected and material == "metal":
-        # The metal palette has only natural alloys; coloured armour uses the
-        # matching six-shade cloth ramp while keeping metal highlights/shadows.
+    if not selected and material in ["metal", "wood"]:
+        # Natural materials also accept coloured finishes through the shared six-shade cloth ramps.
         selected = palettes["cloth"].get(color) or palettes["cloth"].get(aliases.get(color))
     return selected or values.get("light" if material == "body" else bases[material])
 
@@ -98,7 +115,8 @@ def recolor(image, definition, color, eyes, source_variant):
         material = part.get("material")
         if material in palettes:
             target = eyes if material == "eye" else color
-            for old, new in zip(palettes[material][bases[material]], palette(material, target)):
+            # Legacy garments declare their source ramp (for example cloth/leather or cloth/brown).
+            for old, new in zip(palettes[material][part.get("base", bases[material])], palette(material, target)):
                 replacements[tuple(bytes.fromhex(old.lstrip("#")))] = tuple(bytes.fromhex(new.lstrip("#")))
     if not replacements:
         # Legacy fixed-variant weapons do not have palette metadata. A shaded
@@ -124,6 +142,8 @@ def candidates(definition, layer, body, state, color):
     custom = layer.get("custom_animation", "")
     animation = "walk" if state == "idle" else state
     stem = custom.removesuffix("_oversize").removesuffix("_128")
+    if custom == "tool_whip":
+        stem = "slash"
     if stem == "slash_reverse":
         # Forward and reverse slash are alternatives, not simultaneous layers.
         if any(value.get("custom_animation", "").removesuffix("_oversize").removesuffix("_128") == "slash" for key, value in definition.items() if key.startswith("layer_")):
@@ -165,6 +185,8 @@ def pack(definition, layer, body, color, eyes):
             raise ValueError(f"Unexpected LPC frame size {size}: {path}")
         cell = max(cell, size)
         columns = image.width // size
+        # The authored whip has eight oversized poses rather than the standard six-step slash.
+        cycle = range(columns) if layer.get("custom_animation") == "tool_whip" else cycle
         directions = []
         for direction in range(4):
             indices = []
@@ -179,11 +201,15 @@ def pack(definition, layer, body, color, eyes):
                 frames.append(cropped)
             directions.append(indices)
         clips[state] = directions
+    if definition is definitions.get("crossbow") and "thrust" in clips:
+        # The authored crossbow fires in its thrust pose; combat's ranged cue is named shoot.
+        clips["shoot"] = clips["thrust"]
     if not frames:
         return None
     if definition.get("resting_pose_fallback") and "idle" not in clips:
-        # Some authored weapons supply only an attack. Hold its initial pose at rest.
-        resting = [[indices[0]] for indices in next(iter(clips.values()))]
+        # A reverse attack's last column matches the body's neutral first pose.
+        poses = definition.get("body_poses", {}).get(next(iter(clips)), {}).get("frames")
+        resting = [[indices[poses[direction].index(0) if poses else 0]] for direction, indices in enumerate(next(iter(clips.values()))) ]
         clips["idle"] = resting
         clips["walk"] = resting
     packed = write_atlas(frames, clips, cell, definition, layer, color, eyes, pathlib.Path(path).stem)
@@ -218,7 +244,7 @@ def write_atlas(frames, clips, cell, definition, layer, color, eyes, source_vari
     generated.add(name)
     if not (OUT / name).exists():
         (OUT / name).write_bytes(data.getvalue())
-    return {"image": name, "cell": cell, "columns": columns, "z": layer["zPos"], "clips": clips, **({"trim": trim} if trim else {})}
+    return {"image": name, "cell": cell, "columns": columns, "z": layer["zPos"], "clips": clips, **({"trim": trim} if trim else {}), **({"bodyPoses": definition["body_poses"]} if not compact and definition.get("body_poses") else {})}
 
 def pack_movement_frames(atlas, clips, cell, columns):
     """Trim shared transparent margins and deduplicate poses without changing their timing or origin."""
@@ -338,7 +364,7 @@ for profile, definition in definitions.items():
 layouts, layout_ids = [], {}
 for layers in catalog.values():
     for layer in [part for layer in layers for part in [layer, *([layer["travel"]] if "travel" in layer else [])]]:
-        layout = {"cell": layer.pop("cell"), "columns": layer.pop("columns"), "clips": layer.pop("clips"), **({"trim": layer.pop("trim")} if "trim" in layer else {})}
+        layout = {"cell": layer.pop("cell"), "columns": layer.pop("columns"), "clips": layer.pop("clips"), **({"trim": layer.pop("trim")} if "trim" in layer else {}), **({"bodyPoses": layer.pop("bodyPoses")} if "bodyPoses" in layer else {})}
         key = json.dumps(layout, sort_keys=True)
         if key not in layout_ids:
             layout_ids[key] = len(layouts)

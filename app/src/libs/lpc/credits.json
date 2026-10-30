@@ -410,6 +410,44 @@
     "chosenLicense": "OGA-BY 3.0"
   },
   {
+    "profile": "headband",
+    "file": "hat/headband/thick",
+    "notes": "",
+    "authors": [
+      "JaidynReiman"
+    ],
+    "licenses": [
+      "OGA-BY 3.0+",
+      "CC-BY 3.0+",
+      "GPL 3.0"
+    ],
+    "urls": [
+      "https://opengameart.org/content/lpc-relm-hair-xlong-ponytail",
+      "https://opengameart.org/content/lpc-expanded-hats-facial-helmets"
+    ],
+    "chosenLicense": "OGA-BY 3.0+"
+  },
+  {
+    "profile": "wide-hat",
+    "file": "hat/helmet/kettle",
+    "notes": "previously referred to as chain-hat, color reduction by Napsio (Vitruvian Studio)",
+    "authors": [
+      "Johannes Sjölund (wulax)",
+      "JaidynReiman",
+      "Napsio (Vitruvian Studio)"
+    ],
+    "licenses": [
+      "OGA-BY 3.0",
+      "CC-BY-SA 3.0",
+      "GPL 3.0"
+    ],
+    "urls": [
+      "https://opengameart.org/content/lpc-medieval-fantasy-character-sprites",
+      "https://opengameart.org/content/lpc-expanded-hats-facial-helmets"
+    ],
+    "chosenLicense": "OGA-BY 3.0"
+  },
+  {
     "profile": "hood",
     "file": "hat/cloth/hood",
     "notes": "Brown hood by Wulax, original black/white recolors by ??, mapped to idle/run/jump/revised combat by JaidynReiman, along with additional recolors.",
@@ -1444,6 +1482,74 @@
     "urls": [
       "https://opengameart.org/content/lpc-medieval-fantasy-character-sprites",
       "https://opengameart.org/content/lpc-walk-animations-for-bows"
+    ],
+    "chosenLicense": "OGA-BY 3.0+"
+  },
+  {
+    "profile": "crossbow",
+    "file": "weapon/ranged/crossbow",
+    "notes": "original by drjamgo, modified for v3 character bases and split into layers by bluecarrot16",
+    "authors": [
+      "bluecarrot16",
+      "drjamgo@hotmail.com"
+    ],
+    "licenses": [
+      "CC0"
+    ],
+    "urls": [
+      "https://opengameart.org/content/lpc-crossbow-final"
+    ],
+    "chosenLicense": "CC0"
+  },
+  {
+    "profile": "club",
+    "file": "weapon/blunt/club",
+    "notes": "",
+    "authors": [
+      "bluecarrot16"
+    ],
+    "licenses": [
+      "OGA-BY 3.0+",
+      "GPL 3.0",
+      "CC-BY 4.0"
+    ],
+    "urls": [
+      "https://opengameart.org/content/lpc-more-weapons"
+    ],
+    "chosenLicense": "OGA-BY 3.0+"
+  },
+  {
+    "profile": "trident",
+    "file": "weapon/polearm/trident",
+    "notes": "original \"trident\" by daneeklu and gr3yh47; adapted to opposite hand and split into layers by bluecarrot16",
+    "authors": [
+      "Daniel Eddeland (daneeklu)",
+      "gr3yh47",
+      "Johannes Sjölund (wulax)"
+    ],
+    "licenses": [
+      "CC-BY-SA 3.0"
+    ],
+    "urls": [
+      "https://opengameart.org/content/lpc-weapons-two-bows-a-spear-and-a-trident",
+      "https://opengameart.org/content/lpc-extended-weapon-animations"
+    ],
+    "chosenLicense": "CC-BY-SA 3.0"
+  },
+  {
+    "profile": "whip",
+    "file": "tools/whip",
+    "notes": "",
+    "authors": [
+      "bluecarrot16"
+    ],
+    "licenses": [
+      "OGA-BY 3.0+",
+      "GPL 3.0",
+      "CC-BY 4.0"
+    ],
+    "urls": [
+      "https://opengameart.org/content/lpc-more-weapons"
     ],
     "chosenLicense": "OGA-BY 3.0+"
   },

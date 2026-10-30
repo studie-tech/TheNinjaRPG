@@ -370,7 +370,13 @@ export const createCombatActors = (
       const active =
         cue &&
         record.actionAt !== undefined &&
-        frame.now - record.actionAt < durations[cue.animation];
+        frame.now - record.actionAt <
+          (Math.max(
+            0,
+            ...(record.art?.entries ?? []).map(
+              (entry) => entry.character?.durations[cue.animation] ?? 0,
+            ),
+          ) || durations[cue.animation]);
       if (!record.alive && user.curHealth <= 0 && record.deathAt === undefined)
         record.deathAt = frame.now;
       if (record.alive) record.deathAt = undefined;

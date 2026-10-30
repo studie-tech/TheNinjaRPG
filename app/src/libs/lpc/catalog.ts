@@ -6,12 +6,19 @@ import type {
   SpriteLayer,
 } from "@/validators/lpc";
 
+/** Authored attack columns share one clock across weapons, bodies and clothing. */
+export const LPC_ATTACK_FRAME_MS = 80;
+
 /** Authored frame indices can be sparse; cell and columns locate them in the packed atlas. */
 export type LpcLayout = {
   cell: number;
   columns: number;
   /** Shared logical crop; movement atlases keep one extruded pixel outside each frame. */
   trim?: { x: number; y: number; width: number; height: number };
+  /** Custom weapon columns can reference a different authored body/clothing timeline. */
+  bodyPoses?: Partial<
+    Record<LpcAnimation, { animation: LpcAnimation; frames: number[][] }>
+  >;
   clips: Partial<Record<LpcAnimation, number[][]>>;
 };
 /** A layer's full poses and its optional movement-only atlas share the same visual selection. */
@@ -59,7 +66,7 @@ export const lpcFrame = (
     layout.clips.idle?.[direction] ??
     layout.clips.walk?.[direction];
   if (!frames?.length) return null;
-  const duration = state === "walk" ? 90 : state === "idle" ? 200 : 80;
+  const duration = state === "walk" ? 90 : state === "idle" ? 200 : LPC_ATTACK_FRAME_MS;
   const step = reducedMotion ? 0 : Math.floor(Math.max(0, elapsed) / duration);
   const index =
     state === "idle" || state === "walk"
