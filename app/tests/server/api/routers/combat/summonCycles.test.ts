@@ -148,6 +148,7 @@ describeWithDatabase("cyclic summon battle admission", () => {
     const meta = dungeonBattleState({ runState: { ...dungeonBattleState().runState, memberIds: members } });
     const waves = [{ aiIds: ["opener"], delayRounds: 0 }, { aiIds: ["A"], delayRounds: 1 }];
     if (mode === "later wave") {
+      await client.update(userData).set({status: "QUEUED"});
       const content = dungeonContent();
       content.tiers[0]![0]!.waves = waves;
       await client.insert(dungeon).values({ id: "definition", content, updatedAt: new Date() });
@@ -163,7 +164,7 @@ describeWithDatabase("cyclic summon battle admission", () => {
     }, "QUEST");
     expect(result).toMatchObject({ success: false, message: expect.stringMatching(/cyclic summon.*report this to staff/i) });
     expect(await client.query.battle.findMany()).toHaveLength(0);
-    expect(await client.query.userData.findFirst({ where: eq(userData.userId, "human") })).toMatchObject({ status: "AWAKE", battleId: null });
+    expect(await client.query.userData.findFirst({ where: eq(userData.userId, "human") })).toMatchObject({ status: mode === "later wave" ? "QUEUED" : "AWAKE", battleId: null });
     expect(Pusher.prototype.trigger).not.toHaveBeenCalled();
   });
 

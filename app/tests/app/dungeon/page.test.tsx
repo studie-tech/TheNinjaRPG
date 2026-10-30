@@ -50,6 +50,7 @@ const mount = (status: RunStatus | null, availableFn: () => Promise<Available>, 
   const stateQuery = vi.fn(stateFn);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ profile: { getUser: { invalidate: vi.fn(async () => undefined) } } }),
+    pets: { getCollection: { useQuery: () => ({ data: { pets: [] }, isPending: false }) } },
     coop: { dungeon: {
       getAvailable: { useQuery: (_input: unknown, options: object) => useQuery({ ...options, queryKey: ["available"], queryFn: availableFn }) },
       getState: { useQuery: (_input: unknown, options: object) => useQuery({ ...options, queryKey: ["state"], queryFn: stateQuery }) },
@@ -114,7 +115,7 @@ for (const scenario of scenarios) {
 }
 
 it("keeps the party usable after a failed entrance refresh with retained cached data", async () => {
-  const cached: Available = [{ id: "definition", content: dungeonContent(), updatedAt: new Date() }];
+  const cached: Available = [{ id: "definition", content: dungeonContent(), admission: { requirements: dungeonContent().requirements, error: null, attempts: [], completions: [] }, updatedAt: new Date() }];
   const { view, queryClient, actCall } = mount("PAUSED", async () => { throw new Error("Entrance refetch failed"); }, undefined, cached);
   await waitFor(() => expect(view.getByRole("button", { name: "Resume and ready up" })).toBeDefined());
   await act(async () => { await queryClient.refetchQueries({ queryKey: ["available"] }); });
@@ -130,7 +131,7 @@ it("recovers entrances locally while invitations and completion claims remain us
   data.runs = [...data.runs, { ...party("LOBBY"), id: "invite", leaderId: "b", state: { ...party("LOBBY").state, memberIds: ["b"], invitedIds: ["a"] } }];
   const { view, stateQuery, actCall, claimCall, createCall } = mount(null, async () => {
     if (entranceFails) throw new Error("Entrance lookup failed");
-    return [{ id: "definition", content: dungeonContent(), updatedAt: new Date() }];
+    return [{ id: "definition", content: dungeonContent(), admission: { requirements: dungeonContent().requirements, error: null, attempts: [], completions: [] }, updatedAt: new Date() }];
   }, async () => data);
   await waitFor(() => expect(view.getByRole("alert").textContent).toContain("Entrance lookup failed"));
   fireEvent.click(view.getByRole("button", { name: "Accept invitation" }));

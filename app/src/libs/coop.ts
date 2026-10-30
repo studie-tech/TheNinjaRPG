@@ -18,6 +18,14 @@ export const coopPolicies = {
     readyCheck: false,
     mutableRoster: true,
   },
+  dungeonSolo: {
+    minMembers: 1,
+    maxMembers: 1,
+    invitationLimit: 0,
+    reserveInvitations: true,
+    readyCheck: true,
+    mutableRoster: false,
+  },
   dungeon: {
     minMembers: DUNGEON_PARTY_SIZE,
     maxMembers: DUNGEON_PARTY_SIZE,
@@ -222,5 +230,7 @@ export type CoopEncounter =
   | (Omit<DungeonBattleState, "lastActionRound"> & {
       kind: "dungeon";
       battleId: string;
+      dungeonId: string;
+      content: import("@/validators/dungeon").DungeonContent;
       waves: EncounterWave[];
     });

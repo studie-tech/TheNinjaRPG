@@ -30,7 +30,7 @@ export const petsAllowedInBattle = (battleType: BattleType) =>
   PET_BATTLE_CONFIG.enabled && PET_BATTLE_CONFIG.battleTypes.includes(battleType);
 
 /**
- * Mutate initiation's preloaded state with at most one eligible active pet per owner.
+ * Materialize each explicitly selected dungeon pet, or the ordinary active pet per owner.
  * Abilities, passives and AI rules are frozen here so later turns need no pet reads.
  * Species passives enter battle once, after all companions have joined their teams.
  * petIdsByOwner records only pets actually spawned, binding settlement XP to them.
@@ -43,6 +43,7 @@ export const addPetsToBattle = (info: {
   width: number;
   height: number;
   ownerRanks?: Record<string, UserRank>;
+  selectedPetIdsByOwner?: Record<string, string[]>;
   usersEffects?: UserEffect[];
   groundEffects?: GroundEffect[];
   abilitiesByOwner?: Record<
@@ -63,14 +64,16 @@ export const addPetsToBattle = (info: {
     sourceId: string;
   }[] = [];
   for (const pet of pets) {
-    if (extraState.petIdsByOwner[pet.userId]) continue;
+    const selected = info.selectedPetIdsByOwner?.[pet.userId];
+    if (selected ? !selected.includes(pet.id) : extraState.petIdsByOwner[pet.userId])
+      continue;
     const owner = usersState.find((u) => u.userId === pet.userId && !u.isAi);
     // Some modes normalize combat rank; eligibility uses the real preloaded rank.
     if (
       !owner ||
       !pet.species ||
       owner.petTask?.petId === pet.id ||
-      owner.activePetId !== pet.id ||
+      (!selected && owner.activePetId !== pet.id) ||
       !canUsePet(pet, { rank: ownerRanks?.[owner.userId] ?? owner.rank })
     )
       continue;
@@ -140,7 +143,7 @@ export const addPetsToBattle = (info: {
       rules: structuredClone(pet.aiRules),
       includeDefaultRules: pet.includeDefaultRules,
     };
-    extraState.petIdsByOwner[owner.userId] = pet.id;
+    extraState.petIdsByOwner[owner.userId] ??= pet.id;
     usersState.push(actor);
   }
   // Resolve enemies after spawning every companion, so opposing pets receive the same passives.

@@ -58,6 +58,7 @@ import {
   clan,
   conversation,
   dataBattleAction,
+  dungeonMember,
   dungeonRun,
   gameAsset,
   gameSetting,
@@ -1291,7 +1292,8 @@ export const updateUserDataForCreateBattle = (
               ),
         ...(dungeonEncounter
           ? [
-              eq(userData.status, "AWAKE"),
+              eq(userData.status, "QUEUED"),
+              sql`EXISTS (SELECT 1 FROM ${dungeonMember} WHERE ${dungeonMember.runId} = ${dungeonEncounter.runId} AND ${dungeonMember.activeUserId} = ${userData.userId})`,
               exists(
                 client
                   .select({ one: sql`1` })
@@ -1306,6 +1308,11 @@ export const updateUserDataForCreateBattle = (
                     ),
                   ),
               ),
+            ]
+          : []),
+        ...(!dungeonEncounter
+          ? [
+              sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
             ]
           : []),
         // Team members must still occupy the original launch tile after combat preload.

@@ -47,6 +47,8 @@ import {
   actionLog,
   battleHistory,
   contentProposal,
+  dungeonMember,
+  dungeonRun,
   farmPlot,
   gameSetting,
   historicalIp,
@@ -2167,7 +2169,13 @@ export const wakeQueuedUser = (client: Pick<DrizzleClient, "update">, userId: st
   client
     .update(userData)
     .set({ status: "AWAKE" })
-    .where(and(eq(userData.userId, userId), eq(userData.status, "QUEUED")));
+    .where(
+      and(
+        eq(userData.userId, userId),
+        eq(userData.status, "QUEUED"),
+        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+      ),
+    );
 
 /** Build an atomic money increment for one user. */
 export const incrementUserMoney = (

@@ -21,8 +21,10 @@ import { Progress } from "@/components/ui/progress";
 import {
   DUNGEON_FLOORS_PER_TIER,
   DUNGEON_INACTIVE_ROUNDS,
+  DUNGEON_LOBBY_SECONDS,
   DUNGEON_PARTY_SIZE,
   DUNGEON_RUN_SECONDS,
+  DUNGEON_SOLO_PETS,
 } from "@/drizzle/constants";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
@@ -32,7 +34,9 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { PartyRoster } from "@/layout/PartyRoster";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { dungeonRequirements } from "@/libs/dungeon";
 import { getRewardArray } from "@/libs/objectives";
+import { canUsePet } from "@/libs/pets/progression";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -46,6 +50,8 @@ export default function DungeonPage() {
   const { data: user, timeDiff } = useRequiredUserData();
   const router = useRouter();
   const utils = api.useUtils();
+  const [selectedPets, setSelectedPets] = useState<string[]>([]);
+  const collection = api.pets.getCollection.useQuery(undefined, { enabled: !!user });
   const [message, setMessage] = useState("");
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [abandonId, setAbandonId] = useState<string | null>(null);
@@ -72,7 +78,11 @@ export default function DungeonPage() {
     setMessage(response.success ? "" : response.message);
     if (response.success) setAbandonId(null);
     showMutationToast(response);
-    await Promise.all([state.refetch(), utils.profile.getUser.invalidate()]);
+    await Promise.all([
+      state.refetch(),
+      available.refetch(),
+      utils.profile.getUser.invalidate(),
+    ]);
   };
   const create = api.coop.dungeon.create.useMutation({
     onSuccess: refresh,
@@ -127,19 +137,20 @@ export default function DungeonPage() {
   const readyCount = current?.state.readyIds.length ?? 0;
   const isReady = current?.state.readyIds.includes(user.userId) ?? false;
   const allReady =
-    current?.state.memberIds.length === DUNGEON_PARTY_SIZE &&
+    current?.state.memberIds.length ===
+      (current?.state.pets ? 1 : DUNGEON_PARTY_SIZE) &&
     current.state.memberIds.every((id) => current.state.readyIds.includes(id));
   const endingRun = runs.find((run) => run.id === abandonId);
   return (
     <ContentBox
       title="Dungeon Pyramids"
-      subtitle="Three-player co-op"
+      subtitle="Player parties and solo companion squads"
       defaultBackHref="/travel"
     >
       <div className="mb-4 flex items-center gap-3 text-muted-foreground text-sm">
         <span className="flex items-center gap-1.5">
           <Users className="h-4 w-4" aria-hidden="true" />
-          {DUNGEON_PARTY_SIZE} players
+          {DUNGEON_PARTY_SIZE} players or solo with {DUNGEON_SOLO_PETS} pets
         </span>
         <span className="flex items-center gap-1.5">
           <Clock3 className="h-4 w-4" aria-hidden="true" />
@@ -160,9 +171,10 @@ export default function DungeonPage() {
           <PopoverContent align="end" className="space-y-2 text-sm">
             <p className="font-semibold">Dungeon rules</p>
             <p>
-              Enter with {DUNGEON_PARTY_SIZE} ready players. The{" "}
-              {DUNGEON_RUN_SECONDS / 60}-minute timer starts on the first floor and
-              keeps running while paused.
+              Enter with {DUNGEON_PARTY_SIZE} ready players or solo with{" "}
+              {DUNGEON_SOLO_PETS} battle-ready pets. Lobbies expire after{" "}
+              {DUNGEON_LOBBY_SECONDS / 60} minutes. The {DUNGEON_RUN_SECONDS / 60}
+              -minute timer starts on the first floor and keeps running while paused.
             </p>
             <p>
               Each floor fully restores the party. Fleeing is disabled;{" "}
@@ -320,7 +332,7 @@ export default function DungeonPage() {
               />
             </div>
             <PartyRoster
-              capacity={DUNGEON_PARTY_SIZE}
+              capacity={current.state.pets ? 1 : DUNGEON_PARTY_SIZE}
               members={current.state.memberIds.map((id) => ({
                 userId: id,
                 username:
@@ -337,6 +349,24 @@ export default function DungeonPage() {
                   : undefined
               }
             />
+            {current.state.pets && (
+              <ul aria-label="Dungeon companions" className="grid gap-2 sm:grid-cols-2">
+                {current.state.pets.map((pet) => (
+                  <li
+                    key={pet.id}
+                    className="rounded-lg border bg-background/50 p-3 text-sm"
+                  >
+                    <Link href="/pets" className="font-medium">
+                      {pet.name}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">
+                      Battle companion · Ready
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <DungeonRequirements content={current.content} />
             {current.state.invitedIds.length > 0 && (
               <div className="flex flex-wrap gap-2 text-sm">
                 {current.state.invitedIds.map((id) => (
@@ -360,6 +390,7 @@ export default function DungeonPage() {
               </div>
             )}
             {current.status === "LOBBY" &&
+              !current.state.pets &&
               current.leaderId === user.userId &&
               current.state.memberIds.length + current.state.invitedIds.length <
                 DUNGEON_PARTY_SIZE && (
@@ -387,7 +418,7 @@ export default function DungeonPage() {
               <span className="text-muted-foreground text-xs">
                 {current.status === "PAUSED"
                   ? "The timer continues while paused."
-                  : `${readyCount}/${DUNGEON_PARTY_SIZE} ready`}
+                  : `${readyCount}/${current.state.pets ? 1 : DUNGEON_PARTY_SIZE} ready`}
               </span>
               <div className="flex gap-2">
                 {["LOBBY", "BETWEEN"].includes(current.status) && (
@@ -438,6 +469,65 @@ export default function DungeonPage() {
         {/* Entrance lookups must not block party controls or completion claims. */}
         {!current && (
           <div className="space-y-3">
+            <fieldset className="space-y-2 rounded-lg border p-3">
+              <legend className="px-1 text-sm font-medium">
+                Solo squad companions ({selectedPets.length}/{DUNGEON_SOLO_PETS})
+              </legend>
+              {collection.error ? (
+                <p role="alert">
+                  {collection.error.message}{" "}
+                  <Button onClick={() => void collection.refetch()}>
+                    Retry companions
+                  </Button>
+                </p>
+              ) : collection.isPending ? (
+                <Loader explanation="Loading companions" />
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Choose two fully generated, battle-ready companions who are not on a
+                    task.{" "}
+                    <Link href="/pets" className="text-primary underline">
+                      Manage companions
+                    </Link>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {collection.data?.pets
+                      .filter(
+                        (pet) =>
+                          pet.generationStatus === "READY" &&
+                          pet.species &&
+                          canUsePet(pet, user) &&
+                          user.petTask?.petId !== pet.id,
+                      )
+                      .map((pet) => (
+                        <label
+                          key={pet.id}
+                          className="flex items-center gap-2 rounded border px-3 py-2 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedPets.includes(pet.id)}
+                            disabled={
+                              pending ||
+                              (!selectedPets.includes(pet.id) &&
+                                selectedPets.length >= DUNGEON_SOLO_PETS)
+                            }
+                            onChange={(event) =>
+                              setSelectedPets((ids) =>
+                                event.target.checked
+                                  ? [...ids, pet.id]
+                                  : ids.filter((id) => id !== pet.id),
+                              )
+                            }
+                          />
+                          {pet.name}
+                        </label>
+                      ))}
+                  </div>
+                </>
+              )}
+            </fieldset>
             <h2 className="font-semibold">Dungeons in your sector</h2>
             {available.error ? (
               <p role="alert">
@@ -468,12 +558,35 @@ export default function DungeonPage() {
                       </p>
                     </div>
                     <Button
-                      disabled={pending}
+                      disabled={pending || !!dungeon.admission.error}
                       onClick={() => create.mutate({ id: dungeon.id })}
                     >
                       Create lobby
                     </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={
+                        pending ||
+                        !!dungeon.admission.error ||
+                        selectedPets.length !== DUNGEON_SOLO_PETS
+                      }
+                      onClick={() =>
+                        create.mutate({ id: dungeon.id, petIds: selectedPets })
+                      }
+                    >
+                      Enter solo with pets
+                    </Button>
                   </div>
+                  <DungeonRequirements content={dungeon.content} />
+                  <p className="text-xs text-muted-foreground">
+                    {dungeon.admission.attempts.length} lifetime attempts ·{" "}
+                    {dungeon.admission.completions.length} collected completions
+                  </p>
+                  {dungeon.admission.error && (
+                    <p role="status" className="text-sm text-destructive">
+                      {dungeon.admission.error}
+                    </p>
+                  )}
                   <DungeonRewards rewards={dungeon.content.rewards} />
                   {dungeon.content.description && (
                     <details className="text-sm">
@@ -600,5 +713,35 @@ const DungeonRewards = ({
         !rewards.prestige &&
         rewards.drops.length === 0 && <span>No completion rewards</span>}
     </div>
+  );
+};
+
+/** Display immutable requirements at the entrance and throughout the reserved run. */
+const DungeonRequirements = ({ content }: { content: DungeonContent }) => {
+  const r = dungeonRequirements(content);
+  return (
+    <section
+      aria-label="Dungeon entry requirements"
+      className="space-y-1 text-xs text-muted-foreground"
+    >
+      <p>
+        Every player: level {r.requiredLevel}
+        {r.prerequisiteQuestId
+          ? ` · Complete ${r.prerequisiteQuestName ?? r.prerequisiteQuestId}`
+          : ""}
+      </p>
+      {r.requiredItemId && (
+        <p>
+          {r.requiredItemQuantity} × {r.requiredItemName ?? r.requiredItemId} per
+          player, consumed on first-floor entry.
+        </p>
+      )}
+      <p>
+        Attempts: {r.maxAttempts ?? "unlimited"} lifetime
+        {r.attemptDelay !== "none" ? ` · One per ${r.attemptDelay} period` : ""}.
+        Completions: {r.maxCompletes ?? "unlimited"}
+        {r.retryDelay === "none" ? " lifetime" : ` per ${r.retryDelay} period`}.
+      </p>
+    </section>
   );
 };

@@ -10,6 +10,8 @@ import {
   DUNGEON_MAX_WAVES,
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
+  MAX_PLAYER_LEVEL,
+  RetryQuestDelays,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
 } from "@/drizzle/constants";
@@ -17,6 +19,20 @@ import { type CoopRoster, encounterWaveSchema } from "@/validators/coop";
 import { mapLocationFields } from "@/validators/mapLocation";
 import { RewardPackageValidator } from "@/validators/rewardPackages";
 import type { PostProcessedRewards } from "@/validators/rewards";
+
+/** Quest-compatible lifetime attempt caps, calendar cooldowns and completion caps. */
+export const dungeonRequirementsSchema = z.object({
+  requiredLevel: z.number().int().min(1).max(MAX_PLAYER_LEVEL).prefault(1),
+  prerequisiteQuestName: z.string().optional(),
+  requiredItemName: z.string().optional(),
+  prerequisiteQuestId: z.string().min(1).nullable().prefault(null),
+  requiredItemId: z.string().min(1).nullable().prefault(null),
+  requiredItemQuantity: z.number().int().min(1).max(9999).prefault(1),
+  maxAttempts: z.number().int().min(1).nullable().prefault(null),
+  maxCompletes: z.number().int().min(1).nullable().prefault(null),
+  attemptDelay: z.enum(RetryQuestDelays).prefault("none"),
+  retryDelay: z.enum(RetryQuestDelays).prefault("none"),
+});
 
 /** Each member rolls once per drop, receiving its full quantity on success. */
 const dungeonDropSchema = z
@@ -49,6 +65,7 @@ export const dungeonFloorSchema = z.object({
 /** Shared editor/server contract: five floors per tier, immediate first waves and a final boss. */
 export const dungeonContentSchema = z
   .object({
+    requirements: dungeonRequirementsSchema.prefault({}),
     name: z.string().trim().min(1, "Enter a dungeon name.").max(100),
     description: z.string().max(2000).prefault(""),
     // Empty artwork retains the biome entrance; encounter portraits remain independent.
@@ -141,6 +158,12 @@ export type DungeonFloor = z.infer<typeof dungeonFloorSchema>;
 export type DungeonRunState = CoopRoster & {
   /** Start reservation metadata used to recover an interrupted battle initiation. */
   entryStartedAt?: number;
+  /** Committed with the first battle and entry items; absent until a successful admission. */
+  entryPaidAt?: number;
+  /** Publication commits with the battle; recovery may claim only an unpublished floor. */
+  battlePublished?: boolean;
+  /** Owned companions reserved by the solo player's queued status throughout the run. */
+  pets?: { id: string; name: string; avatar: string | null }[];
   entryPreviousDeadline?: number | null;
   floor: number;
   clearedFloors: number[];
@@ -150,6 +173,7 @@ export type DungeonRunState = CoopRoster & {
 export type DungeonRewardReceipt = {
   /** Delivered direct drops and successful package rolls, scoped to the dungeon. */
   grantedDrops?: string[];
+  claimedAt?: number;
   money: number;
   experience: number;
   tokens: number;

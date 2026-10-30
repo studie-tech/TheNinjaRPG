@@ -44,20 +44,27 @@ describeWithDatabase("co-op activity adapters", () => {
     expect(await caller.quest.startEncounter({ partyId: party.id })).toMatchObject({ success: false, message: expect.stringContaining("solo") });
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, "joiner") }))?.questPartyId).toBeNull();
   });
-  it.each(["quest", "dungeon"] as const)("retains independent membership scopes when %s is created first", async (first) => {
+  it.each(["quest", "dungeon"] as const)("preserves quest membership while dungeon status reserves ordinary activities (%s first)", async (first) => {
     const caller = await callerFor(coopRouter, "leader");
     const createQuest = () => caller.quest.create({ questId: "team-quest", isPublic: true });
     const createDungeon = () => caller.dungeon.create({ id: "definition" });
     expect((await (first === "quest" ? createQuest() : createDungeon())).success).toBe(true);
-    expect((await (first === "quest" ? createDungeon() : createQuest())).success).toBe(true);
+    if (first === "dungeon") {
+      expect((await createQuest()).success).toBe(false);
+      const run = (await (await getTestDatabase()).query.dungeonRun.findFirst())!;
+      expect((await caller.dungeon.act({id: run.id, action: "leave"})).success).toBe(true);
+      expect((await createQuest()).success).toBe(true);
+    } else expect((await createDungeon()).success).toBe(true);
     const db = await getTestDatabase();
     const team = (await db.query.questParty.findFirst())!;
     const run = (await db.query.dungeonRun.findFirst())!;
     expect((await caller.quest.overview()).current?.id).toBe(team.id);
     expect((await caller.dungeon.getState()).runs[0]?.id).toBe(run.id);
     expect((await createQuest()).success).toBe(false);
-    expect((await createDungeon()).success).toBe(false);
-    expect((await caller.dungeon.act({ id: run.id, action: "leave" })).success).toBe(true);
+    if (first === "quest") {
+      expect((await createDungeon()).success).toBe(false);
+      expect((await caller.dungeon.act({ id: run.id, action: "leave" })).success).toBe(true);
+    }
     expect((await caller.quest.overview()).current?.id).toBe(team.id);
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, "leader") }))?.questPartyId).toBe(team.id);
     expect((await caller.quest.leave({ partyId: team.id })).success).toBe(true);

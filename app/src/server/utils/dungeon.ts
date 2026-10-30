@@ -1,12 +1,16 @@
 import { eq, sql } from "drizzle-orm";
+import { DUNGEON_LOBBY_SECONDS } from "@/drizzle/constants";
 import { type dungeonRun, userData } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { dungeonBattleOutcome, dungeonNextState } from "@/libs/dungeon";
 import { deleteBattleById, deleteBattleIfVersionMatches } from "@/queries/combat";
 import {
+  claimDungeonQueue,
+  claimDungeonStartRecovery,
   clearDungeonActiveUsers,
   findBattleForExpireDungeonRun,
+  releaseDungeonQueue,
   updateDungeonRunForExpireDungeonRun,
   updateDungeonRunForRollbackDungeonStart,
   updateDungeonRunForSettleDungeonBattle,
@@ -25,20 +29,33 @@ export const rollbackDungeonStart = (
   version: number,
 ) =>
   retryOnDeadlock(async () => {
+    // Publication and this claim serialize on the run row. Advancing the version
+    // prevents a slow launcher from publishing while cleanup removes partial writes.
+    const recovering = run.status === "STARTING";
+    if (!recovering) {
+      const claim = await claimDungeonStartRecovery(client, run.id, battleId, version);
+      if (claim.rowsAffected !== 1) return;
+    }
+    const recoveryVersion = recovering ? version : version + 1;
     const {
+      battlePublished: _published,
       entryStartedAt: _started,
       entryPreviousDeadline: _deadline,
       ...state
     } = run.state;
     await cleanupCoopBattleStart(client, battleId, run.state.memberIds);
     // Reopen only after all cleanup finished; the CAS rejects stale or competing recovery.
-    await updateDungeonRunForRollbackDungeonStart(
+    const reopened = await updateDungeonRunForRollbackDungeonStart(
       client,
       run,
       state,
       battleId,
-      version,
+      recoveryVersion,
     );
+    if (reopened.rowsAffected === 1)
+      await Promise.all(
+        run.state.memberIds.map((id) => claimDungeonQueue(client, id, run.id)),
+      );
   });
 
 /**
@@ -85,6 +102,7 @@ export const settleDungeonBattle = async (
         current,
         meta,
         settledAt,
+        status === "BETWEEN",
       );
       if (status === "ENDED") await clearDungeonActiveUsers(tx, meta.runId);
       return true;
@@ -102,9 +120,14 @@ export const expireDungeonRun = async (
   client: DrizzleClient,
   run: typeof dungeonRun.$inferSelect,
 ) => {
+  const deadline =
+    run.expiresAt ??
+    (run.status === "LOBBY"
+      ? new Date(run.createdAt.getTime() + DUNGEON_LOBBY_SECONDS * 1000)
+      : null);
   if (
-    !run.expiresAt ||
-    run.expiresAt.getTime() > Date.now() ||
+    !deadline ||
+    deadline.getTime() > Date.now() ||
     ["COMPLETED", "ENDED"].includes(run.status)
   )
     return false;
@@ -128,6 +151,7 @@ export const expireDungeonRun = async (
           settledAt,
         );
       }
+      await releaseDungeonQueue(tx, run.id);
       await clearDungeonActiveUsers(tx, run.id);
     }),
   );

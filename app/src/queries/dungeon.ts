@@ -6,13 +6,18 @@ import {
   desc,
   eq,
   getTableColumns,
+  gt,
   inArray,
   isNotNull,
   isNull,
+  lt,
+  lte,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { DUNGEON_LOBBY_SECONDS } from "@/drizzle/constants";
 import {
   actionLog,
   battle,
@@ -22,8 +27,12 @@ import {
   item,
   jutsu,
   mapAsset,
+  quest,
+  questHistory,
   rewardPackage,
   userData,
+  userItem,
+  userPet,
 } from "@/drizzle/schema";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
@@ -37,7 +46,7 @@ export const findUserDataForGetAvailable = (
 ) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, ctx.userId),
-    columns: { sector: true },
+    columns: { userId: true, sector: true, level: true },
   });
 
 /** Build the `dungeon` listing for `getAvailable`. */
@@ -239,6 +248,7 @@ export const insertDungeonRunForCreate = (
   definition: { id: string },
   ctx: { userId: string },
   content: import("@/validators/dungeon").DungeonContent,
+  pets?: DungeonRunState["pets"],
 ) =>
   client.insert(dungeonRun).values({
     id,
@@ -246,14 +256,18 @@ export const insertDungeonRunForCreate = (
     leaderId: ctx.userId,
     content,
     status: "LOBBY",
+    expiresAt: new Date(Date.now() + DUNGEON_LOBBY_SECONDS * 1000),
     createdAt: new Date(),
     state: {
+      pets,
       memberIds: [ctx.userId],
       invitedIds: [],
-      readyIds: [],
+      readyIds: pets ? [ctx.userId] : [],
       floor: 0,
       clearedFloors: [],
-      message: "Invite teammates, then have everyone ready up.",
+      message: pets
+        ? "Your companions are ready. Enter the first floor."
+        : "Invite teammates, then have everyone ready up.",
     },
   });
 
@@ -319,6 +333,7 @@ export const updateDungeonRunForReserve = (
       version: run.version + 1,
       state: {
         ...state,
+        battlePublished: false,
         entryStartedAt: Date.now(),
         entryPreviousDeadline: run.expiresAt?.getTime() ?? null,
       },
@@ -454,7 +469,7 @@ export const updateDungeonRewardReceipt = (
 /** Build the `dungeonRun` update for `rollbackDungeonStart`, using predicates on `id`, `battleId`, `version`. */
 export const updateDungeonRunForRollbackDungeonStart = (
   client: Pick<DrizzleClient, "update">,
-  run: { expiresAt: null | Date; id: string },
+  run: { expiresAt: null | Date; id: string; state?: DungeonRunState },
   state: Omit<DungeonRunState, "entryStartedAt" | "entryPreviousDeadline">,
   battleId: string,
   version: number,
@@ -462,7 +477,7 @@ export const updateDungeonRunForRollbackDungeonStart = (
   client
     .update(dungeonRun)
     .set({
-      status: run.expiresAt ? "BETWEEN" : "LOBBY",
+      status: run.state?.entryPaidAt ? "BETWEEN" : "LOBBY",
       battleId: null,
       expiresAt: run.expiresAt,
       version: sql`${dungeonRun.version} + 1`,
@@ -512,11 +527,12 @@ export const updateUserDataForSettleDungeonBattle = (
   current: import("@/libs/combat/types").CompleteBattle,
   meta: { runState: { memberIds: string[] } },
   settledAt: Date,
+  keepQueued: boolean,
 ) =>
   client
     .update(userData)
     .set({
-      status: "AWAKE",
+      status: keepQueued ? "QUEUED" : "AWAKE",
       battleId: null,
       bracketImmunityLiftedUntil: resumeBracketImmunitySql(),
       bracketImmunityPausedAt: null,
@@ -545,6 +561,7 @@ export const updateDungeonRunForExpireDungeonRun = (
   client: Pick<DrizzleClient, "update">,
   run: {
     state: DungeonRunState;
+    status?: string;
     id: string;
     version: number;
   },
@@ -558,7 +575,10 @@ export const updateDungeonRunForExpireDungeonRun = (
       state: {
         ...run.state,
         readyIds: [],
-        message: "The one-hour dungeon deadline expired.",
+        message:
+          run.status === "LOBBY"
+            ? "The 15-minute dungeon lobby expired."
+            : "The one-hour dungeon deadline expired.",
       },
     })
     .where(and(eq(dungeonRun.id, run.id), eq(dungeonRun.version, run.version)));
@@ -593,5 +613,199 @@ export const updateUserDataForExpireDungeonRun = (
       and(
         inArray(userData.userId, run.state.memberIds),
         eq(userData.battleId, run.battleId),
+      ),
+    );
+
+/** One active reservation identifies the queue owner and private squad navigation. */
+export const findActiveDungeonRun = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+) =>
+  client
+    .select({ run: dungeonRun })
+    .from(dungeonMember)
+    .innerJoin(dungeonRun, eq(dungeonRun.id, dungeonMember.runId))
+    .where(eq(dungeonMember.activeUserId, userId))
+    .limit(1);
+
+/** Claim ordinary play only for the account's own newly inserted membership. */
+export const claimDungeonQueue = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  runId: string,
+) =>
+  client
+    .update(userData)
+    .set({ status: "QUEUED", updatedAt: new Date() })
+    .where(
+      and(
+        eq(userData.userId, userId),
+        eq(userData.status, "AWAKE"),
+        isNull(userData.battleId),
+        eq(userData.isBanned, false),
+        sql`EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.runId} = ${runId} AND ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} IN ('LOBBY', 'BETWEEN', 'PAUSED') AND (${dungeonRun.expiresAt} IS NULL OR ${dungeonRun.expiresAt} > NOW(3)))`,
+      ),
+    );
+
+/** Release only a queue owned by this run, before deleting its membership reservation. */
+export const releaseDungeonQueue = (
+  client: Pick<DrizzleClient, "update">,
+  runId: string,
+  userId?: string,
+) =>
+  client
+    .update(userData)
+    .set({ status: "AWAKE", updatedAt: new Date() })
+    .where(
+      and(
+        eq(userData.status, "QUEUED"),
+        isNull(userData.battleId),
+        userId ? eq(userData.userId, userId) : undefined,
+        sql`EXISTS (SELECT 1 FROM ${dungeonMember} WHERE ${dungeonMember.runId} = ${runId} AND ${dungeonMember.activeUserId} = ${userData.userId})`,
+      ),
+    );
+
+/** Entry history remains independent of the inventory and current quest attempt. */
+export const listDungeonEntryHistory = (
+  client: Pick<DrizzleClient, "select">,
+  userIds: string[],
+) =>
+  client
+    .select({
+      userId: dungeonMember.userId,
+      dungeonId: dungeonRun.dungeonId,
+      state: dungeonRun.state,
+      reward: dungeonMember.reward,
+      createdAt: dungeonRun.createdAt,
+    })
+    .from(dungeonMember)
+    .innerJoin(dungeonRun, eq(dungeonRun.id, dungeonMember.runId))
+    .where(inArray(dungeonMember.userId, userIds));
+
+export const listDungeonPrerequisites = (
+  client: Pick<DrizzleClient, "query">,
+  userIds: string[],
+) =>
+  client.query.questHistory.findMany({
+    where: and(
+      inArray(questHistory.userId, userIds),
+      or(eq(questHistory.completed, 1), gt(questHistory.previousCompletes, 0)),
+    ),
+    columns: { userId: true, questId: true },
+  });
+
+export const listDungeonEntryInventory = (
+  client: Pick<DrizzleClient, "query">,
+  userIds: string[],
+) =>
+  client.query.userItem.findMany({
+    where: and(
+      inArray(userItem.userId, userIds),
+      gt(userItem.quantity, 0),
+      eq(userItem.storedAtHome, false),
+      eq(userItem.isInAuction, false),
+      or(
+        isNull(userItem.craftingFinishedAt),
+        lt(userItem.craftingFinishedAt, new Date()),
+      ),
+    ),
+  });
+
+export const findDungeonRequirementSources = (
+  client: Pick<DrizzleClient, "query">,
+  requirements: DungeonContent["requirements"],
+) =>
+  Promise.all([
+    requirements.prerequisiteQuestId
+      ? client.query.quest.findFirst({
+          where: eq(quest.id, requirements.prerequisiteQuestId),
+          columns: { id: true, name: true },
+        })
+      : null,
+    requirements.requiredItemId
+      ? client.query.item.findFirst({
+          where: eq(item.id, requirements.requiredItemId),
+          columns: { id: true, name: true },
+        })
+      : null,
+  ]);
+
+/** The run receipt commits with inventory debits and battle inserts in the admission transaction. */
+export const markDungeonFloorPublished = (
+  client: Pick<DrizzleClient, "update">,
+  runId: string,
+  battleId: string,
+  version: number,
+  state: DungeonRunState,
+) =>
+  client
+    .update(dungeonRun)
+    .set({ state })
+    .where(
+      and(
+        eq(dungeonRun.id, runId),
+        eq(dungeonRun.version, version),
+        eq(dungeonRun.battleId, battleId),
+        eq(dungeonRun.status, "FIGHTING"),
+        sql`COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${dungeonRun.state}, '$.battlePublished')), 'false') = 'false'`,
+      ),
+    );
+
+/** Selected companions receive the same completion XP in their active or parked bank. */
+export const grantDungeonPetExperience = (
+  client: Pick<DrizzleClient, "execute">,
+  userId: string,
+  petIds: string[],
+  experience: number,
+) =>
+  client.execute(sql`UPDATE ${userPet} INNER JOIN ${userData} ON ${eq(userData.userId, userPet.userId)}
+    SET ${userPet.revision} = ${userPet.revision} + 1, ${userPet.updatedAt} = NOW(3),
+        ${userPet.storedExperience} = ${userPet.storedExperience} + IF(${userPet.id} = ${userData.activePetId}, 0, ${experience}),
+        ${userData.petExperience} = ${userData.petExperience} + IF(${userPet.id} = ${userData.activePetId}, ${experience}, 0)
+    WHERE ${and(eq(userPet.userId, userId), inArray(userPet.id, petIds))}`);
+
+/** Bounded deadline sweep includes offline parties and interrupted floor reservations. */
+export const listExpiredDungeonRuns = (client: Pick<DrizzleClient, "query">) =>
+  client.query.dungeonRun.findMany({
+    where: and(
+      inArray(dungeonRun.status, [
+        "LOBBY",
+        "STARTING",
+        "FIGHTING",
+        "BETWEEN",
+        "PAUSED",
+      ]),
+      or(
+        lte(dungeonRun.expiresAt, new Date()),
+        and(
+          eq(dungeonRun.status, "LOBBY"),
+          isNull(dungeonRun.expiresAt),
+          lte(
+            dungeonRun.createdAt,
+            new Date(Date.now() - DUNGEON_LOBBY_SECONDS * 1000),
+          ),
+        ),
+      ),
+    ),
+    limit: 100,
+  });
+
+/** Fence an unpublished launcher before destructive recovery; publication uses the same row. */
+export const claimDungeonStartRecovery = (
+  client: Pick<DrizzleClient, "update">,
+  runId: string,
+  battleId: string,
+  version: number,
+) =>
+  client
+    .update(dungeonRun)
+    .set({ status: "STARTING", version: sql`${dungeonRun.version} + 1` })
+    .where(
+      and(
+        eq(dungeonRun.id, runId),
+        eq(dungeonRun.battleId, battleId),
+        eq(dungeonRun.version, version),
+        eq(dungeonRun.status, "FIGHTING"),
+        sql`COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${dungeonRun.state}, '$.battlePublished')), 'false') = 'false'`,
       ),
     );

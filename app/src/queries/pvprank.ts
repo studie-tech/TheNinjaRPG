@@ -25,6 +25,8 @@ import {
 } from "@/drizzle/constants";
 import {
   battleHistory,
+  dungeonMember,
+  dungeonRun,
   item,
   logQueueLengths,
   logRankedPicks,
@@ -247,6 +249,7 @@ export const updateUserDataForGetRankedPvpQueue = (
       and(
         eq(userData.userId, ctx.userId),
         eq(userData.status, "QUEUED"),
+        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
         // Independent reads may precede a ranked claim or belong to a clan lobby.
         notExists(
           client

@@ -29,7 +29,6 @@ import {
   UserRolesWithSkillTreeAccess,
   VILLAGE_SYNDICATE_ID,
 } from "@/drizzle/constants";
-
 import {
   type Bloodline,
   type BloodlineReskin,
@@ -49,7 +48,6 @@ import {
   type VillageAlliance,
   type VillageStructure,
 } from "@/drizzle/schema";
-
 import { getReskinnedBloodline } from "@/libs/bloodline";
 import {
   deletedReason,
@@ -126,6 +124,7 @@ import {
 import { fetchSquad } from "@/queries/anbu";
 import { incrementUserBank } from "@/queries/bank";
 import { fetchClan } from "@/queries/clan";
+import { claimDungeonQueue, findActiveDungeonRun } from "@/queries/dungeon";
 import { listHuntingHabitats } from "@/queries/hunting";
 import { fetchKageReplacement } from "@/queries/kage";
 import { updateSpriteBodyStyle } from "@/queries/lpc";
@@ -266,6 +265,7 @@ import {
 } from "@/server/utils/concurrency";
 import { settleCookingExperience } from "@/server/utils/cooking";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
+import { expireDungeonRun } from "@/server/utils/dungeon";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { hashIp } from "@/server/utils/ipHash";
 import {
@@ -766,6 +766,7 @@ export const profileRouter = createTRPCRouter({
         publishedAchievements,
         questInvitations,
         tournamentNoticeState,
+        activeDungeonRuns,
       ] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
@@ -780,6 +781,7 @@ export const profileRouter = createTRPCRouter({
         fetchPublishedAchievements(ctx.drizzle),
         listQuestPartyForGetUser(ctx.drizzle, ctx),
         fetchEventNoticeState(ctx.drizzle, ctx.userId),
+        findActiveDungeonRun(ctx.drizzle, ctx.userId),
       ]);
       const { user, settings, toastMessages, hasUnvotedPolls } = updatedUser;
       const readyFarmPlots = readyFarmPlotsResult[0]?.count ?? 0;
@@ -790,6 +792,33 @@ export const profileRouter = createTRPCRouter({
         : [];
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
+      const activeDungeon = activeDungeonRuns[0]?.run;
+      if (activeDungeon && !["ENDED"].includes(activeDungeon.status)) {
+        const expired = await expireDungeonRun(ctx.drizzle, activeDungeon);
+        if (expired) {
+          // Expiry releases this run's queued reservation; refresh a concurrent profile snapshot.
+          if (user?.status === "QUEUED") user.status = "AWAKE";
+        } else {
+          if (
+            user?.status === "AWAKE" &&
+            ["LOBBY", "BETWEEN", "PAUSED"].includes(activeDungeon.status)
+          ) {
+            const claim = await claimDungeonQueue(
+              ctx.drizzle,
+              ctx.userId,
+              activeDungeon.id,
+            );
+            if (claim.rowsAffected === 1) user.status = "QUEUED";
+          }
+          notifications.push({
+            href: "/dungeon",
+            name: "Active Dungeon Squad",
+            color: "green",
+            alwaysShow: true,
+            notificationCount: 1,
+          });
+        }
+      }
       // Ignore stale invitations for disabled or terminal teams, as the discovery page does.
       const invitations = questInvitations.filter(
         (party) =>
