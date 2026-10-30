@@ -245,17 +245,34 @@ describe("canonical world landmarks", () => {
     }
   });
 
-  it("keeps every generated local-map seam terrain-identical", () => {
-    const grids = globe.tiles.map((_, sector) => localTerrainGrid(sector, false));
+  it("keeps village and wilderness border terrain and travel costs identical across the globe", () => {
+    const borderSignature = (tile: Record<string, unknown>) =>
+      [
+        tile.terrain,
+        tile.blocked,
+        tile.walkCost,
+        tile.battleBiome,
+        tile.decoration,
+      ].join("|");
+    const grids = globe.tiles.map((_, sector) =>
+      localTileProperties(sector, false).map(borderSignature),
+    );
     const edge = (grid: string[], side: number) => {
       if (side === 0) return grid.slice(0, MAP_SIZE);
       if (side === 2) return grid.slice((MAP_SIZE - 1) * MAP_SIZE);
-      return Array.from({ length: MAP_SIZE }, (_, y) =>
-        grid[y * MAP_SIZE + (side === 1 ? MAP_SIZE - 1 : 0)],
+      return Array.from(
+        { length: MAP_SIZE },
+        (_, y) => grid[y * MAP_SIZE + (side === 1 ? MAP_SIZE - 1 : 0)],
       );
     };
     const mismatches: string[] = [];
     for (let sector = 0; sector < globe.tiles.length; sector++) {
+      const village = localTileProperties(sector, true).map(borderSignature);
+      for (const side of [0, 1, 2, 3]) {
+        if (edge(village, side).join("|") !== edge(grids[sector]!, side).join("|")) {
+          mismatches.push(`${sector}:${side} village/wilderness`);
+        }
+      }
       for (const side of [1, 2] as const) {
         const neighbor = globe.tiles[sector]!.n[side]!;
         if (neighbor < 0) continue;
@@ -271,7 +288,65 @@ describe("canonical world landmarks", () => {
       }
     }
     expect(mismatches).toEqual([]);
-  }, 20_000);
+  }, 30_000);
+
+  it("keeps saved border repairs aligned with the world fields and the Tiled terrain references", () => {
+    const sql = readFileSync(
+      resolve(process.cwd(), "drizzle/migrations/0131_mighty_thor.sql"),
+      "utf8",
+    );
+    const repairs = [...sql.matchAll(/INSERT INTO SectorMap[\s\S]*?;\n/g)];
+    expect(repairs).toHaveLength(13);
+    for (const [statement] of repairs) {
+      const sector = Number(
+        statement.match(
+          /WHERE s.sector = (\d+) AND s.sourceHash = '[a-f0-9]{64}'/,
+        )?.[1],
+      );
+      const expected = localTileProperties(sector);
+      const tileset = JSON.parse(
+        statement.match(/CAST\('(\{"firstgid"[^']+)\' AS JSON\)/)![1]!,
+      ) as {
+        firstgid: number;
+        tiles: { id: number; properties: { name: string; value: unknown }[] }[];
+      };
+      const references = [
+        ...statement.matchAll(/'\$\.layers\[0\]\.data\[(\d+)\]', (\d+)/g),
+      ];
+      const propertiesByIndex = new Map<number, Record<string, unknown>>();
+      expect(references.length).toBeGreaterThan(0);
+      for (const [, index, gid] of references) {
+        const i = Number(index);
+        const x = i % MAP_SIZE;
+        const y = Math.floor(i / MAP_SIZE);
+        expect(x === 0 || y === 0 || x === MAP_SIZE - 1 || y === MAP_SIZE - 1).toBe(
+          true,
+        );
+        const tile = tileset.tiles.find(
+          (tile) => tile.id + tileset.firstgid === Number(gid),
+        );
+        expect(tile).toBeDefined();
+        propertiesByIndex.set(
+          i,
+          Object.fromEntries(tile!.properties.map(({ name, value }) => [name, value])),
+        );
+        for (const { name, value } of tile!.properties) {
+          // Road and village zones retain the authored layout. Terrain and
+          // travel properties follow the global field on every shared border.
+          if (name === "zone") continue;
+          expect(value, `${sector}:${x},${y} ${name}`).toEqual(expected[i]![name]);
+        }
+      }
+      for (const [, index, field, value] of statement.matchAll(
+        /'\$\.tiles\[(\d+)\]\.(terrain|walkCost|battleBiome|zone)', ('[^']+'|\d+)/g,
+      )) {
+        const parsed = value!.startsWith("'") ? value!.slice(1, -1) : Number(value);
+        expect<unknown>(parsed, `${sector}:${index} ${field}`).toEqual(
+          propertiesByIndex.get(Number(index))![field!],
+        );
+      }
+    }
+  });
 
   it("spills reserved polar terrain naturally into adjacent sectors", () => {
     const northOfReservedSector = localTerrainGrid(0, false);
