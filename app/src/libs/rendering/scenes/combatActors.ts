@@ -1,10 +1,12 @@
 import type { Grid } from "honeycomb-grid";
+import type { RenderLayer } from "pixi.js";
 import { Container, Graphics, Sprite } from "pixi.js";
 import {
   IMG_AVATAR_DEFAULT,
   IMG_BATTLEFIELD_TOMBSTONE,
   IMG_SECTOR_USER_MARKER,
   IMG_SECTOR_USER_SPRITE_MASK,
+  WORLD_DAY_BRIGHTNESS,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
@@ -28,6 +30,7 @@ import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createRenderScope } from "@/libs/rendering/scope";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { isObjectChainVisible } from "@/libs/rendering/visibility";
+import type { WorldShadows } from "@/libs/rendering/worldShadows";
 
 const LPC_COMBAT_SCALE = 0.75;
 
@@ -36,6 +39,8 @@ export const createCombatActors = (
   game: GameRenderer,
   grid: Grid<TerrainHex>,
   onStep: () => void,
+  shadows?: WorldShadows,
+  layers?: { ground: RenderLayer; world: RenderLayer; ui: RenderLayer },
 ) => {
   const container = new Container(),
     records = new Map<string, Fighter>();
@@ -43,6 +48,7 @@ export const createCombatActors = (
   const getMaxPools = createCombatMaxPoolCache(),
     paths = new PathCalculator(grid);
   let snapshot: CombatActorSnapshot | null = null;
+  let brightness = WORLD_DAY_BRIGHTNESS;
   let needsSort = true,
     expiresAt = Number.POSITIVE_INFINITY,
     calculatedAt = 0;
@@ -103,6 +109,8 @@ export const createCombatActors = (
         artRoot.label = "combat-art";
         // Ground cues stay below artwork; the compact HUD clears both LPC heads and NPC portraits.
         root.addChild(shadowSprite, selection, hover, artRoot);
+        layers?.ground.attach(shadowSprite, selection, hover);
+        layers?.world.attach(artRoot);
         // Contiguous full-height rows keep all resource colors readable at mobile map scale.
         const meterWidth = tile.width / 2,
           meterHeight = tile.height / 10;
@@ -153,8 +161,15 @@ export const createCombatActors = (
         threat.container.addChild(highestThreat);
         root.addChild(threat.container);
         root.addChild(hp.container);
-        if (sp) root.addChild(sp.container);
-        if (cp) root.addChild(cp.container);
+        layers?.ui.attach(hp.container, threat.container);
+        if (sp) {
+          root.addChild(sp.container);
+          layers?.ui.attach(sp.container);
+        }
+        if (cp) {
+          root.addChild(cp.container);
+          layers?.ui.attach(cp.container);
+        }
         root.label = user.userId;
         container.addChild(root);
         scope.own(() => {
@@ -181,6 +196,7 @@ export const createCombatActors = (
           highestThreat,
           shadow: shadowSprite,
           alive: true,
+          groundY,
           lastActionId: previous?.lastActionId ?? user.spriteAction?.id,
           action: previous?.action,
           actionAt: previous?.actionAt,
@@ -194,11 +210,22 @@ export const createCombatActors = (
         records.set(user.userId, record);
         needsSort = true;
         const current = record;
-        const loading = createWorldSprites(scope, parts).then(
+        const loading = createWorldSprites(scope, parts, shadows).then(
           (art) => {
             if (!scope.isDisposed()) {
               current.art = art;
+              art.setLighting(brightness);
               artRoot.addChild(art.container);
+              // Ground effects share actor ownership without widening the artwork's HUD-clearance bounds.
+              for (const label of ["scenery-shadows", "scenery-lights"]) {
+                const ground = art.container.getChildByLabel(label);
+                if (!ground) continue;
+                root.addChildAt(ground, root.getChildIndex(artRoot));
+                layers?.ground.attach(...ground.children);
+              }
+              for (const entry of art.entries)
+                if (entry.description.mask || entry.description.unlit)
+                  layers?.ui.attach(entry.sprite);
               // Portrait and badge bounds keep HUD rows above art and ground cues below it.
               // Headgear can fill the LPC frame; ordinary frames retain their compact HUD.
               if (!(current.user.isAi && current.user.isOriginal)) {
@@ -285,6 +312,8 @@ export const createCombatActors = (
     for (const entry of record.art?.entries ?? []) {
       entry.sprite.visible =
         entry.description.kind === "tombstone" ? !alive && user.isOriginal : alive;
+      if (entry.shadow) entry.shadow.visible = entry.sprite.visible;
+      if (entry.light) entry.light.visible = displayed && entry.sprite.visible;
       if (entry.description.kind === "aiAvatar") {
         const facing = getFacingDirection(
           user,
@@ -455,6 +484,9 @@ export const createCombatActors = (
       container.children.sort((a, b) => b.y - a.y);
       needsSort = false;
     }
+    for (const record of records.values())
+      record.artRoot.zIndex = -(record.root.y + record.groundY + container.y);
+    layers?.world.sortRenderLayerChildren();
     return moving;
   };
   const hit = (x: number, y: number) => {
@@ -473,6 +505,10 @@ export const createCombatActors = (
   return {
     container,
     sync,
+    setLighting: (next: number) => {
+      brightness = next;
+      for (const record of records.values()) record.art?.setLighting(next);
+    },
     animate,
     hit,
     ready: () => Promise.all([...pending]),
@@ -511,6 +547,7 @@ export const combatActorParts = (
     x: w / 2,
     y,
     groundY: 0,
+    unlit: !["avatar", "aiAvatar", "tombstone"].includes(kind),
     ...extra,
   });
   const parts: WorldSpriteDescription[] = [];
@@ -518,6 +555,8 @@ export const combatActorParts = (
     parts.push(
       part("aiAvatar", user.avatar || IMG_AVATAR_DEFAULT, h * 1.6, h * 0.9, {
         rendition: 256,
+        nearest: true,
+        shadowCaster: "character",
       }),
     );
   } else {
@@ -530,7 +569,12 @@ export const combatActorParts = (
           user.avatar || IMG_AVATAR_DEFAULT,
           h * 1.8 * LPC_COMBAT_SCALE,
           h * (0.9 * LPC_COMBAT_SCALE + 0.15),
-          { character: user.spriteAppearance },
+          {
+            character: user.spriteAppearance,
+            shadowCaster: "character",
+            shadow: 0.16,
+            light: 0.65,
+          },
         ),
       );
     else {
@@ -622,4 +666,5 @@ type Fighter = {
   highestThreat: Graphics;
   shadow: Sprite;
   alive: boolean;
+  groundY: number;
 };

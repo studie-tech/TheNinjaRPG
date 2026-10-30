@@ -13,6 +13,7 @@ import {
   IMG_SECTOR_VS_ICON,
   MEDNIN_MIN_RANK,
   RANKS_RESTRICTED_FROM_PVP,
+  WORLD_DAY_BRIGHTNESS,
 } from "@/drizzle/constants";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
@@ -22,8 +23,12 @@ import { getActiveObjectives } from "@/libs/quest";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createRenderScope } from "@/libs/rendering/scope";
-import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
+import type {
+  WorldMotionDirection,
+  WorldSpriteDescription,
+} from "@/libs/rendering/sectorSprites";
 import { isObjectChainVisible, type WorldBounds } from "@/libs/rendering/visibility";
+import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import { hasRequiredRank } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -32,7 +37,8 @@ import { findVillageUserRelationship } from "@/utils/alliance";
 /** Actor identity and art stay stable across position and presence updates. */
 export const createTravelActors = (
   game: GameRenderer,
-  layers?: { depth: RenderLayer; overlay: RenderLayer },
+  layers?: { depth: RenderLayer; overlay: RenderLayer; ground?: RenderLayer },
+  shadows?: WorldShadows,
 ) => {
   const container = new Container();
   const records = new Map<string, ActorRecord>();
@@ -40,6 +46,7 @@ export const createTravelActors = (
   let viewer: UserWithRelations;
   let users: SectorUser[] = [];
   let friendlyAttack = false;
+  let brightness = WORLD_DAY_BRIGHTNESS;
   let hovered: string | null = null;
   let paths: PathCalculator | null = null;
   let pathGrid: Grid<TerrainHex> | null = null;
@@ -204,10 +211,11 @@ export const createTravelActors = (
         );
         root.addChild(badge);
       }
-      void createWorldSprites(scope, recipe.parts).then(
+      void createWorldSprites(scope, recipe.parts, shadows).then(
         (art) => {
           if (scope.isDisposed()) return;
           record.art = art;
+          art.setLighting(brightness);
           root.addChild(art.container);
           if (art.entries.some((entry) => entry.description.kind === "avatar")) {
             record.fallback?.destroy();
@@ -216,7 +224,11 @@ export const createTravelActors = (
           // Controls retain actor transforms/visibility while rendering above all scenery.
           if (recipe.user)
             for (const entry of art.entries)
-              if (isActorControl(entry.description.kind))
+              if (
+                isActorControl(entry.description.kind) ||
+                entry.description.mask ||
+                entry.description.unlit
+              )
                 layers?.overlay.attach(entry.sprite);
           updateActions();
         },
@@ -306,7 +318,10 @@ export const createTravelActors = (
     }
     return null;
   };
-  const animate = (frame: GameFrame) => {
+  const animate = (
+    frame: GameFrame,
+    movements?: ReadonlyMap<string, TravelActorMovement>,
+  ) => {
     const angle = frame.reducedMotion ? 0 : (frame.now * Math.PI) / 5000;
     const cycle = frame.reducedMotion ? 0 : (frame.now / 1000) % 2;
     const wobble = cycle < 1 ? Math.sin(cycle * Math.PI * 4) * (1 - cycle) * 2 : 0;
@@ -316,8 +331,17 @@ export const createTravelActors = (
       const dx = -waypoint.center.x - record.x,
         dy = -waypoint.center.y - record.y;
       const distance = Math.hypot(dx, dy);
-      const moving = distance > 0.01;
-      if (moving) {
+      const movement = movements?.get(recipe.user?.userId ?? "");
+      const moving = movement ? movement.direction !== null : distance > 0.01;
+      if (movement) {
+        record.facing = lpcFacing(
+          movement.x - record.x,
+          movement.y - record.y,
+          record.facing,
+        );
+        record.x = movement.x;
+        record.y = movement.y;
+      } else if (moving) {
         record.facing = lpcFacing(dx, dy, record.facing);
         // Catch up queued network waypoints without overshooting; reduced motion snaps to each one.
         const step = frame.reducedMotion
@@ -374,6 +398,22 @@ export const createTravelActors = (
     },
     hit,
     animate,
+    feet: (userId: string) => {
+      const record = records.get(`user:${userId}`);
+      if (!record) return undefined;
+      const body = record.recipe.parts.find((part) => part.character);
+      return {
+        x: record.root.x + (body?.x ?? record.recipe.tile.width / 2) + container.x,
+        y:
+          record.root.y +
+          (body ? body.y - (body.size * 28) / 64 : record.recipe.tile.height / 2) +
+          container.y,
+      };
+    },
+    setLighting: (next: number) => {
+      brightness = next;
+      for (const record of records.values()) record.art?.setLighting(next);
+    },
     hover: (next: string | null) => {
       if (next !== hovered) {
         hovered = next;
@@ -553,6 +593,7 @@ const part = (
   x: tile.width * x,
   y: tile.height * y,
   groundY: 0,
+  unlit: kind !== "avatar",
   ...extra,
 });
 const pin = (tile: TerrainHex, tint: number) => [
@@ -587,9 +628,15 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
       0.5,
       user.spriteAppearance ? LPC_TRAVEL_FOOT_Y + LPC_TRAVEL_HEIGHT / 2 : 1,
       user.spriteAppearance
-        ? { character: user.spriteAppearance, characterMode: "travel" }
+        ? {
+            character: user.spriteAppearance,
+            characterMode: "travel",
+            shadowCaster: "character",
+            shadow: 0.16,
+            light: 0.65,
+          }
         : user.isNpc
-          ? { rendition: 256 }
+          ? { rendition: 256, nearest: true, shadowCaster: "character" }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },
     ),
   );
@@ -675,4 +722,20 @@ type ActorRecord = {
   root: Container;
   art: Awaited<ReturnType<typeof createWorldSprites>> | null;
   fallback: Graphics | null;
+};
+
+/** Interpolated sector-local feet use the same path clock as the camera. */
+export type TravelActorMovement = {
+  x: number;
+  y: number;
+  direction: WorldMotionDirection | null;
+  facing: number;
+};
+
+export type TravelMotionStep = {
+  from: { sector: number; x: number; y: number };
+  to: { sector: number; x: number; y: number };
+  startedAt: number;
+  direction: WorldMotionDirection;
+  facing: 1 | -1;
 };

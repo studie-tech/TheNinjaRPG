@@ -39,6 +39,6 @@ describe("combat targeting colors", () => {
   it("uses explicit authoring footprints without requiring a playable action", () => {
     const info = fixture(), target = info.grid.getHex({ col: 2, row: 2 })!;
     const plan = combatHighlightPlan({ ...info, action: undefined, targetTiles: [target] });
-    expect([...plan.tints.keys()]).toEqual(["2,2"]); expect(plan.edges).toHaveLength(0);
+    expect([...plan.tints.keys()]).toEqual(["2,2"]); expect(plan.tints.get("2,2")).toEqual({ color: "#ff3232", strength: 0.8 }); expect(plan.edges).toHaveLength(0);
   });
 });

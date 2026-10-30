@@ -1,4 +1,5 @@
 import { COMBAT_BIOMES, type CombatBiome } from "@/drizzle/constants";
+import { resolveWorldTerrain } from "@/libs/rendering/worldArt";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import type { GlobalTile } from "@/libs/sector-map/world-types";
 import { getBiomeFromGlobalTile } from "@/libs/travel";
@@ -9,7 +10,7 @@ const hexToInt = (hex: string) => Number.parseInt(hex.replace("#", ""), 16);
 const builtinColors = (key: string) => {
   const spec = BUILTIN_TERRAINS_BY_KEY.get(key);
   if (!spec) throw new Error(`Unknown built-in terrain ${key}`);
-  return spec.colors.map(hexToInt) as [number, number, number];
+  return resolveWorldTerrain(spec).colors.map(hexToInt) as [number, number, number];
 };
 
 /**

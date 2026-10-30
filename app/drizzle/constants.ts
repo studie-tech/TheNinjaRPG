@@ -2591,6 +2591,9 @@ export const IMG_OCCUPATION_CRAFTING =
 export const IMG_OCCUPATION_FARMING =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMNdWH9tsO4cexqW2RDgkE3zZbNXSFGitmnar";
 
+// Shared clock for path publication and its interpolated presentation.
+export const SECTOR_WALK_STEP_MS = 50;
+
 // Global day/night cycle (UTC, shared across world views)
 export const WORLD_CYCLE_SECONDS = 30 * 60;
 export const WORLD_DAY_SECONDS = 15 * 60;

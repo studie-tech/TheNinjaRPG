@@ -23,7 +23,7 @@ const windowEntry = (sector = 724, dy = 0): TravelWindowEntry => ({
 });
 const snapshotFixture = (): TravelSnapshot => ({
   sector: 724, actorRevision: 0, viewer, users: [player()], minBracket: -1, showUsers: true, friendlyAttack: false, structureObjectiveIds: new Set(), window: [windowEntry()], nav: null, col: 4, row: 4, enabled: true, brightness: 1,
-  decorations: new Map([["tree", { filepath: "depth-tree.png", renderScale: 3 } as DecorationAsset]]), terrains: new Map(), libraryVersion: "depth", locations: [], mapAssets: [],
+  decorations: new Map([["tree", { key: "tree", filepath: "depth-tree.png", renderScale: 3 } as DecorationAsset]]), terrains: new Map(), libraryVersion: "depth", locations: [], mapAssets: [],
 });
 /** Keep real scene/actor/artwork geometry and ownership; replace only GPU setup and image decoding. */
 const gameFixture = () => {
@@ -48,7 +48,7 @@ const gameFixture = () => {
     const container = new Container();
     const dispose = () => { if (!container.destroyed) container.destroy({ children: true }); };
     scope.own(dispose);
-    return { container, dispose, isAnimated: false, setTints: () => {} };
+    return { container, dispose, isAnimated: false, setLighting: () => {}, setTints: () => {} };
   });
   return { game, stage, advance: (next = frame()) => update(next) };
 };
@@ -57,8 +57,9 @@ const sceneFixture = async (state = snapshotFixture()) => {
   const scene = await createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => ({ ...state }), onError: (error) => { throw error; }, onReady: () => {}, onTap: () => {}, onHover: () => {}, onZoom: () => {}, initialZoom: 1 });
   fixture.advance(); await settle();
   const world = fixture.stage.children[0]!;
-  const layers = world.children.filter((child) => child instanceof RenderLayer);
-  return { ...fixture, scene, state, world, depth: layers[1]!, overlay: layers[2]! };
+  const collect = (node: Container): RenderLayer[] => node.children.flatMap((child) => child instanceof RenderLayer ? [child] : collect(child));
+  const layers = collect(world);
+  return { ...fixture, scene, state, world, depth: layers[2]!, overlay: layers[3]! };
 };
 beforeEach(() => {
   const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
@@ -231,7 +232,7 @@ describe("travel scene ground depth", () => {
 
   it("keeps controls and encounter/count markers above scenery and prioritizes visible controls over nearer bodies", async () => {
     const { scene, game, world, depth, overlay } = await sceneFixture();
-    expect(world.getChildIndex(depth)).toBeLessThan(world.getChildIndex(overlay));
+    expect(world.getChildIndex(depth.parent!)).toBeLessThan(world.getChildIndex(overlay));
     const grid = scene.sectors.get(724)!.grid;
     const actors = createTravelActors(game, { depth, overlay }); world.addChild(actors.container);
     const users = [player({ userId: "other" }), player({ userId: "nearer", longitude: 6, latitude: 3 }), player({ userId: "npc", isNpc: true, npcPlacementId: "npc", npcInteractionType: "FRIENDLY" }), player({ userId: "fighter", longitude: 10, latitude: 10, status: "BATTLE", battleId: "battle" })];

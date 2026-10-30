@@ -1,4 +1,25 @@
+import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
 import { parseHexColor } from "@/utils/color";
+
+/** Cool moonlight keeps the cycle legible without losing the readable nighttime luminance. */
+export const worldLighting = (brightness: number) => {
+  const night = Math.max(
+    0,
+    Math.min(
+      1,
+      (WORLD_DAY_BRIGHTNESS - brightness) /
+        (WORLD_DAY_BRIGHTNESS - WORLD_NIGHT_BRIGHTNESS),
+    ),
+  );
+  const luminance = 1 - night * 0.07;
+  const red = Math.round(255 * (1 - night * 0.22) * luminance),
+    green = Math.round(255 * (1 - night * 0.15) * luminance),
+    blue = Math.round(255 * luminance);
+  return {
+    night,
+    tint: (red << 16) | (green << 8) | blue,
+  };
+};
 
 /** Normalized linear RGB for the game shaders' explicit display-color conversion. */
 export const linearRenderColor = (hex: string): LinearColor => {

@@ -25,7 +25,7 @@ export const combatHighlightPlan = (info: {
   const { user, grid, battle, action, hovered, canUse } = info;
   if (info.targetTiles) {
     for (const tile of info.targetTiles)
-      tints.set(`${tile.col},${tile.row}`, { color: "#00ff64", strength: 0.8 });
+      tints.set(`${tile.col},${tile.row}`, { color: "#ff3232", strength: 0.8 });
     return { tints, edges, valid: false };
   }
   const origin = user && grid.getHex({ col: user.longitude, row: user.latitude });

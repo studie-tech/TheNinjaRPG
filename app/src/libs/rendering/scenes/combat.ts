@@ -1,12 +1,19 @@
 import alea from "alea";
 import { ring } from "honeycomb-grid";
-import { Container, Graphics, Text } from "pixi.js";
-import { ID_SFX_MOVE } from "@/drizzle/constants";
+import {
+  Container,
+  Graphics,
+  getMaxFragmentPrecision,
+  RenderLayer,
+  Text,
+} from "pixi.js";
+import { ID_SFX_MOVE, WORLD_DAY_BRIGHTNESS } from "@/drizzle/constants";
 import type { GameAsset, UserData } from "@/drizzle/schema";
 import { actionPointsAfterAction, calcActiveUser } from "@/libs/combat/actions";
 import type { AggroDisplay } from "@/libs/combat/aggroDisplay";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { getBattlefieldHeightRatio } from "@/libs/combat/util";
+import { getWorldCycleBrightness } from "@/libs/dayNight";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import { combatHighlightPlan } from "@/libs/rendering/combatHighlights";
@@ -24,6 +31,8 @@ import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
 import { prepareCombatTerrain } from "@/libs/rendering/scenes/combatTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
+import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import { clamp } from "@/utils/math";
 
 /**
@@ -79,20 +88,37 @@ export const createCombatScene = async (options: {
       alea(options.seed ?? initial.battle.id),
       options.lightLayout,
     );
+    const world = new Container();
+    // Packed geometry decoding needs highp; mediump devices use the primitives' ambient lighting.
+    const shadows =
+      getMaxFragmentPrecision() === "highp"
+        ? createWorldShadows(game, world)
+        : undefined;
+    const lightingLayer = shadows?.container ?? new Container();
+    const groundLayer = new RenderLayer(),
+      depthLayer = new RenderLayer({ sortableChildren: true }),
+      uiLayer = new RenderLayer();
+    lightingLayer.addChild(groundLayer, depthLayer);
     const [terrain, art] = await Promise.all([
       createHexTerrain(game, data.terrain, false),
-      createWorldSprites(game, data.scenery),
+      createWorldSprites(game, data.scenery, shadows),
     ]);
     if (game.isDisposed()) throw new DOMException("Combat cancelled", "AbortError");
-    const world = new Container(),
-      outlines = new Graphics(),
+    if (shadows) game.own(shadows.registerTerrain(terrain.container, data.terrain));
+    const outlines = new Graphics(),
       labels = new Container();
-    const actors = createCombatActors(game, data.grid, () => {
-      const snapshot = options.getSnapshot();
-      const move = snapshot.assets.find((asset) => asset.id === ID_SFX_MOVE);
-      if (snapshot.active && snapshot.sound && move?.url)
-        options.play(move.url, snapshot.volume * 0.75);
-    });
+    const actors = createCombatActors(
+      game,
+      data.grid,
+      () => {
+        const snapshot = options.getSnapshot();
+        const move = snapshot.assets.find((asset) => asset.id === ID_SFX_MOVE);
+        if (snapshot.active && snapshot.sound && move?.url)
+          options.play(move.url, snapshot.volume * 0.75);
+      },
+      shadows,
+      { ground: groundLayer, world: depthLayer, ui: uiLayer },
+    );
     const effects = createCombatEffects(game, data.grid, options.play);
     for (const tile of data.grid) {
       if (!tile.name) continue;
@@ -107,12 +133,19 @@ export const createCombatScene = async (options: {
       text.position.set(tile.x, tile.y - 28 / 3);
       labels.addChild(text);
     }
+    // Physical fighters and scenery share painter ordering; meters and controls remain unlit.
+    // Ambient terrain draws from its earlier owner so fallback contacts remain above its opaque faces.
+    if (shadows) groundLayer.attach(...terrain.container.children);
+    groundLayer.sortRenderLayerChildren();
+    art.attachLayers({ ground: groundLayer, world: depthLayer, ui: uiLayer });
     world.addChild(
       terrain.container,
+      art.container,
+      lightingLayer,
       effects.ground,
       outlines,
       labels,
-      art.container,
+      uiLayer,
       actors.container,
       effects.container,
     );
@@ -351,7 +384,30 @@ export const createCombatScene = async (options: {
         }
       }
       transform();
-      art.animate(frame, scale());
+      const breeze = sampleWorldWind(frame, scale());
+      art.animate(frame, scale(), null, breeze);
+      const lightDate = snapshot.cycleEnabled
+        ? new Date(Date.now() - snapshot.timeDiff)
+        : null;
+      if (shadows)
+        shadows.update(
+          worldSunlight(lightDate),
+          {
+            minX: camera.x - game.renderer.width / (2 * scale()),
+            maxX: camera.x + game.renderer.width / (2 * scale()),
+            minY: camera.y - game.renderer.height / (2 * scale()),
+            maxY: camera.y + game.renderer.height / (2 * scale()),
+          },
+          breeze,
+        );
+      else {
+        const brightness = lightDate
+          ? getWorldCycleBrightness(lightDate)
+          : WORLD_DAY_BRIGHTNESS;
+        terrain.setLighting(brightness);
+        art.setLighting(brightness);
+        actors.setLighting(brightness);
+      }
       drawHighlights(snapshot, tile);
       if (
         options.interactive !== false &&
@@ -427,6 +483,8 @@ export type CombatSceneSnapshot = {
   action?: CombatAction;
   actions: CombatAction[];
   timeDiff: number;
+  /** Public/static previews stay at noon unless the world cycle is explicitly enabled. */
+  cycleEnabled?: boolean;
   assets: GameAsset[];
   requestedIds: ReadonlySet<string>;
   aggro?: AggroDisplay;
