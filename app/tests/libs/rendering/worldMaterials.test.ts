@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { BufferImageSource, Polygon, Rectangle, Texture } from "pixi.js";
 import sharp from "sharp";
 import { WORLD_DAY_SECONDS } from "@/drizzle/constants";
 import * as sceneAssets from "@/libs/rendering/assets";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { BIOME_DECORATIONS, GROUND_DETAIL_ART, WOODLAND_DECORATIONS, resolveWorldDecoration } from "@/libs/rendering/worldArt";
-import stockImages from "@/libs/rendering/villageBuildingImages.json";
-import { resolveWorldStructure } from "@/libs/rendering/worldStructures";
-import worldSurfaceAtlases from "@/libs/rendering/worldSurfaceAtlases.json";
+import { WORLD_STRUCTURE_ART, resolveWorldStructure } from "@/libs/rendering/worldStructures";
+import { WORLD_ASSET_SOURCES, worldAssetSource } from "@/libs/rendering/worldAssetSources";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
+import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
 import { STONE_VILLAGE_WALL_KIT } from "@/libs/sector-map/village-wall-assets";
 import { acquireWorldMaterial, createCharacterMaterialFrame, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
@@ -19,6 +21,8 @@ const material = (width: number, height: number): WorldMaterial => {
   const pixels = new Uint8Array(width * height * 4);
   return { pixels, width, height, shape: "building", frames: new Map(), texture: new Texture({ source: new BufferImageSource({ resource: pixels, width, height, format: "rgba8unorm", scaleMode: "nearest", alphaMode: "no-premultiply-alpha" }) }) };
 };
+const worldSurfaceAtlases = Object.keys(WORLD_ASSET_SOURCES);
+const materialUrls = new Set(Object.values(WORLD_ASSET_SOURCES).map((source) => source.material));
 const paint = (source: WorldMaterial, x: number, y: number, height: number, flags: number, alpha = 255) => source.pixels.set([128 | flags, 128, height, alpha], (y * source.width + x) * 4);
 const decodeNormal = ([u, v]: readonly [number, number]) => {
   let x = u * 2 - 1, y = v * 2 - 1;
@@ -160,7 +164,7 @@ describe("world material loading", () => {
     const dispose = vi.fn();
     const assets = vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({
       texture: async (path) => {
-        if (!path.endsWith(".material.png")) return albedo.texture;
+        if (!materialUrls.has(path)) return albedo.texture;
         if (failure === "missing") throw new Error("Missing authored material");
         return auxiliary.texture;
       }, dispose,
@@ -176,7 +180,7 @@ describe("world material loading", () => {
     try {
       const loaded = await lease.resource;
       expect(request).toHaveBeenCalledTimes(failure === "unknown" ? 0 : 1);
-      if (failure !== "unknown") expect(request).toHaveBeenCalledWith(image.replace(/\.webp$/, ".surfaces.json"));
+      if (failure !== "unknown") expect(request).toHaveBeenCalledWith(worldAssetSource(image)!.surfaces);
       expect(loaded.surfaceFrames).toBeUndefined();
       expect(loaded.isBillboard).toBe(true);
       expect(loaded.pixels[2]).toBe(Math.round((1 - 0.5 / height) * 255));
@@ -212,7 +216,7 @@ describe("world material loading", () => {
       albedo.pixels.set([20, 40, 60, 255], i * 4);
       numerical.pixels.set([129, 128, 128, 255], i * 4);
     }
-    const loadTexture = vi.fn(async (image: string) => image.endsWith(".material.png") ? numerical.texture : albedo.texture);
+    const loadTexture = vi.fn(async (image: string) => materialUrls.has(image) ? numerical.texture : albedo.texture);
     const assets = vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({ texture: loadTexture, dispose }));
     let drawn: Uint8Array = new Uint8Array();
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(((kind: string) => kind === "2d" ? {
@@ -235,7 +239,7 @@ describe("world material loading", () => {
       const [source, repeated] = await Promise.all([first.resource, second.resource]);
       expect(source).toBe(repeated);
       expect(fixture.request).toHaveBeenCalledTimes(1);
-      expect(fixture.request).toHaveBeenCalledWith("/world-art/ground-details.surfaces.json");
+      expect(fixture.request).toHaveBeenCalledWith(worldAssetSource(image)!.surfaces);
       expect(fixture.loadTexture).toHaveBeenCalledTimes(2);
       expect(source.surfaceFrames).toEqual([definition]);
       expect(source.surfaceBytes).toBe(text.length * 4);
@@ -272,9 +276,22 @@ describe("world material loading", () => {
     } finally { complete(new Response(JSON.stringify([definition]))); first.release(); second.release(); fixture.restore(); }
   });
 
+  it("loads persisted numerical maps at native resolution for artwork outside the catalogue", async () => {
+    const published = worldAssetSource("/world-art/ground-details.webp")!;
+    const fixture = loadingFixture(() => new Response(JSON.stringify([definition])));
+    const lease = acquireWorldMaterial("persisted-structure.webp", "building", 128, published);
+    try {
+      const source = await lease.resource;
+      expect(source.isBillboard).toBe(false);
+      expect(fixture.loadTexture).toHaveBeenCalledWith("persisted-structure.webp", 0, "nearest");
+      expect(fixture.loadTexture).toHaveBeenCalledWith(published.material, 0, "nearest");
+      expect(fixture.request).toHaveBeenCalledWith(published.surfaces);
+    } finally { lease.release(); fixture.restore(); }
+  });
+
   it.each([
-    ["missing", "/world-art/civic-buildings.webp", "", 404],
-    ["malformed", "/world-art/horizon-watch-hall.webp", "{", 200],
+    ["missing", "/world-art/settlement-wake-island.webp", "", 404],
+    ["malformed", "/world-art/settlement-horizon.webp", "{", 200],
     ["empty", "/world-art/village-walls.webp", "[]", 200],
     ["invalid frame", "/world-art/desert-rocks.webp", JSON.stringify([{ frame: [0, 0, null, 4], surfaces: [], volumes: [] }]), 200],
     ["missing surfaces", "/world-art/submerged-rock-shelf.webp", JSON.stringify([{ frame: [0, 0, 4, 4], volumes: [] }]), 200],
@@ -283,7 +300,7 @@ describe("world material loading", () => {
     const lease = acquireWorldMaterial(image, "column");
     try {
       const source = await lease.resource;
-      expect(fixture.request).toHaveBeenCalledWith(image.replace(/\.webp$/, ".surfaces.json"));
+      expect(fixture.request).toHaveBeenCalledWith(worldAssetSource(image)!.surfaces);
       expect(source.surfaceFrames).toBeUndefined();
       expect(source.surfaceBytes ?? 0).toBe(0);
       expect(source.isBillboard).toBe(true);
@@ -529,11 +546,11 @@ describe("thin authored foliage backing", () => {
     } finally { source.texture.destroy(true); }
   });
 
-  it("bounds shared native ground-atlas profiles and preserves opaque ownership after Float32 compilation", async () => {
+  it.skipIf(!worldArtDirectory)("bounds shared native ground-atlas profiles and preserves opaque ownership after Float32 compilation", async () => {
     const image = "/world-art/ground-details.webp";
-    const definitions = JSON.parse(readFileSync(new URL(`../../../public${image.replace(/\.webp$/, ".surfaces.json")}`, import.meta.url), "utf8")) as AuthoredMaterialFrame[];
-    const albedo = await sharp(new URL(`../../../public${image}`, import.meta.url).pathname).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const numerical = await sharp(new URL(`../../../public${image.replace(/\.webp$/, ".material.png")}`, import.meta.url).pathname).ensureAlpha().raw().toBuffer();
+    const definitions = JSON.parse(readFileSync(worldArtFile(image.replace(/\.webp$/, ".surfaces.json")), "utf8")) as AuthoredMaterialFrame[];
+    const albedo = await sharp(worldArtFile(image)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const numerical = await sharp(worldArtFile(image.replace(/\.webp$/, ".material.png"))).ensureAlpha().raw().toBuffer();
     const source = material(albedo.info.width, albedo.info.height);
     source.surfaceFrames = definitions; source.pixels.set(numerical);
     for (let i = 3; i < source.pixels.length; i += 4) source.pixels[i] = albedo.data[i]!;
@@ -649,15 +666,17 @@ const expectClosedFoliageCoverage = (source: WorldMaterial, rect: Rectangle, fra
   expect(covered).toBeGreaterThan(0);
 };
 
-describe("bundled world surface catalogue", () => {
-  const surfaceFiles = worldSurfaceAtlases.map((image) => new URL(`../../../public${image.replace(/\.webp$/, ".surfaces.json")}`, import.meta.url));
+describe.skipIf(!worldArtDirectory)("published world surface pixel audit", () => {
+  if (!worldArtDirectory) return;
+  const surfaceFiles = worldSurfaceAtlases.map((image) => worldArtFile(image.replace(/\.webp$/, ".surfaces.json")));
   const catalogue = Object.fromEntries(worldSurfaceAtlases.map((image, index) => [image, JSON.parse(readFileSync(surfaceFiles[index]!, "utf8")) as AuthoredMaterialFrame[]]));
-  const directory = new URL("../../../public/world-art/", import.meta.url);
+  const directory = worldArtDirectory;
   const expectFrame = (image: string, frame: { x: number; y: number; width: number; height: number }) => {
-    expect(catalogue[image]?.some(({ frame: rectangle }) => rectangle[0] === frame.x && rectangle[1] === frame.y && rectangle[2] === frame.width && rectangle[3] === frame.height), `${image} ${JSON.stringify(frame)}`).toBe(true);
+    const key = worldSurfaceAtlases.find((key) => worldAssetSource(key) === worldAssetSource(image))!;
+    expect(catalogue[key]?.some(({ frame: rectangle }) => rectangle[0] === frame.x && rectangle[1] === frame.y && rectangle[2] === frame.width && rectangle[3] === frame.height), `${image} ${JSON.stringify(frame)}`).toBe(true);
   };
 
-  it("covers every bundled material atlas", () => {
+  it("covers every published material atlas", () => {
     const materialAtlases = readdirSync(directory).filter((name) => name.endsWith(".material.png")).map((name) => `/world-art/${name.replace(/\.material\.png$/, ".webp")}`);
     expect(Object.keys(catalogue).sort()).toEqual(materialAtlases.sort());
     expect(new Set(worldSurfaceAtlases).size).toBe(worldSurfaceAtlases.length);
@@ -665,20 +684,53 @@ describe("bundled world surface catalogue", () => {
     expect(surfaceAtlases.sort()).toEqual(worldSurfaceAtlases.map((image) => image.slice("/world-art/".length).replace(/\.webp$/, ".surfaces.json")).sort());
   });
 
+  it("matches the immutable hashes of every published albedo, material and mesh", () => {
+    for (const [image, source] of Object.entries(WORLD_ASSET_SOURCES))
+      for (const [kind, suffix] of [["image", ".webp"], ["material", ".material.png"], ["surfaces", ".surfaces.json"]] as const) {
+        const bytes = readFileSync(worldArtFile(image.replace(/\.webp$/, suffix)));
+        expect(createHash("sha256").update(bytes).digest("hex"), `${image} ${kind}`).toBe(source.sha256[kind]);
+      }
+  });
+
+  it("separates painted roofs, facade banners and the open arena floor", async () => {
+    // These visible landmarks guard semantic alignment in addition to the silhouette/height audit.
+    for (const [key, u, v, surface] of [
+      ["akikaze/academy", .35, .32, 3], ["akikaze/academy", .36, .64, 1],
+      ["akikaze/townhall", .65, .32, 3], ["akikaze/townhall", .75, .70, 1],
+      ["wake-island/globalanbuhq", .13, .42, 3], ["wake-island/globalanbuhq", .46, .65, 1],
+      ["wake-island/colosseum", .53, .40, 0], ["wake-island/colosseum", .20, .35, 1],
+    ] as const) {
+      const art = WORLD_STRUCTURE_ART[key]!, logical = worldSurfaceAtlases.find((image) => worldAssetSource(image) === worldAssetSource(art.filepath))!;
+      const { data, info } = await sharp(worldArtFile(logical.replace(/\.webp$/, ".material.png"))).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const x = art.frame.x + Math.floor(art.frame.width * u), y = art.frame.y + Math.floor(art.frame.height * v);
+      expect(data[(y * info.width + x) * 4]! % 4, `${key} at ${u},${v}`).toBe(surface);
+    }
+  });
+
+  it("places each service entrance on an opaque stair or foundation contact", async () => {
+    for (const [key, art] of Object.entries(WORLD_STRUCTURE_ART)) {
+      const image = worldSurfaceAtlases.find((image) => worldAssetSource(image) === worldAssetSource(art.filepath))!;
+      const { data, info } = await sharp(worldArtFile(image)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const x = art.frame.x + art.stair.x, y = art.frame.y + art.stair.y;
+      expect(data[(y * info.width + x) * 4 + 3], key).toBe(255);
+    }
+  });
+
   it("bounds shipped surface metadata and compiled mesh storage for low-memory devices", async () => {
-    const metadataBytes = surfaceFiles.reduce((sum, file) => sum + readFileSync(file).byteLength, readFileSync(new URL("../../../src/libs/rendering/worldSurfaceAtlases.json", import.meta.url)).byteLength);
-    expect(metadataBytes).toBeLessThanOrEqual(12 * 1024 * 1024);
-    let count = 0;
     for (const [image, definitions] of Object.entries(catalogue)) {
-      const dimensions = await sharp(new URL(`../../../public${image}`, import.meta.url).pathname).metadata();
+      const dimensions = await sharp(worldArtFile(image)).metadata();
+      // Settlement variants load independently; bound a complete shared kit rather than the installed catalogue.
+      const metadataBytes = readFileSync(worldArtFile(image.replace(/\.webp$/, ".surfaces.json"))).byteLength;
+      expect(metadataBytes * 4 + dimensions.width! * dimensions.height! * 8, image).toBeLessThanOrEqual(16 * 1024 * 1024);
+      let count = 0;
       const source = material(dimensions.width!, dimensions.height!);
       source.surfaceFrames = definitions;
       try {
         for (const definition of definitions)
           count += worldMaterialFrame(source, new Rectangle(...definition.frame)).vertices.length / 6;
       } finally { source.texture.destroy(true); }
+      expect(count, image).toBeLessThanOrEqual(125_000);
     }
-    expect(count).toBeLessThanOrEqual(400_000);
   });
 
   it("matches runtime padded structure, scenery, ground-detail and wall frame rectangles", () => {
@@ -689,16 +741,8 @@ describe("bundled world surface catalogue", () => {
         const resolved = resolveWorldDecoration(asset, biome);
         if (resolved.filepath.startsWith("/world-art/") && resolved.frame) expectFrame(resolved.filepath, resolved.frame);
       }
-      for (const [route, sources] of Object.entries(stockImages)) {
-        const image = `https://uploadthing.b-cdn.net/f/${sources[0]}.webp`;
-        const resolved = resolveWorldStructure(image, route, biome);
-        if (resolved) expectFrame(resolved.filepath, resolved.frame);
-        if (route === "/townhall") {
-          const horizon = resolveWorldStructure(image, route, biome, 301)!;
-          expectFrame(horizon.filepath, horizon.frame);
-        }
-      }
     }
+    for (const art of Object.values(WORLD_STRUCTURE_ART)) expectFrame(art.filepath, art.frame);
     const kit = STONE_VILLAGE_WALL_KIT;
     for (const spec of [...Object.values(kit.panels), ...Object.values(kit.gates), kit.pier, kit.tower])
       if (spec.frame) expectFrame(spec.url, spec.frame);
@@ -706,14 +750,14 @@ describe("bundled world surface catalogue", () => {
 
   it("covers the standalone submerged shelf", async () => {
     const image = "/world-art/submerged-rock-shelf.webp";
-    const dimensions = await sharp(new URL(`../../../public${image}`, import.meta.url).pathname).metadata();
+    const dimensions = await sharp(worldArtFile(image)).metadata();
     expectFrame(image, { x: 0, y: 0, width: dimensions.width!, height: dimensions.height! });
   });
 
   it.each(Object.entries(catalogue).flatMap(([image, frames]) => frames.map((definition, index) => [image, index, definition] as const)))("keeps opaque volumes within %s frame %i and behind its visible surface", async (image, index, definition) => {
     const label = `${image} frame ${index}`;
-    const { data, info } = await sharp(new URL(`../../../public${image}`, import.meta.url).pathname).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    const numerical = await sharp(new URL(`../../../public${image.replace(/\.webp$/, ".material.png")}`, import.meta.url).pathname).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const { data, info } = await sharp(worldArtFile(image)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const numerical = await sharp(worldArtFile(image.replace(/\.webp$/, ".material.png"))).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     expect([numerical.info.width, numerical.info.height]).toEqual([info.width, info.height]);
     const source = material(info.width, info.height);
     source.surfaceFrames = catalogue[image];
@@ -786,7 +830,7 @@ describe("bundled world surface catalogue", () => {
 
   it("builds every authored frame without sampled grids, invalid indices or WebGL1 overflow", async () => {
     for (const [image, definitions] of Object.entries(catalogue)) {
-      const dimensions = await sharp(new URL(`../../../public${image}`, import.meta.url).pathname).metadata();
+      const dimensions = await sharp(worldArtFile(image)).metadata();
       const source = material(dimensions.width!, dimensions.height!);
       source.surfaceFrames = definitions;
       try {
@@ -829,6 +873,26 @@ describe("bundled world surface catalogue", () => {
         }
       } finally {
         source.texture.destroy(true);
+      }
+    }
+  });
+});
+
+describe("published world artwork", () => {
+  it("pins immutable UploadThing sources without shipping a public world-art directory", () => {
+    expect(existsSync(new URL("../../../public/world-art", import.meta.url))).toBe(false);
+    for (const source of Object.values(WORLD_ASSET_SOURCES)) {
+      for (const field of ["image", "material", "surfaces"] as const) {
+        expect(new URL(source[field]).origin).toBe(new URL(UPLOADTHING_HOST).origin);
+        expect(new URL(source[field]).search).toBe("");
+        expect(source.sha256[field]).toMatch(/^[a-f0-9]{64}$/);
+      }
+      expect(source.material).not.toBe(source.image);
+      expect(worldAssetSource(source.image)).toBe(source);
+      for (const [x, y, width, height] of source.frames) {
+        expect(x!).toBeGreaterThanOrEqual(0); expect(y!).toBeGreaterThanOrEqual(0);
+        expect(x! + width!).toBeLessThanOrEqual(source.width);
+        expect(y! + height!).toBeLessThanOrEqual(source.height);
       }
     }
   });

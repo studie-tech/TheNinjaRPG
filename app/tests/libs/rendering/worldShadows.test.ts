@@ -15,6 +15,8 @@ import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
 import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
 import { ensureDom } from "../../setup/dom.mjs";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
+import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 
 ensureDom();
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
@@ -453,16 +455,16 @@ describe("physical world lighting", () => {
       f.dispose(); register.mockRestore(); mask.mockRestore(); source.dispose();
     }
   });
-  it("receives authored stock rock heights and normals without adding sun/local occluders or lights", async () => {
+  it.skipIf(!worldArtDirectory)("receives authored stock rock heights and normals without adding sun/local occluders or lights", async () => {
     const f = fixture();
-    const surfaces = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(readFileSync(new URL("../../../public/world-art/biome-scenery.surfaces.json", import.meta.url), "utf8")));
+    const surfaces = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(readFileSync(worldArtFile("biome-scenery.surfaces.json"), "utf8")));
     const decoded = await Promise.all(["biome-scenery.webp", "biome-scenery.material.png"].map(async (name) => {
-      const { data, info } = await sharp(new URL(`../../../public/world-art/${name}`, import.meta.url).pathname).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const { data, info } = await sharp(worldArtFile(name)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
       return new Texture({ source: new BufferImageSource({ resource: new Uint8Array(data), width: info.width, height: info.height, format: "rgba8unorm" }) });
     }));
     // Fixture-owned atlas sources preserve real dimensions independently of shared scene image leases.
     const assets = vi.spyOn(sceneAssets, "createSceneAssets").mockImplementation(() => ({
-      texture: async (path) => decoded[path.endsWith(".material.png") ? 1 : 0]!,
+      texture: async (path) => decoded[path === worldAssetSource("/world-art/biome-scenery.webp")!.material ? 1 : 0]!,
       dispose() {},
     }));
     let drawn: Uint8Array = new Uint8Array();

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { BufferImageSource, Rectangle, Texture } from "pixi.js";
 import { createCharacterMaterialFrame, worldMaterialFrame, type AuthoredMaterialFrame, type WorldMaterial } from "@/libs/rendering/worldMaterials";
 import { lightingFragment, pointLightFragment } from "@/libs/rendering/worldLightingShaders";
@@ -188,8 +189,8 @@ const shrine = () => record("shrine-pedestal", [], { volumes: [volume([
 ].map((value, index) => value + (index % 4 === 0 ? 512 : index % 4 === 1 ? 1024 : 0)), [0, 1, 2, 0, 2, 3, 3, 2, 4])] });
 
 describe("authored foliage under local lights", () => {
-  it.each([["woodland-village", 0], ["woodland-village", 1], ["woodland-village", 2], ["biome-scenery", 11], ["biome-scenery", 13]] as const)("retains distinct lit and shaded ground for four nearby lights around %s frame %i", (atlas, index) => {
-    const definitions = JSON.parse(readFileSync(new URL(`../../../public/world-art/${atlas}.surfaces.json`, import.meta.url), "utf8")) as AuthoredMaterialFrame[];
+  it.skipIf(!worldArtDirectory).each([["woodland-village", 0], ["woodland-village", 1], ["woodland-village", 2], ["biome-scenery", 11], ["biome-scenery", 13]] as const)("retains distinct lit and shaded ground for four nearby lights around %s frame %i", (atlas, index) => {
+    const definitions = JSON.parse(readFileSync(worldArtFile(`${atlas}.surfaces.json`), "utf8")) as AuthoredMaterialFrame[];
     const definition = definitions[index]!, [, , w, h] = definition.frame;
     const pixels = new Uint8Array(1024 * 1024 * 4), texture = new Texture({ source: new BufferImageSource({ resource: pixels, width: 1024, height: 1024 }) });
     const source: WorldMaterial = { texture, pixels, width: 1024, height: 1024, shape: "canopy", frames: new Map(), surfaceFrames: definitions };

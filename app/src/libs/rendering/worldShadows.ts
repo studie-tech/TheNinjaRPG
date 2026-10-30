@@ -273,6 +273,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           image,
           description.shadowCaster ?? "column",
           character ? 0 : 128,
+          description.worldMaterial,
         ),
       );
       const record: Caster = {

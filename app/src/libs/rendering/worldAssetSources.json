@@ -1,0 +1,1516 @@
+{
+  "/world-art/woodland-village.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJztXRYYemvaQu94EYJs8HpxVzofny6iPtbgCZ",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtAYtsoUYJDfpFXWm3nrcPluEtIZqyLkaSV1j",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6oLQbnDfT5pyNCaUruzhPtAJqb8Kj9mc1nlH",
+    "width": 627,
+    "height": 627,
+    "frames": [
+      [
+        22.5,
+        38,
+        124.5,
+        138
+      ],
+      [
+        184,
+        41,
+        119.5,
+        137.5
+      ],
+      [
+        338.5,
+        34,
+        110,
+        147
+      ],
+      [
+        497.5,
+        36.5,
+        105.5,
+        143.5
+      ],
+      [
+        20,
+        207.5,
+        127,
+        139
+      ],
+      [
+        181,
+        227,
+        128.5,
+        119.5
+      ],
+      [
+        341.5,
+        222,
+        119,
+        124
+      ],
+      [
+        496,
+        205.5,
+        115,
+        142.5
+      ],
+      [
+        16.5,
+        379.5,
+        133.5,
+        104
+      ],
+      [
+        186,
+        394.5,
+        112.5,
+        90.5
+      ],
+      [
+        353,
+        375,
+        86,
+        111.5
+      ],
+      [
+        487,
+        369,
+        126.5,
+        116
+      ],
+      [
+        26.5,
+        507.5,
+        112.5,
+        98.5
+      ],
+      [
+        186,
+        519.5,
+        116,
+        86.5
+      ],
+      [
+        350.5,
+        512,
+        72,
+        95.5
+      ],
+      [
+        497.5,
+        521,
+        103.5,
+        85
+      ]
+    ],
+    "sha256": {
+      "image": "923c525b8b01e22b6c380085e67199adad43b780841c3345c3feb0a20a6a0b5e",
+      "material": "29b193bcea023152b0d20c61e1c66f4c6cadb0f7cba6e7df2a2b5d3d1802a792",
+      "surfaces": "d40f44649911fc95f9ae8706ce0e3a66d44a8039d2de8068512c20960d3decae"
+    }
+  },
+  "/world-art/biome-scenery.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ88JF00kkp45TvAnoIBa0rtCf1lbyXYjVKQ2q",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJo4HsSUZ9MPZpHJ7VliuEWDfATdxhv62SXnm4",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJgbEQoZcU9cpECTimBdjaqbNn7vQsxGR1wLk4",
+    "width": 627,
+    "height": 627,
+    "frames": [
+      [
+        30,
+        53,
+        119.5,
+        100.5
+      ],
+      [
+        180,
+        51,
+        121,
+        104
+      ],
+      [
+        333,
+        65.5,
+        116.5,
+        94.5
+      ],
+      [
+        485.5,
+        82,
+        111.5,
+        73
+      ],
+      [
+        32.5,
+        176,
+        103,
+        140.5
+      ],
+      [
+        189,
+        225,
+        94.5,
+        92
+      ],
+      [
+        340.5,
+        207,
+        107,
+        110
+      ],
+      [
+        483,
+        225,
+        125,
+        91.5
+      ],
+      [
+        22.5,
+        381.5,
+        121.5,
+        83
+      ],
+      [
+        177,
+        365.5,
+        124,
+        96.5
+      ],
+      [
+        331.5,
+        388,
+        125.5,
+        80.5
+      ],
+      [
+        485.5,
+        336,
+        119,
+        132.5
+      ],
+      [
+        24,
+        488.5,
+        121.5,
+        116.5
+      ],
+      [
+        176,
+        511,
+        120.5,
+        91.5
+      ],
+      [
+        326.5,
+        511,
+        118,
+        91.5
+      ],
+      [
+        473,
+        522.5,
+        138.5,
+        80
+      ]
+    ],
+    "sha256": {
+      "image": "f6f6c75a551517c9f0b7b7c8407272989d51a27c8ee572769e9014081de12445",
+      "material": "769c7b92783117bf83219c3880b9a0c89b52c870bcd6da3622c6b28f623ed7de",
+      "surfaces": "b809dc8a0dc92b2cbd6fadf9803fee31711d46b7ab25944925c99e722e56bf15"
+    }
+  },
+  "/world-art/village-walls.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCQs8Fa26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2hytVQnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJpwLXQxbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
+    "width": 768,
+    "height": 512,
+    "frames": [
+      [
+        13,
+        94,
+        171.5,
+        122.5
+      ],
+      [
+        201,
+        98.5,
+        182.5,
+        131.5
+      ],
+      [
+        393,
+        87.5,
+        167,
+        138.5
+      ],
+      [
+        565,
+        70,
+        193.5,
+        172
+      ],
+      [
+        15.5,
+        278,
+        191.5,
+        179.5
+      ],
+      [
+        215.5,
+        282.5,
+        208.5,
+        175
+      ],
+      [
+        472.5,
+        329,
+        81.5,
+        113
+      ],
+      [
+        595,
+        249.5,
+        141,
+        206
+      ]
+    ],
+    "sha256": {
+      "image": "51a9c7aaa41afe0e4a198aaedc815a8ae1e0cad2dc62a0840042f9c03c239d3b",
+      "material": "3e780237b6b5fe8b6d1e470fbdaf582065cc1db4ddb4499ed8c04e55d4624650",
+      "surfaces": "32524675b0dfc33945ddb67dc815fc7a314cc936b9e3d36996126ae714529f93"
+    }
+  },
+  "/world-art/training-dummy.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDLKie0zEwoh0WXMnscL279N8ayVQUCbRzS3p",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJbZcOHNZAtYUndMi56GkX19q0A4PzyeIloBrE",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJSkDkrmd3jWrEB7TyZlmpoAxMK5Qi16kNPVJu",
+    "width": 94,
+    "height": 192,
+    "frames": [
+      [
+        0,
+        0,
+        94,
+        192
+      ]
+    ],
+    "sha256": {
+      "image": "3d6f69e2d485bc9b15ae70b4a23e61bde7be4d76c4aaf2e7ed091b4732988d2f",
+      "material": "7ff0da07e360b23e3562d7207805c4f98772b1fb9e5f25c99648605f6326a32b",
+      "surfaces": "eef70fa8edc17a30a8d62360b12cd5fd5eb33a65ea28f79bb36639a3082201c0"
+    }
+  },
+  "/world-art/oasis-village.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJOkOtBhVHevxIThUauQkGJEBY3D2cPqy8f5sp",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCaae5n26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJpoAM7nzbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75",
+    "width": 256,
+    "height": 208,
+    "frames": [
+      [
+        0,
+        0,
+        75,
+        108
+      ],
+      [
+        128,
+        0,
+        75,
+        100
+      ],
+      [
+        0,
+        128,
+        57,
+        67
+      ],
+      [
+        128,
+        128,
+        37,
+        37
+      ]
+    ],
+    "sha256": {
+      "image": "c8d6831fe56e038f4801913a245ccdd37f80304f073c2cedf9e0944322c1e5c9",
+      "material": "6fe27dd79c6a65f0bde60886880972d494123802e62a509f0e89bc4a4d5c65fa",
+      "surfaces": "d80cd5b295e191ebfd9a1a0892f507d7686d9a05000be65762e1b6b7ac49c641"
+    }
+  },
+  "/world-art/practice-rail.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJcjX2G3SnxBpQqGNDcTHbLmYz8uXAl3oa54ti",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJAM1vFHoZUC4muiGcQNzjfEndY5y1w20B8hTW",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmeOAxLHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "width": 116,
+    "height": 87,
+    "frames": [
+      [
+        0,
+        0,
+        116,
+        87
+      ]
+    ],
+    "sha256": {
+      "image": "beca4ad25fbb5cb1848e91f2878733c945d65db8ce2dec5ee14553c34e443a83",
+      "material": "d57bfa8ac05a9df1d6d35fe116fbbce99e4e0dc5e828dcac1ee5a55bfbbcafd9",
+      "surfaces": "d199e29e16762a67144215fe8fc304ecf8a9389537eaaab9f70b59cf38c6db94"
+    }
+  },
+  "/world-art/desert-rocks.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJunWnOgKCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ0pl85MgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVRGwlLlF2veAXohUuE59nTQHRJIYjtiG18aF",
+    "width": 512,
+    "height": 100,
+    "frames": [
+      [
+        2,
+        2,
+        112,
+        73
+      ],
+      [
+        130,
+        2,
+        125,
+        92
+      ],
+      [
+        258,
+        2,
+        122,
+        83
+      ],
+      [
+        386,
+        2,
+        124,
+        97
+      ]
+    ],
+    "sha256": {
+      "image": "d19d7c35d8177f589c73476cd27c5147928e8189eb619fdc85746383dc05df54",
+      "material": "ab3cd9d8499376f9dd7e715561eb83e6c275141ad17b514d48ee8ad04ecf789c",
+      "surfaces": "e9a813ae67517bc69c30d29a17b847d3d1a21258b046aca2c448aa4a5685bd37"
+    }
+  },
+  "/world-art/submerged-rock-shelf.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2HrNYX6nMXlcRpYmJ5do0zKw4Qx6PVEtBa9b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ0SSnfMQgrYldRWJcD6vE10SjNsXHeA9pVMfQ",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmjL7lFOHE4IMO5Goa7cgLxPJ0VC6lU8vbt1A",
+    "width": 256,
+    "height": 119,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        119
+      ]
+    ],
+    "sha256": {
+      "image": "41f5a7246b4a1f3b129ccc89bd8a31b2328219b849c9c1bfa35772d2732cb708",
+      "material": "8c8c0abd1ccf5a20c5fcb48ec32720a06873406def8d1f1bdcfa4f4f34c773c4",
+      "surfaces": "75afc29e1830de35fc48b4dc51cb583be0e18fb9a0f1ce239e201f3c691c6c0b"
+    }
+  },
+  "/world-art/ground-details.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQllVKyZjhzBPya1rwfCIqOTU0cV5xgsMeo3u",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJH1CTEiQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ0sJWbIgrYldRWJcD6vE10SjNsXHeA9pVMfQi",
+    "width": 64,
+    "height": 64,
+    "frames": [
+      [
+        1,
+        1,
+        13,
+        14
+      ],
+      [
+        17,
+        2,
+        14,
+        13
+      ],
+      [
+        33,
+        6,
+        14,
+        9
+      ],
+      [
+        49,
+        5,
+        14,
+        10
+      ],
+      [
+        1,
+        21,
+        14,
+        10
+      ],
+      [
+        17,
+        20,
+        14,
+        11
+      ],
+      [
+        33,
+        17,
+        14,
+        14
+      ],
+      [
+        49,
+        18,
+        14,
+        13
+      ],
+      [
+        1,
+        33,
+        13,
+        14
+      ],
+      [
+        17,
+        36,
+        14,
+        11
+      ],
+      [
+        33,
+        37,
+        14,
+        10
+      ],
+      [
+        49,
+        35,
+        14,
+        12
+      ],
+      [
+        1,
+        49,
+        14,
+        14
+      ],
+      [
+        17,
+        52,
+        14,
+        11
+      ],
+      [
+        33,
+        51,
+        14,
+        12
+      ],
+      [
+        49,
+        53,
+        14,
+        10
+      ]
+    ],
+    "sha256": {
+      "image": "cd1e724c180c0a100a3e40600d3d0e5210d877dc742387823149be0d9d90873a",
+      "material": "1d303096565c3bc9291b915b17f67e0cf2b4bf3ae65bb1c63b72df221d790f03",
+      "surfaces": "5b0fecef797f9c004ce80262f2a33f5b4338e31e9b1624fdc4741086ebc8e237"
+    }
+  },
+  "/world-art/settlement-akikaze.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmo6kBSHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGe02tqRfoVrha0LP4mAS5KM7wtiZbUNXJxdC",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJV2Po2hF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "width": 640,
+    "height": 512,
+    "frames": [
+      [
+        1,
+        0,
+        157,
+        128
+      ],
+      [
+        160,
+        11,
+        160,
+        117
+      ],
+      [
+        320,
+        3,
+        160,
+        125
+      ],
+      [
+        482,
+        0,
+        156,
+        128
+      ],
+      [
+        2,
+        128,
+        155,
+        128
+      ],
+      [
+        160,
+        139,
+        160,
+        117
+      ],
+      [
+        320,
+        144,
+        160,
+        112
+      ],
+      [
+        480,
+        139,
+        160,
+        117
+      ],
+      [
+        0,
+        258,
+        160,
+        126
+      ],
+      [
+        160,
+        301,
+        160,
+        83
+      ],
+      [
+        328,
+        256,
+        143,
+        128
+      ],
+      [
+        487,
+        256,
+        145,
+        128
+      ],
+      [
+        0,
+        391,
+        160,
+        121
+      ],
+      [
+        160,
+        392,
+        160,
+        120
+      ],
+      [
+        320,
+        394,
+        160,
+        118
+      ],
+      [
+        486,
+        384,
+        148,
+        128
+      ]
+    ],
+    "sha256": {
+      "image": "79838d3199b1082042b8bff2e27630bf074813fc487753dd2567837097ea57e1",
+      "material": "e1ae200bec705c88b6f93ef0c385fbba82b34493fc0a2ed6a2ef8f625bf8eba9",
+      "surfaces": "49562162a999e78edc8e05dcb765f0b1a0c769acff60afae50f8abab9ef701cf"
+    }
+  },
+  "/world-art/settlement-tsukimori.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJFjRaEOG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJun4wghRCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJu7lVL2CyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "width": 640,
+    "height": 512,
+    "frames": [
+      [
+        4,
+        0,
+        152,
+        128
+      ],
+      [
+        163,
+        0,
+        153,
+        128
+      ],
+      [
+        325,
+        0,
+        149,
+        128
+      ],
+      [
+        484,
+        0,
+        152,
+        128
+      ],
+      [
+        8,
+        128,
+        143,
+        128
+      ],
+      [
+        160,
+        131,
+        160,
+        125
+      ],
+      [
+        320,
+        128,
+        159,
+        128
+      ],
+      [
+        481,
+        128,
+        157,
+        128
+      ],
+      [
+        7,
+        256,
+        145,
+        128
+      ],
+      [
+        160,
+        278,
+        160,
+        106
+      ],
+      [
+        333,
+        256,
+        133,
+        128
+      ],
+      [
+        483,
+        256,
+        153,
+        128
+      ],
+      [
+        0,
+        388,
+        160,
+        124
+      ],
+      [
+        163,
+        384,
+        153,
+        128
+      ],
+      [
+        320,
+        399,
+        160,
+        113
+      ],
+      [
+        491,
+        384,
+        137,
+        128
+      ]
+    ],
+    "sha256": {
+      "image": "d1471ac0d5eec028d8b8a1064e5e882db5c9f4b97eb970f9b37164810306cd7b",
+      "material": "4c345f7661c21c867623f382051c4be7948d24a79bb572b673c385e96f3fdce9",
+      "surfaces": "5a5b208a40ce71348ba79acbccecd9a634e93063ff14fe80bc63072bd268fde9"
+    }
+  },
+  "/world-art/settlement-akasumi.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2GYkVbnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCp6leV26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ1zHnlYJ6bo95WClq4K0wxZUmJcvThgdVenO3",
+    "width": 640,
+    "height": 512,
+    "frames": [
+      [
+        3,
+        0,
+        153,
+        128
+      ],
+      [
+        160,
+        12,
+        160,
+        116
+      ],
+      [
+        320,
+        5,
+        160,
+        123
+      ],
+      [
+        482,
+        0,
+        156,
+        128
+      ],
+      [
+        2,
+        128,
+        155,
+        128
+      ],
+      [
+        160,
+        138,
+        160,
+        118
+      ],
+      [
+        320,
+        143,
+        160,
+        113
+      ],
+      [
+        480,
+        138,
+        160,
+        118
+      ],
+      [
+        0,
+        258,
+        160,
+        126
+      ],
+      [
+        160,
+        296,
+        160,
+        88
+      ],
+      [
+        327,
+        256,
+        146,
+        128
+      ],
+      [
+        488,
+        256,
+        144,
+        128
+      ],
+      [
+        0,
+        392,
+        160,
+        120
+      ],
+      [
+        160,
+        390,
+        160,
+        122
+      ],
+      [
+        320,
+        392,
+        160,
+        120
+      ],
+      [
+        485,
+        384,
+        149,
+        128
+      ]
+    ],
+    "sha256": {
+      "image": "4f7a7a36a8d5cbd07b218a3b82cb35c3d911086aecad6c46db280eec33ad8530",
+      "material": "c5be8a1f5ba32dd2a39c9f2e8fe1808feed896eb9da990c1940919755a482159",
+      "surfaces": "83463e10041aa6f14963d74f8c1816df5027df617ca983c4744215282de68a15"
+    }
+  },
+  "/world-art/settlement-hyorin.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxLc4pPWZsq9k0Von5rUfP6OgQ2TyptCKHS4u",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJeLDYjVyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJeb65ljyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+    "width": 640,
+    "height": 512,
+    "frames": [
+      [
+        4,
+        0,
+        151,
+        128
+      ],
+      [
+        160,
+        9,
+        160,
+        119
+      ],
+      [
+        320,
+        1,
+        160,
+        127
+      ],
+      [
+        482,
+        0,
+        155,
+        128
+      ],
+      [
+        2,
+        128,
+        156,
+        128
+      ],
+      [
+        160,
+        139,
+        160,
+        117
+      ],
+      [
+        320,
+        145,
+        160,
+        111
+      ],
+      [
+        480,
+        139,
+        160,
+        117
+      ],
+      [
+        0,
+        258,
+        160,
+        126
+      ],
+      [
+        160,
+        286,
+        160,
+        98
+      ],
+      [
+        322,
+        256,
+        156,
+        128
+      ],
+      [
+        485,
+        256,
+        150,
+        128
+      ],
+      [
+        0,
+        393,
+        160,
+        119
+      ],
+      [
+        160,
+        388,
+        160,
+        124
+      ],
+      [
+        320,
+        394,
+        160,
+        118
+      ],
+      [
+        487,
+        384,
+        145,
+        128
+      ]
+    ],
+    "sha256": {
+      "image": "35851d83266292953eb69495975053597d897e5f608396227d91a2214f83c240",
+      "material": "4c9f0c7df3c1454be2480b6ec847e096778c19c9299cd4b34a8c467d3fa80164",
+      "surfaces": "ad2ff39da6e560220d160f6df4096c81aa0c834800558440e832d7da7fd3876a"
+    }
+  },
+  "/world-art/settlement-horizon.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ1zcwCv6bo95WClq4K0wxZUmJcvThgdVenO3P",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJX34d0WqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTxykwC5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "width": 640,
+    "height": 512,
+    "frames": [
+      [
+        2,
+        0,
+        155,
+        128
+      ],
+      [
+        160,
+        12,
+        160,
+        116
+      ],
+      [
+        320,
+        6,
+        160,
+        122
+      ],
+      [
+        482,
+        0,
+        155,
+        128
+      ],
+      [
+        1,
+        128,
+        158,
+        128
+      ],
+      [
+        160,
+        141,
+        160,
+        115
+      ],
+      [
+        320,
+        145,
+        160,
+        111
+      ],
+      [
+        480,
+        138,
+        160,
+        118
+      ],
+      [
+        0,
+        261,
+        160,
+        123
+      ],
+      [
+        160,
+        297,
+        160,
+        87
+      ],
+      [
+        323,
+        256,
+        153,
+        128
+      ],
+      [
+        486,
+        256,
+        147,
+        128
+      ],
+      [
+        0,
+        394,
+        160,
+        118
+      ],
+      [
+        160,
+        389,
+        160,
+        123
+      ],
+      [
+        320,
+        393,
+        160,
+        119
+      ],
+      [
+        482,
+        384,
+        155,
+        128
+      ]
+    ],
+    "sha256": {
+      "image": "9166fcd05537ce771a8bbef5d0951e904b3732fd1e15238b067c16e352987678",
+      "material": "af04414b298c68205cde1ffae6a434423eb2783f3ba5d375febb03bc93dd77eb",
+      "surfaces": "051e3388a0f93aca568930d17c4ec690c8f567b2c72e689655ced9361eb63ebd"
+    }
+  },
+  "/world-art/settlement-shirohana.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuIlKwlCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJF03zXVRG2iOewJtjGzvNcmEX3TBnoSfMDZPH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJpISTqJbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
+    "width": 640,
+    "height": 512,
+    "frames": [
+      [
+        1,
+        0,
+        158,
+        128
+      ],
+      [
+        160,
+        13,
+        160,
+        115
+      ],
+      [
+        320,
+        0,
+        160,
+        128
+      ],
+      [
+        484,
+        0,
+        151,
+        128
+      ],
+      [
+        4,
+        128,
+        152,
+        128
+      ],
+      [
+        160,
+        144,
+        160,
+        112
+      ],
+      [
+        320,
+        141,
+        160,
+        115
+      ],
+      [
+        480,
+        136,
+        160,
+        120
+      ],
+      [
+        0,
+        261,
+        160,
+        123
+      ],
+      [
+        160,
+        297,
+        160,
+        87
+      ],
+      [
+        325,
+        256,
+        150,
+        128
+      ],
+      [
+        493,
+        256,
+        134,
+        128
+      ],
+      [
+        0,
+        394,
+        160,
+        118
+      ],
+      [
+        160,
+        385,
+        160,
+        127
+      ],
+      [
+        320,
+        395,
+        160,
+        117
+      ],
+      [
+        485,
+        384,
+        150,
+        128
+      ]
+    ],
+    "sha256": {
+      "image": "51ea458e7eab92fd5967e325dd6f753a678b1d3221a03392f8c45efb9e8c9c72",
+      "material": "959a1ec639cda6807fbe35f076c739b1d851bbefcddadf3e930ae217c8685c4b",
+      "surfaces": "83f2d2527e785f7ac21169651f141582d39ce7d8390c8e8f91e09253086b6f36"
+    }
+  },
+  "/world-art/settlement-syndicate.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTonPFL5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJgLwndDcU9cpECTimBdjaqbNn7vQsxGR1wLk4",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2HhBRWHnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b",
+    "width": 640,
+    "height": 512,
+    "frames": [
+      [
+        1,
+        0,
+        157,
+        128
+      ],
+      [
+        160,
+        9,
+        160,
+        119
+      ],
+      [
+        320,
+        5,
+        160,
+        123
+      ],
+      [
+        481,
+        0,
+        157,
+        128
+      ],
+      [
+        0,
+        128,
+        159,
+        128
+      ],
+      [
+        160,
+        140,
+        160,
+        116
+      ],
+      [
+        320,
+        143,
+        160,
+        113
+      ],
+      [
+        480,
+        136,
+        160,
+        120
+      ],
+      [
+        0,
+        256,
+        160,
+        128
+      ],
+      [
+        160,
+        294,
+        160,
+        90
+      ],
+      [
+        328,
+        256,
+        144,
+        128
+      ],
+      [
+        486,
+        256,
+        147,
+        128
+      ],
+      [
+        0,
+        399,
+        160,
+        113
+      ],
+      [
+        160,
+        393,
+        160,
+        119
+      ],
+      [
+        320,
+        400,
+        160,
+        112
+      ],
+      [
+        483,
+        384,
+        153,
+        128
+      ]
+    ],
+    "sha256": {
+      "image": "5e864599f3fa0de882a50545ea4d95a419568bcde1c9f06c751a6358bce9c68a",
+      "material": "6c08d58b97a70166d90ee996e19ef3d39620578dcfa9b30011489f67b273f11e",
+      "surfaces": "9d39c8b8b4a162373eb7ea252b46db5e3781490f5bf4496768440b7fa0c5d804"
+    }
+  },
+  "/world-art/settlement-freedom-state.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ8gRZRIkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGPST58RfoVrha0LP4mAS5KM7wtiZbUNXJxdC",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJusWRwoCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "width": 640,
+    "height": 512,
+    "frames": [
+      [
+        2,
+        0,
+        155,
+        128
+      ],
+      [
+        160,
+        11,
+        160,
+        117
+      ],
+      [
+        320,
+        3,
+        160,
+        125
+      ],
+      [
+        482,
+        0,
+        155,
+        128
+      ],
+      [
+        0,
+        128,
+        160,
+        128
+      ],
+      [
+        160,
+        142,
+        160,
+        114
+      ],
+      [
+        320,
+        144,
+        160,
+        112
+      ],
+      [
+        480,
+        139,
+        160,
+        117
+      ],
+      [
+        0,
+        258,
+        160,
+        126
+      ],
+      [
+        160,
+        280,
+        160,
+        104
+      ],
+      [
+        323,
+        256,
+        153,
+        128
+      ],
+      [
+        484,
+        256,
+        151,
+        128
+      ],
+      [
+        0,
+        397,
+        160,
+        115
+      ],
+      [
+        160,
+        393,
+        160,
+        119
+      ],
+      [
+        320,
+        395,
+        160,
+        117
+      ],
+      [
+        485,
+        384,
+        150,
+        128
+      ]
+    ],
+    "sha256": {
+      "image": "481bf1722c6ae1b76b4e098e2d6597e6df8e487308f0db1358dec1c2b4fec812",
+      "material": "6c3692f341b0c461ef5b61ced4e5ddb0d27c204a6d1e6471d541b8c91af5684a",
+      "surfaces": "3cbd93c08f54a0477994465e5f0510907e4e3bb7e5234d0066a714a185b609d3"
+    }
+  },
+  "/world-art/settlement-wake-island.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJrtJ4VPZhuJPmdY8zI2ptZXAoEj1c6BMKvrQO",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJT1BJWo5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJAD1heRoZUC4muiGcQNzjfEndY5y1w20B8hTW",
+    "width": 480,
+    "height": 384,
+    "frames": [
+      [
+        0,
+        0,
+        160,
+        128
+      ],
+      [
+        160,
+        16,
+        160,
+        112
+      ],
+      [
+        320,
+        0,
+        159,
+        128
+      ],
+      [
+        8,
+        128,
+        144,
+        128
+      ],
+      [
+        160,
+        143,
+        160,
+        113
+      ],
+      [
+        323,
+        128,
+        154,
+        128
+      ],
+      [
+        0,
+        262,
+        160,
+        122
+      ],
+      [
+        160,
+        260,
+        160,
+        124
+      ],
+      [
+        320,
+        258,
+        160,
+        126
+      ]
+    ],
+    "sha256": {
+      "image": "2c229fbcc9fab342401de2fa93cb1fc49d63ca99b1a97e38f5ad9d855ab3ff8c",
+      "material": "58d3feb17dd2afc34708083ef2a7c1227292d77d7dc9a9a973c724f2e7f14965",
+      "surfaces": "42861b3059574bc264529193836daa0d22603638faec5e70cb37f66a7dbd2918"
+    }
+  },
+  "/world-art/settlement-freedom-extras.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJaWX93dYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJPJZmkFpKeUGyX2kj6u45AOQiSa1zYH0mqZoc",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ6emmESJDfT5pyNCaUruzhPtAJqb8Kj9mc1nl",
+    "width": 320,
+    "height": 256,
+    "frames": [
+      [
+        0,
+        2,
+        160,
+        126
+      ],
+      [
+        160,
+        10,
+        160,
+        118
+      ],
+      [
+        0,
+        134,
+        160,
+        122
+      ],
+      [
+        160,
+        140,
+        160,
+        116
+      ]
+    ],
+    "sha256": {
+      "image": "7bede5b77230424baf0c1642cd7c6d8c601163a5496fe4187c518c088eab9f58",
+      "material": "209c6eeb52729970ad9f8c763133ae2cc77636d77e209ad87a8169fd73810ac9",
+      "surfaces": "e3c5f4e6e72f146c29a8e5890a344c3853ab9b6d8a7bd34e183d28a42841e6c5"
+    }
+  }
+}

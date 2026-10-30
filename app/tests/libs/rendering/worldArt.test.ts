@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import sharp from "sharp";
 import { GROUND_DETAIL_ART, resolveWorldDecoration, resolveWorldTerrain } from "@/libs/rendering/worldArt";
-import { CIVIC_STRUCTURES, WOODLAND_STRUCTURES, resolveWorldStructure } from "@/libs/rendering/worldStructures";
-import stockImages from "@/libs/rendering/villageBuildingImages.json";
+import { WORLD_STRUCTURE_ART, resolveWorldStructure } from "@/libs/rendering/worldStructures";
+import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
+import { transformImageUrl } from "@/utils/image";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 
@@ -39,7 +41,8 @@ describe("world art skinning", () => {
   });
 
   it("shares sixteen native pixel cutouts with clear atlas gutters across biome-specific stock ground cover", async () => {
-    const { data, info } = await sharp(new URL("../../../public/world-art/ground-details.webp", import.meta.url).pathname).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const decoded = worldArtDirectory ? await sharp(worldArtFile("ground-details.webp")).ensureAlpha().raw().toBuffer({ resolveWithObject: true }) : null;
+    const info = decoded?.info ?? worldAssetSource("/world-art/ground-details.webp")!, data = decoded?.data;
     expect(info.width * info.height * 4).toBeLessThanOrEqual(16 * 1024);
     expect(GROUND_DETAIL_ART).toHaveLength(16);
     for (const [index, asset] of GROUND_DETAIL_ART.entries()) {
@@ -48,13 +51,13 @@ describe("world art skinning", () => {
       expect(y + height).toBeLessThanOrEqual(info.height);
       expect(Math.max(width, height)).toBeLessThanOrEqual(14);
       let covered = 0;
-      for (let v = 0; v < height; v++) for (let u = 0; u < width; u++) {
+      if (data) for (let v = 0; v < height; v++) for (let u = 0; u < width; u++) {
         const alpha = data[((y + v) * info.width + x + u) * 4 + 3]!;
         expect([0, 255]).toContain(alpha);
         if (u === 0 || v === 0 || u === width - 1 || v === height - 1) expect(alpha).toBe(0);
         if (alpha) covered++;
       }
-      expect(covered).toBeGreaterThan(0);
+      if (data) expect(covered).toBeGreaterThan(0);
       expect(asset.renderScale).toBeLessThanOrEqual(0.36);
       for (const other of GROUND_DETAIL_ART.slice(index + 1)) {
         const frame = other.frame!;
@@ -86,43 +89,37 @@ describe("world art skinning", () => {
     expect(resolveWorldTerrain({ ...ice, colors: custom.colors }).depression).toBe(ice.depression);
   });
 
-  it("recognizes stock structures across CDN aliases while retaining custom replacements", () => {
-    const file = "Hzww9EQvYURJ8PljuOkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q.webp";
-    const stock = resolveWorldStructure(`https://ui0arpl8sm.ufs.sh/f/${file}`, "/academy");
+  it("recognizes published structures across CDN aliases and retains custom replacements", () => {
+    const image = WORLD_STRUCTURE_ART["akikaze/academy"]!.sourceImage;
+    const stock = resolveWorldStructure(image, "/academy");
     expect(stock?.frame).toBeDefined();
-    expect(resolveWorldStructure(`https://uploadthing.b-cdn.net/f/${file}?width=200`, "/academy")).toEqual(stock);
+    expect(resolveWorldStructure(`${transformImageUrl(image)}?width=200`, "/academy")).toEqual(stock);
     expect(resolveWorldStructure("https://uploadthing.b-cdn.net/f/custom.webp", "/academy")).toBeUndefined();
-    expect(resolveWorldStructure(`https://uploadthing.b-cdn.net/f/${file}`, "/hospital")).toBeUndefined();
+    expect(resolveWorldStructure(image, "/hospital")).toBeUndefined();
   });
-  it("maps every civic service to a separate in-bounds atlas view", () => {
-    for (const [index, [route, x, y, width, height]] of CIVIC_STRUCTURES.entries()) {
-      const source = stockImages[route][0];
-      expect(resolveWorldStructure(`https://uploadthing.b-cdn.net/f/${source}.webp`, route)?.filepath).toBe("/world-art/civic-buildings.webp");
-      expect(x + width).toBeLessThanOrEqual(1536);
-      expect(y + height).toBeLessThanOrEqual(1024);
-      for (const [, nx, ny, nw, nh] of CIVIC_STRUCTURES.slice(index + 1))
-        expect(x + width <= nx || nx + nw <= x || y + height <= ny || ny + nh <= y).toBe(true);
+  it("keeps all nine Wake Island services visually distinct and source-aligned", () => {
+    const buildings = Object.values(WORLD_STRUCTURE_ART).filter((art) => art.village === "Wake Island");
+    expect(buildings).toHaveLength(9);
+    expect(new Set(buildings.map((art) => art.sourceImage)).size).toBe(9);
+    for (const art of buildings) expect(worldAssetSource(art.filepath)?.material).toBe(art.material);
+  });
+  it("keeps every settlement's stair contacts and material frames inside its published artwork", () => {
+    expect(new Set(Object.values(WORLD_STRUCTURE_ART).map((art) => art.village)).size).toBe(9);
+    for (const art of Object.values(WORLD_STRUCTURE_ART)) {
+      const source = worldAssetSource(art.filepath)!;
+      expect(source.frames).toContainEqual([art.frame.x, art.frame.y, art.frame.width, art.frame.height]);
+      expect(art.stair.x).toBeGreaterThan(0); expect(art.stair.x).toBeLessThan(art.frame.width);
+      expect(art.stair.y).toBeGreaterThan(art.frame.height * .8); expect(art.stair.y).toBeLessThanOrEqual(art.frame.height);
+      expect(art.courtSlope).toBeGreaterThan(0); expect(art.courtSlope).toBeLessThan(.6);
+      expect(source.material).toBe(art.material); expect(source.surfaces).toBe(art.surfaces);
     }
   });
-  it("keeps bundled stair contacts inside each resolved woodland, climate and civic frame", () => {
-    for (const [route] of [...WOODLAND_STRUCTURES, ...CIVIC_STRUCTURES])
-      for (const biome of ["ground", "snow", "dessert"] as const) {
-        const art = resolveWorldStructure(`https://uploadthing.b-cdn.net/f/${stockImages[route][0]}.webp`, route, biome)!;
-        expect(art.stair.x).toBeGreaterThan(0);
-        expect(art.stair.x).toBeLessThan(art.frame.width);
-        expect(art.stair.y).toBeGreaterThan(art.frame.height * .8);
-        expect(art.stair.y).toBeLessThanOrEqual(art.frame.height);
-      }
-  });
-  it("limits Horizon's civic lookout to its bundled hall while retaining entrance dimensions", () => {
-    const image = `https://uploadthing.b-cdn.net/f/${stockImages["/townhall"][0]}.webp`;
-    const shared = resolveWorldStructure(image, "/townhall", "ground", 724)!;
-    const horizon = resolveWorldStructure(image, "/townhall", "ground", 301)!;
-    expect(horizon.filepath).toBe("/world-art/horizon-watch-hall.webp");
-    expect(horizon.height).toBe(shared.height);
-    expect(horizon.frame).toMatchObject({ width: shared.frame.width, height: shared.frame.height });
-    expect(horizon.shadow).toBe(shared.shadow);
-    expect(resolveWorldStructure(image, "/townhall", "ground")).toEqual(shared);
-    expect(resolveWorldStructure("https://uploadthing.b-cdn.net/f/custom.webp", "/townhall", "ground", 301)).toBeUndefined();
+  it("uses persisted materials only while their source image and service still match", () => {
+    const art = WORLD_STRUCTURE_ART["horizon/townhall"]!;
+    const configured = { ...art, height: art.height + .1 };
+    expect(resolveWorldStructure(art.sourceImage, art.route, configured)).toBe(configured);
+    expect(resolveWorldStructure("custom-townhall.webp", art.route, configured)).toBeUndefined();
+    expect(resolveWorldStructure(art.sourceImage, "/bank", configured)).toBeUndefined();
+    expect(art.sourceImage).not.toBe(WORLD_STRUCTURE_ART["akikaze/townhall"]!.sourceImage);
   });
 });

@@ -9,7 +9,10 @@ import {
   resolveWorldTerrain,
   VILLAGE_ART,
 } from "@/libs/rendering/worldArt";
-import { getWorldForecourtSize } from "@/libs/rendering/worldStructures";
+import {
+  getWorldForecourtPoint,
+  getWorldForecourtSize,
+} from "@/libs/rendering/worldStructures";
 import {
   getVillageWallFoundationKeys,
   type VillageWallPlan,
@@ -355,15 +358,15 @@ const appendForecourt = (
 ) => {
   const h = grid.toArray()[0]?.height;
   if (!h) return;
-  const { width, depth } = getWorldForecourtSize(h, entrance.hasPrecinct);
+  const { width, depth } = getWorldForecourtSize(
+    h,
+    entrance.hasPrecinct,
+    entrance.courtScale,
+  );
   const gap = h * 0.025,
     columns = entrance.hasPrecinct ? 14 : 12,
     rows = entrance.hasPrecinct ? 10 : 8;
-  // Front-facing steps and their paving share horizontal rows on the ground plane.
-  const point = (x: number, y: number): [number, number] => [
-    entrance.x + x,
-    entrance.y - y,
-  ];
+  const point = (x: number, y: number) => getWorldForecourtPoint(entrance, x, y);
   // Rear courses tuck under the foundation; a continuous mortar bed joins the court to its steps.
   for (const inset of [0, gap])
     for (let row = -2; row < rows; row++)

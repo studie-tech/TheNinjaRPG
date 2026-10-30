@@ -2,6 +2,7 @@ import { type Grid, ring } from "honeycomb-grid";
 import type { VillageStructure } from "@/drizzle/schema";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 import {
+  getWorldForecourtPoint,
   getWorldStructureEntrance,
   resolveWorldStructure,
 } from "@/libs/rendering/worldStructures";
@@ -15,7 +16,6 @@ export const planVillageLandscape = (
   grid: Grid<TerrainHex>,
   structures: VillageStructure[],
   wall: VillageWallPlan | null,
-  sector?: number,
 ) => {
   const roads = new Set(
     grid
@@ -26,7 +26,8 @@ export const planVillageLandscape = (
   const services = structures
     .filter(
       (structure) =>
-        structure.hasPage && resolveWorldStructure(structure.image, structure.route),
+        structure.hasPage &&
+        resolveWorldStructure(structure.image, structure.route, structure.worldArt),
     )
     .sort((a, b) => a.route.localeCompare(b.route));
   const tiles = grid.toArray();
@@ -53,16 +54,11 @@ export const planVillageLandscape = (
   const entrances = services.flatMap((site) => {
     const tile = grid.getHex({ col: site.longitude, row: site.latitude });
     if (!tile) return [];
-    const art = resolveWorldStructure(
-      site.image,
-      site.route,
-      tile.spec?.battleBiome,
-      sector,
-    );
+    const art = resolveWorldStructure(site.image, site.route, site.worldArt);
     if (!art) return [];
     const entrance = getWorldStructureEntrance(tile, tile.height * art.height, art);
-    const landing =
-      grid.pointToHex({ x: entrance.x, y: entrance.y - tile.height * 0.7 }) ?? tile;
+    const [x, y] = getWorldForecourtPoint(entrance, 0, tile.height * 0.7);
+    const landing = grid.pointToHex({ x, y }) ?? tile;
     return [{ longitude: landing.col, latitude: landing.row }];
   });
   const sites = [...entrances, ...gates, ...trailheads].flatMap((site) => {
