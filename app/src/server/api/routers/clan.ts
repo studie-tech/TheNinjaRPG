@@ -1666,7 +1666,11 @@ export const clanRouter = createTRPCRouter({
           success: true,
           message: `${groupLabel} battle initiated`,
           battleId,
-          userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+          userPatch: await getBattleUserPatch(
+            ctx.drizzle,
+            ctx.userId,
+            result.requiresUserRefresh,
+          ),
         };
       } catch (error) {
         if (

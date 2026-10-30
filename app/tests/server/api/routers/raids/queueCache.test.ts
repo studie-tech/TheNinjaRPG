@@ -170,7 +170,7 @@ describeWithDatabase("raid join committed queue", () => {
     await db.update(userData).set({ reputationPointsTotal: 20 }).where(eq(userData.userId, "queue-sql-user"));
     vi.spyOn(combat, "initiateBattle").mockImplementation(async () => {
       await db.update(userData).set({ status: "BATTLE", battleId: "started-raid" }).where(eq(userData.userId, "queue-sql-user"));
-      return { success: true, message: "Started", battleId: "started-raid" };
+      return { success: true, message: "Started", battleId: "started-raid", requiresUserRefresh: false };
     });
     const client = new QueryClient();
     const key = [["profile", "getUser"], { type: "query" }];
@@ -199,7 +199,7 @@ describeWithDatabase("raid join committed queue", () => {
     await fetchUpdatedUser({ client: db, userId: "queue-sql-user" });
     vi.spyOn(combat, "initiateBattle").mockImplementation(async () => {
       await db.update(userData).set({ status: "BATTLE", battleId: "confirmed-raid" }).where(eq(userData.userId, "queue-sql-user"));
-      return { success: true, message: "Started", battleId: "confirmed-raid" };
+      return { success: true, message: "Started", battleId: "confirmed-raid", requiresUserRefresh: false };
     });
     vi.spyOn(socialQueries, "findBattleUserCache").mockRejectedValueOnce(new Error("Battle confirmation unavailable"));
     const api = await callerFor(raidsRouter, "queue-sql-user");
@@ -212,7 +212,7 @@ describeWithDatabase("raid join committed queue", () => {
     expect((await api.startRaidBattle({ teamId: "cache-team" })).success).toBe(false);
     expect(combat.initiateBattle).toHaveBeenCalledTimes(1);
   });
-  it.each([true, false])("confirms saved admission fields after raid start, success=%s", async (success) => {
+  it.each([{ success: true, requiresUserRefresh: false }, { success: true, requiresUserRefresh: true }, { success: false, requiresUserRefresh: false }])("reconciles raid admission according to its settlement contract (%j)", async ({ success, requiresUserRefresh }) => {
     const db = await getTestDatabase();
     await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));
     await db.update(mpvpBattleQueue).set({ createdAt: new Date(0) }).where(eq(mpvpBattleQueue.id, "cache-team"));
@@ -220,12 +220,18 @@ describeWithDatabase("raid join committed queue", () => {
     await fetchUpdatedUser({ client: db, userId: "queue-sql-user" });
     vi.spyOn(combat, "initiateBattle").mockImplementation(async () => {
       await db.update(userData).set({ status: success ? "BATTLE" : "QUEUED", battleId: success ? "started-raid" : null, curEnergy: 17, pveFights: 5 }).where(eq(userData.userId, "queue-sql-user"));
-      return success ? { success: true, message: "Started", battleId: "started-raid" } : { success: false, message: "Admission rejected" };
+      return success ? { success: true, message: "Started", battleId: "started-raid", requiresUserRefresh } : { success: false, message: "Admission rejected" };
     });
     const result = await (await callerFor(raidsRouter, "queue-sql-user")).startRaidBattle({ teamId: "cache-team" });
-    expect(result).toMatchObject({ success, userDelta: {}, userPatch: { status: success ? "BATTLE" : "AWAKE", battleId: success ? "started-raid" : null, curEnergy: 17, pveFights: 5 } });
-    expect(result.userPatch).not.toHaveProperty("items");
-    expect(result.userPatch).not.toHaveProperty("bloodline");
+    expect(result.success).toBe(success);
+    if (success && !requiresUserRefresh) {
+      expect(result).toMatchObject({ userDelta: {}, userPatch: { status: "BATTLE", battleId: "started-raid", curEnergy: 17, pveFights: 5 } });
+      expect(result.userPatch).not.toHaveProperty("items");
+      expect(result.userPatch).not.toHaveProperty("bloodline");
+    } else {
+      expect(result.userPatch).toBeUndefined();
+      expect(result.userDelta).toBeUndefined();
+    }
   });
 
   it("confirms a newer battle when ready-up's guarded cleanup loses", async () => {

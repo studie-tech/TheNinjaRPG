@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { overworldAiPlacement, overworldAiPlacementQuest, quest, questHistory, userData, userQuestAttempt } from "@/drizzle/schema";
+import { aiProfile, battle, battleHistory, trainingLog, userCookingJob, userQueue, overworldAiPlacement, overworldAiPlacementQuest, quest, questHistory, userData, userQuestAttempt } from "@/drizzle/schema";
 import * as overworldQueries from "@/queries/overworldAi";
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
@@ -12,7 +12,7 @@ import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables }
 
 describeWithDatabase("overworld interaction profile updates", () => {
   beforeEach(async () => {
-    await resetTables(overworldAiPlacementQuest, overworldAiPlacement, questHistory, quest, userQuestAttempt, userData);
+    await resetTables(aiProfile, battle, battleHistory, trainingLog, userCookingJob, userQueue, overworldAiPlacementQuest, overworldAiPlacement, questHistory, quest, userQuestAttempt, userData);
     await insertUsers([
       { userId: "npc-cache-actor", rank: "JONIN", status: "AWAKE", sector: 0, longitude: 0, latitude: 0, primaryElement: "Fire", secondaryElement: "Water" },
       { userId: "npc-cache-template", isAi: true },
@@ -29,6 +29,26 @@ describeWithDatabase("overworld interaction profile updates", () => {
     return { db, snapshot, caller: callerForDatabase(overworldAiRouter, "npc-cache-actor", db) };
   };
 
+  it.each(["safe", "upfront", "progression", "queue", "cooking"] as const)("preserves admission recovery after upfront hydration (%s)", async (settlement) => {
+    const db = await getTestDatabase();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json([{ result: [59, 60] }]));
+    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0 }).where(eq(userData.userId, "npc-cache-actor"));
+    await db.update(overworldAiPlacement).set({ interactionType: "HOSTILE" }).where(eq(overworldAiPlacement.id, "cache-giver"));
+    const { caller, snapshot } = await prepared();
+    stubProfile("fetchUpdatedUser", async () => ({ ...snapshot, requiresUserRefresh: settlement === "upfront", requiresProgressionRefresh: settlement === "progression" }));
+    // The admission preload must also account for work that became due after hydration.
+    if (settlement === "queue") await db.insert(userQueue).values({ id: "npc-deleted-job", userId: "npc-cache-actor", kind: "JUTSU", position: 1, jutsuId: "deleted-jutsu", reservedRyo: 321, durationSeconds: 1, startsAt: new Date(0), finishesAt: new Date(1000) });
+    if (settlement === "cooking") await db.insert(userCookingJob).values({ id: "npc-cooking", userId: "npc-cache-actor", experience: 99, finishesAt: new Date(0) });
+    const response = await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 });
+    expect(response.success).toBe(true);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") })).toHaveProperty("status", "BATTLE");
+    if (settlement === "safe") expect(response.userPatch).toHaveProperty("status", "BATTLE");
+    else {
+      expect(response.userPatch).toBeUndefined();
+      expect(response.userDelta).toBeUndefined();
+    }
+  });
   it("acknowledges a friendly NPC with no available work without changing the profile", async () => {
     const { caller } = await prepared();
     expect(await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 })).toMatchObject({ success: true, userPatch: {} });

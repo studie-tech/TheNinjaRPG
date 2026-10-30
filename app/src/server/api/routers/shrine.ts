@@ -1044,20 +1044,24 @@ export const shrineRouter = createTRPCRouter({
       const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
 
       // Fetch user and battle data
-      const [{ user, requiresUserRefresh }, shrineBattle, activeWars, relationships] =
-        await Promise.all([
-          fetchUpdatedUser({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-          }),
-          findMpvpBattleQueueForJoinShrineBattle(
-            ctx.drizzle,
-            input,
-            shrineLobbyStaleBefore,
-          ),
-          fetchActiveWars(ctx.drizzle),
-          fetchAlliances(ctx.drizzle),
-        ]);
+      const [
+        { user, requiresUserRefresh, requiresProgressionRefresh },
+        shrineBattle,
+        activeWars,
+        relationships,
+      ] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        findMpvpBattleQueueForJoinShrineBattle(
+          ctx.drizzle,
+          input,
+          shrineLobbyStaleBefore,
+        ),
+        fetchActiveWars(ctx.drizzle),
+        fetchAlliances(ctx.drizzle),
+      ]);
 
       // Guards
       if (!user) return errorResponse("User not found");
@@ -1211,14 +1215,17 @@ export const shrineRouter = createTRPCRouter({
           success: true,
           message: "Shrine battle initiated!",
           battleId: result.battleId,
-          userPatch: requiresUserRefresh
-            ? undefined
-            : await getShrineLobbyUserPatch(
-                ctx.drizzle,
-                ctx.userId,
-                user.villageId,
-                true,
-              ),
+          userPatch:
+            requiresUserRefresh ||
+            requiresProgressionRefresh ||
+            result.requiresUserRefresh
+              ? undefined
+              : await getShrineLobbyUserPatch(
+                  ctx.drizzle,
+                  ctx.userId,
+                  user.villageId,
+                  true,
+                ),
         };
       }
 

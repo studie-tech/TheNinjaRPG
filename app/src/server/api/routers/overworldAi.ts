@@ -452,7 +452,14 @@ export const overworldAiRouter = createTRPCRouter({
             });
             return {
               ...battle,
-              userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+              userPatch: await getBattleUserPatch(
+                ctx.drizzle,
+                ctx.userId,
+                !battle.success ||
+                  requiresUserRefresh ||
+                  requiresProgressionRefresh ||
+                  ("requiresUserRefresh" in battle && battle.requiresUserRefresh),
+              ),
             };
           }
           if (
@@ -507,7 +514,13 @@ export const overworldAiRouter = createTRPCRouter({
                 success: true,
                 message: "Battle started",
                 battleId: battle.battleId,
-                userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+                userPatch: await getBattleUserPatch(
+                  ctx.drizzle,
+                  ctx.userId,
+                  requiresUserRefresh ||
+                    requiresProgressionRefresh ||
+                    battle.requiresUserRefresh,
+                ),
               }
             : errorResponse(battle.message);
         }
@@ -658,7 +671,13 @@ export const overworldAiRouter = createTRPCRouter({
               success: true,
               message: "Battle started",
               battleId: battle.battleId,
-              userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+              userPatch: await getBattleUserPatch(
+                ctx.drizzle,
+                ctx.userId,
+                requiresUserRefresh ||
+                  requiresProgressionRefresh ||
+                  battle.requiresUserRefresh,
+              ),
             }
           : errorResponse(battle.message);
       }

@@ -184,7 +184,11 @@ export const territoryWarRouter = createTRPCRouter({
         );
         return {
           ...result,
-          userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+          userPatch: await getBattleUserPatch(
+            ctx.drizzle,
+            ctx.userId,
+            result.requiresUserRefresh,
+          ),
         };
       } finally {
         // Failed launches restore the lobby; a real battle keeps its membership until settlement.

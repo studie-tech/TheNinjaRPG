@@ -506,7 +506,12 @@ export const dungeonRouter = createTRPCRouter({
         });
         return {
           ...result,
-          userPatch: await getBattleUserPatch(ctx.drizzle, ctx.userId),
+          userPatch: await getBattleUserPatch(
+            ctx.drizzle,
+            ctx.userId,
+            !result.success ||
+              ("requiresUserRefresh" in result && result.requiresUserRefresh),
+          ),
         };
       }
 

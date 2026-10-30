@@ -1,5 +1,6 @@
 import { fetchEvent, fetchEventNoticeState } from "@/queries/tournamentEvents";
 import * as eventQueries from "@/queries/tournamentEvents";
+import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
@@ -18,11 +19,13 @@ import {
   battle,
   battleHistory,
   questHistory,
+  quest,
   tournament,
   tournamentMatch,
   tournamentRewardClaim,
   trainingLog,
   userData,
+  userCookingJob,
   userQueue,
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
@@ -35,6 +38,8 @@ import {
   generateEventBracket,
 } from "@/libs/tournament/events";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
+import { profileRouter } from "@/server/api/routers/profile";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { tournamentRouter } from "@/server/api/routers/tournament";
 import { maintainEventTournaments, syncEventTournament } from "@/server/api/routers/tournamentEvents";
 import type { DrizzleClient } from "@/server/db";
@@ -74,7 +79,9 @@ describeWithDatabase("event tournament persistence", () => {
       aiProfile,
       trainingLog,
       userQueue,
+      userCookingJob,
       questHistory,
+      quest,
       userData,
     );
   });
@@ -583,6 +590,35 @@ describeWithDatabase("event tournament persistence", () => {
     return { database, game, accept };
   };
 
+  it.each([false, true])("reconciles the accepting actor's Cooking when a match launches (receipt: %s)", async (hasCooking) => {
+    const { database, game, accept } = await readyEvent();
+    const userId = game.userIds[1]!;
+    if (hasCooking) await database.insert(userCookingJob).values({ id: "event-cooking", userId, experience: 99, finishesAt: new Date(Date.now() + 3600_000) });
+    const profile = await callerFor(profileRouter, userId);
+    const initial = await profile.getUser();
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["event-admission-profile"];
+    const read = vi.fn(() => profile.getUser());
+    cache.setQueryDefaults(key, { queryFn: read });
+    cache.setQueryData(key, initial);
+    const revision = prepareUserUpdate(cache, key);
+    try {
+      if (hasCooking) await database.update(userCookingJob).set({ finishesAt: new Date(0) });
+      const response = await accept(userId);
+      expect(response.success).toBe(true);
+      await updateUserCache(cache, key, response.userPatch, { revision, isEventParticipant: response.isEventParticipant });
+      const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
+      const cached = cache.getQueryData<typeof initial>(key)!.userData;
+      expect(saved?.cookingExperience).toBe(hasCooking ? 99 : 0);
+      expect(cached?.cookingExperience).toBe(saved?.cookingExperience);
+      expect(cached?.cookingJobs).toHaveLength(0);
+      expect(cached?.status).toBe("BATTLE");
+      expect(cached?.battleId).toBe(saved?.battleId);
+      expect(read).toHaveBeenCalledTimes(hasCooking ? 1 : 0);
+      if (hasCooking) expect(response.userPatch).toBeUndefined();
+      else expect(response.userPatch).toHaveProperty("status", "BATTLE");
+    } finally { cache.clear(); }
+  });
   it("blocks open-world attacks on registered entrants until they withdraw", async () => {
     const database = await getTestDatabase();
     await insertUsers(

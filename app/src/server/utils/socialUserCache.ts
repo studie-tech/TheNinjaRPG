@@ -196,7 +196,13 @@ export const getShrineLobbyUserPatch = (
   });
 
 /** Public derived combat values retain equipment eligibility without exposing effect definitions. */
-export const getBattleUserPatch = async (client: DrizzleClient, userId: string) => {
+export const getBattleUserPatch = async (
+  client: DrizzleClient,
+  userId: string,
+  requiresUserRefresh = false,
+) => {
+  // Lazy admission settlement changes fields beyond this bounded projection.
+  if (requiresUserRefresh) return undefined;
   const confirmation = await Promise.all([
     findBattleUserCache(client, userId),
     fetchMasterySources(client, userId),

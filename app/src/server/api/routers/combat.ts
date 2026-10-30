@@ -2023,6 +2023,9 @@ export const initiateBattle = async (
   const queueOwners = fetchedUsers.filter(
     (user) => !user.isAi && hasDueTimedJob(user.queue),
   );
+  // Settlement can change resources and receipts outside the combat cache projection,
+  // including partial writes before an optional settlement failure.
+  let requiresUserRefresh = queueOwners.length > 0;
   if (queueOwners.length > 0) {
     try {
       await settleDueTimedQueues(client, queueOwners);
@@ -2042,6 +2045,7 @@ export const initiateBattle = async (
       !user.isAi && user.cookingJobs.some((job) => job.finishesAt <= new Date()),
   );
   if (cookingOwners.length) {
+    requiresUserRefresh = true;
     try {
       await Promise.all(
         cookingOwners.map((user) =>
@@ -3657,7 +3661,7 @@ export const initiateBattle = async (
     Sentry.captureException(error, { tags: { source: "dungeonBattlePublication" } });
   }
   // Return the battle
-  return { success: true, message: "You have attacked", battleId };
+  return { success: true, message: "You have attacked", battleId, requiresUserRefresh };
 };
 
 const summonCycleCause = Symbol("summonCycle");
