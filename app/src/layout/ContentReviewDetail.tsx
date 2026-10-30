@@ -125,8 +125,8 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
     await utils.contentReview.getCounts.invalidate();
     // Query errors retain their normal feedback; a saved decision still completes.
     const counts = await utils.contentReview.getCounts.fetch().catch(() => undefined);
-    if (!counts) await updateUser(undefined, { revision });
-    else if (counts.canReview)
+    if (!counts?.canReview) await updateUser(undefined, { revision });
+    else
       await updateUser(
         {},
         {

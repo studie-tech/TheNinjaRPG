@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { aiProfile, battle, battleHistory, trainingLog, userCookingJob, userQueue, overworldAiPlacement, overworldAiPlacementQuest, quest, questHistory, userData, userQuestAttempt } from "@/drizzle/schema";
+import { aiProfile, anbuSquad, battle, battleHistory, trainingLog, userCookingJob, userQueue, overworldAiPlacement, overworldAiPlacementQuest, quest, questHistory, userData, userQuestAttempt } from "@/drizzle/schema";
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { updateUserDataForGET } from "@/queries/profile";
@@ -16,7 +16,7 @@ import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries
 
 describeWithDatabase("overworld interaction profile updates", () => {
   beforeEach(async () => {
-    await resetTables(aiProfile, battle, battleHistory, trainingLog, userCookingJob, userQueue, overworldAiPlacementQuest, overworldAiPlacement, questHistory, quest, userQuestAttempt, userData);
+    await resetTables(aiProfile, anbuSquad, battle, battleHistory, trainingLog, userCookingJob, userQueue, overworldAiPlacementQuest, overworldAiPlacement, questHistory, quest, userQuestAttempt, userData);
     await insertUsers([
       { userId: "npc-cache-actor", rank: "JONIN", status: "AWAKE", sector: 0, longitude: 0, latitude: 0, primaryElement: "Fire", secondaryElement: "Water" },
       { userId: "npc-cache-template", isAi: true },
@@ -31,6 +31,20 @@ describeWithDatabase("overworld interaction profile updates", () => {
     const snapshot = await fetchUpdatedUser({ client: db, userId: "npc-cache-actor" });
     stubProfile("fetchUpdatedUser", async () => ({ ...snapshot, requiresUserRefresh: false, requiresProgressionRefresh: false }));
     return { db, snapshot, caller: callerForDatabase(overworldAiRouter, "npc-cache-actor", db) };
+  };
+
+  /** Capture the production NPC callback with the real profile cache updater. */
+  const npcCallbacks = (cache: QueryClient, key: string[]) => {
+    const source = readFileSync(join(import.meta.dirname, "../../../../src/layout/Sector.tsx"), "utf8");
+    const call = source.indexOf("api.overworldAi.interactWithOverworldAi.useMutation(");
+    const callbacks = source.slice(call).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+    if (!callbacks) throw new Error("NPC callbacks were not found");
+    const transpiler = new (require("bun").Transpiler)({ loader: "tsx" });
+    const factory = transpiler.transformSync(`function callbacks() { return (${callbacks}); }`);
+    const updateUser = (patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(cache, key, patch, options);
+    return new Function("prepareUserUpdate", "updateUser", "showMutationToast", "setNpcDialog", "utils", "openRewardChoice", `${factory}\nreturn callbacks();`)(
+      () => prepareUserUpdate(cache, key), updateUser, vi.fn(), vi.fn(), { travel: { getSectorData: { invalidate: vi.fn() } } }, vi.fn(),
+    ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   };
 
   it.each(["safe", "upfront", "progression", "queue", "cooking"] as const)("preserves admission recovery after upfront hydration (%s)", async (settlement) => {
@@ -56,6 +70,39 @@ describeWithDatabase("overworld interaction profile updates", () => {
   it("acknowledges a friendly NPC with no available work without changing the profile", async () => {
     const { caller } = await prepared();
     expect(await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 })).toMatchObject({ success: true, userPatch: {} });
+  });
+
+  it.each([false, true])("reconciles an empty NPC interaction through Sector with deferred ANBU cleanup=%s", async (cleanup) => {
+    const db = await getTestDatabase();
+    setSystemTime(new Date("2026-10-30T14:00:00Z"));
+    await db.update(userData).set({ level: 50, isOutlaw: true, anbuId: cleanup ? "old-anbu" : null, regeneration: 0, updatedAt: new Date(), regenAt: new Date() }).where(eq(userData.userId, "npc-cache-actor"));
+    if (cleanup) await db.insert(anbuSquad).values({ id: "old-anbu", name: "Old squad", image: "", villageId: "former-home", memberCount: 1, kageOrderId: "", leaderOrderId: "" });
+    const profile = callerForDatabase(profileRouter, "npc-cache-actor", db);
+    const initial = await profile.getUser();
+    expect(initial.userData?.anbuId).toBe(cleanup ? "old-anbu" : null);
+    if (cleanup) {
+      // The final-member guard preserves the retry marker until another member joins.
+      await insertUsers([{ userId: "npc-cache-member", username: "npc-cache-member", anbuId: "old-anbu" }]);
+      await db.update(anbuSquad).set({ memberCount: 2 }).where(eq(anbuSquad.id, "old-anbu"));
+    }
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["npc-membership-profile"];
+    const getUser = vi.fn(() => profile.getUser());
+    cache.setQueryData(key, initial);
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const stop = observer.subscribe(() => {});
+    const options = npcCallbacks(cache, key);
+    try {
+      const revision = options.onMutate();
+      const result = await callerForDatabase(overworldAiRouter, "npc-cache-actor", db).interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 });
+      expect(result).toMatchObject({ success: true, message: "The NPC has nothing for you." });
+      expect((await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") }))?.anbuId).toBeNull();
+      if (cleanup) expect((await db.query.anbuSquad.findFirst({ where: eq(anbuSquad.id, "old-anbu") }))?.memberCount).toBe(1);
+      await options.onSuccess(result, undefined, revision);
+      expect(cache.getQueryData<typeof initial>(key)?.userData).toMatchObject({ anbuId: null, anbuSquad: null });
+      expect(getUser).toHaveBeenCalledTimes(cleanup ? 1 : 0);
+      expect(result.userPatch).toEqual(cleanup ? undefined : {});
+    } finally { stop(); cache.clear(); }
   });
 
   it.each([0, 100])("returns the committed roll and active quest slot for chance %s", async (chance) => {
@@ -121,16 +168,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
       // Another settled request can advance updatedAt before this tab learns the reset.
       await db.update(userData).set({ updatedAt: new Date(), regenAt: new Date() }).where(eq(userData.userId, "npc-cache-actor"));
     }
-    const source = readFileSync(join(import.meta.dirname, "../../../../src/layout/Sector.tsx"), "utf8");
-    const call = source.indexOf("api.overworldAi.interactWithOverworldAi.useMutation(");
-    const callbacks = source.slice(call).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
-    if (!callbacks) throw new Error("NPC callbacks were not found");
-    const transpiler = new (require("bun").Transpiler)({ loader: "tsx" });
-    const factory = transpiler.transformSync(`function callbacks() { return (${callbacks}); }`);
-    const updateUser = (patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(cache, key, patch, options);
-    const options = new Function("prepareUserUpdate", "updateUser", "showMutationToast", "setNpcDialog", "utils", "openRewardChoice", `${factory}\nreturn callbacks();`)(
-      () => prepareUserUpdate(cache, key), updateUser, vi.fn(), vi.fn(), { travel: { getSectorData: { invalidate: vi.fn() } } }, vi.fn(),
-    ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
+    const options = npcCallbacks(cache, key);
     try {
       const revision = options.onMutate();
       const result = await callerForDatabase(overworldAiRouter, "npc-cache-actor", db).interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 });
