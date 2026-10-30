@@ -469,7 +469,7 @@ export default function DungeonPage() {
         {/* Entrance lookups must not block party controls or completion claims. */}
         {!current && (
           <div className="space-y-3">
-            <fieldset className="space-y-2 rounded-lg border p-3">
+            <fieldset className="min-w-0 space-y-2 rounded-lg border p-3">
               <legend className="px-1 text-sm font-medium">
                 Solo squad companions ({selectedPets.length}/{DUNGEON_SOLO_PETS})
               </legend>
@@ -503,10 +503,11 @@ export default function DungeonPage() {
                       .map((pet) => (
                         <label
                           key={pet.id}
-                          className="flex items-center gap-2 rounded border px-3 py-2 text-sm"
+                          className="flex min-w-0 max-w-full items-center gap-2 rounded border px-3 py-2 text-sm"
                         >
                           <input
                             type="checkbox"
+                            className="shrink-0"
                             checked={selectedPets.includes(pet.id)}
                             disabled={
                               pending ||
@@ -521,7 +522,9 @@ export default function DungeonPage() {
                               )
                             }
                           />
-                          {pet.name}
+                          <span className="truncate" title={pet.name}>
+                            {pet.name}
+                          </span>
                         </label>
                       ))}
                   </div>

@@ -443,6 +443,11 @@ export default function DungeonEditor() {
                         />
                         {content.requirements[field] !== null ? (
                           <NumberInput
+                            aria-label={
+                              field === "maxAttempts"
+                                ? "Maximum lifetime attempts"
+                                : "Maximum completions per reset period"
+                            }
                             min={1}
                             value={content.requirements[field]!}
                             onValueChange={(value) =>
