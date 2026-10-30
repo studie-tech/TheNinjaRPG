@@ -16,6 +16,8 @@ const flows = [
   { file: "layout/RaidBrowser.tsx", procedure: "raids.claimDamageReward", patch: { reputationPoints: 10 }, invalidations: 2 },
   { file: "layout/Clan.tsx", procedure: "clan.upgradeHideoutToStronghold", patch: { village: { id: "home", type: "STRONGHOLD" } }, invalidations: 0 },
   { file: "layout/OccupationCrafting.tsx", procedure: "occupation.cancelQueuedCraft", patch: { queue: [] }, invalidations: 2 },
+  { file: "app/[shell]/dungeon/page.tsx", procedure: "coop.dungeon.act", patch: { status: "BATTLE" } },
+  { file: "app/[shell]/territory-war/page.tsx", procedure: "territoryWar.startBattle", patch: { status: "QUEUED" } },
 ];
 
 /** Execute profile mutation callbacks against a warmed cache and captured revision. */
@@ -40,6 +42,7 @@ const setup = (file: string, procedure: string) => {
     occupation: { getCraftingQueue: leaf },
     raids: { getRaidDetails: leaf },
     profile: { getDashboard: leaf },
+    territoryWar: { invalidate },
   };
   const updateUser = vi.fn((patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options));
   const source = readFileSync(join(import.meta.dirname, "../../src", file), "utf8");
@@ -47,9 +50,16 @@ const setup = (file: string, procedure: string) => {
   const indent = source.slice(source.lastIndexOf("\n", call) + 1, call).match(/^\s*/)?.[0];
   const callbacks = source.slice(call).match(new RegExp(`useMutation\\((\\{[\\s\\S]*?\\n${indent}\\})\\);`))?.[1];
   if (!callbacks) throw new Error(`${procedure} callbacks were not found in ${file}`);
+  const shared = procedure === "coop.dungeon.act"
+    ? source.slice(source.indexOf("  const refresh ="), source.indexOf("  const create ="))
+    : procedure === "territoryWar.startBattle"
+      ? source.slice(source.indexOf("  const onSuccess ="), source.indexOf("  const create ="))
+      : "";
+  const transpiler = new (require("bun").Transpiler)({ loader: "tsx" }) as { transformSync(source: string): string };
+  const factory = transpiler.transformSync(`function callbackOptions() { ${shared} return (${callbacks}); }`);
   // Execute the production callbacks with the real cache merger, matching userItemsRefresh.test.ts.
-  const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", "showRewardToast", "recoverUser", `return (${callbacks});`)(
-    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(),
+  const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", "showRewardToast", "recoverUser", "state", "setMessage", "setAbandonId", "form", "pushToCombat", "router", `${factory}\nreturn callbackOptions();`)(
+    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: invalidate }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), {},
   ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   return {
     client, getUser, invalidate, updateUser, options, profile,
@@ -62,7 +72,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, in
   it("applies a normal patch-only success without fetching the observed profile", async () => {
     const test = setup(file, procedure);
     try {
-      await test.options.onSuccess({ success: true, userPatch: patch, userDelta: {}, achievementProgress: [] }, undefined, test.options.onMutate());
+      await test.options.onSuccess({ success: true, userPatch: patch, userDelta: {}, achievementProgress: [] }, {}, test.options.onMutate());
       await test.updateUser.mock.results[0]?.value;
       expect(test.value()?.userData).toMatchObject({ ...patch, money: 100 });
       expect(test.getUser).not.toHaveBeenCalled();
@@ -75,7 +85,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, in
   it("keeps an authoritative empty patch local", async () => {
     const test = setup(file, procedure);
     try {
-      await test.options.onSuccess({ success: true, userPatch: {}, userDelta: {} }, undefined, test.options.onMutate());
+      await test.options.onSuccess({ success: true, userPatch: {}, userDelta: {} }, {}, test.options.onMutate());
       await test.updateUser.mock.results[0]?.value;
       expect(test.value()?.userData).toEqual(test.profile.userData);
       expect(test.getUser).not.toHaveBeenCalled();
@@ -86,7 +96,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, in
   it("fetches the profile when a successful response cannot supply a patch", async () => {
     const test = setup(file, procedure);
     try {
-      await test.options.onSuccess({ success: true }, undefined, test.options.onMutate());
+      await test.options.onSuccess({ success: true }, {}, test.options.onMutate());
       await test.updateUser.mock.results[0]?.value;
       expect(test.getUser).toHaveBeenCalledTimes(1);
       expect(test.invalidate).toHaveBeenCalledTimes(invalidations);
@@ -98,7 +108,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, in
     try {
       const revision = test.options.onMutate();
       test.client.setQueryData(key, { ...test.profile, userData: { ...test.profile.userData, money: 90 } });
-      await test.options.onSuccess({ success: true, userPatch: patch, userDelta: {} }, undefined, revision);
+      await test.options.onSuccess({ success: true, userPatch: patch, userDelta: {} }, {}, revision);
       await test.updateUser.mock.results[0]?.value;
       expect(test.getUser).toHaveBeenCalledTimes(1);
       expect(test.invalidate).toHaveBeenCalledTimes(invalidations);
@@ -106,7 +116,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, in
   });
 });
 
-describe.each(flows.filter(({ procedure }) => ["quests.startQuest", "bloodline.swapBloodline", "raids.claimDamageReward"].includes(procedure)))("$procedure rejected profile updates", ({ file, procedure }) => {
+describe.each(flows.filter(({ procedure }) => ["quests.startQuest", "bloodline.swapBloodline", "raids.claimDamageReward", "coop.dungeon.act", "territoryWar.startBattle"].includes(procedure)))("$procedure rejected profile updates", ({ file, procedure }) => {
   it("recovers settlement committed before a rejection without a patch", async () => {
     const test = setup(file, procedure);
     const settled = { ...test.profile, userData: { ...test.profile.userData, cookingExperience: 23, cookingJobs: [] } };

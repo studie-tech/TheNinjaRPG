@@ -2,7 +2,7 @@ import { fetchBattle } from "@/queries/combat";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { aiProfile, battle, battleHistory, clan, mpvpBattleQueue, mpvpBattleUser, territoryWar, userData, userVote, village } from "@/drizzle/schema";
+import { aiProfile, battle, battleHistory, clan, mpvpBattleQueue, mpvpBattleUser, territoryWar, userCookingJob, userData, userVote, village } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 
 import { clanRouter } from "@/server/api/routers/clan";
@@ -18,7 +18,7 @@ const team = async () => (await getTestDatabase()).query.mpvpBattleQueue.findFir
 
 describeWithDatabase("Territory War participation", () => {
   beforeEach(async () => {
-    await resetTables(battleHistory, battle, mpvpBattleUser, mpvpBattleQueue, territoryWar, clan, village, userVote, userData, aiProfile);
+    await resetTables(battleHistory, battle, mpvpBattleUser, mpvpBattleQueue, territoryWar, clan, village, userCookingJob, userVote, userData, aiProfile);
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "home", name: "Home", sector: 1, kageId: "leader" },
@@ -48,6 +48,22 @@ describeWithDatabase("Territory War participation", () => {
     expect(snapshot.usersState.filter(user => !user.isAi && !user.isSummon)).toHaveLength(3);
     expect(snapshot.usersState.filter(user => user.isAi && !user.isSummon)).toHaveLength(1);
     expect(new Set(Object.values(snapshot.extraState.territoryWar!.competitors).map(comp => comp.id))).toEqual(new Set(["village:home"]));
+  });
+
+  it("requires canonical recovery when a rejected Territory War launch settles Cooking", async () => {
+    const db = await getTestDatabase();
+    const leader = await caller();
+    expect((await leader.createTeam({ eventId: "event" })).success).toBe(true);
+    const id = (await team())!.id;
+    expect((await (await caller("ally")).joinTeam({ teamId: id })).success).toBe(true);
+    await db.update(userData).set({ isBanned: true }).where(eq(userData.userId, "ally"));
+    await db.insert(userCookingJob).values({ id: "territory-cooking", userId: "leader", experience: 23, finishesAt: new Date(0) });
+    const result = await leader.startBattle({ teamId: id });
+    expect(result).toMatchObject({ success: false, message: "All teammates must represent the same village or faction and be queued in the event sector" });
+    expect(result.userPatch).toBeUndefined();
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "leader") })).toMatchObject({ cookingExperience: 23, status: "QUEUED", battleId: null });
+    expect(await db.query.userCookingJob.findMany()).toHaveLength(0);
+    expect((await team())?.battleId).toBeNull();
   });
 
   it.each(["leave", "start", "expire"] as const)("preserves an admitted teammate after creator rejection so they can %s", async (recovery) => {
