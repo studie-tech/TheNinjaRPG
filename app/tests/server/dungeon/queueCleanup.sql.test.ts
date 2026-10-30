@@ -43,6 +43,7 @@ import { dungeonContent } from "../../setup/dungeon";
 import { initialPetSpecies } from "../../libs/pets/helpers/species";
 import { insertPetSpecies, insertUsers } from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
+import { beforeStatements } from "../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -287,24 +288,13 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
       .insert(sector)
       .values({ sector: 205, villageId: VILLAGE_SYNDICATE_ID, shrineLevel: 1 });
     let interposed = false;
-    const delayed = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "insert")
-          return (table: unknown) =>
-            table === mpvpBattleQueue
-              ? {
-                  values: async () => {
-                    interposed = true;
-                    await updateUserDataForGET3(db);
-                    expect((await owner()).status).toBe("AWAKE");
-                    await createDungeon();
-                    throw new Error("Injected unavailable queue insert");
-                  },
-                }
-              : target.insert(table as never);
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const delayed = beforeStatements(db, mpvpBattleQueue, [async () => {
+      interposed = true;
+      await updateUserDataForGET3(db);
+      expect((await owner()).status).toBe("AWAKE");
+      await createDungeon();
+      throw new Error("Injected unavailable queue insert");
+    }]);
     await expect(
       callerForDatabase(shrineRouter, "a", delayed).challengeShrine({
         sectorNumber: 205,
@@ -392,24 +382,12 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
     await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "x"));
     await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "y"));
     let interposed = false;
-    const delayed = new Proxy(db, {
-      get(target, key, receiver) {
-        if (key === "insert")
-          return (table: unknown) =>
-            table === mpvpBattleUser
-              ? {
-                  values: async (values: typeof mpvpBattleUser.$inferInsert) => {
-                    interposed = true;
-                    await updateUserDataForGET3(db);
-                    expect((await owner()).status).toBe("AWAKE");
-                    await createDungeon();
-                    return await target.insert(mpvpBattleUser).values(values);
-                  },
-                }
-              : target.insert(table as never);
-        return Reflect.get(target, key, receiver);
-      },
-    });
+    const delayed = beforeStatements(db, mpvpBattleUser, [async () => {
+      interposed = true;
+      await updateUserDataForGET3(db);
+      expect((await owner()).status).toBe("AWAKE");
+      await createDungeon();
+    }]);
     expect(
       (
         await callerForDatabase(clanRouter, "a", delayed).joinClanBattle({
