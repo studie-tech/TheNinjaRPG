@@ -7,6 +7,8 @@ import * as clanLogic from "@/libs/clan";
 import * as socialQueries from "@/queries/socialUserCache";
 import { clanRouter } from "@/server/api/routers/clan";
 import { profileRouter } from "@/server/api/routers/profile";
+import * as profileApi from "@/server/api/routers/profile";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -36,7 +38,7 @@ describeWithDatabase("clan village membership progression", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["leaveClan", "kickMember", "instantJoinAndLead", "purchaseHideout"] as const)("%s projects changed village quests and achievements without a profile read", async (method) => {
+  it.each(["leaveClan", "kickMember", "instantJoinAndLead", "purchaseHideout"] as const)("%s reconciles changed village progression without hydrating for confirmation", async (method) => {
     const db = await getTestDatabase();
     const isJoining = method === "instantJoinAndLead";
     const isPurchasing = method === "purchaseHideout";
@@ -62,13 +64,16 @@ describeWithDatabase("clan village membership progression", () => {
     const unsubscribe = observer.subscribe(() => {});
     try {
       const revision = prepareUserUpdate(client, key);
+      const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
       const caller = callerForDatabase(clanRouter, userId, db);
-      const result = method === "kickMember" ? await caller.kickMember({ clanId, memberId: userId })
+      const result: UserDeltaResponse = method === "kickMember" ? await caller.kickMember({ clanId, memberId: userId })
         : method === "purchaseHideout" ? await caller.purchaseHideout({ clanId, sector: 301 })
         : await caller[method]({ clanId });
       expect(result.success, result.message).toBe(true);
-      await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress, ...(result.userDelta ? { delta: result.userDelta } : {}) });
-      expect(getUser).not.toHaveBeenCalled();
+      expect(hydration).not.toHaveBeenCalled();
+      if (method === "purchaseHideout") await client.invalidateQueries({ queryKey: key, exact: true });
+      else await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress, ...(result.userDelta ? { delta: result.userDelta } : {}) });
+      expect(getUser).toHaveBeenCalledTimes(1);
       const cached = client.getQueryData<typeof initial>(key)!;
       const canonical = await profile.getUser();
       expect(cached.userData?.villageId).toBe(destination ?? canonical.userData?.villageId);
@@ -77,8 +82,8 @@ describeWithDatabase("clan village membership progression", () => {
       expect(cached.userData?.userQuests).toEqual(canonical.userData?.userQuests);
       expect(cached.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry)).toEqual(canonical.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry));
       expect(cached.userData?.regeneration).toBe(canonical.userData?.regeneration);
-      expect(result.userPatch?.userQuests).toEqual([]);
-      expect(result.achievementProgress).toBeDefined();
+      expect(result.userPatch).toBeUndefined();
+      expect(result.achievementProgress).toBeUndefined();
     } finally { unsubscribe(); client.clear(); }
   });
 
@@ -112,7 +117,7 @@ describeWithDatabase("clan village membership progression", () => {
       { id: "destination-achievement", questType: "achievement", requiredVillage: strongholdId, content, hidden: false },
       { id: "destination-tier", questType: "tier", requiredVillage: strongholdId, requiredLevel: 1, maxLevel: 100, hidden: false,
         content: { ...content, objectives: [InstantNewQuestObjective.parse({ id: "start-child", task: "new_quest", newQuestIds: ["child-mission"] })] } },
-      { id: "child-mission", questType: "mission", requiredVillage: strongholdId, content, hidden: false },
+      { id: "child-mission", name: "Child Mission", questType: "mission", requiredVillage: strongholdId, content, hidden: false },
     ]);
     await db.insert(questHistory).values({ id: "paused-tier", userId, questId: "destination-tier", questType: "tier" });
     const profile = callerForDatabase(profileRouter, userId, db);
@@ -124,15 +129,18 @@ describeWithDatabase("clan village membership progression", () => {
     const unsubscribe = observer.subscribe(() => {});
     try {
       const revision = prepareUserUpdate(client, key);
+      const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
       const result = await callerForDatabase(clanRouter, userId, db).instantJoinAndLead({ clanId });
       expect(result.success, result.message).toBe(true);
-      expect(await db.query.questHistory.findFirst({ where: eq(questHistory.questId, "child-mission") })).toMatchObject({ userId, questId: "child-mission" });
+      expect(hydration).not.toHaveBeenCalled();
+      expect(await db.query.questHistory.findFirst({ where: eq(questHistory.questId, "child-mission") })).toBeUndefined();
       expect(result.userPatch).toBeUndefined();
       expect(result.achievementProgress).toBeUndefined();
       expect(result.userDelta).toBeUndefined();
       await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress, ...(result.userDelta ? { delta: result.userDelta } : {}) });
       expect(getUser).toHaveBeenCalledTimes(1);
-      const cached = client.getQueryData<typeof initial>(key)!;
+      expect(client.getQueryData<typeof initial>(key)?.notifications).toContainEqual(expect.objectContaining({ name: "Started new quest: Child Mission" }));
+      const cached = await profile.getUser();
       expect(cached.userData?.villageId).toBe(strongholdId);
       expect(cached.userData?.userQuests.map((entry) => entry.questId).sort()).toEqual(["child-mission", "destination-tier"]);
       expect(cached.userData?.questData?.map((tracker) => tracker.id).sort()).toEqual(["child-mission", "destination-achievement", "destination-tier"]);

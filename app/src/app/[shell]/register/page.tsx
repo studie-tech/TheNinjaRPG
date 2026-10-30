@@ -98,7 +98,7 @@ const Register: React.FC = () => {
     return (
       <ContentBox title="Connection interrupted">
         <p className="p-4">We couldn&apos;t load your account. Please try again.</p>
-        <Button className="m-4" onClick={() => void utils.profile.getUser.refetch()}>
+        <Button className="m-4" onClick={() => void utils.profile.getUser.invalidate()}>
           Try again
         </Button>
       </ContentBox>
@@ -154,7 +154,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
     api.register.createCharacter.useMutation({
       onSuccess: async (data) => {
         if (data.success) {
-          await utils.profile.getUser.refetch();
+          await utils.profile.getUser.invalidate();
           createAvatar.mutate();
           sendGTMEvent({ event: "register", userId: userData?.userId ?? "" });
         } else {

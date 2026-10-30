@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { actionLog, aiProfile, battle, battleHistory, huntingHabitat, huntingProgress, huntingSession, item, sectorMap, quest, questHistory, trainingLog, userCookingJob, userData, userItem, userQueue } from "@/drizzle/schema";
@@ -53,6 +53,8 @@ describeWithDatabase("Hunting lifecycle", () => {
     const read = vi.fn(() => profile.getUser());
     cache.setQueryDefaults(key, { queryFn: read });
     cache.setQueryData(key, initial);
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
     const revision = prepareUserUpdate(cache, key);
     try {
       // These receipts become due after the page's profile snapshot.
@@ -91,7 +93,7 @@ describeWithDatabase("Hunting lifecycle", () => {
         expect(response.userPatch).toBeUndefined();
         expect(response.userDelta).toBeUndefined();
       }
-    } finally { cache.clear(); }
+    } finally { unsubscribe(); cache.clear(); }
   });
   it("persists a personal location on refresh and reserves only one session", async () => {
     const hunter = await callerFor(huntingRouter, "hunter");

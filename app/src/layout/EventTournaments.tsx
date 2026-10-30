@@ -821,7 +821,7 @@ const useEventActionCache = () => {
     settle: (_result: unknown, error: unknown) => {
       if (error)
         return Promise.all([
-          utils.profile.getUser.refetch(),
+          utils.profile.getUser.invalidate(),
           utils.tournament.getEvent.invalidate(),
           utils.tournament.listEvents.invalidate(),
           utils.tournament.getEventNotices.invalidate(),
@@ -853,6 +853,6 @@ const useEventActionCache = () => {
                   ]
                 : current,
           })
-        : utils.profile.getUser.refetch(),
+        : utils.profile.getUser.invalidate(),
   };
 };

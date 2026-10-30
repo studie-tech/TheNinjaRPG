@@ -1,6 +1,6 @@
 import { fetchEvent, fetchEventNoticeState } from "@/queries/tournamentEvents";
 import * as eventQueries from "@/queries/tournamentEvents";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
@@ -601,6 +601,8 @@ describeWithDatabase("event tournament persistence", () => {
     const read = vi.fn(() => profile.getUser());
     cache.setQueryDefaults(key, { queryFn: read });
     cache.setQueryData(key, initial);
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
     const revision = prepareUserUpdate(cache, key);
     try {
       if (hasCooking) await database.update(userCookingJob).set({ finishesAt: new Date(0) });
@@ -617,7 +619,7 @@ describeWithDatabase("event tournament persistence", () => {
       expect(read).toHaveBeenCalledTimes(hasCooking ? 1 : 0);
       if (hasCooking) expect(response.userPatch).toBeUndefined();
       else expect(response.userPatch).toHaveProperty("status", "BATTLE");
-    } finally { cache.clear(); }
+    } finally { unsubscribe(); cache.clear(); }
   });
   it("blocks open-world attacks on registered entrants until they withdraw", async () => {
     const database = await getTestDatabase();

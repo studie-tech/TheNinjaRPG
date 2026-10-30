@@ -7,14 +7,11 @@ import {
 } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
-import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
-import { PostProcessedRewardSchema } from "@/validators/rewards";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
- * Confirm delivered purchase balances and reputation-dependent progression.
- * Optional confirmation can be withheld; required hydration errors propagate.
- * Preserve consumed progression feedback independently of cache confirmation.
+ * Confirm delivered purchase balances with bounded reads. Reputation-dependent
+ * progression and pending feedback reconcile through the canonical profile query.
  */
 export const getPurchaseUserUpdate = (
   client: DrizzleClient,
@@ -35,7 +32,7 @@ export const getPurchaseUserUpdate = (
       findPurchaseUserSnapshot(client, userId),
       fetchAchievementCatalogue(client),
       fetchQuestBootstrap(client, userId),
-      // These reads only confirm a delivery; canonical progression below can write.
+      // These reads only confirm a delivery; progression is settled by the profile.
     ]).catch(() => undefined);
     if (!confirmation?.[0]) return fallback;
     const [saved, achievements, bootstrap] = confirmation;
@@ -69,17 +66,7 @@ export const getPurchaseUserUpdate = (
             !available.some((entry) => entry.questType === questType) &&
             canBootstrapQuestType(bootstrap, questType, saved.level),
         ));
-    const progression = needsProgression
-      ? await getRewardUserUpdate({
-          client,
-          userId,
-          rewards: PostProcessedRewardSchema.parse({}),
-          granted: { titles: [], badges: [], sageModes: [] },
-          requiresRelations: true,
-        })
-      : undefined;
-    if (needsProgression && !progression?.userPatch)
-      return { ...fallback, announcements: progression?.announcements };
+    if (needsProgression) return fallback;
     return {
       userPatch: saved
         ? {
@@ -87,10 +74,8 @@ export const getPurchaseUserUpdate = (
             reputationPoints: saved.reputationPoints,
             reputationPointsTotal: saved.reputationPointsTotal,
             federalStatus: saved.federalStatus,
-            ...progression?.userPatch,
           }
         : undefined,
       userDelta: {},
-      achievementProgress: progression?.achievementProgress,
     };
   });

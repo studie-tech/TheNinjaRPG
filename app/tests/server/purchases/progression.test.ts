@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { QueryClient, type QueryKey } from "@tanstack/react-query";
+import { QueryClient, QueryObserver, type QueryKey } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { STORE_REP_PRODUCTS } from "@/drizzle/constants";
@@ -26,6 +26,12 @@ const userId = "purchase-progress-player";
 type Profile = Awaited<ReturnType<ReturnType<typeof profileRouter.createCaller>["getUser"]>>;
 /** Select the reputation goal shared by purchase and upgrade progression assertions. */
 const goal = (profile: Profile | undefined) => profile?.userData?.questData?.find((entry) => entry.id === "purchase-progress")?.goals.find((entry) => entry.id === "purchase-goal");
+const subscriptions: (() => void)[] = [];
+/** Keep the profile observed as it is in the mounted application. */
+const observeProfile = (cache: QueryClient, key: QueryKey, read: () => Promise<Profile>) => {
+  const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+  subscriptions.push(observer.subscribe(() => {}));
+};
 const upgradeCost = calcFedUgradeCost("NORMAL", "GOLD")!;
 /** Create an active provider billing period for a reputation-funded upgrade. */
 const seedUpgrade = async (source: "paypal" | "stripe") => {
@@ -56,9 +62,9 @@ describeWithDatabase("purchase reputation progression", () => {
     const db = await getTestDatabase();
     await db.insert(userVote).values({ id: "purchase-progress-vote", userId, secret: "payment1", lastVoteAt: new Date() });
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { subscriptions.splice(0).forEach((stop) => stop()); vi.restoreAllMocks(); });
 
-  it.each(["native", "web"] as const)("preserves consumed progression messages through a %s purchase fallback", async (source) => {
+  it.each(["native", "web"] as const)("leaves progression messages for the canonical read after a %s purchase", async (source) => {
     const db = await getTestDatabase();
     await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, userId));
     const content = { reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] };
@@ -78,12 +84,16 @@ describeWithDatabase("purchase reputation progression", () => {
     expect(await grantStorePurchase(db, { userId, transactionId: "feedback-purchase", productId: STORE_REP_PRODUCTS[0]!.productId, store: "APPLE", isSandbox: false, purchasedAt: new Date(), raw: {} })).toMatchObject({ status: "granted" });
     // An admitted quest can have an instant effect pending during purchase confirmation.
     await insertQuestHistory([{ userId, questId: "purchase-effect", questType: "mission" }]);
+    const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
     const result = source === "native" ? await (await callerFor(purchasesRouter, userId)).userSnapshot() : await getPurchaseUserUpdate(db, userId);
     expect(result.userPatch).toBeFalsy();
-    expect(result.announcements).toContain("Started new quest: Purchase Child Mission");
+    expect(result.announcements).toBeUndefined();
+    expect(hydration).not.toHaveBeenCalled();
+    expect(await db.query.questHistory.findFirst({ where: eq(questHistory.questId, "purchase-child") })).toBeUndefined();
     const canonical = await profile.getUser();
-    expect(canonical.userData?.userQuests.some((entry) => entry.questId === "purchase-child")).toBe(true);
-    expect(canonical.notifications.some((entry) => entry.name === "Started new quest: Purchase Child Mission")).toBe(false);
+    expect(await db.query.questHistory.findFirst({ where: eq(questHistory.questId, "purchase-child") })).toMatchObject({ userId });
+    expect(canonical.notifications).toContainEqual(expect.objectContaining({ color: "toast", name: "Started new quest: Purchase Child Mission" }));
+    expect((await profile.getUser()).notifications.some((entry) => entry.name === "Started new quest: Purchase Child Mission")).toBe(false);
   });
 
   it.each(["snapshot unavailable", "snapshot missing", "catalogue unavailable", "bootstrap unavailable"] as const)("reconciles a delivered native purchase when confirmation is %s", async (failure) => {
@@ -95,6 +105,7 @@ describeWithDatabase("purchase reputation progression", () => {
     const read = vi.fn(() => profile.getUser());
     cache.setQueryDefaults(key, { queryFn: read });
     cache.setQueryData(key, initial);
+    observeProfile(cache, key, read);
     const revision = prepareUserUpdate(cache, key);
     const purchase = { userId, transactionId: "confirmed-native-purchase", productId: STORE_REP_PRODUCTS[0]!.productId, store: "APPLE" as const, isSandbox: false, purchasedAt: new Date(), raw: {} };
     expect(await grantStorePurchase(db, purchase)).toMatchObject({ status: "granted" });
@@ -122,15 +133,18 @@ describeWithDatabase("purchase reputation progression", () => {
     expect(result.userDelta).toBeUndefined();
   });
 
-  it("propagates canonical purchase progression errors", async () => {
+  it("withholds confirmation without running full profile progression", async () => {
     const db = await getTestDatabase();
     await insertQuests([{ id: "purchase-progress", questType: "achievement", hidden: false,
       content: { objectives: [SimpleObjective.parse({ id: "purchase-goal", task: "reputation_points", value: 1 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
-    vi.spyOn(profileApi, "fetchUpdatedUser").mockRejectedValueOnce(new Error("Purchase progression unavailable"));
-    await expect(getPurchaseUserUpdate(db, userId)).rejects.toThrow("Purchase progression unavailable");
+    const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
+    const result = await getPurchaseUserUpdate(db, userId);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(hydration).not.toHaveBeenCalled();
   });
 
-  it.each(["payment", "native"] as const)("merges %s confirmation and reputation progression without refetching", async (source) => {
+  it.each(["payment", "native"] as const)("reconciles %s reputation progression through one canonical read", async (source) => {
     const db = await getTestDatabase();
     await insertQuests([{ id: "purchase-progress", name: "Purchase Progress", questType: "achievement", hidden: false,
       content: { objectives: [SimpleObjective.parse({ id: "purchase-goal", task: "reputation_points", value: 1 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
@@ -139,15 +153,19 @@ describeWithDatabase("purchase reputation progression", () => {
     expect(goal(initial)).toMatchObject({ done: false, value: 0 });
     const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const key = ["purchase-profile"];
-    let refetches = 0;
-    cache.setQueryDefaults(key, { queryFn: async () => { refetches += 1; throw new Error("Unexpected profile refetch"); } });
+    const read = vi.fn(() => profile.getUser());
+    cache.setQueryDefaults(key, { queryFn: read });
     cache.setQueryData(key, initial);
+    observeProfile(cache, key, read);
     const revision = prepareUserUpdate(cache, key);
     const product = STORE_REP_PRODUCTS[0]!;
     expect(await grantStorePurchase(db, { userId, transactionId: "reputation-purchase", productId: product.productId, store: "APPLE", isSandbox: false, purchasedAt: new Date(), raw: {} })).toMatchObject({ status: "granted" });
+    const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
     const result = source === "native" ? await (await callerFor(purchasesRouter, userId)).userSnapshot() : await getPurchaseUserUpdate(db, userId);
+    expect(result.userPatch).toBeFalsy();
+    expect(hydration).not.toHaveBeenCalled();
     await updateUserCache(cache, key, result.userPatch ?? undefined, { revision, achievementProgress: "achievementProgress" in result ? result.achievementProgress : undefined });
-    expect(refetches).toBe(0);
+    expect(read).toHaveBeenCalledTimes(1);
     expect(goal(cache.getQueryData(key))).toMatchObject({ done: true, value: product.reputationPoints });
     expect(cache.getQueryData<Profile>(key)?.userData?.reputationPoints).toBe(product.reputationPoints);
     const saved = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
@@ -166,7 +184,7 @@ describeWithDatabase("purchase reputation progression", () => {
     expect(counted.getReads()).toBe(1);
   });
 
-  it("projects reputation objectives on active hidden quests", async () => {
+  it("reconciles reputation objectives on active hidden quests", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, userId));
     await insertQuests([{ id: "purchase-progress", questType: "story", hidden: true,
@@ -174,11 +192,14 @@ describeWithDatabase("purchase reputation progression", () => {
     await insertQuestHistory([{ userId, questId: "purchase-progress", questType: "story" }]);
     await (await callerFor(profileRouter, userId)).getUser();
     await db.update(userData).set({ reputationPoints: 5, reputationPointsTotal: 5 }).where(eq(userData.userId, userId));
+    const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
     const result = await getPurchaseUserUpdate(db, userId);
-    expect(result.userPatch?.questData?.find((entry) => entry.id === "purchase-progress")?.goals[0]).toMatchObject({ value: 5, done: true });
+    expect(result.userPatch).toBeUndefined();
+    expect(hydration).not.toHaveBeenCalled();
+    expect(goal(await (await callerFor(profileRouter, userId)).getUser())).toMatchObject({ value: 5, done: true });
   });
 
-  it.each((["paypal", "stripe"] as const).flatMap((source) => (["none", "mission", "achievement"] as const).map((questType) => ({ source, questType }))))("merges $source upgrade balances and $questType reputation progress without a profile refetch", async ({ source, questType }) => {
+  it.each((["paypal", "stripe"] as const).flatMap((source) => (["none", "mission", "achievement"] as const).map((questType) => ({ source, questType }))))("confirms $source upgrade balances and reconciles $questType reputation progression", async ({ source, questType }) => {
     await seedUpgrade(source);
     if (questType !== "none") {
       await insertQuests([{ id: "purchase-progress", questType, hidden: false,
@@ -192,6 +213,7 @@ describeWithDatabase("purchase reputation progression", () => {
     const read = vi.fn(() => profile.getUser());
     cache.setQueryDefaults(key, { queryFn: read });
     cache.setQueryData(key, initial);
+    observeProfile(cache, key, read);
     const callbacks = upgradeCallbacks(cache, key);
     const revision = callbacks.onMutate();
     const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
@@ -199,10 +221,10 @@ describeWithDatabase("purchase reputation progression", () => {
       const caller = await callerFor(paypalRouter, userId);
       const result = await caller.upgradeSubscription({ userId, plan: "GOLD" });
       expect(result.success).toBe(true);
-      expect(hydration).toHaveBeenCalledTimes(questType === "none" ? 0 : 1);
-      expect(result.userDelta).toEqual({});
+      expect(hydration).not.toHaveBeenCalled();
+      expect(result.userDelta).toEqual(questType === "none" ? {} : undefined);
       await callbacks.onSuccess(result, undefined, revision);
-      expect(read).not.toHaveBeenCalled();
+      expect(read).toHaveBeenCalledTimes(questType === "none" ? 0 : 1);
       const cached = cache.getQueryData<Profile>(key);
       expect(cached?.userData).toMatchObject({ federalStatus: "GOLD", reputationPoints: upgradeCost * 2, reputationPointsTotal: upgradeCost * 2 });
       if (questType !== "none") expect(goal(cached)).toMatchObject({ value: upgradeCost * 2, done: false });
@@ -232,6 +254,7 @@ describeWithDatabase("purchase reputation progression", () => {
     const read = vi.fn(() => profile.getUser());
     cache.setQueryDefaults(key, { queryFn: read });
     cache.setQueryData(key, initial);
+    observeProfile(cache, key, read);
     const callbacks = upgradeCallbacks(cache, key);
     const revision = callbacks.onMutate();
     const confirmation = vi.spyOn(purchaseQueries, "findPurchaseUserSnapshot");
@@ -271,13 +294,17 @@ describeWithDatabase("purchase reputation progression", () => {
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ federalStatus: "NORMAL", reputationPoints: upgradeCost * 3, reputationPointsTotal: upgradeCost * 3 });
   });
 
-  it.each(["paypal", "stripe"] as const)("propagates canonical progression errors after a committed %s upgrade", async (source) => {
+  it.each(["paypal", "stripe"] as const)("keeps a committed %s upgrade successful without full progression confirmation", async (source) => {
     await seedUpgrade(source);
     await insertQuests([{ id: "purchase-progress", questType: "achievement", hidden: false,
       content: { objectives: [SimpleObjective.parse({ id: "purchase-goal", task: "reputation_points", value: upgradeCost * 4 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
-    vi.spyOn(profileApi, "fetchUpdatedUser").mockRejectedValueOnce(new Error("Upgrade progression unavailable"));
+    const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
     const caller = await callerFor(paypalRouter, userId);
-    await expect(caller.upgradeSubscription({ userId, plan: "GOLD" })).rejects.toThrow("Upgrade progression unavailable");
+    const result = await caller.upgradeSubscription({ userId, plan: "GOLD" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(hydration).not.toHaveBeenCalled();
     expect(await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ federalStatus: "GOLD", reputationPoints: upgradeCost * 2, reputationPointsTotal: upgradeCost * 2 });
     expect((await caller.upgradeSubscription({ userId, plan: "GOLD" })).success).toBe(false);
   });

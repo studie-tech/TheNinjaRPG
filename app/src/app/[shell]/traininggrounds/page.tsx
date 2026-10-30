@@ -595,7 +595,7 @@ const StatsTraining: React.FC<
       },
       onError: async () => {
         await Promise.all([
-          utils.profile.getUser.refetch(),
+          utils.profile.getUser.invalidate(),
           utils.misc.getCaptcha.invalidate(),
         ]);
       },
@@ -622,7 +622,7 @@ const StatsTraining: React.FC<
           sendGTMEvent({ event: "mastery_training" });
         }
       },
-      onError: () => utils.profile.getUser.refetch(),
+      onError: () => utils.profile.getUser.invalidate(),
     });
 
   const { mutate: queueMasteryTraining, isPending: isQueueingMastery } =
@@ -651,7 +651,7 @@ const StatsTraining: React.FC<
       },
       onError: async () => {
         await Promise.all([
-          utils.profile.getUser.refetch(),
+          utils.profile.getUser.invalidate(),
           utils.misc.getCaptcha.invalidate(),
         ]);
       },

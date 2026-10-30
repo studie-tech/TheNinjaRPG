@@ -14,6 +14,7 @@ import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 const userId = "reward-confirmation-player";
+const subscriptions: (() => void)[] = [];
 
 describeWithDatabase("ranked reward confirmation recovery", () => {
   beforeEach(async () => {
@@ -26,7 +27,7 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
     await db.insert(rankedSeason).values({ id: "confirmation-season", name: "Confirmation Season", description: "", startDate: new Date(0), endDate: new Date(0), rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_money: 100 }) }] });
     await db.insert(rankedUserRewards).values({ id: "confirmation-receipt", userId, seasonId: "confirmation-season", division: "Wood" });
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { subscriptions.splice(0).forEach((stop) => stop()); vi.restoreAllMocks(); });
 
   it.each(["unavailable", "missing"] as const)("reconciles the paid profile and clears the receipt through the actual callback when confirmation is %s", async (failure) => {
     const db = await getTestDatabase();
@@ -79,13 +80,19 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 0 });
   });
 
-  it("propagates side-effecting canonical progression failures", async () => {
+  it("commits a relation-changing reward without running full profile confirmation", async () => {
     const db = await getTestDatabase();
     await db.update(rankedSeason).set({ rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_rank: "JONIN", reward_money: 100 }) }] }).where(eq(rankedSeason.id, "confirmation-season"));
-    const progression = vi.spyOn(profile, "fetchUpdatedUser").mockRejectedValueOnce(new Error("Canonical progression unavailable"));
-    await expect((await callerFor(pvpRankRouter, userId)).claimSeasonRewards()).rejects.toThrow("Canonical progression unavailable");
-    expect(progression).toHaveBeenCalledTimes(1);
+    const hydration = vi.spyOn(profile, "fetchUpdatedUser");
+    const caller = await callerFor(pvpRankRouter, userId);
+    const result = await caller.claimSeasonRewards();
+    expect(result.success).toBe(true);
+    if (!("rewards" in result)) throw new Error(result.message);
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    expect(hydration).not.toHaveBeenCalled();
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100 });
+    expect((await caller.claimSeasonRewards()).success).toBe(false);
   });
 
   it.each(["announcement", "recruit reward"] as const)("delivers a pending %s when reconciling a claimed profession reward", async (feedback) => {
@@ -100,7 +107,10 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
     const read = vi.fn(() => profileApi.getUser());
     cache.setQueryDefaults(key, { queryFn: read });
     cache.setQueryData(key, initial);
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+    subscriptions.push(observer.subscribe(() => {}));
     const revision = prepareUserUpdate(cache, key);
+    const hydration = vi.spyOn(profile, "fetchUpdatedUser");
     try {
       const caller = await callerFor(pvpRankRouter, userId);
       const result = await caller.claimSeasonRewards();
@@ -109,6 +119,8 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
       expect(result.userPatch).toBeUndefined();
       expect(result.userDelta).toBeUndefined();
       expect(result.achievementProgress).toBeUndefined();
+      expect(hydration).not.toHaveBeenCalled();
+      expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject(feedback === "announcement" ? { unreadNotifications: 1 } : { unreadRecruitRewards: 1 });
       await updateUserCache(cache, key, result.userPatch, { revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
       expect(read).toHaveBeenCalledTimes(1);
       const name = feedback === "announcement" ? "A new event has started." : "Your recruits earned you 1 rank milestone reward";
@@ -120,7 +132,7 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
     } finally { cache.clear(); }
   });
 
-  it("reconciles a quest started by reward hydration before projecting its objectives", async () => {
+  it("lets canonical recovery start a reward quest and deliver its feedback once", async () => {
     const db = await getTestDatabase();
     await db.update(rankedSeason).set({ rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_medical_experience: 1 }) }] }).where(eq(rankedSeason.id, "confirmation-season"));
     const profileApi = await callerFor(profile.profileRouter, userId);
@@ -135,6 +147,8 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
     const read = vi.fn(() => profileApi.getUser());
     cache.setQueryDefaults(key, { queryFn: read });
     cache.setQueryData(key, initial);
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+    subscriptions.push(observer.subscribe(() => {}));
     const revision = prepareUserUpdate(cache, key);
     try {
       const result = await (await callerFor(pvpRankRouter, userId)).claimSeasonRewards();
@@ -144,7 +158,14 @@ describeWithDatabase("ranked reward confirmation recovery", () => {
       expect(result.userDelta).toBeUndefined();
       await updateUserCache(cache, key, result.userPatch, { revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
       expect(read).toHaveBeenCalledTimes(1);
+      const message = "Started new quest: Next Quest";
+      expect(cache.getQueryData<typeof initial>(key)?.notifications).toContainEqual(expect.objectContaining({ color: "toast", name: message }));
+      expect(await db.query.questHistory.findMany({ where: eq(questHistory.questId, "reward-next") })).toHaveLength(1);
+      // Canonical settlement admits the child; the next profile read projects its objectives.
+      await cache.invalidateQueries({ queryKey: key, exact: true });
+      expect(read).toHaveBeenCalledTimes(2);
       expect(cache.getQueryData<typeof initial>(key)?.userData?.questData?.find((entry) => entry.id === "reward-next")?.goals[0]).toMatchObject({ id: "level", value: 50, done: true });
+      expect(cache.getQueryData<typeof initial>(key)?.notifications.some((entry) => entry.name === message)).toBe(false);
       expect(await db.query.questHistory.findMany({ where: eq(questHistory.questId, "reward-next") })).toHaveLength(1);
     } finally { cache.clear(); }
   });

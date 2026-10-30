@@ -929,7 +929,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       } else if (useritem?.item.itemType === "MEAL") {
         // A rejected snapshot must refresh the next modal's quantity and account state.
         await Promise.all([
-          utils.profile.getUser.refetch(),
+          utils.profile.getUser.invalidate(),
           utils.item.getUserItemsWithVariants.invalidate(),
         ]);
       }

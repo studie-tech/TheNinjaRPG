@@ -54,7 +54,6 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { scheduleDiscordSync } from "@/server/utils/discord/sync";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { getVillageChangeUserUpdate } from "@/server/utils/socialUserCache";
 import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSwapVillage } from "@/utils/permissions";
@@ -215,10 +214,10 @@ export const villageRouter = createTRPCRouter({
     .meta({
       mcp: { description: "Leave current village to become outlaw" },
     })
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
       // Queries
-      const { user, requiresUserRefresh } = await fetchUpdatedUser({
+      const { user } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -247,15 +246,12 @@ export const villageRouter = createTRPCRouter({
       return {
         success: true,
         message: "You have left the village",
-        ...(!requiresUserRefresh
-          ? await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)
-          : {}),
       };
     }),
   joinVillage: protectedProcedure
     .meta({ mcp: { description: "Join a village as an outlaw" } })
     .input(z.object({ villageId: z.string() }))
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
       const [updatedUser, village] = await Promise.all([
@@ -293,17 +289,14 @@ export const villageRouter = createTRPCRouter({
       return {
         success: true,
         message: "You have joined the village",
-        ...(!updatedUser.requiresUserRefresh
-          ? await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)
-          : {}),
       };
     }),
   swapVillage: protectedProcedure
     .input(z.object({ villageId: z.string() }))
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const { user, requiresUserRefresh } = await fetchUpdatedUser({
+      const { user } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -345,10 +338,6 @@ export const villageRouter = createTRPCRouter({
       return {
         success: true,
         message: "You have swapped villages",
-        userDelta: requiresUserRefresh ? undefined : { reputationPoints: -cost },
-        ...(!requiresUserRefresh
-          ? await getVillageChangeUserUpdate(ctx.drizzle, ctx.userId)
-          : {}),
       };
     }),
   getAlliances: publicProcedure

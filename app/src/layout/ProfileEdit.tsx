@@ -1180,7 +1180,7 @@ const NewAiAvatar: React.FC = () => {
                 : undefined,
               { revision, delta: data.userDelta },
             )
-          : utils.profile.getUser.refetch(),
+          : utils.profile.getUser.invalidate(),
         utils.avatar.getHistoricalAvatars.invalidate(),
       ]);
     },
@@ -1450,7 +1450,8 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
  */
 const SwapVillage: React.FC = () => {
   // State
-  const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
+  const { data: userData } = useRequiredUserData();
+  const utils = api.useUtils();
   const [village, setVillage] = useState<Village | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
@@ -1468,15 +1469,9 @@ const SwapVillage: React.FC = () => {
 
   // Mutations
   const { mutate: swap, isPending: isSwapping } = api.village.swapVillage.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
+    onSuccess: async (data) => {
       showMutationToast(data);
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          achievementProgress: data.achievementProgress,
-          ...(data.userDelta ? { delta: data.userDelta } : {}),
-        });
+      if (data.success) await utils.profile.getUser.invalidate();
     },
     onSettled: () => {
       document.body.style.cursor = "default";

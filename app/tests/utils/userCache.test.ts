@@ -19,7 +19,7 @@ const warMission = (id: string): WarMissionAttempt => ({
   sideVillageId: "village", villageId: "village", sector: 1,
   task: "espionage", value: 10, endsAt: "2026-01-01T00:01:00Z",
 });
-const setup = () => {
+const setup = (active = true) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(key, profile(100));
   let database = 100;
@@ -32,7 +32,7 @@ const setup = () => {
       return profile(database);
     },
   });
-  const unsubscribe = observer.subscribe(() => {});
+  const unsubscribe = active ? observer.subscribe(() => {}) : () => {};
   return {
     client,
     observer,
@@ -44,6 +44,29 @@ const setup = () => {
 };
 
 describe("user cache updates", () => {
+  it.each(["missing response", "changed revision", "invalid relation"] as const)("marks an inactive profile stale without executing it after %s", async (recovery) => {
+    const test = setup(false);
+    const revision = prepareUserUpdate(test.client, key);
+    test.setDatabase(80);
+    if (recovery === "changed revision") test.client.setQueryData(key, profile(120));
+    await updateUserCache(test.client, key,
+      recovery === "missing response" ? undefined : recovery === "invalid relation" ? { villageId: "new" } : { money: 80 },
+      { revision },
+    );
+    expect(test.client.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(test.client.getQueryState(key)?.fetchStatus).toBe("idle");
+    expect(test.client.getQueryState(key)?.error).toBeNull();
+    expect(test.reads()).toBe(0);
+    expect(test.value()?.userData.money).toBe(recovery === "changed revision" ? 120 : 100);
+    const unsubscribe = test.observer.subscribe(() => {});
+    await test.observer.getCurrentQuery().promise;
+    expect(test.reads()).toBe(1);
+    expect(test.value()?.userData.money).toBe(80);
+    expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+    unsubscribe();
+    test.close();
+  });
+
   it.each(["added", "removed"] as const)("replaces a saved Kage schedule with its invitation %s", async (change) => {
     const test = setup();
     const schedule: KageDefenseSchedule = { kageId: "kage", tenure: "2026-01-01T00:00:00Z", windows: [], publishedAt: null, missedStarts: 0, paused: false, observedAt: "2026-01-01T00:00:00Z" };

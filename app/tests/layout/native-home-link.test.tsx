@@ -32,7 +32,7 @@ beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: navigate, back: vi.fn() } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     register: { setReferralSource: { useMutation: () => ({ mutate: vi.fn() }) } },
-    useUtils: () => ({ profile: { getUser: { refetch: vi.fn(async () => {}) } } }),
+    useUtils: () => ({ profile: { getUser: { invalidate: vi.fn(async () => {}) } } }),
   });
   vi.spyOn(Welcome, "default").mockImplementation(() => <p>Public welcome</p>);
   vi.spyOn(Loader, "default").mockImplementation(({ explanation }) => <p>{explanation}</p>);

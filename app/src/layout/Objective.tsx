@@ -76,7 +76,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
             revision,
             achievementProgress: data.achievementProgress,
           });
-        else await utils.profile.getUser.refetch();
+        else await utils.profile.getUser.invalidate();
       },
     });
 

@@ -446,7 +446,7 @@ const MenuBoxProfile: React.FC = () => {
                           refreshTime();
                           await Promise.all([
                             utils.raids.getUserRaidBuffs.invalidate(),
-                            utils.profile.getUser.refetch(),
+                            utils.profile.getUser.invalidate(),
                           ]);
                         }}
                       />
@@ -578,7 +578,7 @@ const MenuBoxProfile: React.FC = () => {
                         targetDate={covertTrainingFinishAt}
                         timeDiff={timeDiff}
                         onFinish={async () => {
-                          await utils.profile.getUser.refetch();
+                          await utils.profile.getUser.invalidate();
                         }}
                       />
                     </Link>

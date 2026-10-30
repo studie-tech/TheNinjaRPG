@@ -225,13 +225,13 @@ export function PetProfile() {
               revision,
               delta: result.userPatch ? (result.userDelta ?? {}) : undefined,
             })
-        : utils.profile.getUser.refetch(),
+        : utils.profile.getUser.invalidate(),
     ]);
   };
   const failMutation = async (cause: { message: string }) => {
     setMessage(cause.message);
     // A network failure may arrive after the server commits the update.
-    await Promise.all([invalidatePetData(), utils.profile.getUser.refetch()]);
+    await Promise.all([invalidatePetData(), utils.profile.getUser.invalidate()]);
   };
   const update = api.pets.updatePet.useMutation({
     onMutate: prepareUserUpdate,
@@ -283,7 +283,7 @@ export function PetProfile() {
           utils.pets.getCollection.invalidate(),
         ]);
       } else {
-        await Promise.all([invalidatePetData(), utils.profile.getUser.refetch()]);
+        await Promise.all([invalidatePetData(), utils.profile.getUser.invalidate()]);
       }
     },
     onError: failMutation,

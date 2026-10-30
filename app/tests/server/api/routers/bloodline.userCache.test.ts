@@ -144,6 +144,8 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
     const getUser = vi.fn(() => profile.getUser());
     client.setQueryDefaults(key, { queryFn: getUser });
     client.setQueryData(key, initial);
+    const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
     const confirmation = vi.spyOn(bloodlineQueries, "findBloodlineCacheState");
     if (failure === "missing") confirmation.mockResolvedValueOnce(undefined);
     else confirmation.mockRejectedValueOnce(new Error("Lineage confirmation unavailable"));
@@ -161,7 +163,7 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
       expect((await api.purchaseBloodline({ bloodlineId: lineId })).success).toBe(false);
       expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A });
       expect(await db.query.bloodlineRolls.findMany({ where: eq(bloodlineRolls.userId, userId) })).toHaveLength(1);
-    } finally { client.clear(); }
+    } finally { unsubscribe(); client.clear(); }
   });
 
   it("reconciles newly eligible and obsolete lineage achievements and missions after a swap", async () => {
