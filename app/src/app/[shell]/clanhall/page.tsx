@@ -31,8 +31,7 @@ import { clanCreateSchema } from "@/validators/clan";
 
 export default function Clans() {
   // Must be in allied village
-  const { userData, access, updateUser, prepareUserUpdate } =
-    useRequireInVillage("/clanhall");
+  const { userData, access } = useRequireInVillage("/clanhall");
 
   // tRPC utils
   const utils = api.useUtils();
@@ -40,13 +39,8 @@ export default function Clans() {
   // Mutations
   const { mutate: createClan, isPending: isCreating } = api.clan.createClan.useMutation(
     {
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+      onSuccess: async (data) => {
+        if (data.success) await utils.profile.getUser.invalidate();
         showMutationToast(data);
         if (data.success) {
           await utils.clan.getAll.invalidate();

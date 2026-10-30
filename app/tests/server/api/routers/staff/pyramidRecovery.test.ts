@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, getTableName } from "drizzle-orm";
 import { actionLog, battle, huntingHabitat, huntingProgress, huntingReceipt, huntingSession, mpvpBattleUser, quest, questHistory, rankedPvpQueue, userData, userItem } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
-import { getIsolatedPyramid, removeClosedPyramidHistories } from "@/libs/questRun";
+import { getIsolatedPyramid } from "@/libs/questRun";
 import { combatRouter } from "@/server/api/routers/combat";
 import { huntingRouter } from "@/server/api/routers/hunting";
 import { profileRouter } from "@/server/api/routers/profile";
@@ -43,16 +43,17 @@ describeWithDatabase("staff Pyramid recovery", () => {
     await resetTables(questHistory);
   });
 
-  it("returns a narrow self recovery and exact closed history receipts", async () => {
+  it("reconciles self recovery and closed histories through the canonical profile", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, "hero"));
-    const cached = (await (await callerFor(profileRouter, "hero")).getUser()).userData!;
+    const profile = await callerFor(profileRouter, "hero");
+    const cached = (await profile.getUser()).userData!;
     expect(getIsolatedPyramid(cached)?.id).toBe("attempt");
     const result = await (await callerFor(createTRPCRouter({ staff: staffRouter }), "hero")).staff.forceAwake({ userId: "hero", reason: "Recover my stranded Pyramid run" });
-    const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "hero") });
-    const history = await db.query.questHistory.findFirst({ where: eq(questHistory.id, "attempt") });
-    expect(result).toMatchObject({ success: true, userPatch: { status: "AWAKE", battleId: null, travelFinishAt: null, updatedAt: saved!.updatedAt }, closedPyramidHistories: [{ id: "attempt", questId: "pyramid", endAt: history!.endAt }] });
-    const current = { ...cached, ...result.userPatch, ...removeClosedPyramidHistories(cached, result.closedPyramidHistories ?? []) };
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result).not.toHaveProperty("closedPyramidHistories");
+    const current = (await profile.getUser()).userData!;
     expect(getIsolatedPyramid(current)).toBeUndefined();
     expect(current.userQuests.some((entry) => entry.id === "attempt")).toBe(false);
     expect(current.questData?.some((tracker) => tracker.id === "pyramid")).toBe(false);
@@ -65,7 +66,7 @@ describeWithDatabase("staff Pyramid recovery", () => {
     const historyReads = vi.spyOn(db.query.questHistory, "findMany");
     const result = await (await callerFor(staffRouter, "staff")).forceAwake({ userId: "hero", reason: "Recover another stranded character" });
     expect(result).toMatchObject({ success: true, userPatch: {} });
-    expect(result.closedPyramidHistories).toBeUndefined();
+    expect(result).not.toHaveProperty("closedPyramidHistories");
     expect(userReads).toHaveBeenCalledTimes(2);
     expect(historyReads).not.toHaveBeenCalled();
   });

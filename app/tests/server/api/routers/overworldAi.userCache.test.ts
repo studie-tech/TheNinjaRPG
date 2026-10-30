@@ -1,14 +1,18 @@
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { aiProfile, battle, battleHistory, trainingLog, userCookingJob, userQueue, overworldAiPlacement, overworldAiPlacementQuest, quest, questHistory, userData, userQuestAttempt } from "@/drizzle/schema";
-import * as overworldQueries from "@/queries/overworldAi";
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
-import { fetchUpdatedUser } from "@/server/api/routers/profile";
+import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
+import { updateUserDataForGET } from "@/queries/profile";
+import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 import { AllObjectives } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
-import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 describeWithDatabase("overworld interaction profile updates", () => {
   beforeEach(async () => {
@@ -20,7 +24,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
     const db = await getTestDatabase();
     await db.insert(overworldAiPlacement).values({ id: "cache-giver", aiTemplateUserId: "npc-cache-template", interactionType: "FRIENDLY", sectorList: [], sector: 0, longitude: 0, latitude: 0 });
   });
-  afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
+  afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); setSystemTime(); });
 
   const prepared = async () => {
     const db = await getTestDatabase();
@@ -65,14 +69,16 @@ describeWithDatabase("overworld interaction profile updates", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.5);
     const result = await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 });
     expect(result.success).toBe(true);
-    expect(result.userPatch).toMatchObject({ dailyOverworldQuestRolls: 1, activeNpcQuestId: chance ? "cache-npc-quest" : null });
+    expect(result.userDelta).toMatchObject({ dailyOverworldQuestRolls: 1 });
+    if (chance) expect(result.userPatch).toMatchObject({ activeNpcQuestId: "cache-npc-quest" });
+    else expect(result.userPatch).toEqual({});
     if (chance) expect(result.userPatch?.userQuests).toContainEqual(expect.objectContaining({ questId: "cache-npc-quest" }));
     const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") });
-    expect(result.userPatch?.dailyOverworldQuestRolls).toBe(saved?.dailyOverworldQuestRolls);
-    expect(result.userPatch?.activeNpcQuestId).toBe(saved?.activeNpcQuestId);
+    expect(result.userDelta?.dailyOverworldQuestRolls).toBe(saved?.dailyOverworldQuestRolls);
+    if (chance) expect(result.userPatch?.activeNpcQuestId).toBe(saved?.activeNpcQuestId);
   });
 
-  it("omits the partial progression patch after a committed NPC assignment when confirmation fails", async () => {
+  it("returns the committed assignment without a cache confirmation SELECT", async () => {
     const db = await getTestDatabase();
     await insertQuests([{ id: "cache-npc-quest", questType: "overworld", hidden: false, maxAttempts: 10, maxCompletes: 10, content: {
       objectives: [AllObjectives.parse({ id: "train", task: "stats_trained", value: 50 })],
@@ -81,14 +87,62 @@ describeWithDatabase("overworld interaction profile updates", () => {
     await db.insert(overworldAiPlacementQuest).values({ placementId: "cache-giver", questId: "cache-npc-quest", chance: 100 });
     const { caller } = await prepared();
     vi.spyOn(Math, "random").mockReturnValue(0.5);
-    vi.spyOn(overworldQueries, "findOverworldInteractionUserCache").mockRejectedValueOnce(new Error("NPC confirmation unavailable"));
-    const result = await caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 });
+    const { result, statements } = await recordQueries(() => caller.interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 }));
+    const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
+    expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
     expect(result.success).toBe(true);
-    expect(result.userPatch).toBeUndefined();
-    expect(result.userDelta).toBeUndefined();
+    expect(result.userPatch).toHaveProperty("activeNpcQuestId", "cache-npc-quest");
+    expect(result.userDelta).toEqual({ dailyOverworldQuestRolls: 1 });
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") })).toMatchObject({ dailyOverworldQuestRolls: 1, activeNpcQuestId: "cache-npc-quest" });
     expect(await db.query.questHistory.findMany()).toHaveLength(1);
   });
+  it.each([false, true])("applies the SQL roll through Sector's actual callback across a UTC cron reset=%s", async (resetDay) => {
+    const db = await getTestDatabase();
+    setSystemTime(new Date("2026-10-30T23:59:59Z"));
+    await db.update(userData).set({ level: 50, isOutlaw: true, regeneration: 0, dailyOverworldQuestRolls: 1, updatedAt: new Date(), regenAt: new Date() }).where(eq(userData.userId, "npc-cache-actor"));
+    await insertQuests([{ id: "cache-npc-quest", questType: "overworld", hidden: false, maxAttempts: 10, maxCompletes: 10, content: {
+      objectives: [AllObjectives.parse({ id: "train", task: "stats_trained", value: 50 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    await db.insert(overworldAiPlacementQuest).values({ placementId: "cache-giver", questId: "cache-npc-quest", chance: 0 });
+    const profile = callerForDatabase(profileRouter, "npc-cache-actor", db);
+    const initial = await profile.getUser();
+    expect(initial.userData?.dailyOverworldQuestRolls).toBe(1);
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["npc-roll-profile"];
+    const getUser = vi.fn(() => profile.getUser());
+    cache.setQueryDefaults(key, { queryFn: getUser });
+    cache.setQueryData(key, initial);
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const stop = observer.subscribe(() => {});
+    if (resetDay) {
+      setSystemTime(new Date("2026-10-31T00:00:01Z"));
+      await updateUserDataForGET(db);
+      // Another settled request can advance updatedAt before this tab learns the reset.
+      await db.update(userData).set({ updatedAt: new Date(), regenAt: new Date() }).where(eq(userData.userId, "npc-cache-actor"));
+    }
+    const source = readFileSync(join(import.meta.dirname, "../../../../src/layout/Sector.tsx"), "utf8");
+    const call = source.indexOf("api.overworldAi.interactWithOverworldAi.useMutation(");
+    const callbacks = source.slice(call).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+    if (!callbacks) throw new Error("NPC callbacks were not found");
+    const transpiler = new (require("bun").Transpiler)({ loader: "tsx" });
+    const factory = transpiler.transformSync(`function callbacks() { return (${callbacks}); }`);
+    const updateUser = (patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(cache, key, patch, options);
+    const options = new Function("prepareUserUpdate", "updateUser", "showMutationToast", "setNpcDialog", "utils", "openRewardChoice", `${factory}\nreturn callbacks();`)(
+      () => prepareUserUpdate(cache, key), updateUser, vi.fn(), vi.fn(), { travel: { getSectorData: { invalidate: vi.fn() } } }, vi.fn(),
+    ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
+    try {
+      const revision = options.onMutate();
+      const result = await callerForDatabase(overworldAiRouter, "npc-cache-actor", db).interactWithOverworldAi({ placementId: "cache-giver", positionVersion: 0 });
+      expect(result).toMatchObject({ success: true, userDelta: { dailyOverworldQuestRolls: 1 }, dailyOverworldQuestRollsBefore: resetDay ? 0 : 1 });
+      await options.onSuccess(result, undefined, revision);
+      const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "npc-cache-actor") });
+      expect(saved?.dailyOverworldQuestRolls).toBe(resetDay ? 1 : 2);
+      expect(cache.getQueryData<typeof initial>(key)?.userData?.dailyOverworldQuestRolls).toBe(saved?.dailyOverworldQuestRolls);
+      expect(getUser).toHaveBeenCalledTimes(resetDay ? 1 : 0);
+    } finally { stop(); cache.clear(); }
+  });
+
   it("publishes a dialog objective's confirmed payout and updated trackers", async () => {
     const db = await getTestDatabase();
     await insertQuests([{ id: "cache-dialog-quest", questType: "overworld", hidden: false, maxAttempts: 10, maxCompletes: 10, content: {

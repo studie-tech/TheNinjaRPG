@@ -57,7 +57,11 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success) await updateUser(data.userPatch, { revision });
+        if (data.success)
+          await updateUser(data.userPatch, {
+            revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
       },
       onSettled: (_data, error) => {
         setIsOpen(false);

@@ -55,7 +55,10 @@ import {
   lockPurchaseBuyer,
   reputationAllowanceUsed,
 } from "@/server/utils/purchases/allowance";
-import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
+import {
+  fetchPurchaseUserCacheInputs,
+  getKnownPurchaseUserUpdate,
+} from "@/server/utils/purchases/cache";
 import {
   canonicalStoreUserId,
   isDeletedStoreUserId,
@@ -272,7 +275,10 @@ export const paypalRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       if (isNativeUserAgent(ctx.userAgent))
         return errorResponse("Use the in-app store to make purchases");
-      const token = await getPaypalAccessToken();
+      const [token, purchaseInputs] = await Promise.all([
+        getPaypalAccessToken(),
+        fetchPurchaseUserCacheInputs(ctx.drizzle, ctx.userId).catch(() => undefined),
+      ]);
       let order = await getPaypalOrder({ orderId: input.orderId, token });
       const snapshotId = readStoreCustomId(order?.purchase_units?.[0]?.custom_id);
       if (!snapshotId) return errorResponse("Checkout not found");
@@ -351,9 +357,23 @@ export const paypalRouter = createTRPCRouter({
         invoiceId: capture.invoice_id ?? order?.purchase_units?.[0]?.invoice_id,
         raw: order,
       });
+      const { delivery, ...response } = result;
       return {
-        ...result,
-        ...(result.success ? await getPurchaseUserUpdate(ctx.drizzle, ctx.userId) : {}),
+        ...response,
+        ...(delivery &&
+        (delivery.recipientId !== ctx.userId || !delivery.contents.items.length)
+          ? getKnownPurchaseUserUpdate(
+              purchaseInputs,
+              {},
+              delivery.recipientId === ctx.userId
+                ? {
+                    money: delivery.contents.money,
+                    reputationPoints: delivery.contents.reputationPoints,
+                    reputationPointsTotal: delivery.contents.reputationPoints,
+                  }
+                : {},
+            )
+          : {}),
       };
     }),
 
@@ -425,7 +445,6 @@ export const paypalRouter = createTRPCRouter({
       );
       const result = await syncTransactions(ctx.drizzle, transactions, token);
       return {
-        ...(result.length ? await getPurchaseUserUpdate(ctx.drizzle, ctx.userId) : {}),
         success: result.length > 0 && result.every((entry) => entry.success),
         message: result.length
           ? result.map((entry) => entry.message).join(", ")
@@ -450,10 +469,7 @@ export const paypalRouter = createTRPCRouter({
         orderId: input.orderId,
         callerId: ctx.userId,
       });
-      return {
-        ...result,
-        ...(result.success ? await getPurchaseUserUpdate(ctx.drizzle, ctx.userId) : {}),
-      };
+      return result;
     }),
   // Includes reservations from both web payment providers.
   getRecentRepsCount: protectedProcedure
@@ -557,10 +573,12 @@ export const paypalRouter = createTRPCRouter({
       if (input.userId !== ctx.userId) {
         return errorResponse("You can only upgrade your own subscription");
       }
-      const [upgrader, target] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
-      ]);
+      const purchaseInputs = await fetchPurchaseUserCacheInputs(
+        ctx.drizzle,
+        ctx.userId,
+      );
+      const target = purchaseInputs[0];
+      if (!target) return errorResponse("Complete registration before upgrading.");
       const subscription = await findPaypalSubscriptionForUpgradeSubscription(
         ctx.drizzle,
         target,
@@ -573,6 +591,7 @@ export const paypalRouter = createTRPCRouter({
           ctx.userId,
           target.federalStatus,
           input.plan,
+          purchaseInputs,
         );
       // Get cost, and ensure that we are actually upgrading
       const cost = calcFedUgradeCost(subscription.federalStatus, input.plan);
@@ -580,7 +599,7 @@ export const paypalRouter = createTRPCRouter({
         return errorResponse(`Invalid: ${subscription.federalStatus} to ${input.plan}`);
       }
       // Check that we have enough reputation points
-      if (upgrader.reputationPoints < cost) {
+      if (target.reputationPoints < cost) {
         return errorResponse(`Not enough reputation points`);
       }
       // The balance, displayed tier, and paid ledger must advance together. A single
@@ -603,7 +622,14 @@ export const paypalRouter = createTRPCRouter({
       return {
         success: true,
         message: "OK",
-        ...(await getPurchaseUserUpdate(ctx.drizzle, ctx.userId)),
+        ...getKnownPurchaseUserUpdate(
+          purchaseInputs,
+          { federalStatus: input.plan },
+          {
+            reputationPoints: -cost,
+            reputationPointsTotal: -cost,
+          },
+        ),
       };
     }),
   // Cancel paypal subscription

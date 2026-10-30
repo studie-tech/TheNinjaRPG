@@ -27,10 +27,8 @@ import {
 } from "@/queries/emailReminder";
 import { findGameSettingByName } from "@/queries/gamesettings";
 import {
-  acknowledgeAnnouncements,
   countCaptchaForRefreshCaptcha,
   fetchGameAssets,
-  findAnnouncementReceipt,
   findCaptchaForGenerateCaptcha,
   findCaptchaForSolvedCaptchaRecently,
   findConversationForGetGlobalTavernEnabled,
@@ -51,11 +49,7 @@ import {
   updateUserDataForAwardReputation,
   updateUserDataForSubmitNotification,
 } from "@/queries/misc";
-import {
-  fetchAllGameSettings,
-  fetchUser,
-  listNotificationForGetUser,
-} from "@/queries/profile";
+import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -160,32 +154,7 @@ export const miscRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return { success: false, message: "Could insert notificaiton in db" };
       } else {
-        const receipt = await findAnnouncementReceipt(ctx.drizzle, ctx.userId).catch(
-          () => undefined,
-        );
-        const count = receipt?.unreadNotifications ?? 0;
-        const unread =
-          count > 0
-            ? await listNotificationForGetUser(ctx.drizzle, {
-                unreadNotifications: count,
-              }).catch(() => undefined)
-            : undefined;
-        // Optional delivery failures leave canonical hydration to acknowledge the published announcement.
-        const acknowledged = unread
-          ? await acknowledgeAnnouncements(ctx.drizzle, ctx.userId, count).catch(
-              () => undefined,
-            )
-          : undefined;
-        return {
-          success: true,
-          message: "Notification sent",
-          ...(acknowledged?.rowsAffected && unread
-            ? {
-                userPatch: { unreadNotifications: 0 },
-                announcements: unread.map((entry) => entry.content),
-              }
-            : {}),
-        };
+        return { success: true, message: "Notification sent" };
       }
     }),
   getPreviousNotifications: protectedProcedure

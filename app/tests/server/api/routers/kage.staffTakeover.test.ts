@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { KAGE_DEFAULT_PRESTIGE } from "@/drizzle/constants";
 import { actionLog, userData, village } from "@/drizzle/schema";
-import * as socialQueries from "@/queries/socialUserCache";
 import { kageRouter } from "@/server/api/routers/kage";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { insertUsers } from "../../../setup/factories";
@@ -62,10 +61,9 @@ describeWithDatabase("staff kage takeover", () => {
     expect(logs).toHaveLength(1);
   });
 
-  it("preserves the completed takeover when optional governance confirmation fails", async () => {
+  it("uses canonical recovery for the SQL-conditional takeover rank", async () => {
     const db = await getTestDatabase();
     await fetchUpdatedUser({ client: db, userId: "staff" });
-    vi.spyOn(socialQueries, "findGovernanceUserCache").mockRejectedValueOnce(new Error("Governance confirmation unavailable"));
     const result = await (await callerFor(kageRouter, "staff")).takeKage({ reason: "Testing village wars" });
     expect(result.success).toBe(true);
     expect(result.userPatch).toBeUndefined();

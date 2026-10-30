@@ -9,7 +9,6 @@ import { getTerritoryCompetitor, getTerritoryWarBoostUntil } from "@/libs/territ
 import { deleteBattleQueueMemberById } from "@/queries/clan";
 import { wakeQueuedUser } from "@/queries/profile";
 import { claimBattleQueue, listQueueMembers } from "@/queries/raids";
-import { findQueueUserCache } from "@/queries/socialUserCache";
 import {
   deleteMpvpBattleQueueForCreateTeam,
   executeClaimedForJoinTeam,
@@ -27,7 +26,6 @@ import {
 import { initiateBattle } from "@/server/api/routers/combat";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
-import { getBattleUserPatch } from "@/server/utils/socialUserCache";
 import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -118,13 +116,11 @@ export const territoryWarRouter = createTRPCRouter({
       );
       if (!removed.rowsAffected)
         return errorResponse("This team has already started or you have left it");
-      await wakeQueuedUser(ctx.drizzle, ctx.userId);
+      const woke = await wakeQueuedUser(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: "Left the team",
-        userPatch: await findQueueUserCache(ctx.drizzle, ctx.userId).catch(
-          () => undefined,
-        ),
+        userPatch: woke.rowsAffected ? { status: "AWAKE" } : undefined,
       };
     }),
 
@@ -161,6 +157,7 @@ export const territoryWarRouter = createTRPCRouter({
         const result = await initiateBattle(
           {
             client: ctx.drizzle,
+            cacheUserId: ctx.userId,
             userIds: roster.map((member) => member.userId),
             targetIds: [event.guardianId],
             sector: event.sector,
@@ -184,11 +181,8 @@ export const territoryWarRouter = createTRPCRouter({
         );
         return {
           ...result,
-          userPatch: await getBattleUserPatch(
-            ctx.drizzle,
-            ctx.userId,
-            result.requiresUserRefresh,
-          ),
+          userPatch: result.userPatch,
+          userDelta: result.userDelta,
         };
       } finally {
         // Failed launches restore the lobby; a real battle keeps its membership until settlement.

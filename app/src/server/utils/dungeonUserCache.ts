@@ -1,36 +1,32 @@
 import type { UserData } from "@/drizzle/schema";
-import { effectiveMasteries } from "@/libs/mastery";
-import { calcMaxEnergy } from "@/libs/profile";
-import { findDungeonRewardUserCache } from "@/queries/dungeon";
-import { fetchMasterySources } from "@/queries/skillTree";
 import { getRewardUserDelta } from "@/server/api/routers/quests";
-import type { DrizzleClient } from "@/server/db";
+import type { ActivityCompletions } from "@/server/utils/achievementObjectives";
 import type { PostProcessedRewards } from "@/validators/rewards";
 
-/** Confirm scalar receipt balances, leaving derived progression to the profile query. */
-export const getDungeonRewardUserUpdate = async (
-  client: DrizzleClient,
-  before: UserData,
+/** New scalar delivery returns its known delta; receipt replay never grants it twice. */
+export const getDungeonRewardUserUpdate = (
+  before: UserData & ActivityCompletions,
   rewards: PostProcessedRewards | undefined,
+  replay = false,
 ) => {
-  if (!rewards || getRewardUserDelta(rewards) === undefined)
-    return { userPatch: undefined };
-  // Completion is counted when the final battle settles. Its confirmed total lets
-  // clients detect a missed battle-ended profile refresh and reconcile trackers.
-  const confirmation = await Promise.all([
-    findDungeonRewardUserCache(client, before.userId),
-    fetchMasterySources(client, before.userId),
-    // Receipt delivery has committed; missing cache data reconciles through the profile.
-  ]).catch(() => undefined);
-  if (!confirmation?.[0]) return { userPatch: undefined };
-  const [saved, sources] = confirmation;
-  const sourceUser = { ...saved, ...sources };
-  const { bloodlineId: _bloodlineId, isAi: _isAi, ...patch } = saved;
+  const delta = rewards && getRewardUserDelta(rewards);
+  if (!delta || (!replay && (rewards?.reward_exp ?? 0) > 0))
+    return { userPatch: undefined, userDelta: undefined };
   return {
     userPatch: {
-      ...patch,
-      effectiveMasteries: effectiveMasteries(sourceUser),
-      maxEnergy: calcMaxEnergy(sourceUser),
+      dungeonsCompleted: before.dungeonsCompleted,
+      ...(replay
+        ? {
+            money: before.money,
+            seichiSilver: before.seichiSilver,
+            earnedExperience: before.earnedExperience,
+            petExperience: before.petExperience,
+            reputationPoints: before.reputationPoints,
+            reputationPointsTotal: before.reputationPointsTotal,
+            villagePrestige: before.villagePrestige,
+          }
+        : {}),
     },
+    userDelta: replay ? {} : delta,
   };
 };

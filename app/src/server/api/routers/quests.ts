@@ -143,9 +143,7 @@ import {
   fetchRewardChoiceOwnership,
   fetchUserQuestByQuestId,
   fetchViewerRole,
-  findIsolatedAbandonState,
   findOverworldAiPlacementQuestForAssignQuestToUser,
-  findPetTaskRewardCacheState,
   findQuestHistoryForCheckRewards,
   findQuestHistoryForClaimRewardChoice,
   findQuestHistoryForCollectPetTask,
@@ -274,7 +272,6 @@ import {
   userRegenerationGainSql,
 } from "@/server/utils/regeneration";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
-import { getBattleUserPatch } from "@/server/utils/socialUserCache";
 import { grantTitles } from "@/server/utils/titleGrants";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { recordVillageMissionProgress } from "@/server/utils/villageMission";
@@ -327,7 +324,11 @@ import {
   getQuestCounterFieldName,
   type QuestCounterFieldName,
 } from "@/validators/user";
-import { type UserDelta, userDeltaResponseSchema } from "@/validators/userCache";
+import {
+  type UserDelta,
+  type UserDeltaResponse,
+  userDeltaResponseSchema,
+} from "@/validators/userCache";
 
 export const questsRouter = createTRPCRouter({
   /** Public scenery exposes neutral presentation, never quest steps or player progress. */
@@ -776,14 +777,11 @@ export const questsRouter = createTRPCRouter({
           updateUserDataForAbandon(ctx.drizzle, questData, input, ctx, now),
         ]);
       }
-      const released = current.isolated
-        ? await findIsolatedAbandonState(ctx.drizzle, ctx.userId).catch(() => undefined)
-        : undefined;
       const canProject =
         snapshot.requiresProgressionRefresh === false &&
         !current.quest.teamEnabled &&
         !["tier", "daily", "achievement"].includes(current.questType) &&
-        (!current.isolated || released !== undefined);
+        !current.isolated;
       Object.assign(user, {
         questData: trackers,
         questFinishAt: now,
@@ -791,7 +789,6 @@ export const questsRouter = createTRPCRouter({
           ? { updatedAt: getNextUserSnapshotAt(user.updatedAt, now) }
           : {}),
         ...(user.activeNpcQuestId === input.id ? { activeNpcQuestId: null } : {}),
-        ...released,
         userQuests: user.userQuests.filter((entry) => entry.id !== current.id),
       });
       return {
@@ -1369,38 +1366,20 @@ export const questsRouter = createTRPCRouter({
         return errorResponse(
           "Task state changed. Refresh and collect its results again.",
         );
-      // Profession counters and pet XP are SQL grants; confirm them instead of guessing
-      // rounded amounts or the eligible companion bank from the pre-claim snapshot.
-      const scalarRewards = getRewardUserDelta(
-        {
-          ...claim.rewards,
-          reward_hunting_experience: 0,
-          reward_gathering_experience: 0,
-          reward_medical_experience: 0,
-          reward_crafting_experience: 0,
-          reward_sage_mastery_experience: 0,
-          reward_pet_experience: 0,
-          reward_hunter_items: false,
-          reward_gathering_items: false,
-        },
-        0,
-        true,
-      );
-      const saved =
+      // The claim owns its task/history changes; unsupported rounded and companion
+      // grants retain canonical recovery through the existing reward delta contract.
+      const scalarRewards = getRewardUserDelta(claim.rewards, 0, true);
+      const canProjectRewards =
         snapshot.requiresProgressionRefresh === false &&
         claim.userCacheEligible &&
-        scalarRewards
-          ? await findPetTaskRewardCacheState(ctx.drizzle, ctx.userId).catch(
-              () => undefined,
-            )
-          : undefined;
-      if (saved) Object.assign(user, saved);
+        scalarRewards !== undefined &&
+        claim.rewards.reward_exp === 0;
       const refreshed = getNewTrackers(user, [{ task: "any" }]);
       user.questData = refreshed.trackers;
       const projectedIds = new Set(user.userQuests.map((entry) => entry.questId));
       const projection =
-        saved &&
-        saved.petTask === null &&
+        canProjectRewards &&
+        user.petTask === null &&
         refreshed.consequences.length === 0 &&
         !snapshot.progressionQuestCandidates.some(
           (entry) =>
@@ -1411,12 +1390,12 @@ export const questsRouter = createTRPCRouter({
         getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0
           ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
           : undefined;
-      const { questData: _privateTrackers, ...savedFields } = saved ?? {};
       return {
         ...(projection
           ? {
               ...projection,
-              userPatch: { ...savedFields, ...projection.userPatch, petTask: null },
+              userPatch: { ...projection.userPatch, petTask: null },
+              userDelta: claim.userDelta,
             }
           : {}),
         success: true,
@@ -1990,12 +1969,12 @@ export const questsRouter = createTRPCRouter({
         notifications: finalNotification,
         claimed,
         battleAttempted,
-        battleUserPatch,
+        battleUserUpdate,
       } = await handleQuestConsequences(ctx.drizzle, user, consequences, notifications);
       // Return information
       const canProject =
         claimed &&
-        (!battleAttempted || battleUserPatch) &&
+        (!battleAttempted || battleUserUpdate) &&
         snapshot.requiresProgressionRefresh === false &&
         !user.questParty &&
         !user.queue?.length &&
@@ -2005,10 +1984,7 @@ export const questsRouter = createTRPCRouter({
           (entry) => entry.type === "combat" || entry.type === "update_user",
         ) &&
         getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0;
-      const committedBattlePatch =
-        canProject && battleUserPatch
-          ? await getBattleUserPatch(ctx.drizzle, user.userId)
-          : undefined;
+      const committedBattlePatch = canProject ? battleUserUpdate?.userPatch : undefined;
       const projection =
         canProject && (!battleAttempted || committedBattlePatch)
           ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
@@ -2020,6 +1996,7 @@ export const questsRouter = createTRPCRouter({
           ? {
               ...projection,
               userPatch: { ...projection.userPatch, ...committedBattlePatch },
+              userDelta: battleUserUpdate?.userDelta,
             }
           : {}),
       };
@@ -4123,7 +4100,7 @@ const executeClaimedQuestConsequences = async ({
   opponent: QuestConsequence | undefined;
 }) => {
   user.updatedAt = claimedAt;
-  let battleUserPatch: Pick<UserData, "status" | "battleId"> | undefined;
+  let battleUserUpdate: Pick<UserDeltaResponse, "userPatch" | "userDelta"> | undefined;
   const collectedItems = collected.flatMap(({ ids }) => ids);
   // Combat preloads trackers without the live party relation; both carry receipt ownership.
   const partyQuestId =
@@ -4248,6 +4225,7 @@ const executeClaimedQuestConsequences = async ({
                 latitude: user.latitude,
                 sector: user.sector,
                 userIds: [user.userId],
+                cacheUserId: user.userId,
                 targetIds: opponent.ids,
                 allyAiIds: opponent.allyAiIds,
                 client: client,
@@ -4278,13 +4256,16 @@ const executeClaimedQuestConsequences = async ({
               opponent.scaleGains ?? 1,
             );
             if (!result.success) notifications.push(result.message);
-            else if (result.battleId && !result.requiresUserRefresh)
-              battleUserPatch = { status: "BATTLE", battleId: result.battleId };
+            else if (result.userPatch && !result.requiresUserRefresh)
+              battleUserUpdate = {
+                userPatch: result.userPatch,
+                userDelta: result.userDelta,
+              };
           })()
         : Promise.resolve(),
     ],
   ]);
-  return battleUserPatch;
+  return battleUserUpdate;
 };
 
 /**
@@ -4315,7 +4296,7 @@ export const handleQuestConsequences = async (
   notifications: string[];
   claimed: boolean;
   battleAttempted: boolean;
-  battleUserPatch?: Pick<UserData, "status" | "battleId">;
+  battleUserUpdate?: Pick<UserDeltaResponse, "userPatch" | "userDelta">;
 }> => {
   // Quests reset
   const resetQuests = consequences.filter(
@@ -4444,7 +4425,7 @@ export const handleQuestConsequences = async (
         });
         notifications.push("Quest team progress will update on your next request.");
       }
-      const battleUserPatch = await executeClaimedQuestConsequences({
+      const battleUserUpdate = await executeClaimedQuestConsequences({
         client,
         user,
         claimedAt: claimResult.claimedAt,
@@ -4460,7 +4441,7 @@ export const handleQuestConsequences = async (
         notifications,
         claimed: true,
         battleAttempted: !!opponent,
-        ...(battleUserPatch ? { battleUserPatch } : {}),
+        ...(battleUserUpdate ? { battleUserUpdate } : {}),
       };
     }
   }

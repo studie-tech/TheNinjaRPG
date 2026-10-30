@@ -338,21 +338,3 @@ export const incrementNotificationCounters = (
     .update(userData)
     .set({ unreadNotifications: sql`unreadNotifications + 1` })
     .where(inArray(userData.userId, userIds));
-
-/** Read only the announcement receipt count for the acting account. */
-export const findAnnouncementReceipt = (client: DrizzleClient, userId: string) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: { unreadNotifications: true },
-  });
-
-/** A concurrent announcement keeps its unread receipt instead of being cleared by this response. */
-export const acknowledgeAnnouncements = (
-  client: DrizzleClient,
-  userId: string,
-  count: number,
-) =>
-  client
-    .update(userData)
-    .set({ unreadNotifications: 0 })
-    .where(and(eq(userData.userId, userId), eq(userData.unreadNotifications, count)));

@@ -132,8 +132,6 @@ const setup = (action: Action, options: {
     if (options.lostResponse) throw new Error("Response lost after commit");
     return {
       success: true, message: "Updated tournament",
-      userPatch: options.missingPatch ? undefined : { status: "AWAKE", battleId: null },
-      isEventParticipant: action === "JOIN", eventNotices: [],
     };
   });
   const reads = [vi.fn(() => authoritative), vi.fn(() => authoritative)];
@@ -173,7 +171,7 @@ const setup = (action: Action, options: {
 };
 
 for (const action of ["JOIN", "WITHDRAW", "DECLINE"] as const) {
-  it.each([false, true])(`${action} patches the actor and refreshes another tab (event after response: %s)`, async (eventAfterResponse) => {
+  it.each([false, true])(`${action} recovers the actor and refreshes another tab (event after response: %s)`, async (eventAfterResponse) => {
     const test = setup(action, { eventAfterResponse });
     await test.click();
     await test.findByText("Updated tournament");
@@ -181,7 +179,7 @@ for (const action of ["JOIN", "WITHDRAW", "DECLINE"] as const) {
     if (eventAfterResponse) await act(() => test.sendPacket());
     await waitFor(() => expect(test.reads[1]).toHaveBeenCalledTimes(1));
     expect(test.mutate).toHaveBeenCalledWith(expect.objectContaining({ originSocketId: "1.1" }));
-    expect(test.reads[0]).not.toHaveBeenCalled();
+    expect(test.reads[0]).toHaveBeenCalledTimes(1);
     for (const index of [0, 1]) {
       expect(test.profile(index).isEventParticipant).toBe(action === "JOIN");
       expect(test.profile(index).notifications).toEqual([{ href: "/inbox", name: "Inbox", color: "blue" }]);
@@ -226,8 +224,8 @@ it("reads the connected socket at submission and refreshes events from an earlie
   await test.click();
   await test.findByText("Updated tournament");
   expect(test.mutate).toHaveBeenCalledWith(expect.objectContaining({ originSocketId: "3.1" }));
-  expect(test.reads[0]).not.toHaveBeenCalled();
+  expect(test.reads[0]).toHaveBeenCalledTimes(1);
   test.connections[0]!.socket_id = "4.1";
   await act(() => test.emit({ type: "eventTournament", originSocketId: "3.1" }));
-  expect(test.reads[0]).toHaveBeenCalledTimes(1);
+  expect(test.reads[0]).toHaveBeenCalledTimes(2);
 });

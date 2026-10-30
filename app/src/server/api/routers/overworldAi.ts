@@ -34,7 +34,6 @@ import {
   fetchQuestNamesBindingPlacement,
   fetchQuestsBindingPlacement,
   findOverworldAiPlacementForUpsertPlacement,
-  findOverworldInteractionUserCache,
   findUserDataForUpsertPlacement,
   insertOverworldAiPlacementForUpsertPlacement,
   insertOverworldAiPlacementQuestForUpsertPlacement,
@@ -69,7 +68,6 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { claimActiveNpcQuest } from "@/server/utils/concurrency";
 import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
-import { getBattleUserPatch } from "@/server/utils/socialUserCache";
 import { canChangeContent } from "@/utils/permissions";
 import type { ZodAllTags } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
@@ -335,6 +333,7 @@ export const overworldAiRouter = createTRPCRouter({
       userDeltaResponseSchema.extend({
         battleId: z.string().optional(),
         grantedQuestId: z.string().optional(),
+        dailyOverworldQuestRollsBefore: z.number().optional(),
         /** The interaction completed a quest whose reward the player now picks. */
         rewardChoicePending: z.boolean().optional(),
         dialog: z
@@ -415,14 +414,6 @@ export const overworldAiRouter = createTRPCRouter({
       const userForTrackers = { ...activeUser, items: useritems, useritems };
       const ownedItemIds = useritems.map((i) => i.itemId);
       const noUserChange = requiresUserRefresh ? undefined : {};
-      // Daily-roll and slot writes are independent of quest assignment; confirm them after either outcome.
-      const interactionPatch = (hasProgressionSnapshot = false) =>
-        requiresUserRefresh && !hasProgressionSnapshot
-          ? undefined
-          : findOverworldInteractionUserCache(ctx.drizzle, ctx.userId).catch(
-              () => undefined,
-            );
-
       // 1) Bound-objective sub-path (defeat_opponents | dialog | deliver_item).
       const boundCandidates = getBoundObjectiveCandidates(activeUser);
       const matchedBound = findActionableBoundObjective({
@@ -452,14 +443,18 @@ export const overworldAiRouter = createTRPCRouter({
             });
             return {
               ...battle,
-              userPatch: await getBattleUserPatch(
-                ctx.drizzle,
-                ctx.userId,
-                !battle.success ||
-                  requiresUserRefresh ||
-                  requiresProgressionRefresh ||
-                  ("requiresUserRefresh" in battle && battle.requiresUserRefresh),
-              ),
+              userPatch:
+                !requiresUserRefresh &&
+                !requiresProgressionRefresh &&
+                "userPatch" in battle
+                  ? battle.userPatch
+                  : undefined,
+              userDelta:
+                !requiresUserRefresh &&
+                !requiresProgressionRefresh &&
+                "userDelta" in battle
+                  ? battle.userDelta
+                  : undefined,
             };
           }
           if (
@@ -514,13 +509,14 @@ export const overworldAiRouter = createTRPCRouter({
                 success: true,
                 message: "Battle started",
                 battleId: battle.battleId,
-                userPatch: await getBattleUserPatch(
-                  ctx.drizzle,
-                  ctx.userId,
-                  requiresUserRefresh ||
-                    requiresProgressionRefresh ||
-                    battle.requiresUserRefresh,
-                ),
+                userPatch:
+                  !requiresUserRefresh && !requiresProgressionRefresh
+                    ? battle.userPatch
+                    : undefined,
+                userDelta:
+                  !requiresUserRefresh && !requiresProgressionRefresh
+                    ? battle.userDelta
+                    : undefined,
               }
             : errorResponse(battle.message);
         }
@@ -671,13 +667,14 @@ export const overworldAiRouter = createTRPCRouter({
               success: true,
               message: "Battle started",
               battleId: battle.battleId,
-              userPatch: await getBattleUserPatch(
-                ctx.drizzle,
-                ctx.userId,
-                requiresUserRefresh ||
-                  requiresProgressionRefresh ||
-                  battle.requiresUserRefresh,
-              ),
+              userPatch:
+                !requiresUserRefresh && !requiresProgressionRefresh
+                  ? battle.userPatch
+                  : undefined,
+              userDelta:
+                !requiresUserRefresh && !requiresProgressionRefresh
+                  ? battle.userDelta
+                  : undefined,
             }
           : errorResponse(battle.message);
       }
@@ -797,7 +794,7 @@ export const overworldAiRouter = createTRPCRouter({
             questId: activeNpcQuestId,
           })
         : Promise.resolve();
-      const [, claim] = await Promise.all([
+      const [clearedStale, claim] = await Promise.all([
         clearStale,
         updateUserDataForInteractWithOverworldAi(ctx.drizzle, ctx),
       ]);
@@ -836,7 +833,19 @@ export const overworldAiRouter = createTRPCRouter({
         return {
           success: true,
           message: "The NPC had nothing for you this time.",
-          userPatch: await interactionPatch(),
+          userPatch:
+            !requiresUserRefresh &&
+            (!activeNpcQuestId || clearedStale?.rowsAffected === 1)
+              ? activeNpcQuestId
+                ? { activeNpcQuestId: null }
+                : {}
+              : undefined,
+          userDelta:
+            !requiresUserRefresh &&
+            (!activeNpcQuestId || clearedStale?.rowsAffected === 1)
+              ? { dailyOverworldQuestRolls: 1 }
+              : undefined,
+          dailyOverworldQuestRollsBefore: activeUser.dailyOverworldQuestRolls,
         };
       }
       // Claim the single active-NPC-mission slot atomically before granting. If the slot is
@@ -853,7 +862,7 @@ export const overworldAiRouter = createTRPCRouter({
         return {
           success: true,
           message: ACTIVE_NPC_MISSION_BLOCKED_MESSAGE,
-          userPatch: await interactionPatch(),
+          userPatch: undefined,
         };
       }
       // Release the slot we just claimed on ANY assign failure — a `!success` return or an
@@ -882,10 +891,18 @@ export const overworldAiRouter = createTRPCRouter({
       }
       if (!result.success) {
         // Assign failed (e.g. cap/availability raced).
-        await releaseClaimedSlot();
+        const released = await releaseClaimedSlot();
         return {
           ...errorResponse(result.message),
-          userPatch: await interactionPatch(),
+          userPatch:
+            !requiresUserRefresh && released.rowsAffected === 1
+              ? { activeNpcQuestId: null }
+              : undefined,
+          userDelta:
+            !requiresUserRefresh && released.rowsAffected === 1
+              ? { dailyOverworldQuestRolls: 1 }
+              : undefined,
+          dailyOverworldQuestRollsBefore: activeUser.dailyOverworldQuestRolls,
         };
       }
       const cacheUpdate =
@@ -894,20 +911,19 @@ export const overworldAiRouter = createTRPCRouter({
         chosen.quest.questType !== "war"
           ? getUserProgressionUpdate(activeUser, publishedAchievementIds)
           : undefined;
-      const confirmedInteraction = cacheUpdate
-        ? await interactionPatch(true)
-        : undefined;
       return {
         success: true,
         message: result.message,
         grantedQuestId: chosen.quest.id,
-        ...(cacheUpdate && confirmedInteraction
+        ...(cacheUpdate
           ? {
               ...cacheUpdate,
               userPatch: {
                 ...cacheUpdate.userPatch,
-                ...confirmedInteraction,
+                activeNpcQuestId: chosen.quest.id,
               },
+              userDelta: { dailyOverworldQuestRolls: 1 },
+              dailyOverworldQuestRollsBefore: activeUser.dailyOverworldQuestRolls,
             }
           : {}),
       };
@@ -940,6 +956,7 @@ const startOverworldBattle = (opts: {
       latitude: opts.placement.latitude,
       sector: opts.placement.sector,
       userIds: [opts.userId],
+      cacheUserId: opts.userId,
       targetIds: [opts.placement.aiTemplateUserId],
       allyAiIds: opts.allyAiIds,
       givePools: opts.givePools,

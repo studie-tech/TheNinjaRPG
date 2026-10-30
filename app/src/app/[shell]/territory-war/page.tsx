@@ -61,7 +61,7 @@ export default function TerritoryWarPage() {
     onMutate: prepareUserUpdate,
     onSuccess: async (result, variables, revision) => {
       if (result.success && result.battleId) {
-        await updateUser(result.userPatch, { revision });
+        await updateUser(result.userPatch, { revision, delta: result.userDelta });
         pushToCombat(router, result.battleId);
       } else await onSuccess(result, variables, revision);
     },

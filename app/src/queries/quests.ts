@@ -91,16 +91,6 @@ import type {
 import type { PetTask } from "@/validators/petTasks";
 import type { RewardChoiceCard } from "@/validators/rewards";
 
-/** Load definitions needed to apply public masking to committed tracker goals. */
-export const listQuestTrackerDefinitions = (
-  client: Pick<DrizzleClient, "query">,
-  questIds: string[],
-) =>
-  client.query.quest.findMany({
-    where: inArray(quest.id, questIds),
-    columns: { id: true, content: true },
-  });
-
 /** Build the `quest` listing for `GET`, using predicates on `questType`, `content`, `hidden`. */
 export const listQuestForGET = (client: Pick<DrizzleClient, "query">) =>
   client.query.quest.findMany({
@@ -2334,75 +2324,3 @@ const petTaskOwnerReturnCondition = (userId: string, task: PetTask) =>
       isNotNull(userPet.avatar),
       ne(userPet.avatar, ""),
     )})`;
-
-/** Confirm reward counters whose SQL grants include live caps and pet eligibility. */
-export const findRewardUserSnapshot = (
-  client: Pick<DrizzleClient, "query">,
-  userId: string,
-) =>
-  client.query.userData.findFirst({
-    columns: {
-      money: true,
-      seichiSilver: true,
-      earnedExperience: true,
-      petExperience: true,
-      villagePrestige: true,
-      reputationPoints: true,
-      reputationPointsTotal: true,
-      skillPoints: true,
-      medicalExperience: true,
-      huntingExperience: true,
-      craftingExperience: true,
-      gatheringExperience: true,
-      sageMasteryExperience: true,
-      ninjutsuMastery: true,
-      genjutsuMastery: true,
-      taijutsuMastery: true,
-      bukijutsuMastery: true,
-      bloodlineMastery: true,
-      sageMastery: true,
-      masteryRanks: true,
-    },
-    with: { village: { columns: { id: true, tokens: true } } },
-    where: eq(userData.userId, userId),
-  });
-
-/** Confirm only the pools and state released by an isolated quest abandonment. */
-export const findIsolatedAbandonState = (client: DrizzleClient, userId: string) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: {
-      updatedAt: true,
-      questFinishAt: true,
-      curEnergy: true,
-      regenAt: true,
-      status: true,
-      battleId: true,
-      activeNpcQuestId: true,
-    },
-  });
-
-/** Confirm rounded/capped scalar rewards and the companion bank after a task claim. */
-export const findPetTaskRewardCacheState = (client: DrizzleClient, userId: string) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: {
-      updatedAt: true,
-      petTask: true,
-      questData: true,
-      questFinishAt: true,
-      money: true,
-      seichiSilver: true,
-      earnedExperience: true,
-      petExperience: true,
-      reputationPoints: true,
-      reputationPointsTotal: true,
-      villagePrestige: true,
-      skillPoints: true,
-      huntingExperience: true,
-      gatheringExperience: true,
-      medicalExperience: true,
-      craftingExperience: true,
-      sageMasteryExperience: true,
-    },
-  });

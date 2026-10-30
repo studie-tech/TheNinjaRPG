@@ -1,13 +1,14 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { aiProfile, battle, battleHistory, item, quest, questHistory, userCookingJob, userData, userItem, userVote } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
-import * as socialQueries from "@/queries/socialUserCache";
 import { profileRouter } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { createTRPCRouter } from "@/server/api/trpc";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 import { IncreaseMaxPoolsTag } from "@/validators/combat";
 import { InstantNewQuestObjective, InstantStartBattleObjective, QuestTracker, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -19,7 +20,7 @@ import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables }
 const playerId = "retry-cache-player";
 const questId = "retry-cache-quest";
 const router = createTRPCRouter({ quests: questsRouter });
-const scenarios = ["ordinary", "isolated", "cooking", "unpaid entry", "paid entry", "missing confirmation", "failed confirmation", "consumed feedback"] as const;
+const scenarios = ["ordinary", "isolated", "cooking", "unpaid entry", "paid entry", "live immunity", "consumed feedback"] as const;
 
 describeWithDatabase("quest retry admission cache", () => {
   beforeEach(async () => {
@@ -42,7 +43,7 @@ describeWithDatabase("quest retry admission cache", () => {
         status: isolated ? "BATTLE" : "AWAKE", isOutlaw: true,
         primaryElement: "Fire", secondaryElement: "Water", regeneration: 0,
         pveFights: 7, stealthActive: true, stealthActivatedAt: now,
-        bracketImmunityLiftedUntil: new Date(now.getTime() + 3600000),
+        bracketImmunityLiftedUntil: scenario === "live immunity" ? new Date(now.getTime() + 3600000) : new Date(0),
         bracketImmunityPausedAt: null, updatedAt: now, regenAt: now,
         curHealth: 1000, maxHealth: 1000, curChakra: 1000, maxChakra: 1000,
         curStamina: 1000, maxStamina: 1000,
@@ -90,9 +91,6 @@ describeWithDatabase("quest retry admission cache", () => {
       ]);
       await insertQuestHistory([{ userId: playerId, questId: "retry-feedback-source", questType: "story" }]);
     }
-    const confirmation = vi.spyOn(socialQueries, "findBattleUserCache");
-    if (scenario === "missing confirmation") confirmation.mockResolvedValueOnce(undefined);
-    if (scenario === "failed confirmation") confirmation.mockRejectedValueOnce(new Error("Battle confirmation unavailable"));
     // Admission observes Cooking becoming due after the retry's opening profile read.
     const actorDatabase = scenario === "cooking"
       ? beforeStatements(database, userData, [async () => {
@@ -121,10 +119,20 @@ describeWithDatabase("quest retry admission cache", () => {
         expect(response.userDelta).toBeUndefined();
         expect(response.achievementProgress).toBeUndefined();
       } else expect(response.userPatch).toBeDefined();
-      // Mirror Objective's successful retry callback, including unknown-patch recovery.
-      await updateUserCache(client, key, response.userPatch, { revision, achievementProgress: response.achievementProgress });
+      // Execute Objective's actual callback against this real admission result.
+      const source = readFileSync(join(import.meta.dirname, "../../../../../src/layout/Objective.tsx"), "utf8");
+      const call = source.indexOf("api.quests.retryBattle.useMutation(");
+      const callbacks = source.slice(call).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+      if (!callbacks) throw new Error("Retry callbacks were not found");
+      const transpiler = new (require("bun").Transpiler)({ loader: "tsx" });
+      const factory = transpiler.transformSync(`function callbacks() { return (${callbacks}); }`);
+      const options = new Function("prepareUserUpdate", "updateUser", "showMutationToast", "utils", `${factory}\nreturn callbacks();`)(
+        () => prepareUserUpdate(client, key),
+        (patch: UserPatch | undefined, mutation: UserUpdateOptions) => updateUserCache(client, key, patch, mutation),
+        vi.fn(), { profile: { getUser: { invalidate: () => client.invalidateQueries({ queryKey: key, exact: true }) } } },
+      ) as { onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
+      await options.onSuccess(response, undefined, revision);
       expect(recovery).toHaveBeenCalledTimes(needsRecovery ? 1 : 0);
-      expect(confirmation).toHaveBeenCalledTimes(["cooking", "unpaid entry", "consumed feedback"].includes(scenario) ? 0 : 1);
       const saved = await database.query.userData.findFirst({ where: eq(userData.userId, playerId) });
       const cached = client.getQueryData<typeof initial>(key)?.userData;
       if (scenario === "consumed feedback") {
@@ -133,7 +141,8 @@ describeWithDatabase("quest retry admission cache", () => {
       }
       expect(saved?.pveFights).toBe(8);
       expect(saved?.stealthActive).toBe(false);
-      expect(saved?.bracketImmunityPausedAt).toBeInstanceOf(Date);
+      if (scenario === "live immunity") expect(saved?.bracketImmunityPausedAt).toBeInstanceOf(Date);
+      else expect(saved?.bracketImmunityPausedAt).toBeNull();
       for (const field of ["status", "battleId", "pveFights", "stealthActive", "stealthActivatedAt", "bracketImmunityPausedAt", "updatedAt"] as const) {
         expect(cached?.[field]).toEqual(saved?.[field]);
       }

@@ -452,18 +452,13 @@ const PayPalSubscriptionButton = (props: {
   }, []);
 
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const utils = api.useUtils();
   // Mutation for starting subscription
   const { mutate: subscribe, isPending: isSubscribing } =
     api.paypal.resolveSubscription.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
+      onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            delta: data.userDelta,
-            achievementProgress: data.achievementProgress,
-          });
+        if (data.success) await utils.profile.getUser.invalidate();
         if (data.success && props.onSuccess) props.onSuccess();
       },
       onError: (error) => {
@@ -963,7 +958,6 @@ const SubscriptionsOverview = () => {
  * Lookup paypal subscription
  */
 const LookupTransaction = () => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   // tRPC utility
   const utils = api.useUtils();
 
@@ -975,24 +969,17 @@ const LookupTransaction = () => {
 
   // Sync transaction
   const { mutate, isPending } = api.paypal.resolveTransaction.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
+    onSuccess: async (data) => {
       showMutationToast(data);
-      if (data.success || data.userPatch)
-        await updateUser(data.userPatch, {
-          revision,
-          delta: data.userDelta,
-          achievementProgress: data.achievementProgress,
-        });
-      if (data.success) {
-        await Promise.all([
-          utils.item.getUserItems.invalidate(),
-          utils.item.getUserItemsWithVariants.invalidate(),
-          utils.paypal.getRecentRepsCount.invalidate(),
-          utils.paypal.getPaypalTransactions.invalidate(),
-          utils.paypal.getStoreBundles.invalidate(),
-        ]);
-      }
+      // A lookup can apply some receipts before another delivery fails.
+      await Promise.all([
+        utils.profile.getUser.invalidate(),
+        utils.item.getUserItems.invalidate(),
+        utils.item.getUserItemsWithVariants.invalidate(),
+        utils.paypal.getRecentRepsCount.invalidate(),
+        utils.paypal.getPaypalTransactions.invalidate(),
+        utils.paypal.getStoreBundles.invalidate(),
+      ]);
     },
   });
 

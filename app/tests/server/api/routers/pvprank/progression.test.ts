@@ -107,15 +107,16 @@ describeWithDatabase("ranked reward progression recovery", () => {
     cached.cache.clear();
   });
 
-  it("keeps ordinary scalar rewards on the narrow confirmation path", async () => {
+  it("returns ordinary scalar reward deltas without confirming balances", async () => {
     const db = await getTestDatabase();
     await db.update(rankedSeason).set({ rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_money: 100 }) }] }).where(eq(rankedSeason.id, "reward-season"));
     const counted = countUserReads(db);
     const result = await pvpRankRouter.createCaller({ drizzle: counted.client, userId } as never).claimSeasonRewards();
-    expect(result).toMatchObject({ success: true, userPatch: { money: 100 } });
+    expect(result).toMatchObject({ success: true, userPatch: {}, userDelta: { money: 100 } });
     if (!result.success) throw new Error(result.message);
     expect(result.userPatch).not.toHaveProperty("questData");
-    expect(counted.getReads()).toBe(2);
+    expect(counted.getReads()).toBe(1);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100 });
   });
 
   it("reconciles automatic expulsion, faction cleanup and current faction notices", async () => {

@@ -1518,20 +1518,3 @@ const activeSanctionReportsWhere = (userId: string) =>
     ]),
     gt(userReport.banEnd, new Date()),
   );
-
-/** Read only sanction fields that can change when a moderator targets their own account. */
-export const findUserSanctionSnapshot = (
-  client: Pick<DrizzleClient, "query">,
-  userId: string,
-) =>
-  client.query.userData.findFirst({
-    columns: {
-      isBanned: true,
-      isSilenced: true,
-      isTradeBanned: true,
-      isWarned: true,
-      status: true,
-      travelFinishAt: true,
-    },
-    where: eq(userData.userId, userId),
-  });

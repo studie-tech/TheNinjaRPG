@@ -114,7 +114,7 @@ import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequireInVillage } from "@/utils/UserContext";
+import { useRequireInVillage, useUserData } from "@/utils/UserContext";
 import { UploadButton } from "@/utils/uploadthing";
 import {
   createMoneyTransferSchema,
@@ -346,6 +346,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const { clanId, canCreate } = props;
   const { userData, timeDiff, updateUser, prepareUserUpdate } =
     useRequireInVillage("/clanhall");
+  const { pusher } = useUserData();
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [deletingBattleId, setDeletingBattleId] = useState<string | null>(null);
@@ -387,13 +388,17 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
 
   const { mutateAsync: removeBattle, isPending: isDeletingBattle } =
     api.clan.deleteClanBattle.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userPatch)
-          await updateUser(data.userPatch, {
-            revision,
-            ...(data.userDelta ? { delta: data.userDelta } : {}),
-          });
+      // A lost response may have committed deletion while its socket echo was suppressed.
+      onSettled: (_data, error) => {
+        if (error)
+          return Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.clan.getClanBattles.invalidate(),
+            utils.combat.getBattle.invalidate(),
+          ]);
+      },
+      onSuccess: async (data) => {
+        if (data.success) await utils.profile.getUser.invalidate();
       },
     });
   /** Keep rejection feedback in the dialog and refresh combat/profile after deletion. */
@@ -402,7 +407,10 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     deleteSubmissionInFlight.current = true;
     setDeleteError("");
     try {
-      const result = await removeBattle({ clanBattleId: deletingBattleId });
+      const result = await removeBattle({
+        clanBattleId: deletingBattleId,
+        originSocketId: pusher?.connection.socket_id,
+      });
       showMutationToast(result);
       if (!result.success) {
         setDeleteError(result.message);

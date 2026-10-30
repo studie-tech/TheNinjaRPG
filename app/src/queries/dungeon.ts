@@ -867,43 +867,12 @@ const expiredDungeonState = (run: { state: DungeonRunState; status?: string }) =
       : "The one-hour dungeon deadline expired.",
 });
 
-/** Confirm scalar reward balances and mastery state; membership rewards use a full profile. */
+/** Load the payout actor and completion count together in the opening wave. */
 export const findDungeonRewardUserCache = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
 ) =>
   client.query.userData.findFirst({
     where: eq(userData.userId, userId),
-    columns: {
-      money: true,
-      seichiSilver: true,
-      earnedExperience: true,
-      petExperience: true,
-      reputationPoints: true,
-      reputationPointsTotal: true,
-      villagePrestige: true,
-      skillPoints: true,
-      medicalExperience: true,
-      huntingExperience: true,
-      craftingExperience: true,
-      gatheringExperience: true,
-      sageMasteryExperience: true,
-      level: true,
-      rank: true,
-      bloodlineId: true,
-      isAi: true,
-      ninjutsuMastery: true,
-      genjutsuMastery: true,
-      taijutsuMastery: true,
-      bukijutsuMastery: true,
-      bloodlineMastery: true,
-      sageMastery: true,
-      masteryRanks: true,
-      sageModeId: true,
-    },
     extras: (table) => activityCompletionExtras(table.userId),
-    with: {
-      sageMode: true,
-      titles: { with: { title: true } },
-    },
   });

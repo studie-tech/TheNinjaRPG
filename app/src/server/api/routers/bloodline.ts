@@ -48,7 +48,6 @@ import {
   fetchNaturalBloodlineRoll,
   fetchUserHistoricBloodlines,
   findActionLogForSwapBloodline,
-  findBloodlineCacheState,
   findBloodlineForUpdate,
   findBloodlineReskinForUpdateReskin,
   findBloodlineRollsForRoll,
@@ -97,7 +96,6 @@ import {
   canBootstrapQuestType,
   fetchQuestBootstrap,
   fetchUpdatedUser,
-  getUserProgressionUpdate,
 } from "@/routers/profile";
 import {
   baseServerResponse,
@@ -341,21 +339,8 @@ export const bloodlineRouter = createTRPCRouter({
         );
       }
 
-      const lineagePatch = await bloodlineCachePatch(
-        ctx.drizzle,
-        { ...user, userQuests: updatedUser.progressionQuestCandidates },
-        line,
-        updatedUser.settings,
-        { questBootstrap: updatedUser.questBootstrap },
-      );
-      const progression =
-        updatedUser.requiresProgressionRefresh === false && lineagePatch
-          ? getUserProgressionUpdate(user, updatedUser.publishedAchievementIds)
-          : undefined;
+      // The live Bloodright refund and hydrated passive sources require profile reconciliation.
       return {
-        ...(progression
-          ? { ...progression, userPatch: { ...progression.userPatch, ...lineagePatch } }
-          : {}),
         success: true,
         message: `Bloodline swapped${isFreeSwap ? (isStaffFreeSwap ? " (Free for staff member)" : ` (Free for ${federalStatus} supporter)`) : ""}`,
       };
@@ -817,8 +802,7 @@ export const bloodlineRouter = createTRPCRouter({
             }
             return {
               success: true,
-              userPatch: await bloodlineCachePatch(
-                ctx.drizzle,
+              userPatch: bloodlineCachePatch(
                 user,
                 randomBloodline,
                 settings,
@@ -902,14 +886,16 @@ export const bloodlineRouter = createTRPCRouter({
       // during the CAS — is NOT that marker, so the bloodline may already be granted, the credit
       // was legitimately spent, and it must not be handed back (avoids a grant + refund double
       // benefit even if a future edit throws a plain TRPCError from those side-effect writes).
+      let grantedAt: Date | undefined;
       try {
-        await updateBloodline(
+        const granted = await updateBloodline(
           ctx.drizzle,
           user,
           randomBloodline,
           0,
           `Pity roll for ${input.rank}: ${randomBloodline.name}`,
         );
+        grantedAt = granted.updatedAt;
       } catch (error) {
         if (error instanceof BloodlineGrantRejectedError) {
           // Swallow refund failures: the grant rejection is the meaningful error for the caller,
@@ -930,12 +916,12 @@ export const bloodlineRouter = createTRPCRouter({
       await insertBloodlineRollsForPityRoll(ctx.drizzle, ctx, randomBloodline, input);
       return {
         success: true,
-        userPatch: await bloodlineCachePatch(
-          ctx.drizzle,
+        userPatch: bloodlineCachePatch(
           user,
           randomBloodline,
           settings,
           progression,
+          grantedAt,
         ),
         message: `You have been granted a bloodline: ${randomBloodline.name}`,
       };
@@ -946,11 +932,9 @@ export const bloodlineRouter = createTRPCRouter({
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, roll, settings, progression] = await Promise.all([
-        fetchBloodlineProgressionUser(ctx.drizzle, ctx.userId),
+      const [user, roll] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
         fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
-        fetchAllGameSettings(ctx.drizzle),
-        fetchBloodlineProgression(ctx.drizzle, ctx.userId),
       ]);
       if (!user) return errorResponse("User not found");
       // Guard
@@ -979,13 +963,6 @@ export const bloodlineRouter = createTRPCRouter({
       }
       return {
         success: true,
-        userPatch: await bloodlineCachePatch(
-          ctx.drizzle,
-          user,
-          null,
-          settings,
-          progression,
-        ),
         message: removalCost
           ? `Bloodline removed for ${REMOVAL_COST} reps`
           : "Bloodline removed for free",
@@ -1019,7 +996,7 @@ export const bloodlineRouter = createTRPCRouter({
         return errorResponse("Bloodline does not belong to your village");
       }
       // Update
-      await updateBloodline(
+      const granted = await updateBloodline(
         ctx.drizzle,
         user,
         line,
@@ -1027,16 +1004,33 @@ export const bloodlineRouter = createTRPCRouter({
         `Bloodline Purchased: ${line.name}`,
       );
       await insertBloodlineRollsForPurchaseBloodline(ctx.drizzle, ctx, line);
+      const patch = bloodlineCachePatch(
+        user,
+        line,
+        settings,
+        progression,
+        granted.updatedAt,
+      );
+      const requiresReputationProgression = getUserQuests({
+        ...user,
+        bloodlineId: line.id,
+      }).some((quest) =>
+        quest.content.objectives.some(
+          (objective) =>
+            objective.task === "reputation_points" &&
+            !user.questData
+              ?.find((tracker) => tracker.id === quest.id)
+              ?.goals.find((goal) => goal.id === objective.id)?.done,
+        ),
+      );
       return {
         success: true,
         message: "Bloodline purchased",
-        userPatch: await bloodlineCachePatch(
-          ctx.drizzle,
-          user,
-          line,
-          settings,
-          progression,
-        ),
+        userPatch: requiresReputationProgression ? undefined : patch,
+        userDelta:
+          patch && !requiresReputationProgression
+            ? { reputationPoints: -BLOODLINE_COST[line.rank] }
+            : undefined,
       };
     }),
 });
@@ -1085,11 +1079,13 @@ export const updateBloodline = async (
   // Update user first, with a CAS on both reputation (atomic decrement, floor guard) and the
   // caller's pre-state bloodlineId (prevents a raced/duplicate grant from re-spending reputation
   // or clobbering a bloodline someone else already changed).
+  const updatedAt = new Date();
   const updateResult = await updateUserDataForUpdateBloodline(
     client,
     bloodline,
     repCost,
     user,
+    updatedAt,
   );
   if (!updateResult.rowsAffected) {
     throw new BloodlineGrantRejectedError("Unable to update bloodline");
@@ -1103,6 +1099,7 @@ export const updateBloodline = async (
     // Create a log entry for this action
     insertActionLogForUpdateBloodline(client, user, logMsg),
   ]);
+  return { updatedAt };
 };
 
 /**
@@ -1174,9 +1171,8 @@ const fetchBloodlineProgression = async (client: DrizzleClient, userId: string) 
   return { achievements, questBootstrap };
 };
 
-/** Confirm SQL refunds/debits and reconcile lineage-dependent quest progression when needed. */
-const bloodlineCachePatch = async (
-  client: DrizzleClient,
+/** Project new acquisitions; live refunds and progression reconcile through the profile. */
+const bloodlineCachePatch = (
   user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineProgressionUser>>>,
   line: Bloodline | null,
   settings: Parameters<typeof getBloodlinePassivePatch>[2],
@@ -1184,7 +1180,10 @@ const bloodlineCachePatch = async (
     questBootstrap: Awaited<ReturnType<typeof fetchQuestBootstrap>>;
     achievements?: Awaited<ReturnType<typeof fetchAchievementCatalogue>>;
   },
+  updatedAt?: Date,
 ) => {
+  // Existing lineage can have concurrent Bloodright purchases refunded at live prices.
+  if (user.bloodlineId) return undefined;
   const questUser = {
     ...user,
     userQuests: [...user.userQuests],
@@ -1220,18 +1219,10 @@ const bloodlineCachePatch = async (
   // The canonical read owns collection receipts, quest admission and tracker retirement.
   if (hasQuestEligibilityChange || needsCollectionProgression || needsQuestBootstrap)
     return undefined;
-  // The lineage grant and debit are committed; optional confirmation can refetch the profile.
-  const saved = await findBloodlineCacheState(client, user.userId).catch(
-    () => undefined,
-  );
-  if (!saved || saved.bloodlineId !== (line?.id ?? null)) return undefined;
   return {
-    ...saved,
-    ...getBloodlinePassivePatch(
-      { ...user, regeneration: saved.regeneration },
-      line,
-      settings,
-    ),
-    ...(saved.bloodlineReskinId === null ? { activeReskin: null } : {}),
+    ...getBloodlinePassivePatch(user, line, settings),
+    bloodright: [],
+    bloodrightSpent: 0,
+    ...(updatedAt ? { updatedAt, bloodlineReskinId: null, activeReskin: null } : {}),
   };
 };

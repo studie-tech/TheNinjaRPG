@@ -563,10 +563,11 @@ export const insertMpvpBattleQueueForChallengeShrine = (
   attackerSide: string,
   targetSector: { villageId: string },
   input: { sectorNumber: number },
+  createdAt = new Date(),
 ) =>
   client.insert(mpvpBattleQueue).values({
     id: shrineBattleId,
-    createdAt: new Date(),
+    createdAt,
     battleType: "SHRINE_BATTLE",
     attackerEntityId: attackerSide,
     defenderEntityId: targetSector.villageId,

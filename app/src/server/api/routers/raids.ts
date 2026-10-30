@@ -82,7 +82,6 @@ import {
   updateUserRequestForReadyToQueue,
   updateUserRequestForReadyToQueue2,
 } from "@/queries/raids";
-import { findQueueUserCache } from "@/queries/socialUserCache";
 import { deleteSectorByNumber } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
@@ -99,14 +98,16 @@ import { deferPushToUsers } from "@/server/utils/push/defer";
 import { raidBattleStarted } from "@/server/utils/push/messages";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
 import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
-import { getBattleUserPatch } from "@/server/utils/socialUserCache";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import { AllTags } from "@/validators/combat";
 import type { RaidObjectiveType } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { userDeltaResponseSchema } from "@/validators/userCache";
+import {
+  type UserDeltaResponse,
+  userDeltaResponseSchema,
+} from "@/validators/userCache";
 
 export const raidsRouter = createTRPCRouter({
   /**
@@ -610,6 +611,7 @@ export const raidsRouter = createTRPCRouter({
       }
       const userId = user.userId;
       // CAS: only transition from the status we read to avoid racing concurrent requests.
+      let confirmedAwake = false;
       if (user.status !== "AWAKE") {
         const updateResult = await updateUserDataForReadyToQueue(ctx.drizzle, userId, {
           status: user.status,
@@ -619,6 +621,7 @@ export const raidsRouter = createTRPCRouter({
             "Failed to update status - your status may have changed",
           );
         }
+        confirmedAwake = true;
       } else {
         // Already AWAKE: guard against clearing an active travel that hasn't finished yet.
         const isTraveling = user.travelFinishAt && user.travelFinishAt > new Date();
@@ -628,7 +631,8 @@ export const raidsRouter = createTRPCRouter({
         // Clear any stale dirty fields. No rowsAffected check here — MySQL reports 0
         // when the SET is a no-op (fields already null), which is indistinguishable
         // from a concurrent status change. We already confirmed AWAKE above.
-        await updateUserDataForReadyToQueue2(ctx.drizzle, userId);
+        const result = await updateUserDataForReadyToQueue2(ctx.drizzle, userId);
+        confirmedAwake = result.rowsAffected === 1;
       }
       // Step 1: remove user from team + other independent cleanups in parallel.
       // mpvpBattleUser must be deleted before the NOT EXISTS team-cleanup check in step 2.
@@ -674,15 +678,14 @@ export const raidsRouter = createTRPCRouter({
         const pusher = getServerPusher();
         void updateRaidTeamsOnSector(pusher, teamSector);
       }
-      const saved = await findQueueUserCache(ctx.drizzle, ctx.userId);
       return {
-        ...(saved?.status === "AWAKE"
-          ? { success: true, message: "You are ready to queue!" }
-          : errorResponse(
-              "Your status changed. Leave your current activity before readying for a raid.",
-            )),
-        userPatch: saved,
-        userDelta: {},
+        success: true,
+        message: confirmedAwake
+          ? "You are ready to queue!"
+          : "Ready status checked; refresh your current activity if needed.",
+        userPatch: confirmedAwake
+          ? { status: "AWAKE" as const, travelFinishAt: null, battleId: null }
+          : undefined,
       };
     }),
 
@@ -811,7 +814,6 @@ export const raidsRouter = createTRPCRouter({
         if (teamData.queue.length >= RAID_BATTLE_MAX_USERS_PER_TEAM) {
           return {
             ...errorResponse("Team is full"),
-            ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId)),
           };
         }
       } else {
@@ -863,7 +865,6 @@ export const raidsRouter = createTRPCRouter({
           await wakeQueuedUser(ctx.drizzle, ctx.userId);
           return {
             ...errorResponse("Team is no longer available"),
-            ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId)),
           };
         }
 
@@ -875,7 +876,6 @@ export const raidsRouter = createTRPCRouter({
           await wakeQueuedUser(ctx.drizzle, ctx.userId);
           return {
             ...errorResponse("Team is full"),
-            ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId)),
           };
         }
       }
@@ -900,7 +900,6 @@ export const raidsRouter = createTRPCRouter({
         });
         return {
           ...errorResponse("Failed to join raid - please try again"),
-          ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId)),
         };
       }
 
@@ -946,7 +945,7 @@ export const raidsRouter = createTRPCRouter({
         // here (the parent queue row holding attackerEntityId is gone), so purge
         // every raid-chat membership row this user owns to drop access to any
         // stale conversation that survived a prior raid reset.
-        await Promise.all([
+        const [, wake] = await Promise.all([
           deleteBattleQueueMemberById(ctx.drizzle, queueEntry.id),
           wakeQueuedUser(ctx.drizzle, ctx.userId),
           purgeAllRaidChatMembershipsForUser(ctx.drizzle, ctx.userId),
@@ -954,7 +953,7 @@ export const raidsRouter = createTRPCRouter({
         return {
           success: true,
           message: "Left the queue",
-          ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId, initialUpdate)),
+          ...raidQueueWakeUpdate(initialUpdate, wake.rowsAffected === 1),
         };
       }
       if (queueEntry.clanBattle.battleType !== "RAID_BATTLE") {
@@ -974,7 +973,7 @@ export const raidsRouter = createTRPCRouter({
 
       // Mutation - delete queue entry, update user status, drop chat
       // membership, and cleanup claiming ID in parallel.
-      await Promise.all([
+      const [, wake] = await Promise.all([
         deleteBattleQueueMemberById(ctx.drizzle, queueEntry.id),
         wakeQueuedUser(ctx.drizzle, ctx.userId),
         purgeRaidChatMembership(ctx.drizzle, raidChatConversationId, ctx.userId),
@@ -1002,7 +1001,7 @@ export const raidsRouter = createTRPCRouter({
       return {
         success: true,
         message: "Left raid queue",
-        ...(await confirmRaidQueueUpdate(ctx.drizzle, ctx.userId, initialUpdate)),
+        ...raidQueueWakeUpdate(initialUpdate, wake.rowsAffected === 1),
       };
     }),
 
@@ -1122,6 +1121,7 @@ export const raidsRouter = createTRPCRouter({
         const result = await initiateBattle(
           {
             userIds: attackerUserIds,
+            cacheUserId: ctx.userId,
             client: ctx.drizzle,
             targetIds: [raidData.firstAiId],
             raidQuestId: raid.id,
@@ -1152,12 +1152,7 @@ export const raidsRouter = createTRPCRouter({
             success: true,
             message: "Raid battle started",
             battleId: result.battleId,
-            ...(await confirmRaidBattleUpdate(
-              ctx.drizzle,
-              ctx.userId,
-              initialUpdate,
-              result.requiresUserRefresh,
-            )),
+            ...(await confirmRaidBattleUpdate(initialUpdate, result)),
           };
         } else {
           await rollbackStartRaidBattle({
@@ -1170,12 +1165,7 @@ export const raidsRouter = createTRPCRouter({
 
           return {
             ...errorResponse(result.message ?? "Failed to start battle"),
-            ...(await confirmRaidBattleUpdate(
-              ctx.drizzle,
-              ctx.userId,
-              initialUpdate,
-              true,
-            )),
+            ...(await confirmRaidBattleUpdate(initialUpdate, {})),
           };
         }
       } catch (err) {
@@ -1285,15 +1275,13 @@ export const raidsRouter = createTRPCRouter({
         success: true,
         message: "Raid Reward Claimed",
         rewards: displayRewards,
-        ...(await getRewardUserUpdate({
-          client: ctx.drizzle,
-          userId: ctx.userId,
+        ...getRewardUserUpdate({
           rewards: processedRewards,
           granted,
           requiresRelations:
             snapshot.requiresProgressionRefresh || (threshold.effects?.length ?? 0) > 0,
           progression: getUserProgressionUpdate(user, snapshot.publishedAchievementIds),
-        })),
+        }),
       };
     }),
 });
@@ -1521,42 +1509,36 @@ const getRaidSnapshotUpdate = (
   return { ...update, userDelta: update ? {} : undefined };
 };
 
-/**
- * Confirm queue fields while preserving upfront progression recovery requirements.
- * Missing confirmation withholds both patch and delta for canonical reconciliation.
- */
-const confirmRaidQueueUpdate = async (
-  client: DrizzleClient,
-  userId: string,
-  initial?: ReturnType<typeof getRaidSnapshotUpdate>,
-) => {
-  const saved = await findQueueUserCache(client, userId).catch(() => undefined);
-  const patch =
-    saved && (!initial || initial.userPatch)
-      ? { ...initial?.userPatch, ...saved }
-      : undefined;
-  return {
-    ...initial,
-    userPatch: patch,
-    userDelta: patch ? {} : undefined,
-  };
-};
+/** A successful guarded wake changes only the actor's queue status. */
+const raidQueueWakeUpdate = (
+  initial: ReturnType<typeof getRaidSnapshotUpdate>,
+  woke: boolean,
+) => ({
+  ...initial,
+  userPatch:
+    woke && initial.userPatch
+      ? { ...initial.userPatch, status: "AWAKE" as const }
+      : undefined,
+  userDelta: woke && initial.userPatch ? {} : undefined,
+});
 
 /**
  * Combine admission state with a safe upfront progression snapshot.
  * Unknown admission or progression state must reconcile as one profile.
  */
-const confirmRaidBattleUpdate = async (
-  client: DrizzleClient,
-  userId: string,
+const confirmRaidBattleUpdate = (
   initial: ReturnType<typeof getRaidSnapshotUpdate>,
-  requiresUserRefresh = false,
-) => {
-  const saved = await getBattleUserPatch(client, userId, requiresUserRefresh);
-  return {
-    ...initial,
-    userPatch:
-      saved && initial.userPatch ? { ...initial.userPatch, ...saved } : undefined,
-    userDelta: saved && initial.userPatch ? {} : undefined,
-  };
-};
+  result: Pick<UserDeltaResponse, "userPatch" | "userDelta"> & {
+    requiresUserRefresh?: boolean;
+  },
+) => ({
+  ...initial,
+  userPatch:
+    !result.requiresUserRefresh && result.userPatch && initial.userPatch
+      ? { ...initial.userPatch, ...result.userPatch }
+      : undefined,
+  userDelta:
+    !result.requiresUserRefresh && result.userPatch && initial.userPatch
+      ? result.userDelta
+      : undefined,
+});

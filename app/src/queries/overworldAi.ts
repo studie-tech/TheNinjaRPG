@@ -284,16 +284,3 @@ export const fetchQuestsBindingPlacement = async (
  *  (overworldPlacementId). Shared by the name-only and content-bearing fetches. */
 const questBindsPlacementWhere = (placementId: string) =>
   sql`JSON_CONTAINS(JSON_EXTRACT(${quest.content}, '$.objectives[*].overworldPlacementId'), JSON_QUOTE(${placementId})) = 1`;
-
-/** Confirm the roll allowance and quest slot after an interaction's independent CAS writes. */
-export const findOverworldInteractionUserCache = (
-  client: Pick<DrizzleClient, "query">,
-  userId: string,
-) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, userId),
-    columns: {
-      dailyOverworldQuestRolls: true,
-      activeNpcQuestId: true,
-    },
-  });

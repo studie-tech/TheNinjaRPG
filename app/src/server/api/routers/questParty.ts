@@ -774,6 +774,7 @@ export const startQuestPartyEncounter = async ({
       initiateBattle(
         {
           client: client,
+          cacheUserId: userId,
           userIds: party.memberIds,
           targetIds:
             ambush?.ids ??
