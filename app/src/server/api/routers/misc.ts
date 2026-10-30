@@ -170,9 +170,11 @@ export const miscRouter = createTRPCRouter({
                 unreadNotifications: count,
               }).catch(() => undefined)
             : undefined;
-        // A failed optional read leaves the announcement available to canonical hydration.
+        // Optional delivery failures leave canonical hydration to acknowledge the published announcement.
         const acknowledged = unread
-          ? await acknowledgeAnnouncements(ctx.drizzle, ctx.userId, count)
+          ? await acknowledgeAnnouncements(ctx.drizzle, ctx.userId, count).catch(
+              () => undefined,
+            )
           : undefined;
         return {
           success: true,

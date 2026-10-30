@@ -121,15 +121,18 @@ describeWithDatabase("confirmed progression cache responses", () => {
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, "other-reader") }))?.unreadNotifications).toBe(1);
   });
 
-  it.each(["receipt", "listing"] as const)("keeps a sent announcement available to canonical hydration when its optional %s fails", async (failure) => {
+  it.each(["receipt", "listing", "acknowledgment"] as const)("keeps a sent announcement available to canonical hydration when its optional %s fails", async (failure) => {
     const db = await getTestDatabase();
     if (failure === "receipt") vi.spyOn(miscQueries, "findAnnouncementReceipt").mockRejectedValueOnce(new Error("Announcement receipt unavailable"));
-    else vi.spyOn(profileQueries, "listNotificationForGetUser").mockRejectedValueOnce(new Error("Announcement listing unavailable"));
+    else if (failure === "listing") vi.spyOn(profileQueries, "listNotificationForGetUser").mockRejectedValueOnce(new Error("Announcement listing unavailable"));
+    else vi.spyOn(miscQueries, "acknowledgeAnnouncements").mockRejectedValueOnce(new Error("Announcement acknowledgment unavailable"));
     const result = await callerForDatabase(miscRouter, userId, db).submitNotification({ content: "A committed announcement", senderId: userId });
     expect(result.success).toBe(true);
     expect(result.userPatch).toBeUndefined();
+    expect(result.announcements).toBeUndefined();
     expect(await db.query.notification.findMany()).toHaveLength(1);
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ unreadNotifications: 1 });
     expect((await callerForDatabase(profileRouter, userId, db).getUser()).notifications).toContainEqual(expect.objectContaining({ name: "A committed announcement", color: "toast" }));
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ unreadNotifications: 0 });
   });
 });
