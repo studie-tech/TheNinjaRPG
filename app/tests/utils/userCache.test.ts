@@ -60,6 +60,51 @@ describe("user cache updates", () => {
     test.close();
   });
 
+  it("checks original prerequisites before merging and final prerequisites against the projected user", async () => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
+      status: "AWAKE", activeDungeonRunId: null } });
+    await updateUserCache(test.client, key, { status: "QUEUED", activeDungeonRunId: "squad" }, {
+      revision: prepareUserUpdate(test.client, key),
+      delta: { money: -10 },
+      expected: { status: "AWAKE", activeDungeonRunId: null },
+      expectedAfter: { status: "QUEUED", activeDungeonRunId: "squad" },
+      achievementProgress: [],
+    });
+    expect(test.value()?.userData).toMatchObject({ money: 90, status: "QUEUED", activeDungeonRunId: "squad" });
+    expect(test.client.getQueryData<{ achievementProgress: unknown[] }>(key)?.achievementProgress).toEqual([]);
+    expect(test.reads()).toBe(0);
+    test.close();
+  });
+
+  it("withholds the whole projection and metadata before one canonical read when final prerequisites differ", async () => {
+    const test = setup();
+    const initial = { ...profile(100), userData: { ...profile(100).userData, status: "AWAKE" as const }, achievementProgress: [{ questId: "kept" }] };
+    const canonical = { ...initial, userData: { ...initial.userData, money: 80, status: "BATTLE" as const } };
+    test.client.setQueryData(key, initial);
+    let reads = 0;
+    let observed: unknown;
+    let mergedNotifications = false;
+    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => {
+      reads++;
+      observed = test.client.getQueryData(key);
+      return canonical;
+    } });
+    await updateUserCache(test.client, key, { status: "QUEUED" }, {
+      revision: prepareUserUpdate(test.client, key),
+      delta: { money: -10, reputationPoints: -5 },
+      expected: { status: "AWAKE" },
+      expectedAfter: { status: "BATTLE" },
+      achievementProgress: [],
+      notifications: () => { mergedNotifications = true; return []; },
+    });
+    expect(observed).toEqual(initial);
+    expect(test.client.getQueryData(key)).toEqual(canonical);
+    expect(mergedNotifications).toBe(false);
+    expect(reads).toBe(1);
+    test.close();
+  });
+
   it.each(["missing response", "changed revision", "invalid relation"] as const)("marks an inactive profile stale without executing it after %s", async (recovery) => {
     const test = setup(false);
     const revision = prepareUserUpdate(test.client, key);

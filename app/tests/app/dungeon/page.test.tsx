@@ -84,8 +84,8 @@ it("forwards confirmed achievement progress with the claim's captured profile re
   await waitFor(() => expect(view.getByRole("button", { name: "Claim completion rewards" })).toBeDefined());
   const response = { success: true, message: "Completion rewards delivered.", userPatch: { medicalExperience: 1 }, achievementProgress: [] };
   await act(async () => respondToClaim(response));
-  expect(updateUser).toHaveBeenNthCalledWith(1, response.userPatch, { revision: 42, expected: undefined, achievementProgress: response.achievementProgress });
-  expect(updateUser).toHaveBeenNthCalledWith(2, {}, { revision: 42, expected: { activeDungeonRunId: null } });
+  expect(updateUser).toHaveBeenCalledTimes(1);
+  expect(updateUser).toHaveBeenCalledWith(response.userPatch, { revision: 42, expected: undefined, expectedAfter: { activeDungeonRunId: null }, achievementProgress: response.achievementProgress });
 });
 
 it("does not show an older ended run beside a newer completion", async () => {

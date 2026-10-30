@@ -89,7 +89,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, in
       expect(test.value()?.userData).toMatchObject({ ...patch, money: 100 });
       expect(test.getUser).not.toHaveBeenCalled();
       expect(test.invalidate).toHaveBeenCalledTimes(invalidations);
-      expect(test.updateUser).toHaveBeenCalledTimes(procedure === "coop.dungeon.act" ? 2 : 1);
+      expect(test.updateUser).toHaveBeenCalledTimes(1);
       if (procedure.startsWith("bloodline.") || procedure === "skillTree.resetAllUsersSkillPoints" || procedure === "quests.startQuest") expect(test.value()?.achievementProgress).toEqual([]);
     } finally { test.close(); }
   });
@@ -164,7 +164,7 @@ describe.each(admissionFlows)("$procedure admission deltas", ({ file, procedure 
       await test.updateUser.mock.results[0]?.value;
       expect(test.value()?.userData).toMatchObject({ ...userPatch, pveFights: 8, curHealth: 321, curChakra: 222, curStamina: 111, curEnergy: 37 });
       expect(test.getUser).not.toHaveBeenCalled();
-      expect(test.updateUser).toHaveBeenCalledTimes(procedure === "coop.dungeon.act" ? 2 : 1);
+      expect(test.updateUser).toHaveBeenCalledTimes(1);
     } finally { test.close(); }
   });
 
@@ -203,7 +203,7 @@ it("adds confirmed dungeon navigation once without replaying consumed feedback",
     expect(test.value()?.notifications).toEqual([unrelated, activeDungeonNotification]);
     expect(test.getUser).not.toHaveBeenCalled();
     expect(test.invalidate).toHaveBeenCalledTimes(2);
-    expect(test.updateUser).toHaveBeenCalledTimes(2);
+    expect(test.updateUser).toHaveBeenCalledTimes(1);
   } finally { test.close(); }
 });
 

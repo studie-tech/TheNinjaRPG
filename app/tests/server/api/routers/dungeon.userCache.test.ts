@@ -329,6 +329,49 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     expect(cache.current().userData).toMatchObject({ status: canonical.userData?.status, activeDungeonRunId: canonical.userData?.activeDungeonRunId });
   });
 
+  for (const snapshot of ["current", "completion-mismatch", "invalidated-revision"] as const) {
+    it.each(["expiry", "read-error"] as const)(`reads the canonical profile once after a present scalar claim with ${snapshot} and mandatory state %s`, async (scenario) => {
+      const db = await getTestDatabase();
+      const profile = callerForDatabase(profileRouter, userId, db);
+      await profile.getUser();
+      await db.insert(dungeonRun).values({ id: "newer-run", dungeonId: "definition", leaderId: userId, content: dungeonContent(), status: "LOBBY", createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000), state: { ...dungeonBattleState().runState, memberIds: [userId] } });
+      await db.insert(dungeonMember).values({ runId: "newer-run", userId, activeUserId: userId });
+      await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, userId));
+      const beforeCompletion = snapshot === "completion-mismatch" ? await profile.getUser() : undefined;
+      const actor = await completedRun({}, 0);
+      const initial = beforeCompletion ?? await profile.getUser();
+      expect(initial.userData?.dungeonsCompleted).toBe(snapshot === "completion-mismatch" ? 0 : 1);
+      const cache = cachedProfile(initial, () => profile.getUser(), await actor.getState());
+      if (snapshot === "invalidated-revision")
+        await cache.client.invalidateQueries({ queryKey: cache.key, exact: true, refetchType: "none" });
+      const revision = cache.callbacks.onMutate();
+      expect(revision === undefined).toBe(snapshot === "invalidated-revision");
+      const response = userDeltaResponseSchema.parse(await actor.claim({ id: "completed-run" }));
+      expect(response).toMatchObject({ success: true, userPatch: { dungeonsCompleted: 1 }, userExpected: { dungeonsCompleted: 1 }, userDelta: { money: 100 } });
+      const readState = cache.refetchState.getMockImplementation()!;
+      cache.refetchState.mockImplementationOnce(async () => {
+        // Keep cleanup in the callback's mandatory read, after the mutation response.
+        await db.update(dungeonRun).set({ expiresAt: new Date(0) }).where(eq(dungeonRun.id, "newer-run"));
+        if (scenario === "read-error")
+          vi.spyOn(db.query.userData, "findMany").mockImplementationOnce(() => { throw Error("Roster read failed after expiry"); });
+        return readState();
+      });
+      await cache.callbacks.onSuccess(response, undefined, revision);
+      await expect(cache.refetchState.mock.results[0]?.value).resolves.toMatchObject({ isError: scenario === "read-error" });
+      expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, "newer-run") })).toMatchObject({ status: "ENDED" });
+      expect(await db.query.dungeonMember.findFirst({ where: eq(dungeonMember.runId, "newer-run") })).toMatchObject({ activeUserId: null });
+      expect(cache.current().userData).toMatchObject({ status: "AWAKE", activeDungeonRunId: null, money: 100, dungeonsCompleted: 1 });
+      expect(goal(cache.current(), "dungeon-completion")).toMatchObject({ done: true, value: 1 });
+      expect(cache.current().notifications.some((entry) => entry.name === activeDungeonNotification.name)).toBe(false);
+      expect(cache.refetch).toHaveBeenCalledTimes(1);
+      expect(cache.refetchState).toHaveBeenCalledTimes(1);
+      expect(cache.refetchAvailable).toHaveBeenCalledTimes(1);
+      expect(cache.showMutationToast).toHaveBeenCalledTimes(1);
+      expect(cache.setMessage).toHaveBeenCalledWith("");
+      expect(cache.setAbandonId).toHaveBeenCalledTimes(1);
+    });
+  }
+
   it("reconciles a receipt committed after the replay caller read its opening balance", async () => {
     const db = await getTestDatabase();
     const api = await completedRun({}, 0);
