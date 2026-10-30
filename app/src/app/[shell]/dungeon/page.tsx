@@ -354,9 +354,13 @@ export default function DungeonPage() {
                 {current.state.pets.map((pet) => (
                   <li
                     key={pet.id}
-                    className="rounded-lg border bg-background/50 p-3 text-sm"
+                    className="min-w-0 rounded-lg border bg-background/50 p-3 text-sm"
                   >
-                    <Link href="/pets" className="font-medium">
+                    <Link
+                      href="/pets"
+                      className="block truncate font-medium"
+                      title={pet.name}
+                    >
                       {pet.name}
                     </Link>
                     <p className="text-xs text-muted-foreground">
