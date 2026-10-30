@@ -27,10 +27,12 @@ type UserCache = {
   isEventParticipant?: boolean;
 };
 type KnownUserPatch = Partial<User> | UserCachePatch;
+/** Profile fields, or a pure projection that withholds unsafe state with undefined. */
 export type UserPatch =
   | KnownUserPatch
   | ((current: User) => KnownUserPatch | undefined);
 
+/** Capture a settled profile revision; undefined requires mutation reconciliation. */
 export const prepareUserUpdate = (client: QueryClient, key: QueryKey) => {
   // An action can render before the initial profile; leave that loading query running.
   // Pending or invalidated reads may reconcile another action, so keep those too.
@@ -46,7 +48,9 @@ export const prepareUserUpdate = (client: QueryClient, key: QueryKey) => {
   return state.dataUpdateCount;
 };
 
+/** Cache metadata bound to the profile revision captured before a mutation. */
 export type UserUpdateOptions = {
+  /** The prepareUserUpdate result; undefined forces authoritative recovery. */
   revision: number | undefined;
   // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
   delta?: UserDelta;
@@ -57,7 +61,11 @@ export type UserUpdateOptions = {
   ) => NavBarDropdownLink[] | undefined;
 };
 
-/** Merge local fields or reconcile a confirmed mutation against its captured revision. */
+/**
+ * Apply local fields or a confirmed response against its captured profile revision.
+ * Unsafe snapshots refetch; accepted fields and metadata update together.
+ * Consumed announcements are delivered separately by the mutation toast path.
+ */
 export const updateUserCache = async (
   client: QueryClient,
   key: QueryKey,
@@ -147,6 +155,7 @@ export const updateUserCache = async (
     await client.refetchQueries({ queryKey: key, exact: true, type: "all" });
 };
 
+/** Foreign-key changes require replacement of the matching embedded relation. */
 const USER_RELATIONS = {
   anbuSquad: "anbuId",
   clan: "clanId",
@@ -157,6 +166,7 @@ const USER_RELATIONS = {
   questParty: "questPartyId",
 } as const;
 
+/** Mirror server-side caps when applying confirmed numeric deltas locally. */
 const USER_DELTA_CAPS = {
   skillPoints: MAX_SKILL_POINTS,
   medicalExperience: MEDNIN_EXP_CAP,
@@ -254,6 +264,7 @@ const mergeUserCache = (
         ?.filter(isMockQuestHistoryRow)
         .map((entry) => entry.questId),
     );
+    // Composed raid responses can carry fresh virtual goals in the merged snapshot.
     const virtualTrackers = user.questData?.filter(
       (entry) => virtualIds.has(entry.id) && !persistedIds.has(entry.id),
     );

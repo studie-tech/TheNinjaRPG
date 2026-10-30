@@ -1510,6 +1510,10 @@ const getRaidSnapshotUpdate = (
   return { ...update, userDelta: update ? {} : undefined };
 };
 
+/**
+ * Confirm queue fields while preserving upfront progression recovery requirements.
+ * Missing confirmation withholds both patch and delta for canonical reconciliation.
+ */
 const confirmRaidQueueUpdate = async (
   client: DrizzleClient,
   userId: string,
@@ -1527,6 +1531,10 @@ const confirmRaidQueueUpdate = async (
   };
 };
 
+/**
+ * Combine admission state with a safe upfront progression snapshot.
+ * Unknown admission or progression state must reconcile as one profile.
+ */
 const confirmRaidBattleUpdate = async (
   client: DrizzleClient,
   userId: string,

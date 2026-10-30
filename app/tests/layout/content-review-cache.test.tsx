@@ -17,7 +17,9 @@ const callbacks = {} as Record<Action, Success>;
 const counts = { canReview: true, statuses: { PENDING: 3 }, pendingByCategory: {} };
 const fetchCounts = vi.fn(async () => counts);
 const shown = vi.fn<typeof toast.showMutationToast>(() => undefined);
+/** Resolve unrelated invalidations so tests target optional count confirmation. */
 const settled = async () => undefined;
+/** Seed a reviewer profile whose queue notice can be updated or reconciled. */
 const profile = () => ({
   userData: { userId: "reviewer", role: "OWNER", money: 100 },
   notifications: [{ href: "/manual/review", name: "Content review (3)", color: "green", notificationCount: 3 }],
@@ -57,6 +59,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Capture rendered decision callbacks with the production profile cache updater. */
 const setup = () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(queryClient);

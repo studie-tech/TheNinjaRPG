@@ -17,6 +17,7 @@ const flows = [
   { file: "layout/OccupationCrafting.tsx", procedure: "occupation.cancelQueuedCraft", patch: { queue: [] }, invalidations: 2 },
 ];
 
+/** Execute profile mutation callbacks against a warmed cache and captured revision. */
 const setup = (file: string, procedure: string) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const profile = {

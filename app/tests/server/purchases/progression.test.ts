@@ -24,8 +24,10 @@ import { countUserReads } from "../../setup/userReads";
 
 const userId = "purchase-progress-player";
 type Profile = Awaited<ReturnType<ReturnType<typeof profileRouter.createCaller>["getUser"]>>;
+/** Select the reputation goal shared by purchase and upgrade progression assertions. */
 const goal = (profile: Profile | undefined) => profile?.userData?.questData?.find((entry) => entry.id === "purchase-progress")?.goals.find((entry) => entry.id === "purchase-goal");
 const upgradeCost = calcFedUgradeCost("NORMAL", "GOLD")!;
+/** Create an active provider billing period for a reputation-funded upgrade. */
 const seedUpgrade = async (source: "paypal" | "stripe") => {
   const db = await getTestDatabase();
   await db.update(userData).set({ federalStatus: "NORMAL", reputationPoints: upgradeCost * 3, reputationPointsTotal: upgradeCost * 3 }).where(eq(userData.userId, userId));
@@ -35,6 +37,7 @@ const seedUpgrade = async (source: "paypal" | "stripe") => {
     await db.insert(stripePayment).values({ id: "upgrade-period", checkoutId: "upgrade-checkout", createdById: userId, affectedUserId: userId, federalStatus: "NORMAL", amountCents: 500, reputationPoints: 0, purchasedAt: new Date(), grantedAt: new Date(), expiresAt: new Date(Date.now() + 86400000) });
   }
 };
+/** Use production upgrade callbacks so metadata forwarding is not a manual test merge. */
 const upgradeCallbacks = (cache: QueryClient, key: QueryKey) => {
   const source = readFileSync(join(import.meta.dirname, "../../../src/app/[shell]/points/page.tsx"), "utf8");
   const callbacks = source.slice(source.indexOf("api.paypal.upgradeSubscription.useMutation(")).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];

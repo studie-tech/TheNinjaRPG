@@ -9,7 +9,11 @@ import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
 import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
 
-/** Confirm SQL-capped counters; hydrate derived relations only when the reward changes them. */
+/**
+ * Confirm committed counters, hydrating when derived progression must be settled.
+ * Required hydration errors propagate; optional cache confirmation can be withheld.
+ * Forward consumed feedback even when the profile needs canonical reconciliation.
+ */
 export const getRewardUserUpdate = async (input: {
   client: DrizzleClient;
   userId: string;

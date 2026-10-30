@@ -23,6 +23,7 @@ import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables }
 
 type Profile = RouterOutputs["profile"]["getUser"];
 const userId = "dungeon-cache-player";
+/** Select the goal compared between cached and canonical dungeon progress. */
 const goal = (profile: Profile, id: string) => profile.userData?.questData?.find((entry) => entry.id === id)?.goals[0];
 const clients: QueryClient[] = [];
 

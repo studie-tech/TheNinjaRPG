@@ -124,8 +124,9 @@ export const triggerConfetti = async (
 };
 
 /**
- * Convenience wrapper for showing toast
- * @param data
+ * Display mutation outcomes and confirmed, already-consumed announcements.
+ * For consumed announcements, call on an accepted response before awaiting recovery.
+ * Announcements remain visible even when the main message is the silent "OK".
  */
 export const showMutationToast = (data: {
   success: boolean;

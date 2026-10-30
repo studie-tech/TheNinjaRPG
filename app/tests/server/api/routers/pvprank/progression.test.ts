@@ -16,8 +16,10 @@ import { countUserReads } from "../../../../setup/userReads";
 
 const userId = "reward-progress-player";
 type Profile = Awaited<ReturnType<ReturnType<typeof profileRouter.createCaller>["getUser"]>>;
+/** Select the objective compared between ranked reward projections and canonical state. */
 const goal = (profile: Profile | undefined) => profile?.userData?.questData?.find((entry) => entry.id === "reward-progress")?.goals.find((entry) => entry.id === "reward-goal");
 
+/** Expose a warmed reward cache that detects unexpected canonical refetches. */
 const cachedProfile = (initial: Profile) => {
   const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const key = ["reward-progress-profile"];

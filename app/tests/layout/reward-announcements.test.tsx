@@ -12,6 +12,7 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 type Success = (result: UserDeltaResponse, variables: unknown, revision: number | undefined) => Promise<void> | void;
 let ranked: Success;
 let raid: Success;
+/** Resolve unrelated invalidations so reward-feedback assertions stay focused. */
 const settled = async (): Promise<void> => undefined;
 const updateUser = vi.fn(settled);
 const rewardShown = vi.fn<typeof toast.showRewardToast>(() => undefined);

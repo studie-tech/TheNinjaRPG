@@ -3,7 +3,11 @@ import { getPublicQuestUser } from "@/libs/quest";
 import { listQuestTrackerDefinitions } from "@/queries/quests";
 import type { DrizzleClient } from "@/server/db";
 
-/** Mask committed location goals using definitions even when no history row exists. */
+/**
+ * Mask persisted location goals, including trackers without quest-history rows.
+ * The sparse envelope preserves omitted virtual trackers during the client merge.
+ * A failed visibility lookup withholds the patch for canonical recovery.
+ */
 export const getPublicQuestTrackerPatch = async (
   client: DrizzleClient,
   user: Pick<UserData, "questData" | "sector" | "role">,

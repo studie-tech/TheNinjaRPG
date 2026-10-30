@@ -866,7 +866,8 @@ const expiredDungeonState = (run: { state: DungeonRunState; status?: string }) =
       ? `The ${DUNGEON_LOBBY_SECONDS / 60}-minute dungeon lobby expired.`
       : "The one-hour dungeon deadline expired.",
 });
-/** Confirm reward balances and relations after the receipt transaction commits. */
+
+/** Confirm reward balances and relations after receipt delivery commits. */
 export const findDungeonRewardUserCache = (
   client: Pick<DrizzleClient, "query">,
   userId: string,
