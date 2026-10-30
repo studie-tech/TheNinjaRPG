@@ -14,11 +14,15 @@ let ranked: Success;
 let raid: Success;
 const settled = async (): Promise<void> => undefined;
 const updateUser = vi.fn(settled);
+const rewardShown = vi.fn<typeof toast.showRewardToast>(() => undefined);
+const mutationShown = vi.fn<typeof toast.showMutationToast>(() => undefined);
 
 beforeEach(() => {
   updateUser.mockClear();
-  vi.spyOn(toast, "showRewardToast").mockImplementation(() => undefined);
-  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  rewardShown.mockClear();
+  mutationShown.mockClear();
+  vi.spyOn(toast, "showRewardToast").mockImplementation(rewardShown);
+  vi.spyOn(toast, "showMutationToast").mockImplementation(mutationShown);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: { userId: "actor" }, prepareUserUpdate: () => undefined, updateUser,
@@ -56,13 +60,13 @@ it.each(["ranked", "raid"] as const)("delivers %s hydration feedback once throug
   let finish!: () => void;
   updateUser.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
   const pending = (source === "ranked" ? ranked : raid)(result, {}, undefined);
-  expect(toast.showRewardToast).toHaveBeenCalledTimes(1);
-  expect(toast.showRewardToast).toHaveBeenCalledWith(
+  expect(rewardShown).toHaveBeenCalledTimes(1);
+  expect(rewardShown).toHaveBeenCalledWith(
     source === "ranked" ? [result.message, ...result.announcements!] : result.announcements,
     result.rewards,
     source === "ranked" ? "Claimed!" : result.message,
   );
-  expect(toast.showMutationToast).not.toHaveBeenCalled();
+  expect(mutationShown).not.toHaveBeenCalled();
   finish();
   await pending;
 });
