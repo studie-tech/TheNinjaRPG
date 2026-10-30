@@ -1,7 +1,7 @@
 "use client";
 
 import { useAtom, useSetAtom } from "jotai";
-import { Bot } from "lucide-react";
+import { Bot, Maximize2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -13,6 +13,7 @@ import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
 import ActionTimer from "@/layout/ActionTimer";
 import { AutoCombatControl } from "@/layout/AutoCombatControl";
+import { BattleFocusView } from "@/layout/BattleFocusView";
 import { ActionSelector } from "@/layout/CombatActions";
 import CombatHistory from "@/layout/CombatHistory";
 import CombatTimeline from "@/layout/CombatTimeline";
@@ -283,7 +284,24 @@ export default function CombatPage() {
           }}
           battle={battle}
           isPending={battleState.isPending}
-          options={<UserCombatSettings config={config} userData={userData} />}
+          options={
+            <>
+              {!config.battleFocus && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10"
+                  aria-label="Battle focus"
+                  title="Battle focus: full-window battle screen"
+                  onClick={() => config.setBattleFocus(true)}
+                >
+                  <Maximize2 className="h-5 w-5" />
+                </Button>
+              )}
+              <UserCombatSettings config={config} userData={userData} />
+            </>
+          }
         />
       </div>
     );
@@ -325,69 +343,87 @@ export default function CombatPage() {
     );
   }, [isBattleLoading, combat, userData, results, battle]);
 
-  const renderActions = useCallback(() => {
-    if (!isInBattle || !battle) return null;
+  // Handing turns to the AI profile; beside the fighters in battle focus.
+  const renderAutoControl = useCallback(() => {
+    if (!battle || !canToggleAutoCombat || results) return null;
     return (
-      <div
-        className={cn("flex flex-col gap-1", results && "opacity-50")}
-        inert={!!results}
-      >
-        {isAutoCombatActive ? (
-          <AutoCombatPanel
-            aiOnly={
-              battle.extraState.tournamentAiOnly || battle.extraState.kageMatch?.ai
-            }
-          />
-        ) : (
-          <ActionSelector
-            showInfoIcon={true}
-            items={actions}
-            currentRound={battle.round}
-            className="p-1"
-            showBgColor={true}
-            eagerImages={true}
-            showLabels={showActionLabels}
-            selectedId={actionId}
-            combatMode={true}
-            userActionPoints={user?.actionPoints}
-            battle={battle}
-            userId={controlledActorId}
-            gridClassNameOverwrite={actionGridClass}
-            aspectRatioClass={actionAspect}
-            onClick={handleActionClick}
-          />
-        )}
-        {canToggleAutoCombat && !results && (
-          <AutoCombatControl
-            key={battle.id}
-            isActive={isAutoCombatActive}
-            isPending={isTogglingAutoCombat}
-            requiresConfirmation={ManualStartBattleTypes.includes(battle.battleType)}
-            error={autoCombatError}
-            onChange={(enabled) => toggleAutoCombat({ battleId: battle.id, enabled })}
-          />
-        )}
-      </div>
+      <AutoCombatControl
+        key={battle.id}
+        isActive={isAutoCombatActive}
+        isPending={isTogglingAutoCombat}
+        requiresConfirmation={ManualStartBattleTypes.includes(battle.battleType)}
+        error={autoCombatError}
+        onChange={(enabled) => toggleAutoCombat({ battleId: battle.id, enabled })}
+      />
     );
   }, [
-    userId,
-    isInBattle,
     battle,
-    isAutoCombatActive,
+    canToggleAutoCombat,
     results,
+    isAutoCombatActive,
     isTogglingAutoCombat,
     autoCombatError,
     toggleAutoCombat,
-    canToggleAutoCombat,
-    actions,
-    showActionLabels,
-    actionId,
-    user?.actionPoints,
-    controlledActorId,
-    actionGridClass,
-    actionAspect,
-    handleActionClick,
   ]);
+
+  const renderActions = useCallback(
+    (focus = false) => {
+      if (!isInBattle || !battle) return null;
+      return (
+        <div
+          className={cn("flex flex-col gap-1", results && "opacity-50")}
+          inert={!!results}
+        >
+          {isAutoCombatActive ? (
+            <AutoCombatPanel
+              aiOnly={
+                battle.extraState.tournamentAiOnly || battle.extraState.kageMatch?.ai
+              }
+            />
+          ) : (
+            <ActionSelector
+              showInfoIcon={true}
+              items={actions}
+              currentRound={battle.round}
+              className="p-1"
+              showBgColor={true}
+              eagerImages={true}
+              showLabels={!focus && showActionLabels}
+              selectedId={actionId}
+              combatMode={true}
+              userActionPoints={user?.actionPoints}
+              battle={battle}
+              userId={controlledActorId}
+              gridClassNameOverwrite={focus ? FOCUS_ACTION_GRID : actionGridClass}
+              aspectRatioClass={focus ? "aspect-square" : actionAspect}
+              onClick={handleActionClick}
+            />
+          )}
+          {!focus && renderAutoControl()}
+        </div>
+      );
+    },
+    [
+      userId,
+      isInBattle,
+      battle,
+      isAutoCombatActive,
+      results,
+      isTogglingAutoCombat,
+      autoCombatError,
+      toggleAutoCombat,
+      canToggleAutoCombat,
+      actions,
+      showActionLabels,
+      actionId,
+      user?.actionPoints,
+      controlledActorId,
+      actionGridClass,
+      actionAspect,
+      handleActionClick,
+      renderAutoControl,
+    ],
+  );
 
   const renderTimeline = useCallback(() => {
     if (!config.showTimeline || !battle) return null;
@@ -514,6 +550,51 @@ export default function CombatPage() {
     );
   }
 
+  if (config.battleFocus && battle) {
+    return (
+      <BattleFocusView
+        battle={battle}
+        controlledActorId={controlledActorId}
+        timer={renderTimer()}
+        field={renderBattlefield()}
+        fieldRatio={
+          results ? undefined : getBattlefieldHeightRatio(battle.width, battle.height)
+        }
+        dock={
+          <>
+            {renderActions(true)}
+            {actionId && !results && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                <span className="text-green-700">Green</span>: affected ·{" "}
+                <span className="text-red-500">Red</span>: not affected ·{" "}
+                <span className="text-blue-500">Blue</span>: move · Hotkeys: W end turn,
+                M move
+              </p>
+            )}
+          </>
+        }
+        autoControl={renderAutoControl()}
+        log={
+          <CombatHistory
+            battleId={battle.id}
+            battleVersion={battle.version}
+            battleRound={battle.round}
+            results={results}
+          />
+        }
+        timeline={
+          <CombatTimeline
+            battleId={battle.id}
+            battle={battle}
+            battleVersion={battle.version}
+            showBasicActions={config.showBasicActions}
+          />
+        }
+        onShowLayout={() => config.setBattleFocus(false)}
+      />
+    );
+  }
+
   // Determine which components are tabbed vs standalone
   const tabbedIds: CombatLayoutComponentId[] = ["actions", "timeline", "battlelog"];
 
@@ -571,3 +652,7 @@ const AutoCombatPanel: React.FC<AutoCombatPanelProps> = (props) => {
     </div>
   );
 };
+
+/** Battle focus packs every action into one grid of icons that wraps as needed. */
+const FOCUS_ACTION_GRID =
+  "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1 max-lg:grid-cols-6";
