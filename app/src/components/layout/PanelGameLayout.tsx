@@ -47,6 +47,11 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
 
   return (
     <div className="tnr-theme-game" data-layout-variant={props.variant}>
+      <div className="fixed right-5 bottom-5 z-50 hidden min-[1100px]:block">
+        <LowerRightHelpBtn className="theme-header-button shadow-lg">
+          <CircleHelp aria-hidden="true" />
+        </LowerRightHelpBtn>
+      </div>
       <a className="theme-skip-link" href="#game-content">
         Skip to game content
       </a>
