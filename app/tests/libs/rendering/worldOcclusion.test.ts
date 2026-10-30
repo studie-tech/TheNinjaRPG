@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
-import type { BufferImageSource } from "pixi.js";
+import { readFileSync } from "node:fs";
+import { BufferImageSource, Rectangle, Texture } from "pixi.js";
+import { createCharacterMaterialFrame, worldMaterialFrame, type AuthoredMaterialFrame, type WorldMaterial } from "@/libs/rendering/worldMaterials";
 import { lightingFragment, pointLightFragment } from "@/libs/rendering/worldLightingShaders";
 import { createWorldOcclusion, MAX_CELL_INSTANCES, type Occluder } from "@/libs/rendering/worldOcclusion";
 import { MAX_SMALL_WORLD_WIND, MAX_WORLD_WIND } from "@/libs/rendering/worldWind";
@@ -126,9 +128,11 @@ const prismIntersects = (prism: Vertex[], origin: Point, end: Point) => {
   const contains = (point: Point) => {
     for (let i = 0; i < indices.length; i += 3) {
       const a = vertices[indices[i]!]!, normal = cross(subtract(vertices[indices[i + 1]!]!, a), subtract(vertices[indices[i + 2]!]!, a));
-      if (dot(normal, normal) < 1e-16) continue;
-      const inward = dot(normal, subtract(center, a)), distance = dot(normal, subtract(point, a));
-      if (Math.abs(inward) < 1e-10 ? Math.abs(distance) > 1e-8 : inward * distance < -1e-9) return false;
+      const length = Math.hypot(...normal);
+      if (length < 1e-12) continue;
+      // Signed distances keep the oracle's tolerance independent of a packed triangle's area.
+      const inward = dot(normal, subtract(center, a)) / length, distance = dot(normal, subtract(point, a)) / length;
+      if (Math.abs(inward) < 1e-10 ? Math.abs(distance) > 1e-8 : Math.sign(inward) * distance < -1e-9) return false;
     }
     return true;
   };
@@ -182,6 +186,58 @@ const shrine = () => record("shrine-pedestal", [], { volumes: [volume([
   367.58778862, 77.05150171, 2.42629515, 11.06750041,
   367.28225516, 84.59997551, 2.42629515, 12.41903667,
 ].map((value, index) => value + (index % 4 === 0 ? 512 : index % 4 === 1 ? 1024 : 0)), [0, 1, 2, 0, 2, 3, 3, 2, 4])] });
+
+describe("authored foliage under local lights", () => {
+  it.each([["woodland-village", 0], ["woodland-village", 1], ["woodland-village", 2], ["biome-scenery", 11], ["biome-scenery", 13]] as const)("retains distinct lit and shaded ground for four nearby lights around %s frame %i", (atlas, index) => {
+    const definitions = JSON.parse(readFileSync(new URL(`../../../public/world-art/${atlas}.surfaces.json`, import.meta.url), "utf8")) as AuthoredMaterialFrame[];
+    const definition = definitions[index]!, [, , w, h] = definition.frame;
+    const pixels = new Uint8Array(1024 * 1024 * 4), texture = new Texture({ source: new BufferImageSource({ resource: pixels, width: 1024, height: 1024 }) });
+    const source: WorldMaterial = { texture, pixels, width: 1024, height: 1024, shape: "canopy", frames: new Map(), surfaceFrames: definitions };
+    const frame = worldMaterialFrame(source, new Rectangle(...definition.frame)), field = createWorldOcclusion();
+    try {
+      field.update([record("foliage", [], { volumes: frame.volumes, transform: new Float32Array([w, 0, 0, -h, -w / 2, h]), height: h })],
+        { minX: -256, minY: -256, maxX: 256, maxY: 256 });
+      expect(field.error).toBeNull(); expect(field.instanceCount).toBe(1);
+      const lights: Point[] = [[120, 0, 160], [-120, 0, 160], [0, 120, 160], [0, -120, 160]];
+      const patterns = new Set<number>();
+      const counts = lights.map(() => 0);
+      for (let y = -120; y <= 120; y += 20) for (let x = -120; x <= 120; x += 20) {
+        let pattern = 0;
+        lights.forEach((light, i) => {
+          if (blocked(field, [x, y, 0], light)) { pattern |= 1 << i; counts[i] = counts[i]! + 1; }
+        });
+        patterns.add(pattern);
+      }
+      for (const count of counts) { expect(count).toBeGreaterThan(0); expect(count).toBeLessThan(169); }
+      expect(patterns.size).toBeGreaterThan(3);
+    } finally { field.dispose(); texture.destroy(true); }
+  });
+});
+
+describe("character lighting from local sources", () => {
+  it.each([1, -1])("casts solid shadows from four light directions without filling leg gaps or self-shadowing its front (facing %i)", (facing) => {
+    const pixels = new Uint8Array(64 * 64 * 4);
+    for (let y = 20; y < 60; y++) for (let x = 24; x < 40; x++) {
+      if (y >= 55 && x >= 29 && x < 35) continue;
+      pixels[(y * 64 + x) * 4 + 3] = 255;
+    }
+    const texture = new Texture({ source: new BufferImageSource({ resource: pixels, width: 64, height: 64 }), frame: new Rectangle(0, 0, 64, 64) });
+    const source: WorldMaterial = { texture, pixels, width: 64, height: 64, shape: "character", frames: new Map(), isBillboard: true };
+    const frame = createCharacterMaterialFrame(source, texture), field = createWorldOcclusion();
+    try {
+      field.update([record("character", [], { volumes: frame.volumes, transform: new Float32Array([64 * facing, 0, 0, -64, facing < 0 ? 64 : 0, 60]), height: 64, dynamic: true })],
+        { minX: -128, minY: -128, maxX: 192, maxY: 192 });
+      expect(field.error).toBeNull();
+      for (const [ground, light] of [
+        [[80, -10, 0], [-80, 30, 60]], [[-16, -10, 0], [144, 30, 60]],
+        [[32, 40, 0], [32, -80, 60]], [[32, -20, 0], [32, 100, 60]],
+      ] as [Point, Point][]) expect(blocked(field, ground, light)).toBe(true);
+      expect(blocked(field, [32, 2, 0], [32, 2, 3])).toBe(false);
+      expect(blocked(field, [26, 1, 0], [26, 1, 4])).toBe(true);
+      expect(blocked(field, [32, -0.02, 20], [32, -80, 60])).toBe(false);
+    } finally { field.dispose(); texture.destroy(true); }
+  });
+});
 
 describe("exact world occlusion prisms", () => {
   it("keeps a thin occluder opaque across boundary-crossing facade rays", () => {

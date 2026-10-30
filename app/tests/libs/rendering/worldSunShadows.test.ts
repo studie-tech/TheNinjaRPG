@@ -160,6 +160,32 @@ describe("retained sunlight depth", () => {
     } finally { f.dispose(); }
   });
 
+  it.each([[1, -0.12, 0.28], [0, -0.65, 1.08], [-1, -0.12, 0.28]])("fits visible receiver rays at sun direction %j without clipping sunward offscreen casters", (x, y, z) => {
+    const f = fixture();
+    const caster = { ...f.caster("canopy", false), height: 160 };
+    const view = { minX: 0, maxX: 341, minY: 0, maxY: 300 };
+    try {
+      f.sun.update([caster], view, { x, y, z }, undefined, -20);
+      const u = f.sun.uniforms.uniforms;
+      const project = (p: number[]) => {
+        const relative = p.map((value, i) => value - u.uSunOrigin[i]!);
+        const dot = (basis: Float32Array) => relative.reduce((sum, value, i) => sum + value * basis[i]!, 0);
+        return [(dot(u.uSunRight) - u.uSunBounds[0]!) / u.uSunBounds[2]!,
+          (dot(u.uSunUp) - u.uSunBounds[1]!) / u.uSunBounds[3]!,
+          (dot(u.uSun) - u.uSunDepth[0]!) / u.uSunDepth[1]!];
+      };
+      for (const sx of [view.minX, view.maxX]) for (const sy of [view.minY, view.maxY]) for (const height of [-20, 160]) {
+        const receiver = [sx, 2 * (sy - height), height];
+        const sample = project(receiver);
+        for (const value of sample) { expect(value).toBeGreaterThanOrEqual(0); expect(value).toBeLessThanOrEqual(1); }
+        const toTop = (160 - height) / u.uSun[2]!;
+        const front = project(receiver.map((value, i) => value + toTop * u.uSun[i]!));
+        expect(front[0]).toBeCloseTo(sample[0]!, 5); expect(front[1]).toBeCloseTo(sample[1]!, 5);
+        expect(front[2]).toBeGreaterThanOrEqual(sample[2]!); expect(front[2]).toBeLessThanOrEqual(1.00001);
+      }
+    } finally { f.dispose(); }
+  });
+
   it("updates a moving actor independently of retained static depth", () => {
     const f = fixture(), scenery = f.caster("tree", false);
     f.sun.update([scenery, f.caster("actor", true)], viewport, worldSunlight());

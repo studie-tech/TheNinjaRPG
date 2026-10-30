@@ -1,4 +1,4 @@
-import { BufferImageSource, Texture } from "pixi.js";
+import { BufferImageSource, Rectangle, Texture } from "pixi.js";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import type { WorldShadowShape } from "@/libs/rendering/worldShadows";
@@ -256,6 +256,89 @@ export const worldMaterialFrame = (
   };
   material.frames.set(key, result);
   return result;
+};
+
+/**
+ * Packed character frames retain their logical foot row. Rounded row volumes extend
+ * behind the visible card along the camera ray, so side lighting cannot collapse
+ * the caster to a line or expand its camera silhouette. Shared frame caches own the mesh.
+ */
+export const createCharacterMaterialFrame = (
+  material: WorldMaterial,
+  texture: Texture,
+) => {
+  const ratio = material.width / texture.source.pixelWidth;
+  const rect = texture.frame.clone();
+  rect.x *= ratio;
+  rect.y *= ratio;
+  rect.width *= ratio;
+  rect.height *= ratio;
+  const source = worldMaterialFrame(material, rect),
+    { orig, trim } = texture;
+  const vertices = Array.from(source.vertices),
+    points = source.points.slice();
+  const project = (data: number[] | Float32Array, stride: number) => {
+    for (let i = 0; i < data.length; i += stride) {
+      data[i] =
+        ((data[i] ?? 0) * (trim?.width ?? orig.width) + (trim?.x ?? 0)) / orig.width;
+      data[i + 1] =
+        ((data[i + 1] ?? 0) * (trim?.height ?? orig.height) + (trim?.y ?? 0)) /
+        orig.height;
+      data[i + 2] = Math.max(0, 0.5 + 28 / orig.height - (data[i + 1] ?? 0));
+    }
+  };
+  project(vertices, 6);
+  project(points, 4);
+  const indices = Array.from(source.indices);
+  const volumes: AuthoredMaterialFrame["volumes"][number][] = [];
+  const pixel = 1 / ratio,
+    foot = orig.height / 2 + 28;
+  for (let y = 0; y < rect.height; y++) {
+    const top = foot - (trim?.y ?? 0) - y * pixel,
+      lower = Math.max(0, top - pixel);
+    if (top <= 0) continue;
+    let start = -1;
+    for (let x = 0; x <= rect.width; x++) {
+      const covered =
+        x < rect.width &&
+        (material.pixels[((rect.y + y) * material.width + rect.x + x) * 4 + 3] ?? 0) >=
+          128;
+      if (covered && start < 0) start = x;
+      if ((covered || start < 0) && x < rect.width) continue;
+      if (start < 0) continue;
+      const left = (trim?.x ?? 0) + start * pixel,
+        width = (x - start) * pixel;
+      const depth = Math.min(width * 0.65, lower * 1.8);
+      if (depth > 0) {
+        const ring = Array.from({ length: 5 }, (_, index) => {
+          const angle = Math.PI * (1 - index / 4),
+            back = Math.sin(angle) * depth;
+          return [
+            left + (width * (1 + Math.cos(angle))) / 2,
+            foot - top,
+            lower - back / 2,
+            top - back / 2,
+          ] as const;
+        });
+        volumes.push({ vertices: ring, indices: [0, 1, 2, 0, 2, 3, 0, 3, 4] });
+      }
+      start = -1;
+    }
+  }
+  const closed = appendAuthoredGeometry(
+    { frame: [0, 0, orig.width, orig.height], surfaces: [], volumes },
+    material,
+    new Rectangle(0, 0, orig.width, orig.height),
+    vertices,
+    indices,
+  );
+  return {
+    ...source,
+    vertices: new Float32Array(vertices),
+    indices: new Uint16Array(indices),
+    points,
+    volumes: closed,
+  };
 };
 
 const appendAuthoredGeometry = (

@@ -11,7 +11,7 @@ import { resolveWorldStructure } from "@/libs/rendering/worldStructures";
 import worldSurfaceAtlases from "@/libs/rendering/worldSurfaceAtlases.json";
 import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
 import { STONE_VILLAGE_WALL_KIT } from "@/libs/sector-map/village-wall-assets";
-import { acquireWorldMaterial, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
+import { acquireWorldMaterial, createCharacterMaterialFrame, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
 import { worldSunlight } from "@/libs/rendering/worldShadows";
 import { createSunShadows } from "@/libs/rendering/worldSunShadows";
 
@@ -27,6 +27,53 @@ const decodeNormal = ([u, v]: readonly [number, number]) => {
   const length = Math.hypot(x, y, z);
   return [x / length, y / length, z / length];
 };
+
+describe("packed character shadow volumes", () => {
+  const make = () => {
+    const source = material(32, 32); source.isBillboard = true;
+    for (let y = 0; y < 29; y++) for (let x = 5; x < 27; x++) {
+      // A transparent gap between the legs must stay open in the volume as well as the art.
+      if (y > 20 && x >= 13 && x < 19) continue;
+      paint(source, x, y, 0, 1);
+    }
+    const texture = new Texture({ source: source.texture.source, frame: new Rectangle(0, 0, 32, 32),
+      orig: new Rectangle(0, 0, 64, 64), trim: new Rectangle(16, 31, 32, 32) });
+    return { source, texture, frame: createCharacterMaterialFrame(source, texture), dispose: () => { texture.destroy(false); source.texture.destroy(true); } };
+  };
+  it("has real rear depth for east/west light while retaining every covered camera pixel", () => {
+    const f = make();
+    try {
+      expect(f.frame.volumes!.length).toBeGreaterThan(0);
+      let depth = 0;
+      for (const volume of f.frame.volumes!) for (let i = 0; i < volume.vertices.length; i += 4) {
+        const u = volume.vertices[i]!, v = volume.vertices[i + 1]!, lower = volume.vertices[i + 2]!, upper = volume.vertices[i + 3]!;
+        depth = Math.max(depth, 2 * (60 - (v + upper) * 64));
+        expect(lower).toBeGreaterThanOrEqual(0); expect(upper).toBeGreaterThanOrEqual(lower);
+        expect(u * 64).toBeGreaterThanOrEqual(21); expect(u * 64).toBeLessThanOrEqual(43);
+        expect(v * 64).toBeGreaterThanOrEqual(31); expect((v + upper - lower) * 64).toBeLessThanOrEqual(60.00001);
+      }
+      expect(depth).toBeGreaterThan(6);
+      expect(f.frame.vertices.length / 6).toBeLessThan(2000);
+      expect(Array.from(f.frame.vertices).every(Number.isFinite)).toBe(true);
+    } finally { f.dispose(); }
+  });
+  it("keeps transparent leg gaps open and leaves the receiver card in front of the volume", () => {
+    const f = make();
+    try {
+      for (const volume of f.frame.volumes!) {
+        const rows = Array.from(volume.vertices).filter((_, i) => i % 4 === 1).map(v => v * 64);
+        if (Math.min(...rows) <= 51) continue;
+        const xs = Array.from(volume.vertices).filter((_, i) => i % 4 === 0).map(u => u * 64);
+        expect(Math.max(...xs) <= 29.00001 || Math.min(...xs) >= 34.99999).toBe(true);
+      }
+      for (let i = 0; i < f.frame.vertices.length; i += 6) {
+        if (f.frame.vertices[i + 5] !== 0) continue;
+        const rear = 2 * (60 - (f.frame.vertices[i + 1]! + f.frame.vertices[i + 2]!) * 64);
+        expect(rear).toBeGreaterThanOrEqual(-0.00001);
+      }
+    } finally { f.dispose(); }
+  });
+});
 
 describe("sampled world material fallback", () => {
   it("keeps atlas UVs, normalized physical heights and semantic classes aligned", () => {
