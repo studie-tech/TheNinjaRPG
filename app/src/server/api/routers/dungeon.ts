@@ -559,12 +559,15 @@ export const dungeonRouter = createTRPCRouter({
       ]);
       if (!run || !member || !user || !run.state.memberIds.includes(ctx.userId))
         return errorResponse("You are not in this party.");
+      // The independently loaded actor can predate a concurrently committed receipt.
+      // Omit cache updates so replay reconciles through the canonical profile query.
       if (member.reward)
         return {
           success: true,
           message: "Rewards already delivered.",
           reward: member.reward,
-          ...getDungeonRewardUserUpdate(user, member.reward.rewards, true),
+          userPatch: undefined,
+          userDelta: undefined,
         };
       if (
         run.status !== "COMPLETED" ||
