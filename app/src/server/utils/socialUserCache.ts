@@ -32,14 +32,17 @@ export const getVillageChangeUserUpdate = async (
   client: DrizzleClient,
   userId: string,
 ) => {
+  const updatedUser = await withRequestScope(() =>
+    fetchUpdatedUser({ client, userId }),
+  );
   const fallback = {
     userPatch: undefined,
     achievementProgress: undefined,
     userDelta: undefined,
+    announcements: updatedUser.toastMessages.length
+      ? updatedUser.toastMessages
+      : undefined,
   };
-  const updatedUser = await withRequestScope(() =>
-    fetchUpdatedUser({ client, userId }),
-  );
   // Progression can publish histories and effects after loading this user snapshot.
   if (!updatedUser.user || updatedUser.requiresProgressionRefresh) return fallback;
   const membership = await getMembershipUserPatch(client, updatedUser.user);

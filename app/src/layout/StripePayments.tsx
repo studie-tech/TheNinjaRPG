@@ -8,6 +8,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
+import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { stripePurchaseSchema } from "@/validators/stripe";
 
@@ -122,6 +123,12 @@ export const StripePaymentReturn = () => {
   const resolve = api.stripe.resolveSession.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
+      if (result.success && result.announcements?.length)
+        showMutationToast({
+          success: true,
+          message: "OK",
+          announcements: result.announcements,
+        });
       setMessage(result.message);
       // Held payments write receipts too; only successful delivery clears the retry URL.
       await Promise.all([

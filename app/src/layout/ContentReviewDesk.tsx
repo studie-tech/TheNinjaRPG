@@ -59,8 +59,10 @@ export const ContentReviewDesk: React.FC = () => {
       ]);
       // Queue reads can outdate suggestions, so count after the queue refresh.
       await utils.contentReview.getCounts.invalidate();
-      const counts = await utils.contentReview.getCounts.fetch();
-      if (counts.canReview)
+      // Query errors retain their normal feedback; a saved decision still completes.
+      const counts = await utils.contentReview.getCounts.fetch().catch(() => undefined);
+      if (!counts) await updateUser(undefined, { revision });
+      else if (counts.canReview)
         await updateUser(
           {},
           {

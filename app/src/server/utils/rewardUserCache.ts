@@ -22,11 +22,6 @@ export const getRewardUserUpdate = async (input: {
   progression?: ReturnType<typeof getUserProgressionUpdate>;
 }) => {
   const { client, userId, rewards, granted } = input;
-  const fallback = {
-    userPatch: undefined,
-    userDelta: undefined,
-    achievementProgress: undefined,
-  };
   const needsRelations =
     input.requiresRelations ||
     getRewardUserDelta(rewards) === undefined ||
@@ -36,9 +31,15 @@ export const getRewardUserUpdate = async (input: {
   const hydrated = needsRelations
     ? await withRequestScope(() => fetchUpdatedUser({ client, userId }))
     : undefined;
+  const fallback = {
+    userPatch: undefined,
+    userDelta: undefined,
+    achievementProgress: undefined,
+    announcements: hydrated?.toastMessages.length ? hydrated.toastMessages : undefined,
+  };
   if (needsRelations && !hydrated?.user) return fallback;
-  // The profile endpoint delivers pending feedback and confirms relation-changing
-  // quest effects that are outside this reward patch.
+  // Canonical hydration confirms relation-changing quest effects. Generated feedback
+  // has already been consumed and travels independently of cache confirmation.
   if (
     hydrated &&
     (hydrated.toastMessages?.length ||
@@ -92,6 +93,7 @@ export const getRewardUserUpdate = async (input: {
     ? getUserProgressionUpdate(hydrated.user, hydrated.publishedAchievementIds)
     : input.progression;
   return {
+    announcements: undefined,
     userDelta: {},
     achievementProgress: progression?.achievementProgress,
     userPatch: hydrated?.user

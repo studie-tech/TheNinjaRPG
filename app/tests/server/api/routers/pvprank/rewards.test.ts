@@ -1,18 +1,19 @@
 import { RANKED_ENTRY_COST } from "@/drizzle/constants";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { anbuSquad, war, rankedSeason, rankedUserRewards, userData, village } from "@/drizzle/schema";
+import { anbuSquad, war, quest, questHistory, rankedSeason, rankedUserRewards, userData, village } from "@/drizzle/schema";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
-import { fetchUpdatedUser } from "@/server/api/routers/profile";
+import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { withRequestScope } from "@/server/requestScope";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertUsers } from "../../../../setup/factories";
+import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
+import { insertQuests, insertUsers } from "../../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
 
 describeWithDatabase("ranked season reward loyalty", () => {
   beforeEach(async () => {
-    await resetTables(rankedUserRewards, rankedSeason, userData, village, anbuSquad, war);
+    await resetTables(questHistory, quest, rankedUserRewards, rankedSeason, userData, village, anbuSquad, war);
     const db = await getTestDatabase();
     await db.insert(village).values({ id: "reward-village", name: "Reward village", kageId: "", tokens: 0 });
     await insertUsers([{ userId: "claimant", villageId: "reward-village", joinedVillageAt: new Date(Date.now() - 100 * 86_400_000), villagePrestige: 0, money: 0 }]);
@@ -50,6 +51,30 @@ describeWithDatabase("ranked season reward loyalty", () => {
     const result = await (await callerFor(pvpRankRouter, "claimant")).claimSeasonRewards();
     expect(result).toMatchObject({ success: true, userDelta: {}, userPatch: { rank: "JONIN", money: 100, villageId: "reward-village" } });
     expect(result).toMatchObject({ userPatch: { effectiveMasteries: expect.any(Object), maxEnergy: expect.any(Number) } });
+  });
+
+  it("returns consumed quest feedback when reward hydration requires a canonical profile", async () => {
+    const db = await getTestDatabase();
+    await db.insert(village).values({ id: "new-village", name: "AKIKAZE", sector: 2, kageId: "" });
+    await db.update(userData).set({ role: "OWNER", rank: "JONIN", level: 50 }).where(eq(userData.userId, "claimant"));
+    await db.update(rankedSeason).set({ rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_village_membership: "AKIKAZE" }) }] }).where(eq(rankedSeason.id, "season"));
+    const content = { objectives: [SimpleObjective.parse({ id: "arena", task: "arena_kills", value: 100 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] };
+    await insertQuests([
+      { id: "destination-tier", questType: "tier", requiredVillage: "new-village", requiredLevel: 1, maxLevel: 100, hidden: false,
+        content: { ...content, objectives: [InstantNewQuestObjective.parse({ id: "start-child", task: "new_quest", newQuestIds: ["child-mission"] })] } },
+      { id: "child-mission", name: "New Child Mission", questType: "mission", requiredVillage: "new-village", content, hidden: false },
+    ]);
+    await db.insert(questHistory).values({ id: "paused-tier", userId: "claimant", questId: "destination-tier", questType: "tier" });
+    const profile = await callerFor(profileRouter, "claimant");
+    expect((await profile.getUser()).userData?.userQuests).toEqual([]);
+    const result = await (await callerFor(pvpRankRouter, "claimant")).claimSeasonRewards();
+    expect(result.success).toBe(true);
+    const parsed = userDeltaResponseSchema.parse(result);
+    expect(parsed.userPatch).toBeUndefined();
+    expect(parsed.announcements).toContain("Started new quest: New Child Mission");
+    const canonical = await profile.getUser();
+    expect(canonical.userData?.userQuests.some((entry) => entry.questId === "child-mission")).toBe(true);
+    expect(canonical.notifications.some((entry) => entry.name === "Started new quest: New Child Mission")).toBe(false);
   });
 
   it.each([false, true])("scales earned prestige and tokens once, with outlaw=%s", async (isOutlaw) => {

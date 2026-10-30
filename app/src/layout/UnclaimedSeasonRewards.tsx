@@ -22,7 +22,11 @@ export function UnclaimedSeasonRewards() {
     onSuccess: async (data, _variables, revision) => {
       if (data.success) {
         if ("rewards" in data && data.rewards) {
-          showRewardToast([data.message], data.rewards, "Claimed!");
+          showRewardToast(
+            [data.message, ...(data.announcements ?? [])],
+            data.rewards,
+            "Claimed!",
+          );
           await Promise.all([
             utils.pvpRank.getUnclaimedUserSeasonRewards.invalidate(),
             updateUser(data.userPatch, {

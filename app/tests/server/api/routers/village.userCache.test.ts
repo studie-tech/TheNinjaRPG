@@ -98,7 +98,7 @@ describeWithDatabase("village membership quest reconciliation", () => {
       { id: "new-achievement", questType: "achievement", requiredVillage: destination, content, hidden: false },
       { id: "destination-tier", questType: "tier", requiredVillage: destination, requiredLevel: 1, maxLevel: 100, hidden: false,
         content: { ...content, objectives: [InstantNewQuestObjective.parse({ id: "start-child", task: "new_quest", newQuestIds: ["child-mission"] })] } },
-      { id: "child-mission", questType: "mission", requiredVillage: destination, content, hidden: false },
+      { id: "child-mission", name: "New Child Mission", questType: "mission", requiredVillage: destination, content, hidden: false },
     ]);
     await db.insert(questHistory).values({ id: "paused-destination-tier", userId, questId: "destination-tier", questType: "tier" });
     const profile = callerForDatabase(profileRouter, userId, db);
@@ -118,6 +118,7 @@ describeWithDatabase("village membership quest reconciliation", () => {
       expect(result.userPatch).toBeUndefined();
       expect(result.achievementProgress).toBeUndefined();
       expect(result.userDelta).toBeUndefined();
+      expect(result.announcements).toContain("Started new quest: New Child Mission");
       await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress, ...(result.userDelta ? { delta: result.userDelta } : {}) });
       expect(getUser).toHaveBeenCalledTimes(1);
       const cached = client.getQueryData<typeof initial>(key)!;
@@ -127,6 +128,7 @@ describeWithDatabase("village membership quest reconciliation", () => {
       expect(cached.achievementProgress.map((entry) => entry.questId)).toEqual(["new-achievement"]);
       const saved = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
       expect(cached.userData?.reputationPoints).toBe(saved?.reputationPoints);
+      expect(cached.notifications.some((entry) => entry.name === "Started new quest: New Child Mission")).toBe(false);
       expect(saved?.reputationPoints).toBe(initial.userData?.reputationPoints);
     } finally { unsubscribe(); client.clear(); }
   });

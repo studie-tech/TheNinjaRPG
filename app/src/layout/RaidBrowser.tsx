@@ -159,7 +159,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
       onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
         if (data.success && "rewards" in data && data.rewards) {
-          showRewardToast([], data.rewards, data.message);
+          showRewardToast(data.announcements ?? [], data.rewards, data.message);
         } else {
           showMutationToast(data);
         }

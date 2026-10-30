@@ -1281,13 +1281,13 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     api.clan.leaveClan.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
+        showMutationToast(data);
         if (data.success || data.userPatch)
           await updateUser(data.userPatch, {
             revision,
             achievementProgress: data.achievementProgress,
             ...(data.userDelta ? { delta: data.userDelta } : {}),
           });
-        showMutationToast(data);
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1493,13 +1493,13 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     api.clan.instantJoinAndLead.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
+        showMutationToast(data);
         if (data.success || data.userPatch)
           await updateUser(data.userPatch, {
             revision,
             achievementProgress: data.achievementProgress,
             ...(data.userDelta ? { delta: data.userDelta } : {}),
           });
-        showMutationToast(data);
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -2613,6 +2613,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
     },
 
     onSuccess: async (data, _variables, revision) => {
+      showMutationToast(data);
       if (data.success || data.userPatch)
         await updateUser(data.userPatch, {
           revision,
@@ -2786,7 +2787,6 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
     setPendingKickMemberId(memberId);
     try {
       const data = await kick({ clanId, memberId });
-      showMutationToast(data);
       if (!data.success) return;
 
       // The successful response proves this exact member was removed. Hide only

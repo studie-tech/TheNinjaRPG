@@ -267,24 +267,7 @@ const NotificationSystem: React.FC = () => {
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         await Promise.all([
-          ...(data.success
-            ? [
-                updateUser(data.userPatch, {
-                  revision,
-                  notifications: (current: NavBarDropdownLink[] | undefined) =>
-                    current
-                      ? [
-                          ...current.filter((entry) => entry.color !== "toast"),
-                          ...(data.announcements ?? []).map((name) => ({
-                            href: "/news",
-                            name,
-                            color: "toast" as const,
-                          })),
-                        ]
-                      : current,
-                }),
-              ]
-            : []),
+          ...(data.success ? [updateUser(data.userPatch, { revision })] : []),
           utils.misc.getPreviousNotifications.invalidate(),
         ]);
       },

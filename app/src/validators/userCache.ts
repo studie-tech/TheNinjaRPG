@@ -321,6 +321,8 @@ export const userDeltaResponseSchema = baseServerResponse.extend({
   teamId: z.string().optional(),
   achievementProgress: z.custom<AchievementProgress[]>(Array.isArray).optional(),
   rewards: PostProcessedRewardSchema.optional(),
+  /** Feedback consumed by this response, independent of profile cache acceptance. */
+  announcements: z.array(z.string()).optional(),
   notifications: z.array(z.string()).optional(),
   userQuest: z
     .object({
