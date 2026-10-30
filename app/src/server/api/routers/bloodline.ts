@@ -1011,26 +1011,11 @@ export const bloodlineRouter = createTRPCRouter({
         progression,
         granted.updatedAt,
       );
-      const requiresReputationProgression = getUserQuests({
-        ...user,
-        bloodlineId: line.id,
-      }).some((quest) =>
-        quest.content.objectives.some(
-          (objective) =>
-            objective.task === "reputation_points" &&
-            !user.questData
-              ?.find((tracker) => tracker.id === quest.id)
-              ?.goals.find((goal) => goal.id === objective.id)?.done,
-        ),
-      );
       return {
         success: true,
         message: "Bloodline purchased",
-        userPatch: requiresReputationProgression ? undefined : patch,
-        userDelta:
-          patch && !requiresReputationProgression
-            ? { reputationPoints: -BLOODLINE_COST[line.rank] }
-            : undefined,
+        userPatch: patch,
+        userDelta: patch ? { reputationPoints: -BLOODLINE_COST[line.rank] } : undefined,
       };
     }),
 });
