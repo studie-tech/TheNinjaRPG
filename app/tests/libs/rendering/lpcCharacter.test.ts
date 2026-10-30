@@ -70,6 +70,57 @@ describe("layered LPC actors", () => {
       expect(actor.durations[animation]).toBe(frames[0].length * 80);
     }
   });
+  it.each([
+    { primary: "club", secondary: "club", animation: "slash" },
+    { primary: "whip", secondary: "whip", animation: "slash" },
+    { primary: "crossbow", secondary: "crossbow", animation: "shoot" },
+    { primary: "club", secondary: "whip", animation: "slash" },
+    { primary: "whip", secondary: "club", animation: "slash" },
+  ] as const)("aligns paired $primary/$secondary weapons with one body pose", async ({ primary, secondary, animation }) => {
+    const { game } = gameFixture();
+    for (const body of ["male", "female"] as const) for (const reducedMotion of [false, true]) for (const primaryMirror of [false, true]) {
+      const appearance: SpriteAppearance = { version: 1, body, layers: [
+        { profile: "body", color: "light" }, { profile: "shirt", color: "black" },
+        { profile: primary, color: "brown", mirror: primaryMirror },
+        { profile: secondary, color: "brown", mirror: !primaryMirror },
+      ] };
+      const actor = await characters.createLpcCharacter(game, appearance);
+      const parts = appearance.layers.flatMap((layer) => spriteLayerSheets(appearance, layer).map((sheet) => ({ layer, sheet })));
+      const owner = parts.find((part) => part.layer === appearance.layers[2])!;
+      const ownerPose = lpcCatalog.layouts[owner.sheet.layout]!.bodyPoses![animation]!;
+      for (const direction of [0, 1, 2, 3] as const) {
+        const reflected = direction === 1 ? 3 : direction === 3 ? 1 : direction;
+        const ownerFacing = primaryMirror ? reflected : direction;
+        actor.render(frame(1000, reducedMotion), animation, direction, true);
+        for (let step = 0; step <= 8; step++) {
+          actor.render(frame(1000 + step * 80, reducedMotion), animation, direction);
+          const ownerStep = Math.min(reducedMotion ? 0 : step, ownerPose.frames[ownerFacing]!.length - 1);
+          const bodyStep = ownerPose.frames[ownerFacing]![ownerStep]!;
+          for (const [index, part] of parts.entries()) {
+            const child = actor.sprite.children[index] as Sprite;
+            const facing = part.layer.mirror ? reflected : direction;
+            const pose = lpcCatalog.layouts[part.sheet.layout]!.bodyPoses?.[animation];
+            if (!pose) {
+              const expected = lpcFrame(part.sheet, ownerPose.animation, facing, bodyStep * 80)!;
+              expect(child.texture.frame).toMatchObject({ x: expected.x, y: expected.y, width: expected.width, height: expected.height });
+              continue;
+            }
+            // Decode the selected native rectangle back to its authored body reference.
+            const selected = pose.frames[facing]!.flatMap((bodyFrame, column) => {
+              const expected = lpcFrame(part.sheet, animation, facing, column * 80)!;
+              return child.texture.frame.x === expected.x && child.texture.frame.y === expected.y ? [bodyFrame] : [];
+            });
+            expect(child.visible).toBe(true);
+            expect(selected).toContain(bodyStep);
+            if (primary === secondary || part.layer === owner.layer) {
+              const expected = lpcFrame(part.sheet, animation, facing, step * 80, reducedMotion)!;
+              expect(child.texture.frame).toMatchObject({ x: expected.x, y: expected.y, width: expected.width, height: expected.height });
+            }
+          }
+        }
+      }
+    }
+  });
   it("shares immutable source-owned frame views across independently animated actors", async () => {
     const { game, source, owned } = gameFixture();
     const appearance: SpriteAppearance = { version: 1, body: "male", layers: [{ profile: "body", color: "light" }] };

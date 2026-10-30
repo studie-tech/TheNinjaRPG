@@ -1,9 +1,4 @@
-import type {
-  LpcColor,
-  LpcEquipmentProfile,
-  SpriteAppearance,
-  SpriteLayer,
-} from "@/validators/lpc";
+import type { LpcColor, SpriteAppearance, SpriteLayer } from "@/validators/lpc";
 import { getCharacterAttributes } from "@/validators/register";
 
 /** Saved variant fields inherit the item independently; names and IDs never select artwork. */

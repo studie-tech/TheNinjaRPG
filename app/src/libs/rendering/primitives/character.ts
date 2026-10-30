@@ -94,17 +94,14 @@ export const createLpcCharacter = async (
     const opposite = direction === 1 ? 3 : direction === 3 ? 1 : direction;
     const poses = pose?.frames[poseOwner?.layer.mirror ? opposite : direction];
     const elapsed = frame.now - startedAt;
-    const poseStep =
-      poses?.[
-        Math.min(
-          frame.reducedMotion
-            ? 0
-            : Math.floor(Math.max(0, elapsed) / LPC_ATTACK_FRAME_MS),
-          poses.length - 1,
-        )
-      ];
+    const step = frame.reducedMotion
+      ? 0
+      : Math.floor(Math.max(0, elapsed) / LPC_ATTACK_FRAME_MS);
+    const poseStep = poses?.[Math.min(step, poses.length - 1)];
     for (const entry of layers) {
-      const usesBodyPose = pose && entry.layer !== poseOwner?.layer;
+      const facing = entry.layer.mirror ? opposite : direction;
+      const customPose = lpcCatalog.layouts[entry.sheet.layout]?.bodyPoses?.[state];
+      const usesBodyPose = pose && !customPose;
       const animation = usesBodyPose ? pose.animation : state;
       if (
         entry.authored.has(animation) &&
@@ -113,13 +110,26 @@ export const createLpcCharacter = async (
         entry.child.visible = false;
         continue;
       }
+      const customFrames = customPose?.frames[facing];
+      const customStep = customFrames && Math.min(step, customFrames.length - 1);
+      // Paired weapons retain their timing when compatible, otherwise match the shared body pose.
+      const weaponStep =
+        customFrames && customStep !== undefined
+          ? customFrames[customStep] === poseStep
+            ? customStep
+            : customFrames.indexOf(poseStep ?? 0)
+          : undefined;
       // Flipping an off-hand pose reverses its horizontal facing, so sample the opposite row first.
       const sample = lpcFrame(
         entry.sheet,
         animation,
-        entry.layer.mirror ? opposite : direction,
-        usesBodyPose ? (poseStep ?? 0) * LPC_ATTACK_FRAME_MS : elapsed,
-        usesBodyPose ? false : frame.reducedMotion,
+        facing,
+        weaponStep !== undefined
+          ? Math.max(0, weaponStep) * LPC_ATTACK_FRAME_MS
+          : usesBodyPose
+            ? (poseStep ?? 0) * LPC_ATTACK_FRAME_MS
+            : elapsed,
+        usesBodyPose || customPose ? false : frame.reducedMotion,
       );
       entry.child.visible = !!sample;
       if (!sample) continue;
