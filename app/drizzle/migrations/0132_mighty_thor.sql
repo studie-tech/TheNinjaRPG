@@ -272,3 +272,36 @@ UPDATE `VillageStructure` AS s INNER JOIN `Village` AS v ON v.`id` = s.`villageI
 UPDATE `VillageStructure` AS s INNER JOIN `Village` AS v ON v.`id` = s.`villageId` SET s.`image` = 'https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-townhall-079365b74c60fec2b6b3960f.webp', s.`worldArt` = '{"route":"/townhall","sourceImage":"https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-townhall-079365b74c60fec2b6b3960f.webp","filepath":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJVIq9cwF2veAXohUuE59nTQHRJIYjtiG18aF4","material":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDUGgA1zEwoh0WXMnscL279N8ayVQUCbRzS3p","surfaces":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuQO8sjCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b","frame":{"x":0,"y":0,"width":401,"height":222},"stair":{"x":116,"y":199},"height":3.47,"shadow":0.2,"courtSlope":0.1435}' WHERE v.`type` IN ('HIDEOUT', 'STRONGHOLD') AND s.`route` = '/townhall' AND s.`image` IN ('https://utfs.io/f/f233ebed-3458-4c58-842f-8f84bfaf0b34-relv3y.webp', 'https://uploadthing.b-cdn.net/f/f233ebed-3458-4c58-842f-8f84bfaf0b34-relv3y.webp', 'https://utfs.io/f/f233ebed-3458-4c58-842f-8f84bfaf0b34-relv3y', 'https://uploadthing.b-cdn.net/f/f233ebed-3458-4c58-842f-8f84bfaf0b34-relv3y');
 
 UPDATE `VillageStructure` AS s INNER JOIN `Village` AS v ON v.`id` = s.`villageId` SET s.`image` = 'https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-traininggrounds-280406d4373c06d5f0211339.webp', s.`worldArt` = '{"route":"/traininggrounds","sourceImage":"https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-traininggrounds-280406d4373c06d5f0211339.webp","filepath":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJudsB6ZCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b","material":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJhUfqqGQMfUBdnwAX5LTajlNc4mrgzi0RJtqp","surfaces":"https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJDxCMxwzEwoh0WXMnscL279N8ayVQUCbRzS3p","frame":{"x":0,"y":505,"width":237,"height":211},"stair":{"x":78,"y":203},"height":3.3,"shadow":0.2,"courtSlope":0.2308}' WHERE v.`type` IN ('HIDEOUT', 'STRONGHOLD') AND s.`route` = '/traininggrounds' AND s.`image` IN ('https://utfs.io/f/9c832de9-917e-4edb-ad10-d9d1175f19a7-nda31y.webp', 'https://uploadthing.b-cdn.net/f/9c832de9-917e-4edb-ad10-d9d1175f19a7-nda31y.webp', 'https://utfs.io/f/9c832de9-917e-4edb-ad10-d9d1175f19a7-nda31y', 'https://uploadthing.b-cdn.net/f/9c832de9-917e-4edb-ad10-d9d1175f19a7-nda31y');
+
+-- Service plots keep native silhouettes and entrances clear while retaining hospital and arrival coordinates.
+-- Byte comparisons keep identity guards independent of the connection collation.
+UPDATE `VillageStructure` AS s
+INNER JOIN `Village` AS v ON v.`id` = s.`villageId`
+INNER JOIN (
+  SELECT CAST(NULL AS CHAR(64)) AS villageName, CAST(NULL AS CHAR(64)) AS route, 0 AS oldLongitude, 0 AS oldLatitude, 0 AS longitude, 0 AS latitude, CAST(NULL AS CHAR(256)) AS image WHERE FALSE
+  UNION ALL SELECT 'Hyorin', '/academy', 11, 10, 11, 12, 'https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-academy-b635ea644ab19d2aab017b24.webp'
+  UNION ALL SELECT 'Hyorin', '/battlearena', 15, 4, 18, 4, 'https://ui0arpl8sm.ufs.sh/f/world-native-hyorin-battlearena-56d76f05ca78a0c650de45f1.webp'
+  UNION ALL SELECT 'Wake Island', '/minigames', 16, 10, 19, 8, 'https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-minigames-48e7324e0a6358a77eacc7ee.webp'
+  UNION ALL SELECT 'Wake Island', '/pets', 3, 6, 6, 8, 'https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-pets-51f2d944ac82291ab2643a24.webp'
+  UNION ALL SELECT 'Wake Island', '/globalanbuhq', 10, 16, 9, 18, 'https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-globalanbuhq-8c461166c5e8b7702d9f8e4f.webp'
+  UNION ALL SELECT 'Wake Island', '/souvenirs', 16, 16, 21, 13, 'https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-souvenirs-522705053ad3f0f5ef39e8fb.webp'
+  UNION ALL SELECT 'Wake Island', '/science', 13, 14, 14, 18, 'https://ui0arpl8sm.ufs.sh/f/world-native-wake-island-science-c2cbb470eed7b1841449cd44.webp'
+  UNION ALL SELECT 'Horizon', '/battlearena', 15, 4, 18, 4, 'https://ui0arpl8sm.ufs.sh/f/world-native-horizon-battlearena-7321bd88807ea7597dad377f.webp'
+  UNION ALL SELECT 'Horizon', '/townhall', 9, 17, 8, 17, 'https://ui0arpl8sm.ufs.sh/f/world-native-horizon-townhall-0aaa807c3e294b126a6e51fa.webp'
+  UNION ALL SELECT 'Freedom State', '/academy', 11, 10, 11, 12, 'https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-academy-2eefb47a89c068fe0e6d1db9.webp'
+  UNION ALL SELECT 'Freedom State', '/battlearena', 15, 4, 18, 4, 'https://ui0arpl8sm.ufs.sh/f/world-native-freedom-state-battlearena-87877fbb2d84408a34d8c3fb.webp'
+  UNION ALL SELECT 'Akikaze', '/battlearena', 15, 4, 18, 4, 'https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-battlearena-792ea43be789c5c473f4aa8c.webp'
+  UNION ALL SELECT 'Akikaze', '/academy', 11, 10, 11, 12, 'https://ui0arpl8sm.ufs.sh/f/world-native-akikaze-academy-c5bc2de727c4d6043bae3801.webp'
+  UNION ALL SELECT 'Syndicate', '/academy', 11, 10, 11, 12, 'https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-academy-259dad3784b30367dc4a971f.webp'
+  UNION ALL SELECT 'Syndicate', '/battlearena', 15, 4, 18, 4, 'https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-battlearena-64414c962cb362b3c563311e.webp'
+  UNION ALL SELECT 'Akasumi', '/battlearena', 15, 4, 18, 4, 'https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-battlearena-1f79dcda9d4bafbb5b3904be.webp'
+  UNION ALL SELECT 'Akasumi', '/academy', 11, 10, 11, 12, 'https://ui0arpl8sm.ufs.sh/f/world-native-akasumi-academy-c6531beeb397b2d6bb4b346a.webp'
+  UNION ALL SELECT 'Tsukimori', '/battlearena', 15, 4, 18, 4, 'https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-battlearena-14b598c15c42cfda10b63b8a.webp'
+  UNION ALL SELECT 'Tsukimori', '/academy', 11, 10, 11, 12, 'https://ui0arpl8sm.ufs.sh/f/world-native-tsukimori-academy-6df80c32857bf8f789ee2060.webp'
+  UNION ALL SELECT 'Shirohana', '/academy', 11, 10, 11, 12, 'https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-academy-5cd2ba5da3c85724be30ba5a.webp'
+  UNION ALL SELECT 'Shirohana', '/battlearena', 15, 4, 18, 4, 'https://ui0arpl8sm.ufs.sh/f/world-native-shirohana-battlearena-86b81b67a864ff7d87004358.webp'
+  UNION ALL SELECT NULL, '/academy', 11, 10, 11, 12, 'https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-academy-259dad3784b30367dc4a971f.webp'
+  UNION ALL SELECT NULL, '/battlearena', 15, 4, 18, 4, 'https://ui0arpl8sm.ufs.sh/f/world-native-syndicate-battlearena-64414c962cb362b3c563311e.webp'
+) AS plots ON CAST(plots.route AS BINARY) = s.`route` AND (CAST(plots.villageName AS BINARY) = v.`name` OR (plots.villageName IS NULL AND v.`type` IN ('HIDEOUT', 'STRONGHOLD')))
+SET s.`longitude` = plots.longitude, s.`latitude` = plots.latitude
+WHERE s.`longitude` = plots.oldLongitude AND s.`latitude` = plots.oldLatitude AND s.`image` = CAST(plots.image AS BINARY) AND s.`hasPage` = 1;
