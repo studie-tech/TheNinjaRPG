@@ -1,10 +1,20 @@
 import { DUNGEON_FLOORS_PER_TIER, DUNGEON_INACTIVE_ROUNDS } from "@/drizzle/constants";
 import { stillInBattle } from "@/libs/combat/actions";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import { attemptCapReached } from "@/libs/quest";
 import { periodStart } from "@/utils/time";
 import type { DungeonContent, DungeonRunState } from "@/validators/dungeon";
 import { dungeonRequirementsSchema } from "@/validators/dungeon";
+
+/** Navigation for the player's unique active dungeon reservation. */
+export const activeDungeonNotification: NavBarDropdownLink = {
+  href: "/dungeon",
+  name: "Active Dungeon Squad",
+  color: "green",
+  alwaysShow: true,
+  notificationCount: 1,
+};
 
 /** Run snapshot and preloaded waves carried by combat; actions never fetch dungeon content. */
 export type DungeonBattleState = {

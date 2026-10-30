@@ -386,7 +386,12 @@ export const dungeonRouter = createTRPCRouter({
           return errorResponse("You already joined another dungeon.");
         throw error;
       }
-      return { success: true, message: "Lobby created.", userPatch: {}, id };
+      return {
+        success: true,
+        message: "Lobby created.",
+        userPatch: { status: "QUEUED" as const },
+        id,
+      };
     }),
   /** Apply one party version; membership changes also commit their cross-run reservation. */
   act: protectedProcedure
@@ -400,8 +405,7 @@ export const dungeonRouter = createTRPCRouter({
         listDungeonMemberForAct(ctx.drizzle, ctx, input),
       ]);
       if (!run || !user) return errorResponse("Dungeon not found.");
-      if (run.expiresAt && run.expiresAt.getTime() <= Date.now()) {
-        await expireDungeonRun(ctx.drizzle, run);
+      if (await expireDungeonRun(ctx.drizzle, run)) {
         return {
           ...errorResponse("The dungeon deadline expired."),
           userPatch: undefined,
@@ -541,7 +545,15 @@ export const dungeonRouter = createTRPCRouter({
             : updateParty(ctx.drizzle),
         );
         return saved
-          ? { success: true, message: "Party updated.", userPatch: {} }
+          ? {
+              success: true,
+              message: "Party updated.",
+              userPatch: joined
+                ? { status: "QUEUED" as const }
+                : ending || removedUser === ctx.userId
+                  ? undefined
+                  : {},
+            }
           : errorResponse("The party changed. Refresh and try again.");
       } catch (error) {
         if (error === queueChanged)
@@ -666,7 +678,10 @@ export const dungeonRouter = createTRPCRouter({
             success: true,
             message: "Completion rewards delivered.",
             reward: receipt,
-            ...getDungeonRewardUserUpdate(user, receipt.rewards),
+            // Releasing this squad changes navigation; a newer reservation must remain visible.
+            ...(member.activeUserId === ctx.userId
+              ? { userPatch: undefined, userDelta: undefined }
+              : getDungeonRewardUserUpdate(user, receipt.rewards)),
           }
         : errorResponse("Rewards were already claimed. Refresh to view your receipt.");
     }),

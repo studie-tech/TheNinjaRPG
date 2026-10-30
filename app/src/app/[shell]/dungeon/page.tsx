@@ -34,7 +34,8 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { PartyRoster } from "@/layout/PartyRoster";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { dungeonRequirements } from "@/libs/dungeon";
+import { activeDungeonNotification, dungeonRequirements } from "@/libs/dungeon";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import { getRewardArray } from "@/libs/objectives";
 import { canUsePet } from "@/libs/pets/progression";
 import { showMutationToast } from "@/libs/toast";
@@ -88,6 +89,23 @@ export default function DungeonPage() {
         revision,
         ...(response.userDelta ? { delta: response.userDelta } : {}),
         achievementProgress: response.achievementProgress,
+        ...(response.success && patch?.status === "QUEUED"
+          ? {
+              // A confirmed reservation adds navigation without replaying consumed feedback.
+              notifications: (current: NavBarDropdownLink[] | undefined) =>
+                current && [
+                  ...current.filter(
+                    (entry) =>
+                      entry.color !== "toast" &&
+                      !(
+                        entry.href === activeDungeonNotification.href &&
+                        entry.name === activeDungeonNotification.name
+                      ),
+                  ),
+                  activeDungeonNotification,
+                ],
+            }
+          : {}),
       },
     );
     setMessage(response.success ? "" : response.message);

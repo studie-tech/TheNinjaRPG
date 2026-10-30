@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { battle, clan, dungeon, dungeonMember, dungeonRun, gameSetting, quest, questHistory, userData, userRewards, userVote, village } from "@/drizzle/schema";
+import { activeDungeonNotification } from "@/libs/dungeon";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import * as profileQueries from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
@@ -36,7 +37,7 @@ const refreshSource = page.slice(page.indexOf("  const refresh ="), page.indexOf
 const claimSource = page.slice(page.indexOf("  const claim ="), page.indexOf("  const runs ="));
 // Exercise the page's shared refresh and actual claim callback with the production cache merger.
 const transpiler = new (require("bun").Transpiler)({ loader: "tsx" }) as { transformSync(source: string): string };
-const claimFactory = transpiler.transformSync(`function createCallbacks() { ${refreshSource} ${claimSource} return claim; }`);
+const claimFactory = transpiler.transformSync(`function createCallbacks() { ${refreshSource} ${claimSource} return { ...claim, refresh }; }`);
 
 /** Use the production merge against a warmed profile and count any fallback profile read. */
 const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
@@ -49,12 +50,12 @@ const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
   const observer = new QueryObserver(client, { queryKey: key, queryFn: refetch, staleTime: Infinity });
   subscriptions.push(observer.subscribe(() => {}));
   const refetchState = vi.fn(async () => undefined);
-  const callbacks = new Function("prepareUserUpdate", "updateUser", "api", "state", "setMessage", "setAbandonId", "showMutationToast", "setIsHistoryOpen", "user", `${claimFactory}\nreturn createCallbacks();`)(
+  const callbacks = new Function("prepareUserUpdate", "updateUser", "api", "state", "available", "setMessage", "setAbandonId", "showMutationToast", "setIsHistoryOpen", "activeDungeonNotification", "user", `${claimFactory}\nreturn createCallbacks();`)(
     () => prepareUserUpdate(client, key),
     (patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options),
     { coop: { dungeon: { claim: { useMutation: (options: ClaimCallbacks) => options } } } },
-    { refetch: refetchState }, vi.fn(), vi.fn(), vi.fn(), vi.fn(), initial.userData,
-  ) as ClaimCallbacks;
+    { refetch: refetchState }, { refetch: vi.fn(async () => undefined) }, vi.fn(), vi.fn(), vi.fn(), vi.fn(), activeDungeonNotification, initial.userData,
+  ) as ClaimCallbacks & { refresh: (response: UserDeltaResponse, revision: number | undefined) => Promise<void> };
   return { client, key, refetch, refetchState, callbacks, current: () => client.getQueryData<Profile>(key)! };
 };
 
@@ -90,6 +91,39 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     await db.insert(dungeonMember).values({ runId: "completed-run", userId });
     return callerForDatabase(dungeonRouter, userId, db);
   };
+
+  it.each(["create", "accept"] as const)("confirms a guarded dungeon %s with queue status and canonical navigation", async (action) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ sector: 1 }).where(eq(userData.userId, userId));
+    await db.insert(dungeon).values({ id: "definition", content: dungeonContent(), updatedAt: new Date() });
+    let invitedRun = "";
+    if (action === "accept") {
+      await insertUsers([{ userId: "squad-host", username: "SquadHost", sector: 1, status: "AWAKE" }]);
+      const host = callerForDatabase(dungeonRouter, "squad-host", db);
+      const created = await host.create({ id: "definition" });
+      if (!created.success || !("id" in created)) throw Error("Missing host squad");
+      invitedRun = created.id;
+      expect((await host.act({ id: invitedRun, action: "invite", userId })).success).toBe(true);
+    }
+    const profile = callerForDatabase(profileRouter, userId, db);
+    const initial = await profile.getUser();
+    initial.notifications.push({ href: "/profile", name: "Consumed feedback", color: "toast" });
+    const cache = cachedProfile(initial, () => profile.getUser());
+    const revision = cache.callbacks.onMutate();
+    const actor = callerForDatabase(dungeonRouter, userId, db);
+    const response = userDeltaResponseSchema.parse(await (action === "create"
+      ? actor.create({ id: "definition" })
+      : actor.act({ id: invitedRun, action: "accept" })));
+    expect(response).toMatchObject({ success: true, userPatch: { status: "QUEUED" } });
+    await cache.callbacks.refresh(response, revision);
+    expect(cache.refetch).not.toHaveBeenCalled();
+    expect(cache.current().userData?.status).toBe("QUEUED");
+    expect(cache.current().notifications.filter((entry) => entry.href === "/dungeon")).toEqual([activeDungeonNotification]);
+    expect(cache.current().notifications.some((entry) => entry.color === "toast")).toBe(false);
+    const canonical = await profile.getUser();
+    expect(canonical.userData?.status).toBe(cache.current().userData?.status);
+    expect(canonical.notifications.filter((entry) => entry.href === "/dungeon")).toEqual([activeDungeonNotification]);
+  });
 
   it.each([
     ["reputation_points", "reward_reputation", "reputationPointsTotal"],
@@ -132,22 +166,35 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     expect(goal(cache.current(), "reward-progress")).toEqual(goal(await profile.getUser(), "reward-progress"));
   });
 
-  it("keeps a fresh scalar claim local and canonically reconciles its receipt replay", async () => {
+  it.each(["inactive", "active", "newer"] as const)("reconciles scalar claims and receipt replays with squad reservation: %s", async (reservation) => {
     const db = await getTestDatabase();
     const profile = callerForDatabase(profileRouter, userId, db);
     await profile.getUser();
     const api = await completedRun({}, 0);
+    if (reservation === "active")
+      await db.update(dungeonMember).set({ activeUserId: userId }).where(eq(dungeonMember.runId, "completed-run"));
+    if (reservation === "newer") {
+      await db.insert(dungeonRun).values({ id: "newer-run", dungeonId: "definition", leaderId: userId, content: dungeonContent(), status: "LOBBY", createdAt: new Date(), expiresAt: new Date(Date.now() + 3600000), state: { ...dungeonBattleState().runState, memberIds: [userId] } });
+      await db.insert(dungeonMember).values({ runId: "newer-run", userId, activeUserId: userId });
+    }
     const initial = await profile.getUser();
     expect(goal(initial, "dungeon-completion")).toMatchObject({ done: true, value: 1 });
+    expect(initial.notifications.some((entry) => entry.href === "/dungeon" && entry.name === "Active Dungeon Squad")).toBe(reservation !== "inactive");
     const cache = cachedProfile(initial, () => profile.getUser());
     const hydration = vi.spyOn(profileQueries, "fetchUpdatedUser");
     for (let claim = 0; claim < 2; claim++) {
+      const priorHydrations = hydration.mock.calls.length;
       const revision = cache.callbacks.onMutate();
       const { result, statements } = await recordQueries(() => api.claim({ id: "completed-run" }));
       const response = userDeltaResponseSchema.parse(result);
       if (claim === 0) {
-        expect(response.userPatch).toEqual({ dungeonsCompleted: 1 });
-        expect(response.userDelta?.money).toBe(100);
+        if (reservation === "active") {
+          expect(response.userPatch).toBeUndefined();
+          expect(response.userDelta).toBeUndefined();
+        } else {
+          expect(response.userPatch).toEqual({ dungeonsCompleted: 1 });
+          expect(response.userDelta?.money).toBe(100);
+        }
         const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
         expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
       } else {
@@ -158,11 +205,12 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
         expect(statements.every((statement) => /^\s*select/i.test(statement))).toBe(true);
       }
       expect(response.achievementProgress).toBeUndefined();
-      expect(hydration).not.toHaveBeenCalled();
+      expect(hydration).toHaveBeenCalledTimes(priorHydrations);
       await cache.callbacks.onSuccess(response, undefined, revision);
-      expect(cache.refetch).toHaveBeenCalledTimes(claim);
+      expect(cache.refetch).toHaveBeenCalledTimes(claim + Number(reservation === "active"));
+      expect(cache.current().notifications.some((entry) => entry.href === "/dungeon" && entry.name === "Active Dungeon Squad")).toBe(reservation === "newer");
     }
-    expect(hydration).toHaveBeenCalledTimes(1);
+    expect(hydration).toHaveBeenCalledTimes(reservation === "active" ? 2 : 1);
     expect(cache.current().userData).toMatchObject({ money: 100, earnedExperience: 0, dungeonsCompleted: 1 });
     expect(goal(cache.current(), "dungeon-completion")).toEqual(goal(initial, "dungeon-completion"));
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ money: 100, earnedExperience: 0 });

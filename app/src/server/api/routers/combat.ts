@@ -2139,6 +2139,7 @@ export const initiateBattle = async (
         return errorResponse(
           `${owner.username} does not have the required dungeon entry items.`,
         );
+      requiresUserRefresh ||= charges.length > 0;
       owner.items = owner.items
         .map((row) => ({
           ...row,
