@@ -100,8 +100,8 @@ describeWithDatabase("moderator trade ban removal", () => {
     const db = await getTestDatabase();
     const result = await callerForDatabase(reportsRouter, "staff", db).tradeBan(decision);
     expect(result.success).toBe(true);
-    expect(result.userPatch).toBeUndefined();
-    expect(result.userDelta).toBeUndefined();
+    expect(result).not.toHaveProperty("userPatch");
+    expect(result).not.toHaveProperty("userDelta");
     expect(result).not.toHaveProperty("pendingReportCount");
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "target") })).toMatchObject({ isTradeBanned: true });
     expect(await db.query.userReportComment.findMany()).toHaveLength(1);

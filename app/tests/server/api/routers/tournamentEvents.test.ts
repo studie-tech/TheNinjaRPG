@@ -39,7 +39,6 @@ import {
 } from "@/libs/tournament/events";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter } from "@/server/api/routers/profile";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { tournamentRouter } from "@/server/api/routers/tournament";
 import { maintainEventTournaments, syncEventTournament } from "@/server/api/routers/tournamentEvents";
 import type { DrizzleClient } from "@/server/db";
@@ -112,7 +111,7 @@ describeWithDatabase("event tournament persistence", () => {
     if (!("tournamentId" in created)) throw new Error(created.message);
     const result = await staff.manageEvent({ tournamentId: created.tournamentId, action: "PUBLISH" });
     expect(result.success).toBe(true);
-    expect(result.userPatch).toBeUndefined();
+    expect(result).not.toHaveProperty("userPatch");
     expect(result).not.toHaveProperty("eventNotices");
     expect(await db.query.tournament.findFirst()).toMatchObject({ eventData: { status: "REGISTRATION" } });
   });
@@ -598,12 +597,11 @@ describeWithDatabase("event tournament persistence", () => {
     cache.setQueryData(key, initial);
     const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
     const unsubscribe = observer.subscribe(() => {});
-    const revision = prepareUserUpdate(cache, key);
     try {
       if (hasCooking) await database.update(userCookingJob).set({ finishesAt: new Date(0) });
       const response = await accept(userId);
       expect(response.success).toBe(true);
-      await updateUserCache(cache, key, response.userPatch, { revision,  });
+      await cache.invalidateQueries({ queryKey: key });
       const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
       const cached = cache.getQueryData<typeof initial>(key)!.userData;
       expect(saved?.cookingExperience).toBe(hasCooking ? 99 : 0);
@@ -612,7 +610,7 @@ describeWithDatabase("event tournament persistence", () => {
       expect(cached?.status).toBe("BATTLE");
       expect(cached?.battleId).toBe(saved?.battleId);
       expect(read).toHaveBeenCalledTimes(1);
-      expect(response.userPatch).toBeUndefined();
+      expect(response).not.toHaveProperty("userPatch");
     } finally { unsubscribe(); cache.clear(); }
   });
   it("blocks open-world attacks on registered entrants until they withdraw", async () => {

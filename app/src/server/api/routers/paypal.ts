@@ -434,7 +434,7 @@ export const paypalRouter = createTRPCRouter({
     }),
   resolveTransaction: protectedProcedure
     .input(searchPaypalTransactionSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch potential transactions from paypal
       const token = await getPaypalAccessToken();
@@ -458,7 +458,7 @@ export const paypalRouter = createTRPCRouter({
         orderId: z.string().min(1).max(191).optional(),
       }),
     )
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const token = await getPaypalAccessToken();
       const subscription = await getPaypalSubscription(input.subscriptionId, token);

@@ -398,8 +398,8 @@ describeWithDatabase("web store payments", () => {
         success: false,
         message: `${failure}, ${offer.name} delivered, Transaction ID capture-legacy-payment synced!`,
       });
-      expect(result.userPatch).toBeUndefined();
-      expect(result.userDelta).toBeUndefined();
+      expect(result).not.toHaveProperty("userPatch");
+      expect(result).not.toHaveProperty("userDelta");
     } finally { fetchMock.mockRestore(); }
     const buyer = await db.query.userData.findFirst({ where: eq(userData.userId, "buyer") });
     expect(buyer!.reputationPoints).toBeGreaterThan(0);

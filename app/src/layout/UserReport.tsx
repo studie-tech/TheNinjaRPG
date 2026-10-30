@@ -137,30 +137,16 @@ const DisplayUserReport: React.FC<UserReportProps> = (props) => {
 
   const onSuccess = (data: BaseServerResponse) => refreshAfterSuccess(data, true);
 
-  const banUser = api.reports.ban.useMutation({
-    onSuccess,
-  });
-  const tradebanUser = api.reports.tradeBan.useMutation({
-    onSuccess,
-  });
-  const clearReport = api.reports.clear.useMutation({
-    onSuccess,
-  });
+  const banUser = api.reports.ban.useMutation({ onSuccess });
+  const tradebanUser = api.reports.tradeBan.useMutation({ onSuccess });
+  const clearReport = api.reports.clear.useMutation({ onSuccess });
   const createComment = api.comments.createReportComment.useMutation({
     onSuccess: (data) => refreshAfterSuccess(data, false),
   });
-  const escalateReport = api.reports.escalate.useMutation({
-    onSuccess,
-  });
-  const silenceUser = api.reports.silence.useMutation({
-    onSuccess,
-  });
-  const timeoutUser = api.reports.timeout.useMutation({
-    onSuccess,
-  });
-  const warnUser = api.reports.warn.useMutation({
-    onSuccess,
-  });
+  const escalateReport = api.reports.escalate.useMutation({ onSuccess });
+  const silenceUser = api.reports.silence.useMutation({ onSuccess });
+  const timeoutUser = api.reports.timeout.useMutation({ onSuccess });
+  const warnUser = api.reports.warn.useMutation({ onSuccess });
 
   const isPending =
     banUser.isPending ||

@@ -238,12 +238,14 @@ export const VillageStructureMaintenance = ({ villageId }: { villageId: string }
     { enabled: !!villageId },
   );
   const pay = api.kage.payStructureMaintenance.useMutation({
-    onSuccess: async (data) => {
-      if (data.success) await utils.profile.getUser.invalidate();
-      const result = data;
+    onSuccess: async (result) => {
       setMessage(result.message ?? "");
       showMutationToast(result);
-      if (result.success) await utils.village.get.invalidate();
+      if (result.success)
+        await Promise.all([
+          utils.village.get.invalidate(),
+          utils.profile.getUser.invalidate(),
+        ]);
     },
     onError: (error) => setMessage(error.message),
   });

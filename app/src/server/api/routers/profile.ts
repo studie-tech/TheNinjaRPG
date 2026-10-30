@@ -2194,7 +2194,7 @@ export const profileRouter = createTRPCRouter({
       mcp: { description: "Confirm and execute account deletion" },
     })
     .input(z.object({ userId: z.string(), confirmation: z.string().optional() }))
-    .output(userDeltaResponseSchema.extend({ affectedUserId: z.string().optional() }))
+    .output(baseServerResponse.extend({ affectedUserId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, target] = await Promise.all([

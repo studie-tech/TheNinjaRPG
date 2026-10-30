@@ -46,7 +46,11 @@ import {
 } from "@/queries/tournamentEvents";
 import { initiateBattle } from "@/routers/combat";
 import { updateRewards } from "@/routers/quests";
-import { errorResponse, protectedProcedure } from "@/server/api/trpc";
+import {
+  baseServerResponse,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
@@ -60,8 +64,6 @@ import {
   eventTournamentPlayerSchema,
   eventTournamentSaveSchema,
 } from "@/validators/tournament";
-
-import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const eventTournamentProcedures = {
   /** Return invitations and open ready checks that still need this player's response. */
@@ -167,7 +169,7 @@ export const eventTournamentProcedures = {
         originSocketId: z.string().max(128).optional(),
       }),
     )
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, target] = await Promise.all([
         findUserRoleById(ctx.drizzle, ctx.userId),
@@ -353,7 +355,7 @@ export const eventTournamentProcedures = {
         originSocketId: z.string().max(128).optional(),
       }),
     )
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchEventUser(ctx.drizzle, ctx.userId);
       if (!user || user.isAi || user.isBanned)
