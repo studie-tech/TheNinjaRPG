@@ -102,6 +102,7 @@ export const createLpcCharacter = async (
         idleDuration = 1600 + Math.random() * 2000;
       }
     }
+    // Outfits without compatible idle artwork keep their neutral pose and planted feet.
     const sampleState = idling
       ? state === "combat" && hasCombatIdle
         ? "combat"
@@ -114,11 +115,6 @@ export const createLpcCharacter = async (
         ? 0
         : idlePhase * 3 * LPC_IDLE_FRAME_MS
       : frame.now - startedAt;
-    // Unsupported outfits breathe together by one source pixel, preserving their original pose and detail.
-    const breath =
-      idling && sampleState === "stand" && !frame.reducedMotion && idlePhase >= 2 / 3
-        ? -1 / 64
-        : 0;
     // A custom weapon drives the body timeline while retaining its own authored columns.
     const poseOwner = poseOwners.get(sampleState);
     const pose =
@@ -130,7 +126,6 @@ export const createLpcCharacter = async (
       : Math.floor(Math.max(0, elapsed) / LPC_ATTACK_FRAME_MS);
     const poseStep = poses?.[Math.min(step, poses.length - 1)];
     for (const entry of layers) {
-      entry.child.y = breath;
       const facing = entry.layer.mirror ? opposite : direction;
       const customPose =
         lpcCatalog.layouts[entry.sheet.layout]?.bodyPoses?.[sampleState];

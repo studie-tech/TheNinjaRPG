@@ -13,9 +13,9 @@ Its layers share one phase; walking and attacks retain their authored speed.
 
 An outfit uses the combat stance only when every visible profile supplies it.
 Other outfits use a complete authored idle when available, or retain their aligned
-neutral pose with one source pixel of breathing motion. No equipment is hidden to
-satisfy a missing stance. Reduced motion holds the first pose and suppresses the
-breathing offset. Hidden/offscreen scenes suspend their existing frame loop;
+neutral pose with planted feet. No equipment is hidden to satisfy a missing stance,
+and idle never translates the whole character. Reduced motion holds the first pose.
+Hidden/offscreen scenes suspend their existing frame loop;
 characters do not create individual animation timers. Sector actors outside a padded viewport do not acquire texture
 leases; moving the viewport into their area installs them from the latest snapshot,
 and departing actors release their resources through their existing render scope.

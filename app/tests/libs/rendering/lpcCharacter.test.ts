@@ -115,12 +115,32 @@ describe("layered LPC actors", () => {
         const ownsPose = lpcCatalog.layouts[part.layout]!.clips[state];
         expect(child.visible).toBe(!!ownsPose);
         if (ownsPose) expect(child.texture.frame).toMatchObject(frameRectangle(expected!));
-        expect(child.y).toBe(state === "stand" ? -1 / 64 : 0);
+        expect(child.y).toBe(0);
       }
       actor.render(frame(2000, true), "combat", 2);
       for (const child of actor.sprite.children as Sprite[]) expect(child.y).toBe(0);
       actor.render(frame(3000), "walk", 2);
       for (const child of actor.sprite.children as Sprite[]) expect(child.y).toBe(0);
+    }
+  });
+  it("keeps unsupported idle outfits planted through every breathing phase", async () => {
+    const { game } = gameFixture();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    for (const body of ["male", "female"] as const) for (const mode of ["all", "travel"] as const) for (const profile of ["club", "katana", "robe", "belt"]) {
+      const appearance: SpriteAppearance = { version: 1, body, layers: [{ profile: "body", color: "light" }, { profile, color: "brown" }] };
+      const actor = await characters.createLpcCharacter(game, appearance, mode);
+      for (const direction of [0, 1, 2, 3] as const) for (const animation of ["idle", "combat"] as const) {
+        actor.render({ now: 0, delta: 0, reducedMotion: false }, animation, direction);
+        const neutral = (actor.sprite.children as Sprite[]).map((child) => ({ texture: child.texture, visible: child.visible }));
+        for (let tick = 1; tick <= 240; tick++) {
+          actor.render({ now: tick * 1000 / 60, delta: 1 / 60, reducedMotion: false }, animation, direction);
+          for (const [index, child] of (actor.sprite.children as Sprite[]).entries()) {
+            expect(child.y).toBe(0);
+            expect(child.texture).toBe(neutral[index]!.texture);
+            expect(child.visible).toBe(neutral[index]!.visible);
+          }
+        }
+      }
     }
   });
   it.each([
