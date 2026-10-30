@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   COMBAT_BIOMES,
   DUNGEON_FLOORS_PER_TIER,
+  DUNGEON_LOBBY_SECONDS,
   DUNGEON_MAX_DROPS,
   DUNGEON_MAX_MOBS,
   DUNGEON_MAX_REWARD_QUANTITY,
@@ -342,8 +343,8 @@ export default function DungeonEditor() {
                 <h2 className="font-semibold">Entry requirements</h2>
                 <p className="text-sm text-muted-foreground">
                   Every player must qualify. Entry items and an attempt are consumed
-                  when the first floor starts. Lobby reservations expire after 15
-                  minutes.
+                  when the first floor starts. Lobby reservations expire after{" "}
+                  {DUNGEON_LOBBY_SECONDS / 60} minutes.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Required level">

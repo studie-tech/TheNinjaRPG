@@ -577,7 +577,7 @@ export const updateDungeonRunForExpireDungeonRun = (
         readyIds: [],
         message:
           run.status === "LOBBY"
-            ? "The 15-minute dungeon lobby expired."
+            ? `The ${DUNGEON_LOBBY_SECONDS / 60}-minute dungeon lobby expired.`
             : "The one-hour dungeon deadline expired.",
       },
     })
