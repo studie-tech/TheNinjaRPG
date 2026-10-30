@@ -196,6 +196,7 @@ describeWithDatabase("quest battle entry item identity", () => {
       "QUEST",
     );
     expect(result.success).toBe(true);
+    expect(result).toHaveProperty("requiresUserRefresh", true);
     expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(true);
     expect(await client.query.userItem.findMany()).toHaveLength(0);
     expect(await client.query.battle.findMany()).toHaveLength(1);

@@ -274,6 +274,7 @@ import {
   userRegenerationGainSql,
 } from "@/server/utils/regeneration";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
+import { getBattleUserPatch } from "@/server/utils/socialUserCache";
 import { grantTitles } from "@/server/utils/titleGrants";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { recordVillageMissionProgress } from "@/server/utils/villageMission";
@@ -2004,22 +2005,21 @@ export const questsRouter = createTRPCRouter({
           (entry) => entry.type === "combat" || entry.type === "update_user",
         ) &&
         getQuestTargetSectorsToCheck(user, user.questData ?? []).length === 0;
-      const projection = canProject
-        ? getUserProgressionUpdate(
-            { ...user, ...battleUserPatch },
-            snapshot.publishedAchievementIds,
-          )
-        : undefined;
-      // Battle initiation owns the account's next version; retain the cached stamp
-      // until an authoritative read supplies it rather than publishing the earlier claim.
-      const { updatedAt: _claimStamp, ...battlePatch } = projection?.userPatch ?? {};
+      const committedBattlePatch =
+        canProject && battleUserPatch
+          ? await getBattleUserPatch(ctx.drizzle, user.userId)
+          : undefined;
+      const projection =
+        canProject && (!battleAttempted || committedBattlePatch)
+          ? getUserProgressionUpdate(user, snapshot.publishedAchievementIds)
+          : undefined;
       return {
         success: true,
-        message: finalNotification.join("\n"),
+        message: [...snapshot.toastMessages, ...finalNotification].join("\n"),
         ...(projection
           ? {
               ...projection,
-              userPatch: battleUserPatch ? battlePatch : projection.userPatch,
+              userPatch: { ...projection.userPatch, ...committedBattlePatch },
             }
           : {}),
       };
@@ -4278,7 +4278,7 @@ const executeClaimedQuestConsequences = async ({
               opponent.scaleGains ?? 1,
             );
             if (!result.success) notifications.push(result.message);
-            else if (result.battleId)
+            else if (result.battleId && !result.requiresUserRefresh)
               battleUserPatch = { status: "BATTLE", battleId: result.battleId };
           })()
         : Promise.resolve(),
