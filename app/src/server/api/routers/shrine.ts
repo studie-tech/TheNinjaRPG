@@ -56,7 +56,6 @@ import {
   selectSectorForHasLevel3Shrine,
   updateSectorForPayWeeklyMaintenance,
   updateSectorForUpgradeShrine,
-  updateUserDataForChallengeShrine2,
   updateVillageForActivateBoost,
   updateVillageForPayWeeklyMaintenance,
   updateVillageForPayWeeklyMaintenance2,
@@ -792,7 +791,7 @@ export const shrineRouter = createTRPCRouter({
         }
       } catch (error) {
         // Rollback user status on any insert failure
-        await updateUserDataForChallengeShrine2(ctx.drizzle, user);
+        await wakeQueuedUser(ctx.drizzle, user.userId);
         throw error;
       }
 

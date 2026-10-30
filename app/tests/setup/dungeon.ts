@@ -8,7 +8,8 @@ export const dungeonContent = () => dungeonContentSchema.parse({
   rewards: {money: 100, experience: 10, tokens: 5, prestige: 2},
 });
 /** Independent three-player battle snapshot with overridable wave/progress state for each test. */
-export const dungeonBattleState = (overrides: Partial<DungeonBattleState> = {}): DungeonBattleState => ({
+export const dungeonBattleState = (overrides: Partial<DungeonBattleState> = {}): DungeonBattleState & { dungeonId: string; content: ReturnType<typeof dungeonContent> } => ({
+  dungeonId: "definition", content: dungeonContent(),
   runId: "run", runVersion: 1, runState: {memberIds: ["a", "b", "c"], invitedIds: [], readyIds: [], floor: 0, clearedFloors: [], message: ""},
   totalFloors: DUNGEON_FLOORS_PER_TIER, roomKind: "floor", expiresAt: Date.now() + 3600000,
   lastActionRound: {a: 0, b: 0, c: 0}, ...overrides,

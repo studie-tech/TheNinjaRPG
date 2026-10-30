@@ -19,6 +19,7 @@ import {
   type CombatBiome,
   CombatStatNames,
   DUNGEON_PARTY_SIZE,
+  DUNGEON_SOLO_PETS,
   ELEMENTAL_MASTERY_BOOST,
   ELITE_JONIN_BRACKET,
   IMG_AVATAR_DEFAULT,
@@ -130,7 +131,7 @@ import {
   rollInitiative,
 } from "@/libs/combat/util";
 import type { CoopEncounter } from "@/libs/coop";
-import { dungeonBattleOutcome } from "@/libs/dungeon";
+import { dungeonBattleOutcome, dungeonRequirements } from "@/libs/dungeon";
 import { activeTrainedElement } from "@/libs/elementalMastery";
 import { computeJutsuLoadoutCapAssignments } from "@/libs/jutsu";
 import { resolveSelectableLoadout } from "@/libs/loadout";
@@ -148,6 +149,7 @@ import {
   isObjectiveWarActive,
 } from "@/libs/objectiveWar";
 import { petExperienceGainSql } from "@/libs/pets/experience";
+import { canUsePet } from "@/libs/pets/progression";
 import {
   calcActiveUserRegen,
   calcCP,
@@ -260,6 +262,11 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { settleCookingExperience } from "@/server/utils/cooking";
+import {
+  commitDungeonEntryBattle,
+  fetchDungeonEntryData,
+  getDungeonEntryCharges,
+} from "@/server/utils/dungeonEntry";
 import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { notifyBattleDefenders } from "@/server/utils/push/combat";
@@ -1892,7 +1899,10 @@ export const initiateBattle = async (
   const { longitude, latitude, sector, userIds, targetIds, client } = info;
   const dungeonEncounter = info.coop?.kind === "dungeon" ? info.coop : undefined;
   const questEncounter = info.coop?.kind === "quest" ? info.coop : undefined;
-  if (dungeonEncounter && userIds.length !== DUNGEON_PARTY_SIZE)
+  if (
+    dungeonEncounter &&
+    userIds.length !== (dungeonEncounter.runState.pets ? 1 : DUNGEON_PARTY_SIZE)
+  )
     return {
       success: false,
       message: `A dungeon requires ${DUNGEON_PARTY_SIZE} players`,
@@ -1940,6 +1950,7 @@ export const initiateBattle = async (
     activeEventTournaments,
     pets,
     petJutsus,
+    dungeonEntryData,
   ] = await Promise.all([
     info.territoryWar ??
       (battleType === "COMBAT" && sector !== undefined
@@ -1997,6 +2008,9 @@ export const initiateBattle = async (
     petsAllowedInBattle(battleType)
       ? listJutsuForInitiateBattle3(client, userIds, targetIds)
       : [],
+    dungeonEncounter && !dungeonEncounter.runState.entryPaidAt
+      ? fetchDungeonEntryData(client, userIds)
+      : null,
   ]);
 
   // Start due jutsu levels and crafts before the participants are read for the fight,
@@ -2068,6 +2082,53 @@ export const initiateBattle = async (
       success: false,
       message: "A companion selection changed. Please try again.",
     };
+  }
+
+  if (dungeonEncounter?.runState.pets) {
+    const owner = fetchedUsers.find((user) => user.userId === userIds[0]);
+    const chosen = dungeonEncounter.runState.pets;
+    if (
+      !owner ||
+      chosen.length !== DUNGEON_SOLO_PETS ||
+      new Set(chosen.map((pet) => pet.id)).size !== DUNGEON_SOLO_PETS ||
+      chosen.some((selected) => {
+        const pet = pets.find(
+          (pet) => pet.id === selected.id && pet.userId === owner.userId,
+        );
+        return (
+          !pet ||
+          !pet.species ||
+          pet.generationStatus !== "READY" ||
+          owner.petTask?.petId === pet.id ||
+          !canUsePet(pet, owner)
+        );
+      })
+    )
+      return errorResponse(
+        "Your selected dungeon companions must be fully generated, battle-ready and free of tasks.",
+      );
+  }
+  // Consumed tickets must not contribute equipment stats to the first floor.
+  if (dungeonEntryData && dungeonEncounter) {
+    const requirements = dungeonRequirements(dungeonEncounter.content);
+    for (const owner of fetchedUsers.filter((user) => userIds.includes(user.userId))) {
+      const charges = getDungeonEntryCharges(
+        requirements,
+        dungeonEntryData.inventory.filter((row) => row.userId === owner.userId),
+      );
+      if (!charges)
+        return errorResponse(
+          `${owner.username} does not have the required dungeon entry items.`,
+        );
+      owner.items = owner.items
+        .map((row) => ({
+          ...row,
+          quantity:
+            row.quantity -
+            (charges.find((charge) => charge.id === row.id)?.quantity ?? 0),
+        }))
+        .filter((row) => row.quantity > 0);
+    }
   }
 
   const entryCharges = info.questAttempt
@@ -2627,16 +2688,18 @@ export const initiateBattle = async (
         };
     } else if (!isAutoBattle && !user.isAi) {
       // For other battles, check if user status is appropriate (skip AI users)
-      const isOk = isQueuedBattle
+      const isOk = dungeonEncounter
         ? user.status === "QUEUED"
-        : isShrineBattle
-          ? ["AWAKE", "QUEUED"].includes(user.status)
-          : user.status === "AWAKE" ||
-            (battleType === "QUEST" &&
-              isBetweenPyramidBattles(user) &&
-              info.questAttempt?.isolated &&
-              getIsolatedPyramid(user)?.id === info.questAttempt.id &&
-              info.questBattleSource?.questId === info.questAttempt.questId);
+        : isQueuedBattle
+          ? user.status === "QUEUED"
+          : isShrineBattle
+            ? ["AWAKE", "QUEUED"].includes(user.status)
+            : user.status === "AWAKE" ||
+              (battleType === "QUEST" &&
+                isBetweenPyramidBattles(user) &&
+                info.questAttempt?.isolated &&
+                getIsolatedPyramid(user)?.id === info.questAttempt.id &&
+                info.questBattleSource?.questId === info.questAttempt.questId);
       if (!isOk) {
         return { success: false, message: `User ${user.username} is not awake` };
       }
@@ -2859,6 +2922,9 @@ export const initiateBattle = async (
     summonTemplateCache,
     petPreload: {
       pets,
+      selectedPetIdsByOwner: dungeonEncounter?.runState.pets
+        ? { [userIds[0]!]: dungeonEncounter.runState.pets.map((pet) => pet.id) }
+        : undefined,
       ownerRanks: Object.fromEntries(
         fetchedUsers
           .filter((user) => !user.isAi)
@@ -2881,6 +2947,14 @@ export const initiateBattle = async (
   const { userEffects, usersState, extraState, initialDurability, groundEffects } =
     processed;
 
+  if (
+    dungeonEncounter?.runState.pets &&
+    usersState.filter((user) => user.petId && user.controllerId === userIds[0])
+      .length !== DUNGEON_SOLO_PETS
+  )
+    return errorResponse(
+      "Both selected dungeon companions must be able to join the battlefield.",
+    );
   if (dungeonEncounter) {
     let offset = userIds.length + (dungeonEncounter.waves[0]?.aiIds.length ?? 0);
     const encounter = await prepareEncounterWaves(
@@ -2911,7 +2985,11 @@ export const initiateBattle = async (
     extraState.dungeon = {
       runId: dungeonEncounter.runId,
       runVersion: dungeonEncounter.runVersion,
-      runState: dungeonEncounter.runState,
+      runState: {
+        ...dungeonEncounter.runState,
+        battlePublished: true,
+        ...(dungeonEntryData ? { entryPaidAt: Date.now() } : {}),
+      },
       totalFloors: dungeonEncounter.totalFloors,
       roomKind: dungeonEncounter.roomKind,
       expiresAt: dungeonEncounter.expiresAt,
@@ -3274,7 +3352,7 @@ export const initiateBattle = async (
   }
   /**
    * Persist the preloaded battle and return the participant claim and any settled failure.
-   * First payments, event launches and personal hunts await writes within their transaction session.
+   * Dungeon floors, first payments, event launches and hunts await their transaction's writes.
    * Other battles dispatch independent writes together and settle all siblings before cleanup.
    */
   const createBattle = async (client: DrizzleClient) => {
@@ -3343,7 +3421,13 @@ export const initiateBattle = async (
         ? [updateTournamentMatchForCreateBattle(client, battleId, userIds, targetIds)]
         : []),
     ] as const;
-    if (hasEntryCharges || info.tournamentGame || info.kageMatch || info.hunting) {
+    if (
+      hasEntryCharges ||
+      dungeonEncounter ||
+      info.tournamentGame ||
+      info.kageMatch ||
+      info.hunting
+    ) {
       await writes[0];
       await writes[1];
       const claimedUsers = await writes[2];
@@ -3362,9 +3446,26 @@ export const initiateBattle = async (
   };
   const attempt = info.questAttempt;
   let result: Awaited<ReturnType<typeof createBattle>>;
-  // Separate ticket stacks, a receipt and battle inserts must commit together on first payment.
-  // Later and no-ticket floors use the existing participant claim and compensation path.
-  if (attempt && hasEntryCharges) {
+  // Every dungeon floor commits its playable battle with the publication/recovery fence.
+  // First entry additionally commits all ticket stacks and its attempt receipt in that commit.
+  if (dungeonEncounter && extraState.dungeon) {
+    const committed = await commitDungeonEntryBattle({
+      client,
+      data: dungeonEntryData,
+      runId: dungeonEncounter.runId,
+      dungeonId: dungeonEncounter.dungeonId,
+      battleId,
+      version: dungeonEncounter.runVersion,
+      state: extraState.dungeon.runState,
+      content: dungeonEncounter.content,
+      users: fetchedUsers.filter((user) => userIds.includes(user.userId)),
+      createBattle,
+      didClaim: (result) =>
+        !result.failed && result.claimedUsers?.rowsAffected === expectedRows,
+    });
+    if (!committed.success) return errorResponse(committed.message);
+    result = committed.result;
+  } else if (attempt && hasEntryCharges) {
     const player = users.find((u) => u.userId === attempt.userId);
     const committed = await commitQuestEntryBattle({
       client,
@@ -3515,37 +3616,43 @@ export const initiateBattle = async (
     return { success: false, message: "Attack failed, did the target move?" };
   }
 
-  // Push websockets message to target
-  notifyBattleDefenders(client, {
-    battleId,
-    battleType,
-    initiatorIds: info.userIds,
-    users,
-  });
-  const pusher = getServerPusher();
+  try {
+    // Push websockets message to target
+    notifyBattleDefenders(client, {
+      battleId,
+      battleType,
+      initiatorIds: info.userIds,
+      users,
+    });
+    const pusher = getServerPusher();
 
-  // Keep human fighters on the sector map as combat markers so nearby players
-  // can see who is fighting. AI templates are not sector-map entities and must
-  // not be broadcast. Auto-battles stay off this broadcast.
-  if (!AutoBattleTypes.includes(battleType)) {
-    await Promise.all(
-      users.map(async (user) => {
-        await Promise.all([
-          pusher.trigger(user.userId, "event", { type: "battle", battleId }),
-          ...(!user.isAi
-            ? [
-                updateUserOnMap(pusher, user.sector, {
-                  ...user,
-                  status: "BATTLE",
-                  battleId,
-                }),
-              ]
-            : []),
-        ]);
-      }),
-    );
+    // Keep human fighters on the sector map as combat markers so nearby players
+    // can see who is fighting. AI templates are not sector-map entities and must
+    // not be broadcast. Auto-battles stay off this broadcast.
+    if (!AutoBattleTypes.includes(battleType)) {
+      await Promise.all(
+        users.map(async (user) => {
+          await Promise.all([
+            pusher.trigger(user.userId, "event", { type: "battle", battleId }),
+            ...(!user.isAi
+              ? [
+                  updateUserOnMap(pusher, user.sector, {
+                    ...user,
+                    status: "BATTLE",
+                    battleId,
+                  }),
+                ]
+              : []),
+          ]);
+        }),
+      );
+    }
+  } catch (error) {
+    // The dungeon battle and its entry payment are committed. Polling restores navigation
+    // when publication fails; compensation must never erase this paid, playable battle.
+    if (!dungeonEncounter) throw error;
+    Sentry.captureException(error, { tags: { source: "dungeonBattlePublication" } });
   }
-
   // Return the battle
   return { success: true, message: "You have attacked", battleId };
 };
@@ -3619,7 +3726,7 @@ export const processUsersForBattle = async (
     height: number;
     petPreload?: Pick<
       Parameters<typeof addPetsToBattle>[0],
-      "pets" | "ownerRanks" | "abilitiesByOwner"
+      "pets" | "ownerRanks" | "abilitiesByOwner" | "selectedPetIdsByOwner"
     >;
   },
   summonDependencies = new Map<string, Set<string>>(),

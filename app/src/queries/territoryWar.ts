@@ -29,6 +29,7 @@ import {
   userData,
   village,
 } from "@/drizzle/schema";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 
 /** Latest scheduled event, including closed/expired results; does not advance its lifecycle. */
@@ -232,7 +233,8 @@ export const executeRowsForCleanupTerritoryWarTeams = (
   expired: SQL<unknown>,
 ) =>
   client.execute(
-    sql`UPDATE UserData u INNER JOIN MpvpBattleUser m ON m.userId = u.userId INNER JOIN MpvpBattleQueue q ON q.id = m.clanBattleId INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId SET u.status = 'AWAKE' WHERE ${expired} AND u.status = 'QUEUED'`,
+    sql`UPDATE UserData u INNER JOIN MpvpBattleUser m ON m.userId = u.userId INNER JOIN MpvpBattleQueue q ON q.id = m.clanBattleId INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId SET u.status = 'AWAKE' WHERE ${expired} AND u.status = 'QUEUED'
+      AND ${withoutDungeonReservation(sql`u.userId`)}`,
   );
 
 /** Execute the database statement for `cleanupTerritoryWarTeams`. */

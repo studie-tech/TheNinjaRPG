@@ -176,7 +176,7 @@ export async function GET(request: Request) {
 
     // Step 25: Set status to AWAKE for users who are QUEUED if they are not in any active battle systems
     // Only claimed ranked rows own status; provisional joins must not keep an orphan queued.
-    // This covers mpvp battles and ranked PvP.
+    // This covers mpvp battles, ranked PvP and live dungeon reservations.
     await updateUserDataForGET3(drizzleDB);
 
     // Step 26: Update the population of each village

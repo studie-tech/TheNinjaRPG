@@ -14,12 +14,16 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   COMBAT_BIOMES,
   DUNGEON_FLOORS_PER_TIER,
+  DUNGEON_LOBBY_SECONDS,
   DUNGEON_MAX_DROPS,
   DUNGEON_MAX_MOBS,
   DUNGEON_MAX_REWARD_QUANTITY,
   DUNGEON_MAX_TIERS,
   DUNGEON_MAX_WAVES,
   ENCOUNTER_MAX_WAVE_DELAY_ROUNDS,
+  MAX_ITEM_STACK_SIZE,
+  MAX_PLAYER_LEVEL,
+  RetryQuestDelays,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -30,9 +34,13 @@ import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatLocalDateTimeInput } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
-import { type DungeonContent, dungeonContentSchema } from "@/validators/dungeon";
+import {
+  type DungeonContent,
+  dungeonContentSchema,
+  dungeonRequirementsSchema,
+} from "@/validators/dungeon";
 
-/** Edit authored tiers, waves and completion rewards using the same schema enforced by the server. */
+/** Edit encounters, entry requirements and rewards using the shared server validator. */
 export default function DungeonEditor() {
   const { data: user } = useUserData();
   const utils = api.useUtils();
@@ -50,6 +58,7 @@ export default function DungeonEditor() {
   const definitions = api.coop.dungeon.getAll.useQuery(undefined, { enabled: allowed });
   const assets = api.mapAsset.getAll.useQuery(undefined, { enabled: allowed });
   const ais = api.profile.getAllAiNames.useQuery(undefined, { enabled: allowed });
+  const quests = api.quests.getAllNames.useQuery(undefined, { enabled: allowed });
   const items = api.item.getAllNames.useQuery(undefined, { enabled: allowed });
   const jutsus = api.jutsu.getAllNames.useQuery(undefined, { enabled: allowed });
   const packages = api.rewardPackages.getCatalog.useQuery(undefined, {
@@ -131,7 +140,7 @@ export default function DungeonEditor() {
   return (
     <ContentBox
       title="Dungeon editor"
-      subtitle="Three-player co-op"
+      subtitle="Player parties and solo companion squads"
       defaultBackHref="/manual"
     >
       {/* Keep the submitted draft selected until its save result supplies or confirms the ID. */}
@@ -184,7 +193,7 @@ export default function DungeonEditor() {
           {message || definitions.error?.message}
         </p>
       )}
-      {[ais, items, jutsus, packages].some((query) => query.isError) && (
+      {[ais, items, jutsus, packages, quests].some((query) => query.isError) && (
         <p role="alert" className="mb-4 rounded border p-3">
           Could not load enemy or reward choices.{" "}
           <Button
@@ -195,6 +204,7 @@ export default function DungeonEditor() {
                 items.refetch(),
                 jutsus.refetch(),
                 packages.refetch(),
+                quests.refetch(),
               ])
             }
           >
@@ -327,6 +337,173 @@ export default function DungeonEditor() {
                   </Field>
                 </div>
               </div>
+              <section
+                className="space-y-3 rounded-lg border p-4"
+                aria-label="Entry requirements"
+              >
+                <h2 className="font-semibold">Entry requirements</h2>
+                <p className="text-sm text-muted-foreground">
+                  Every player must qualify. Entry items and an attempt are consumed
+                  when the first floor starts. Lobby reservations expire after{" "}
+                  {DUNGEON_LOBBY_SECONDS / 60} minutes.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Required level">
+                    <NumberInput
+                      min={1}
+                      max={MAX_PLAYER_LEVEL}
+                      value={content.requirements.requiredLevel}
+                      onValueChange={(requiredLevel) =>
+                        patch({
+                          requirements: { ...content.requirements, requiredLevel },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Prerequisite quest">
+                    <SearchSelect
+                      label="Prerequisite quest"
+                      placeholder="No prerequisite"
+                      value={content.requirements.prerequisiteQuestId ?? ""}
+                      options={[
+                        { value: "", label: "No prerequisite" },
+                        ...(quests.data?.map((quest) => ({
+                          value: quest.id,
+                          label: quest.name,
+                        })) ?? []),
+                      ]}
+                      onChange={(value) =>
+                        patch({
+                          requirements: {
+                            ...content.requirements,
+                            prerequisiteQuestId: value || null,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Required entry item">
+                    <SearchSelect
+                      label="Required entry item"
+                      placeholder="No item required"
+                      value={content.requirements.requiredItemId ?? ""}
+                      options={[
+                        { value: "", label: "No item required" },
+                        ...(items.data?.map((item) => ({
+                          value: item.id,
+                          label: item.name,
+                        })) ?? []),
+                      ]}
+                      onChange={(value) =>
+                        patch({
+                          requirements: {
+                            ...content.requirements,
+                            requiredItemId: value || null,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="Entry item quantity">
+                    <NumberInput
+                      min={1}
+                      max={MAX_ITEM_STACK_SIZE}
+                      value={content.requirements.requiredItemQuantity}
+                      onValueChange={(requiredItemQuantity) =>
+                        patch({
+                          requirements: {
+                            ...content.requirements,
+                            requiredItemQuantity,
+                          },
+                        })
+                      }
+                    />
+                  </Field>
+                  {(["maxAttempts", "maxCompletes"] as const).map((field) => (
+                    <Field
+                      key={field}
+                      label={
+                        field === "maxAttempts"
+                          ? "Maximum lifetime attempts"
+                          : "Maximum completions per reset period"
+                      }
+                    >
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          aria-label={`Limit ${field === "maxAttempts" ? "attempts" : "completions"}`}
+                          checked={content.requirements[field] !== null}
+                          onCheckedChange={(limited) =>
+                            patch({
+                              requirements: {
+                                ...content.requirements,
+                                [field]: limited ? 1 : null,
+                              },
+                            })
+                          }
+                        />
+                        {content.requirements[field] !== null ? (
+                          <NumberInput
+                            aria-label={
+                              field === "maxAttempts"
+                                ? "Maximum lifetime attempts"
+                                : "Maximum completions per reset period"
+                            }
+                            min={1}
+                            value={content.requirements[field]!}
+                            onValueChange={(value) =>
+                              patch({
+                                requirements: {
+                                  ...content.requirements,
+                                  [field]: value,
+                                },
+                              })
+                            }
+                          />
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            Unlimited
+                          </span>
+                        )}
+                      </div>
+                    </Field>
+                  ))}
+                  {(["attemptDelay", "retryDelay"] as const).map((field) => (
+                    <Field
+                      key={field}
+                      label={
+                        field === "attemptDelay"
+                          ? "Attempt cooldown (one attempt per period)"
+                          : "Completion reset period"
+                      }
+                    >
+                      <select
+                        aria-label={
+                          field === "attemptDelay"
+                            ? "Attempt cooldown"
+                            : "Completion reset period"
+                        }
+                        className="w-full rounded border bg-background p-2"
+                        value={content.requirements[field]}
+                        onChange={(e) =>
+                          patch({
+                            requirements: {
+                              ...content.requirements,
+                              [field]: e.target
+                                .value as DungeonContent["requirements"][typeof field],
+                            },
+                          })
+                        }
+                      >
+                        {RetryQuestDelays.map((delay) => (
+                          <option key={delay} value={delay}>
+                            {delay === "none" ? "None (lifetime)" : delay}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ))}
+                </div>
+              </section>
             </TabsContent>
             <TabsContent
               ref={roomsRef}
@@ -804,6 +981,7 @@ const normalizeRooms = (tiers: DungeonContent["tiers"]): DungeonContent["tiers"]
   );
 /** Start with an unpublished definition so incomplete drafts never expose travel entrances. */
 const newDungeon = (): DungeonContent => ({
+  requirements: dungeonRequirementsSchema.parse({}),
   name: "",
   description: "",
   structureAssetId: "",

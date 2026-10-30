@@ -1,7 +1,10 @@
 import { DUNGEON_FLOORS_PER_TIER, DUNGEON_INACTIVE_ROUNDS } from "@/drizzle/constants";
 import { stillInBattle } from "@/libs/combat/actions";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
+import { attemptCapReached } from "@/libs/quest";
+import { periodStart } from "@/utils/time";
 import type { DungeonContent, DungeonRunState } from "@/validators/dungeon";
+import { dungeonRequirementsSchema } from "@/validators/dungeon";
 
 /** Run snapshot and preloaded waves carried by combat; actions never fetch dungeon content. */
 export type DungeonBattleState = {
@@ -125,4 +128,55 @@ export const dungeonCombatResult = (
     bountiesClaimed: [],
     droppedItems: [],
   };
+};
+
+/** Persisted definitions without entry gates retain unlimited access. */
+export const dungeonRequirements = (content: Pick<DungeonContent, "requirements">) =>
+  dungeonRequirementsSchema.parse(content.requirements ?? {});
+
+/** Pure admission checks shared by discovery, readiness and battle initiation. */
+export const dungeonEntryError = (
+  info: {
+    requirements: ReturnType<typeof dungeonRequirements>;
+    level: number;
+    questCompleted: boolean;
+    itemQuantity: number;
+    attempts: number[];
+    completions: number[];
+  },
+  now = new Date(),
+) => {
+  const { requirements: r } = info;
+  if (info.level < r.requiredLevel) return `Requires level ${r.requiredLevel}.`;
+  if (r.prerequisiteQuestId && !info.questCompleted)
+    return "Complete the prerequisite quest first.";
+  if (r.maxAttempts !== null && info.attempts.length >= r.maxAttempts)
+    return "The maximum dungeon attempts have been used.";
+  const lastAttempt = info.attempts.length ? Math.max(...info.attempts) : null;
+  if (
+    attemptCapReached(
+      {
+        attemptDelay: r.attemptDelay,
+        lastAttemptAt: lastAttempt === null ? null : new Date(lastAttempt),
+      },
+      now,
+    )
+  )
+    return `This dungeon has already been attempted this ${r.attemptDelay} period.`;
+  const completes =
+    r.retryDelay === "none"
+      ? info.completions
+      : info.completions.filter(
+          (at) =>
+            at >=
+            periodStart(
+              r.retryDelay as Exclude<typeof r.retryDelay, "none">,
+              now,
+            ).getTime(),
+        );
+  if (r.maxCompletes !== null && completes.length >= r.maxCompletes)
+    return "The maximum dungeon completions have been collected for this period.";
+  if (r.requiredItemId && info.itemQuantity < r.requiredItemQuantity)
+    return `Requires ${r.requiredItemQuantity} entry item(s) in your carried inventory.`;
+  return null;
 };

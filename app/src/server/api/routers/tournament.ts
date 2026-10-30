@@ -186,10 +186,18 @@ export const tournamentRouter = createTRPCRouter({
           "TOURNAMENT",
         );
       }
-      // We we failed to create battle, let this user win by default
+      // Two-player no-shows preserve live dungeon reservations.
       if (!result?.success) {
-        await setMatchWinner(ctx.drizzle, input.matchId, user.userId, "NO_SHOW");
-      } else {
+        const awarded = await setMatchWinner(
+          ctx.drizzle,
+          input.matchId,
+          user.userId,
+          "NO_SHOW",
+        );
+        if (!awarded)
+          return errorResponse(
+            result?.message ?? "Match participants are unavailable. Try again.",
+          );
       }
       // Return
       return { success: true, message: "Joined Match", battleId: result?.battleId };
@@ -213,7 +221,7 @@ const cleanupCompletedTournament = async (
  * @param {string} matchId - The ID of the match.
  * @param {string} winnerId - The ID of the winner.
  * @returns {Promise<boolean>} - A promise that resolves to true if the winner is successfully set.
- * @throws {Error} - If the match is not found or the winner is not in the match.
+ * Refused no-show awards return false; other missing result writes throw.
  */
 export const setMatchWinner = async (
   client: DrizzleClient,
@@ -228,6 +236,7 @@ export const setMatchWinner = async (
     matchId,
   );
   if (result.rowsAffected === 0) {
+    if (state === "NO_SHOW") return false;
     throw new Error("Match not found or winner not in match.");
   }
   return true;

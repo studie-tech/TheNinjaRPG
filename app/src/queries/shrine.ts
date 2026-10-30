@@ -32,6 +32,7 @@ import {
   userData,
   village,
 } from "@/drizzle/schema";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import {
   boostInactivePredicate,
@@ -189,6 +190,7 @@ export const updateUserDataForRunStaleShrineLobbyCleanup = (
       and(
         inArray(userData.userId, unclaimedUsersSubquery),
         eq(userData.status, "QUEUED"),
+        withoutDungeonReservation(),
       ),
     );
 
@@ -570,16 +572,6 @@ export const insertMpvpBattleQueueForChallengeShrine = (
     defenderEntityId: targetSector.villageId,
     sector: input.sectorNumber,
   });
-
-/** Build the `userData` update for `challengeShrine`, setting `status`, using predicates on `userId`. */
-export const updateUserDataForChallengeShrine2 = (
-  client: Pick<DrizzleClient, "update">,
-  user: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({ status: "AWAKE" })
-    .where(eq(userData.userId, user.userId));
 
 /** Build the `mpvpBattleQueue` lookup for `joinShrineBattle`, using predicates on `id`, `battleType`, `createdAt`. */
 export const findMpvpBattleQueueForJoinShrineBattle = (

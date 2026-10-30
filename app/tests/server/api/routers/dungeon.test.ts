@@ -34,6 +34,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const db = await getTestDatabase();
     const party = await lobby();
     await db.update(dungeonRun).set({content, status: "COMPLETED", state: {...dungeonBattleState().runState, memberIds: ["a"], floor: 5, clearedFloors: [0,1,2,3,4]}}).where(eq(dungeonRun.id, party.id));
+    await db.update(userData).set({status: "AWAKE"}).where(eq(userData.userId, "a"));
     return party;
   };
 
@@ -375,7 +376,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     expect(results.filter(Boolean)).toHaveLength(1);
     expect((await db.query.dungeonRun.findFirst())?.state.floor).toBe(1);
     const users = await db.query.userData.findMany({where: eq(userData.battleId, "fight")}); expect(users).toHaveLength(1); // Unrelated accounts are never released.
-    const revived = await db.query.userData.findFirst({where: eq(userData.userId, "b")}); expect(revived?.status).toBe("AWAKE"); expect(revived?.curHealth).toBe(revived?.maxHealth); expect(revived?.curEnergy).toBeGreaterThanOrEqual(9); expect(revived?.curEnergy).toBeLessThan(9.1);
+    const revived = await db.query.userData.findFirst({where: eq(userData.userId, "b")}); expect(revived?.status).toBe("QUEUED"); expect(revived?.curHealth).toBe(revived?.maxHealth); expect(revived?.curEnergy).toBeGreaterThanOrEqual(9); expect(revived?.curEnergy).toBeLessThan(9.1);
     for (const user of await db.query.userData.findMany({where: inArray(userData.userId, ["a", "b"])})) {
       expect(user.bracketImmunityPausedAt).toBeNull();
       expect(user.bracketImmunityLiftedUntil.getTime() - Date.now()).toBeGreaterThan(1790000);
@@ -390,8 +391,8 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     await db.update(userData).set({bracketImmunityPausedAt: new Date(immunityAt - 3600000), bracketImmunityLiftedUntil: new Date(immunityAt - 1800000)}).where(inArray(userData.userId, original.state.memberIds));
     await Promise.all([rollbackDungeonStart(withoutTransactions(db),original,"partial",1), rollbackDungeonStart(withoutTransactions(db),original,"partial",1)]);
     expect(await db.query.battle.findMany()).toHaveLength(0);expect(await db.query.battleHistory.findMany()).toHaveLength(0);
-    const restored=await db.query.dungeonRun.findFirst();expect(restored?.status).toBe("LOBBY");expect(restored?.expiresAt).toBeNull();expect(restored?.version).toBe(2);
-    expect((await db.query.userData.findMany({where: inArray(userData.userId, original.state.memberIds)})).every(user => user.status === "AWAKE" && user.battleId === null)).toBe(true);
+    const restored=await db.query.dungeonRun.findFirst();expect(restored?.status).toBe("LOBBY");expect(restored?.expiresAt).toBeNull();expect(restored?.version).toBe(3);
+    expect((await db.query.userData.findMany({where: inArray(userData.userId, original.state.memberIds)})).every(user => user.status === "QUEUED" && user.battleId === null)).toBe(true);
     for (const user of await db.query.userData.findMany({where: inArray(userData.userId, original.state.memberIds)})) {
       expect(user.bracketImmunityPausedAt).toBeNull();
       expect(user.bracketImmunityLiftedUntil.getTime() - Date.now()).toBeGreaterThan(1790000);
@@ -420,12 +421,12 @@ describeWithDatabase("Dungeon parties and settlement", () => {
       },
     });
     await expect(rollbackDungeonStart(failing, original, "partial", 1)).rejects.toThrow("Injected cleanup failure");
-    expect((await db.query.dungeonRun.findFirst())?.status).toBe("FIGHTING");
+    expect((await db.query.dungeonRun.findFirst())?.status).toBe("STARTING");
     expect(await db.query.battle.findMany()).toHaveLength(0);
     const a = callerForDatabase(dungeonRouter, "a", withoutTransactions(db));
-    expect((await a.getState()).runs[0]).toMatchObject({status: "LOBBY", battleId: null, expiresAt: null, version: 2});
+    expect((await a.getState()).runs[0]).toMatchObject({status: "LOBBY", battleId: null, expiresAt: null, version: 3});
     expect(await db.query.battleHistory.findMany()).toHaveLength(0);
-    expect((await db.query.userData.findMany({where: inArray(userData.userId, original.state.memberIds)})).every(user => user.status === "AWAKE" && user.battleId === null)).toBe(true);
+    expect((await db.query.userData.findMany({where: inArray(userData.userId, original.state.memberIds)})).every(user => user.status === "QUEUED" && user.battleId === null)).toBe(true);
   });
   it("expires paused runs and releases all active memberships", async () => {
     const {id} = await lobby(); const db = await getTestDatabase();

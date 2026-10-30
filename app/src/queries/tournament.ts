@@ -4,6 +4,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -133,7 +134,7 @@ export const insertTournamentMatchForJoinTournament = (
     startedAt: tournamentData.startedAt,
   });
 
-/** Build the `userData` update for `joinMatch`, setting `status` and `curHealth`, using predicates on `userId`. */
+/** Wake tournament participants without releasing live dungeon reservations. */
 export const updateUserDataForJoinMatch = (
   client: Pick<DrizzleClient, "update">,
   matchData: { userId1: string; userId2: null | string },
@@ -145,7 +146,10 @@ export const updateUserDataForJoinMatch = (
       curHealth: sql`CASE WHEN ${userData.curHealth} < 0 THEN 1 ELSE ${userData.curHealth} END`,
     })
     .where(
-      inArray(userData.userId, [matchData.userId1 ?? "", matchData.userId2 ?? ""]),
+      and(
+        inArray(userData.userId, [matchData.userId1 ?? "", matchData.userId2 ?? ""]),
+        withoutDungeonReservation(),
+      ),
     );
 
 /** Build deletion of all matches in a tournament. */
@@ -184,6 +188,16 @@ export const updateTournamentMatchForSetMatchWinner = (
           eq(tournamentMatch.userId1, winnerId),
           eq(tournamentMatch.userId2, winnerId),
         ),
+        // A genuine bye needs no battle; a rejected two-player admission is not a forfeit.
+        state === "NO_SHOW"
+          ? or(
+              isNull(tournamentMatch.userId2),
+              and(
+                withoutDungeonReservation(tournamentMatch.userId1),
+                withoutDungeonReservation(tournamentMatch.userId2),
+              ),
+            )
+          : undefined,
       ),
     );
 

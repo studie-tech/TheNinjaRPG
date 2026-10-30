@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { getTableColumns, type SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { aiProfile, battle, dungeon, dungeonRun, jutsu, userData, userJutsu } from "@/drizzle/schema";
+import { aiProfile, battle, dungeon, dungeonMember, dungeonRun, jutsu, userData, userJutsu } from "@/drizzle/schema";
 import { prepareEncounterWaves } from "@/libs/combat/encounters";
 import type { CombatQueryUser } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
@@ -144,7 +144,7 @@ describe("summon template preparation scope", () => {
 
 describeWithDatabase("initiated wave summon preloads", () => {
   beforeEach(async () => {
-    await resetTables(battle, aiProfile, dungeon, dungeonRun, userData, jutsu, userJutsu);
+    await resetTables(dungeonMember, battle, aiProfile, dungeon, dungeonRun, userData, jutsu, userJutsu);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());
@@ -153,7 +153,7 @@ describeWithDatabase("initiated wave summon preloads", () => {
     const client = await getTestDatabase();
     const members = ["preload-a", "preload-b", "preload-c"];
     await insertUsers([
-      ...members.map((userId) => ({ userId, username: userId, status: "AWAKE" as const, level: 50, rank: "JONIN" as const })),
+      ...members.map((userId) => ({ userId, username: userId, status: "QUEUED" as const, level: 50, rank: "JONIN" as const })),
       { userId: "caster", username: "Caster", isAi: true, level: 50, rank: "JONIN" as const },
       { userId: "shared", username: "Shared", isAi: true, level: 50, rank: "JONIN" as const },
     ]);
@@ -174,6 +174,7 @@ describeWithDatabase("initiated wave summon preloads", () => {
       state: meta.runState, status: "FIGHTING", version: meta.runVersion,
       battleId: "preload-battle", expiresAt: new Date(meta.expiresAt), createdAt: new Date(),
     });
+    await client.insert(dungeonMember).values(members.map((userId) => ({ runId: meta.runId, userId, activeUserId: userId })));
     const result = await initiateBattle({
       client, userIds: members, targetIds: waves.flatMap((wave) => wave.aiIds),
       coop: { kind: "dungeon", ...meta, battleId: "preload-battle", waves },

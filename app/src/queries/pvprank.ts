@@ -36,6 +36,7 @@ import {
   rankedUserRewards,
   userData,
 } from "@/drizzle/schema";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import type { RankedLoadoutSchema } from "@/validators/pvpRank";
 
@@ -247,6 +248,7 @@ export const updateUserDataForGetRankedPvpQueue = (
       and(
         eq(userData.userId, ctx.userId),
         eq(userData.status, "QUEUED"),
+        withoutDungeonReservation(),
         // Independent reads may precede a ranked claim or belong to a clan lobby.
         notExists(
           client

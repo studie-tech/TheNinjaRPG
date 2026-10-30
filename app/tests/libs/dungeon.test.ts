@@ -2,7 +2,8 @@ import { advanceEncounterWave } from "@/libs/combat/encounters";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { describe, expect, it } from "bun:test";
-import { dungeonBattleOutcome, dungeonNextState } from "@/libs/dungeon";
+import { periodStart } from "@/utils/time";
+import { dungeonEntryError, dungeonBattleOutcome, dungeonNextState } from "@/libs/dungeon";
 import { alignBattle, calcBattleResult, findUser, maskBattle } from "@/libs/combat/util";
 import { applyEffects } from "@/libs/combat/process";
 import { getBattleSpawnLocations } from "@/libs/combat/participants";
@@ -147,5 +148,37 @@ describe("dungeon combat rules", () => {
     expect(dungeonContentSchema.safeParse(next).success).toBe(false);
     const delayed = dungeonContent(); delayed.tiers[0]![0]!.waves[0]!.delayRounds = 1;
     expect(dungeonContentSchema.safeParse(delayed).success).toBe(false);
+  });
+});
+
+describe("dungeon admission limits", () => {
+  const now = new Date("2026-10-30T12:00:00Z");
+  /** Start from an eligible account so each test changes only its admission constraint. */
+  const evidence = () => ({ requirements: dungeonContent().requirements, level: 50, questCompleted: true, itemQuantity: 3, attempts: [] as number[], completions: [] as number[] });
+  it("keeps default dungeons unlimited and checks level, historical quest and each player's items", () => {
+    const info = evidence();
+    expect(dungeonEntryError(info, now)).toBeNull();
+    info.requirements.requiredLevel = 51;
+    expect(dungeonEntryError(info, now)).toContain("level 51");
+    info.requirements.requiredLevel = 1;
+    info.requirements.prerequisiteQuestId = "quest"; info.questCompleted = false;
+    expect(dungeonEntryError(info, now)).toContain("prerequisite");
+    info.questCompleted = true; info.requirements.requiredItemId = "ticket"; info.requirements.requiredItemQuantity = 4;
+    expect(dungeonEntryError(info, now)).toContain("4 entry");
+  });
+  it("uses quest lifetime attempt caps independently of calendar attempt cooldowns", () => {
+    const info = evidence(); info.attempts = [Date.parse("2026-10-29T23:59:59Z")];
+    info.requirements.maxAttempts = 1;
+    expect(dungeonEntryError(info, now)).toContain("maximum dungeon attempts");
+    info.requirements.maxAttempts = null; info.requirements.attemptDelay = "daily";
+    expect(dungeonEntryError(info, now)).toBeNull();
+    info.attempts.push(now.getTime());
+    expect(dungeonEntryError(info, now)).toContain("daily");
+  });
+  it.each(["daily", "weekly", "monthly"] as const)("resets completion caps on the %s UTC quest boundary", (delay) => {
+    const info = evidence(); info.requirements.maxCompletes = 1; info.requirements.retryDelay = delay;
+    const start = periodStart(delay, now).getTime();
+    info.completions = [start - 1]; expect(dungeonEntryError(info, now)).toBeNull();
+    info.completions.push(start); expect(dungeonEntryError(info, now)).toContain("maximum dungeon completions");
   });
 });

@@ -65,6 +65,16 @@ describe("owned pets in combat", () => {
     PET_BATTLE_CONFIG.enabled = previousBattleEnabled;
   });
 
+  it("spawns both selected solo dungeon pets with independent actors and distinct cells", () => {
+    const battle = scenario();
+    addPetsToBattle({ ...battle, pets: [petFixture(), petFixture({ id: "pet-2" }), petFixture({ id: "pet-3" })], selectedPetIdsByOwner: { owner: ["pet-1", "pet-2"] } });
+    const pets = battle.usersState.filter((user) => user.petId);
+    expect(pets.map((pet) => pet.petId)).toEqual(["pet-1", "pet-2"]);
+    expect(new Set(pets.map((pet) => `${pet.longitude},${pet.latitude}`)).size).toBe(2);
+    expect(pets.every((pet) => pet.isAi && pet.isSummon && pet.controllerId === "owner")).toBe(true);
+    expect(pets[0]?.aiProfileId).not.toBe(pets[1]?.aiProfileId);
+  });
+
   it.each(["left", "right"] as const)("preloads %s-facing source art for the shared AI combat renderer", (avatarFacing) => {
     const battle = scenario();
     add(battle, [petFixture({ avatarFacing })]);

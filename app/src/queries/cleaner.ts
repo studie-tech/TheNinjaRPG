@@ -50,6 +50,7 @@ import {
   warKill,
 } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { secondsFromNow } from "@/utils/time";
@@ -339,6 +340,7 @@ export const updateUserDataForGET3 = (
     .where(
       and(
         eq(userData.status, "QUEUED"),
+        withoutDungeonReservation(),
         notExists(
           client
             .select({ id: mpvpBattleUser.id })

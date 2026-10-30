@@ -36,6 +36,7 @@ import {
   war,
 } from "@/drizzle/schema";
 import { RAID_CHAT_CONVERSATION_LIKE_PATTERN } from "@/libs/raids";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { activeWarAllyWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
 
@@ -342,7 +343,13 @@ export const updateUserDataForReadyToQueue = (
   client
     .update(userData)
     .set({ status: "AWAKE", travelFinishAt: null, battleId: null })
-    .where(and(eq(userData.userId, userId), eq(userData.status, user.status)));
+    .where(
+      and(
+        eq(userData.userId, userId),
+        eq(userData.status, user.status),
+        withoutDungeonReservation(),
+      ),
+    );
 
 /**
  * Build the `userData` update for `readyToQueue`, setting `travelFinishAt` and
@@ -795,7 +802,13 @@ export const updateUserDataForCheckAndCleanupExpiredRaid = (
   client
     .update(userData)
     .set({ status: "AWAKE", battleId: null })
-    .where(and(eq(userData.status, "QUEUED"), inArray(userData.userId, userIds)));
+    .where(
+      and(
+        eq(userData.status, "QUEUED"),
+        inArray(userData.userId, userIds),
+        withoutDungeonReservation(),
+      ),
+    );
 
 /** Build the `mpvpBattleUser` deletion for `rollbackJoinRaidQueue`, using predicates on `userId` and `clanBattleId`. */
 export const deleteMpvpBattleUserForRollbackJoinRaidQueue = (
@@ -844,7 +857,11 @@ export const updateUserDataForRollbackStartRaidBattle = (
     .update(userData)
     .set({ status: "AWAKE" })
     .where(
-      and(inArray(userData.userId, attackerUserIds), eq(userData.status, "QUEUED")),
+      and(
+        inArray(userData.userId, attackerUserIds),
+        eq(userData.status, "QUEUED"),
+        withoutDungeonReservation(),
+      ),
     );
 
 /** Build the `conversation` insert for `ensureRaidChatConversation`, updating duplicate keys. */

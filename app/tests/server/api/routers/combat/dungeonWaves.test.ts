@@ -46,7 +46,8 @@ describeWithDatabase("dungeon wave preparation", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("ends an initiated dungeon only after three completed missed rounds", async () => {
+  it.each([false, true])("ends an initiated dungeon only after three completed missed rounds (publication failure: %p)", async (publicationFails) => {
+    if (publicationFails) vi.spyOn(Pusher.prototype, "trigger").mockRejectedValue(new Error("Pusher unavailable"));
     const client = await getTestDatabase();
     const meta = dungeonBattleState({
       runState: { ...dungeonBattleState().runState, memberIds: MEMBERS },
@@ -56,7 +57,7 @@ describeWithDatabase("dungeon wave preparation", () => {
     const liftedUntil = new Date(Date.now() + 1800000);
     content.tiers[0]![0]!.waves = waves;
     await insertUsers([
-      ...MEMBERS.map((userId) => ({ userId, username: userId, status: "AWAKE" as const, level: 50, rank: "JONIN" as const, bracketImmunityLiftedUntil: liftedUntil })),
+      ...MEMBERS.map((userId) => ({ userId, username: userId, status: "QUEUED" as const, level: 50, rank: "JONIN" as const, bracketImmunityLiftedUntil: liftedUntil })),
       { userId: OPENER, username: "Enemy", isAi: true, level: 50, rank: "JONIN" as const },
     ]);
     await client.insert(aiProfile).values({ id: "Default", userId: OPENER, rules: [] });
@@ -71,6 +72,7 @@ describeWithDatabase("dungeon wave preparation", () => {
       client, userIds: MEMBERS, targetIds: [OPENER],
       coop: { kind: "dungeon", ...meta, battleId: "wave-fight", waves },
     }, "QUEST")).success).toBe(true);
+    vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     const initial = (await client.query.battle.findFirst())!;
     expect((await client.query.userData.findFirst({where: eq(userData.userId, MEMBERS[0]!)}))?.bracketImmunityPausedAt).not.toBeNull();
     expect(initial.round).toBe(1);
@@ -114,7 +116,7 @@ describeWithDatabase("dungeon wave preparation", () => {
       content.tiers[0]![0]!.waves = waves;
       await client.insert(aiProfile).values({ id: "Default", userId: OPENER, rules: [] });
       await insertUsers([
-        ...MEMBERS.map((userId) => ({ userId, username: userId, status: "AWAKE" as const, level: 50, rank: "JONIN" as const })),
+        ...MEMBERS.map((userId) => ({ userId, username: userId, status: "QUEUED" as const, level: 50, rank: "JONIN" as const })),
         ...[OPENER, MID, HIGH].map((userId) => ({ userId, username: userId, isAi: true, level: 50, rank: "JONIN" as const })),
       ]);
       await client.insert(dungeon).values({ id: "wave-definition", content, updatedAt: new Date() });
@@ -123,6 +125,7 @@ describeWithDatabase("dungeon wave preparation", () => {
         state: meta.runState, status: "FIGHTING", version: meta.runVersion,
         battleId: "wave-fight", expiresAt: new Date(meta.expiresAt), createdAt: new Date(),
       });
+      await client.insert(dungeonMember).values(MEMBERS.map((userId) => ({ runId: meta.runId, userId, activeUserId: userId })));
       // The later wave is authored in ascending initiative order. Equal rolls
       // also exercise ties with the active member and between the new enemies.
       const rolls = initiative === "distinct"
@@ -188,7 +191,7 @@ describeWithDatabase("dungeon wave preparation", () => {
         }) }],
       });
       await insertUsers([
-        ...MEMBERS.map((userId) => ({ userId, username: userId, status: "AWAKE" as const, level: 50, rank: "JONIN" as const })),
+        ...MEMBERS.map((userId) => ({ userId, username: userId, status: "QUEUED" as const, level: 50, rank: "JONIN" as const })),
         ...[OPENER, CASTER, CREATURE].map((userId) => ({
           userId, username: userId, isAi: true, level: 50, rank: "JONIN" as const,
           effects: userId === CREATURE ? [makeTag("increasemaxpools", {
@@ -212,6 +215,7 @@ describeWithDatabase("dungeon wave preparation", () => {
         state: meta.runState, status: "FIGHTING", version: meta.runVersion,
         battleId: "wave-fight", expiresAt: new Date(meta.expiresAt), createdAt: new Date(),
       });
+      await client.insert(dungeonMember).values(MEMBERS.map((userId) => ({ runId: meta.runId, userId, activeUserId: userId })));
       expect((await initiateBattle({
         client, userIds: MEMBERS, targetIds: waves.flatMap((entry) => entry.aiIds),
         coop: { kind: "dungeon", ...meta, battleId: "wave-fight", waves },

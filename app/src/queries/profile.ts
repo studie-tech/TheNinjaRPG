@@ -87,6 +87,7 @@ import {
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { questPartyRelations } from "@/queries/questParty";
 import { activeWarAllyWhere } from "@/queries/war";
 import { serverError } from "@/server/api/trpc";
@@ -2167,7 +2168,13 @@ export const wakeQueuedUser = (client: Pick<DrizzleClient, "update">, userId: st
   client
     .update(userData)
     .set({ status: "AWAKE" })
-    .where(and(eq(userData.userId, userId), eq(userData.status, "QUEUED")));
+    .where(
+      and(
+        eq(userData.userId, userId),
+        eq(userData.status, "QUEUED"),
+        withoutDungeonReservation(),
+      ),
+    );
 
 /** Build an atomic money increment for one user. */
 export const incrementUserMoney = (

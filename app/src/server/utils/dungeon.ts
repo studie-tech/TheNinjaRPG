@@ -1,12 +1,17 @@
 import { eq, sql } from "drizzle-orm";
+import { DUNGEON_LOBBY_SECONDS } from "@/drizzle/constants";
 import { type dungeonRun, userData } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { dungeonBattleOutcome, dungeonNextState } from "@/libs/dungeon";
 import { deleteBattleById, deleteBattleIfVersionMatches } from "@/queries/combat";
 import {
+  claimDungeonQueue,
+  claimDungeonStartRecovery,
   clearDungeonActiveUsers,
+  expireDungeonRunWithoutBattle,
   findBattleForExpireDungeonRun,
+  releaseDungeonQueue,
   updateDungeonRunForExpireDungeonRun,
   updateDungeonRunForRollbackDungeonStart,
   updateDungeonRunForSettleDungeonBattle,
@@ -25,20 +30,33 @@ export const rollbackDungeonStart = (
   version: number,
 ) =>
   retryOnDeadlock(async () => {
+    // Publication and this claim serialize on the run row. Advancing the version
+    // prevents a slow launcher from publishing while cleanup removes partial writes.
+    const recovering = run.status === "STARTING";
+    if (!recovering) {
+      const claim = await claimDungeonStartRecovery(client, run.id, battleId, version);
+      if (claim.rowsAffected !== 1) return;
+    }
+    const recoveryVersion = recovering ? version : version + 1;
     const {
+      battlePublished: _published,
       entryStartedAt: _started,
       entryPreviousDeadline: _deadline,
       ...state
     } = run.state;
     await cleanupCoopBattleStart(client, battleId, run.state.memberIds);
     // Reopen only after all cleanup finished; the CAS rejects stale or competing recovery.
-    await updateDungeonRunForRollbackDungeonStart(
+    const reopened = await updateDungeonRunForRollbackDungeonStart(
       client,
       run,
       state,
       battleId,
-      version,
+      recoveryVersion,
     );
+    if (reopened.rowsAffected === 1)
+      await Promise.all(
+        run.state.memberIds.map((id) => claimDungeonQueue(client, id, run.id)),
+      );
   });
 
 /**
@@ -85,6 +103,7 @@ export const settleDungeonBattle = async (
         current,
         meta,
         settledAt,
+        status === "BETWEEN",
       );
       if (status === "ENDED") await clearDungeonActiveUsers(tx, meta.runId);
       return true;
@@ -95,25 +114,36 @@ export const settleDungeonBattle = async (
 /**
  * End an expired run, delete its battle, restore bound members and release reservations.
  * A loaded run version claims the whole cleanup; terminal, unexpired and stale snapshots
- * are no-ops. Fetch the battle only when needed for its preloaded energy recovery values.
+ * are no-ops. Runs without a battle use one joined update; battle-bearing expiry must
+ * also delete the battle and restore its preloaded energy recovery values atomically.
  * Return whether readers must refresh, including when a competing version won the expiry CAS.
  */
 export const expireDungeonRun = async (
   client: DrizzleClient,
   run: typeof dungeonRun.$inferSelect,
 ) => {
+  const deadline =
+    run.expiresAt ??
+    (run.status === "LOBBY"
+      ? new Date(run.createdAt.getTime() + DUNGEON_LOBBY_SECONDS * 1000)
+      : null);
   if (
-    !run.expiresAt ||
-    run.expiresAt.getTime() > Date.now() ||
+    !deadline ||
+    deadline.getTime() > Date.now() ||
     ["COMPLETED", "ENDED"].includes(run.status)
   )
     return false;
+  if (!run.battleId) {
+    await retryOnDeadlock(() => expireDungeonRunWithoutBattle(client, run));
+    // A competing floor can win the CAS; callers must reload even when no row changed.
+    return true;
+  }
   const settledAt = new Date();
-  const snapshot = run.battleId
-    ? await findBattleForExpireDungeonRun(client, { battleId: run.battleId })
-    : undefined;
-  // The terminal status disables future expiry, so battle removal, revival and reservation
-  // release must commit with it. A single run CAS cannot express those multi-table effects.
+  const snapshot = await findBattleForExpireDungeonRun(client, {
+    battleId: run.battleId,
+  });
+  // Removing the playable battle needs DELETE while terminal status and revival need UPDATE.
+  // MySQL cannot combine those in one statement; commit them together so failures stay retryable.
   await retryOnDeadlock(() =>
     client.transaction(async (tx) => {
       const claim = await updateDungeonRunForExpireDungeonRun(tx, run);
@@ -128,6 +158,7 @@ export const expireDungeonRun = async (
           settledAt,
         );
       }
+      await releaseDungeonQueue(tx, run.id);
       await clearDungeonActiveUsers(tx, run.id);
     }),
   );
