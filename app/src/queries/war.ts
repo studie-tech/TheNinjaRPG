@@ -55,8 +55,6 @@ import {
 import {
   actionLog,
   clan,
-  dungeonMember,
-  dungeonRun,
   gameSetting,
   mpvpBattleQueue,
   notification,
@@ -79,6 +77,7 @@ import {
   warMercenary,
 } from "@/drizzle/schema";
 import { getShrineHpByLevel, isVillageInvolvedInAnyWar } from "@/libs/war";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import { DAY_S, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { defaultWarRules, type WarMissionAttempt } from "@/validators/war";
@@ -710,7 +709,7 @@ export const executeRowsForFinishWarSettlement5 = (
         UPDATE ${userData} INNER JOIN MpvpBattleUser mbu ON ${userData.userId} = mbu.userId
         INNER JOIN ${mpvpBattleQueue} ON mbu.clanBattleId = ${mpvpBattleQueue.id}
         SET ${userData.status} = 'AWAKE' WHERE ${queueMatch} AND ${userData.status} = 'QUEUED'
-          AND NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))
+          AND ${withoutDungeonReservation()}
       `);
 
 /** Execute the database statement for `finishWarSettlement`. */

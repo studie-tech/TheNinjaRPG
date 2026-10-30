@@ -14,6 +14,19 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getQuestEntryCharges } from "@/server/utils/questEntry";
 import type { DungeonContent, DungeonRunState } from "@/validators/dungeon";
 
+export const getDungeonEntryCharges = (
+  { requiredItemId, requiredItemQuantity }: ReturnType<typeof dungeonRequirements>,
+  inventory: Parameters<typeof getQuestEntryCharges>[1],
+) => {
+  const entryItems = requiredItemId
+    ? [{ ids: [requiredItemId], number: requiredItemQuantity }]
+    : [];
+  return getQuestEntryCharges(
+    { entryPaid: false, quest: { content: { entryItems } } },
+    inventory,
+  );
+};
+
 /** Load independent personal admission evidence once, before any battle mutation. */
 export const fetchDungeonEntryData = async (client: DrizzleClient, ids: string[]) => {
   const [history, quests, inventory] = await Promise.all([
@@ -117,22 +130,8 @@ export const commitDungeonEntryBattle = async <T>({
         if (receipt.rowsAffected !== 1) throw rejected;
         const requirements = dungeonRequirements(content);
         for (const user of data ? users : []) {
-          const charges = getQuestEntryCharges(
-            {
-              entryPaid: false,
-              quest: {
-                content: {
-                  entryItems: requirements.requiredItemId
-                    ? [
-                        {
-                          ids: [requirements.requiredItemId],
-                          number: requirements.requiredItemQuantity,
-                        },
-                      ]
-                    : [],
-                },
-              },
-            },
+          const charges = getDungeonEntryCharges(
+            requirements,
             data!.inventory.filter((row) => row.userId === user.userId),
           );
           if (!charges) throw rejected;

@@ -104,6 +104,7 @@ import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import type { TerritoryCompetitor } from "@/libs/territoryWar";
 import type { RegenerationPeriod } from "@/libs/timedBuffs";
 import { fetchAiProfileById } from "@/queries/ai";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import {
   activeWarAllyWhere,
   activeWarMercenaryWhere,
@@ -1310,11 +1311,7 @@ export const updateUserDataForCreateBattle = (
               ),
             ]
           : []),
-        ...(!dungeonEncounter
-          ? [
-              sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
-            ]
-          : []),
+        ...(!dungeonEncounter ? [withoutDungeonReservation()] : []),
         // Team members must still occupy the original launch tile after combat preload.
         ...(battleType === "COMBAT" || questEncounter
           ? [

@@ -42,8 +42,6 @@ import {
   battleAction,
   clan,
   conversation,
-  dungeonMember,
-  dungeonRun,
   mpvpBattleQueue,
   mpvpBattleUser,
   rankedPvpQueue,
@@ -56,6 +54,7 @@ import {
   warAlly,
   warKill,
 } from "@/drizzle/schema";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 
@@ -863,7 +862,7 @@ export const updateUserDataForInitiateClanBattle = (
         inArray(userData.userId, allIds),
         eq(userData.status, "QUEUED"),
         isNull(userData.battleId),
-        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+        withoutDungeonReservation(),
         // Recheck membership and the reserved lobby at the write: deletion can
         // release surplus players into another queue after startup's final read.
         exists(
@@ -1013,7 +1012,7 @@ export const updateUserDataForUndoClanBattleJoin = (
         eq(userData.userId, userId),
         eq(userData.status, "QUEUED"),
         isNull(userData.battleId),
-        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+        withoutDungeonReservation(),
         not(
           exists(
             client
@@ -1056,7 +1055,7 @@ export const updateUserDataForRemoveFromClan = (
     .update(userData)
     .set({
       clanId: null,
-      status: sql`CASE WHEN status = "QUEUED" AND NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED')) THEN "AWAKE" ELSE status END`,
+      status: sql`CASE WHEN status = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE status END`,
       villageId: sql`CASE WHEN isOutlaw = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE villageId END`,
     })
     .where(eq(userData.userId, userId));
@@ -1166,7 +1165,7 @@ export const updateUserDataForRemoveFromClan2 = (
     .update(userData)
     .set({
       clanId: null,
-      status: sql`CASE WHEN status = "QUEUED" AND NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED')) THEN "AWAKE" ELSE status END`,
+      status: sql`CASE WHEN status = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE status END`,
       villageId: sql`CASE WHEN isOutlaw = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE villageId END`,
     })
     // Exclude the leaver, whose row the primary-key update above already
@@ -1388,7 +1387,7 @@ export const updateUserDataForDeleteClanBattle = (
       and(
         eq(userData.status, "QUEUED"),
         isNull(userData.battleId),
-        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+        withoutDungeonReservation(),
         inArray(
           userData.userId,
           client

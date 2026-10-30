@@ -47,8 +47,6 @@ import {
   actionLog,
   battleHistory,
   contentProposal,
-  dungeonMember,
-  dungeonRun,
   farmPlot,
   gameSetting,
   historicalIp,
@@ -89,6 +87,7 @@ import {
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import { questPartyRelations } from "@/queries/questParty";
 import { activeWarAllyWhere } from "@/queries/war";
 import { serverError } from "@/server/api/trpc";
@@ -2173,7 +2172,7 @@ export const wakeQueuedUser = (client: Pick<DrizzleClient, "update">, userId: st
       and(
         eq(userData.userId, userId),
         eq(userData.status, "QUEUED"),
-        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+        withoutDungeonReservation(),
       ),
     );
 

@@ -26,14 +26,13 @@ import {
   SHRINE_WEEKLY_MAINTENANCE_COST,
 } from "@/drizzle/constants";
 import {
-  dungeonMember,
-  dungeonRun,
   mpvpBattleQueue,
   mpvpBattleUser,
   sector,
   userData,
   village,
 } from "@/drizzle/schema";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import {
   boostInactivePredicate,
@@ -191,7 +190,7 @@ export const updateUserDataForRunStaleShrineLobbyCleanup = (
       and(
         inArray(userData.userId, unclaimedUsersSubquery),
         eq(userData.status, "QUEUED"),
-        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+        withoutDungeonReservation(),
       ),
     );
 

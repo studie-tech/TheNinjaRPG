@@ -30,8 +30,6 @@ import {
   conversationComment,
   dailyBankInterest,
   dataBattleAction,
-  dungeonMember,
-  dungeonRun,
   forumPost,
   historicalAvatar,
   historicalIp,
@@ -52,6 +50,7 @@ import {
   warKill,
 } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { secondsFromNow } from "@/utils/time";
@@ -341,7 +340,7 @@ export const updateUserDataForGET3 = (
     .where(
       and(
         eq(userData.status, "QUEUED"),
-        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+        withoutDungeonReservation(),
         notExists(
           client
             .select({ id: mpvpBattleUser.id })

@@ -4,6 +4,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
+import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 
 /**
@@ -76,7 +77,7 @@ export const fetchMatch = async (client: DrizzleClient, matchId: string) => {
 import { inArray, isNull, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-import { clan, dungeonMember, dungeonRun, userData } from "@/drizzle/schema";
+import { clan, userData } from "@/drizzle/schema";
 
 /** Build the `clan` update for `createTournament`, setting `bank`, using predicates on `id`. */
 export const updateClanForCreateTournament = (
@@ -147,7 +148,7 @@ export const updateUserDataForJoinMatch = (
     .where(
       and(
         inArray(userData.userId, [matchData.userId1 ?? "", matchData.userId2 ?? ""]),
-        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
+        withoutDungeonReservation(),
       ),
     );
 

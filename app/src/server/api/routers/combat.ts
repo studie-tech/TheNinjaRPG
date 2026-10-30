@@ -265,6 +265,7 @@ import { settleCookingExperience } from "@/server/utils/cooking";
 import {
   commitDungeonEntryBattle,
   fetchDungeonEntryData,
+  getDungeonEntryCharges,
 } from "@/server/utils/dungeonEntry";
 import { masteryGainUpdates } from "@/server/utils/masteryProgression";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
@@ -2111,22 +2112,8 @@ export const initiateBattle = async (
   if (dungeonEntryData && dungeonEncounter) {
     const requirements = dungeonRequirements(dungeonEncounter.content);
     for (const owner of fetchedUsers.filter((user) => userIds.includes(user.userId))) {
-      const charges = getQuestEntryCharges(
-        {
-          entryPaid: false,
-          quest: {
-            content: {
-              entryItems: requirements.requiredItemId
-                ? [
-                    {
-                      ids: [requirements.requiredItemId],
-                      number: requirements.requiredItemQuantity,
-                    },
-                  ]
-                : [],
-            },
-          },
-        },
+      const charges = getDungeonEntryCharges(
+        requirements,
         dungeonEntryData.inventory.filter((row) => row.userId === owner.userId),
       );
       if (!charges)
