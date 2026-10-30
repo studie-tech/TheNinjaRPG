@@ -29,7 +29,8 @@ export function HotkeyCaptureDialog({
 }: {
   target: HotkeyTarget | null;
   currentKey?: string;
-  onAssign: (key: string) => boolean | null | void;
+  /** Returns false to keep the dialog open, e.g. when the key is refused. */
+  onAssign: (key: string) => boolean | null | undefined;
   onClose: () => void;
 }) {
   const [error, setError] = useState<string>();
