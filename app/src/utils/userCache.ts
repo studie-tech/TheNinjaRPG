@@ -8,7 +8,6 @@ import {
 } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { canAssignExperience } from "@/libs/profile";
-import { isMockQuestHistoryRow } from "@/libs/quest";
 import { getReducedGainsDays } from "@/libs/train";
 import { getUserFactionNotifications } from "@/libs/userNotifications";
 import type {
@@ -244,31 +243,12 @@ const mergeUserChanges = <T extends object>(
 const isCacheObject = (value: unknown): value is Record<string, unknown> =>
   isPlainObject(value) && !(value instanceof Date);
 
-/** Keep public tracker confirmations and derived navigation in the same atomic cache update. */
+/** Keep confirmed profile state and derived navigation in the same cache update. */
 const mergeUserCache = (
   old: UserCache,
   user: User,
   achievementProgress?: AchievementProgress[],
 ): UserCache => {
-  if ("persistedQuestData" in user) {
-    const { persistedQuestData, ...savedUser } = user as User & UserCachePatch;
-    const persistedIds = new Set(persistedQuestData?.map((entry) => entry.id));
-    const virtualIds = new Set(
-      (achievementProgress ?? old.achievementProgress)
-        ?.filter(isMockQuestHistoryRow)
-        .map((entry) => entry.questId),
-    );
-    // Composed raid responses can carry fresh virtual goals in the merged snapshot.
-    const virtualTrackers = user.questData?.filter(
-      (entry) => virtualIds.has(entry.id) && !persistedIds.has(entry.id),
-    );
-    user = {
-      ...savedUser,
-      questData: virtualTrackers?.length
-        ? [...(persistedQuestData ?? []), ...virtualTrackers]
-        : (persistedQuestData ?? null),
-    };
-  }
   const factionNotifications = getUserFactionNotifications(user);
   const previousFactionNames = new Set(
     getUserFactionNotifications(old.userData ?? undefined).map((entry) => entry.name),
