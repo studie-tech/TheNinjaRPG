@@ -1,4 +1,6 @@
 import * as crypto from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -6,7 +8,7 @@ import { BLOODLINE_COST, PITY_BLOODLINE_ROLLS, ROLL_CHANCE } from "@/drizzle/con
 import { actionLog, bloodline, bloodlineRolls, gameSetting, quest, questHistory, userData, userVote } from "@/drizzle/schema";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { profileRouter } from "@/server/api/routers/profile";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 import { BloodlineCollection, QuestTracker, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../setup/factories";
@@ -134,11 +136,17 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
     expect(result.achievementProgress).toBeUndefined();
   });
 
-  it("applies a paid lineage acquisition without postwrite SELECTs or a profile read", async () => {
+  it("applies a paid lineage acquisition with an unfinished lifetime reputation goal without postwrite SELECTs or a profile read", async () => {
     const db = await getTestDatabase();
     await db.delete(quest).where(eq(quest.id, questId));
+    await db.update(userData).set({ reputationPointsTotal: 100 }).where(eq(userData.userId, userId));
+    await insertQuests([{ id: "reputation-mission", questType: "mission", hidden: false,
+      content: { objectives: [SimpleObjective.parse({ id: "reputation-goal", task: "reputation_points", value: 1000 })],
+        reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
+    await db.insert(questHistory).values({ id: "reputation-run", userId, questId: "reputation-mission", questType: "mission" });
     const profile = callerForDatabase(profileRouter, userId, db);
     const initial = await profile.getUser();
+    expect(initial.userData?.questData?.find((tracker) => tracker.id === "reputation-mission")?.goals[0]).toMatchObject({ done: false, value: 100 });
     const client = new QueryClient();
     const key = ["paid-lineage-profile"];
     const getUser = vi.fn(() => profile.getUser());
@@ -147,19 +155,35 @@ describeWithDatabase("lineage acquisition profile reconciliation", () => {
     const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
     const unsubscribe = observer.subscribe(() => {});
     try {
-      const revision = prepareUserUpdate(client, key);
+      // Execute the purchase component's callbacks with the confirmed response and real cache merger.
+      const source = readFileSync(join(import.meta.dirname, "../../../../src/layout/Bloodline.tsx"), "utf8");
+      const call = source.indexOf("api.bloodline.purchaseBloodline.useMutation(");
+      const callbacks = source.slice(call).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+      if (!callbacks) throw new Error("Bloodline purchase callbacks were not found");
+      const transpiler = new (require("bun").Transpiler)({ loader: "tsx" });
+      const factory = transpiler.transformSync(`function callbacks() { return (${callbacks}); }`);
+      const updateUser = (patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options);
+      const options = new Function("prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", `${factory}\nreturn callbacks();`)(
+        () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(),
+      ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
+      const revision = options.onMutate();
       const api = callerForDatabase(bloodlineRouter, userId, db);
       const { result, statements } = await recordQueries(() => api.purchaseBloodline({ bloodlineId: lineId }));
       expect(result.success).toBe(true);
+      await options.onSuccess(result, { bloodlineId: lineId }, revision);
+      expect(getUser).not.toHaveBeenCalled();
       expect(result.userPatch?.bloodlineId).toBe(lineId);
       expect(result.userDelta).toEqual({ reputationPoints: -BLOODLINE_COST.A });
       const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
       expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
-      await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta });
-      expect(getUser).not.toHaveBeenCalled();
-      expect(client.getQueryData<typeof initial>(key)?.userData).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A });
+      const cached = client.getQueryData<typeof initial>(key);
+      expect(cached?.userData).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A, reputationPointsTotal: 100 });
+      expect(cached?.userData?.questData).toEqual(initial.userData?.questData);
+      const canonical = await profile.getUser();
+      expect(cached?.userData?.questData).toEqual(canonical.userData?.questData);
+      expect(canonical.userData).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A, reputationPointsTotal: 100 });
       expect((await api.purchaseBloodline({ bloodlineId: lineId })).success).toBe(false);
-      expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A });
+      expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ bloodlineId: lineId, reputationPoints: 100000 - BLOODLINE_COST.A, reputationPointsTotal: 100 });
       expect(await db.query.bloodlineRolls.findMany({ where: eq(bloodlineRolls.userId, userId) })).toHaveLength(1);
     } finally { unsubscribe(); client.clear(); }
   });
