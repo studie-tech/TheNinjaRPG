@@ -2,7 +2,7 @@
  * Database access for occupation; authorization and transaction scopes stay in callers.
  */
 
-import { and, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import {
@@ -11,6 +11,7 @@ import {
   userData,
   userItem,
   userItemImbuement,
+  userQueue,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
@@ -256,7 +257,7 @@ export const findCraftingQueueState = (client: DrizzleClient, userId: string) =>
     where: eq(userData.userId, userId),
     columns: { userId: true },
     with: {
-      queue: { with: { item: true } },
+      queue: { orderBy: asc(userQueue.position), with: { item: true } },
       items: {
         columns: { id: true },
         where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
