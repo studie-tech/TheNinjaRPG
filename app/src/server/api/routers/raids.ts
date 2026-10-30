@@ -1086,6 +1086,7 @@ export const raidsRouter = createTRPCRouter({
       if (!raidValidation.isValid) {
         if (raidValidation.error === "This raid has ended") {
           await checkAndCleanupExpiredRaid(ctx.drizzle, raid.id);
+          return errorResponse(raidValidation.error);
         }
         return reject(raidValidation.error);
       }

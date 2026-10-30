@@ -1,5 +1,5 @@
 import * as combat from "@/routers/combat";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -211,6 +211,35 @@ describeWithDatabase("raid join committed queue", () => {
     expect(await db.query.mpvpBattleQueue.findFirst({ where: eq(mpvpBattleQueue.id, "cache-team") })).toMatchObject({ battleId: "confirmed-raid" });
     expect((await api.startRaidBattle({ teamId: "cache-team" })).success).toBe(false);
     expect(combat.initiateBattle).toHaveBeenCalledTimes(1);
+  });
+  it("recovers the actor after expired-raid cleanup without returning the queued snapshot", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "queue-sql-user"));
+    await db.update(mpvpBattleQueue).set({ createdAt: new Date(0) }).where(eq(mpvpBattleQueue.id, "cache-team"));
+    await db.insert(mpvpBattleUser).values({ id: "starter", userId: "queue-sql-user", clanBattleId: "cache-team", side: "ATTACKER", slot: 0 });
+    const profile = await callerFor(profileRouter, "queue-sql-user");
+    const initial = await profile.getUser();
+    expect(initial.userData?.status).toBe("QUEUED");
+    const client = new QueryClient();
+    const key = [["profile", "getUser"], { type: "query" }];
+    client.setQueryData(key, initial);
+    const getUser = vi.fn(() => profile.getUser());
+    const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      await db.update(quest).set({ raidEndsAt: new Date(0) }).where(eq(quest.id, "cache-raid"));
+      const revision = prepareUserUpdate(client, key);
+      const result = await (await callerFor(raidsRouter, "queue-sql-user")).startRaidBattle({ teamId: "cache-team" });
+      expect(result).toMatchObject({ success: false, message: "This raid has ended" });
+      expect(result.userPatch).toBeUndefined();
+      expect(result.userDelta).toBeUndefined();
+      expect(await db.query.userData.findFirst({ where: eq(userData.userId, "queue-sql-user") })).toMatchObject({ status: "AWAKE" });
+      expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
+      expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(0);
+      await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta });
+      expect(getUser).toHaveBeenCalledTimes(1);
+      expect(client.getQueryData<typeof initial>(key)?.userData?.status).toBe("AWAKE");
+    } finally { unsubscribe(); client.clear(); }
   });
   it.each([{ success: true, requiresUserRefresh: false }, { success: true, requiresUserRefresh: true }, { success: false, requiresUserRefresh: false }])("reconciles raid admission according to its settlement contract (%j)", async ({ success, requiresUserRefresh }) => {
     const db = await getTestDatabase();

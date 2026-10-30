@@ -1563,14 +1563,10 @@ const SwapBloodline: React.FC = () => {
       onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         await Promise.all([
-          ...(data.success
-            ? [
-                updateUser(data.userPatch, {
-                  revision,
-                  achievementProgress: data.achievementProgress,
-                }),
-              ]
-            : []),
+          updateUser(data.userPatch, {
+            revision,
+            achievementProgress: data.achievementProgress,
+          }),
           utils.bloodline.getSwapInfo.invalidate(),
         ]);
       },
