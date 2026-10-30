@@ -289,20 +289,23 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     expect((await db.query.dungeonRun.findFirst({where: eq(dungeonRun.id, id)}))?.state.readyIds).toHaveLength(0);
   });
 
-  it("returns current absolute reward balances on first claim and replay after an independent grant", async () => {
+  it("preserves shared reward balances for canonical reconciliation on claim and replay", async () => {
     const db = await getTestDatabase();
     const { a, id } = await completedLobby(dungeonContent());
+    const balances = () => db.query.userData.findFirst({ where: eq(userData.userId, "a"), with: { village: true } });
     const first = await a.claim({ id });
-    expect(first).toMatchObject({ success: true, userPatch: {
+    expect(first).toMatchObject({ success: true, userPatch: undefined });
+    expect(await balances()).toMatchObject({
       money: 100, earnedExperience: 10, villagePrestige: 2,
-      village: { id: "village", tokens: 5 }, dungeonsCompleted: 1,
-    } });
+      village: { id: "village", tokens: 5 },
+    });
     await db.update(userData).set({ money: 109 }).where(eq(userData.userId, "a"));
     const replay = await a.claim({ id });
-    expect(replay).toMatchObject({ success: true, userPatch: {
+    expect(replay).toMatchObject({ success: true, userPatch: undefined });
+    expect(await balances()).toMatchObject({
       money: 109, earnedExperience: 10, villagePrestige: 2,
-      village: { id: "village", tokens: 5 }, dungeonsCompleted: 1,
-    } });
+      village: { id: "village", tokens: 5 },
+    });
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, "a") }))?.money).toBe(109);
   });
   it("grants the configured rewards once when claims race", async () => {

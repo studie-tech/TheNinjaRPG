@@ -10,10 +10,10 @@ import * as socialQueries from "@/queries/socialUserCache";
 import * as profileQueries from "@/queries/profile";
 import * as skillQueries from "@/queries/skillTree";
 import { withRequestScope } from "@/server/requestScope";
-import { getBattleUserPatch, getMembershipUserPatch, getShrineLobbyUserPatch, getVillageChangeUserUpdate, getWarAllegianceUserPatch } from "@/server/utils/socialUserCache";
+import { getBattleUserPatch, getMembershipUserPatch, getShrineLobbyUserPatch, getWarAllegianceUserPatch } from "@/server/utils/socialUserCache";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { makeEffect } from "../../../libs/combat/helpers/battleScenario";
-import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
+import { resetServerModuleStubs } from "../../../setup/serverModules";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuests, insertUserItems, insertUsers } from "../../../setup/factories";
@@ -76,12 +76,6 @@ describeWithDatabase("confirmed social profile projections", () => {
     const db = await getTestDatabase();
     vi.spyOn(skillQueries, "fetchMasterySources").mockRejectedValueOnce(new Error("Mastery sources unavailable"));
     expect(await getBattleUserPatch(db, "projection-user")).toBeUndefined();
-  });
-
-  it("propagates side-effecting village progression errors before membership confirmation", async () => {
-    const db = await getTestDatabase();
-    stubProfile("fetchUpdatedUser", async () => { throw new Error("Village progression unavailable"); });
-    await expect(getVillageChangeUserUpdate(db, "projection-user")).rejects.toThrow("Village progression unavailable");
   });
 
   it("publishes a newer combat retained by conditional queue cleanup", async () => {

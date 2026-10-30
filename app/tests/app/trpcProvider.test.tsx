@@ -149,7 +149,7 @@ const profileRecoveryCallbacks = ({
   const utils = {
     profile: {
       getUser: {
-        refetch: () => queryClient.refetchQueries({ queryKey: key, exact: true }),
+        invalidate: () => queryClient.invalidateQueries({ queryKey: key, exact: true }),
       },
       getDashboard: { invalidate },
     },

@@ -36,13 +36,13 @@ export const ElementalMastery = () => {
     await Promise.all([
       ...(result.success
         ? [updateUser(result.userPatch, { revision })]
-        : [utils.profile.getUser.refetch()]),
+        : [utils.profile.getUser.invalidate()]),
       utils.profile.getPublicUser.invalidate(),
     ]);
   };
   const onError = () => {
     setMessage("Could not save. Please try again.");
-    void utils.profile.getUser.refetch();
+    void utils.profile.getUser.invalidate();
   };
   const select = api.train.selectTrainedElement.useMutation({
     onMutate: prepareUserUpdate,

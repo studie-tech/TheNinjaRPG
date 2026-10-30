@@ -1,9 +1,10 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { anbuSquad, clan, gameSetting, quest, questHistory, raidDamageThreshold, raidParticipation, rankedSeason, rankedUserRewards, userData, userVote, village, war } from "@/drizzle/schema";
 import { profileRouter } from "@/server/api/routers/profile";
+import * as profileApi from "@/server/api/routers/profile";
 import { raidsRouter } from "@/server/api/routers/raids";
 import { withRequestScope } from "@/server/requestScope";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
@@ -19,18 +20,20 @@ type Profile = Awaited<ReturnType<ReturnType<typeof profileRouter.createCaller>[
 /** Select the objective compared between ranked reward projections and canonical state. */
 const goal = (profile: Profile | undefined) => profile?.userData?.questData?.find((entry) => entry.id === "reward-progress")?.goals.find((entry) => entry.id === "reward-goal");
 
-/** Expose a warmed reward cache that detects unexpected canonical refetches. */
-const cachedProfile = (initial: Profile) => {
+const subscriptions: (() => void)[] = [];
+/** Observe a warmed profile and count canonical reads required by reward recovery. */
+const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
   const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const key = ["reward-progress-profile"];
-  let refetches = 0;
-  cache.setQueryDefaults(key, { queryFn: async () => { refetches += 1; throw new Error("Unexpected profile refetch"); } });
+  const getUser = vi.fn(read);
   cache.setQueryData(key, initial);
+  const observer = new QueryObserver(cache, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+  subscriptions.push(observer.subscribe(() => {}));
   const revision = prepareUserUpdate(cache, key);
-  return { cache, key, revision, refetches: () => refetches, profile: () => cache.getQueryData<Profile>(key) };
+  return { cache, key, revision, refetches: () => getUser.mock.calls.length, profile: () => cache.getQueryData<Profile>(key) };
 };
 
-describeWithDatabase("ranked rewards project automatic progression", () => {
+describeWithDatabase("ranked reward progression recovery", () => {
   beforeEach(async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => Response.json(
       String(url).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
@@ -46,7 +49,7 @@ describeWithDatabase("ranked rewards project automatic progression", () => {
     await db.insert(rankedUserRewards).values({ id: "reward-receipt", userId, seasonId: "reward-season", division: "Wood" });
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { subscriptions.splice(0).forEach((stop) => stop()); vi.restoreAllMocks(); });
 
   it.each([
     ["reputation_points", "reward_reputation", "reputationPointsTotal"],
@@ -54,19 +57,21 @@ describeWithDatabase("ranked rewards project automatic progression", () => {
     ["hunting_experience", "reward_hunting_experience", "huntingExperience"],
     ["crafting_experience", "reward_crafting_experience", "craftingExperience"],
     ["gathering_experience", "reward_gathering_experience", "gatheringExperience"],
-  ] as const)("persists and merges %s after %s without refetching", async (task, rewardField, savedField) => {
+  ] as const)("persists %s and reconciles its %s reward through one canonical read", async (task, rewardField, savedField) => {
     const db = await getTestDatabase();
     await insertQuests([{ id: "reward-progress", name: "Reward Progress", questType: "achievement", hidden: false,
       content: { objectives: [SimpleObjective.parse({ id: "reward-goal", task, value: 1 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] } }]);
     await db.update(rankedSeason).set({ rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ [rewardField]: 1 }) }] }).where(eq(rankedSeason.id, "reward-season"));
     const profile = await callerFor(profileRouter, userId);
-    const cached = cachedProfile(await profile.getUser());
+    const cached = cachedProfile(await profile.getUser(), () => profile.getUser());
     expect(goal(cached.profile())).toMatchObject({ value: 0, done: false });
+    const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
     const result = await (await callerFor(pvpRankRouter, userId)).claimSeasonRewards();
+    expect(hydration).not.toHaveBeenCalled();
     expect(result.success).toBe(true);
     if (!result.success) throw new Error(result.message);
     await updateUserCache(cached.cache, cached.key, result.userPatch, { revision: cached.revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
-    expect(cached.refetches()).toBe(0);
+    expect(cached.refetches()).toBe(1);
     expect(goal(cached.profile())).toMatchObject({ value: 1, done: true });
     const saved = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
     expect(saved?.[savedField]).toBe(1);
@@ -84,15 +89,19 @@ describeWithDatabase("ranked rewards project automatic progression", () => {
     await db.insert(raidParticipation).values({ id: "reward-participation", questId: "reward-raid", userId, damageDealt: 100 });
     await db.insert(raidDamageThreshold).values({ id: "reward-threshold", questId: "reward-raid", damageRequired: 50, rewards: ObjectiveReward.parse({ reward_medical_experience: 1 }) });
     const profile = await callerFor(profileRouter, userId);
-    const cached = cachedProfile(await profile.getUser());
+    const cached = cachedProfile(await profile.getUser(), () => profile.getUser());
+    const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
     const result = await withRequestScope(async () => {
       await profile.getUser();
-      return (await callerFor(raidsRouter, userId)).claimDamageReward({ questId: "reward-raid", thresholdId: "reward-threshold" });
+      const readCount = hydration.mock.calls.length;
+      const response = await (await callerFor(raidsRouter, userId)).claimDamageReward({ questId: "reward-raid", thresholdId: "reward-threshold" });
+      expect(hydration).toHaveBeenCalledTimes(readCount + 1);
+      return response;
     });
     expect(result.success).toBe(true);
     if (!result.success) throw new Error(result.message);
     await updateUserCache(cached.cache, cached.key, result.userPatch, { revision: cached.revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
-    expect(cached.refetches()).toBe(0);
+    expect(cached.refetches()).toBe(1);
     expect(goal(cached.profile())).toMatchObject({ value: 1, done: true });
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ medicalExperience: 1 });
     cached.cache.clear();
@@ -109,7 +118,7 @@ describeWithDatabase("ranked rewards project automatic progression", () => {
     expect(counted.getReads()).toBe(2);
   });
 
-  it("merges automatic expulsion, faction cleanup and current faction notices", async () => {
+  it("reconciles automatic expulsion, faction cleanup and current faction notices", async () => {
     const db = await getTestDatabase();
     await db.insert(village).values([{ id: "reward-home", name: "Home", sector: 10, type: "VILLAGE", kageId: "other" }, { id: VILLAGE_SYNDICATE_ID, name: "Syndicate", sector: 20, type: "OUTLAW", kageId: "other" }]);
     await db.insert(anbuSquad).values({ id: "reward-squad", name: "Reward squad", memberCount: 2, image: "", villageId: "reward-home", kageOrderId: "", leaderOrderId: "" });
@@ -117,16 +126,21 @@ describeWithDatabase("ranked rewards project automatic progression", () => {
     await db.insert(war).values({ id: "reward-home-war", type: "SECTOR_WAR", status: "ACTIVE", attackerVillageId: "other", defenderVillageId: "reward-home", sector: 30 });
     await db.update(userData).set({ isOutlaw: false, villageId: "reward-home", villagePrestige: 0, anbuId: "reward-squad", clanId: "reward-clan", joinedVillageAt: new Date(Date.now() - 100 * 86_400_000) }).where(eq(userData.userId, userId));
     await db.update(rankedSeason).set({ rewards: [{ division: "Wood", rewards: ObjectiveReward.parse({ reward_prestige: -1 }) }] }).where(eq(rankedSeason.id, "reward-season"));
-    const cached = cachedProfile(await (await callerFor(profileRouter, userId)).getUser());
+    const profile = await callerFor(profileRouter, userId);
+    const cached = cachedProfile(await profile.getUser(), () => profile.getUser());
     expect(cached.profile()?.notifications?.some((entry) => entry.name === "Sector under attack (Sector 30)")).toBe(true);
     const result = await (await callerFor(pvpRankRouter, userId)).claimSeasonRewards();
     expect(result.success).toBe(true);
     if (!result.success) throw new Error(result.message);
     await updateUserCache(cached.cache, cached.key, result.userPatch, { revision: cached.revision, delta: result.userDelta, achievementProgress: result.achievementProgress });
-    expect(cached.refetches()).toBe(0);
+    expect(cached.refetches()).toBe(1);
+    expect(cached.profile()?.userData).toMatchObject({ villageId: VILLAGE_SYNDICATE_ID, isOutlaw: true, villagePrestige: 1 });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ villageId: VILLAGE_SYNDICATE_ID, isOutlaw: true, anbuId: null, clanId: null });
+    // Expulsion commits membership cleanup; the next canonical read loads its relations.
+    await cached.cache.invalidateQueries({ queryKey: cached.key, exact: true });
+    expect(cached.refetches()).toBe(2);
     expect(cached.profile()?.userData).toMatchObject({ villageId: VILLAGE_SYNDICATE_ID, village: { id: VILLAGE_SYNDICATE_ID }, isOutlaw: true, villagePrestige: 1, clanId: null, clan: null, anbuId: null, anbuSquad: null, activeWars: [] });
     expect(cached.profile()?.notifications?.some((entry) => entry.name.includes("Sector 30"))).toBe(false);
-    expect(await db.query.userData.findFirst({ where: eq(userData.userId, userId) })).toMatchObject({ villageId: VILLAGE_SYNDICATE_ID, isOutlaw: true, anbuId: null, clanId: null });
     cached.cache.clear();
   });
 });

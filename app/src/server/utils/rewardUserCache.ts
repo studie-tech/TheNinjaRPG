@@ -1,18 +1,12 @@
 import type { GetRewardResult } from "@/libs/quest";
 import { findRewardUserSnapshot } from "@/queries/quests";
-import {
-  fetchUpdatedUser,
-  getUserProgressionUpdate,
-} from "@/server/api/routers/profile";
+import type { getUserProgressionUpdate } from "@/server/api/routers/profile";
 import { getRewardUserDelta, type updateRewards } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
-import { withRequestScope } from "@/server/requestScope";
-import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
 
 /**
- * Confirm committed counters, hydrating when derived progression must be settled.
- * Required hydration errors propagate; optional cache confirmation can be withheld.
- * Forward consumed feedback even when the profile needs canonical reconciliation.
+ * Confirm scalar payouts with a bounded read. Relation-changing rewards and
+ * derived progression reconcile through the canonical profile query.
  */
 export const getRewardUserUpdate = async (input: {
   client: DrizzleClient;
@@ -26,107 +20,31 @@ export const getRewardUserUpdate = async (input: {
   progression?: ReturnType<typeof getUserProgressionUpdate>;
 }) => {
   const { client, userId, rewards, granted } = input;
-  const needsRelations =
+  const needsReconciliation =
     input.requiresRelations ||
     getRewardUserDelta(rewards) === undefined ||
     granted.titles.length > 0 ||
     granted.badges.length > 0 ||
     granted.sageModes.length > 0;
-  const hydrated = needsRelations
-    ? await withRequestScope(() => fetchUpdatedUser({ client, userId }))
-    : undefined;
   const fallback = {
     userPatch: undefined,
     userDelta: undefined,
     achievementProgress: undefined,
-    announcements: hydrated?.toastMessages.length ? hydrated.toastMessages : undefined,
+    announcements: undefined,
   };
-  if (needsRelations && !hydrated?.user) return fallback;
-  // Canonical hydration confirms relation-changing quest effects. Generated feedback
-  // has already been consumed and travels independently of cache confirmation.
-  if (
-    hydrated &&
-    (hydrated.toastMessages?.length ||
-      hydrated.user?.unreadNotifications ||
-      hydrated.user?.unreadRecruitRewards ||
-      hydrated.trackerResults?.consequences.some(
-        (entry) => entry.type !== "update_user",
-      ))
-  )
-    return fallback;
-  // Hydration can settle queued costs and rewards; reuse its confirmed counters.
-  const counters = hydrated?.user
-    ? {
-        money: hydrated.user.money,
-        seichiSilver: hydrated.user.seichiSilver,
-        earnedExperience: hydrated.user.earnedExperience,
-        petExperience: hydrated.user.petExperience,
-        villagePrestige: hydrated.user.villagePrestige,
-        reputationPoints: hydrated.user.reputationPoints,
-        reputationPointsTotal: hydrated.user.reputationPointsTotal,
-        skillPoints: hydrated.user.skillPoints,
-        medicalExperience: hydrated.user.medicalExperience,
-        huntingExperience: hydrated.user.huntingExperience,
-        craftingExperience: hydrated.user.craftingExperience,
-        gatheringExperience: hydrated.user.gatheringExperience,
-        sageMasteryExperience: hydrated.user.sageMasteryExperience,
-        ninjutsuMastery: hydrated.user.ninjutsuMastery,
-        genjutsuMastery: hydrated.user.genjutsuMastery,
-        taijutsuMastery: hydrated.user.taijutsuMastery,
-        bukijutsuMastery: hydrated.user.bukijutsuMastery,
-        bloodlineMastery: hydrated.user.bloodlineMastery,
-        sageMastery: hydrated.user.sageMastery,
-        masteryRanks: hydrated.user.masteryRanks,
-        village: hydrated.user.village
-          ? { id: hydrated.user.village.id, tokens: hydrated.user.village.tokens }
-          : undefined,
-      }
-    : // Confirmation is optional cache data after the payout has committed.
-      await findRewardUserSnapshot(client, userId).catch(() => undefined);
+  if (needsReconciliation) return fallback;
+  // Confirmation is optional cache data after the payout has committed.
+  const counters = await findRewardUserSnapshot(client, userId).catch(() => undefined);
   if (!counters) return fallback;
-  const needsMembership =
-    hydrated?.user &&
-    (rewards.reward_village_membership !== "NONE" ||
-      rewards.reward_prestige < 0 ||
-      hydrated.user.villageId !== (hydrated.user.village?.id ?? null));
-  const membership = needsMembership
-    ? await getMembershipUserPatch(client, hydrated.user)
-    : undefined;
-  if (needsMembership && !membership) return fallback;
-  const progression = hydrated?.user
-    ? getUserProgressionUpdate(hydrated.user, hydrated.publishedAchievementIds)
-    : input.progression;
+  const progression = input.progression;
   return {
     announcements: undefined,
     userDelta: {},
     achievementProgress: progression?.achievementProgress,
-    userPatch: hydrated?.user
-      ? {
-          ...progression?.userPatch,
-          dungeonsCompleted: hydrated.user.dungeonsCompleted,
-          raidsCompleted: hydrated.user.raidsCompleted,
-          ...counters,
-          village: hydrated.user.village,
-          villageId: hydrated.user.villageId,
-          isOutlaw: hydrated.user.isOutlaw,
-          joinedVillageAt: hydrated.user.joinedVillageAt,
-          clanId: hydrated.user.clanId,
-          clan: hydrated.user.clan,
-          anbuId: hydrated.user.anbuId,
-          anbuSquad: hydrated.user.anbuSquad,
-          titles: hydrated.user.titles,
-          displayTitle: hydrated.user.displayTitle,
-          sageModeId: hydrated.user.sageModeId,
-          sageMode: hydrated.user.sageMode,
-          raidBuffs: hydrated.user.raidBuffs,
-          ...membership,
-        }
-      : counters
-        ? {
-            ...progression?.userPatch,
-            ...counters,
-            village: counters.village ?? undefined,
-          }
-        : undefined,
+    userPatch: {
+      ...progression?.userPatch,
+      ...counters,
+      village: counters.village ?? undefined,
+    },
   };
 };

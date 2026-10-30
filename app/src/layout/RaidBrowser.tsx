@@ -103,7 +103,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
   // Preserve default error feedback while reconciling a potentially committed action.
   const recoverUser = (_data: unknown, error: unknown) => {
-    if (error) return util.profile.getUser.refetch();
+    if (error) return util.profile.getUser.invalidate();
   };
   // Mutations
   const { mutate: joinQueue, isPending: joinPending } =

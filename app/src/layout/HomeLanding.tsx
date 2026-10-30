@@ -77,7 +77,7 @@ export const HomeLanding: React.FC = () => {
               onClick={async () => {
                 setIsRetrying(true);
                 try {
-                  await utils.profile.getUser.refetch();
+                  await utils.profile.getUser.invalidate();
                 } finally {
                   setIsRetrying(false);
                 }

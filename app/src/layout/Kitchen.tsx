@@ -41,7 +41,7 @@ export default function Kitchen({ image }: { image?: string }) {
     : 0;
   const utils = api.useUtils();
   useActivityBonusRefresh(user, () => {
-    void utils.profile.getUser.refetch();
+    void utils.profile.getUser.invalidate();
   });
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -93,7 +93,7 @@ export default function Kitchen({ image }: { image?: string }) {
         refresh(),
         result.success
           ? updateUser(result.userPatch, { revision })
-          : utils.profile.getUser.refetch(),
+          : utils.profile.getUser.invalidate(),
       ]);
     },
     onError: (error) => setMessage(error.message),

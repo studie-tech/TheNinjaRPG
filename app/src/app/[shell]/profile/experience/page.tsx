@@ -23,10 +23,10 @@ export default function AssignExperience() {
       showMutationToast(result);
       if (result.success)
         await updateUser(result.userPatch, { revision: context?.userRevision });
-      else await utils.profile.getUser.refetch();
+      else await utils.profile.getUser.invalidate();
     },
     onError: async () => {
-      await utils.profile.getUser.refetch();
+      await utils.profile.getUser.invalidate();
     },
   });
 

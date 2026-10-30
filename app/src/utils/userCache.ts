@@ -63,7 +63,7 @@ export type UserUpdateOptions = {
 
 /**
  * Apply local fields or a confirmed response against its captured profile revision.
- * Unsafe snapshots refetch; accepted fields and metadata update together.
+ * Unsafe snapshots invalidate; accepted fields and metadata update together.
  * Consumed announcements are delivered separately by the mutation toast path.
  */
 export const updateUserCache = async (
@@ -97,8 +97,7 @@ export const updateUserCache = async (
       return mergeUserCache(old, user);
     });
     // A local patch must preserve reconciliation of unrelated fields.
-    if (needsRefresh)
-      await client.refetchQueries({ queryKey: key, exact: true, type: "all" });
+    if (needsRefresh) await client.invalidateQueries({ queryKey: key, exact: true });
     return;
   }
   const { revision } = mutation;
@@ -108,7 +107,7 @@ export const updateUserCache = async (
     // An initial fetch may contain a pre-mutation snapshot. Cancel it first so
     // a snapshot taken before the mutation cannot satisfy this reconciliation.
     await client.cancelQueries({ queryKey: key, exact: true });
-    await client.refetchQueries({ queryKey: key, exact: true, type: "all" });
+    await client.invalidateQueries({ queryKey: key, exact: true });
     return;
   }
   const wasFetching = client.getQueryState(key)?.fetchStatus !== "idle";
@@ -116,7 +115,7 @@ export const updateUserCache = async (
   // Another action may have requested this unfinished read to reconcile its own changes.
   // Preserve that refresh instead of cancelling it and clearing the invalidation with a delta.
   if (wasFetching) {
-    await client.refetchQueries({ queryKey: key, exact: true, type: "all" });
+    await client.invalidateQueries({ queryKey: key, exact: true });
     return;
   }
   let applied = false;
@@ -151,8 +150,7 @@ export const updateUserCache = async (
       result.notifications = mutation.notifications(result.notifications);
     return result;
   });
-  if (!applied)
-    await client.refetchQueries({ queryKey: key, exact: true, type: "all" });
+  if (!applied) await client.invalidateQueries({ queryKey: key, exact: true });
 };
 
 /** Foreign-key changes require replacement of the matching embedded relation. */

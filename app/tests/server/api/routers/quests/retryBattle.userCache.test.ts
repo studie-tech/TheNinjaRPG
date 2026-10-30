@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { aiProfile, battle, battleHistory, item, quest, questHistory, userCookingJob, userData, userItem, userVote } from "@/drizzle/schema";
@@ -105,6 +105,8 @@ describeWithDatabase("quest retry admission cache", () => {
     const recovery = vi.fn(() => profile.getUser());
     client.setQueryDefaults(key, { queryFn: recovery });
     client.setQueryData(key, initial);
+    const observer = new QueryObserver(client, { queryKey: key, queryFn: recovery, staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
     const revision = prepareUserUpdate(client, key);
     try {
       const response = await api.retryBattle({ questId });
@@ -153,6 +155,6 @@ describeWithDatabase("quest retry admission cache", () => {
       for (const field of ["offence", "defence", "strength", "speed", "intelligence", "willpower", "curHealth", "curChakra", "curStamina", "curEnergy", "maxEnergy"] as const) {
         expect(cached?.[field]).toBe(canonical?.[field]);
       }
-    } finally { client.clear(); }
+    } finally { unsubscribe(); client.clear(); }
   });
 });

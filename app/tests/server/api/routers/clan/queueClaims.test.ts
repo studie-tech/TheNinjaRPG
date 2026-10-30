@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import {
   battle,
@@ -16,7 +19,9 @@ import { Pusher } from "@/libs/pusher";
 import * as socialQueries from "@/queries/socialUserCache";
 import { clanRouter } from "@/server/api/routers/clan";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
+import { profileRouter } from "@/server/api/routers/profile";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
+import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 import { insertUsers } from "../../../../setup/factories";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import {
@@ -88,6 +93,50 @@ describeWithDatabase("clan queue claim ownership", () => {
       slot: 0,
     });
   };
+
+  it("executes the canonical profile after a queued deleting actor receives battleEnded", async () => {
+    const db = await getTestDatabase();
+    await oldMembership();
+    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "leader"));
+    const profile = callerForDatabase(profileRouter, "leader", db);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = [["profile", "getUser"], { type: "query" }];
+    client.setQueryData(key, await profile.getUser());
+    const getUser = vi.fn(() => profile.getUser());
+    const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const stop = observer.subscribe(() => {});
+    const source = readFileSync(join(import.meta.dirname, "../../../../../src/layout/Clan.tsx"), "utf8");
+    const callbacks = source.slice(source.indexOf("api.clan.deleteClanBattle.useMutation(")).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+    if (!callbacks) throw new Error("Clan deletion callbacks were not found");
+    const options = new Function("prepareUserUpdate", "updateUser", `return (${callbacks});`)(
+      () => prepareUserUpdate(client, key),
+      (patch: UserPatch | undefined, update: UserUpdateOptions) => updateUserCache(client, key, patch, update),
+    ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
+    const handlerSource = readFileSync(join(import.meta.dirname, "../../../../../src/layout/PusherHandler.tsx"), "utf8");
+    const callback = handlerSource.match(/channel.bind\("event", (async [\s\S]*?\n      \})\);/)?.[1];
+    if (!callback) throw new Error("User event callback was not found");
+    const transpiler = new (require("bun").Transpiler)({ loader: "tsx", tsconfig: { compilerOptions: { jsx: "react" } } }) as { transformSync(source: string): string };
+    const factory = transpiler.transformSync(`function createHandler() { return (${callback}); }`);
+    const receive = new Function("utils", `${factory}\nreturn createHandler();`)(
+      { profile: { getUser: {
+        cancel: () => client.cancelQueries({ queryKey: key, exact: true }),
+        invalidate: () => client.invalidateQueries({ queryKey: key, exact: true }),
+      } }, combat: { getBattle: { invalidate: vi.fn() } } },
+    ) as (event: { type: string }) => Promise<void>;
+    try {
+      const trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+      const revision = options.onMutate();
+      const result = await callerForDatabase(clanRouter, "leader", db).deleteClanBattle({ clanBattleId: "old" });
+      expect(result.success).toBe(true);
+      await options.onSuccess(result, undefined, revision);
+      expect(getUser).not.toHaveBeenCalled();
+      const event = trigger.mock.calls.find(([recipient]) => recipient === "leader")?.[2];
+      expect(event).toEqual({ type: "battleEnded" });
+      await receive(event as { type: string });
+      expect(getUser).toHaveBeenCalledTimes(1);
+      expect(client.getQueryData<{ userData: { status: string } }>(key)?.userData.status).toBe("AWAKE");
+    } finally { stop(); client.clear(); }
+  });
 
   it("keeps a completed queue departure successful when optional status confirmation fails", async () => {
     const db = await getTestDatabase();

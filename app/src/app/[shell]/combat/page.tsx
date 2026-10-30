@@ -186,7 +186,7 @@ export default function CombatPage() {
   // Reconcile from the server without clearing held results or a newer battle.
   useEffect(() => {
     if (isBattleMissing) {
-      if (userData?.battleId) void utils.profile.getUser.refetch();
+      if (userData?.battleId) void utils.profile.getUser.invalidate();
       if (battle?.id === userData?.battleId && battle?.extraState.dungeon && !results) {
         router.push("/dungeon");
       }

@@ -136,7 +136,7 @@ export function PetAcquisition() {
               revision,
               delta: result.userPatch ? (result.userDelta ?? {}) : undefined,
             })
-        : utils.profile.getUser.refetch(),
+        : utils.profile.getUser.invalidate(),
     ]);
   };
   const failMutation = async (cause: { message: string }) => {
@@ -145,7 +145,7 @@ export function PetAcquisition() {
     await Promise.all([
       utils.pets.getPet.invalidate(),
       utils.pets.getCollection.invalidate(),
-      utils.profile.getUser.refetch(),
+      utils.profile.getUser.invalidate(),
     ]);
   };
   const acquire = api.pets.acquirePet.useMutation({

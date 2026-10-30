@@ -22,7 +22,7 @@ beforeEach(() => {
     <img alt={alt} src={typeof src === "string" ? src : undefined} />
   ));
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ profile: { getUser: { refetch: invalidate } } }),
+    useUtils: () => ({ profile: { getUser: { invalidate: invalidate } } }),
   });
 });
 

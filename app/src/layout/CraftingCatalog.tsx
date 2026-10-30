@@ -98,7 +98,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   // Utils
   const utils = api.useUtils();
   useActivityBonusRefresh(userData, () => {
-    void utils.profile.getUser.refetch();
+    void utils.profile.getUser.invalidate();
   });
   const craftingReductionPercent = userData
     ? getActivityBonuses(userData).craftingReductionPercent

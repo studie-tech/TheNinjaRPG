@@ -5,26 +5,16 @@ import { findDungeonRewardUserCache } from "@/queries/dungeon";
 import { fetchMasterySources } from "@/queries/skillTree";
 import { getRewardUserDelta } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
-import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
-import {
-  PostProcessedRewardSchema,
-  type PostProcessedRewards,
-} from "@/validators/rewards";
+import type { PostProcessedRewards } from "@/validators/rewards";
 
-/** Confirm receipt balances and reconcile progression when the delivered reward affects it. */
+/** Confirm scalar receipt balances, leaving derived progression to the profile query. */
 export const getDungeonRewardUserUpdate = async (
   client: DrizzleClient,
   before: UserData,
   rewards: PostProcessedRewards | undefined,
 ) => {
   if (!rewards || getRewardUserDelta(rewards) === undefined)
-    return getRewardUserUpdate({
-      client,
-      userId: before.userId,
-      rewards: rewards ?? PostProcessedRewardSchema.parse({}),
-      granted: { titles: [], badges: [], sageModes: [] },
-      requiresRelations: true,
-    });
+    return { userPatch: undefined };
   // Completion is counted when the final battle settles. Its confirmed total lets
   // clients detect a missed battle-ended profile refresh and reconcile trackers.
   const confirmation = await Promise.all([

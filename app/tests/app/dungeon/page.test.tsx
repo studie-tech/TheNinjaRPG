@@ -53,7 +53,7 @@ const mount = (status: RunStatus | null, availableFn: () => Promise<Available>, 
   let claimCallbacks: ClaimCallbacks;
   const stateQuery = vi.fn(stateFn);
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ profile: { getUser: { refetch: vi.fn(async () => undefined) } } }),
+    useUtils: () => ({ profile: { getUser: { invalidate: vi.fn(async () => undefined) } } }),
     pets: { getCollection: { useQuery: () => ({ data: { pets: [] }, isPending: false }) } },
     coop: { dungeon: {
       getAvailable: { useQuery: (_input: unknown, options: object) => useQuery({ ...options, queryKey: ["available"], queryFn: availableFn }) },

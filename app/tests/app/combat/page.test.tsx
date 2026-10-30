@@ -46,7 +46,7 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>)
     loadingEvents.push(`assets:${ids.join(",")}`);
   });
   const utils = {
-    profile: { getUser: { refetch: refetchProfile } },
+    profile: { getUser: { invalidate: refetchProfile } },
     combat: { getBattle: { invalidate: vi.fn() } },
     misc: { getAllGameAssetNames: { prefetch: prefetchAssets } },
   };

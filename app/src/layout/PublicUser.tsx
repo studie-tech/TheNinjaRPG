@@ -247,7 +247,7 @@ const DebugUserCloneControl: React.FC<{
         setConfirmedSource(null);
         void Promise.allSettled([
           // Cloning replaces character state and generated relation IDs; reload its complete projection.
-          utils.profile.getUser.refetch(),
+          utils.profile.getUser.invalidate(),
           utils.profile.getPublicUser.invalidate({ userId: cloneUserId }),
         ]);
         router.push("/profile");

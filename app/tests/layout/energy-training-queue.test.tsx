@@ -41,7 +41,7 @@ function testMocks(): QueueMocks {
 const mocks = testMocks();
 vi.mock("@/app/_trpc/client", () => ({
   api: {
-    useUtils: () => ({ profile: { getUser: { refetch: testMocks().invalidate } } }),
+    useUtils: () => ({ profile: { getUser: { invalidate: testMocks().invalidate } } }),
     train: {
       updateEnergyTrainingQueue: {
         useMutation: (callbacks: QueueCallbacks) => {

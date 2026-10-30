@@ -1,11 +1,11 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { beforeEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { actionLog, gameSetting, quest, questHistory, userData, userVote, village } from "@/drizzle/schema";
 import { profileRouter } from "@/server/api/routers/profile";
 import { villageRouter } from "@/server/api/routers/village";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import * as profileApi from "@/server/api/routers/profile";
 import { InstantNewQuestObjective, MoveToObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../setup/factories";
@@ -16,6 +16,7 @@ const key = [["profile", "getUser"], { type: "query" }];
 const content = { objectives: [SimpleObjective.parse({ id: "arena", task: "arena_kills", value: 100 })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] };
 
 describeWithDatabase("village membership quest reconciliation", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
     await resetTables(actionLog, questHistory, quest, userVote, gameSetting, userData, village);
     const db = await getTestDatabase();
@@ -30,7 +31,7 @@ describeWithDatabase("village membership quest reconciliation", () => {
     await db.insert(userVote).values({ id: "membership-vote", userId, secret: "member1", lastVoteAt: new Date() });
   });
 
-  it.each(["joinVillage", "leaveVillage", "swapVillage"] as const)("%s projects destination achievements and replaces source trackers without a profile refetch", async (method) => {
+  it.each(["joinVillage", "leaveVillage", "swapVillage"] as const)("%s reconciles destination achievements without post-mutation hydration", async (method) => {
     const db = await getTestDatabase();
     const source = method === "joinVillage" ? VILLAGE_SYNDICATE_ID : "old-home";
     const destination = method === "leaveVillage" ? VILLAGE_SYNDICATE_ID : "new-home";
@@ -48,14 +49,14 @@ describeWithDatabase("village membership quest reconciliation", () => {
     const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
     const unsubscribe = observer.subscribe(() => {});
     try {
-      const revision = prepareUserUpdate(client, key);
+      const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
       const caller = callerForDatabase(villageRouter, userId, db);
       const result = method === "leaveVillage" ? await caller.leaveVillage() : await caller[method]({ villageId: destination });
       expect(result.success).toBe(true);
-      expect(result.userPatch?.userQuests).toEqual([]);
-      expect(result.achievementProgress?.map((entry) => entry.questId)).toEqual(["new-achievement"]);
-      await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress, ...(result.userDelta ? { delta: result.userDelta } : {}) });
-      expect(getUser).not.toHaveBeenCalled();
+      expect(hydration).toHaveBeenCalledTimes(1);
+      expect(result).not.toHaveProperty("userPatch");
+      await client.invalidateQueries({ queryKey: key, exact: true });
+      expect(getUser).toHaveBeenCalledTimes(1);
       const cached = client.getQueryData<typeof initial>(key)!;
       expect(cached.userData?.villageId).toBe(destination);
       expect(cached.userData?.questData?.map((tracker) => tracker.id)).toEqual(["new-achievement"]);
@@ -75,9 +76,7 @@ describeWithDatabase("village membership quest reconciliation", () => {
       content: { ...content, objectives: [MoveToObjective.parse({ id: "secret", task: "move_to_location", sector: 723, longitude: 41, latitude: 37, hideLocation: true })] } }]);
     const result = await callerForDatabase(villageRouter, userId, db).joinVillage({ villageId: "new-home" });
     expect(result.success).toBe(true);
-    expect(result.userPatch).toBeUndefined();
-    expect(result.achievementProgress).toBeUndefined();
-    expect(result.userDelta).toBeUndefined();
+    expect(result).not.toHaveProperty("userPatch");
     const canonical = await callerForDatabase(profileRouter, userId, db).getUser();
     expect(canonical.userData?.userQuests?.[0]?.quest.content.objectives[0]).toMatchObject({ sector: 1337, longitude: 1337, latitude: 1337 });
     const publicGoal = canonical.userData?.questData?.[0]?.goals[0];
@@ -110,18 +109,18 @@ describeWithDatabase("village membership quest reconciliation", () => {
     const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
     const unsubscribe = observer.subscribe(() => {});
     try {
-      const revision = prepareUserUpdate(client, key);
+      const hydration = vi.spyOn(profileApi, "fetchUpdatedUser");
       const caller = callerForDatabase(villageRouter, userId, db);
       const result = method === "leaveVillage" ? await caller.leaveVillage() : await caller[method]({ villageId: destination });
       expect(result.success).toBe(true);
-      expect(await db.query.questHistory.findFirst({ where: eq(questHistory.questId, "child-mission") })).toMatchObject({ userId, questId: "child-mission" });
-      expect(result.userPatch).toBeUndefined();
-      expect(result.achievementProgress).toBeUndefined();
-      expect(result.userDelta).toBeUndefined();
-      expect(result.announcements).toContain("Started new quest: New Child Mission");
-      await updateUserCache(client, key, result.userPatch, { revision, achievementProgress: result.achievementProgress, ...(result.userDelta ? { delta: result.userDelta } : {}) });
+      expect(hydration).toHaveBeenCalledTimes(1);
+      expect(await db.query.questHistory.findFirst({ where: eq(questHistory.questId, "child-mission") })).toBeUndefined();
+      expect(result).not.toHaveProperty("userPatch");
+      expect(result).not.toHaveProperty("announcements");
+      await client.invalidateQueries({ queryKey: key, exact: true });
       expect(getUser).toHaveBeenCalledTimes(1);
-      const cached = client.getQueryData<typeof initial>(key)!;
+      expect(client.getQueryData<typeof initial>(key)?.notifications).toContainEqual(expect.objectContaining({ name: "Started new quest: New Child Mission" }));
+      const cached = await profile.getUser();
       expect(cached.userData?.villageId).toBe(destination);
       expect(cached.userData?.userQuests.map((entry) => entry.questId).sort()).toEqual(["child-mission", "destination-tier"]);
       expect(cached.userData?.questData?.map((tracker) => tracker.id).sort()).toEqual(["child-mission", "destination-tier", "new-achievement"]);

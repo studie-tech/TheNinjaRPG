@@ -724,6 +724,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
     let refetches = 0;
     client.setQueryDefaults(key, { queryFn: async () => { refetches++; return profileApi.getUser(); } });
     client.setQueryData(key, before);
+    const observer = new QueryObserver(client, { queryKey: key, queryFn: async () => { refetches++; return profileApi.getUser(); }, staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
     const revision = prepareUserUpdate(client, key);
     const reads = await countProfileReads();
     const result = await api.checkRewards({ questId: missionId });
@@ -743,5 +745,7 @@ describeWithDatabase("confirmed quest cache responses", () => {
       expect(result.userPatch).toBeDefined();
       expect(result.achievementProgress?.some((entry) => entry.questId === achievementId)).toBe(false);
     }
+    unsubscribe();
+    client.clear();
   });
 });

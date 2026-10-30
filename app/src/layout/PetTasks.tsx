@@ -351,12 +351,12 @@ const usePetTaskFeedback = () => {
                   achievementProgress: data.achievementProgress,
                 },
               )
-            : utils.profile.getUser.refetch(),
+            : utils.profile.getUser.invalidate(),
         ]);
       },
       onError: async (error: { message: string }) => {
         setMessage(error.message);
-        await Promise.all([refresh(), utils.profile.getUser.refetch()]);
+        await Promise.all([refresh(), utils.profile.getUser.invalidate()]);
       },
     },
   };

@@ -97,7 +97,7 @@ const AccountLoadError: React.FC = () => {
   return (
     <div className="p-2 text-sm">
       <p>We couldn&apos;t load your account.</p>
-      <Button variant="outline" onClick={() => void utils.profile.getUser.refetch()}>
+      <Button variant="outline" onClick={() => void utils.profile.getUser.invalidate()}>
         Try again
       </Button>
     </div>

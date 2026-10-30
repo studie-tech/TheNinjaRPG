@@ -124,7 +124,7 @@ describe("CraftingCatalog crafting rank gate", () => {
     const invalidate = vi.fn();
     Object.assign(vi.spyOn(client, "api" as never), {
       ...client.api,
-      useUtils: () => ({ profile: { getUser: { refetch: invalidate } } }),
+      useUtils: () => ({ profile: { getUser: { invalidate: invalidate } } }),
     });
     const effect = DecreaseCraftingTime.parse({ power: 10 });
     const userData = {
