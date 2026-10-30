@@ -78,19 +78,25 @@ export default function DungeonPage() {
     showMutationToast(response);
     setMessage(response.success ? "" : response.message);
     if (response.success) setAbandonId(null);
-    await updateUser(response.userPatch, {
-      revision,
-      ...(response.userDelta ? { delta: response.userDelta } : {}),
-      expected: response.userExpected,
-      achievementProgress: response.achievementProgress,
-    });
+    const hasUserUpdate =
+      response.userPatch !== undefined || response.userDelta !== undefined;
+    if (hasUserUpdate)
+      await updateUser(response.userPatch, {
+        revision,
+        ...(response.userDelta ? { delta: response.userDelta } : {}),
+        expected: response.userExpected,
+        achievementProgress: response.achievementProgress,
+      });
     const stateRevision = prepareUserUpdate();
     const [refreshed] = await Promise.all([state.refetch(), available.refetch()]);
-    // The state endpoint reports profile effects from expiry and interrupted starts.
-    await updateUser(refreshed.isError ? undefined : refreshed.data?.userPatch, {
-      revision: stateRevision,
-      expected: refreshed.data?.userExpected,
-    });
+    // Canonical recovery must include any expiry or interrupted-start effects from the state read.
+    await updateUser(
+      !hasUserUpdate || refreshed.isError ? undefined : refreshed.data?.userPatch,
+      {
+        revision: stateRevision,
+        expected: refreshed.data?.userExpected,
+      },
+    );
   };
   const create = api.coop.dungeon.create.useMutation({
     onMutate: prepareUserUpdate,
