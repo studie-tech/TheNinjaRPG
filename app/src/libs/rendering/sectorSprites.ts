@@ -327,7 +327,7 @@ export const sectorSpriteDescriptions = (options: {
       groundY: art
         ? getWorldStructureEntrance(tile, height, art).y
         : tile.y + tile.height / 10 - height * (BUILDING_BASE_ANCHOR_Y - 0.5),
-      rendition: 200,
+      rendition: art ? 0 : 200,
       structureId: structure.id,
     });
   }
