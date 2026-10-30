@@ -3,6 +3,7 @@ import {
   assignHotkey,
   DEFAULT_BASIC_HOTKEYS,
   findLoadoutHotkeyConflict,
+  type HotkeyMap,
   hotkeyMapSchema,
   MAX_LOADOUT_HOTKEYS,
   resolveHotkeys,
@@ -55,7 +56,7 @@ describe("battle hotkeys", () => {
   });
 
   it("checks every loadout of the other kind in both directions", () => {
-    const loadouts = [
+    const loadouts: { name: string; hotkeys: HotkeyMap }[] = [
       { name: "", hotkeys: {} },
       { name: "Arena", hotkeys: { action: "q" } },
     ];
