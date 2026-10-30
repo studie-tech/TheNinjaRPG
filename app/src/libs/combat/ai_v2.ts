@@ -27,6 +27,7 @@ import {
 } from "@/libs/combat/util";
 import type { Point2D, UserLocation } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
+import { secureRandomInt } from "@/utils/math";
 import type { ZodAllAiAction, ZodAllAiCondition } from "@/validators/ai";
 import { ActionEndTurn, enforceExtraRules, getBackupRules } from "@/validators/ai";
 import type { ZodAllTags } from "@/validators/combat";
@@ -509,14 +510,18 @@ export const performAIaction = (
           }
         } else if (rule.action.type === "use_random_jutsu") {
           const jutsus = availActions.filter((a) => a.type === "jutsu");
-          const action = jutsus[Math.floor(Math.random() * jutsus.length)];
+          const action = jutsus.length
+            ? jutsus[secureRandomInt(jutsus.length)]
+            : undefined;
           const target = getTarget(rule.action, action);
           if (action && target) {
             nextAction = { action, long: target.longitude, lat: target.latitude };
           }
         } else if (rule.action.type === "use_random_item") {
           const items = availActions.filter((a) => a.type === "item");
-          const action = items[Math.floor(Math.random() * items.length)];
+          const action = items.length
+            ? items[secureRandomInt(items.length)]
+            : undefined;
           const target = getTarget(rule.action, action);
           if (action && target) {
             nextAction = { action, long: target.longitude, lat: target.latitude };

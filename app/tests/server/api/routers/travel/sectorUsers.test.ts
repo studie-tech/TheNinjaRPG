@@ -74,7 +74,7 @@ describeWithDatabase("travel.getSectorData player visibility", () => {
       "experience", "rank", "isOutlaw", "isBanned", "immunityUntil",
       "robImmunityUntil", "updatedAt", "villageId", "battleId", "anbuId",
       "stealthActive", "stealthActivatedAt", "stealth", "anbuSquad",
-      "warRelationship", "isMasked",
+      "warRelationship", "isMasked", "spriteAppearance",
     ].sort());
     expect(self.anbuSquad).toEqual(SQUAD);
     // The caller's relation is correlated into its existing read, not fetched separately.

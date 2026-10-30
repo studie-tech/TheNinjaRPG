@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendGTMEvent } from "@next/third-parties/google";
+import AutoHeight from "embla-carousel-auto-height";
 import { ArrowRight, MonitorPlay } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { startTransition, useEffect, useState } from "react";
@@ -43,6 +44,7 @@ import {
 } from "@/drizzle/constants";
 import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { CharacterPreview } from "@/layout/CharacterPreview";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
@@ -50,11 +52,13 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { readCampaignSource } from "@/libs/campaignSource";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { secureRandomInt } from "@/utils/math";
 import { useUserData } from "@/utils/UserContext";
 import {
   attributes,
   colors,
   genders,
+  getAttributeGroup,
   type RegistrationSchema,
   registrationSchema,
   skin_colors,
@@ -114,6 +118,22 @@ const REGISTER_BOX = {
   padding: false,
 } as const;
 
+const REGISTER_CAROUSEL_OPTIONS: React.ComponentProps<typeof Carousel>["opts"] = {
+  watchResize: (api, entries) => {
+    const slides = api.slideNodes();
+    const { slideRects } = api.internalEngine();
+    // AutoHeight caches step heights. Refresh for async content and form feedback;
+    // container height changes come from the plugin itself.
+    const hasHeightChange = entries.some(({ target }) => {
+      const index = slides.findIndex((slide) => slide === target);
+      return index !== -1 && slides[index]?.offsetHeight !== slideRects[index]?.height;
+    });
+    if (!hasHeightChange) return true;
+    api.reInit();
+    return false;
+  },
+};
+
 /**
  * The registration form component.
  * Holds the form and its mutations; each step subscribes only to the fields it shows, so a
@@ -158,6 +178,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
     defaultValues: {
       username: "",
       gender: initialFormValues.gender,
+      spriteBodyStyle: undefined,
       hair_color: initialFormValues.hair_color,
       eye_color: initialFormValues.eye_color,
       skin_color: initialFormValues.skin_color,
@@ -221,6 +242,8 @@ const RegisterSteps: React.FC<{ form: RegisterFormApi; isLoading: boolean }> = (
   const [cApi, setCApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const [count, setCount] = useState(0);
+  // Size each step to its content instead of reserving space for the tallest step.
+  const plugins = React.useMemo(() => [AutoHeight()], []);
 
   // Carousel control. The step counter renders in a transition so the slide animation
   // starts without waiting for it; reInit fires when the steps after the first mount.
@@ -243,8 +266,8 @@ const RegisterSteps: React.FC<{ form: RegisterFormApi; isLoading: boolean }> = (
 
   return (
     <>
-      <Carousel setApi={setCApi}>
-        <CarouselContent>
+      <Carousel setApi={setCApi} plugins={plugins} opts={REGISTER_CAROUSEL_OPTIONS}>
+        <CarouselContent className="items-start">
           <CarouselItem className="flex flex-col gap-4">
             <StepBanner alt="step1" src={IMG_REGISTRATIN_STEP1} />
             {isLoading ? (
@@ -385,8 +408,12 @@ const IdentityStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
   );
 };
 
-/** Step 2: appearance colors and attributes */
+/** Preview unsaved body, colour and trait choices through the same resolver as saved characters. */
 const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
+  const [gender, hair, eyes, skin, body] = useWatch({
+    control: form.control,
+    name: ["gender", "hair_color", "eye_color", "skin_color", "spriteBodyStyle"],
+  });
   const [watchAttr1, watchAttr2, watchAttr3] = useWatch({
     control: form.control,
     name: ["attribute_1", "attribute_2", "attribute_3"],
@@ -413,26 +440,62 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
   );
 
   return (
-    <>
-      <div className="grid w-full grid-cols-1 gap-4 px-3 sm:grid-cols-3">
+    <div className="grid grid-cols-[min(7rem,35%)_minmax(0,1fr)] items-start gap-3 px-3 sm:grid-cols-[min(9rem,30%)_minmax(0,1fr)]">
+      <CharacterPreview
+        className="w-full sm:row-span-2"
+        user={{
+          gender,
+          spriteBodyStyle: body,
+          attributes: [
+            watchAttr1,
+            watchAttr2,
+            watchAttr3,
+            `${hair} hair`,
+            `${eyes} eyes`,
+            `${skin} skin`,
+          ].filter((value): value is string => !!value),
+        }}
+      />
+      <FormField
+        control={form.control}
+        name="spriteBodyStyle"
+        render={({ field }) => (
+          <FormItem className="min-w-0 gap-1 self-center">
+            <FormLabel>Body style</FormLabel>
+            <Select
+              value={field.value ?? (gender === "Female" ? "female" : "male")}
+              onValueChange={field.onChange}
+            >
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="male">Broad build</SelectItem>
+                <SelectItem value="female">Slender build</SelectItem>
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <div className="col-span-2 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:col-span-1 sm:grid-cols-3">
         <FormField
           control={form.control}
           name="hair_color"
           render={({ field }) => (
-            <FormItem className="min-w-0">
+            <FormItem className="min-w-0 gap-1">
               <FormLabel>Hair color</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>{option_colors}</SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Attribute 1</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -440,20 +503,17 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           control={form.control}
           name="eye_color"
           render={({ field }) => (
-            <FormItem className="min-w-0">
+            <FormItem className="min-w-0 gap-1">
               <FormLabel>Eye color</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>{option_colors}</SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Attribute 2</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -461,40 +521,41 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           control={form.control}
           name="skin_color"
           render={({ field }) => (
-            <FormItem className="min-w-0">
+            <FormItem className="min-w-0 gap-1">
               <FormLabel>Skin color</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>{option_skins}</SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Attribute 3</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
-      </div>
-      <div className="grid w-full grid-cols-1 gap-4 px-3 sm:grid-cols-3">
+
         <FormField
           control={form.control}
           name="attribute_1"
           render={({ field }) => (
-            <FormItem className="min-w-0">
-              <FormLabel>Attribute #1</FormLabel>
+            <FormItem className="min-w-0 gap-1">
+              <FormLabel>Trait 1</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   {attributes
-                    .filter((e) => ![watchAttr2, watchAttr3].includes(e))
+                    .filter(
+                      (e) =>
+                        ![watchAttr2, watchAttr3].some(
+                          (chosen) => chosen && getAttributeGroup(e).includes(chosen),
+                        ),
+                    )
                     .map((attribute, i) => (
                       <SelectItem key={`${attribute}-${i}`} value={attribute}>
                         {attribute}
@@ -502,10 +563,7 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                     ))}
                 </SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Customize</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -513,17 +571,22 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           control={form.control}
           name="attribute_2"
           render={({ field }) => (
-            <FormItem className="min-w-0">
-              <FormLabel>Attribute #2</FormLabel>
+            <FormItem className="min-w-0 gap-1">
+              <FormLabel>Trait 2</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   {attributes
-                    .filter((e) => ![watchAttr1, watchAttr3].includes(e))
+                    .filter(
+                      (e) =>
+                        ![watchAttr1, watchAttr3].some(
+                          (chosen) => chosen && getAttributeGroup(e).includes(chosen),
+                        ),
+                    )
                     .map((attribute, i) => (
                       <SelectItem key={`${attribute}-${i}`} value={attribute}>
                         {attribute}
@@ -531,10 +594,7 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                     ))}
                 </SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Customize</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
@@ -542,17 +602,22 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           control={form.control}
           name="attribute_3"
           render={({ field }) => (
-            <FormItem className="min-w-0">
-              <FormLabel>Attribute #3</FormLabel>
+            <FormItem className="min-w-0 gap-1">
+              <FormLabel>Trait 3</FormLabel>
               <Select onValueChange={field.onChange} value={field.value ?? ""}>
                 <FormControl>
-                  <SelectTrigger className="h-14 text-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder={`None`} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   {attributes
-                    .filter((e) => ![watchAttr1, watchAttr2].includes(e))
+                    .filter(
+                      (e) =>
+                        ![watchAttr1, watchAttr2].some(
+                          (chosen) => chosen && getAttributeGroup(e).includes(chosen),
+                        ),
+                    )
                     .map((attribute, i) => (
                       <SelectItem key={`${attribute}-${i}`} value={attribute}>
                         {attribute}
@@ -560,15 +625,17 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
                     ))}
                 </SelectContent>
               </Select>
-              <div className="flex flex-row">
-                <FormDescription className="grow">Customize</FormDescription>
-                <FormMessage />
-              </div>
+              <FormMessage />
             </FormItem>
           )}
         />
+        {[watchAttr1, watchAttr2, watchAttr3].includes("Bald") && (
+          <p className="text-muted-foreground col-span-2 text-sm sm:col-span-3">
+            Bald hides scalp hair; hair color still applies to beards.
+          </p>
+        )}
       </div>
-    </>
+    </div>
   );
 };
 
@@ -799,7 +866,14 @@ const getLocalStorageBoolean = (key: string, defaultValue: boolean): boolean => 
 /** Helper to get randomized initial form values */
 const getRandomizedFormValues = () => {
   const shuffledAttributes = [...attributes].sort(() => 0.5 - Math.random());
-  const [attr1, attr2, attr3] = shuffledAttributes.slice(0, 3);
+  const [attr1, attr2, attr3] = shuffledAttributes
+    .filter(
+      (attribute, index, all) =>
+        !all
+          .slice(0, index)
+          .some((previous) => getAttributeGroup(attribute).includes(previous)),
+    )
+    .slice(0, 3);
 
   return {
     attribute_1: attr1 ?? attributes[0],
@@ -809,7 +883,7 @@ const getRandomizedFormValues = () => {
     eye_color: colors[Math.floor(Math.random() * colors.length)] ?? colors[0],
     skin_color:
       skin_colors[Math.floor(Math.random() * skin_colors.length)] ?? skin_colors[0],
-    gender: genders[Math.floor(Math.random() * genders.length)] ?? genders[0],
+    gender: genders[secureRandomInt(genders.length)] ?? genders[0],
   };
 };
 

@@ -1,7 +1,7 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { item, userData, userItem } from "@/drizzle/schema";
+import { item, userData, userItem, type UserItemWithRelations } from "@/drizzle/schema";
 import { itemRouter } from "@/routers/item";
 import { questsRouter } from "@/routers/quests";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
@@ -39,9 +39,9 @@ describeWithDatabase("location quest inventory recovery", () => {
         { queryKey: ["item", "getUserItems"], queryFn: vi.fn(() => items.getUserItems()) },
         { queryKey: ["item", "getUserItemsWithVariants"], queryFn: vi.fn(() => items.getUserItemsWithVariants()) },
       ];
-      const unsubscribe = queries.map((query) => new QueryObserver(client, query).subscribe(() => {}));
+      const unsubscribe = queries.map((query) => new QueryObserver<UserItemWithRelations[]>(client, query).subscribe(() => {}));
       try {
-        expect(await Promise.all(queries.map((query) => client.fetchQuery(query)))).toEqual([[], []]);
+        expect(await Promise.all(queries.map((query) => client.fetchQuery<UserItemWithRelations[]>(query)))).toEqual([[], []]);
         setSystemTime(new Date(now.getTime() + (claim === "stale" ? 31_000 : 1_000)));
         const quests = await callerFor(questsRouter, userId);
         const { result, statements } = await recordQueries(() => quests.checkLocationQuest());
@@ -54,7 +54,7 @@ describeWithDatabase("location quest inventory recovery", () => {
           await Promise.all(queries.map((query) => client.invalidateQueries({ queryKey: query.queryKey })));
         }
         for (const query of queries) {
-          const inventory = client.getQueryData<Awaited<ReturnType<typeof items.getUserItems>>>(query.queryKey);
+          const inventory = client.getQueryData<UserItemWithRelations[]>(query.queryKey);
           expect(inventory).toHaveLength(claim === "stale" ? 1 : 0);
           if (claim === "stale") expect(inventory?.[0]).toMatchObject({ itemId: "merge-herb", quantity: 4 });
           expect(query.queryFn).toHaveBeenCalledTimes(claim === "stale" ? 2 : 1);

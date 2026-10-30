@@ -4,8 +4,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Ban,
   BarChart3,
-  ChevronsLeft,
-  ChevronsRight,
   Dices,
   Droplets,
   Heart,
@@ -15,6 +13,7 @@ import {
   MessageCircle,
   Palette,
   PenLine,
+  Plus,
   RotateCcw,
   SendHorizontal,
   Settings,
@@ -33,6 +32,7 @@ import {
   Upload,
   UserRound,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 import type React from "react";
@@ -92,6 +92,7 @@ import ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import AvatarImage from "@/layout/Avatar";
 import { ResetBloodright } from "@/layout/Bloodright";
+import { CharacterPreview } from "@/layout/CharacterPreview";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -164,12 +165,13 @@ import {
 } from "@/validators/ai";
 import { type StatSchemaType, statSchema } from "@/validators/combat";
 import {
-  type Attribute,
   attributes,
   type Color,
   colors,
   type Gender,
   genders,
+  getAttributeGroup,
+  getCharacterAttributes,
   getSearchValidator,
   type SkinColor,
   skin_colors,
@@ -256,7 +258,7 @@ export function ProfileEdit() {
           description: "Customize your appearance and in-game character",
           keywords: "hair skin eyes beard sprite body clothing outfit",
           icon: SlidersHorizontal,
-          notice: `You can select a total of ${MAX_ATTRIBUTES} attributes.`,
+          notice: `Choose up to ${MAX_ATTRIBUTES} traits. Colors are separate.`,
           content: <AttributeChange />,
         },
       ],
@@ -1848,288 +1850,230 @@ const AvatarChange: React.FC = () => {
   }
 };
 
-/**
- * Attribute change component
- */
+/** Edit saved palettes and compatible traits while sharing the authoritative appearance snapshot. */
 const AttributeChange: React.FC = () => {
-  // State
-  const [hairColor, setHairColor] = useState<Color>("Black");
-  const [eyeColor, setEyeColor] = useState<Color>("Black");
-  const [skinColor, setSkinColor] = useState<SkinColor>("Light");
-  const [pendingAttributeAdditions, setPendingAttributeAdditions] = useState<
-    Partial<Record<Attribute | "Eyes" | "Skin" | "Hair", string>>
-  >({});
-  const [pendingAttributeRemovals, setPendingAttributeRemovals] = useState(
-    () => new Set<string>(),
+  const { data: spriteUser, updateUser: updateSpriteUser } = useRequiredUserData();
+  const [pendingAttribute, setPendingAttribute] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isSavingRef = useRef(false);
+  const {
+    data,
+    refetch,
+    isPending: isLoading,
+  } = api.profile.getUserAttributes.useQuery(undefined);
+  const choices = getCharacterAttributes(
+    (data ?? spriteUser?.attributes ?? []).map((row) => row.attribute),
   );
-  const pendingAttributeAdditionRef = useRef(new Set<string>());
-  const pendingAttributeRemovalRef = useRef(new Set<string>());
-
-  // Queries
-  const { data, refetch } = api.profile.getUserAttributes.useQuery(undefined);
-  const selectedAttributes = data ? data.map((a) => a.attribute as Attribute) : [];
-
-  // Mutations
-  const { mutateAsync: insertAttr } = api.profile.insertAttribute.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await refetch();
-      }
+  const isBusy = pendingAttribute !== null || isLoading;
+  const { mutateAsync: insertAttr } = api.profile.insertAttribute.useMutation();
+  const { mutateAsync: deleteAttr } = api.profile.deleteAttribute.useMutation();
+  const bodyMutation = api.profile.updateSpriteBody.useMutation({
+    onSuccess: async (result) => {
+      showMutationToast(result);
+      if (result.success && result.userPatch) await updateSpriteUser(result.userPatch);
     },
   });
 
-  const addAttribute = async (
-    attribute: Attribute | "Eyes" | "Skin" | "Hair",
-    color?: Color | SkinColor,
+  // Attribute mutations refetch their query; the shared snapshot also refreshes sector visuals.
+  useEffect(() => {
+    if (
+      spriteUser &&
+      data &&
+      JSON.stringify(data.map(({ attribute }) => attribute)) !==
+        JSON.stringify(spriteUser.attributes?.map(({ attribute }) => attribute))
+    )
+      void updateSpriteUser({ attributes: data });
+  }, [data, updateSpriteUser, spriteUser?.attributes]);
+
+  const saveSelection = async (
+    attribute: string,
+    save: () => Promise<BaseServerResponse>,
   ) => {
-    if (pendingAttributeAdditionRef.current.has(attribute)) return;
-
-    const label = color ? `${color} ${attribute}` : attribute;
-    pendingAttributeAdditionRef.current.add(attribute);
-    setPendingAttributeAdditions((current) => ({
-      ...current,
-      [attribute]: label,
-    }));
-
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+    setPendingAttribute(attribute);
+    setErrorMessage(null);
     try {
-      await insertAttr({ attribute, color });
-    } catch {
-      // The mutation's existing error handling reports transport failures.
+      const result = await save();
+      showMutationToast(result);
+      if (result.success) await refetch();
+      else setErrorMessage(result.message ?? "Could not save appearance. Try again.");
+    } catch (error) {
+      // The shared handler reports transport failures; keep the saved selection and allow retry here.
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not save appearance. Try again.",
+      );
     } finally {
-      pendingAttributeAdditionRef.current.delete(attribute);
-      setPendingAttributeAdditions((current) => {
-        const next = { ...current };
-        delete next[attribute];
-        return next;
-      });
-    }
-  };
-
-  const { mutateAsync: deleteAttr } = api.profile.deleteAttribute.useMutation({
-    onSuccess: async (data) => {
-      showMutationToast(data);
-      if (data.success) {
-        await refetch();
-      }
-    },
-  });
-
-  const removeAttribute = async (attribute: string) => {
-    if (pendingAttributeRemovalRef.current.has(attribute)) return;
-
-    pendingAttributeRemovalRef.current.add(attribute);
-    setPendingAttributeRemovals((current) => new Set(current).add(attribute));
-
-    try {
-      await deleteAttr({ attribute });
-    } catch {
-      // The shared tRPC error handler reports transport failures. Because the
-      // row remains rendered until a successful refetch, it is ready to retry.
-    } finally {
-      pendingAttributeRemovalRef.current.delete(attribute);
-      setPendingAttributeRemovals((current) => {
-        const next = new Set(current);
-        next.delete(attribute);
-        return next;
-      });
+      isSavingRef.current = false;
+      setPendingAttribute(null);
     }
   };
 
   return (
-    <div className="grid grid-cols-2 pt-2">
-      <div className="m-3 rounded-md bg-popover p-3">
-        <p className="font-bold">Current </p>
-        {selectedAttributes.map((attribute) => {
-          const isRemoving = pendingAttributeRemovals.has(attribute);
-          return (
-            <button
-              type="button"
-              key={attribute}
-              className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isRemoving}
-              aria-busy={isRemoving}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                void removeAttribute(attribute);
-              }}
+    <div className="space-y-3 py-3">
+      <div className="flex items-start gap-3">
+        <CharacterPreview
+          className="mx-0 w-28 max-w-[35%] shrink-0 sm:w-36"
+          user={{ ...spriteUser, attributes: data ?? spriteUser?.attributes }}
+        />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="character-body-style">Body style</Label>
+            <Select
+              disabled={bodyMutation.isPending}
+              value={
+                spriteUser?.spriteBodyStyle ??
+                (spriteUser?.gender === "Female" ? "female" : "male")
+              }
+              onValueChange={(body) =>
+                bodyMutation.mutate({ body: body as "male" | "female" })
+              }
             >
-              {isRemoving ? (
-                <>
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                  <span aria-live="polite">Removing</span>
-                </>
-              ) : (
-                <>
-                  <span> - {attribute}</span>
-                  <ChevronsRight className="ml-1 h-5 w-5" />
-                </>
+              <SelectTrigger id="character-body-style">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">Broad build</SelectItem>
+                <SelectItem value="female">Slender build</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <p className="font-medium text-sm">
+              Current traits ({choices.traits.length}/{MAX_ATTRIBUTES})
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {choices.traits.map((attribute) => (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  key={attribute}
+                  aria-label={`Remove ${attribute}`}
+                  disabled={isBusy}
+                  aria-busy={pendingAttribute === attribute}
+                  className="h-auto min-h-8 max-w-full justify-start whitespace-normal bg-popover px-2 py-1 text-left"
+                  onClick={() =>
+                    void saveSelection(attribute, () => deleteAttr({ attribute }))
+                  }
+                >
+                  <span>{attribute}</span>
+                  {pendingAttribute === attribute ? (
+                    <Loader2 className="ml-1 h-3 w-3 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <X className="ml-1 h-3 w-3 shrink-0" aria-hidden="true" />
+                  )}
+                </Button>
+              ))}
+              {choices.traits.length === 0 && (
+                <p className="text-muted-foreground text-sm">No traits selected</p>
               )}
-            </button>
-          );
-        })}
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="m-3 rounded-md bg-popover p-3">
-        <p className="font-bold">Available </p>
-        {attributes
-          .filter((a) => !selectedAttributes.includes(a))
-          .map((attribute) => {
-            const pendingLabel = pendingAttributeAdditions[attribute];
-            return (
-              <button
-                type="button"
-                key={attribute}
-                className="flex flex-row items-center hover:cursor-pointer hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={Boolean(pendingLabel)}
-                aria-busy={Boolean(pendingLabel)}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  void addAttribute(attribute);
-                }}
-              >
-                {pendingLabel ? (
-                  <>
-                    <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                    <span aria-live="polite">Adding</span>
-                  </>
-                ) : (
-                  <>
-                    <ChevronsLeft className="mr-1 h-5 w-5" />
-                    <span> {attribute} </span>
-                  </>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {(
+          [
+            { attribute: "Eyes", label: "Eye color", options: colors },
+            { attribute: "Skin", label: "Skin color", options: skin_colors },
+            { attribute: "Hair", label: "Hair color", options: colors },
+          ] as const
+        ).map(({ attribute, label, options }) => (
+          <div
+            key={attribute}
+            className="min-w-0 space-y-1"
+            aria-busy={pendingAttribute === attribute}
+          >
+            <Label htmlFor={`character-${attribute}`}>
+              {label}
+              {pendingAttribute === attribute && (
+                <Loader2
+                  className="ml-1 inline h-3 w-3 animate-spin"
+                  aria-label="Saving"
+                />
+              )}
+            </Label>
+            <Select
+              value={choices[attribute]}
+              disabled={isBusy}
+              onValueChange={(value) =>
+                void saveSelection(attribute, () =>
+                  insertAttr({ attribute, color: value as Color | SkinColor }),
+                )
+              }
+            >
+              <SelectTrigger id={`character-${attribute}`} className="min-w-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {!(options as readonly string[]).includes(choices[attribute]) && (
+                  <SelectItem value={choices[attribute]}>
+                    {choices[attribute]}
+                  </SelectItem>
                 )}
-              </button>
-            );
-          })}
-        <div
-          className="relative mt-3"
-          aria-busy={Boolean(pendingAttributeAdditions.Eyes)}
-        >
-          <Select
-            onValueChange={(e) => setEyeColor(e as Color)}
-            defaultValue={eyeColor}
-            value={eyeColor}
-            disabled={Boolean(pendingAttributeAdditions.Eyes)}
-          >
-            <Label htmlFor="eye_color">Eye color</Label>
-            <SelectTrigger>
-              <SelectValue placeholder={`None`} />
-            </SelectTrigger>
-            <SelectContent id="eye_color">
-              {colors.map((color, i) => (
-                <SelectItem key={`${color}-${i}`} value={color}>
-                  {color}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => void addAttribute("Eyes", eyeColor)}
-            className="absolute right-0 bottom-0"
-            disabled={Boolean(pendingAttributeAdditions.Eyes)}
-            aria-label={
-              pendingAttributeAdditions.Eyes
-                ? `Adding ${pendingAttributeAdditions.Eyes}`
-                : `Add ${eyeColor} Eyes`
-            }
-          >
-            {pendingAttributeAdditions.Eyes ? (
-              <>
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                <span aria-live="polite">Adding</span>
-              </>
-            ) : (
-              <ChevronsLeft className="h-5 w-5" />
-            )}
-          </Button>
-        </div>
-        <div
-          className="relative mt-3"
-          aria-busy={Boolean(pendingAttributeAdditions.Skin)}
-        >
-          <Select
-            onValueChange={(e) => setSkinColor(e as SkinColor)}
-            defaultValue={skinColor}
-            value={skinColor}
-            disabled={Boolean(pendingAttributeAdditions.Skin)}
-          >
-            <Label htmlFor="skin_color">Skin color</Label>
-            <SelectTrigger>
-              <SelectValue placeholder={`None`} />
-            </SelectTrigger>
-            <SelectContent id="skin_color">
-              {skin_colors.map((color, i) => (
-                <SelectItem key={`${color}-${i}`} value={color}>
-                  {color}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => void addAttribute("Skin", skinColor)}
-            className="absolute right-0 bottom-0"
-            disabled={Boolean(pendingAttributeAdditions.Skin)}
-            aria-label={
-              pendingAttributeAdditions.Skin
-                ? `Adding ${pendingAttributeAdditions.Skin}`
-                : `Add ${skinColor} Skin`
-            }
-          >
-            {pendingAttributeAdditions.Skin ? (
-              <>
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                <span aria-live="polite">Adding</span>
-              </>
-            ) : (
-              <ChevronsLeft className="h-5 w-5" />
-            )}
-          </Button>
-        </div>
-        <div
-          className="relative mt-3"
-          aria-busy={Boolean(pendingAttributeAdditions.Hair)}
-        >
-          <Select
-            onValueChange={(e) => setHairColor(e as Color)}
-            defaultValue={hairColor}
-            value={hairColor}
-            disabled={Boolean(pendingAttributeAdditions.Hair)}
-          >
-            <Label htmlFor="hair_color">Hair color</Label>
-            <SelectTrigger>
-              <SelectValue placeholder={`None`} />
-            </SelectTrigger>
-            <SelectContent id="hair_color">
-              {colors.map((color, i) => (
-                <SelectItem key={`${color}-${i}`} value={color}>
-                  {color}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => void addAttribute("Hair", hairColor)}
-            className="absolute right-0 bottom-0"
-            disabled={Boolean(pendingAttributeAdditions.Hair)}
-            aria-label={
-              pendingAttributeAdditions.Hair
-                ? `Adding ${pendingAttributeAdditions.Hair}`
-                : `Add ${hairColor} Hair`
-            }
-          >
-            {pendingAttributeAdditions.Hair ? (
-              <>
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
-                <span aria-live="polite">Adding</span>
-              </>
-            ) : (
-              <ChevronsLeft className="h-5 w-5" />
-            )}
-          </Button>
+                {options.map((color) => (
+                  <SelectItem key={color} value={color}>
+                    {color}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ))}
+      </div>
+      {choices.traits.includes("Bald") && (
+        <p className="text-muted-foreground text-sm">
+          Bald hides scalp hair; hair color still applies to beards.
+        </p>
+      )}
+      <div className="space-y-1">
+        <p className="font-medium text-sm">Available traits</p>
+        <p className="text-muted-foreground text-sm">
+          Choose one hair style, one face shape and one beard style.
+        </p>
+        <div className="flex flex-wrap gap-1">
+          {attributes
+            .filter((attribute) => !choices.traits.includes(attribute))
+            .map((attribute) => {
+              const replacesTrait = choices.traits.some((trait) =>
+                getAttributeGroup(attribute).includes(trait),
+              );
+              return (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  key={attribute}
+                  aria-label={`Add ${attribute}`}
+                  disabled={
+                    isBusy ||
+                    (!replacesTrait && choices.traits.length >= MAX_ATTRIBUTES)
+                  }
+                  aria-busy={pendingAttribute === attribute}
+                  className="h-auto min-h-8 max-w-full justify-start whitespace-normal bg-popover px-2 py-1 text-left"
+                  onClick={() =>
+                    void saveSelection(attribute, () => insertAttr({ attribute }))
+                  }
+                >
+                  {pendingAttribute === attribute ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Plus className="mr-1 h-3 w-3 shrink-0" aria-hidden="true" />
+                  )}
+                  <span>{attribute}</span>
+                </Button>
+              );
+            })}
         </div>
       </div>
+      {errorMessage && (
+        <p role="alert" className="text-destructive text-sm">
+          {errorMessage}
+        </p>
+      )}
     </div>
   );
 };

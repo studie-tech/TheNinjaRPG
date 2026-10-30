@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { VillageStructure } from "@/drizzle/schema";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
@@ -11,8 +12,8 @@ const grid = { getHex: ({ col, row }: { col: number; row: number }) => {
 const location: MapLocation = { id: "tower", sector: 724, longitude: 3, latitude: 4, name: "Tower", description: "A tower.", assetId: "art", scale: 1 };
 const asset = { id: "art", imageUrl: "tower.png", renderScale: 2.4 };
 const objects = [{ id: "tree", type: "decoration", x: 3, y: 4, assetKey: "tree" }];
-const descriptions = (locations: MapLocation[], assets = [asset], mapObjects = objects) => sectorSpriteDescriptions({ grid, map: { objects: mapObjects } as NormalizedSectorMap,
-  structures: [], wall: null, lightLayout: false, locations, mapAssets: assets,
+const descriptions = (locations: MapLocation[], assets = [asset], mapObjects = objects, structures: VillageStructure[] = []) => sectorSpriteDescriptions({ grid, map: { objects: mapObjects } as NormalizedSectorMap,
+  structures, wall: null, lightLayout: false, locations, mapAssets: assets,
   decorations: new Map([["tree", { filepath: "tree.png", renderScale: 2 } as DecorationAsset]]),
 });
 
@@ -48,5 +49,22 @@ describe("sector scenery recipes", () => {
   it("orders scenery by its ground contact", () => {
     const sprites = descriptions([], [asset], [objects[0]!, { ...objects[0]!, id: "far-tree", y: 9 }]);
     expect(sprites.map((sprite) => sprite.id)).toEqual(["far-tree", "tree"]);
+  });
+  it("orders village buildings at their base without moving their centered artwork", () => {
+    const home = { id: "home", longitude: 3, latitude: 4, image: "home.png", hasPage: 1 } as VillageStructure;
+    const sprite = descriptions([], [], [], [home])[0]!;
+    expect(sprite).toMatchObject({ x: 60, y: 82, size: 60, structureId: "home" });
+    expect(sprite.groundY).toBeCloseTo(61);
+    expect(sprite.anchorY).toBeUndefined();
+  });
+  it.each(["structure", "landmark"])("orders authored %s art at its base without moving it", (type) => {
+    const sprite = descriptions([], [], [{ id: type, type, x: 3, y: 4, assetKey: "building.png" }])[0]!;
+    expect(sprite).toMatchObject({ x: 60, y: 82.5, size: 48 });
+    expect(sprite.groundY).toBeCloseTo(65.7);
+    expect(sprite.anchorY).toBeUndefined();
+  });
+  it("retains the center contact for other authored object types", () => {
+    const sprite = descriptions([], [], [{ id: "shrine", type: "shrine", x: 3, y: 4, assetKey: "shrine.png" }])[0]!;
+    expect(sprite).toMatchObject({ x: 60, y: 82.5, size: 24, groundY: 82.5 });
   });
 });

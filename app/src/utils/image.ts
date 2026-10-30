@@ -49,6 +49,7 @@ export const bunnyImageUrl = (src: string, width: number) => {
 
 /**
  * Game texture URL: host rewrite plus an optional Bunny width.
+ * Zero skips rendition parameters; packed atlases use raw keys to bypass the optimizer.
  * Omit `optimizer=image`: forcing optimization of extensionless UploadThing keys
  * can cache renditions incompatible with travel-map portraits.
  */

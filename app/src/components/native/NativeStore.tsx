@@ -1236,8 +1236,7 @@ export default function NativeStore() {
             </p>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-2">
               {LEGAL_LINKS.filter(
-                (link) =>
-                  link.label === "Terms of Service" || link.label === "Privacy Policy",
+                (link) => link.label === "Terms" || link.label === "Privacy",
               ).map((link) => (
                 <NativeExternalLink key={link.href} href={link.href}>
                   {link.label}

@@ -1584,6 +1584,8 @@ export const item = mysqlTable(
     stackSize: int("stackSize").default(1).notNull(),
     image: varchar("image", { length: 191 }).notNull(),
     destroyOnUse: boolean("destroyOnUse").default(false).notNull(),
+    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<import("@/validators/lpc").LpcEquipmentProfile>(),
+    lpcColor: varchar("lpcColor", { length: 16 }).$type<import("@/validators/lpc").LpcColor>(),
     range: int("range").default(0).notNull(),
     chakraCost: double("chakraCost").default(0).notNull(),
     staminaCost: double("staminaCost").default(0).notNull(),
@@ -1742,6 +1744,8 @@ export const itemVariant = mysqlTable(
     image: varchar("image", { length: 512 }).notNull(),
     requiredItemId: varchar("requiredItemId", { length: 191 }),
     costType: mysqlEnum("costType", consts.VARIANT_COST_TYPES).notNull(),
+    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<import("@/validators/lpc").LpcEquipmentProfile>(),
+    lpcColor: varchar("lpcColor", { length: 16 }).$type<import("@/validators/lpc").LpcColor>(),
     cost: int("cost").default(0).notNull(),
     order: smallint("order", { unsigned: true }).default(1).notNull(),
     description: text("description"),
@@ -2595,6 +2599,10 @@ export const userAttribute = mysqlTable(
   },
 );
 
+export const userAttributeRelations = relations(userAttribute, ({ one }) => ({
+  user: one(userData, { fields: [userAttribute.userId], references: [userData.userId] }),
+}));
+
 export const userAssociation = mysqlTable(
   "UserAssociation",
   {
@@ -2648,6 +2656,7 @@ export const userData = mysqlTable(
     lastIp: varchar("lastIp", { length: 191 }),
     username: varchar("username", { length: 191 }).notNull(),
     gender: varchar("gender", { length: 191 }).notNull(),
+    spriteBodyStyle: mysqlEnum("spriteBodyStyle", ["male", "female"]),
     curHealth: int("curHealth", { unsigned: true }).default(100).notNull(),
     maxHealth: int("maxHealth", { unsigned: true }).default(100).notNull(),
     curChakra: int("curChakra", { unsigned: true }).default(100).notNull(),
@@ -3082,6 +3091,7 @@ export const userPetRelations = relations(userPet, ({ one }) => ({
 }));
 
 export const userDataRelations = relations(userData, ({ one, many }) => ({
+  attributes: many(userAttribute),
   home: one(userHome, { fields: [userData.userId], references: [userHome.userId] }),
   questParty: one(questParty, { fields: [userData.questPartyId], references: [questParty.id] }),
   pets: many(userPet),
@@ -3310,6 +3320,7 @@ export type ItemSlot = UserItem["equipped"];
 export type UserItemWithItem = UserItem & { item: Item };
 export type UserItemWithRelations = UserItem & {
   item: Item & { variants?: ItemVariant[] };
+  activeVariant?: ItemVariant | null;
   imbuements: (UserItemImbuement & { item: Item })[];
 };
 export type UserItemWithVariants = UserItem & {
@@ -3318,6 +3329,7 @@ export type UserItemWithVariants = UserItem & {
 };
 
 export const userItemRelations = relations(userItem, ({ one, many }) => ({
+  activeVariant: one(itemVariant, { fields: [userItem.activeVariantId], references: [itemVariant.id] }),
   item: one(item, {
     fields: [userItem.itemId],
     references: [item.id],

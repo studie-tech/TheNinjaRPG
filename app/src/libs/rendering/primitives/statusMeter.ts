@@ -5,6 +5,8 @@ export const createStatusMeter = (options: {
   width: number;
   height: number;
   color: number;
+  backgroundColor?: number;
+  trackColor?: number;
   y: number;
   x?: number;
 }) => {
@@ -19,9 +21,15 @@ export const createStatusMeter = (options: {
   };
   const { width, height } = options;
   const border = Math.min(height / 2, Math.max(1 / 3, Math.min(4 / 3, height / 6)));
-  const background = rect(0x000000, 0, -height / 2, width, height);
+  const background = rect(
+    options.backgroundColor ?? 0x000000,
+    0,
+    -height / 2,
+    width,
+    height,
+  );
   const track = rect(
-    0x808080,
+    options.trackColor ?? 0x808080,
     border / 2,
     -height / 2 + border / 2,
     width - border,
@@ -34,7 +42,8 @@ export const createStatusMeter = (options: {
   let previous = Number.NaN;
   return {
     container,
-    set: (fraction: number) => {
+    set: (fraction: number, color = options.color) => {
+      fill.tint = color;
       const value = Number.isFinite(fraction) ? Math.max(0, Math.min(1, fraction)) : 0;
       if (value === previous) return;
       previous = value;

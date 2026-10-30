@@ -48,6 +48,7 @@ import { getWorldCycleBrightness } from "@/libs/dayNight";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { findHex, PathCalculator } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
+import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { getQuestMapLocations, groupMapLocations } from "@/libs/mapLocations";
 import { isQuestObjectiveAvailable } from "@/libs/objectives";
 import {
@@ -306,6 +307,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     updateUser,
     prepareUserUpdate,
   } = useRequiredUserData();
+  const appearanceSignature = useMemo(
+    () => JSON.stringify(resolveSpriteAppearance(userData ?? {})),
+    [userData],
+  );
+  const lastAppearanceSignature = useRef<string | null>(null);
+  // Only a changed visual recipe refetches sector art; unrelated user stat patches do not.
+  useEffect(() => {
+    const previous = lastAppearanceSignature.current;
+    lastAppearanceSignature.current = appearanceSignature;
+    if (previous !== null && previous !== appearanceSignature)
+      void utils.travel.getSectorData.invalidate({ sector });
+  }, [appearanceSignature, sector, utils]);
   timeDiffRef.current = timeDiff;
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },

@@ -18,7 +18,10 @@ import {
   UserStatuses,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
-
+import {
+  anonymousSpriteAppearance,
+  resolveSpriteAppearance,
+} from "@/libs/lpc/appearance";
 import { getQuestMapLocations } from "@/libs/mapLocations";
 import { isQuestComplete } from "@/libs/objectives";
 import {
@@ -368,6 +371,10 @@ export const travelRouter = createTRPCRouter({
       // Project only the public sector fields from the already-loaded caller snapshot.
       if (user.status === "AWAKE" && !user.isAi) {
         users.push({
+          attributes: user.attributes,
+          items: user.items,
+          gender: user.gender,
+          spriteBodyStyle: user.spriteBodyStyle,
           userId: user.userId,
           username: user.username,
           longitude: user.longitude,
@@ -424,11 +431,24 @@ export const travelRouter = createTRPCRouter({
             u,
           );
           const isMasked = !!contract && u.userId !== ctx.userId;
-          const participant = { ...u, warRelationship, isMasked };
+          // Raw traits and inventory inputs stay server-side; masked users receive a uniform below.
+          const { attributes, items, gender, spriteBodyStyle, ...publicUser } = u;
+          const participant = {
+            ...publicUser,
+            warRelationship,
+            isMasked,
+            spriteAppearance: resolveSpriteAppearance({
+              attributes,
+              items,
+              gender,
+              spriteBodyStyle,
+            }),
+          };
           if (isMasked)
             return {
               ...participant,
               username: "Mercenary",
+              spriteAppearance: anonymousSpriteAppearance(),
               avatar: IMG_AVATAR_DEFAULT,
               avatarLight: IMG_AVATAR_DEFAULT,
             };
@@ -436,6 +456,7 @@ export const travelRouter = createTRPCRouter({
             return {
               ...participant,
               username: `ANBU Member`,
+              spriteAppearance: anonymousSpriteAppearance(true),
               avatar: u.anbuSquad.image,
               avatarLight: u.anbuSquad.image,
             };

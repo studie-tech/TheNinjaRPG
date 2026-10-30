@@ -14,6 +14,7 @@ import {
 } from "@/drizzle/constants";
 import { statFilters } from "@/libs/train";
 import { furnitureVariantDataSchema } from "@/validators/itemFurniture";
+import { lpcItemFields } from "@/validators/lpc";
 
 export const itemCreateSchema = z.object({ type: z.enum(ItemTypes) });
 
@@ -90,6 +91,7 @@ export const itemFilteringSchema = z.object({
 export type ItemFilteringSchema = z.infer<typeof itemFilteringSchema>;
 
 export const ItemVariantValidator = z.object({
+  ...lpcItemFields.shape,
   id: z.string().optional(),
   name: z.string().trim().min(1, "Name required"),
   image: z.string().min(1, "Image required"),
@@ -118,6 +120,7 @@ export const displayCostType = (type: (typeof VARIANT_COST_TYPES)[number]): stri
   COST_TYPE_LABELS[type];
 
 export const ItemVariantResponseSchema = z.object({
+  ...lpcItemFields.shape,
   id: z.string(),
   itemId: z.string(),
   name: z.string(),

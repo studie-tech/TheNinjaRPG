@@ -57,6 +57,11 @@ describe("image URL utilities", () => {
     );
   });
 
+  it("routes packed sprite atlases through Bunny without resizing", () => {
+    const atlas = "https://ui0arpl8sm.ufs.sh/f/raw-atlas-key";
+    expect(textureImageUrl(atlas, 0)).toBe("https://uploadthing.b-cdn.net/f/raw-atlas-key");
+  });
+
   it("replaces an existing width and preserves fragments", () => {
     expect(
       bunnyImageUrl(

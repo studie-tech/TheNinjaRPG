@@ -81,6 +81,8 @@ import { getPossibleActionTiles, PathCalculator } from "@/libs/hexgrid";
 import { calcCombatHealPercentage } from "@/libs/hospital";
 import { applyLinkedJutsuReskin } from "@/libs/jutsu/reskins";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
+import { spriteActionAnimation } from "@/libs/lpc/actions";
+import { withSpriteEquipment } from "@/libs/lpc/appearance";
 import { hasMasteryRequirements } from "@/libs/mastery";
 import { getSageDailyCap, getSageModeActivationCost } from "@/libs/sageMode";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
@@ -461,7 +463,7 @@ export const getActiveBasicActions = (
             : DecreaseCooldownTag.parse(e);
         parsed.actionsAffected?.forEach((act) => {
           const prev = acc[act];
-          acc[act] = prev === undefined ? val : val < prev ? val : prev;
+          acc[act] = prev === undefined ? val : Math.min(val, prev);
         });
         return acc;
       },
@@ -1445,6 +1447,37 @@ export const performBattleAction = (props: {
 
   // Apply relevant effects, and get back new state + active effects
   const { newBattle, actionEffects } = applyEffects(battle, actorId, action);
+
+  // Recompose from captured layers so consumed/broken gear restores clothing without a database read.
+  for (const wearer of newBattle.usersState) {
+    if (
+      wearer.spriteBaseAppearance &&
+      wearer.spriteEquipment &&
+      !wearer.isMasked &&
+      wearer.username !== "ANBU Member"
+    ) {
+      wearer.spriteAppearance = withSpriteEquipment(
+        wearer.spriteBaseAppearance,
+        wearer.items
+          .filter((owned) => owned.equipped !== "NONE" && owned.quantity > 0)
+          .flatMap((owned) =>
+            wearer.spriteEquipment?.[owned.id]
+              ? [wearer.spriteEquipment[owned.id]!]
+              : [],
+          ),
+      );
+    }
+  }
+  const animated = newBattle.usersState.find((entry) => entry.userId === actorId);
+  const animation = spriteActionAnimation(action);
+  // Batched auto turns can end with wait/stance bookkeeping after the visible attack.
+  if (animated && animation !== "idle")
+    animated.spriteAction = {
+      id: nanoid(),
+      animation,
+      longitude,
+      latitude,
+    };
 
   return { newBattle, actionEffects };
 };

@@ -60,6 +60,7 @@ import {
   FURNITURE_ITEM_DEFAULTS,
   furnitureItemSchema,
 } from "@/validators/itemFurniture";
+import { lpcItemFields } from "@/validators/lpc";
 import { type MethodSize, methodSizeSchema } from "@/validators/methodSize";
 import { rewardFields } from "@/validators/rewards";
 import {
@@ -2161,6 +2162,7 @@ export type ZodSkillTreeInput = z.input<typeof SkillTreeValidator>;
  * Item Type. Used for validating a item object is set up properly
  */
 export const ItemValidatorRawSchema = z.object({
+  ...lpcItemFields.shape,
   ...itemEconomySchema.shape,
   ...furnitureItemSchema.shape,
   name: z.string().trim(),

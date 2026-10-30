@@ -23,6 +23,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/conceptart",
   "/conceptart/[imageid]",
   "/consent",
+  "/credits",
   "/discord/link",
   "/dungeon",
   "/emailsettings",

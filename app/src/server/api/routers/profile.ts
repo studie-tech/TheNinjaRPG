@@ -128,6 +128,7 @@ import { incrementUserBank } from "@/queries/bank";
 import { fetchClan } from "@/queries/clan";
 import { listHuntingHabitats } from "@/queries/hunting";
 import { fetchKageReplacement } from "@/queries/kage";
+import { updateSpriteBodyStyle } from "@/queries/lpc";
 import {
   countUsersActiveInLastDay,
   deleteUserAttributeForDeleteAttribute,
@@ -332,7 +333,14 @@ import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { insertAiSchema } from "@/validators/aiInput";
 import { mutateContentSchema } from "@/validators/comments";
 import { idSchema } from "@/validators/misc";
-import { attributes, colors, skin_colors, usernameSchema } from "@/validators/register";
+import {
+  attributes,
+  colors,
+  getAttributeGroup,
+  getCharacterAttributes,
+  skin_colors,
+  usernameSchema,
+} from "@/validators/register";
 import {
   isReservedCustomTitle,
   RESERVED_CUSTOM_TITLE_MESSAGE,
@@ -1474,7 +1482,7 @@ export const profileRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Queries
-      const [user, target, village, sageExists, villages] = await Promise.all([
+      const [user, target, village, sageExists, _villages] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         findUserDataForUpdateUser(ctx.drizzle, input),
         fetchVillage(ctx.drizzle, input.data?.villageId || VILLAGE_SYNDICATE_ID),
@@ -1756,6 +1764,25 @@ export const profileRouter = createTRPCRouter({
         await callDiscordContent(user.username, ai.username, diff, ai.avatar);
       }
       return { success: true, message: `Data updated: ${diff.join(". ")}` };
+    }),
+  /** Save a cosmetic choice as an absolute user patch; stale guards return recoverable responses. */
+  updateSpriteBody: protectedProcedure
+    .input(z.object({ body: z.enum(["male", "female"]) }))
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      if (user.isBanned) return errorResponse("You are banned");
+      if (user.status === "BATTLE")
+        return errorResponse("Change body style outside combat");
+      const result = await updateSpriteBodyStyle(ctx.drizzle, ctx.userId, input.body);
+      // An unchanged MySQL value can report zero rows; reject a guarded race only for an actual change.
+      if (!result.rowsAffected && user.spriteBodyStyle !== input.body)
+        return errorResponse("Your character changed. Refresh and try again.");
+      return {
+        success: true,
+        message: "Body style updated",
+        userPatch: { spriteBodyStyle: input.body },
+      };
     }),
   // Get user attributes
   getUserAttributes: protectedProcedure
@@ -2046,31 +2073,40 @@ export const profileRouter = createTRPCRouter({
     )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Query
+      const isColor = ["Hair", "Skin", "Eyes"].includes(input.attribute);
+      const palette: readonly string[] =
+        input.attribute === "Skin" ? skin_colors : colors;
+      if (isColor && (!input.color || !palette.includes(input.color)))
+        return errorResponse(
+          `Choose a valid ${input.attribute === "Eyes" ? "eye" : input.attribute.toLowerCase()} color`,
+        );
+      if (!isColor && input.color)
+        return errorResponse("Colors must be selected separately from traits");
+
       const existingAttributes = await fetchAttributes(ctx.drizzle, ctx.userId);
-      // Construct the attribute name
-      const name =
-        ["Hair", "Skin", "Eyes"].includes(input.attribute) && input.color
-          ? `${input.color} ${input.attribute}`
-          : input.attribute;
-      // Guards
-      if (existingAttributes.length >= MAX_ATTRIBUTES) {
-        return errorResponse(`Only ${MAX_ATTRIBUTES} attributes allowed`);
-      }
-      if (existingAttributes.some((attr) => attr.attribute === name)) {
-        return errorResponse(`You already have the attribute "${name}"`);
-      }
-      // Mutate - use onDuplicateKeyUpdate to handle race conditions
-      const result = await insertUserAttributeForInsertAttribute(
-        ctx.drizzle,
-        ctx,
-        name,
-      );
-      if (result.rowsAffected === 0) {
-        return { success: false, message: "Failed to insert attribute" };
-      } else {
-        return { success: true, message: "Attribute inserted" };
-      }
+      const name = isColor ? `${input.color} ${input.attribute}` : input.attribute;
+      const group = getAttributeGroup(name).map((choice) => choice.toLowerCase());
+      const remainingTraits = getCharacterAttributes(
+        existingAttributes.map((row) => row.attribute),
+      ).traits.filter((trait) => !group.includes(trait.toLowerCase()));
+      if (!isColor && remainingTraits.length >= MAX_ATTRIBUTES)
+        return errorResponse(
+          `Only ${MAX_ATTRIBUTES} traits allowed; colors are separate`,
+        );
+
+      // Insert before removing old choices so an interrupted save retains a usable appearance.
+      // Concurrent edits on this account can leave an extra cosmetic choice; selecting it again cleans it up.
+      await insertUserAttributeForInsertAttribute(ctx.drizzle, ctx, name);
+      const replaced = existingAttributes
+        .filter(
+          (row) =>
+            group.includes(row.attribute.toLowerCase()) &&
+            row.attribute.toLowerCase() !== name.toLowerCase(),
+        )
+        .map((row) => row.attribute);
+      if (replaced.length)
+        await deleteUserAttributeForDeleteAttribute(ctx.drizzle, replaced, ctx);
+      return { success: true, message: isColor ? "Color updated" : "Trait updated" };
     }),
   // Delete attribute
   deleteAttribute: protectedProcedure
@@ -2082,7 +2118,7 @@ export const profileRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const result = await deleteUserAttributeForDeleteAttribute(
         ctx.drizzle,
-        input,
+        getAttributeGroup(input.attribute),
         ctx,
       );
       if (result.rowsAffected === 0) {
@@ -3801,8 +3837,12 @@ export type UserWithRelations =
       sageMode?: SageMode | null;
       activeReskin?: BloodlineReskin | null;
       anbuSquad?: { name: string } | null;
+      attributes?: { attribute: string }[];
       clan?: Clan | null;
-      items: (UserItem & { item: Pick<Item, "id" | "itemType" | "maxDurability"> })[];
+      items: (UserItem & {
+        activeVariant?: import("@/libs/lpc/appearance").SpriteVariant | null;
+        item: Pick<Item, "id" | "itemType" | "maxDurability"> & Partial<Item>;
+      })[];
       village?:
         | (Village & {
             structures?: VillageStructure[];

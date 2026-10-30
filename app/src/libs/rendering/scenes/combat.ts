@@ -24,6 +24,7 @@ import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
 import { prepareCombatTerrain } from "@/libs/rendering/scenes/combatTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
+import { clamp } from "@/utils/math";
 
 /**
  * Owns a battle canvas and awaits its initial terrain, actors and known effects.
@@ -118,6 +119,8 @@ export const createCombatScene = async (options: {
     game.stage.addChild(world);
     let zoom = Math.max(1, Math.min(3, options.initialZoom));
     let camera = options.focus ?? { x: width / 2, y: (width * ratio) / 2 };
+    let hasManualCamera = false,
+      followedPosition = "";
     let clock = 0,
       dirty = true,
       initialized = false,
@@ -131,6 +134,13 @@ export const createCombatScene = async (options: {
     const scale = () => (game.renderer.width / width) * zoom;
     const transform = () => {
       const s = scale();
+      // Keep the viewport on the battlefield when dragging, zooming or resizing.
+      if (!options.focus) {
+        const halfWidth = game.renderer.width / (2 * s),
+          halfHeight = game.renderer.height / (2 * s);
+        camera.x = clamp(camera.x, halfWidth, width - halfWidth);
+        camera.y = clamp(camera.y, halfHeight, width * ratio - halfHeight);
+      }
       world.scale.set(s, -s);
       world.position.set(
         game.renderer.width / 2 - camera.x * s,
@@ -150,8 +160,16 @@ export const createCombatScene = async (options: {
         const tile = tileAt(x, y);
         if (tile) options.onTap(tile);
       },
+      pan: (dx, dy) => {
+        if (zoom <= 1 || options.focus) return;
+        hasManualCamera = true;
+        camera = { x: camera.x - dx / scale(), y: camera.y + dy / scale() };
+        transform();
+        highlightKey = "";
+      },
       zoom: (factor) => {
         zoom = Math.max(1, Math.min(3, zoom * factor));
+        if (zoom === 1) hasManualCamera = false;
         transform();
         highlightKey = "";
         if (zoomTimer !== null) clearTimeout(zoomTimer);
@@ -166,7 +184,6 @@ export const createCombatScene = async (options: {
       actors.sync({
         battle: snapshot.battle,
         viewer: snapshot.viewer,
-        playerId: snapshot.playerId,
         aggro: snapshot.aggro,
       });
       const affected = new Set<string>();
@@ -292,7 +309,7 @@ export const createCombatScene = async (options: {
       )
         sync(snapshot, !rendered);
       labels.visible = snapshot.showGridNumbers;
-      const pointer = controls.pointer();
+      const pointer = controls.dragging() ? null : controls.pointer();
       const tile = pointer ? tileAt(pointer.x, pointer.y) : null;
       const actor = pointer ? actors.hit(pointer.x, pointer.y) : null;
       const effect = pointer ? effects.hit(pointer.x, pointer.y) : null;
@@ -308,16 +325,23 @@ export const createCombatScene = async (options: {
       if (options.staticActors) actors.snap();
       const moving = actors.animate(frame, snapshot.userId, hoverUser);
       effects.animate(clock, frame.reducedMotion, moving, effect?.id ?? null);
-      if (zoom > 1.5 && !options.focus) {
-        const user = snapshot.battle.usersState.find(
-          (user) => user.userId === snapshot.userId,
-        );
+      const user = snapshot.battle.usersState.find(
+        (user) => user.userId === snapshot.userId,
+      );
+      const position = `${snapshot.userId}:${user?.longitude}:${user?.latitude}`;
+      if (position !== followedPosition) {
+        followedPosition = position;
+        if (!controls.dragging()) hasManualCamera = false;
+      }
+      if (zoom > 1.5 && !options.focus && !hasManualCamera) {
         const tile =
           user && data.grid.getHex({ col: user.longitude, row: user.latitude });
-        if (tile) {
+        const actor = actors.container.getChildByLabel(snapshot.userId);
+        if (tile && actor) {
+          // Follow the rendered position so a long move cannot leave its walk cycle offscreen.
           const target = {
-            x: -tile.center.x + tile.width / 2,
-            y: -tile.center.y + tile.height / 2,
+            x: actor.x + tile.width / 2,
+            y: actor.y + tile.height / 2,
           };
           const amount = frame.reducedMotion ? 1 : 1 - 0.9 ** (frame.delta * 60);
           camera = {
@@ -329,6 +353,15 @@ export const createCombatScene = async (options: {
       transform();
       art.animate(frame, scale());
       drawHighlights(snapshot, tile);
+      if (
+        options.interactive !== false &&
+        !options.focus &&
+        zoom > 1 &&
+        document.body.style.cursor !== "wait"
+      ) {
+        if (controls.dragging()) game.canvas.style.cursor = "grabbing";
+        else if (desiredCursor === "default") game.canvas.style.cursor = "grab";
+      }
       const hoverTile = actor?.tile ?? tile;
       const hasGround =
         hoverTile &&
@@ -390,7 +423,6 @@ export type CombatHover = {
 export type CombatSceneSnapshot = {
   battle: ReturnedBattle;
   userId: string;
-  playerId?: string;
   viewer?: Pick<UserData, "userId" | "avatar" | "avatarLight" | "username">;
   action?: CombatAction;
   actions: CombatAction[];

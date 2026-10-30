@@ -1264,17 +1264,17 @@ export const insertUserAttributeForInsertAttribute = (
     })
     .onDuplicateKeyUpdate({ set: { id: sql`id` } });
 
-/** Build the `userAttribute` deletion for `deleteAttribute`, using predicates on `attribute` and `userId`. */
+/** Remove selected attribute rows for one account, including replaced exclusive choices. */
 export const deleteUserAttributeForDeleteAttribute = (
   client: Pick<DrizzleClient, "delete">,
-  input: { attribute: string },
+  names: readonly string[],
   ctx: { userId: string },
 ) =>
   client
     .delete(userAttribute)
     .where(
       and(
-        eq(userAttribute.attribute, input.attribute),
+        inArray(userAttribute.attribute, [...names]),
         eq(userAttribute.userId, ctx.userId),
       ),
     );
@@ -1882,6 +1882,7 @@ export const findUserDataForQueryUpdatedUser = (
       displayTitle: displayTitleSql(table).as("displayTitle"),
     }),
     with: {
+      attributes: true,
       bloodline: true,
       questParty: { with: questPartyRelations },
       sageMode: true,
@@ -1909,6 +1910,7 @@ export const findUserDataForQueryUpdatedUser = (
       items: {
         where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
         with: {
+          activeVariant: true,
           item: true,
           imbuements: { with: { item: true } },
         },

@@ -66,6 +66,9 @@ export type DmgConfig = typeof dmgConfig;
  * Battlefield state needed to render participants and their visible status.
  */
 export const publicState = [
+  // Only resolved artwork and cues are public; base traits and item-instance lookups stay private.
+  "spriteAppearance",
+  "spriteAction",
   "actionPoints",
   "avatar",
   "avatarFacing",
