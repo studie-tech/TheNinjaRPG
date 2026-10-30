@@ -12,6 +12,8 @@ import * as userContext from "@/utils/UserContext";
 import { ensureDom } from "../../setup/dom.mjs";
 import { makeCompleteBattle, makeUser } from "../../libs/combat/helpers/battleScenario";
 import { dungeonBattleState } from "../../setup/dungeon";
+import * as battleHotkeys from "@/hooks/useBattleHotkeys";
+import { resolveHotkeys } from "@/libs/combat/hotkeys";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];
@@ -56,6 +58,10 @@ const mount = (battleId: string | null, read: (id: string) => Promise<Response>)
     useTabs: false, layoutOrder: ["battlefield"], showTimeline: false, showBattleLog: false,
   } as never);
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ handleNextStep: vi.fn() } as never);
+  vi.spyOn(battleHotkeys, "useBattleHotkeys").mockReturnValue({
+    ...resolveHotkeys(null, null), hasJutsuLoadout: false, hasItemLoadout: false,
+    setHotkey: vi.fn(), isSaving: false,
+  });
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => utils,
     combat: {

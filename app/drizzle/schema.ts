@@ -2018,6 +2018,8 @@ export const jutsuLoadout = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     userId: varchar("userId", { length: 191 }).notNull(),
     jutsuIds: json("content").$type<string[]>().notNull(),
+    /** Battle keys for this loadout's jutsu and the basic actions. */
+    hotkeys: json("hotkeys").$type<Record<string, string>>().default({}).notNull(),
     name: varchar("name", { length: consts.LOADOUT_NAME_MAX_LENGTH })
       .default("")
       .notNull(),
@@ -2041,6 +2043,8 @@ export const itemLoadout = mysqlTable(
     itemData: json("itemData")
       .$type<Array<{ userItemId?: string; itemId: string; slot: ItemSlot }>>()
       .notNull(),
+    /** Battle keys for this loadout's items. */
+    hotkeys: json("hotkeys").$type<Record<string, string>>().default({}).notNull(),
     name: varchar("name", { length: consts.LOADOUT_NAME_MAX_LENGTH })
       .default("")
       .notNull(),

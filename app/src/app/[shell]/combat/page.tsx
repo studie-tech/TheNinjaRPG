@@ -11,17 +11,20 @@ import { AutoBattleTypes, ManualStartBattleTypes } from "@/drizzle/constants";
 import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/combat";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useBattleHotkeys } from "@/hooks/useBattleHotkeys";
 import ActionTimer from "@/layout/ActionTimer";
 import { AutoCombatControl } from "@/layout/AutoCombatControl";
 import { ActionSelector } from "@/layout/CombatActions";
 import CombatHistory from "@/layout/CombatHistory";
 import CombatTimeline from "@/layout/CombatTimeline";
 import ContentBox from "@/layout/ContentBox";
+import { HotkeyCaptureDialog, type HotkeyTarget } from "@/layout/HotkeyControls";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { PyramidRun } from "@/layout/PyramidRunBoundary";
 import { UserCombatSettings } from "@/layout/UserCombatSettings";
-import { availableUserActions } from "@/libs/combat/actions";
+import { availableUserActions, getActionPointCost } from "@/libs/combat/actions";
+import { toHotkey } from "@/libs/combat/hotkeys";
 import type { BattleState } from "@/libs/combat/types";
 import {
   getBattlefieldHeightRatio,
@@ -51,6 +54,8 @@ export default function CombatPage() {
   const [lastViewedVersion, setLastViewedVersion] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>("actions");
   const [autoCombatError, setAutoCombatError] = useState<string>();
+  const hotkeys = useBattleHotkeys();
+  const [hotkeyTarget, setHotkeyTarget] = useState<HotkeyTarget | null>(null);
 
   // Download and evaluate the scene while the battle query is in flight.
   useEffect(() => {
@@ -219,6 +224,7 @@ export default function CombatPage() {
           userId={controlledActorId}
           setBattleState={setBattleState}
           config={config}
+          endTurnKey={hotkeys.byAction.wait}
         />
       )
     );
@@ -230,26 +236,60 @@ export default function CombatPage() {
     config.showAggro,
     config.resourceBarsVisibility,
     actions,
+    hotkeys.byAction.wait,
   ]);
 
-  // Handle key-presses
+  // Battle hotkeys select actions by id. A bound action that is unavailable
+  // right now (stealth, disarm, cooldown, too little AP) ignores its key rather
+  // than letting another action take its place. End Turn is handled by Combat.
   useEffect(() => {
     const onDocumentKeyDown = (event: KeyboardEvent) => {
-      switch (event.key) {
-        case "m":
-          if (actionId === "move") {
-            setActionId(undefined);
-          } else {
-            setActionId("move");
-          }
-          break;
+      if (event.ctrlKey || event.metaKey || event.altKey || hotkeyTarget) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest("input, textarea, select, [contenteditable='true']")
+      )
+        return;
+      if (event.key === "Escape" && actionId) {
+        setActionId(undefined);
+        return;
       }
+      const key = toHotkey(event.key);
+      const boundId = key ? hotkeys.byKey[key] : undefined;
+      if (!boundId || boundId === "wait" || results) return;
+      const action = actions.find((a) => a.id === boundId);
+      if (!action || !battle) return;
+      const onCooldown =
+        !!action.cooldown &&
+        action.lastUsedRound !== undefined &&
+        battle.round - action.lastUsedRound < action.cooldown;
+      const cost = controlledActorId
+        ? getActionPointCost(controlledActorId, battle, action)
+        : action.actionCostPerc;
+      const tooExpensive =
+        user?.actionPoints !== undefined &&
+        cost !== undefined &&
+        user.actionPoints < cost;
+      if (actionId !== boundId && (onCooldown || tooExpensive)) return;
+      event.preventDefault();
+      setActionId(actionId === boundId ? undefined : boundId);
     };
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
     };
-  }, [actionId]);
+  }, [
+    actionId,
+    actions,
+    battle,
+    controlledActorId,
+    hotkeyTarget,
+    hotkeys.byKey,
+    results,
+    setActionId,
+    user?.actionPoints,
+  ]);
 
   // Action click handler
   const handleActionClick = useCallback(
@@ -355,6 +395,14 @@ export default function CombatPage() {
             gridClassNameOverwrite={actionGridClass}
             aspectRatioClass={actionAspect}
             onClick={handleActionClick}
+            hotkeys={hotkeys.byAction}
+            onAssignHotkey={(item) =>
+              setHotkeyTarget({
+                id: item.id,
+                name: item.name,
+                kind: item.type === "item" ? "item" : "jutsu",
+              })
+            }
           />
         )}
         {canToggleAutoCombat && !results && (
@@ -387,6 +435,7 @@ export default function CombatPage() {
     actionGridClass,
     actionAspect,
     handleActionClick,
+    hotkeys.byAction,
   ]);
 
   const renderTimeline = useCallback(() => {
@@ -543,11 +592,29 @@ export default function CombatPage() {
           </div>
         )}
         <div className="grow"></div>
-        <div className="hidden text-xs md:block">
-          <p className="text-orange-700">Hotkey &quot;W&quot;: End turn</p>
-          <p className="text-orange-700">Hotkey &quot;M&quot;: Move</p>
+        <div className="hidden text-right text-xs md:block">
+          {hotkeys.byAction.wait && (
+            <p className="text-orange-700">
+              Hotkey &quot;{hotkeys.byAction.wait.toUpperCase()}&quot;: End turn
+            </p>
+          )}
+          <p className="text-orange-700">Right-click an action to set its hotkey</p>
         </div>
       </div>
+      <HotkeyCaptureDialog
+        target={hotkeyTarget}
+        currentKey={hotkeyTarget ? hotkeys.byAction[hotkeyTarget.id] : undefined}
+        onAssign={(key) =>
+          hotkeyTarget &&
+          hotkeys.setHotkey(
+            hotkeyTarget.kind,
+            hotkeyTarget.id,
+            key,
+            Object.fromEntries(actions.map((action) => [action.id, action.name])),
+          )
+        }
+        onClose={() => setHotkeyTarget(null)}
+      />
     </div>
   );
 }

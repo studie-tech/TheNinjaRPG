@@ -37,6 +37,7 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
+import { LoadoutHotkeysPanel } from "@/layout/HotkeyControls";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, {
   getFilter,
@@ -1242,6 +1243,20 @@ export default function MyJutsu() {
           </div>
         )}
       </ContentBox>
+      {userJutsus && (
+        <ContentBox
+          title="Battle Hotkeys"
+          subtitle="Keys for your equipped jutsu and basic actions"
+          initialBreak={true}
+        >
+          <LoadoutHotkeysPanel
+            kind="jutsu"
+            actions={userJutsus
+              .filter((uj) => uj.equipped)
+              .map((uj) => ({ id: uj.jutsuId, name: uj.jutsu.name }))}
+          />
+        </ContentBox>
+      )}
       {/* Free Transfer Timer */}
       {freeTransferResetTime &&
         freeTransferResetTime > new Date() &&

@@ -1724,6 +1724,17 @@ export const updateUserDataForWriteDefaultPointer = (
     .where(and(eq(userData.userId, ctx.userId), isNull(userData.itemLoadout)));
 
 /** Build the `itemLoadout` update for `renameLoadout`, setting `name`, using predicates on `id` and `userId`. */
+/** Build the `itemLoadout` update for `setLoadoutHotkeys`, using predicates on `id` and `userId`. */
+export const updateItemLoadoutForSetLoadoutHotkeys = (
+  client: Pick<DrizzleClient, "update">,
+  input: { id: string; hotkeys: Record<string, string> },
+  ctx: { userId: string },
+) =>
+  client
+    .update(itemLoadout)
+    .set({ hotkeys: input.hotkeys })
+    .where(and(eq(itemLoadout.id, input.id), eq(itemLoadout.userId, ctx.userId)));
+
 export const updateItemLoadoutForRenameLoadout = (
   client: Pick<DrizzleClient, "update">,
   name: string,

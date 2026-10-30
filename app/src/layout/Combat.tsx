@@ -77,6 +77,8 @@ interface CombatProps {
   userId: string;
   setBattleState: React.Dispatch<React.SetStateAction<BattleState | undefined>>;
   config: CombatPreferences;
+  /** Key that ends the turn; follows the player's hotkey for End Turn. */
+  endTurnKey?: string;
 }
 
 const Combat: React.FC<CombatProps> = (props) => {
@@ -129,6 +131,11 @@ const Combat: React.FC<CombatProps> = (props) => {
   const precomputedActionsRef = useRef<CombatAction[]>([]);
   const resultRef = useRef(result);
   const mountRef = useRef<HTMLDivElement | null>(null);
+  // Read by the document key listener, which only re-registers on [suid, timeDiff].
+  const endTurnKeyRef = useRef(props.endTurnKey ?? "");
+  useEffect(() => {
+    endTurnKeyRef.current = props.endTurnKey ?? "";
+  }, [props.endTurnKey]);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const battleId = battleRef.current?.id;
   const battleType = battleRef.current?.battleType;
@@ -717,8 +724,15 @@ const Combat: React.FC<CombatProps> = (props) => {
         precomputedUserId: userIdRef.current,
         precomputedActions: precomputedActionsRef.current,
       });
-      switch (event.key) {
-        case "w":
+      // Typing in a field never triggers battle keys.
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest("input, textarea, select, [contenteditable='true']")
+      )
+        return;
+      switch (event.key.toLowerCase()) {
+        case endTurnKeyRef.current:
           // Same predicate the server authorizes with, so "w" fires on my own
           // turn and on my piloted summon's turn, but not on my AI summon's
           // (that one is auto-driven). actor.userId is the acting entity.

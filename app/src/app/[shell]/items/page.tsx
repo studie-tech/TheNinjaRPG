@@ -31,6 +31,7 @@ import {
   COST_EXTRA_ITEM_SLOT,
   IMG_EQUIP_SILHOUETTE,
   ITEM_LEVEL_CAP,
+  NonActionItemTypes,
 } from "@/drizzle/constants";
 import type {
   Item,
@@ -46,6 +47,7 @@ import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import { EquipmentPreview } from "@/layout/EquipmentPreview";
+import { LoadoutHotkeysPanel } from "@/layout/HotkeyControls";
 import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -610,6 +612,29 @@ export default function MyItems() {
           </Confirm>
         </div>
       </div>
+      {userItems && (
+        <ContentBox
+          title="Battle Hotkeys"
+          subtitle="Keys for your equipped items"
+          initialBreak={true}
+        >
+          <LoadoutHotkeysPanel
+            kind="item"
+            actions={userItems
+              .filter(
+                (ui) =>
+                  ui.equipped !== "NONE" &&
+                  ui.quantity > 0 &&
+                  !NonActionItemTypes.includes(ui.item.itemType),
+              )
+              .map((ui) => ({ id: ui.itemId, name: ui.item.name }))
+              .filter(
+                (action, index, list) =>
+                  list.findIndex((other) => other.id === action.id) === index,
+              )}
+          />
+        </ContentBox>
+      )}
     </>
   );
 }

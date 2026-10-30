@@ -158,6 +158,7 @@ import {
   updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically,
   updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically,
   updateJutsuLoadoutForRenameLoadout,
+  updateJutsuLoadoutForSetLoadoutHotkeys,
   updateJutsuLoadoutForUnequipAll,
   updateJutsuLoadoutIds,
   updateJutsuReskinForCreateReskin,
@@ -243,6 +244,7 @@ import {
   importJutsuLoadoutSchema,
   previewJutsuLoadoutSchema,
   renameLoadoutSchema,
+  setLoadoutHotkeysSchema,
   sharedJutsuLoadoutTextSchema,
 } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
@@ -447,7 +449,7 @@ export const jutsuRouter = createTRPCRouter({
         "jutsu",
         loadouts.length,
         maxLoadouts,
-        { jutsuIds: [] as JutsuLoadout["jutsuIds"] },
+        { jutsuIds: [] as JutsuLoadout["jutsuIds"], hotkeys: {} },
         new Date(),
       );
       return backfillLoadouts<JutsuLoadout>({
@@ -1844,6 +1846,24 @@ export const jutsuRouter = createTRPCRouter({
       };
     }),
 
+  setLoadoutHotkeys: protectedProcedure
+    .meta({ mcp: { description: "Set the battle hotkeys of a jutsu loadout" } })
+    .input(setLoadoutHotkeysSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const result = await updateJutsuLoadoutForSetLoadoutHotkeys(
+        ctx.drizzle,
+        input,
+        ctx,
+      );
+      // MySQL reports no affected row when the keys did not change, so confirm
+      // ownership before calling an unchanged save a failure.
+      if (result.rowsAffected === 0) {
+        const exists = await findJutsuLoadoutForRenameLoadout(ctx.drizzle, input, ctx);
+        if (!exists) return errorResponse("Loadout not found");
+      }
+      return { success: true, message: "Hotkeys saved" };
+    }),
   renameLoadout: protectedProcedure
     .meta({ mcp: { description: "Rename a jutsu loadout" } })
     .input(renameLoadoutSchema)
