@@ -104,7 +104,7 @@ The catalogue's UploadThing credits URL carries downloadable attribution. Sprite
 and credits remain publicly accessible for web and native players through immutable,
 versioned UploadThing URLs.
 
-The [LPC migration](../app/drizzle/migrations/0127_flat_jane_foster.sql) adds nullable
+The [LPC migration](../app/drizzle/migrations/0129_superb_polaris.sql) adds nullable
 item and variant overrides plus the player's body choice. Apply the journaled
 migrations through this migration before deploying code that selects these columns.
 Existing rows use the catalogue and attribute defaults without a content backfill.
