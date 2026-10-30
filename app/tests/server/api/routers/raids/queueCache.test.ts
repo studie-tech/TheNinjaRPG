@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as combat from "@/routers/combat";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
@@ -12,11 +14,12 @@ import {
   userData,
   userQueue,
 } from "@/drizzle/schema";
+import * as raidQueries from "@/queries/raids";
 import { getRaidChatConversationId } from "@/libs/raids";
 import { Pusher } from "@/libs/pusher";
 import { raidsRouter } from "@/server/api/routers/raids";
 import { profileRouter } from "@/server/api/routers/profile";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 import { AllObjectives, RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
@@ -25,12 +28,14 @@ import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
+  recordQueries,
   resetTables,
 } from "../../../../setup/testDatabase";
 import { beforeStatements } from "../../../../setup/statements";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { queueEnergy } from "../../../../setup/queues";
+import { countUserReads } from "../../../../setup/userReads";
 
 describe("raid join cache reconciliation", () => {
   beforeEach(() => { stubRateLimitTransport(); });
@@ -264,6 +269,56 @@ describeWithDatabase("raid join committed queue", () => {
       expect(result.userPatch).toBeUndefined();
       expect(result.userDelta).toBeUndefined();
     }
+  });
+
+  it.each(["queued", "unchanged", "changed"] as const)("reconciles ready-up through its actual callback after %s SQL", async (outcome) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ status: outcome === "queued" ? "QUEUED" : "AWAKE", regeneration: 0, travelFinishAt: null, battleId: null }).where(eq(userData.userId, "queue-sql-user"));
+    if (outcome === "queued") await db.insert(mpvpBattleUser).values({ id: "ready-member", userId: "queue-sql-user", clanBattleId: "cache-team", side: "ATTACKER", slot: 0 });
+    const profile = await callerFor(profileRouter, "queue-sql-user");
+    const initial = await profile.getUser();
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = [["profile", "getUser"], { type: "query" }];
+    cache.setQueryData(key, initial);
+    const getUser = vi.fn(() => profile.getUser());
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const stop = observer.subscribe(() => undefined);
+    const updateUser = vi.fn((patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(cache, key, patch, options));
+    const leaf = { invalidate: vi.fn(async () => undefined) };
+    const source = readFileSync(join(import.meta.dirname, "../../../../../src/layout/RaidBrowser.tsx"), "utf8");
+    const callbacks = source.slice(source.indexOf("api.raids.readyToQueue.useMutation(")).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+    if (!callbacks) throw new Error("Ready-up callbacks not found");
+    const options = new Function("recoverUser", "prepareUserUpdate", "updateUser", "util", "setIsReadyToQueue", "showMutationToast", `return (${callbacks});`)(
+      vi.fn(), () => prepareUserUpdate(cache, key), updateUser,
+      { raids: { getUserRaidQueue: leaf, getActiveRaidTeams: leaf } }, vi.fn(), vi.fn(),
+    ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => void };
+    const client = outcome === "changed"
+      ? beforeStatements(db, userData, [async () => { await db.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, "queue-sql-user")); }])
+      : db;
+    if (outcome === "unchanged") {
+      const execute = raidQueries.updateUserDataForReadyToQueue2;
+      // Execute the real no-op, then expose the valid zero-change result reported in production.
+      vi.spyOn(raidQueries, "updateUserDataForReadyToQueue2").mockImplementation(((...args: Parameters<typeof execute>) => Promise.resolve(execute(...args)).then(() => ({ rowsAffected: 0 }))) as unknown as typeof execute);
+    }
+    const counted = countUserReads(client);
+    try {
+      const revision = options.onMutate();
+      const measured = await recordQueries(() => callerForDatabase(raidsRouter, "queue-sql-user", counted.client).readyToQueue());
+      const result = measured.result;
+      expect(result.success).toBe(true);
+      expect(counted.getReads()).toBe(1);
+      expect(result.userDelta).toBeUndefined();
+      if (outcome === "queued") expect(result.userPatch).toMatchObject({ status: "AWAKE", battleId: null, travelFinishAt: null });
+      else expect(result.userPatch).toBeUndefined();
+      options.onSuccess(result, undefined, revision);
+      await updateUser.mock.results[0]?.value;
+      expect(updateUser).toHaveBeenCalledTimes(1);
+      expect(getUser).toHaveBeenCalledTimes(outcome === "queued" ? 0 : 1);
+      const saved = await db.query.userData.findFirst({ where: eq(userData.userId, "queue-sql-user") });
+      expect(cache.getQueryData<typeof initial>(key)?.userData?.status).toBe(saved?.status);
+      expect(saved?.status).toBe(outcome === "changed" ? "ASLEEP" : "AWAKE");
+      expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
+    } finally { stop(); cache.clear(); }
   });
 
   it("confirms a newer battle when ready-up's guarded cleanup loses", async () => {

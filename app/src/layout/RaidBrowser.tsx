@@ -185,8 +185,10 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
           void util.raids.getUserRaidQueue.invalidate();
           void util.raids.getActiveRaidTeams.invalidate();
         }
-        if (data.userPatch)
-          void updateUser(data.userPatch, { revision, delta: data.userDelta });
+        void updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
         showMutationToast(data);
       },
     });
