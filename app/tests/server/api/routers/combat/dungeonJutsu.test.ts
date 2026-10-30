@@ -33,6 +33,10 @@ import {
 
 const members = ["leader", "ally", "helper"];
 
+/**
+ * Verifies dungeon battle-usage gates through real loadout, party and combat routers.
+ * Each player's client response must expose PvE/shared jutsu and exclude PvP-only jutsu.
+ */
 describeWithDatabase("dungeon jutsu loadouts", () => {
   beforeEach(async () => {
     stubRateLimitTransport();
@@ -98,6 +102,7 @@ describeWithDatabase("dungeon jutsu loadouts", () => {
     if (!saved) throw new Error("Missing dungeon battle");
     expect(saved.battleType).toBe("QUEST");
     expect(saved.extraState.dungeon?.runId).toBe(id);
+    // Use masked responses so server-only catalog data cannot hide a client omission.
     for (const userId of members) {
       const response = await (await callerFor(combatRouter, userId)).getBattle({ battleId: saved.id });
       const actions = availableUserActions(response.battle, userId).map((action) => action.id);
@@ -109,6 +114,7 @@ describeWithDatabase("dungeon jutsu loadouts", () => {
     if (!current || !actor || !members.includes(actor.userId)) throw new Error("Missing player turn");
     const combat = await callerFor(combatRouter, actor.userId);
     const input = { battleId: current.id, version: current.version, longitude: actor.longitude, latitude: actor.latitude };
+    // An invalid PvP cast must preserve the turn/version so the PvE cast can still execute.
     expect(await combat.performAction({ ...input, actionId: "jutsu-PVP" })).toMatchObject({
       notification: "Action not valid anymore. Try something else",
     });
