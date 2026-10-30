@@ -78,25 +78,19 @@ export default function DungeonPage() {
     showMutationToast(response);
     setMessage(response.success ? "" : response.message);
     if (response.success) setAbandonId(null);
-    const hasUserUpdate =
-      response.userPatch !== undefined || response.userDelta !== undefined;
-    if (hasUserUpdate)
-      await updateUser(response.userPatch, {
-        revision,
-        ...(response.userDelta ? { delta: response.userDelta } : {}),
-        expected: response.userExpected,
-        achievementProgress: response.achievementProgress,
-      });
-    const stateRevision = prepareUserUpdate();
     const [refreshed] = await Promise.all([state.refetch(), available.refetch()]);
     // Canonical recovery must include any expiry or interrupted-start effects from the state read.
-    await updateUser(
-      !hasUserUpdate || refreshed.isError ? undefined : refreshed.data?.userPatch,
-      {
-        revision: stateRevision,
-        expected: refreshed.data?.userExpected,
-      },
-    );
+    const canApplyUserUpdate =
+      !refreshed.isError && refreshed.data?.userPatch !== undefined;
+    await updateUser(canApplyUserUpdate ? response.userPatch : undefined, {
+      revision,
+      ...(canApplyUserUpdate && response.userDelta
+        ? { delta: response.userDelta }
+        : {}),
+      expected: response.userExpected,
+      expectedAfter: refreshed.data?.userExpected,
+      achievementProgress: response.achievementProgress,
+    });
   };
   const create = api.coop.dungeon.create.useMutation({
     onMutate: prepareUserUpdate,

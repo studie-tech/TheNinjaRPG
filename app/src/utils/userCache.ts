@@ -56,6 +56,8 @@ export type UserUpdateOptions = {
   achievementProgress?: AchievementProgress[];
   /** Server-known scalar state that must already match the captured cache. */
   expected?: UserExpected;
+  /** Server-known scalar state that must match the complete projected user. */
+  expectedAfter?: UserExpected;
   notifications?: (
     current: NavBarDropdownLink[] | undefined,
   ) => NavBarDropdownLink[] | undefined;
@@ -145,7 +147,13 @@ export const updateUserCache = async (
       USER_DELTA_CAPS,
       USER_RELATIONS,
     );
-    if (!user) return undefined;
+    if (
+      !user ||
+      Object.entries(mutation.expectedAfter ?? {}).some(
+        ([field, value]) => value !== undefined && user[field as keyof User] !== value,
+      )
+    )
+      return undefined;
     applied = true;
     const result = mergeUserCache(old, user, mutation.achievementProgress);
     if (mutation.notifications)
