@@ -334,6 +334,9 @@ export const createTravelActors = (
       const movement = movements?.get(recipe.user?.userId ?? "");
       const moving = movement ? movement.direction !== null : distance > 0.01;
       if (movement) {
+        // The published edge owns interpolation; its destination consumes any queued snapshot path.
+        record.path.length = 0;
+        record.tile = recipe.tile;
         record.facing = lpcFacing(
           movement.x - record.x,
           movement.y - record.y,

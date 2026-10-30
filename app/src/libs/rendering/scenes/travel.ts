@@ -36,6 +36,7 @@ import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { clamp } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
 
 /**
@@ -113,14 +114,26 @@ export const createTravelScene = async (options: {
       disposed = false,
       zoom = options.initialZoom;
     let camera: { x: number; y: number } | null = null;
+    let hasManualCamera = false;
     let actorsDirty = true,
       lastPath: string | null = null,
       hover = "";
     let lastActorSnapshot: TravelSnapshot | null = null;
     let zoomTimer: ReturnType<typeof setTimeout> | null = null;
     const scale = () => (game.renderer.width / logicalWidth) * zoom;
-    const transform = () => {
+    const transform = (constrain = false) => {
       const s = scale();
+      if (constrain && hasManualCamera && camera && sectors.size) {
+        const entries = [...sectors.values()];
+        const minX = Math.min(...entries.map((entry) => entry.position.x)),
+          maxX = Math.max(...entries.map((entry) => entry.position.x + logicalWidth)),
+          minY = Math.min(...entries.map((entry) => entry.position.y)),
+          maxY = Math.max(...entries.map((entry) => entry.position.y + entry.height));
+        const halfWidth = Math.min(game.renderer.width / (2 * s), (maxX - minX) / 2),
+          halfHeight = Math.min(game.renderer.height / (2 * s), (maxY - minY) / 2);
+        camera.x = clamp(camera.x, minX + halfWidth, maxX - halfWidth);
+        camera.y = clamp(camera.y, minY + halfHeight, maxY - halfHeight);
+      }
       world.scale.set(s, -s);
       // Move the whole map on backing pixels so nearest-sampled wall joints stay stable.
       world.position.set(
@@ -130,7 +143,7 @@ export const createTravelScene = async (options: {
           resolution,
       );
     };
-    game.setResize(transform);
+    game.setResize(() => transform(true));
     const pick = (x: number, y: number): TravelPick => {
       const snapshot = options.getSnapshot(),
         s = scale();
@@ -166,9 +179,16 @@ export const createTravelScene = async (options: {
     const controls = createMapControls(game, {
       enabled: () => options.getSnapshot().enabled,
       tap: (x, y) => options.onTap(pick(x, y)),
+      pan: (dx, dy) => {
+        if (!camera) return;
+        hasManualCamera = true;
+        camera.x -= dx / scale();
+        camera.y += dy / scale();
+        transform(true);
+      },
       zoom: (factor) => {
         zoom = Math.max(0.8, Math.min(3, zoom * factor));
-        transform();
+        transform(true);
         if (zoomTimer !== null) clearTimeout(zoomTimer);
         zoomTimer = setTimeout(() => options.onZoom(zoom), 300);
       },
@@ -190,7 +210,10 @@ export const createTravelScene = async (options: {
       const center = snapshot.window.find((entry) => entry.dx === 0 && entry.dy === 0);
       if (!center) return;
       const first = sectors.get(center.sector);
-      if (!first && sectors.size > 0) camera = null;
+      if (!first && sectors.size > 0) {
+        camera = null;
+        hasManualCamera = false;
+      }
       const mapWidth = center.map.width,
         mapHeight = center.map.height;
       const hexWidth = logicalWidth / (mapWidth - 0.25 * (mapWidth - 1));
@@ -459,8 +482,15 @@ export const createTravelScene = async (options: {
           x: (movement?.x ?? -tile.center.x) + tile.width / 2 + entry.position.x,
           y: (movement?.y ?? -tile.center.y) + tile.height / 2 + entry.position.y,
         };
-        // The actor and camera share the path clock; corrections land without a trailing tween.
-        camera = target;
+        if (!camera) camera = target;
+        else if (!hasManualCamera) {
+          // Exponential follow has the same response at every frame rate; reduced motion centers immediately.
+          const blend = frame.reducedMotion ? 1 : -Math.expm1(-8 * frame.delta);
+          camera.x += (target.x - camera.x) * blend;
+          camera.y += (target.y - camera.y) * blend;
+          if (Math.hypot(target.x - camera.x, target.y - camera.y) * scale() < 0.1)
+            camera = target;
+        }
       }
       transform();
       actors.container.position.copyFrom(entry.position);
@@ -528,8 +558,13 @@ export const createTravelScene = async (options: {
       }
       const pointer = controls.pointer();
       let hoverTile: TravelPick["tile"] = null;
-      if (!pointer || !snapshot.enabled) {
+      if (!pointer || !snapshot.enabled || controls.dragging()) {
         actors.hover(null);
+        if (hover !== "") {
+          hover = "";
+          options.onHover(null, null);
+        }
+        game.canvas.style.cursor = controls.dragging() ? "grabbing" : "default";
       } else {
         const hit = pick(pointer.x, pointer.y);
         hoverTile = hit.tile;
@@ -625,6 +660,11 @@ export const createTravelScene = async (options: {
       sectors,
       updateWindow,
       setBackground,
+      /** Resume smooth character tracking after inspecting the map with a drag. */
+      recenter: () => {
+        hasManualCamera = false;
+        game.invalidate();
+      },
       clearHighlights: () => {
         lastPath = null;
         route.set([], 0);

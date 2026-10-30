@@ -128,6 +128,8 @@ interface SectorProps {
   showActive: boolean;
   autoAttackMode: boolean;
   isWorldExpanded: boolean;
+  /** Re-selecting the player tab resumes camera follow without remounting the scene. */
+  cameraFocusRevision: number;
   setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
   setTarget: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
@@ -303,6 +305,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   }, [target]);
   /** Qualify a selected tile before crossings advance the sector ahead of React's props. */
   const setTarget = (point: SectorPoint | null) => {
+    if (point) travel.scene.current?.recenter();
     routeTargetRef.current = point ? { sector: sectorRef.current, ...point } : null;
     setMovementTarget(point);
   };
@@ -2237,6 +2240,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }),
     `${lightLayout}:${isWorldExpanded}`,
   );
+  useEffect(() => {
+    if (travel.isReady) travel.scene.current?.recenter();
+  }, [travel.isReady, props.cameraFocusRevision]);
   useEffect(() => {
     if (!travel.isReady) return;
     travelCallbacks.current.onReady();

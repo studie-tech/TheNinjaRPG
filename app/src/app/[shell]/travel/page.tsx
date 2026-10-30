@@ -194,6 +194,7 @@ function Travel() {
   const [activeTab, setActiveTab] = useState<string>("");
   const [focusSector, setFocusSector] = useState<number | null>(null);
   const [isWorldExpanded, setWorldExpanded] = useState(false);
+  const [cameraFocusRevision, setCameraFocusRevision] = useState(0);
 
   const searchParams = useSearchParams();
   const [locationRequest, setLocationRequest] = useState<TravelLocation | null>(null);
@@ -878,6 +879,7 @@ function Travel() {
           showActive={showOtherUsers}
           autoAttackMode={autoAttackMode}
           isWorldExpanded={isWorldExpanded}
+          cameraFocusRevision={cameraFocusRevision}
           setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
           setTarget={setTargetPosition}
@@ -896,6 +898,7 @@ function Travel() {
     showOtherUsers,
     autoAttackMode,
     isWorldExpanded,
+    cameraFocusRevision,
     villages,
   ]);
 
@@ -1373,6 +1376,10 @@ function Travel() {
               current={activeTab}
               options={[sectorLink, globalLink]}
               setValue={setActiveTab}
+              onChange={(value) => {
+                if (value !== globalLink)
+                  setCameraFocusRevision((previous) => previous + 1);
+              }}
             />
           </div>
         }

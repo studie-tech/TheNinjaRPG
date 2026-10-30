@@ -5,7 +5,7 @@ import { anonymousSpriteAppearance, resolveSpriteAppearance } from "@/libs/lpc/a
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
-import { createTravelActors, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
+import { createTravelActors, type TravelActorMovement, type TravelActorsSnapshot } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
 
@@ -55,6 +55,35 @@ beforeEach(() => {
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await settle(); vi.restoreAllMocks(); });
 
 describe("travel actor artwork loading", () => {
+  it("does not replay queued network waypoints after a timed walk finishes", async () => {
+    const { actors, grid, snapshot } = fixture();
+    const user = player(0, { longitude: 4, latitude: 4 });
+    actors.sync(snapshot([user])); await settle();
+    const root = actors.container.children[0]!;
+    for (const latitude of [5, 6]) {
+      actors.sync(snapshot([{ ...user, latitude }]));
+      const tile = grid.getHex({ col: 4, row: latitude })!;
+      const movements = new Map<string, TravelActorMovement>([[user.userId, {
+        x: -tile.center.x, y: -tile.center.y, direction: null, facing: 1,
+      }]]);
+      actors.animate({ ...frame, reducedMotion: false }, movements);
+      expect(root.position).toMatchObject({ x: -tile.center.x, y: -tile.center.y });
+    }
+    const arrived = { x: root.x, y: root.y };
+    // The published edge is removed once its clock ends, before the server confirmation can refetch.
+    for (let tick = 0; tick < 12; tick++) {
+      actors.animate({ ...frame, now: 1200 + tick * 16, reducedMotion: false });
+      expect(root.position).toMatchObject(arrived);
+    }
+    actors.sync(snapshot([{ ...user, latitude: 6 }]));
+    actors.animate({ ...frame, reducedMotion: false });
+    expect(root.position).toMatchObject(arrived);
+    // A later authoritative update still uses ordinary remote-actor interpolation.
+    actors.sync(snapshot([{ ...user, latitude: 7 }]));
+    actors.animate({ ...frame, reducedMotion: false });
+    expect(root.y).not.toBe(arrived.y);
+  });
+
   it("keeps 100 pending actors visible and pickable at their own body positions", async () => {
     const pending = holdCharacters();
     const { actors, grid, depth, snapshot } = fixture();

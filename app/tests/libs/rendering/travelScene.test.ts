@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Texture } from "pixi.js";
+import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as terrain from "@/libs/rendering/primitives/terrain";
@@ -31,6 +32,8 @@ const gameFixture = () => {
   const owned = new Set<() => void>();
   const stage = new Container({ isRenderGroup: true });
   const canvas = document.createElement("canvas");
+  canvas.getBoundingClientRect = () => new DOMRect(0, 0, 1024, 600);
+  const listeners = new window.AbortController();
   let update = (_frame: runtime.GameFrame) => {};
   let disposed = false;
   const game = {
@@ -38,9 +41,10 @@ const gameFixture = () => {
     own: (cleanup: () => void) => { owned.add(cleanup); },
     disown: (cleanup: () => void) => { owned.delete(cleanup); },
     isDisposed: () => disposed,
-    setResize: () => {}, setBackground: () => {}, listen: () => {},
+    setResize: () => {}, setBackground: () => {}, invalidate: () => {},
+    listen: (type: string, callback: EventListener) => canvas.addEventListener(type, callback, { signal: listeners.signal }),
     setUpdate: (next: typeof update) => { update = next; },
-    dispose: () => { if (disposed) return; disposed = true; controller.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); },
+    dispose: () => { if (disposed) return; disposed = true; controller.abort(); listeners.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); },
   } as unknown as runtime.GameRenderer;
   cleanups.push(game.dispose);
   vi.spyOn(runtime, "createGameRenderer").mockResolvedValue(game);
@@ -50,16 +54,21 @@ const gameFixture = () => {
     scope.own(dispose);
     return { container, dispose, isAnimated: false, setLighting: () => {}, setTints: () => {} };
   });
-  return { game, stage, advance: (next = frame()) => update(next) };
+  const event = (type: string, x: number, y: number) => {
+    const pointer = new window.MouseEvent(type, { button: 0, clientX: x, clientY: y });
+    Object.defineProperty(pointer, "pointerId", { value: 1 }); canvas.dispatchEvent(pointer);
+  };
+  return { game, stage, event, advance: (next = frame()) => update(next) };
 };
-const sceneFixture = async (state = snapshotFixture()) => {
+const sceneFixture = async (state = snapshotFixture(), initialZoom = 1) => {
   const fixture = gameFixture();
-  const scene = await createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => ({ ...state }), onError: (error) => { throw error; }, onReady: () => {}, onTap: () => {}, onHover: () => {}, onZoom: () => {}, initialZoom: 1 });
+  const onTap = vi.fn();
+  const scene = await createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => ({ ...state }), onError: (error) => { throw error; }, onReady: () => {}, onTap, onHover: () => {}, onZoom: () => {}, initialZoom });
   fixture.advance(); await settle();
   const world = fixture.stage.children[0]!;
   const collect = (node: Container): RenderLayer[] => node.children.flatMap((child) => child instanceof RenderLayer ? [child] : collect(child));
   const layers = collect(world);
-  return { ...fixture, scene, state, world, depth: layers[2]!, overlay: layers[3]! };
+  return { ...fixture, scene, state, world, onTap, depth: layers[2]!, overlay: layers[3]! };
 };
 beforeEach(() => {
   const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
@@ -278,5 +287,80 @@ describe("travel scene ground depth", () => {
     expect(counter.destroyed).toBe(true);
     expect(overlay.renderLayerChildren).not.toContain(counter);
     expect(physical.every((child) => child.destroyed && !depth.renderLayerChildren.includes(child))).toBe(true);
+  });
+});
+
+
+describe("travel camera follow and inspection", () => {
+  it("damps tracking without replaying the final edge after its motion clock is removed", async () => {
+    const { scene, state, world, depth, advance } = await sceneFixture();
+    const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
+    const start = { x: world.x, y: world.y };
+    state.users = [player({ latitude: 6 })]; state.row = 6; state.actorRevision++;
+    state.motionSteps = new Map([["self", { from: { sector: 724, x: 4, y: 4 }, to: { sector: 724, x: 4, y: 6 }, startedAt: 1000, direction: "south", facing: 1 }]]);
+    advance(frame(1000 + SECTOR_WALK_STEP_MS, false));
+    const destination = scene.sectors.get(724)!.grid.getHex({ col: 4, row: 6 })!;
+    const finalY = Math.round(300 + (-destination.center.y + destination.height / 2));
+    expect(actor.y).toBeCloseTo(-destination.center.y);
+    expect(Math.abs(world.y - start.y)).toBeLessThan(Math.abs(finalY - start.y));
+    expect(world.y).not.toBe(start.y);
+    state.motionSteps = undefined;
+    let previous = Math.abs(finalY - world.y);
+    for (let tick = 0; tick < 120; tick++) {
+      advance(frame(1100 + tick * 1000 / 60, false));
+      expect(actor.y).toBeCloseTo(-destination.center.y);
+      const distance = Math.abs(finalY - world.y);
+      expect(distance).toBeLessThanOrEqual(previous);
+      previous = distance;
+    }
+    expect(world.y).toBe(finalY);
+  });
+
+  it("pans without walking, retains inspection across refreshes, and resumes follow on demand", async () => {
+    const { scene, state, world, event, advance, onTap } = await sceneFixture(undefined, 2);
+    const initial = { x: world.x, y: world.y };
+    event("pointerdown", 512, 300); event("pointermove", 542, 320);
+    advance(frame(1016, false));
+    expect(world.x).toBeCloseTo(initial.x + 30); expect(world.y).toBeCloseTo(initial.y + 20);
+    expect(scene.sectors.get(724)!.art.container.visible).toBe(true);
+    event("pointerup", 542, 320);
+    expect(onTap).not.toHaveBeenCalled();
+    const panned = { x: world.x, y: world.y };
+    state.users = [player({ latitude: 5 })]; state.row = 5; state.actorRevision++;
+    for (let tick = 0; tick < 30; tick++) advance(frame(1100 + tick * 16, false));
+    expect(world.position).toMatchObject(panned);
+    scene.recenter(); advance(frame(1600, false));
+    const destination = scene.sectors.get(724)!.grid.getHex({ col: 4, row: 5 })!;
+    const targetY = 300 + world.scale.x * (-destination.center.y + destination.height / 2);
+    expect(Math.abs(targetY - world.y)).toBeLessThan(Math.abs(targetY - panned.y));
+    expect(world.y).not.toBe(Math.round(targetY));
+    advance(frame(1700, true));
+    expect(world.y).toBe(Math.round(targetY));
+    event("pointerdown", 512, 300); event("pointerup", 514, 302);
+    expect(onTap).toHaveBeenCalledTimes(1);
+  });
+
+  it("has the same follow response at 30 and 60 frames per second", async () => {
+    const positions: number[] = [];
+    for (const fps of [30, 60]) {
+      const { state, world, advance } = await sceneFixture();
+      state.row = 8;
+      for (let tick = 1; tick <= fps / 2; tick++) advance({ now: 1000 + tick * 1000 / fps, delta: 1 / fps, reducedMotion: false });
+      positions.push(world.y);
+    }
+    expect(positions[0]).toBe(positions[1]);
+  });
+
+  it("bounds manual panning to the rendered window and ignores dragging while interaction is disabled", async () => {
+    const { game, state, world, event, advance } = await sceneFixture();
+    event("pointerdown", 512, 300); event("pointermove", 100_512, 100_300); event("pointerup", 100_512, 100_300);
+    advance(frame(1016, false));
+    expect(world.x).toBe(0);
+    const panned = { x: world.x, y: world.y };
+    state.enabled = false;
+    event("pointerdown", 512, 300); event("pointermove", -10_000, -10_000); event("pointerup", -10_000, -10_000);
+    advance(frame(1032, false));
+    expect(world.position).toMatchObject(panned);
+    expect(game.canvas.style.cursor).toBe("default");
   });
 });
