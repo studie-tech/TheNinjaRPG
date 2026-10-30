@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { CommentOnConversation } from "@/layout/Comment";
+import type { ChatStartUser } from "@/libs/chatPanel";
 import { parseHtml } from "@/utils/parse";
 
 export const ConversationComments = ({
@@ -15,6 +16,9 @@ export const ConversationComments = ({
   onReact,
   onToggleQuote,
   onDeleted,
+  compact,
+  onMentionUser,
+  onMessageUser,
 }: ConversationCommentsProps) => {
   const unique = new Set<string>();
   const visibleComments = pages
@@ -27,13 +31,16 @@ export const ConversationComments = ({
       return !duplicate;
     });
 
+  // Pages arrive newest first. Compact chat reads top to bottom, oldest first, and
+  // its pagination sentinel (the oldest loaded message) moves to the top.
+  const ordered =
+    compact && visibleComments ? [...visibleComments].reverse() : visibleComments;
+  const sentinelIndex = compact ? 0 : (visibleComments?.length ?? 0) - 1;
+
   return (
     <>
-      {visibleComments?.map((comment, i) => (
-        <div
-          key={comment.id}
-          ref={i === visibleComments.length - 1 ? setLastElement : null}
-        >
+      {ordered?.map((comment, i) => (
+        <div key={comment.id} ref={i === sentinelIndex ? setLastElement : null}>
           <ConversationCommentRow
             comment={comment}
             isQuoted={quoteIds?.includes(comment.id) ?? false}
@@ -46,6 +53,9 @@ export const ConversationComments = ({
             onReact={onReact}
             onToggleQuote={onToggleQuote}
             onDeleted={onDeleted}
+            compact={compact}
+            onMentionUser={onMentionUser}
+            onMessageUser={onMessageUser}
           />
         </div>
       ))}
@@ -64,6 +74,9 @@ const ConversationCommentRow = memo(function ConversationCommentRow({
   onReact,
   onToggleQuote,
   onDeleted,
+  compact,
+  onMentionUser,
+  onMessageUser,
 }: ConversationCommentRowProps) {
   const content = useMemo(() => parseHtml(comment.content), [comment.content]);
 
@@ -81,6 +94,9 @@ const ConversationCommentRow = memo(function ConversationCommentRow({
       canEdit={canInteract}
       setQuoteId={canInteract ? onToggleQuote : undefined}
       onDeleted={onDeleted}
+      compact={compact}
+      onMentionUser={onMentionUser}
+      onMessageUser={onMessageUser}
     >
       {content}
     </CommentOnConversation>
@@ -99,11 +115,22 @@ interface ConversationCommentsProps {
   onToggleQuote: (quoteId: string) => void;
   onDeleted: (commentId: string) => void;
   canInteract: boolean;
+  /** Dense chat rows, oldest first, for the chat panel. */
+  compact?: boolean;
+  onMentionUser?: (username: string) => void;
+  onMessageUser?: (user: ChatStartUser) => void;
 }
 
 type ConversationCommentRowProps = Pick<
   ConversationCommentsProps,
-  "tavernStyling" | "canInteract" | "onReact" | "onToggleQuote" | "onDeleted"
+  | "tavernStyling"
+  | "canInteract"
+  | "onReact"
+  | "onToggleQuote"
+  | "onDeleted"
+  | "compact"
+  | "onMentionUser"
+  | "onMessageUser"
 > & {
   comment: RouterOutputs["comments"]["getConversationComments"]["data"][number];
   isQuoted: boolean;

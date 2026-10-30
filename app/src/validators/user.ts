@@ -5,6 +5,7 @@ import {
   ELEMENTAL_MASTERY_CAP,
   GeneralTypes,
   MAX_MASTERY_CAP,
+  MAX_MUTED_CONVERSATIONS,
   SEICHI_SILVER_ADJUST_LIMIT,
   TavernColorPresets,
   UserRanks,
@@ -152,6 +153,12 @@ export const updateUserPreferencesSchema = z
     sfxOn: z.boolean().optional(),
     buttonSfxOn: z.boolean().optional(),
     iframesMuted: z.boolean().optional(),
+    // Chat notification mutes
+    chatMuted: z.boolean().optional(),
+    mutedConversationIds: z
+      .array(z.string().max(191))
+      .max(MAX_MUTED_CONVERSATIONS)
+      .optional(),
     tutorialOn: z.boolean().optional(),
     defaultAutoCombat: z.boolean().optional(),
     showPvpRecord: z.boolean().optional(),

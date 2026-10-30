@@ -39,19 +39,23 @@ import type { MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
 import { getSearchValidator } from "@/validators/register";
 
-interface ConversationProps {
+/** Props that select a conversation and react to its events. */
+export interface ConversationLogicProps {
   convo_title?: string;
   convo_id?: string;
-  defaultBackHref?: string;
   refreshKey: number;
+  onCommentPosted?: () => void;
+  /** When set, banned/silenced users may only compose if they created this ticket */
+  supportTicketCreatedByUserId?: string;
+}
+
+interface ConversationProps extends ConversationLogicProps {
+  defaultBackHref?: string;
   title: string;
   subtitle: string;
   initialBreak?: boolean;
   topRightContent?: React.ReactNode;
-  onCommentPosted?: () => void;
   onBack?: () => void;
-  /** When set, banned/silenced users may only compose if they created this ticket */
-  supportTicketCreatedByUserId?: string;
   /** Enables persisted username/title colors only for tavern conversations. */
   tavernStyling?: boolean;
 }
@@ -83,7 +87,11 @@ export const ConversationSkeleton: React.FC<ConversationProps> = (props) => {
   );
 };
 
-const Conversation: React.FC<ConversationProps> = (props) => {
+/**
+ * State, live events and actions of one conversation. The tavern page and the
+ * compact chat panel render the same conversation logic in different layouts.
+ */
+export const useConversation = (props: ConversationLogicProps) => {
   const isNativeShell = useNativeShell();
   const onMutateCheck = useGlobalOnMutateProtect();
   const { data: userData, pusher } = useUserData();
@@ -740,6 +748,73 @@ const Conversation: React.FC<ConversationProps> = (props) => {
   };
 
   const allComments = comments?.pages.flatMap((page) => page.data);
+
+  return {
+    userData,
+    isNativeShell,
+    comments,
+    allComments,
+    conversation,
+    isPending,
+    searchQuery,
+    clearSearch,
+    searchButtonElement,
+    invalidateComments,
+    deletedCommentIds,
+    setLastElement,
+    canComposeMessage,
+    composeRestrictionMessage,
+    canPostAsAI,
+    userSearchMethods,
+    maxUsers,
+    senderUser,
+    quoteIds,
+    setValue,
+    getValues,
+    toggleQuoteId,
+    control,
+    errors,
+    editorKey,
+    isCommenting,
+    handleSubmitComment,
+    reactConversationComment,
+    handleConversationCommentDeleted,
+    typingUsers,
+  };
+};
+
+const Conversation: React.FC<ConversationProps> = (props) => {
+  const {
+    userData,
+    isNativeShell,
+    comments,
+    allComments,
+    conversation,
+    isPending,
+    searchQuery,
+    clearSearch,
+    searchButtonElement,
+    invalidateComments,
+    deletedCommentIds,
+    setLastElement,
+    canComposeMessage,
+    composeRestrictionMessage,
+    canPostAsAI,
+    userSearchMethods,
+    maxUsers,
+    senderUser,
+    quoteIds,
+    setValue,
+    toggleQuoteId,
+    control,
+    errors,
+    editorKey,
+    isCommenting,
+    handleSubmitComment,
+    reactConversationComment,
+    handleConversationCommentDeleted,
+    typingUsers,
+  } = useConversation(props);
 
   return (
     <div key={`${props.refreshKey}-${senderUser?.userId}`}>

@@ -11,10 +11,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { ConversationComment, UserReportComment } from "@/drizzle/schema";
+import { CompactComment } from "@/layout/CompactComment";
 import Confirm from "@/layout/Confirm";
 import EmojiPicker from "@/layout/EmojiPicker";
 import { ModerationSummary } from "@/layout/ModerationSummary";
 import ReportUser from "@/layout/Report";
+import type { ChatStartUser } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { canDeleteComment, canSeeSecretData } from "@/utils/permissions";
@@ -49,6 +51,10 @@ interface ConversationCommentProps extends PostProps {
   onDeleted?: (commentId: string) => void;
   /** Revoking edit permission hides an open editor without discarding its unsaved draft. */
   canEdit?: boolean;
+  /** Dense chat row for the chat panel. */
+  compact?: boolean;
+  onMentionUser?: (username: string) => void;
+  onMessageUser?: (user: ChatStartUser) => void;
 }
 export const CommentOnConversation: React.FC<ConversationCommentProps> = (props) => {
   const [editing, setEditing] = useState(false);
@@ -90,6 +96,30 @@ export const CommentOnConversation: React.FC<ConversationCommentProps> = (props)
     deleteInFlightRef.current = true;
     deleteComment.mutate(data);
   };
+
+  if (props.compact && props.user) {
+    return (
+      <CompactComment
+        user={props.user}
+        comment={props.comment}
+        tavernStyling={props.tavernStyling}
+        highlighted={props.color === "poppopover"}
+        quoteIds={props.quoteIds}
+        toggleReaction={props.toggleReaction}
+        setQuoteId={props.setQuoteId}
+        editComment={props.canEdit === false ? undefined : editComment.mutate}
+        isEditPending={editComment.isPending}
+        deleteComment={handleDelete}
+        isDeletePending={deleteComment.isPending}
+        editing={editing && props.canEdit !== false}
+        setEditing={setEditing}
+        onMentionUser={props.onMentionUser}
+        onMessageUser={props.onMessageUser}
+      >
+        {props.children}
+      </CompactComment>
+    );
+  }
 
   return (
     <BaseComment
