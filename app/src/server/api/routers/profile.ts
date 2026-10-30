@@ -758,9 +758,17 @@ export const profileRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       const now = new Date();
       const currentDayCycleStartedAt = new Date(getWorldCyclePosition(now).cycleStart);
+      const fetchUser = () =>
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          userIp: ctx.userIp,
+          hideInformation: true,
+          allowQuestPartySyncFallback: true,
+        });
       // Query
       const [
-        updatedUser,
+        initialUser,
         readyFarmPlotsResult,
         waterableFarmPlotsResult,
         publishedAchievements,
@@ -768,14 +776,7 @@ export const profileRouter = createTRPCRouter({
         tournamentNoticeState,
         activeDungeonRuns,
       ] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          userIp: ctx.userIp,
-          hideInformation: true,
-          allowQuestPartySyncFallback: true,
-          // forceRegen: true, // This should be disabled in prod to save on DB calls
-        }),
+        fetchUser(),
         selectFarmPlotForGetUser(ctx.drizzle, ctx, now),
         selectFarmPlotForGetUser2(ctx.drizzle, ctx, now, currentDayCycleStartedAt),
         fetchPublishedAchievements(ctx.drizzle),
@@ -783,6 +784,20 @@ export const profileRouter = createTRPCRouter({
         fetchEventNoticeState(ctx.drizzle, ctx.userId),
         findActiveDungeonRun(ctx.drizzle, ctx.userId),
       ]);
+      let updatedUser = initialUser;
+      let activeDungeon = activeDungeonRuns[0]?.run;
+      if (activeDungeon && (await expireDungeonRun(ctx.drizzle, activeDungeon))) {
+        // Expiry and competing floor starts can change both the profile and reservation.
+        const [refreshedUser, refreshedRuns] = await Promise.all([
+          fetchUser(),
+          findActiveDungeonRun(ctx.drizzle, ctx.userId),
+        ]);
+        updatedUser = {
+          ...refreshedUser,
+          toastMessages: [...initialUser.toastMessages, ...refreshedUser.toastMessages],
+        };
+        activeDungeon = refreshedRuns[0]?.run;
+      }
       const { user, settings, toastMessages, hasUnvotedPolls } = updatedUser;
       const readyFarmPlots = readyFarmPlotsResult[0]?.count ?? 0;
       const waterableFarmPlots = waterableFarmPlotsResult[0]?.count ?? 0;
@@ -792,32 +807,25 @@ export const profileRouter = createTRPCRouter({
         : [];
       // Figure out notifications
       const notifications: NavBarDropdownLink[] = [];
-      const activeDungeon = activeDungeonRuns[0]?.run;
       if (activeDungeon && !["ENDED"].includes(activeDungeon.status)) {
-        const expired = await expireDungeonRun(ctx.drizzle, activeDungeon);
-        if (expired) {
-          // Expiry releases this run's queued reservation; refresh a concurrent profile snapshot.
-          if (user?.status === "QUEUED") user.status = "AWAKE";
-        } else {
-          if (
-            user?.status === "AWAKE" &&
-            ["LOBBY", "BETWEEN", "PAUSED"].includes(activeDungeon.status)
-          ) {
-            const claim = await claimDungeonQueue(
-              ctx.drizzle,
-              ctx.userId,
-              activeDungeon.id,
-            );
-            if (claim.rowsAffected === 1) user.status = "QUEUED";
-          }
-          notifications.push({
-            href: "/dungeon",
-            name: "Active Dungeon Squad",
-            color: "green",
-            alwaysShow: true,
-            notificationCount: 1,
-          });
+        if (
+          user?.status === "AWAKE" &&
+          ["LOBBY", "BETWEEN", "PAUSED"].includes(activeDungeon.status)
+        ) {
+          const claim = await claimDungeonQueue(
+            ctx.drizzle,
+            ctx.userId,
+            activeDungeon.id,
+          );
+          if (claim.rowsAffected === 1) user.status = "QUEUED";
         }
+        notifications.push({
+          href: "/dungeon",
+          name: "Active Dungeon Squad",
+          color: "green",
+          alwaysShow: true,
+          notificationCount: 1,
+        });
       }
       // Ignore stale invitations for disabled or terminal teams, as the discovery page does.
       const invitations = questInvitations.filter(

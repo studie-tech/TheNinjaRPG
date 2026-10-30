@@ -311,7 +311,6 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
 
   it("preserves a dungeon admitted while territory team membership is provisional", async () => {
     const db = await getTestDatabase();
-    const endsAt = new Date(Date.now() + 1200);
     await db
       .insert(territoryWar)
       .values({
@@ -319,8 +318,8 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
         predecessorId: "initial",
         sector: 1,
         guardianId: "guardian",
-        startsAt: new Date(Date.now() - 10000),
-        endsAt,
+        startsAt: new Date("2000-01-01T00:00:00.000Z"),
+        endsAt: new Date("2100-01-01T00:00:00.000Z"),
       });
     let interposed = false;
     const dialect = new MySqlDialect();
@@ -335,9 +334,10 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
             if (isInsert && !interposed) {
               interposed = true;
               await createDungeon();
-              await new Promise((resolve) =>
-                setTimeout(resolve, Math.max(0, endsAt.getTime() - Date.now() + 30)),
-              );
+              await db
+                .update(territoryWar)
+                .set({ endsAt: new Date("2000-01-02T00:00:00.000Z") })
+                .where(eq(territoryWar.id, "event"));
               await cleanupTerritoryWarTeams(db);
             }
             return result;

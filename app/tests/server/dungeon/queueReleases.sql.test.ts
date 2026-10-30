@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, afterEach, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { actionLog, aiProfile, battle, clan, dungeon, dungeonMember, dungeonRun, mpvpBattleQueue, mpvpBattleUser, petSpecies, quest, tournament, tournamentMatch, userData, userPet, village } from "@/drizzle/schema";
+import { actionLog, aiProfile, battle, clan, dungeon, dungeonMember, dungeonRun, mpvpBattleQueue, mpvpBattleUser, petSpecies, quest, tournament, tournamentMatch, tournamentRecord, userData, userPet, userRewards, village } from "@/drizzle/schema";
 import { updateUserDataForDeleteClanBattle, updateUserDataForRemoveFromClan, updateUserDataForRemoveFromClan2, updateUserDataForUndoClanBattleJoin } from "@/queries/clan";
 import { updateUserDataForCheckAndCleanupExpiredRaid, updateUserDataForReadyToQueue, updateUserDataForRollbackStartRaidBattle } from "@/queries/raids";
 import { updateUserDataForJoinMatch } from "@/queries/tournament";
@@ -20,13 +20,14 @@ import { dungeonContent } from "../../setup/dungeon";
 import { insertPetSpecies, insertQuests, insertUsers } from "../../setup/factories";
 import { initialPetSpecies } from "../../libs/pets/helpers/species";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
+import { beforeStatements } from "../../setup/statements";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 describeWithDatabase("activity releases preserve dungeon reservations", () => {
   beforeEach(async () => {
     stubRateLimitTransport();
     vi.spyOn(Pusher.prototype,"trigger").mockResolvedValue(undefined);
-    await resetTables(actionLog, aiProfile, battle, clan, dungeon, dungeonMember, dungeonRun, mpvpBattleQueue, mpvpBattleUser, petSpecies, quest, tournament, tournamentMatch, userData, userPet, village);
+    await resetTables(actionLog, aiProfile, battle, clan, dungeon, dungeonMember, dungeonRun, mpvpBattleQueue, mpvpBattleUser, petSpecies, quest, tournament, tournamentMatch, tournamentRecord, userData, userPet, userRewards, village);
     const db = await getTestDatabase();
     await db.insert(village).values({id:"v", name:"V", sector:1, kageId:"leader"});
     await db.insert(clan).values({id:"clan", name:"Clan", image:"/clan.webp", villageId:"v", founderId:"leader", leaderId:"leader", leaderOrderId:"order"});
@@ -66,21 +67,74 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
     const db = await getTestDatabase();
     const startedAt = new Date(Date.now() - 10000);
     await db.insert(aiProfile).values({id:"Default",userId:"member",rules:[]});
-    await db.insert(tournament).values({id:"tour",name:"Clan tournament",image:"/test.webp",description:"",type:"CLAN",status:"IN_PROGRESS",round:1,rewards:ObjectiveReward.parse({}),startedAt,roundStartedAt:startedAt});
+    await db.insert(tournament).values({id:"tour",name:"Clan tournament",image:"/test.webp",description:"",type:"CLAN",status:"IN_PROGRESS",round:1,rewards:ObjectiveReward.parse({reward_money:1000}),startedAt,roundStartedAt:startedAt});
+    await db.update(userData).set({money:0});
     await db.insert(tournamentMatch).values({id:"match",tournamentId:"tour",round:1,match:1,state:"WAITING",userId1:actor,userId2:actor === "member" ? "leader" : "member",startedAt});
   };
-  it.each(["member","leader"])("preserves both dungeon participant positions when %s starts their tournament match", async actor => {
+  it.each([
+    ["member", "member"], ["member", "leader"],
+    ["leader", "member"], ["leader", "leader"],
+  ])("preserves a live dungeon without awarding a no-show when first seat is %s and caller is %s", async (firstSeat, actor) => {
     const db = await getTestDatabase();
-    await createTournamentMatch(actor);
+    await createTournamentMatch(firstSeat);
     const created = await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]});
     expect(created.success).toBe(true);
     const pets = await callerFor(petsRouter,"member");
     expect((await pets.updatePet({petId:"one",battleEnabled:false})).success).toBe(false);
-    await (await callerFor(tournamentRouter,actor)).joinMatch({matchId:"match",tournamentId:"tour"});
+    const tournamentCaller = await callerFor(tournamentRouter,actor);
+    expect((await tournamentCaller.joinMatch({matchId:"match",tournamentId:"tour"})).success).toBe(false);
+    expect(await db.query.tournamentMatch.findFirst()).toMatchObject({state:"WAITING",winnerId:null,battleId:null});
+    expect(await db.query.battle.findFirst()).toBeUndefined();
+    await tournamentCaller.getTournament({tournamentId:"tour"});
+    expect(await db.query.tournamentRecord.findFirst()).toBeUndefined();
+    expect(await db.query.userData.findMany()).toEqual(expect.arrayContaining([expect.objectContaining({userId:"member",money:0}),expect.objectContaining({userId:"leader",money:0})]));
     expect(await db.query.userData.findFirst({where:eq(userData.userId,"member")})).toMatchObject({status:"QUEUED",battleId:null});
     expect(await db.query.dungeonMember.findFirst()).toMatchObject({activeUserId:"member"});
     expect(await db.query.dungeonRun.findFirst()).toMatchObject({status:"LOBBY"});
     expect((await pets.updatePet({petId:"one",battleEnabled:false})).success).toBe(false);
+  });
+  it.each(["member", "leader"])("guards a no-show atomically when the first seat is %s and a dungeon joins during admission", async firstSeat => {
+    const db = await getTestDatabase();
+    await createTournamentMatch(firstSeat);
+    await db.update(userData).set({isBanned:true}).where(eq(userData.userId,"member"));
+    let admitted = false;
+    const raced = beforeStatements(db, tournamentMatch, [async () => {
+      await db.update(userData).set({isBanned:false}).where(eq(userData.userId,"member"));
+      expect((await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]})).success).toBe(true);
+      admitted = true;
+    }]);
+    const caller = callerForDatabase(tournamentRouter,"leader",raced);
+    expect((await caller.joinMatch({matchId:"match",tournamentId:"tour"})).success).toBe(false);
+    expect(admitted).toBe(true);
+    expect(await db.query.tournamentMatch.findFirst()).toMatchObject({state:"WAITING",winnerId:null,battleId:null});
+    expect((await caller.joinMatch({matchId:"match",tournamentId:"tour"})).success).toBe(false);
+    await caller.getTournament({tournamentId:"tour"});
+    expect(await db.query.tournamentRecord.findFirst()).toBeUndefined();
+    expect(await db.query.userData.findFirst({where:eq(userData.userId,"member")})).toMatchObject({status:"QUEUED",battleId:null,money:0});
+    expect((await (await callerFor(petsRouter,"member")).updatePet({petId:"one",battleEnabled:false})).success).toBe(false);
+  });
+  it.each([false, true])("keeps a genuine tournament bye eligible with dungeon reservation %p", async reserved => {
+    const db = await getTestDatabase();
+    await createTournamentMatch();
+    await db.update(tournamentMatch).set({userId2:null});
+    if (reserved) expect((await (await callerFor(dungeonRouter,"member")).create({id:"definition",petIds:["one","two"]})).success).toBe(true);
+    expect((await (await callerFor(tournamentRouter,"member")).joinMatch({matchId:"match",tournamentId:"tour"})).success).toBe(true);
+    expect(await db.query.tournamentMatch.findFirst()).toMatchObject({state:"NO_SHOW",winnerId:"member",battleId:null});
+    if (reserved) {
+      expect(await db.query.userData.findFirst({where:eq(userData.userId,"member")})).toMatchObject({status:"QUEUED",battleId:null});
+      expect((await (await callerFor(petsRouter,"member")).updatePet({petId:"one",battleEnabled:false})).success).toBe(false);
+    }
+  });
+  it("keeps ordinary two-player no-shows eligible without a dungeon reservation", async () => {
+    const db = await getTestDatabase();
+    await createTournamentMatch();
+    await db.update(userData).set({isBanned:true}).where(eq(userData.userId,"member"));
+    const caller = await callerFor(tournamentRouter,"leader");
+    expect((await caller.joinMatch({matchId:"match",tournamentId:"tour"})).success).toBe(true);
+    expect(await db.query.tournamentMatch.findFirst()).toMatchObject({state:"NO_SHOW",winnerId:"leader",battleId:null});
+    await caller.getTournament({tournamentId:"tour"});
+    expect(await db.query.tournamentRecord.findFirst()).toMatchObject({winnerId:"leader"});
+    expect(await db.query.userData.findFirst({where:eq(userData.userId,"leader")})).toMatchObject({money:1000});
   });
   it.each([null,"COMPLETED","ENDED"] as const)("starts ordinary tournament battles with dungeon receipt %s", async status => {
     const db = await getTestDatabase();

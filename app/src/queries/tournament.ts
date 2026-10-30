@@ -188,6 +188,16 @@ export const updateTournamentMatchForSetMatchWinner = (
           eq(tournamentMatch.userId1, winnerId),
           eq(tournamentMatch.userId2, winnerId),
         ),
+        // A genuine bye needs no battle; a rejected two-player admission is not a forfeit.
+        state === "NO_SHOW"
+          ? or(
+              isNull(tournamentMatch.userId2),
+              and(
+                withoutDungeonReservation(tournamentMatch.userId1),
+                withoutDungeonReservation(tournamentMatch.userId2),
+              ),
+            )
+          : undefined,
       ),
     );
 
