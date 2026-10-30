@@ -99,6 +99,10 @@ const TrpcClientProvider = (props: {
       defaultOptions: {
         queries: {
           staleTime: Infinity,
+          // React Query's default (3 retries within ~7s) would resend a rate-limited
+          // read straight back into the same limiter window.
+          retry: (failureCount, error) =>
+            !isRateLimitedTrpcError(error) && failureCount < 3,
         },
         mutations: {
           // A caller's onError replaces this fallback, preserving its recovery UX.
@@ -129,6 +133,11 @@ const TrpcClientProvider = (props: {
     queryClient.setQueryDefaults(getQueryKey(api.profile.getUser, undefined, "query"), {
       structuralSharing: shareUserCache,
     });
+    // fetchQuery skips retries only while no retry default exists; keep that for
+    // imperative reads (fetch, prefetch, ensureData) now that observers have one.
+    const fetchQuery = queryClient.fetchQuery.bind(queryClient);
+    queryClient.fetchQuery = ((options) =>
+      fetchQuery({ retry: false, ...options })) as typeof queryClient.fetchQuery;
     return { queryClient, queryMetricsTracker: createQueryMetricsTracker(queryClient) };
   });
   const [trpcClient] = useState(() => {
@@ -205,6 +214,11 @@ const TrpcClientProvider = (props: {
 };
 
 export default TrpcClientProvider;
+
+/** A limiter rejection clears only once its window slides; retrying sooner cannot succeed. */
+const isRateLimitedTrpcError = (error: unknown) =>
+  error instanceof TRPCClientError &&
+  (error.data as { code?: string } | undefined)?.code === "TOO_MANY_REQUESTS";
 
 const handleTrpcError = (
   error: unknown,

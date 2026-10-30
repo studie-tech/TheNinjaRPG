@@ -7,8 +7,10 @@ import { combatRouter } from "@/server/api/routers/combat";
 import { homeRouter } from "@/server/api/routers/home";
 import { fetchUserItems } from "@/server/api/routers/item";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
+import { miscRouter } from "@/server/api/routers/misc";
 import { questsRouter } from "@/server/api/routers/quests";
 import { travelRouter } from "@/server/api/routers/travel";
+import { QUERY_RATE_LIMIT_MESSAGE } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { resetServerModuleStubs } from "../../setup/serverModules";
 import { callerForDatabase } from "../../setup/testDatabase";
@@ -189,6 +191,22 @@ describe("combat deferred rate limit", () => {
     const api = caller(combatRouter, { query: { battle: { findFirst: read } }, update: () => ({ set: () => ({ where: penalty }) }) });
     await expect(api.performAction({ battleId: 42 } as never)).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
     expect(read).not.toHaveBeenCalled();
+    expect(penalty).toHaveBeenCalledTimes(1);
+  });
+
+  it("limits a query without a money penalty", async () => {
+    mockLimiter(async () => [-1, 60]);
+    const update = vi.fn(() => { throw new Error("Unexpected penalty write"); });
+    const api = caller(miscRouter, { update });
+    await expect(api.getCaptcha()).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS", message: QUERY_RATE_LIMIT_MESSAGE });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("keeps the money penalty for mutations", async () => {
+    mockLimiter(async () => [-1, 60]);
+    const penalty = vi.fn(async () => ({ rowsAffected: 1 }));
+    const api = caller(miscRouter, { update: () => ({ set: () => ({ where: penalty }) }) });
+    await expect(api.refreshCaptcha()).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS", message: expect.stringContaining("1% money reduced") });
     expect(penalty).toHaveBeenCalledTimes(1);
   });
 });

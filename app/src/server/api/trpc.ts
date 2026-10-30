@@ -175,30 +175,46 @@ export const sentryMiddleware = t.middleware((opts) =>
 
 /** Enforce the shared limiter and penalty before running a handler. */
 export const ratelimitMiddleware = t.middleware(
-  async ({ ctx: context, path, next }) => {
-    await enforceRateLimit(context, path);
+  async ({ ctx: context, path, type, next }) => {
+    await enforceRateLimit(context, path, type);
     return next();
   },
 );
 
 /** Only handlers that await this gate with their first read may defer rate limiting. */
-export const deferredRatelimitMiddleware = t.middleware(async ({ ctx, path, next }) => {
-  // Observe rejection immediately: input validation or the initial read may fail before
-  // the handler awaits the gate. Keep the original limiter/penalty error in that case too.
-  const rateLimit = enforceRateLimit(ctx, path);
-  void rateLimit.catch(() => {});
-  try {
-    return await next({ ctx: { waitForRateLimit: () => rateLimit } });
-  } finally {
-    await rateLimit;
-  }
-});
+export const deferredRatelimitMiddleware = t.middleware(
+  async ({ ctx, path, type, next }) => {
+    // Observe rejection immediately: input validation or the initial read may fail before
+    // the handler awaits the gate. Keep the original limiter/penalty error in that case too.
+    const rateLimit = enforceRateLimit(ctx, path, type);
+    void rateLimit.catch(() => {});
+    try {
+      return await next({ ctx: { waitForRateLimit: () => rateLimit } });
+    } finally {
+      await rateLimit;
+    }
+  },
+);
+
+/** Message for a rate-limited read: reads carry no penalty (see enforceRateLimit). */
+export const QUERY_RATE_LIMIT_MESSAGE =
+  "Too many requests for this page. Please wait a moment and try again.";
+
+/**
+ * Whether a rate-limit violation debits the caller. Only mutations do: queries are
+ * also fired by the client on its own (polling, invalidations, retries, remounts),
+ * so a burst of reads is not evidence of a player or bot acting too fast. Sign-in
+ * retries never debit an existing character either.
+ */
+export const isPenalizedRateLimitViolation = (path: string, type: string) =>
+  type === "mutation" && !path.startsWith("nativeAuth.");
 
 /**
  * Sliding-window rate limit keyed per procedure path + identity (userId, or IP
- * for anonymous callers); violations by logged-in users incur a 1% money/bank
- * penalty. If the Redis limiter is unreachable, development fails open (local
- * shim may not be running) while production fails closed.
+ * for anonymous callers). Every procedure type is limited; violations of
+ * mutations by logged-in users also incur a 1% money/bank penalty. If the Redis
+ * limiter is unreachable, development fails open (local shim may not be
+ * running) while production fails closed.
  */
 const enforceRateLimit = async (
   context: Pick<
@@ -206,6 +222,7 @@ const enforceRateLimit = async (
     "userId" | "userIp" | "drizzle"
   >,
   path: string,
+  type: string,
 ) => {
   if (!context.userId && !context.userIp) {
     throw new TRPCError({
@@ -227,9 +244,10 @@ const enforceRateLimit = async (
     );
   }
   if (!success) {
+    const penalized = isPenalizedRateLimitViolation(path, type);
     // Authentication retries must never debit an existing character (and a newly
     // authenticated identity may not have created a character yet).
-    if (context.userId && !path.startsWith("nativeAuth.")) {
+    if (context.userId && penalized) {
       const result = await updateUserDataForEnforceRateLimit(context.drizzle, {
         userId: context.userId,
       });
@@ -244,7 +262,11 @@ const enforceRateLimit = async (
       "TOO_MANY_REQUESTS",
       path.startsWith("nativeAuth.")
         ? "Too many sign-in attempts. Please wait a minute and try again."
-        : `You are acting too fast. Incident logged for review on path ${path}. 1% money reduced.`,
+        : !penalized
+          ? QUERY_RATE_LIMIT_MESSAGE
+          : context.userId
+            ? `You are acting too fast. Incident logged for review on path ${path}. 1% money reduced.`
+            : "You are acting too fast. Please wait a moment and try again.",
     );
   }
 };
