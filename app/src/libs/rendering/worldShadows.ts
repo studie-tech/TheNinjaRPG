@@ -29,6 +29,7 @@ import {
 } from "@/libs/rendering/worldLightingShaders";
 import {
   acquireWorldMaterial,
+  createCharacterMaterialFrame,
   type MaterialFrame,
   type WorldMaterial,
   worldMaterialFrame,
@@ -519,25 +520,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         if (record.character) {
           let cached = characterFrames.get(sprite.texture);
           if (!cached) {
-            // Packed frames retain a logical origin; all outfit layers share the same 64px foot row.
-            const { orig, trim } = sprite.texture;
-            const vertices = frame.vertices.slice(),
-              points = frame.points.slice();
-            const project = (data: Float32Array, stride: number) => {
-              for (let i = 0; i < data.length; i += stride) {
-                data[i] =
-                  ((data[i] ?? 0) * (trim?.width ?? orig.width) + (trim?.x ?? 0)) /
-                  orig.width;
-                data[i + 1] =
-                  ((data[i + 1] ?? 0) * (trim?.height ?? orig.height) +
-                    (trim?.y ?? 0)) /
-                  orig.height;
-                data[i + 2] = Math.max(0, 0.5 + 28 / orig.height - (data[i + 1] ?? 0));
-              }
-            };
-            project(vertices, 6);
-            project(points, 4);
-            cached = { ...frame, vertices, points };
+            cached = createCharacterMaterialFrame(material, sprite.texture);
             characterFrames.set(sprite.texture, cached);
           }
           frame = cached;
@@ -656,7 +639,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
               width: characterRoot
                 ? Math.hypot(characterRoot.matrix.a, characterRoot.matrix.b)
                 : Math.abs(sprite.width),
-              height: characterHeight,
+              height: volumes ? casterHeight : characterHeight,
               footX: characterFoot?.x ?? p.x + sourcePose.x,
               footY: characterFoot
                 ? characterFoot.y * 2

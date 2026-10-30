@@ -166,7 +166,7 @@ describe("physical world lighting", () => {
     } finally { f.dispose(); frameSpy.mockRestore(); source.dispose(); }
   });
 
-  it("preserves packed LPC layer geometry and shares one moving foot light across the outfit", async () => {
+  it.each([64, 192])("preserves packed %ipx LPC layer geometry and shares one moving foot light across the outfit", async (logicalSize) => {
     const createField = worldFields.createWorldOcclusion;
     let occluders: readonly worldFields.Occluder[] = [];
     const fieldSpy = vi.spyOn(worldFields, "createWorldOcclusion").mockImplementation((options) => {
@@ -180,8 +180,8 @@ describe("physical world lighting", () => {
     const f = fixture(), source = materialSourceFixture();
     const root = new Container();
     root.position.set(40, 70); root.scale.set(64, -64); f.parent.addChild(root);
-    const views = [58, 20].map((y) => new Texture({ source: source.texture.source,
-      frame: new Rectangle(0, 0, 2, 2), orig: new Rectangle(0, 0, 64, 64), trim: new Rectangle(24, y, 2, 2) }));
+    const views = [logicalSize / 2 + 26, logicalSize / 2 - 12].map((y) => new Texture({ source: source.texture.source,
+      frame: new Rectangle(0, 0, 2, 2), orig: new Rectangle(0, 0, logicalSize, logicalSize), trim: new Rectangle(logicalSize / 2 - 8, y, 2, 2) }));
     const children = views.map((texture) => { const child = new Sprite(texture); child.anchor.set(0.5); child.scale.set(1 / 64); root.addChild(child); return child; });
     const leases = children.map((child, index) => f.shadows.register(child, {
       id: `lpc-layer-${index}`, kind: "avatar", image: `native-lpc-layer-${index}.png`,
@@ -194,7 +194,7 @@ describe("physical world lighting", () => {
       expect(points()).toHaveLength(6 * 9);
       expect(Array.from(points().slice(2, 5))).toEqual([40, 84, 130]);
       expect(occluders).toHaveLength(2);
-      for (const occluder of occluders) expect(occluder).toMatchObject({ footX: 40, footY: 84, width: 64, height: 64 });
+      for (const occluder of occluders) expect(occluder).toMatchObject({ footX: 40, footY: 84, width: 64, height: logicalSize });
       const receiver = f.render.mock.calls.find(([call]) => call.container.children[0]?.geometry?.attributes?.aData)![0].container.children[0];
       const data = receiver.geometry.getBuffer("aPosition").data as Float32Array;
       const stride = receiver.geometry.attributes.aPosition.stride / 4;

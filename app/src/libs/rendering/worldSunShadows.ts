@@ -158,30 +158,28 @@ export const createSunShadows = (game: GameRenderer) => {
         (sun[2] ?? 0) * (right[0] ?? 0),
         horizontal,
       ];
-      const reach = Math.min(
-        384,
-        Math.max(64, (maxHeight * horizontal) / Math.max(0.2, sun[2] ?? 1)),
-      );
-      const minX = Math.floor((viewport.minX - reach) / 64) * 64,
-        maxX = Math.ceil((viewport.maxX + reach) / 64) * 64;
-      const minY = Math.floor((viewport.minY - reach * 0.5) / 64) * 64,
-        maxY = Math.ceil((viewport.maxY + reach * 0.5) / 64) * 64;
+      // A light ray has one sun-space UV. Fit visible receiver rays rather than
+      // enlarging the map to include offscreen casters, which only wastes shadow texels.
+      const minX = (Math.floor(viewport.minX / 64) - 1) * 64,
+        maxX = (Math.ceil(viewport.maxX / 64) + 1) * 64,
+        minY = (Math.floor(viewport.minY / 64) - 1) * 64,
+        maxY = (Math.ceil(viewport.maxY / 64) + 1) * 64;
       const resolution = game.renderer.width > 900 ? 1536 : 768;
       if (staticTexture.width !== resolution) {
         staticTexture.resize(resolution, resolution);
         dynamicTexture.resize(resolution, resolution);
         staticDirty = dynamicDirty = true;
       }
-      const viewKey = `${minX}:${minY}:${maxX}:${maxY}:${maxHeight}:${x}:${y}:${z}:${resolution}`;
+      const viewKey = `${minX}:${minY}:${maxX}:${maxY}:${maxHeight}:${minReceiverHeight}:${x}:${y}:${z}:${resolution}`;
       if (viewKey !== cachedView) {
         cachedView = viewKey;
         staticDirty = dynamicDirty = true;
         const origin = [(minX + maxX) / 2, minY + maxY, 0];
         const bounds = [Infinity, Infinity, -Infinity, -Infinity, Infinity, -Infinity];
         for (const px of [minX, maxX])
-          for (const py of [2 * minY - 2 * maxHeight, 2 * maxY])
-            for (const pz of [0, maxHeight]) {
-              const p = [px - (origin[0] ?? 0), py - (origin[1] ?? 0), pz];
+          for (const py of [minY, maxY])
+            for (const pz of [minReceiverHeight, maxHeight]) {
+              const p = [px - (origin[0] ?? 0), 2 * (py - pz) - (origin[1] ?? 0), pz];
               const r = dot(p, right),
                 u = dot(p, up),
                 d = dot(p, sun);
@@ -192,6 +190,10 @@ export const createSunShadows = (game: GameRenderer) => {
               bounds[4] = Math.min(bounds[4] ?? Infinity, d);
               bounds[5] = Math.max(bounds[5] ?? -Infinity, d);
             }
+        // Sunward casters can lie beyond the receiver depth while sharing its UV.
+        bounds[5] =
+          (bounds[5] ?? 0) +
+          (maxHeight - minReceiverHeight) / Math.max(0.05, sun[2] ?? 1);
         uniforms.uniforms.uSun.set(sun);
         uniforms.uniforms.uSunRight.set(right);
         uniforms.uniforms.uSunUp.set(up);
