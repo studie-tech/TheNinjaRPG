@@ -1,5 +1,5 @@
 import type { Grid } from "honeycomb-grid";
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, type RenderLayer, Text } from "pixi.js";
 import {
   IMG_AVATAR_DEFAULT,
   IMG_ICON_HEAL,
@@ -30,7 +30,10 @@ import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship } from "@/utils/alliance";
 
 /** Actor identity and art stay stable across position and presence updates. */
-export const createTravelActors = (game: GameRenderer) => {
+export const createTravelActors = (
+  game: GameRenderer,
+  layers?: { depth: RenderLayer; overlay: RenderLayer },
+) => {
   const container = new Container();
   const records = new Map<string, ActorRecord>();
   const byRoot = new Map<Container, ActorRecord>();
@@ -112,7 +115,9 @@ export const createTravelActors = (game: GameRenderer) => {
       if (previous) byRoot.delete(previous.root);
       const scope = createRenderScope(game);
       const root = new Container();
+      root.label = recipe.key;
       container.addChild(root);
+      (recipe.user ? layers?.depth : layers?.overlay)?.attach(root);
       if (recipe.user?.spriteAppearance) {
         const color =
           recipe.user.allianceStatus === "ALLY"
@@ -124,9 +129,9 @@ export const createTravelActors = (game: GameRenderer) => {
           new Graphics()
             .ellipse(
               recipe.tile.width / 2,
-              recipe.tile.height * 0.2,
-              recipe.tile.height * 0.35,
-              recipe.tile.height * 0.12,
+              recipe.tile.height * LPC_TRAVEL_CONTACT_Y,
+              recipe.tile.height * 0.35 * LPC_TRAVEL_SCALE,
+              recipe.tile.height * 0.12 * LPC_TRAVEL_SCALE,
             )
             .fill({ color, alpha: 0.55 }),
         );
@@ -181,6 +186,11 @@ export const createTravelActors = (game: GameRenderer) => {
           if (scope.isDisposed()) return;
           record.art = art;
           root.addChild(art.container);
+          // Controls retain actor transforms/visibility while rendering above all scenery.
+          if (recipe.user)
+            for (const entry of art.entries)
+              if (isActorControl(entry.description.kind))
+                layers?.overlay.attach(entry.sprite);
           updateActions();
         },
         (error) => {
@@ -219,31 +229,38 @@ export const createTravelActors = (game: GameRenderer) => {
     }
   };
   const hit = (x: number, y: number): TravelActorHit | null => {
-    // Explicit actor lists avoid tile hit meshes and scene-graph raycasts.
-    for (let i = container.children.length - 1; i >= 0; i--) {
-      const root = container.children[i];
-      const record = root ? byRoot.get(root) : undefined;
-      if (!record?.art) continue;
-      for (let j = record.art.entries.length - 1; j >= 0; j--) {
-        const entry = record.art.entries[j];
-        if (!entry || !isObjectChainVisible(entry.sprite)) continue;
-        const bounds = entry.sprite.getBounds();
-        if (x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY)
-          continue;
-        const { recipe } = record;
-        return {
-          key: recipe.key,
-          type: recipe.quest
-            ? "questMarker"
-            : recipe.battleId
-              ? "battleMarker"
-              : entry.description.kind,
-          userId: recipe.user?.userId,
-          npcPlacementId: recipe.user?.npcPlacementId,
-          battleId: recipe.battleId,
-          longitude: recipe.tile.col,
-          latitude: recipe.tile.row,
-        };
+    // Overlay controls take priority even when another actor's body overlaps them.
+    for (const controlsOnly of [true, false]) {
+      for (let i = container.children.length - 1; i >= 0; i--) {
+        const root = container.children[i];
+        const record = root ? byRoot.get(root) : undefined;
+        if (!record?.art) continue;
+        for (let j = record.art.entries.length - 1; j >= 0; j--) {
+          const entry = record.art.entries[j];
+          if (
+            !entry ||
+            isActorControl(entry.description.kind) !== controlsOnly ||
+            !isObjectChainVisible(entry.sprite)
+          )
+            continue;
+          const bounds = entry.sprite.getBounds();
+          if (x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY)
+            continue;
+          const { recipe } = record;
+          return {
+            key: recipe.key,
+            type: recipe.quest
+              ? "questMarker"
+              : recipe.battleId
+                ? "battleMarker"
+                : entry.description.kind,
+            userId: recipe.user?.userId,
+            npcPlacementId: recipe.user?.npcPlacementId,
+            battleId: recipe.battleId,
+            longitude: recipe.tile.col,
+            latitude: recipe.tile.row,
+          };
+        }
       }
     }
     return null;
@@ -284,8 +301,16 @@ export const createTravelActors = (game: GameRenderer) => {
           (recipe.quest ? wobble : 0),
         record.y + (recipe.spread ? recipe.tile.height * 0.1 * Math.cos(phi) : 0),
       );
+      // Contact uses the interpolated/orbiting position and the current sector origin.
+      // zIndex also invalidates Pixi's retained render instructions when depth changes.
+      root.zIndex = -(
+        root.y +
+        recipe.tile.height *
+          (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5) +
+        container.y
+      );
     }
-    container.children.sort((a, b) => b.position.y - a.position.y);
+    container.sortChildren();
   };
   /** Retain the latest snapshot so viewport changes can materialize its actors without another fetch. */
   const sync = (snapshot: TravelActorsSnapshot) => {
@@ -463,6 +488,14 @@ export const travelAvatar = (
 ) =>
   (user.isNpc ? user.avatar || user.avatarLight : user.avatarLight || user.avatar) ||
   IMG_AVATAR_DEFAULT;
+// Keep the sprite-frame foot and shadow contact fixed when scaling travel artwork.
+const LPC_TRAVEL_SCALE = 0.7;
+const LPC_TRAVEL_HEIGHT = 1.8 * LPC_TRAVEL_SCALE;
+const LPC_TRAVEL_FOOT_Y = 0.1;
+const LPC_TRAVEL_CONTACT_Y = 0.2;
+const isActorControl = (kind: string) =>
+  kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
+
 const part = (
   tile: TerrainHex,
   kind: string,
@@ -509,9 +542,9 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
       tile,
       "avatar",
       travelAvatar(user),
-      user.spriteAppearance ? 1.8 : user.isNpc ? 1.3 : 0.8,
+      user.spriteAppearance ? LPC_TRAVEL_HEIGHT : user.isNpc ? 1.3 : 0.8,
       0.5,
-      1,
+      user.spriteAppearance ? LPC_TRAVEL_FOOT_Y + LPC_TRAVEL_HEIGHT / 2 : 1,
       user.spriteAppearance
         ? { character: user.spriteAppearance, characterMode: "travel" }
         : user.isNpc

@@ -58,15 +58,22 @@ export const createTravelScene = async (options: {
     const world = new Container(),
       terrainLayer = new Container(),
       terrainDrawLayer = new RenderLayer(),
-      artLayer = new Container();
+      artLayer = new Container(),
+      depthDrawLayer = new RenderLayer({ sortableChildren: true }),
+      overlayDrawLayer = new RenderLayer();
     const highlights = new Graphics(),
-      actors = createTravelActors(game);
+      actors = createTravelActors(game, {
+        depth: depthDrawLayer,
+        overlay: overlayDrawLayer,
+      });
     world.addChild(
       terrainLayer,
       terrainDrawLayer,
       highlights,
       artLayer,
       actors.container,
+      depthDrawLayer,
+      overlayDrawLayer,
     );
     game.stage.addChild(world);
     const sectors = new Map<number, TravelSector>();
@@ -196,7 +203,7 @@ export const createTravelScene = async (options: {
         if (existing?.key === key) {
           existing.position = position;
           existing.terrain.container.position.copyFrom(position);
-          existing.art.container.position.copyFrom(position);
+          positionTravelArt(existing.art, position);
           continue;
         }
         const scope = createRenderScope(game),
@@ -234,12 +241,14 @@ export const createTravelScene = async (options: {
             return;
           }
           terrain.container.position.copyFrom(position);
-          art.container.position.copyFrom(position);
+          positionTravelArt(art, position);
           terrainLayer.addChild(terrain.container);
           // Interleave sector depths while retaining each sector's transform and ownership.
           terrainDrawLayer.attach(...terrain.container.children);
           terrainDrawLayer.sortRenderLayerChildren();
           artLayer.addChild(art.container);
+          // Scenery and physical actors share ground depth without changing their owners.
+          depthDrawLayer.attach(...art.entries.map((entry) => entry.sprite));
           existing?.scope.dispose();
           sectors.set(entry.sector, {
             key,
@@ -428,6 +437,15 @@ export const createTravelScene = async (options: {
     throw error;
   }
 };
+const positionTravelArt = (
+  art: Awaited<ReturnType<typeof createWorldSprites>>,
+  position: { x: number; y: number },
+) => {
+  art.container.position.copyFrom(position);
+  for (const entry of art.entries)
+    entry.sprite.zIndex = -(entry.description.groundY + position.y);
+};
+
 export type TravelWindowEntry = {
   sector: number;
   dx: number;
