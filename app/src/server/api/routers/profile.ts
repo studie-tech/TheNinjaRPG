@@ -1224,7 +1224,16 @@ export const profileRouter = createTRPCRouter({
         }
       }
       return {
-        userData: user ? { ...user, pvpBoost: getPvpBoost(user, settings) } : user,
+        userData: user
+          ? {
+              ...user,
+              pvpBoost: getPvpBoost(user, settings),
+              activeDungeonRunId:
+                activeDungeon && activeDungeon.status !== "ENDED"
+                  ? activeDungeon.id
+                  : null,
+            }
+          : user,
         achievementProgress: achievementProgress,
         notifications: notifications,
         isEventParticipant: tournamentNoticeState.isEventParticipant,
@@ -3705,6 +3714,8 @@ export type UserWithRelations =
       regenerationWithoutTimedBuffs?: number;
       displayTitle?: string;
       dungeonsCompleted?: number;
+      /** Current reservation, including a completed squad awaiting its claim. */
+      activeDungeonRunId?: string | null;
       raidsCompleted?: number;
       titles?: (UserTitle & { title?: import("@/drizzle/schema").Title })[];
       raidBuffs?: TimedBuff[];

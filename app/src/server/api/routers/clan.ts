@@ -763,6 +763,7 @@ export const clanRouter = createTRPCRouter({
             ? undefined
             : { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST },
         userPatch: { village: { id: fetchedClan.villageId, hexColor: input.color } },
+        userExpected: { clanId: fetchedClan.id },
         message: `${groupLabel} color updated`,
       };
     }),

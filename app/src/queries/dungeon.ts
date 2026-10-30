@@ -109,7 +109,13 @@ export const listUserDataForGetState = (
 ) =>
   client.query.userData.findMany({
     where: inArray(userData.userId, ids),
-    columns: { userId: true, username: true, status: true, isBanned: true },
+    columns: {
+      userId: true,
+      username: true,
+      status: true,
+      battleId: true,
+      isBanned: true,
+    },
   });
 
 /** Build the `dungeonMember` listing for `getState`, using predicates on `runId`. */

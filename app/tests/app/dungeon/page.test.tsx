@@ -37,7 +37,7 @@ const party = (status: RunStatus): PartyState["runs"][number] => ({
 const partyState = (status: RunStatus | null): PartyState => ({
   runs: status ? [party(status)] : [],
   users: ["a", "b", "c"].map((userId) => ({ userId, username: userId, status: "AWAKE", isBanned: false })),
-  members: [], serverTime: new Date(),
+  members: [], serverTime: new Date(), userPatch: {}, userExpected: { activeDungeonRunId: null },
 });
 
 /** Exercise the page with real query lifecycles while keeping account and mutation I/O local. */
@@ -84,7 +84,8 @@ it("forwards confirmed achievement progress with the claim's captured profile re
   await waitFor(() => expect(view.getByRole("button", { name: "Claim completion rewards" })).toBeDefined());
   const response = { success: true, message: "Completion rewards delivered.", userPatch: { medicalExperience: 1 }, achievementProgress: [] };
   await act(async () => respondToClaim(response));
-  expect(updateUser).toHaveBeenCalledWith(expect.any(Function), { revision: 42, achievementProgress: response.achievementProgress });
+  expect(updateUser).toHaveBeenNthCalledWith(1, response.userPatch, { revision: 42, expected: undefined, achievementProgress: response.achievementProgress });
+  expect(updateUser).toHaveBeenNthCalledWith(2, {}, { revision: 42, expected: { activeDungeonRunId: null } });
 });
 
 it("does not show an older ended run beside a newer completion", async () => {

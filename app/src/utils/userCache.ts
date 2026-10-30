@@ -6,6 +6,7 @@ import {
   SHRINE_BOOST_TYPES,
   UserRanks,
 } from "@/drizzle/constants";
+import { activeDungeonNotification } from "@/libs/dungeon";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { canAssignExperience } from "@/libs/profile";
 import { getReducedGainsDays } from "@/libs/train";
@@ -16,7 +17,7 @@ import type {
 } from "@/server/api/routers/profile";
 import { isPlainObject } from "@/utils/typeutils";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
-import type { UserCachePatch, UserDelta } from "@/validators/userCache";
+import type { UserCachePatch, UserDelta, UserExpected } from "@/validators/userCache";
 
 type User = NonNullable<UserWithRelations>;
 type UserCache = {
@@ -53,6 +54,8 @@ export type UserUpdateOptions = {
   // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
   delta?: UserDelta;
   achievementProgress?: AchievementProgress[];
+  /** Server-known scalar state that must already match the captured cache. */
+  expected?: UserExpected;
   notifications?: (
     current: NavBarDropdownLink[] | undefined,
   ) => NavBarDropdownLink[] | undefined;
@@ -125,7 +128,11 @@ export const updateUserCache = async (
       state?.status === "error" ||
       state?.dataUpdateCount !== revision ||
       state.isInvalidated ||
-      state.fetchStatus !== "idle"
+      state.fetchStatus !== "idle" ||
+      Object.entries(mutation.expected ?? {}).some(
+        ([field, value]) =>
+          value !== undefined && old.userData?.[field as keyof User] !== value,
+      )
     ) {
       return undefined;
     }
@@ -254,6 +261,7 @@ const mergeUserCache = (
     getUserFactionNotifications(old.userData ?? undefined).map((entry) => entry.name),
   );
   const desired: NavBarDropdownLink[] = [...factionNotifications];
+  if (user.activeDungeonRunId) desired.push(activeDungeonNotification);
   if (
     UserRanks.includes(user.rank) &&
     user.earnedExperience > 0 &&
@@ -310,6 +318,7 @@ const mergeUserCache = (
         "Deletion requested",
         "Banned!",
         "Trade Banned!",
+        activeDungeonNotification.name,
       ].includes(entry.name) &&
       !(entry.href === "/village" && /^Slowed \d+ days$/.test(entry.name)) &&
       !previousFactionNames.has(entry.name) &&

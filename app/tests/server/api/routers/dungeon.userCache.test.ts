@@ -135,7 +135,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     expect(canonical.notifications.filter((entry) => entry.href === "/dungeon")).toEqual([activeDungeonNotification]);
   });
 
-  it.each(["accept", "queued", "busy", "read-error", "other-queue", "live"] as const)("reconciles the mandatory state refresh after %s", async (scenario) => {
+  it.each(["accept", "queued", "busy", "read-error", "other-queue", "other-poll", "vanished", "live"] as const)("reconciles the mandatory state refresh after %s", async (scenario) => {
     const db = await getTestDatabase();
     await db.update(userData).set({ sector: 1 }).where(eq(userData.userId, userId));
     await db.insert(dungeon).values({ id: "definition", content: dungeonContent(), updatedAt: new Date() });
@@ -168,6 +168,8 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     else expect(response).toMatchObject({ success: true, userPatch: {} });
     expect(deadline.getTime()).toBeGreaterThan(Date.now());
     if (scenario !== "live") await new Promise((resolve) => setTimeout(resolve, Math.max(0, deadline.getTime() - Date.now()) + 50));
+    if (scenario === "other-poll" || scenario === "vanished") await actor.getState();
+    if (scenario === "vanished") await db.delete(dungeonMember).where(eq(dungeonMember.userId, userId));
     if (scenario === "read-error")
       vi.spyOn(db.query.userData, "findMany").mockImplementationOnce(() => { throw Error("Roster read failed after expiry"); });
     if (scenario === "other-queue") {
@@ -181,7 +183,9 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     await cache.callbacks.refresh(response, revision);
     await expect(cache.refetchState.mock.results[0]?.value).resolves.toMatchObject({ isError: scenario === "read-error" });
     expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, created.id) })).toMatchObject({ status: scenario === "live" ? "LOBBY" : "ENDED" });
-    expect(await db.query.dungeonMember.findFirst({ where: eq(dungeonMember.userId, userId) })).toMatchObject({ activeUserId: scenario === "live" ? userId : null });
+    const membership = await db.query.dungeonMember.findFirst({ where: eq(dungeonMember.userId, userId) });
+    if (scenario === "vanished") expect(membership).toBeUndefined();
+    else expect(membership).toMatchObject({ activeUserId: scenario === "live" ? userId : null });
     expect(cache.current().userData?.status).toBe(scenario === "live" || scenario === "other-queue" ? "QUEUED" : scenario === "busy" ? "ASLEEP" : "AWAKE");
     expect(cache.current().notifications.some((entry) => entry.name === activeDungeonNotification.name)).toBe(scenario === "live");
     expect(cache.refetch).toHaveBeenCalledTimes(Number(scenario !== "live"));

@@ -137,6 +137,7 @@ export const userPatchSchema = z.object({
   pvpExperience: z.number().optional(),
   pvpStreak: z.number().optional(),
   dungeonsCompleted: z.number().optional(),
+  activeDungeonRunId: z.string().nullable().optional(),
   raidsCompleted: z.number().optional(),
   sageModeId: z.string().nullable().optional(),
   sageMode: z.custom<NonNullable<UserWithRelations>["sageMode"]>().optional(),
@@ -312,9 +313,19 @@ export const userPatchSchema = z.object({
     .optional(),
 });
 
+/** Scalar prerequisites supplied by the server for a confirmed cache update. */
+export const userExpectedSchema = userPatchSchema.pick({
+  status: true,
+  battleId: true,
+  activeDungeonRunId: true,
+  dungeonsCompleted: true,
+  clanId: true,
+});
+
 export const userDeltaResponseSchema = baseServerResponse.extend({
   userDelta: userDeltaSchema.optional(),
   userPatch: userPatchSchema.optional(),
+  userExpected: userExpectedSchema.optional(),
   url: z.string().nullish(),
   imageId: z.string().nullish(),
   videoId: z.string().nullish(),
@@ -341,3 +352,4 @@ export const userDeltaResponseSchema = baseServerResponse.extend({
 export type UserDeltaResponse = z.infer<typeof userDeltaResponseSchema>;
 
 export type UserCachePatch = z.infer<typeof userPatchSchema>;
+export type UserExpected = z.infer<typeof userExpectedSchema>;

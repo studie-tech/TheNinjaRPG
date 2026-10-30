@@ -13,6 +13,9 @@ const flows = [
   { file: "layout/ProfileEdit.tsx", procedure: "bloodline.swapBloodline", patch: { bloodlineId: "new", bloodline: { id: "new" }, reputationPoints: 10 } },
   { file: "layout/ProfileEdit.tsx", procedure: "staff.unequipAllGear", patch: { items: [], maxEnergy: 100 } },
   { file: "layout/ProfileEdit.tsx", procedure: "staff.unequipAllJutsus", patch: { loadout: { jutsuIds: [] } } },
+  { file: "layout/ProfileEdit.tsx", procedure: "blackmarket.updateStats", patch: { offence: 100, defence: 100 }, invalidations: 0 },
+  { file: "layout/ProfileEdit.tsx", procedure: "skillTree.resetSkillPoints", patch: { userSkills: [], monthlySkillResets: { month: "2026-10", count: 1 }, maxEnergy: 100, effectiveMasteries: {} }, invalidations: 2 },
+  { file: "layout/Clan.tsx", procedure: "clan.editClanColor", patch: { village: { id: "home", hexColor: "#123456" } }, invalidations: 0 },
   { file: "layout/ProfileEdit.tsx", procedure: "skillTree.resetAllUsersSkillPoints", patch: { userSkills: [], skillPoints: 12 } },
   { file: "app/[shell]/adminbuilding/page.tsx", procedure: "quests.startQuest", patch: { userQuests: [], questData: [] } },
   { file: "layout/RaidBrowser.tsx", procedure: "raids.claimDamageReward", patch: { reputationPoints: 10 }, invalidations: 2 },
@@ -40,7 +43,7 @@ const setup = (file: string, procedure: string) => {
     bloodline: { getItemRolls: leaf, getSwapInfo: leaf },
     item: { getUserItems: leaf },
     jutsu: { getUserJutsus: leaf },
-    skillTree: { getUserSkills: leaf },
+    skillTree: { getUserSkills: leaf, getResetInfo: leaf },
     quests: { allianceBuilding: leaf },
     occupation: { getCraftingQueue: leaf },
     raids: { getRaidDetails: leaf, getUserRaidQueue: leaf },
@@ -55,8 +58,9 @@ const setup = (file: string, procedure: string) => {
   const updateUser = vi.fn((patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options));
   const source = readFileSync(join(import.meta.dirname, "../../src", file), "utf8");
   const call = source.indexOf(`api.${procedure}.useMutation(`);
-  const indent = source.slice(source.lastIndexOf("\n", call) + 1, call).match(/^\s*/)?.[0];
-  const callbacks = source.slice(call).match(new RegExp(`useMutation\\((\\{[\\s\\S]*?\\n${indent}\\})\\);`))?.[1];
+  const optionsStart = source.indexOf("{", call);
+  const indent = source.slice(source.lastIndexOf("\n", optionsStart) + 1, optionsStart).match(/^\s*/)?.[0];
+  const callbacks = source.slice(call).match(new RegExp(`useMutation\\(\\s*(\\{[\\s\\S]*?\\n${indent}\\}),?\\s*\\);`))?.[1];
   if (!callbacks) throw new Error(`${procedure} callbacks were not found in ${file}`);
   const shared = procedure === "coop.dungeon.act"
     ? source.slice(source.indexOf("  const refresh ="), source.indexOf("  const create ="))
@@ -67,7 +71,7 @@ const setup = (file: string, procedure: string) => {
   const factory = transpiler.transformSync(`function callbackOptions() { ${shared} return (${callbacks}); }`);
   // Execute the production callbacks with the real cache merger, matching userItemsRefresh.test.ts.
   const options = new Function("utils", "util", "prepareUserUpdate", "updateUser", "showMutationToast", "setIsOpen", "showRewardToast", "recoverUser", "state", "setMessage", "setAbandonId", "form", "pushToCombat", "router", "board", "onStarted", "setNpcDialog", "openRewardChoice", "available", "activeDungeonNotification", `${factory}\nreturn callbackOptions();`)(
-    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: async () => { await invalidate(); return { data: { users: [], members: [{ runId: "squad", userId: "actor", activeUserId: "actor" }] }, isError: false }; } }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), { push: vi.fn() }, { refetch: invalidate }, undefined, vi.fn(), vi.fn(), { refetch: invalidate }, activeDungeonNotification,
+    utils, utils, () => prepareUserUpdate(client, key), updateUser, vi.fn(), vi.fn(), vi.fn(), vi.fn(), { refetch: async () => { await invalidate(); return { data: { userPatch: {}, users: [], members: [{ runId: "squad", userId: "actor", activeUserId: "actor" }] }, isError: false }; } }, vi.fn(), vi.fn(), { reset: vi.fn() }, vi.fn(), { push: vi.fn() }, { refetch: invalidate }, undefined, vi.fn(), vi.fn(), { refetch: invalidate }, activeDungeonNotification,
   ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   return {
     client, getUser, invalidate, updateUser, options, profile,
@@ -85,7 +89,7 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, in
       expect(test.value()?.userData).toMatchObject({ ...patch, money: 100 });
       expect(test.getUser).not.toHaveBeenCalled();
       expect(test.invalidate).toHaveBeenCalledTimes(invalidations);
-      expect(test.updateUser).toHaveBeenCalledTimes(1);
+      expect(test.updateUser).toHaveBeenCalledTimes(procedure === "coop.dungeon.act" ? 2 : 1);
       if (procedure.startsWith("bloodline.") || procedure === "skillTree.resetAllUsersSkillPoints" || procedure === "quests.startQuest") expect(test.value()?.achievementProgress).toEqual([]);
     } finally { test.close(); }
   });
@@ -132,7 +136,7 @@ describe.each(flows.filter(({ procedure }) => ["quests.startQuest", "bloodline.s
     try {
       await test.options.onSuccess({ success: false, message: "Action no longer available" }, undefined, test.options.onMutate());
       await test.updateUser.mock.results[0]?.value;
-      expect(test.updateUser).toHaveBeenCalledTimes(1);
+      expect(test.updateUser).toHaveBeenCalledTimes(procedure === "coop.dungeon.act" ? 2 : 1);
       expect(test.getUser).toHaveBeenCalledTimes(1);
       expect(test.value()?.userData).toMatchObject({ cookingExperience: 23, cookingJobs: [] });
     } finally { test.close(); }
@@ -160,7 +164,7 @@ describe.each(admissionFlows)("$procedure admission deltas", ({ file, procedure 
       await test.updateUser.mock.results[0]?.value;
       expect(test.value()?.userData).toMatchObject({ ...userPatch, pveFights: 8, curHealth: 321, curChakra: 222, curStamina: 111, curEnergy: 37 });
       expect(test.getUser).not.toHaveBeenCalled();
-      expect(test.updateUser).toHaveBeenCalledTimes(1);
+      expect(test.updateUser).toHaveBeenCalledTimes(procedure === "coop.dungeon.act" ? 2 : 1);
     } finally { test.close(); }
   });
 
@@ -173,7 +177,7 @@ describe.each(admissionFlows)("$procedure admission deltas", ({ file, procedure 
       await test.updateUser.mock.results[0]?.value;
       expect(test.value()?.userData).toMatchObject({ status: "BATTLE", pveFights: 8 });
       expect(test.getUser).toHaveBeenCalledTimes(1);
-      expect(test.updateUser).toHaveBeenCalledTimes(1);
+      expect(test.updateUser).toHaveBeenCalledTimes(procedure === "coop.dungeon.act" ? 2 : 1);
     } finally { test.close(); }
   });
 });
@@ -193,13 +197,13 @@ it("adds confirmed dungeon navigation once without replaying consumed feedback",
   const unrelated: NavBarDropdownLink = { href: "/inbox", name: "Mail", color: "blue" };
   test.client.setQueryData(key, { ...test.profile, notifications: [unrelated, activeDungeonNotification, activeDungeonNotification, { href: "/news", name: "Consumed feedback", color: "toast" }] });
   try {
-    await test.options.onSuccess({ success: true, userPatch: { status: "QUEUED" } }, { action: "accept" }, test.options.onMutate());
+    await test.options.onSuccess({ success: true, userPatch: { status: "QUEUED", activeDungeonRunId: "squad" } }, { action: "accept" }, test.options.onMutate());
     await test.updateUser.mock.results[0]?.value;
     expect(test.value()?.userData).toMatchObject({ status: "QUEUED", money: 100 });
     expect(test.value()?.notifications).toEqual([unrelated, activeDungeonNotification]);
     expect(test.getUser).not.toHaveBeenCalled();
     expect(test.invalidate).toHaveBeenCalledTimes(2);
-    expect(test.updateUser).toHaveBeenCalledTimes(1);
+    expect(test.updateUser).toHaveBeenCalledTimes(2);
   } finally { test.close(); }
 });
 

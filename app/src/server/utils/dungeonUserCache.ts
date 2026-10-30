@@ -12,6 +12,7 @@ export const getDungeonRewardUserUpdate = (
     return { userPatch: undefined, userDelta: undefined };
   return {
     userPatch: { dungeonsCompleted: before.dungeonsCompleted },
+    userExpected: { dungeonsCompleted: before.dungeonsCompleted },
     userDelta: delta,
   };
 };

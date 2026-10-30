@@ -111,6 +111,11 @@ export const dungeonRouter = createTRPCRouter({
     const expiryNeedsRefresh = await Promise.all(
       runs.map((run) => expireDungeonRun(ctx.drizzle, run)),
     );
+    // Cleanup can restore pools and immunity as well as releasing the reservation.
+    let requiresUserRefresh = runs.some(
+      (run, index) =>
+        expiryNeedsRefresh[index] && run.state.memberIds.includes(ctx.userId),
+    );
     const ids = [
       ...new Set(runs.flatMap((r) => [...r.state.memberIds, ...r.state.invitedIds])),
     ];
@@ -133,7 +138,10 @@ export const dungeonRouter = createTRPCRouter({
           );
           if (run) {
             const claim = await claimDungeonQueue(ctx.drizzle, user.userId, run.id);
-            if (claim.rowsAffected === 1) user.status = "QUEUED";
+            if (claim.rowsAffected === 1) {
+              user.status = "QUEUED";
+              if (user.userId === ctx.userId) requiresUserRefresh = true;
+            }
           }
         }),
     );
@@ -153,6 +161,9 @@ export const dungeonRouter = createTRPCRouter({
       const missing = interrupted.filter(
         (r) => r.status === "STARTING" || !battles.some((b) => b.id === r.battleId),
       );
+      requiresUserRefresh ||= missing.some((run) =>
+        run.state.memberIds.includes(ctx.userId),
+      );
       await Promise.all(
         missing.map((r) =>
           rollbackDungeonStart(
@@ -171,11 +182,27 @@ export const dungeonRouter = createTRPCRouter({
       if (missing.length)
         currentRuns = await listDungeonRunForGetState(ctx.drizzle, currentRuns);
     }
+    const actor = users.find((user) => user.userId === ctx.userId);
     return {
       runs: currentRuns,
-      users,
+      // Battle identity is private to the actor's cache prerequisite, not the roster.
+      users: users.map(({ battleId: _battleId, ...user }) => user),
       members: members.filter((m) => m.userId === ctx.userId),
       serverTime: new Date(),
+      userPatch: requiresUserRefresh ? undefined : {},
+      // A different poll may have performed cleanup before these reads. Validate the
+      // observed account and reservation even when this invocation performed no writes.
+      userExpected: {
+        ...(actor ? { status: actor.status, battleId: actor.battleId } : {}),
+        activeDungeonRunId:
+          members.find(
+            (member) =>
+              member.activeUserId === ctx.userId &&
+              currentRuns.some(
+                (run) => run.id === member.runId && run.status !== "ENDED",
+              ),
+          )?.runId ?? null,
+      },
     };
   }),
   /** Staff may inspect hidden and expired definitions when authoring dungeon content. */
@@ -385,7 +412,7 @@ export const dungeonRouter = createTRPCRouter({
       return {
         success: true,
         message: "Lobby created.",
-        userPatch: { status: "QUEUED" as const },
+        userPatch: { status: "QUEUED" as const, activeDungeonRunId: id },
         id,
       };
     }),
@@ -545,7 +572,7 @@ export const dungeonRouter = createTRPCRouter({
               success: true,
               message: "Party updated.",
               userPatch: joined
-                ? { status: "QUEUED" as const }
+                ? { status: "QUEUED" as const, activeDungeonRunId: run.id }
                 : ending || removedUser === ctx.userId
                   ? undefined
                   : {},
