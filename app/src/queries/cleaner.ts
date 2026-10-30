@@ -30,6 +30,8 @@ import {
   conversationComment,
   dailyBankInterest,
   dataBattleAction,
+  dungeonMember,
+  dungeonRun,
   forumPost,
   historicalAvatar,
   historicalIp,
@@ -339,6 +341,7 @@ export const updateUserDataForGET3 = (
     .where(
       and(
         eq(userData.status, "QUEUED"),
+        sql`NOT EXISTS (SELECT 1 FROM ${dungeonMember} INNER JOIN ${dungeonRun} ON ${dungeonRun.id} = ${dungeonMember.runId} WHERE ${dungeonMember.activeUserId} = ${userData.userId} AND ${dungeonRun.status} NOT IN ('COMPLETED', 'ENDED'))`,
         notExists(
           client
             .select({ id: mpvpBattleUser.id })

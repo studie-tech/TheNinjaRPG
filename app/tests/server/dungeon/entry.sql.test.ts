@@ -1,6 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { battle, dungeonMember, dungeonRun, item, userData, userItem, questHistory, userPet } from "@/drizzle/schema";
+import { battle, dungeonMember, dungeonRun, item, mpvpBattleUser, rankedPvpQueue, userData, userItem, questHistory, userPet } from "@/drizzle/schema";
+import { updateUserDataForGET3 } from "@/queries/cleaner";
 import { grantDungeonPetExperience, listExpiredDungeonRuns } from "@/queries/dungeon";
 import { wakeQueuedUser } from "@/queries/profile";
 import { updateUserDataForGetRankedPvpQueue } from "@/queries/pvprank";
@@ -13,7 +14,7 @@ import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/
 
 describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   beforeEach(async () => {
-    await resetTables(battle, dungeonMember, dungeonRun, item, userData, userItem, questHistory, userPet);
+    await resetTables(battle, dungeonMember, dungeonRun, item, mpvpBattleUser, rankedPvpQueue, userData, userItem, questHistory, userPet);
     await insertUsers(["a", "b", "c"].map((userId) => ({ userId, username: userId, status: "QUEUED", level: 50 })));
     await insertItems([{ id: "ticket" }]);
     await insertUserItems(["a", "b", "c"].map((userId) => ({ id: `ticket-${userId}`, itemId: "ticket", userId, quantity: 2 })));
@@ -56,14 +57,19 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
     expect((await info.client.query.userItem.findFirst({where: eq(userItem.userId,"a")}))?.quantity).toBe(2);
     expect((await info.client.query.dungeonRun.findFirst())?.state.entryPaidAt).toBeUndefined();
   });
-  it("does not let generic queue cleanup release a live dungeon, while completed rewards allow ordinary queues", async () => {
+  it.each(["COMPLETED", "ENDED"] as const)("does not let generic queue cleanup release a live dungeon, while %s receipts allow ordinary queues", async (status) => {
     const info = await admission();
     await wakeQueuedUser(info.client, "a");
     await updateUserDataForGetRankedPvpQueue(info.client, { userId: "a" });
+    await updateUserDataForGET3(info.client);
     expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"a")}))?.status).toBe("QUEUED");
-    await info.client.update(dungeonRun).set({status: "COMPLETED"});
+    await info.client.update(dungeonRun).set({status});
     await wakeQueuedUser(info.client, "a");
+    await updateUserDataForGetRankedPvpQueue(info.client, { userId: "b" });
+    await updateUserDataForGET3(info.client);
     expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"a")}))?.status).toBe("AWAKE");
+    expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"b")}))?.status).toBe("ASLEEP");
+    expect((await info.client.query.userData.findFirst({where: eq(userData.userId,"c")}))?.status).toBe("AWAKE");
   });
   it("expires an offline lobby and releases only its own queued members", async () => {
     const info = await admission();
