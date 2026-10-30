@@ -333,19 +333,19 @@
     "village": "Akikaze",
     "sector": 724,
     "route": "/shrine",
-    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-akikaze-shrine-971697f82f23da7b50ad09a0.webp",
-    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJmo6kBSHE4IMO5Goa7cgLxPJ0VC6lU8vbt1Ap",
-    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGe02tqRfoVrha0LP4mAS5KM7wtiZbUNXJxdC",
-    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJV2Po2hF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-akikaze-c1602b7764686d7d1bdf028f.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHg26YNQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJUAPy9aILCIhwPniJ69VxpvAbTDWkOyGzS8rM",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJMFZzTftsO4cexqW2RDgkE3zZbNXSFGitmnar",
     "frame": {
-      "x": 486,
-      "y": 384,
-      "width": 148,
-      "height": 128
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 220
     },
     "stair": {
-      "x": 49,
-      "y": 124
+      "x": 84,
+      "y": 216
     },
     "height": 3.3,
     "shadow": 0.2,
@@ -685,19 +685,19 @@
     "village": "Tsukimori",
     "sector": 1490,
     "route": "/shrine",
-    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-tsukimori-shrine-d509e8bbafc5448b8afa1d27.webp",
-    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJFjRaEOG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
-    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJun4wghRCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8",
-    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJu7lVL2CyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-tsukimori-2457265182d1cb44b94a4da0.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJoyqoH9Z9MPZpHJ7VliuEWDfATdxhv62SXnm4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5e0MCX797jl4ubX8xrRqTZasyMp2WA5eLGUP",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ73h1dQXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
     "frame": {
-      "x": 491,
-      "y": 384,
-      "width": 137,
-      "height": 128
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 239
     },
     "stair": {
-      "x": 45,
-      "y": 122
+      "x": 84,
+      "y": 231
     },
     "height": 3.3,
     "shadow": 0.2,
@@ -1037,19 +1037,19 @@
     "village": "Akasumi",
     "sector": 1335,
     "route": "/shrine",
-    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-akasumi-shrine-fc239a1d00447792de1b628e.webp",
-    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2GYkVbnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b8",
-    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCp6leV26OYrIJuNP1pvSyz29edFtKbngjRcA",
-    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ1zHnlYJ6bo95WClq4K0wxZUmJcvThgdVenO3",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-akasumi-46d4975e78e30a47e01e1eb2.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRhGq7T0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtfcJloUYJDfpFXWm3nrcPluEtIZqyLkaSV1j",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ47637ClYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
     "frame": {
-      "x": 485,
-      "y": 384,
-      "width": 149,
-      "height": 128
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 219
     },
     "stair": {
-      "x": 49,
-      "y": 125
+      "x": 84,
+      "y": 215
     },
     "height": 3.3,
     "shadow": 0.2,
@@ -1389,19 +1389,19 @@
     "village": "Hyorin",
     "sector": 177,
     "route": "/shrine",
-    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-hyorin-shrine-8a46b180200a661f876ea239.webp",
-    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxLc4pPWZsq9k0Von5rUfP6OgQ2TyptCKHS4u",
-    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJeLDYjVyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
-    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJeb65ljyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-hyorin-577db546f0abfb28385b835d.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJZGLY86aYQrBIUTu69nkMxWmS4ah0O7LVCp8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxEswBh2WZsq9k0Von5rUfP6OgQ2TyptCKHS4",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCUtDpH26OYrIJuNP1pvSyz29edFtKbngjRcA",
     "frame": {
-      "x": 487,
-      "y": 384,
-      "width": 145,
-      "height": 128
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 226
     },
     "stair": {
-      "x": 48,
-      "y": 124
+      "x": 84,
+      "y": 221
     },
     "height": 3.3,
     "shadow": 0.2,
@@ -1741,19 +1741,19 @@
     "village": "Horizon",
     "sector": 301,
     "route": "/shrine",
-    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-horizon-shrine-70e2be721deaf60ef7784241.webp",
-    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ1zcwCv6bo95WClq4K0wxZUmJcvThgdVenO3P",
-    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJX34d0WqIOpAoLKbZ4nW9Rsil2V67yuFwQhqv",
-    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTxykwC5IU29dZYJPoOKSh5vmlqatMub3EigH",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-horizon-e0f90ae3ed79479bc27838e4.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ399Yfp8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxEf4wdbWZsq9k0Von5rUfP6OgQ2TyptCKHS4",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJUHaYAvILCIhwPniJ69VxpvAbTDWkOyGzS8rM",
     "frame": {
-      "x": 482,
-      "y": 384,
-      "width": 155,
-      "height": 128
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 211
     },
     "stair": {
-      "x": 51,
-      "y": 124
+      "x": 84,
+      "y": 206
     },
     "height": 3.3,
     "shadow": 0.2,
@@ -2093,19 +2093,19 @@
     "village": "Shirohana",
     "sector": 1538,
     "route": "/shrine",
-    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shirohana-shrine-4a2107783b57526c159d84ef.webp",
-    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJuIlKwlCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
-    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJF03zXVRG2iOewJtjGzvNcmEX3TBnoSfMDZPH",
-    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJpISTqJbKBAOsGCHyl3Sk0mZFrgWPUdjMJ75D",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-shirohana-6f2547d00c466af2aa8d400c.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGgBXmgBRfoVrha0LP4mAS5KM7wtiZbUNXJxd",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQliwoMZjhzBPya1rwfCIqOTU0cV5xgsMeo3u",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ19UjzH6bo95WClq4K0wxZUmJcvThgdVenO3P",
     "frame": {
-      "x": 485,
-      "y": 384,
-      "width": 150,
-      "height": 128
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 218
     },
     "stair": {
-      "x": 50,
-      "y": 124
+      "x": 84,
+      "y": 214
     },
     "height": 3.3,
     "shadow": 0.2,
@@ -2445,19 +2445,19 @@
     "village": "Syndicate",
     "sector": 1062,
     "route": "/shrine",
-    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-syndicate-shrine-ca7e7d4c3ecb38730da9a1a9.webp",
-    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJTonPFL5IU29dZYJPoOKSh5vmlqatMub3EigH",
-    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJgLwndDcU9cpECTimBdjaqbNn7vQsxGR1wLk4",
-    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ2HhBRWHnMXlcRpYmJ5do0zKw4Qx6PVEtBa9b",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-syndicate-472a9145824c8dbc74b3b280.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJWif89Nvszvj71yaSYC0MDOmbko5q9JAGuLHf",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJlMTfaXurWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjrURJCl4XzPI8f1v96qBot0Q3wsUp2nxu7SM",
     "frame": {
-      "x": 483,
-      "y": 384,
-      "width": 153,
-      "height": 128
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 214
     },
     "stair": {
-      "x": 50,
-      "y": 123
+      "x": 84,
+      "y": 208
     },
     "height": 3.3,
     "shadow": 0.2,
@@ -2797,19 +2797,19 @@
     "village": "Freedom State",
     "sector": 555,
     "route": "/shrine",
-    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-freedom-state-shrine-dbc5b88cfc757ef699b5a119.webp",
-    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ8gRZRIkkp45TvAnoIBa0rtCf1lbyXYjVKQ2q",
-    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGPST58RfoVrha0LP4mAS5KM7wtiZbUNXJxdC",
-    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJusWRwoCyJLoOFkrcn4gxSwCfEQ9eMNXZlG8b",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-freedom-state-bcfa7db489fd7954df4b350c.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtxqbew1UYJDfpFXWm3nrcPluEtIZqyLkaSV1",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRSw4Ds0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJROwHWK0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
     "frame": {
-      "x": 485,
-      "y": 384,
-      "width": 150,
-      "height": 128
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 219
     },
     "stair": {
-      "x": 50,
-      "y": 123
+      "x": 84,
+      "y": 212
     },
     "height": 3.3,
     "shadow": 0.2,
@@ -3054,6 +3054,28 @@
       "y": 108
     },
     "height": 3.4,
+    "shadow": 0.2,
+    "courtSlope": 0.34
+  },
+  "wake-island/shrine": {
+    "village": "Wake Island",
+    "sector": 222,
+    "route": "/shrine",
+    "sourceImage": "https://ui0arpl8sm.ufs.sh/f/world-shrine-wake-island-fdb5c896a41cfefde67077be.webp",
+    "filepath": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5NyOsh797jl4ubX8xrRqTZasyMp2WA5eLGUP",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCrCv4x26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJMqbGDUtsO4cexqW2RDgkE3zZbNXSFGitmnar",
+    "frame": {
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 209
+    },
+    "stair": {
+      "x": 84,
+      "y": 198
+    },
+    "height": 3.3,
     "shadow": 0.2,
     "courtSlope": 0.34
   }

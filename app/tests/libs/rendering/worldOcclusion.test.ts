@@ -6,6 +6,7 @@ import { createCharacterMaterialFrame, worldMaterialFrame, type AuthoredMaterial
 import { lightingFragment, pointLightFragment } from "@/libs/rendering/worldLightingShaders";
 import { createWorldOcclusion, MAX_CELL_INSTANCES, type Occluder } from "@/libs/rendering/worldOcclusion";
 import { MAX_SMALL_WORLD_WIND, MAX_WORLD_WIND } from "@/libs/rendering/worldWind";
+import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
 
 const viewport = { minX: 0, minY: 0, maxX: 128, maxY: 128 };
 type Field = ReturnType<typeof createWorldOcclusion>;
@@ -213,6 +214,26 @@ describe("authored foliage under local lights", () => {
       expect(patterns.size).toBeGreaterThan(3);
     } finally { field.dispose(); texture.destroy(true); }
   });
+});
+
+describe("published shrine shadow geometry", () => {
+  it.skipIf(!worldArtDirectory).each(Object.entries(WORLD_ASSET_SOURCES).filter(([key]) => key.startsWith("/world-art/shrine-")))(
+    "fits the exact shadow geometry budget for %s",
+    (key, asset) => {
+      const definitions = JSON.parse(readFileSync(worldArtFile(key.replace(".webp", ".surfaces.json")), "utf8")) as AuthoredMaterialFrame[];
+      const { width, height } = asset;
+      const pixels = new Uint8Array(width * height * 4);
+      const texture = new Texture({ source: new BufferImageSource({ resource: pixels, width, height }) });
+      const source: WorldMaterial = { texture, pixels, width, height, shape: "building", frames: new Map(), surfaceFrames: definitions };
+      const frame = worldMaterialFrame(source, new Rectangle(...definitions[0]!.frame)), field = createWorldOcclusion();
+      try {
+        field.update([record("shrine", [], { volumes: frame.volumes, transform: new Float32Array([width, 0, 0, -height, -width / 2, height]), height })],
+          { minX: -256, minY: -256, maxX: 256, maxY: 256 });
+        expect(field.error).toBeNull();
+        expect(field.instanceCount).toBe(1);
+      } finally { field.dispose(); texture.destroy(true); }
+    },
+  );
 });
 
 describe("character lighting from local sources", () => {

@@ -1512,5 +1512,185 @@
       "material": "209c6eeb52729970ad9f8c763133ae2cc77636d77e209ad87a8169fd73810ac9",
       "surfaces": "e3c5f4e6e72f146c29a8e5890a344c3853ab9b6d8a7bd34e183d28a42841e6c5"
     }
+  },
+  "/world-art/shrine-akikaze.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJHg26YNQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJUAPy9aILCIhwPniJ69VxpvAbTDWkOyGzS8rM",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJMFZzTftsO4cexqW2RDgkE3zZbNXSFGitmnar",
+    "width": 256,
+    "height": 220,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        220
+      ]
+    ],
+    "sha256": {
+      "image": "c1602b7764686d7d1bdf028fa37ff129b8fd9dc4b236cfca2e7641f63ebd327a",
+      "material": "581d22419c3aaebbd20879c64d77bb6686cd516684c9034c1f2f83b99eae56bc",
+      "surfaces": "3da61440c82f85255aa5501875662b60f52177c67fe25fd396b25f6d55c775e3"
+    }
+  },
+  "/world-art/shrine-tsukimori.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJoyqoH9Z9MPZpHJ7VliuEWDfATdxhv62SXnm4",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5e0MCX797jl4ubX8xrRqTZasyMp2WA5eLGUP",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ73h1dQXKPBOUWGyFuM4DlL1v5HNTZhkte0z6",
+    "width": 256,
+    "height": 239,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        239
+      ]
+    ],
+    "sha256": {
+      "image": "2457265182d1cb44b94a4da02815a778fa3f47aa77439ebda120c0a732c73c22",
+      "material": "7fc02d1147788f1124c6a43c885215db692d04a32d38efb362b534b72b8f2545",
+      "surfaces": "0c2d0ce242909a46f47944c7fb6a0e4f4f2540e0bd9b6e67e018ba9bb57b5f4b"
+    }
+  },
+  "/world-art/shrine-akasumi.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRhGq7T0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtfcJloUYJDfpFXWm3nrcPluEtIZqyLkaSV1j",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ47637ClYIif5CL8BKvMsOh2ZnmS7yHt0jTD3",
+    "width": 256,
+    "height": 219,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        219
+      ]
+    ],
+    "sha256": {
+      "image": "46d4975e78e30a47e01e1eb29fbaecd225f56d42b520a5efceaf0a0054bebd79",
+      "material": "fb2f150f95452845c36a9df8989fba8740a5b0156bc73d28b974f01ea2f402d0",
+      "surfaces": "415756074e5ebe0d24e0f73f400222dd625f6279104edaf9529e52f74ce029af"
+    }
+  },
+  "/world-art/shrine-hyorin.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJZGLY86aYQrBIUTu69nkMxWmS4ah0O7LVCp8b",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxEswBh2WZsq9k0Von5rUfP6OgQ2TyptCKHS4",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCUtDpH26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "width": 256,
+    "height": 226,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        226
+      ]
+    ],
+    "sha256": {
+      "image": "577db546f0abfb28385b835df583c8ac0923ad6e5b34c880e3ff202b707414ab",
+      "material": "66cc997c4d937470da51d26eeb60cdfd2f6ea358b1c500b93747589ed3f58292",
+      "surfaces": "8a74ae17cbe4177e6bf683c9c2d904aeb278cd754f559c27abc4f3cc0b7b9751"
+    }
+  },
+  "/world-art/shrine-horizon.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ399Yfp8pYHJX5rdkUTfOKtvu2eGIELmSWqBx",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJxEf4wdbWZsq9k0Von5rUfP6OgQ2TyptCKHS4",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJUHaYAvILCIhwPniJ69VxpvAbTDWkOyGzS8rM",
+    "width": 256,
+    "height": 211,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        211
+      ]
+    ],
+    "sha256": {
+      "image": "e0f90ae3ed79479bc27838e4ef50f474a69999bc304dd64c31dae4db1761e139",
+      "material": "a8761bc17a4d153680befcb2bd5320f7d7442928eba3db0b8f49e4d6afc04b4a",
+      "surfaces": "4b15a44e3255b9a75a1213be675c089543728359294ca7b10a74d0708edd5078"
+    }
+  },
+  "/world-art/shrine-shirohana.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJGgBXmgBRfoVrha0LP4mAS5KM7wtiZbUNXJxd",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJQliwoMZjhzBPya1rwfCIqOTU0cV5xgsMeo3u",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ19UjzH6bo95WClq4K0wxZUmJcvThgdVenO3P",
+    "width": 256,
+    "height": 218,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        218
+      ]
+    ],
+    "sha256": {
+      "image": "6f2547d00c466af2aa8d400c3e311dc28f9fa0d3c4db9ca67e436680a5240c6a",
+      "material": "5076ef873e5c336f01fb278d334944cfe8e6ff167c86d4f38fd65bb99466f616",
+      "surfaces": "9d4d02e6330c69b95836c76a0568d5fadb5c2efb02a97e95d8788a84873627f6"
+    }
+  },
+  "/world-art/shrine-syndicate.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJWif89Nvszvj71yaSYC0MDOmbko5q9JAGuLHf",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJlMTfaXurWYxAsuC7ofQn9pM45OD0ERqkdBXJ",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJjrURJCl4XzPI8f1v96qBot0Q3wsUp2nxu7SM",
+    "width": 256,
+    "height": 214,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        214
+      ]
+    ],
+    "sha256": {
+      "image": "472a9145824c8dbc74b3b280b63e49da9cec157633d9d657cabfba72fe73d7fd",
+      "material": "591dc0cbde217154984dbe8b9bdacdcbf839d896b833e915e457e99aca6534b2",
+      "surfaces": "3aaf1c084a83ef66eb346ea794a1e574f08b667c400649fe7943b961a1fca6b1"
+    }
+  },
+  "/world-art/shrine-freedom-state.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJtxqbew1UYJDfpFXWm3nrcPluEtIZqyLkaSV1",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJRSw4Ds0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJROwHWK0udmODoNtpa0FMcwI4k2Eq7nJhyvjl",
+    "width": 256,
+    "height": 219,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        219
+      ]
+    ],
+    "sha256": {
+      "image": "bcfa7db489fd7954df4b350c77fcff02aa8e75dc00b3b33d33a52ac54ef972ad",
+      "material": "259a262e44b9a5902b8ca5ce6bb26ecd746f8332e5825a3fe1ecc665f533f5db",
+      "surfaces": "08861317f1bc0f3a083cb443126b7404db5980db1a54cbdbac6fbc675ef0a784"
+    }
+  },
+  "/world-art/shrine-wake-island.webp": {
+    "image": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJ5NyOsh797jl4ubX8xrRqTZasyMp2WA5eLGUP",
+    "material": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJCrCv4x26OYrIJuNP1pvSyz29edFtKbngjRcA",
+    "surfaces": "https://ui0arpl8sm.ufs.sh/f/Hzww9EQvYURJMqbGDUtsO4cexqW2RDgkE3zZbNXSFGitmnar",
+    "width": 256,
+    "height": 209,
+    "frames": [
+      [
+        0,
+        0,
+        256,
+        209
+      ]
+    ],
+    "sha256": {
+      "image": "fdb5c896a41cfefde67077be0283d0faa5be4f3a8beeba12169b23f00c2fb39d",
+      "material": "5ab79aebd6201b3fd833f0dd95cb49f9fae6c12c8ae978fd604155196763aab3",
+      "surfaces": "976b7bc38f54dae1883b8b82d018f22527a22569160a9fa89acea2f9e0ef5703"
+    }
   }
 }
