@@ -106,13 +106,21 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
   const [isApproveArmed, setIsApproveArmed] = useState(false);
   const [hasPickedReason, setHasPickedReason] = useState(false);
 
-  /** Refresh decision views and confirm queue notices, reconciling missing counts. */
-  const refresh = async (revision: number | undefined) => {
+  /** Refresh decision views and reconcile content changes or queue notices. */
+  const refresh = async (revision: number | undefined, changesContent = false) => {
     await Promise.all([
       utils.contentReview.getQueue.invalidate(),
       utils.contentReview.getStats.invalidate(),
       utils.contentReview.getProposal.invalidate({ id }),
     ]);
+    // Applied content can change equipped relations and derived profile fields.
+    if (changesContent) {
+      await Promise.all([
+        utils.contentReview.getCounts.invalidate(),
+        utils.profile.getUser.invalidate(),
+      ]);
+      return;
+    }
     // Queue reads can outdate suggestions, so count after the queue refresh.
     await utils.contentReview.getCounts.invalidate();
     // Query errors retain their normal feedback; a saved decision still completes.
@@ -132,7 +140,7 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
         },
       );
   };
-  const decisionOptions = {
+  const decisionOptions = (changesContent = false) => ({
     onMutate: prepareUserUpdate,
     onSuccess: async (
       data: { success: boolean; message: string },
@@ -140,18 +148,18 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
       revision: number | undefined,
     ) => {
       showMutationToast(data);
-      await refresh(revision);
+      await refresh(revision, changesContent);
       if (data.success) onDecided();
     },
-  };
-  const approve = api.contentReview.approve.useMutation(decisionOptions);
-  const reject = api.contentReview.reject.useMutation(decisionOptions);
-  const unreject = api.contentReview.unreject.useMutation(decisionOptions);
+  });
+  const approve = api.contentReview.approve.useMutation(decisionOptions(true));
+  const reject = api.contentReview.reject.useMutation(decisionOptions());
+  const unreject = api.contentReview.unreject.useMutation(decisionOptions());
   const revert = api.contentReview.revert.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
-      await refresh(revision);
+      await refresh(revision, true);
     },
   });
   const isBusy =

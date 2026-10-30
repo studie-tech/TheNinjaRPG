@@ -22,14 +22,13 @@ import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import { withUserNotificationCount } from "@/utils/userNotificationCounts";
 
 /**
  * The content review desk: suggestions from the content audit and from staff, one at a time,
  * with keyboard shortcuts for fast review. Staff who cannot review see their own suggestions.
  */
 export const ContentReviewDesk: React.FC = () => {
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { data: userData } = useRequiredUserData();
   const [tab, setTab] = useState<Tab>("Pending");
   const [category, setCategory] = useState<ContentProposalCategory | null>(null);
   const [source, setSource] = useState<ContentProposalSource | null>(null);
@@ -49,32 +48,18 @@ export const ContentReviewDesk: React.FC = () => {
     },
   );
   const bulkApprove = api.contentReview.bulkApprove.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: async (data, _variables, revision) => {
+    onSuccess: async (data) => {
       showMutationToast(data);
       setBulkIds(new Set());
       await Promise.all([
         utils.contentReview.getQueue.invalidate(),
         utils.contentReview.getStats.invalidate(),
       ]);
-      // Queue reads can outdate suggestions, so count after the queue refresh.
-      await utils.contentReview.getCounts.invalidate();
-      // Query errors retain their normal feedback; a saved decision still completes.
-      const counts = await utils.contentReview.getCounts.fetch().catch(() => undefined);
-      if (!counts) await updateUser(undefined, { revision });
-      else if (counts.canReview)
-        await updateUser(
-          {},
-          {
-            revision,
-            notifications: (current) =>
-              withUserNotificationCount(
-                current,
-                "contentReview",
-                counts.statuses.PENDING ?? 0,
-              ),
-          },
-        );
+      // Queue reads can outdate suggestions; content can change equipped profile fields.
+      await Promise.all([
+        utils.contentReview.getCounts.invalidate(),
+        utils.profile.getUser.invalidate(),
+      ]);
     },
   });
 

@@ -1,7 +1,7 @@
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { actionLog, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage } from "@/drizzle/schema";
+import { actionLog, aiProfile, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userCookingJob, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage } from "@/drizzle/schema";
 import { ObjectiveReward } from "@/validators/rewards";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
@@ -15,7 +15,7 @@ import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battl
 describeWithDatabase("Dungeon parties and settlement", () => {
   beforeEach(async () => {
     stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected HTTP request in dungeon tests" });
-    await resetTables(actionLog, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage);
+    await resetTables(actionLog, aiProfile, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userCookingJob, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage);
     await insertUsers(["a", "b", "c", "outsider"].map((id) => ({userId: id, username: id, status: "AWAKE", sector: 1, money: 0, experience: 0, earnedExperience: 0, villagePrestige: 0, villageId: "village"})));
     const db = await getTestDatabase();
     await db.insert(village).values({id: "village", name: "Village", sector: 1, kageId: "a"});
@@ -269,6 +269,21 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     expect((await b.act({id, action: "pause"})).success).toBe(false);
     expect((await a.act({id, action: "start"})).success).toBe(false);
     expect((await a.claim({id})).success).toBe(false);
+  });
+  it("requires canonical recovery when a rejected dungeon launch settles Cooking", async () => {
+    const db = await getTestDatabase();
+    const { a, id } = await lobby();
+    await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0, primaryElement: "Fire", secondaryElement: "Water" });
+    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await db.insert(userCookingJob).values({ id: "dungeon-cooking", userId: "a", experience: 23, finishesAt: new Date(0) });
+    await db.update(dungeonRun).set({ state: { ...dungeonBattleState().runState, readyIds: ["a", "b", "c"] } }).where(eq(dungeonRun.id, id));
+    await db.insert(dungeonMember).values(["b", "c"].map(userId => ({ runId: id, userId, activeUserId: userId })));
+    const result = await a.act({ id, action: "start" });
+    expect(result).toMatchObject({ success: false, message: "A dungeon enemy is unavailable" });
+    expect(result).toHaveProperty("userPatch", undefined);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "a") })).toMatchObject({ cookingExperience: 23, status: "AWAKE", battleId: null });
+    expect(await db.query.userCookingJob.findMany()).toHaveLength(0);
+    expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) })).toMatchObject({ status: "LOBBY", battleId: null });
   });
   it("accepts only one of two simultaneous invitations into different parties", async () => {
     const {a, id} = await lobby(); const c = await callerFor(dungeonRouter, "c");

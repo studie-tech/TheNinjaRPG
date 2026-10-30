@@ -77,18 +77,18 @@ export default function DungeonPage() {
   const refresh = async (response: UserDeltaResponse, revision: number | undefined) => {
     showMutationToast(response);
     const patch = response.userPatch;
-    if (response.success || response.userPatch)
-      await updateUser(
-        patch?.dungeonsCompleted !== undefined && patch.questData === undefined
-          ? (current) =>
-              // A tab can claim from polling before receiving the battle-ended profile refresh.
-              current.dungeonsCompleted === patch.dungeonsCompleted ? patch : undefined
-          : patch,
-        {
-          revision,
-          achievementProgress: response.achievementProgress,
-        },
-      );
+    // Admission can settle timed work before returning an expected rejection.
+    await updateUser(
+      patch?.dungeonsCompleted !== undefined && patch.questData === undefined
+        ? (current) =>
+            // A tab can claim from polling before receiving the battle-ended profile refresh.
+            current.dungeonsCompleted === patch.dungeonsCompleted ? patch : undefined
+        : patch,
+      {
+        revision,
+        achievementProgress: response.achievementProgress,
+      },
+    );
     setMessage(response.success ? "" : response.message);
     if (response.success) setAbandonId(null);
     await Promise.all([state.refetch(), available.refetch()]);
