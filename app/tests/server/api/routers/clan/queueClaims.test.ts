@@ -143,7 +143,7 @@ describeWithDatabase("clan queue claim ownership", () => {
       const revision = options.onMutate?.();
       const result = await callerForDatabase(clanRouter, "leader", db).deleteClanBattle(input);
       expect(result.success).toBe(true);
-      expect(result.userPatch).toBeUndefined();
+      expect(result).not.toHaveProperty("userPatch");
       if (delivery === "before" || delivery === "lost") await deliver();
       if (delivery === "lost") {
         const error = new Error("Response lost after deletion");

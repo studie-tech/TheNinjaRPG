@@ -1079,12 +1079,7 @@ export const shrineRouter = createTRPCRouter({
       const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
 
       // Fetch user and battle data
-      const [
-        { user, requiresUserRefresh, requiresProgressionRefresh },
-        shrineBattle,
-        activeWars,
-        relationships,
-      ] = await Promise.all([
+      const [{ user }, shrineBattle, activeWars, relationships] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
@@ -1219,7 +1214,6 @@ export const shrineRouter = createTRPCRouter({
       const result = await initiateBattle(
         {
           userIds: attackerIds,
-          cacheUserId: ctx.userId,
           targetIds: defenderIds,
           client: ctx.drizzle,
           biome: "default",
@@ -1251,23 +1245,6 @@ export const shrineRouter = createTRPCRouter({
           success: true,
           message: "Shrine battle initiated!",
           battleId: result.battleId,
-          userDelta:
-            !requiresUserRefresh && !requiresProgressionRefresh && result.userPatch
-              ? result.userDelta
-              : undefined,
-          userPatch:
-            requiresUserRefresh ||
-            requiresProgressionRefresh ||
-            result.requiresUserRefresh
-              ? undefined
-              : result.userPatch
-                ? {
-                    ...result.userPatch,
-                    shrineBattles: (
-                      (user as NonNullable<UserWithRelations>).shrineBattles ?? []
-                    ).filter((entry) => entry.id !== input.shrineBattleId),
-                  }
-                : undefined,
         };
       }
 

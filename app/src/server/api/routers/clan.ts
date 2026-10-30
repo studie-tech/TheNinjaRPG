@@ -587,7 +587,7 @@ export const clanRouter = createTRPCRouter({
   createClan: protectedProcedure
     .meta({ mcp: { description: "Create new clan/faction" } })
     .input(clanCreateSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [
@@ -1567,7 +1567,7 @@ export const clanRouter = createTRPCRouter({
     .input(
       clanBattleIdSchema.extend({ originSocketId: z.string().max(128).optional() }),
     )
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, clanBattleData, ledClans] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),

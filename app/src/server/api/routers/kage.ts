@@ -143,7 +143,7 @@ export const kageRouter = createTRPCRouter({
       };
     }),
   takeKage: protectedProcedure
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .input(
       z.object({
         reason: z
@@ -306,7 +306,7 @@ export const kageRouter = createTRPCRouter({
     }),
   payStructureMaintenance: protectedProcedure
     .input(villageMaintenancePaymentSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const result = await updateVillageForPayStructureMaintenance(
         ctx.drizzle,

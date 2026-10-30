@@ -13,7 +13,12 @@ import {
   updateStripeCheckoutForCancelCheckout,
   updateStripeCheckoutForCreateCheckout,
 } from "@/queries/stripe";
-import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
@@ -33,7 +38,6 @@ import {
 import { fulfillStripeSession } from "@/server/utils/stripe/fulfillment";
 import { dollars2reps, dynamicMonthlyRepCap, reps2dollars } from "@/utils/paypal";
 import { stripePurchaseSchema } from "@/validators/stripe";
-import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Authenticated web checkout, recovery and management; provider objects establish payment. */
 export const stripeRouter = createTRPCRouter({
@@ -290,7 +294,7 @@ export const stripeRouter = createTRPCRouter({
           .max(255),
       }),
     )
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const session = await getStripe().checkout.sessions.retrieve(input.sessionId);
       const checkout = session.metadata?.tnrCheckoutId

@@ -40,10 +40,12 @@ export default function Clans() {
   const { mutate: createClan, isPending: isCreating } = api.clan.createClan.useMutation(
     {
       onSuccess: async (data) => {
-        if (data.success) await utils.profile.getUser.invalidate();
         showMutationToast(data);
         if (data.success) {
-          await utils.clan.getAll.invalidate();
+          await Promise.all([
+            utils.clan.getAll.invalidate(),
+            utils.profile.getUser.invalidate(),
+          ]);
         }
       },
     },

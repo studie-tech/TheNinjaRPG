@@ -941,12 +941,11 @@ const KageChallenge = ({ user }: { user: NonNullable<UserWithRelations> }) => {
   const isKage = user.userId === user.village?.kageId;
   const { mutate: take, isPending: isTaking } = api.kage.takeKage.useMutation({
     onSuccess: async (data) => {
-      if (data.success) await utils.profile.getUser.invalidate();
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
           utils.village.get.invalidate(),
-
+          utils.profile.getUser.invalidate(),
           utils.kage.getDefenses.invalidate(),
         ]);
         setShowTakeKageModal(false);

@@ -667,7 +667,7 @@ export const warRouter = createTRPCRouter({
   /** Grant prestige and consume eligibility in one guarded joined UPDATE. */
   convertWarPoints: protectedProcedure
     .input(warIdSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const saved = await executeSavedForConvertWarPoints(ctx.drizzle, input, ctx);
       return saved.rowsAffected > 0

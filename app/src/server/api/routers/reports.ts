@@ -100,7 +100,6 @@ import {
   userReportSchema,
   userReviewSchema,
 } from "@/validators/reports";
-import { userDeltaResponseSchema } from "@/validators/userCache";
 import type { DrizzleClient } from "../../db";
 
 const pusher = getServerPusher();
@@ -392,7 +391,7 @@ export const reportsRouter = createTRPCRouter({
   // Ban a user. If no escalation: moderator-only. If escalated: admin-only
   ban: protectedProcedure
     .input(reportCommentSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -433,15 +432,12 @@ export const reportsRouter = createTRPCRouter({
       ]);
       // An indefinite ban or silence also bans the linked Discord account.
       scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
-      return {
-        success: true,
-        message: "User banned",
-      };
+      return { success: true, message: "User banned" };
     }),
   // Silence a user. If no escalation: moderator-only. If escalated: admin-only
   silence: protectedProcedure
     .input(reportCommentSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -482,15 +478,12 @@ export const reportsRouter = createTRPCRouter({
       ]);
       // An indefinite ban or silence also bans the linked Discord account.
       scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
-      return {
-        success: true,
-        message: "User silenced",
-      };
+      return { success: true, message: "User silenced" };
     }),
   // Timeout: 1-hour silence. CONTENT-ADMIN and EVENT-ADMIN only.
   timeout: protectedProcedure
     .input(reportTimeoutSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, report] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -523,15 +516,12 @@ export const reportsRouter = createTRPCRouter({
           : []),
         insertUserReportCommentForTimeout(ctx.drizzle, ctx, input),
       ]);
-      return {
-        success: true,
-        message: "User timed out (1 hour)",
-      };
+      return { success: true, message: "User timed out (1 hour)" };
     }),
   // Issue warning to user
   warn: protectedProcedure
     .input(reportCommentSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -569,15 +559,12 @@ export const reportsRouter = createTRPCRouter({
           routeText: "To Report",
         });
       }
-      return {
-        success: true,
-        message: "User warned",
-      };
+      return { success: true, message: "User warned" };
     }),
   // Escalate a report to admin. Only if already banned, and no previous escalation
   escalate: protectedProcedure
     .input(reportCommentSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -594,14 +581,11 @@ export const reportsRouter = createTRPCRouter({
         updateUserReportForEscalate(ctx.drizzle, input),
         insertUserReportCommentForEscalate(ctx.drizzle, ctx, input),
       ]);
-      return {
-        success: true,
-        message: "Report escalated",
-      };
+      return { success: true, message: "Report escalated" };
     }),
   clear: protectedProcedure
     .input(reportCommentSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -659,10 +643,7 @@ export const reportsRouter = createTRPCRouter({
       await Promise.all(mutations);
       // Lifts the Discord ban once no other indefinite sanction remains.
       scheduleDiscordSync(ctx.drizzle, report.reportedUserId);
-      return {
-        success: true,
-        message: "Report cleared",
-      };
+      return { success: true, message: "Report cleared" };
     }),
   updateUserAvatar: protectedProcedure
     .input(z.object({ userId: z.string() }))
@@ -764,7 +745,7 @@ export const reportsRouter = createTRPCRouter({
   // Trade ban a user - moderators can ban users from blackmarket and auction house
   tradeBan: protectedProcedure
     .input(reportCommentSchema)
-    .output(userDeltaResponseSchema)
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, report] = await Promise.all([
@@ -802,10 +783,7 @@ export const reportsRouter = createTRPCRouter({
           : []),
         insertUserReportCommentForTradeBan(ctx.drizzle, ctx, input),
       ]);
-      return {
-        success: true,
-        message: "User trade banned",
-      };
+      return { success: true, message: "User trade banned" };
     }),
 });
 

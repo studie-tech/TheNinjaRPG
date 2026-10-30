@@ -66,8 +66,8 @@ describeWithDatabase("staff kage takeover", () => {
     await fetchUpdatedUser({ client: db, userId: "staff" });
     const result = await (await callerFor(kageRouter, "staff")).takeKage({ reason: "Testing village wars" });
     expect(result.success).toBe(true);
-    expect(result.userPatch).toBeUndefined();
-    expect(result.userDelta).toBeUndefined();
+    expect(result).not.toHaveProperty("userPatch");
+    expect(result).not.toHaveProperty("userDelta");
     expect(await db.query.village.findFirst()).toMatchObject({ kageId: "staff" });
     expect(await db.query.userData.findFirst({ where: eq(userData.userId, "staff") })).toMatchObject({ rank: "JONIN", villagePrestige: KAGE_DEFAULT_PRESTIGE });
     expect(await db.query.actionLog.findMany()).toHaveLength(1);
