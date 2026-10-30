@@ -10,12 +10,24 @@ the attack poses. Sector actors outside a padded viewport do not acquire texture
 leases; moving the viewport into their area installs them from the latest snapshot,
 and departing actors release their resources through their existing render scope.
 
+Travel actors show a clickable, texture-free neutral body while artwork loads.
+Completed artwork replaces it atomically; failed atlas and portrait requests leave
+the neutral body usable. Texture URLs and in-flight loads are shared between actors.
+The texture cache's 16 MiB limit covers idle entries; active texture memory depends
+on the distinct visible appearances. Releasing a scope prevents late installation
+but does not cancel shared image downloads.
+
 ## Appearance and content
 
 `app/src/libs/lpc/appearance.ts` resolves saved skin, eye and hair colours, all
 creation traits, worn equipment and selected item variants. Equipment replaces
 the corresponding base clothing. Unequipping, consuming or breaking equipment
 restores that clothing. Non-wearable items explicitly resolve to `NONE`.
+
+The Items page's Equipped header opens an on-demand appearance preview without
+expanding the equipment layout. It uses the current inventory query, including
+selected variants, so equipment actions and loadout changes update the displayed
+look. Closing the preview releases its renderer and texture leases.
 
 Skin, eye and hair palettes save directly from their selectors and do not count
 toward the trait limit. Hair styles, face shapes and beard styles are mutually

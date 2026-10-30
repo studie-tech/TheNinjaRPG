@@ -45,6 +45,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
+import { EquipmentPreview } from "@/layout/EquipmentPreview";
 import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -393,7 +394,10 @@ export default function MyItems() {
           {/* Keep equipment near its silhouette width while the backpack gains columns. */}
           <div className="grid @min-[600px]:grid-cols-[314px_minmax(0,1fr)]">
             <div className="min-w-0 p-3">
-              <h2 className="font-bold text-2xl text-foreground">Equipped</h2>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-bold text-2xl text-foreground">Equipped</h2>
+                <EquipmentPreview user={userData} items={userItems} />
+              </div>
               <div className="relative mx-auto w-full max-w-[290px]">
                 <Character useritems={userItems} userData={userData} />
               </div>
