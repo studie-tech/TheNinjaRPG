@@ -1,5 +1,5 @@
 import type { Grid } from "honeycomb-grid";
-import { Container, Graphics, type RenderLayer, Text } from "pixi.js";
+import { Container, Graphics, Rectangle, type RenderLayer, Text } from "pixi.js";
 import {
   IMG_AVATAR_DEFAULT,
   IMG_ICON_HEAL,
@@ -146,12 +146,35 @@ export const createTravelActors = (
         scope,
         root,
         art: null,
+        fallback: null,
         tile: previous?.tile ?? recipe.tile,
         path: previous?.path ?? [],
         x: previous?.x ?? -recipe.tile.center.x,
         y: previous?.y ?? -recipe.tile.center.y,
         facing: previous?.facing ?? 2,
       };
+      root.position.set(record.x, record.y);
+      root.zIndex = -(
+        record.y +
+        recipe.tile.height *
+          (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5) +
+        container.y
+      );
+      const body = recipe.parts.find((entry) => entry.character);
+      if (body) {
+        // Texture-free anonymous art stays usable through slow or failed atlas/portrait loads.
+        const fallback = new Graphics({
+          boundsArea: new Rectangle(-0.5, -0.5, 1, 1),
+        })
+          .circle(0, -0.28, 0.13)
+          .roundRect(-0.23, -0.1, 0.46, 0.6, 0.12)
+          .fill(0x89929e);
+        fallback.label = "avatar";
+        fallback.position.set(body.x, body.y);
+        fallback.scale.set(body.size, -body.size);
+        root.addChild(fallback);
+        record.fallback = fallback;
+      }
       records.set(recipe.key, record);
       byRoot.set(root, record);
       if (recipe.counter) {
@@ -186,6 +209,10 @@ export const createTravelActors = (
           if (scope.isDisposed()) return;
           record.art = art;
           root.addChild(art.container);
+          if (art.entries.some((entry) => entry.description.kind === "avatar")) {
+            record.fallback?.destroy();
+            record.fallback = null;
+          }
           // Controls retain actor transforms/visibility while rendering above all scenery.
           if (recipe.user)
             for (const entry of art.entries)
@@ -244,18 +271,20 @@ export const createTravelActors = (
           (overlayChildren && child?.parent?.parent
             ? byRoot.get(child.parent.parent)
             : undefined);
-        if (!record?.art) continue;
-        for (let j = record.art.entries.length - 1; j >= 0; j--) {
-          const entry = record.art.entries[j];
+        if (!record) continue;
+        const entries = record.art?.entries ?? [];
+        for (let j = entries.length - 1; j >= -1; j--) {
+          const entry = entries[j];
+          const sprite = entry?.sprite ?? (j === -1 ? record.fallback : null);
+          const kind = entry?.description.kind ?? "avatar";
           if (
-            !entry ||
-            (overlayChildren && !directRecord && entry.sprite !== child) ||
-            (!overlayChildren &&
-              isActorControl(entry.description.kind) !== controlsOnly) ||
-            !isObjectChainVisible(entry.sprite)
+            !sprite ||
+            (overlayChildren && !directRecord && sprite !== child) ||
+            (!overlayChildren && isActorControl(kind) !== controlsOnly) ||
+            !isObjectChainVisible(sprite)
           )
             continue;
-          const bounds = entry.sprite.getBounds();
+          const bounds = sprite.getBounds();
           if (x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY)
             continue;
           const { recipe } = record;
@@ -265,7 +294,7 @@ export const createTravelActors = (
               ? "questMarker"
               : recipe.battleId
                 ? "battleMarker"
-                : entry.description.kind,
+                : kind,
             userId: recipe.user?.userId,
             npcPlacementId: recipe.user?.npcPlacementId,
             battleId: recipe.battleId,
@@ -645,4 +674,5 @@ type ActorRecord = {
   scope: GameRenderer;
   root: Container;
   art: Awaited<ReturnType<typeof createWorldSprites>> | null;
+  fallback: Graphics | null;
 };
