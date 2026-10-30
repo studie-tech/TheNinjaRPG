@@ -44,6 +44,22 @@ const setup = (active = true) => {
 };
 
 describe("user cache updates", () => {
+  it.each(["matching", "changed", "missing"] as const)("applies confirmed changes only with %s server prerequisites", async (baseline) => {
+    const test = setup();
+    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
+      ...(baseline === "missing" ? {} : { clanId: baseline === "matching" ? "clan" : "new-clan" }) } });
+    const response = userDeltaResponseSchema.parse({ success: true, message: "Saved",
+      userPatch: { money: 80 }, userDelta: { reputationPoints: -5 }, userExpected: { clanId: "clan" } });
+    test.setDatabase(80);
+    await updateUserCache(test.client, key, response.userPatch, {
+      revision: prepareUserUpdate(test.client, key), delta: response.userDelta, expected: response.userExpected,
+    });
+    expect(test.reads()).toBe(Number(baseline !== "matching"));
+    expect(test.value()?.userData.money).toBe(80);
+    expect(test.value()?.userData.reputationPoints).toBe(baseline === "matching" ? 25 : 30);
+    test.close();
+  });
+
   it.each(["missing response", "changed revision", "invalid relation"] as const)("marks an inactive profile stale without executing it after %s", async (recovery) => {
     const test = setup(false);
     const revision = prepareUserUpdate(test.client, key);

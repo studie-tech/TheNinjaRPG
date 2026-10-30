@@ -34,8 +34,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { PartyRoster } from "@/layout/PartyRoster";
 import UserSearchSelect from "@/layout/UserSearchSelect";
-import { activeDungeonNotification, dungeonRequirements } from "@/libs/dungeon";
-import type { NavBarDropdownLink } from "@/libs/menus";
+import { dungeonRequirements } from "@/libs/dungeon";
 import { getRewardArray } from "@/libs/objectives";
 import { canUsePet } from "@/libs/pets/progression";
 import { showMutationToast } from "@/libs/toast";
@@ -79,66 +78,19 @@ export default function DungeonPage() {
     showMutationToast(response);
     setMessage(response.success ? "" : response.message);
     if (response.success) setAbandonId(null);
+    await updateUser(response.userPatch, {
+      revision,
+      ...(response.userDelta ? { delta: response.userDelta } : {}),
+      expected: response.userExpected,
+      achievementProgress: response.achievementProgress,
+    });
+    const stateRevision = prepareUserUpdate();
     const [refreshed] = await Promise.all([state.refetch(), available.refetch()]);
-    const patch = response.userPatch;
-    // Admission can settle timed work before returning an expected rejection.
-    await updateUser(
-      patch || response.userDelta
-        ? (current) => {
-            const actor = refreshed.data?.users.find(
-              (actor) => actor.userId === current.userId,
-            );
-            // Reading party state can expire a run and release its profile/reservation.
-            if (
-              refreshed.isError ||
-              (actor && actor.status !== (patch?.status ?? current.status)) ||
-              (patch?.status === "QUEUED" &&
-                !refreshed.data?.members.some(
-                  (member) => member.activeUserId === current.userId,
-                )) ||
-              state.data?.members.some(
-                (member) =>
-                  member.activeUserId === current.userId &&
-                  !refreshed.data?.members.some(
-                    (next) =>
-                      next.runId === member.runId &&
-                      next.activeUserId === current.userId,
-                  ),
-              )
-            )
-              return undefined;
-            // A tab can claim from polling before receiving the battle-ended profile refresh.
-            return patch?.dungeonsCompleted !== undefined &&
-              patch.questData === undefined
-              ? current.dungeonsCompleted === patch.dungeonsCompleted
-                ? patch
-                : undefined
-              : (patch ?? {});
-          }
-        : undefined,
-      {
-        revision,
-        ...(response.userDelta ? { delta: response.userDelta } : {}),
-        achievementProgress: response.achievementProgress,
-        ...(response.success && patch?.status === "QUEUED"
-          ? {
-              // A confirmed reservation adds navigation without replaying consumed feedback.
-              notifications: (current: NavBarDropdownLink[] | undefined) =>
-                current && [
-                  ...current.filter(
-                    (entry) =>
-                      entry.color !== "toast" &&
-                      !(
-                        entry.href === activeDungeonNotification.href &&
-                        entry.name === activeDungeonNotification.name
-                      ),
-                  ),
-                  activeDungeonNotification,
-                ],
-            }
-          : {}),
-      },
-    );
+    // The state endpoint reports profile effects from expiry and interrupted starts.
+    await updateUser(refreshed.isError ? undefined : refreshed.data?.userPatch, {
+      revision: stateRevision,
+      expected: refreshed.data?.userExpected,
+    });
   };
   const create = api.coop.dungeon.create.useMutation({
     onMutate: prepareUserUpdate,

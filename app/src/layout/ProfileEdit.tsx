@@ -129,7 +129,6 @@ import {
 } from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
 import {
-  canAssignExperience,
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
 } from "@/libs/profile";
@@ -1712,23 +1711,13 @@ const ResetStats: React.FC = () => {
   const { mutateAsync: updateStats, isPending } =
     api.blackmarket.updateStats.useMutation({
       onMutate: prepareUserUpdate,
-      onSuccess: async (data, input, revision) => {
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUser(
-            (current) => {
-              const stats = statSchema.parse(input);
-              const updated = { ...current, ...stats };
-              // Capacity changes can add or remove the derived Assign XP notification.
-              if (
-                current.earnedExperience > 0 &&
-                canAssignExperience(current) !== canAssignExperience(updated)
-              )
-                return undefined;
-              return stats;
-            },
-            { revision, delta: data.userDelta },
-          ).catch(() => undefined);
+          await updateUser(data.userPatch, {
+            revision,
+            delta: data.userDelta,
+          }).catch(() => undefined);
         }
       },
       onError: (error) => {
@@ -3048,18 +3037,7 @@ const ResetSkills: React.FC = () => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(
-              () => {
-                if (
-                  !data.userPatch?.monthlySkillResets ||
-                  data.userPatch.maxEnergy === undefined ||
-                  !data.userPatch.effectiveMasteries
-                )
-                  return undefined;
-                return { userSkills: [], ...data.userPatch };
-              },
-              { revision, delta: data.userDelta },
-            ),
+            updateUser(data.userPatch, { revision, delta: data.userDelta }),
             utils.skillTree.getUserSkills.invalidate(),
             utils.skillTree.getResetInfo.invalidate(),
           ]);

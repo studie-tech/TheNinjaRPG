@@ -1267,18 +1267,14 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   const { mutateAsync: editColor, isPending: isEditingColor } =
     api.clan.editClanColor.useMutation({
       onMutate: prepareUserUpdate,
-      onSuccess: async (data, input, revision) => {
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success)
-          await updateUser(
-            (current) =>
-              current.village &&
-              current.village.id === data.userPatch?.village?.id &&
-              current.clanId === input.clanId
-                ? { village: { ...current.village, hexColor: input.color } }
-                : undefined,
-            { revision, delta: data.userDelta },
-          ).catch(() => undefined);
+          await updateUser(data.userPatch, {
+            revision,
+            delta: data.userDelta,
+            expected: data.userExpected,
+          }).catch(() => undefined);
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
