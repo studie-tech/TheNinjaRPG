@@ -133,6 +133,11 @@ const TrpcClientProvider = (props: {
     queryClient.setQueryDefaults(getQueryKey(api.profile.getUser, undefined, "query"), {
       structuralSharing: shareUserCache,
     });
+    // fetchQuery skips retries only while no retry default exists; keep that for
+    // imperative reads (fetch, prefetch, ensureData) now that observers have one.
+    const fetchQuery = queryClient.fetchQuery.bind(queryClient);
+    queryClient.fetchQuery = ((options) =>
+      fetchQuery({ retry: false, ...options })) as typeof queryClient.fetchQuery;
     return { queryClient, queryMetricsTracker: createQueryMetricsTracker(queryClient) };
   });
   const [trpcClient] = useState(() => {

@@ -2,7 +2,7 @@ import * as clerk from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
 import type { Clerk } from "@clerk/shared/types";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
-import { type QueryClient, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, QueryObserver, useQueryClient } from "@tanstack/react-query";
 import { type TRPCClient, TRPCClientError } from "@trpc/client";
 import * as trpcClient from "@trpc/client";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
@@ -396,14 +396,49 @@ it("does not retry a rate-limited query back into the same limiter window", asyn
   );
   vi.spyOn(console, "error").mockImplementation(() => {});
   const { trpc } = mountProvider(session("a"));
-  await expect(
-    queryClient.fetchQuery({
-      queryKey: getQueryKey(testApi.misc.getSetting, { name: "x" }, "query"),
-      queryFn: () => trpc.misc.getSetting.query({ name: "x" }),
-      retryDelay: 0,
-    }),
-  ).rejects.toThrow("Too many requests");
+  // Observers carry the provider's retry default; imperative reads never retry.
+  const observer = new QueryObserver(queryClient, {
+    queryKey: getQueryKey(testApi.misc.getSetting, { name: "x" }, "query"),
+    queryFn: () => trpc.misc.getSetting.query({ name: "x" }),
+    retryDelay: 0,
+  });
+  await new Promise<void>((resolve) => {
+    const unsubscribe = observer.subscribe((result) => {
+      if (result.status !== "error") return;
+      unsubscribe();
+      resolve();
+    });
+  });
   expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("keeps imperative reads free of React Query retries", async () => {
+  // The transport link never retries BAD_REQUEST, so each call here is one React Query attempt.
+  const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+    Response.json([
+      {
+        error: superjson.serialize({
+          message: "Bad input",
+          code: -32600,
+          data: { code: "BAD_REQUEST" },
+        }),
+      },
+    ]),
+  );
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  const { trpc } = mountProvider(session("a"));
+  const read = (name: string, retry?: number) =>
+    queryClient.fetchQuery({
+      queryKey: getQueryKey(testApi.misc.getSetting, { name }, "query"),
+      queryFn: () => trpc.misc.getSetting.query({ name }),
+      retryDelay: 0,
+      ...(retry === undefined ? {} : { retry }),
+    });
+  await expect(read("y")).rejects.toThrow("Bad input");
+  expect(fetch).toHaveBeenCalledTimes(1);
+  // An explicit caller retry still applies.
+  await expect(read("z", 1)).rejects.toThrow("Bad input");
+  expect(fetch).toHaveBeenCalledTimes(3);
 });
 
 const fetchFailure = (message = "Failed to fetch") => {
