@@ -32,6 +32,11 @@ const gameFixture = () => {
   cleanups.push(() => { controller.abort(); for (const cleanup of owned) cleanup(); source.destroy(true); });
   return { game, owned, source, controller };
 };
+/** Compare sampled texel bounds without mixing logical trim metadata into Pixi's rectangle. */
+const frameRectangle = (sample: NonNullable<ReturnType<typeof lpcFrame>>) => {
+  const { x, y, width, height } = sample;
+  return { x, y, width, height };
+};
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
   vi.spyOn(Assets, "load").mockImplementation(async () => texture());
@@ -40,6 +45,84 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("layered LPC actors", () => {
+  it("gives identical characters independent idle phases while sharing their textures", async () => {
+    const { game } = gameFixture();
+    vi.spyOn(Math, "random").mockReturnValueOnce(0.1).mockReturnValueOnce(0).mockReturnValueOnce(0.9).mockReturnValueOnce(0.5);
+    const appearance = resolveSpriteAppearance({});
+    const first = await characters.createLpcCharacter(game, appearance, "travel");
+    const second = await characters.createLpcCharacter(game, appearance, "travel");
+    first.render({ now: 1000, delta: 0, reducedMotion: false }, "idle", 2);
+    second.render({ now: 1000, delta: 0, reducedMotion: false }, "idle", 2);
+    const a = first.sprite.children[0] as Sprite, b = second.sprite.children[0] as Sprite;
+    expect(a.texture.source).toBe(b.texture.source);
+    expect(a.texture.frame).not.toEqual(b.texture.frame);
+    for (const actor of [first, second]) {
+      const pieces = appearance.layers.flatMap((layer) => spriteLayerSheets(appearance, layer, "travel"));
+      const elapsed = actor === first ? 60 : 540;
+      for (const [index, piece] of pieces.entries()) expect((actor.sprite.children[index] as Sprite).texture.frame).toMatchObject(frameRectangle(lpcFrame(piece, "idle", 2, elapsed)!));
+    }
+  });
+  it("varies each idle cycle's speed and leaves walking and attacks on their authored clock", async () => {
+    const { game } = gameFixture();
+    const random = vi.spyOn(Math, "random").mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValue(0.9);
+    const appearance = resolveSpriteAppearance({});
+    const actor = await characters.createLpcCharacter(game, appearance);
+    const sheet = spriteLayerSheets(appearance, appearance.layers[0]!)[0]!;
+    actor.render({ now: 2000, delta: 2, reducedMotion: false }, "idle", 2);
+    expect(random).toHaveBeenCalledTimes(3);
+    actor.render({ now: 3000, delta: 1, reducedMotion: false }, "idle", 2);
+    const body = actor.sprite.children[0] as Sprite;
+    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "idle", 2, 0)!));
+    expect(body.texture.frame).not.toMatchObject(frameRectangle(lpcFrame(sheet, "idle", 2, 400)!));
+    actor.render(frame(4000), "walk", 2);
+    actor.render(frame(4090), "walk", 2);
+    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "walk", 2, 90)!));
+    actor.render(frame(5000), "slash", 2);
+    actor.render(frame(5160), "slash", 2);
+    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "slash", 2, 160)!));
+    expect(random).toHaveBeenCalledTimes(3);
+  });
+  it("samples idle consistently across frame rates and freezes it for reduced motion", async () => {
+    const { game } = gameFixture();
+    vi.spyOn(Math, "random").mockReturnValue(0.25);
+    const appearance = resolveSpriteAppearance({});
+    const poses: unknown[] = [];
+    for (const fps of [30, 60, 120]) {
+      const actor = await characters.createLpcCharacter(game, appearance, "travel");
+      for (let tick = 1; tick <= fps * 3.6; tick++) actor.render({ now: tick * 1000 / fps, delta: 1 / fps, reducedMotion: false }, "idle", 2);
+      const part = actor.sprite.children[0] as Sprite;
+      poses.push(part.texture.frame.clone());
+      actor.render({ now: 5000, delta: 0.1, reducedMotion: true }, "idle", 2);
+      const frozen = part.texture;
+      actor.render({ now: 50000, delta: 0.1, reducedMotion: true }, "idle", 2);
+      expect(part.texture).toBe(frozen);
+      expect(part.y).toBe(0);
+    }
+    expect(poses[1]).toEqual(poses[0]);
+    expect(poses[2]).toEqual(poses[0]);
+  });
+  it("uses a common authored combat or idle pose and keeps unsupported outfits together", async () => {
+    const { game } = gameFixture();
+    vi.spyOn(Math, "random").mockReturnValue(0.9);
+    for (const [profile, state] of [["shirt", "combat"], ["leather", "idle"], ["club", "stand"]] as const) {
+      const appearance: SpriteAppearance = { version: 1, body: "male", layers: [{ profile: "body", color: "light" }, { profile, color: "brown" }] };
+      const actor = await characters.createLpcCharacter(game, appearance);
+      actor.render({ now: 1000, delta: 0, reducedMotion: false }, "combat", 2);
+      const parts = appearance.layers.flatMap((layer) => spriteLayerSheets(appearance, layer));
+      for (const [index, part] of parts.entries()) {
+        const child = actor.sprite.children[index] as Sprite;
+        const expected = lpcFrame(part, state, 2, 540);
+        const ownsPose = lpcCatalog.layouts[part.layout]!.clips[state];
+        expect(child.visible).toBe(!!ownsPose);
+        if (ownsPose) expect(child.texture.frame).toMatchObject(frameRectangle(expected!));
+        expect(child.y).toBe(state === "stand" ? -1 / 64 : 0);
+      }
+      actor.render(frame(2000, true), "combat", 2);
+      for (const child of actor.sprite.children as Sprite[]) expect(child.y).toBe(0);
+      actor.render(frame(3000), "walk", 2);
+      for (const child of actor.sprite.children as Sprite[]) expect(child.y).toBe(0);
+    }
+  });
   it.each([
     { profile: "club", animation: "slash", bodyAnimation: "slash", frames: Array.from({ length: 4 }, () => [5, 4, 3, 2, 1, 0]) },
     { profile: "whip", animation: "slash", bodyAnimation: "slash", frames: [[0, 1, 4, 5, 3, 2, 2, 1], [0, 1, 5, 4, 3, 3, 3, 2], [0, 1, 5, 4, 3, 3, 2, 1], [0, 1, 5, 4, 3, 3, 3, 2]] },
@@ -364,7 +447,7 @@ describe("layered LPC actors", () => {
     const render = renders[0]!;
     expect(render.mock.calls.every((call) => call[3] === false)).toBe(true);
     actors.animate(frame(7000, reducedMotion), user.userId, undefined);
-    expect(render.mock.calls.at(-1)?.[1]).toBe("idle");
+    expect(render.mock.calls.at(-1)?.[1]).toBe("combat");
   });
   it("deduplicates combat cues across refetches, restarts consecutive attacks and keeps the actor", async () => {
     const { game } = gameFixture();
@@ -384,7 +467,7 @@ describe("layered LPC actors", () => {
     const root = actors.container.children[0];
     const render = renders[0]!;
     actors.animate(frame(1000), user.userId, undefined);
-    expect(render.mock.calls.at(-1)?.slice(1)).toEqual(["idle", 1, false]);
+    expect(render.mock.calls.at(-1)?.slice(1)).toEqual(["combat", 1, false]);
     user.spriteAction = { id: "first", animation: "slash", longitude: 3, latitude: 1 };
     actors.sync({ battle }); actors.animate(frame(1100), user.userId, undefined);
     expect(render.mock.calls.at(-1)?.[3]).toBe(true);
@@ -396,7 +479,7 @@ describe("layered LPC actors", () => {
     expect(actors.container.children[0]).toBe(root);
     expect(create).toHaveBeenCalledTimes(1);
     actors.animate(frame(2000), user.userId, undefined);
-    expect(render.mock.calls.at(-1)?.[1]).toBe("idle");
+    expect(render.mock.calls.at(-1)?.[1]).toBe("combat");
     battle.usersState = []; actors.sync({ battle });
     expect(root?.destroyed).toBe(true);
   });
@@ -420,6 +503,6 @@ describe("layered LPC actors", () => {
     actors.sync({ battle }); actors.animate(frame(1660), user.userId, undefined);
     expect(renders[0]!.mock.calls.at(-1)?.[1]).toBe(animation);
     actors.animate(frame(1740), user.userId, undefined);
-    expect(renders[0]!.mock.calls.at(-1)?.[1]).toBe("idle");
+    expect(renders[0]!.mock.calls.at(-1)?.[1]).toBe("combat");
   });
 });

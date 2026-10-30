@@ -5,8 +5,18 @@ scene lifecycle. Character creation and profile attribute management preview the
 same appearance recipe. Body style is independent of gender; existing characters
 derive their initial style from gender until the player selects one.
 
-Sector actors and idle/walk previews use compact movement atlases. Combat loads
-the attack poses. Sector actors outside a padded viewport do not acquire texture
+Sector actors and idle/walk previews share compact standing, idle and movement atlases.
+Combat also loads its ready stance and attack poses. Authored idle and combat cycles
+retain LPC's two-pose `[0, 0, 1]` breathing sequence. Each actor has an independent
+phase and chooses a new cycle duration between 1.6 and 3.6 seconds on each breath.
+Its layers share one phase; walking and attacks retain their authored speed.
+
+An outfit uses the combat stance only when every visible profile supplies it.
+Other outfits use a complete authored idle when available, or retain their aligned
+neutral pose with one source pixel of breathing motion. No equipment is hidden to
+satisfy a missing stance. Reduced motion holds the first pose and suppresses the
+breathing offset. Hidden/offscreen scenes suspend their existing frame loop;
+characters do not create individual animation timers. Sector actors outside a padded viewport do not acquire texture
 leases; moving the viewport into their area installs them from the latest snapshot,
 and departing actors release their resources through their existing render scope.
 

@@ -83,7 +83,9 @@ export type LpcEquipmentProfile = (typeof lpcEquipmentProfiles)[number];
 export type LpcColor = (typeof lpcColors)[number];
 export type LpcBody = (typeof lpcBodyStyles)[number];
 export type LpcAnimation =
+  | "stand"
   | "idle"
+  | "combat"
   | "walk"
   | "slash"
   | "thrust"

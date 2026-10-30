@@ -359,7 +359,9 @@ export const createCombatActors = (
       }
       // Full authored cycles expire independently of reduced-motion frame freezing.
       const durations = {
+        stand: 0,
         idle: 0,
+        combat: 0,
         walk: 0,
         slash: 480,
         thrust: 640,
@@ -389,7 +391,13 @@ export const createCombatActors = (
         entry.sprite.visible = record.alive || falling;
         entry.character.render(
           frame,
-          falling ? "hurt" : distance > 0.01 ? "walk" : active ? cue.animation : "idle",
+          falling
+            ? "hurt"
+            : distance > 0.01
+              ? "walk"
+              : active
+                ? cue.animation
+                : "combat",
           record.facing ?? (user.direction === "left" ? 3 : 1),
           startsAction,
         );

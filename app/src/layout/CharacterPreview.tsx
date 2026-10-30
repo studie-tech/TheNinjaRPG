@@ -56,7 +56,9 @@ export const CharacterPreview = ({
           const actor = await createLpcCharacter(
             game,
             JSON.parse(signature),
-            animation === "idle" || animation === "walk" ? "travel" : "all",
+            animation === "stand" || animation === "idle" || animation === "walk"
+              ? "travel"
+              : "all",
           );
           if (controller.signal.aborted) return;
           actor.sprite.position.set(128, 125);

@@ -1,6 +1,7 @@
 import { Container, Rectangle, Sprite, Texture, type TextureSource } from "pixi.js";
 import {
   LPC_ATTACK_FRAME_MS,
+  LPC_IDLE_FRAME_MS,
   lpcCatalog,
   lpcFrame,
   spriteLayerSheets,
@@ -48,11 +49,14 @@ export const createLpcCharacter = async (
   });
   const durations: Partial<Record<LpcAnimation, number>> = {};
   const poseOwners = new Map<LpcAnimation, (typeof parts)[number]>();
+  // Every visible profile must agree on a pose; legacy gear stays attached to the neutral outfit.
+  const hasIdle = parts.every((part) => part.authored.has("idle"));
+  const hasCombatIdle = parts.every((part) => part.authored.has("combat"));
   for (const part of parts)
     for (const [animation, directions] of Object.entries(
       lpcCatalog.layouts[part.sheet.layout]!.clips,
     ))
-      if (animation !== "idle" && animation !== "walk") {
+      if (!["stand", "idle", "combat", "walk"].includes(animation)) {
         const state = animation as LpcAnimation;
         durations[state] = Math.max(
           durations[state] ?? 0,
@@ -74,6 +78,9 @@ export const createLpcCharacter = async (
     direction: LpcDirection = 2,
     startedAt = 0,
     disposed = false;
+  // One actor-wide phase keeps its layers together; independent cycles avoid synchronized crowds.
+  let idlePhase = Math.random();
+  let idleDuration = 1600 + Math.random() * 2000;
   /** Restart retriggers the same animation for a new cue; elapsed time comes from the scene clock. */
   const render = (
     frame: GameFrame,
@@ -87,22 +94,48 @@ export const createLpcCharacter = async (
       startedAt = frame.now;
     }
     direction = nextDirection;
+    const idling = state === "idle" || state === "combat";
+    if (idling && !frame.reducedMotion) {
+      idlePhase += (Math.max(0, frame.delta) * 1000) / idleDuration;
+      if (idlePhase >= 1) {
+        idlePhase %= 1;
+        idleDuration = 1600 + Math.random() * 2000;
+      }
+    }
+    const sampleState = idling
+      ? state === "combat" && hasCombatIdle
+        ? "combat"
+        : hasIdle
+          ? "idle"
+          : "stand"
+      : state;
+    const elapsed = idling
+      ? frame.reducedMotion
+        ? 0
+        : idlePhase * 3 * LPC_IDLE_FRAME_MS
+      : frame.now - startedAt;
+    // Unsupported outfits breathe together by one source pixel, preserving their original pose and detail.
+    const breath =
+      idling && sampleState === "stand" && !frame.reducedMotion && idlePhase >= 2 / 3
+        ? -1 / 64
+        : 0;
     // A custom weapon drives the body timeline while retaining its own authored columns.
-    const poseOwner = poseOwners.get(state);
+    const poseOwner = poseOwners.get(sampleState);
     const pose =
-      poseOwner && lpcCatalog.layouts[poseOwner.sheet.layout]!.bodyPoses![state]!;
+      poseOwner && lpcCatalog.layouts[poseOwner.sheet.layout]!.bodyPoses![sampleState]!;
     const opposite = direction === 1 ? 3 : direction === 3 ? 1 : direction;
     const poses = pose?.frames[poseOwner?.layer.mirror ? opposite : direction];
-    const elapsed = frame.now - startedAt;
     const step = frame.reducedMotion
       ? 0
       : Math.floor(Math.max(0, elapsed) / LPC_ATTACK_FRAME_MS);
     const poseStep = poses?.[Math.min(step, poses.length - 1)];
     for (const entry of layers) {
+      entry.child.y = breath;
       const facing = entry.layer.mirror ? opposite : direction;
-      const customPose = lpcCatalog.layouts[entry.sheet.layout]?.bodyPoses?.[state];
+      const customPose =
+        lpcCatalog.layouts[entry.sheet.layout]?.bodyPoses?.[sampleState];
       const usesBodyPose = pose && !customPose;
-      const animation = usesBodyPose ? pose.animation : state;
+      const animation = usesBodyPose ? pose.animation : sampleState;
       if (
         entry.authored.has(animation) &&
         !lpcCatalog.layouts[entry.sheet.layout]?.clips[animation]
