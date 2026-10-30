@@ -78,5 +78,6 @@ describe("village expulsion recovery", () => {
     const result = await fetchUpdatedUser({ client: db, userId: "user-1" });
     expect(writes()).toBe(4);
     expect(result.user).toMatchObject({ isOutlaw: true, anbuId: null, anbuSquad: null });
+    expect(result).toMatchObject({ requiresUserRefresh: true, requiresProgressionRefresh: true });
   });
 });

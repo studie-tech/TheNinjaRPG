@@ -102,6 +102,20 @@ it.each(["reject", "unreject"] as const)("uses a confirmed count after %s withou
   test.unsubscribe();
 });
 
+it.each(["reject", "unreject"] as const)("reconciles lost review permission after %s", async (action) => {
+  const test = setup();
+  const saved = { ...profile(), userData: { ...profile().userData, role: "USER" }, notifications: [] };
+  test.read.mockResolvedValue(saved);
+  fetchCounts.mockResolvedValueOnce({ ...counts, canReview: false });
+  const response = { success: false, message: "Not allowed" };
+  await callbacks[action](response, {}, prepareUserUpdate(test.queryClient, key));
+  expect(test.read).toHaveBeenCalledTimes(1);
+  expect(test.queryClient.getQueryData(key)).toEqual(saved);
+  expect(test.onDecided).not.toHaveBeenCalled();
+  expect(shown).toHaveBeenCalledWith(response);
+  test.unsubscribe();
+});
+
 it.each(["approve", "revert", "bulkApprove"] as const)("reconciles equipped content and derived profile fields after %s", async (action) => {
   const test = setup();
   const saved = { ...profile(), userData: { ...profile().userData, bloodline: { id: "lineage", regenIncrease: 40 }, regeneration: 50 } };

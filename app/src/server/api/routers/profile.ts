@@ -3043,6 +3043,8 @@ const fetchUpdatedUserOnce = async (
     if (removedFromSquad) {
       user.anbuId = null;
       user.anbuSquad = null;
+      requiresUserRefresh = true;
+      requiresProgressionRefresh = true;
     }
     if (needsClanCleanup) {
       user.clanId = null;
