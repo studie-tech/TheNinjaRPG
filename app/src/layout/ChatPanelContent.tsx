@@ -4,6 +4,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowLeftRight,
   Ban,
   Bell,
   BellOff,
@@ -30,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useActivityDock } from "@/hooks/useActivityDock";
 import { useChatMutes } from "@/hooks/useChatMutes";
 import { useTaverns } from "@/hooks/useTaverns";
 import AvatarImage from "@/layout/Avatar";
@@ -79,6 +81,7 @@ export default function ChatPanelBody({
   const [panel, setPanel] = useAtom(chatPanelAtom);
   const mentions = useAtomValue(chatMentionsAtom);
   const mutes = useChatMutes();
+  const { swapSides, setSwapSides } = useActivityDock();
   // Phones show a list of chats first, then one conversation with a back button.
   const [phoneChat, setPhoneChat] = useState<PhoneChat | null>(null);
 
@@ -173,6 +176,18 @@ export default function ChatPanelBody({
           </div>
         )}
         <div className="ml-auto flex items-center">
+          {!isPhone && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-[32px] w-[32px]"
+              aria-label="Swap Chat and Activity sides"
+              title="Swap Chat and Activity sides"
+              onClick={() => setSwapSides(!swapSides)}
+            >
+              <ArrowLeftRight className="h-[16px] w-[16px]" />
+            </Button>
+          )}
           {!isPhone && (
             <Button
               variant="ghost"

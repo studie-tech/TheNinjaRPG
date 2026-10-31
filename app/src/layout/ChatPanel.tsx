@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ignoreToastInteractions } from "@/components/ui/outside-interaction";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useActivityDock } from "@/hooks/useActivityDock";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Loader from "@/layout/Loader";
 import { hasTutorialReminder } from "@/layout/TutorialSettings";
@@ -38,6 +39,7 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
   const mentions = useAtomValue(chatMentionsAtom);
   const isPhone = useMediaQuery("(max-width: 639px)");
   const [isWide, setIsWide] = useState(false);
+  const { swapSides } = useActivityDock();
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const open = panel.owner === id;
@@ -86,7 +88,7 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
         {open && !isPhone && (
           <PopoverContent
             side="top"
-            align="start"
+            align={swapSides ? "start" : "end"}
             collisionPadding={8}
             onInteractOutside={ignoreToastInteractions()}
             className={cn(

@@ -355,6 +355,8 @@ interface LogbookEntryProps {
   tracker: QuestTrackerType;
   showScene?: boolean;
   hideTitle?: boolean;
+  /** Keep objectives in one column inside a narrow activity panel. */
+  compact?: boolean;
 }
 
 interface QuestDialogSceneProps {
@@ -819,7 +821,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
           <div
             className={cn(
               "grid grid-cols-1 gap-4",
-              tierOrDaily || quest.content.objectives.length === 1
+              props.compact || tierOrDaily || quest.content.objectives.length === 1
                 ? "sm:grid-cols-1"
                 : "sm:grid-cols-2",
               showScene ? "px-3 pb-3" : "",

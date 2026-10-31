@@ -48,7 +48,7 @@ export function CompactComment(props: CompactCommentProps) {
   const { user, comment } = props;
   const isAuthor = !!userData && userData.userId === user.userId;
   const isQuoted = props.quoteIds?.includes(comment.id) ?? false;
-  const { userColor } = getPostUserClasses(user, props.tavernStyling);
+  const { userColor, titleColor } = getPostUserClasses(user, props.tavernStyling);
   const time = comment.createdAt.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -69,6 +69,7 @@ export function CompactComment(props: CompactCommentProps) {
         isSelf={isAuthor}
         onMention={props.onMentionUser}
         onMessage={props.onMessageUser}
+        tavernStyling={props.tavernStyling}
       />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-[6px] text-[12px]">
@@ -78,6 +79,13 @@ export function CompactComment(props: CompactCommentProps) {
           >
             {user.username}
           </Link>
+          {user.displayTitle && (
+            <span
+              className={cn("rounded-md px-[6px] py-[1px] text-[11px]", titleColor)}
+            >
+              {user.displayTitle}
+            </span>
+          )}
           <span className="bg-muted text-muted-foreground rounded px-[4px] text-[11px]">
             Lv {user.level} · {showUserRank(user)}
           </span>
@@ -240,13 +248,16 @@ function UserMenu({
   isSelf,
   onMention,
   onMessage,
+  tavernStyling,
 }: {
   user: CompactCommentProps["user"];
   isSelf: boolean;
+  tavernStyling?: boolean;
   onMention?: (username: string) => void;
   onMessage?: (user: ChatStartUser) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { userColor, titleColor } = getPostUserClasses(user, tavernStyling);
   const utils = api.useUtils();
   const { mutate: toggleBlock, isPending } =
     api.profile.toggleBlacklistEntry.useMutation({
@@ -265,15 +276,15 @@ function UserMenu({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        className="focus-visible:ring-ring h-[28px] w-[28px] shrink-0 overflow-hidden rounded-full focus-visible:ring-2"
+        className="focus-visible:ring-ring h-[36px] w-[36px] shrink-0 overflow-hidden rounded-lg focus-visible:ring-2"
         aria-label={`Actions for ${user.username}`}
       >
         <AvatarImage
           href={user.avatar}
           userId={user.userId}
           alt={user.username}
-          size={28}
-          className="rounded-full"
+          size={36}
+          className="w-full rounded-lg"
         />
       </PopoverTrigger>
       <PopoverContent
@@ -284,7 +295,26 @@ function UserMenu({
         aria-label={`Actions for ${user.username}`}
       >
         <div className="mb-[4px] border-b px-[8px] pt-[4px] pb-[8px]">
-          <p className="truncate text-[13px] font-bold">{user.username}</p>
+          <AvatarImage
+            href={user.avatar}
+            userId={user.userId}
+            alt={user.username}
+            size={160}
+            className="mb-2 w-full rounded-lg"
+          />
+          <p className={cn("truncate text-[13px] font-bold", userColor)}>
+            {user.username}
+          </p>
+          {user.displayTitle && (
+            <span
+              className={cn(
+                "mt-1 inline-block rounded-md px-2 py-0.5 text-xs",
+                titleColor,
+              )}
+            >
+              {user.displayTitle}
+            </span>
+          )}
           <p className="text-muted-foreground text-[12px]">
             Lv {user.level} {showUserRank(user)}
             {user.villageName ? ` · ${user.villageName}` : ""}

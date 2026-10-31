@@ -10,6 +10,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { IMG_LOGO_SHORT } from "@/drizzle/constants";
+import { useActivityDock } from "@/hooks/useActivityDock";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -44,6 +45,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
     location,
     variantClasses,
   } = props;
+  const { swapSides } = useActivityDock();
   const isGuidedTutorial = isTutorialActive(userData);
 
   return (
@@ -51,7 +53,9 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
       <div
         className={cn(
           "fixed hidden min-[1100px]:block",
-          userData ? "bottom-[80px] left-5 z-[61]" : "right-5 bottom-5 z-50",
+          userData
+            ? cn("bottom-5 z-[65]", swapSides ? "left-5" : "right-5")
+            : "right-5 bottom-5 z-50",
         )}
       >
         <LowerRightHelpBtn className="theme-header-button shadow-lg">

@@ -37,6 +37,9 @@ export const chatDraftsAtom = atom<Record<string, string>>({});
 /** Conversation currently on screen in the panel; its activity is already seen. */
 export const chatViewingAtom = atom<string | undefined>(undefined);
 
+/** Serialize full-list preference saves across every chat surface for the same account. */
+export const chatMutePendingAtom = atom<Record<string, boolean>>({});
+
 /**
  * Tavern mentions and replies received since the page loaded, per conversation.
  * Tavern traffic itself never counts; only messages aimed at the player do.

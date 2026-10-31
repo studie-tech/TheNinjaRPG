@@ -1,9 +1,9 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
-import { useAtomValue } from "jotai";
 import { ArrowRight, Loader2, Settings2, Sparkles, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,10 +31,10 @@ import {
   useTutorialStep,
 } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
+import { ActivityDock } from "@/layout/ActivityDock";
 import Image from "@/layout/Image";
 import { useCheckRewards } from "@/layout/Logbook";
 import { Objective } from "@/layout/Objective";
-import { chatPanelAtom } from "@/libs/chatPanel";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import {
@@ -62,30 +62,12 @@ import type { QuestTrackerType } from "@/validators/objectives";
 /** Marks the assistant panel so the highlight logic can measure what it covers. */
 const TUTORIAL_ASSISTANT_PANEL_ID = "tutorial-assistant-panel";
 
-/**
- * The area of the screen the assistant panel takes clicks in. The panel is fixed
- * to a corner, so a highlighted element can sit perfectly inside the viewport and
- * still be impossible to press underneath it. The nameplate hangs outside the
- * panel's own box so descendants are unioned in, but only ones that actually
- * intercept pointer events -- the character portrait is decorative and lets
- * clicks straight through, and counting it would push highlights further up the
- * page than they need to go.
- */
+/** Include the Activity header when keeping highlighted controls clear of the dock. */
 const getAssistantPanelRect = (): DOMRect | null => {
   const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
-  if (!panel) return null;
-  const rect = panel.getBoundingClientRect();
-  let { top, left, right, bottom } = rect;
-  for (const child of panel.querySelectorAll("*")) {
-    if (getComputedStyle(child).pointerEvents === "none") continue;
-    const r = child.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0) continue;
-    top = Math.min(top, r.top);
-    left = Math.min(left, r.left);
-    right = Math.max(right, r.right);
-    bottom = Math.max(bottom, r.bottom);
-  }
-  return new DOMRect(left, top, right - left, bottom - top);
+  return (
+    (panel?.closest("[data-activity-dock]") ?? panel)?.getBoundingClientRect() ?? null
+  );
 };
 
 const rectsOverlap = (a: DOMRect, b: DOMRect) =>
@@ -115,8 +97,7 @@ const AssistantPortrait: React.FC<{ characterImage?: string }> = ({
   const { variant } = useAbVariant(LEMU_EXPERIMENT);
   const defaultImage = getLemuImage(variant);
   const className = cn(
-    "pointer-events-none absolute right-0 z-0 w-auto select-none object-contain drop-shadow-2xl",
-    "-top-[10rem] h-[14rem] scale-x-[-1] md:-top-70 md:h-96",
+    "pointer-events-none h-16 w-12 shrink-0 select-none object-contain scale-x-[-1]",
   );
   return (
     <Image
@@ -130,7 +111,7 @@ const AssistantPortrait: React.FC<{ characterImage?: string }> = ({
 };
 
 /**
- * Reusable assistant dialog (uses the latter, correct styling)
+ * Tutorial content presented inside the Activity dock.
  * @param title - The title of the dialog
  * @param children - The content of the dialog
  * @param onOpenDisableModal - Optional callback when close button is clicked
@@ -166,87 +147,74 @@ const AssistantDialog: React.FC<{
   <section
     id={TUTORIAL_ASSISTANT_PANEL_ID}
     data-tutorial-step={stepId}
+    data-dodge-highlight={dodgeHighlight || undefined}
     aria-label={`Tutorial: ${title}`}
-    className={cn(
-      "pointer-events-auto fixed right-4 z-[60] md:right-4",
-      // The portrait hangs a long way above the panel, so the dodged position
-      // needs room for it rather than sitting flush at the top.
-      dodgeHighlight ? "top-44 md:top-52" : "bottom-24 md:bottom-4",
-    )}
+    className="pointer-events-auto relative"
   >
-    <div className="relative">
-      {/* Assistant portrait positioned behind and above the dialog (top-right) */}
-      <AssistantPortrait characterImage={characterImage} />
-      {/* Foreground content */}
-      <div className="relative z-10">
-        {/* Nameplate */}
-        <div className="absolute -top-6 left-8 rounded-md bg-primary px-4 py-1 text-primary-foreground text-xs uppercase tracking-wider shadow-lg md:text-sm">
+    <div className="relative p-4" aria-busy={isBusy}>
+      <div className="mb-3 flex items-center gap-3 pr-7">
+        <AssistantPortrait characterImage={characterImage} />
+        <h2 className="text-primary text-sm font-semibold uppercase tracking-wide">
           {title}
-        </div>
-        {/* Speech panel */}
-        <div
-          className="w-[80vw] rounded-xl border-2 border-primary bg-card p-4 text-foreground shadow-2xl md:w-[560px] md:p-5"
-          aria-busy={isBusy}
+        </h2>
+      </div>
+      {onOpenDisableModal && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenDisableModal();
+          }}
+          disabled={isBusy}
+          className="absolute top-2 right-2 h-6 w-6 p-0 opacity-50 hover:opacity-100"
+          title={isBusy ? "Disabling" : "Disable tutorial"}
+          aria-label={isBusy ? "Disabling" : "Disable tutorial"}
         >
-          {onOpenDisableModal && (
+          {isBusy ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <X className="h-4 w-4" aria-hidden="true" />
+          )}
+        </Button>
+      )}
+      {isBusy && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-3 flex items-center gap-2 font-medium text-muted-foreground text-sm"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Disabling
+        </div>
+      )}
+      {errorMessage && !isBusy && (
+        <p role="alert" className="mb-3 text-destructive text-sm">
+          {errorMessage}
+        </p>
+      )}
+      <fieldset disabled={isBusy} className="contents">
+        {children}
+        {showOrderingButton && onOpenOrderingDialog && (
+          <div className="mt-3 flex justify-end">
             <Button
               variant="ghost"
               size="sm"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onOpenDisableModal();
+                onOpenOrderingDialog();
               }}
-              disabled={isBusy}
-              className="absolute top-2 right-2 h-6 w-6 p-0 opacity-50 hover:opacity-100"
-              title={isBusy ? "Disabling" : "Disable tutorial"}
-              aria-label={isBusy ? "Disabling" : "Disable tutorial"}
+              className="opacity-50 hover:opacity-100"
+              title="Sort quest priorities"
             >
-              {isBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <X className="h-4 w-4" aria-hidden="true" />
-              )}
+              <Settings2 className="mr-1 h-4 w-4" />
+              <span className="text-xs">Priority</span>
             </Button>
-          )}
-          {isBusy && (
-            <div
-              role="status"
-              aria-live="polite"
-              className="mb-3 flex items-center gap-2 font-medium text-muted-foreground text-sm"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              Disabling
-            </div>
-          )}
-          {errorMessage && !isBusy && (
-            <p role="alert" className="mb-3 text-destructive text-sm">
-              {errorMessage}
-            </p>
-          )}
-          <fieldset disabled={isBusy} className="contents">
-            {children}
-            {showOrderingButton && onOpenOrderingDialog && (
-              <div className="mt-3 flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onOpenOrderingDialog();
-                  }}
-                  className="opacity-50 hover:opacity-100"
-                  title="Sort quest priorities"
-                >
-                  <Settings2 className="mr-1 h-4 w-4" />
-                  <span className="text-xs">Priority</span>
-                </Button>
-              </div>
-            )}
-          </fieldset>
-        </div>
-      </div>
+          </div>
+        )}
+      </fieldset>
     </div>
   </section>
 );
@@ -362,17 +330,35 @@ interface TutorialAssistantProps {
  */
 const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
   const pathname = usePublicPathname();
-  const { data: userData } = useUserDataSelector((user) => user.userId);
-  const isChatOpen = useAtomValue(chatPanelAtom).owner !== null;
-  // The game shell also wraps public pages. Reward hooks require a player and redirect
-  // anonymous visitors, so keep them unmounted until the profile is available.
-  // Keep browser authentication clear and unmount presentation listeners while chatting.
-  // The saved tutorial step and preference remain available when the assistant returns.
-  if (!userData || isBrowserAuthPath(pathname) || isChatOpen) return null;
-  return <PlayerTutorialAssistant {...props} />;
+  const { data: userData } = useUserData();
+  const tutorialIdentityRef = React.useRef({
+    userId: userData?.userId,
+    tutorialStep: userData?.tutorialStep,
+  });
+  React.useLayoutEffect(() => {
+    tutorialIdentityRef.current = {
+      userId: userData?.userId,
+      tutorialStep: userData?.tutorialStep,
+    };
+  }, [userData?.userId, userData?.tutorialStep]);
+  // Account-scoped presentation resets when the player changes; progress stays in the profile.
+  if (!userData || isBrowserAuthPath(pathname)) return null;
+  return (
+    <ActivityDock key={userData.userId}>
+      <PlayerTutorialAssistant {...props} tutorialIdentityRef={tutorialIdentityRef} />
+    </ActivityDock>
+  );
 };
 
-const PlayerTutorialAssistant: React.FC<TutorialAssistantProps> = ({
+const PlayerTutorialAssistant: React.FC<
+  TutorialAssistantProps & {
+    tutorialIdentityRef: React.RefObject<{
+      userId: string | undefined;
+      tutorialStep: number | undefined;
+    }>;
+  }
+> = ({
+  tutorialIdentityRef,
   rightSideBarOpen,
   setRightSideBarOpen,
   rightSideBarRef,
@@ -409,16 +395,6 @@ const PlayerTutorialAssistant: React.FC<TutorialAssistantProps> = ({
       }
     | undefined
   >(undefined);
-  const tutorialIdentityRef = React.useRef({
-    userId: userData?.userId,
-    tutorialStep: userData?.tutorialStep,
-  });
-  React.useLayoutEffect(() => {
-    tutorialIdentityRef.current = {
-      userId: userData?.userId,
-      tutorialStep: userData?.tutorialStep,
-    };
-  }, [userData?.userId, userData?.tutorialStep]);
   const [isDisablingTutorial, setIsDisablingTutorial] = useState(false);
   const [disableTutorialError, setDisableTutorialError] = useState<string>();
   const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
@@ -1203,53 +1179,60 @@ const PlayerTutorialAssistant: React.FC<TutorialAssistantProps> = ({
     { enabled: postTutorialCharacterIds.length > 0 },
   );
 
-  // Render Game Menu tutorial (with bottom-right assistant)
+  // Keep the game-menu highlight on the viewport and its explanation in Activity.
   const renderGameMenuTutorial = () => {
     if (gameMenuHighlight) {
       return (
-        <div className="fixed inset-0 z-[60]">
-          {/* Dim background */}
-          <div className="absolute inset-0 bg-black/30" />
+        <>
+          {createPortal(
+            <div className="fixed inset-0 z-[60] pointer-events-none">
+              {/* Dim background */}
+              <div className="absolute inset-0 bg-black/30" />
 
-          {/* Hole highlight over the game button */}
-          <div
-            className="absolute bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
-            style={highlightHoleStyle(gameMenuHighlight)}
-          >
-            <div className="absolute inset-0 z-[1] animate-pulse rounded-md border-[3px] border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.7)]">
-              {/* Allow clicking to open the menu */}
-              <button
-                type="button"
-                className="pointer-events-auto absolute inset-0 z-[2] cursor-pointer disabled:cursor-wait"
-                disabled={isDisablingTutorial}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (isDisablingTutorial) return;
-                  setRightSideBarOpen(true);
+              {/* Hole highlight over the game button */}
+              <div
+                className="absolute bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"
+                style={highlightHoleStyle(gameMenuHighlight)}
+              >
+                <div className="absolute inset-0 z-[1] animate-pulse rounded-md border-[3px] border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.7)]">
+                  {/* Allow clicking to open the menu */}
+                  <button
+                    type="button"
+                    className="pointer-events-auto absolute inset-0 z-[2] cursor-pointer disabled:cursor-wait"
+                    disabled={isDisablingTutorial}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (isDisablingTutorial) return;
+                      setRightSideBarOpen(true);
+                    }}
+                    aria-label="Open game menu"
+                  />
+                </div>
+              </div>
+
+              {/* Hand pointer near the highlighted button */}
+              <Image
+                src={IMG_URL_HANDPOINTER}
+                alt="Tap here"
+                className="absolute h-[4.5rem] w-[4.5rem] animate-bounce"
+                width={80}
+                height={80}
+                style={{
+                  top: Math.max(
+                    0,
+                    gameMenuHighlight.top + gameMenuHighlight.height + 12,
+                  ),
+                  left: Math.min(
+                    window.innerWidth - 40,
+                    gameMenuHighlight.left + gameMenuHighlight.width / 2 - 20,
+                  ),
                 }}
-                aria-label="Open game menu"
               />
-            </div>
-          </div>
-
-          {/* Hand pointer near the highlighted button */}
-          <Image
-            src={IMG_URL_HANDPOINTER}
-            alt="Tap here"
-            className="absolute h-[4.5rem] w-[4.5rem] animate-bounce"
-            width={80}
-            height={80}
-            style={{
-              top: Math.max(0, gameMenuHighlight.top + gameMenuHighlight.height + 12),
-              left: Math.min(
-                window.innerWidth - 40,
-                gameMenuHighlight.left + gameMenuHighlight.width / 2 - 20,
-              ),
-            }}
-          />
-
-          {/* Assistant panel bottom-right - large, game-like dialog */}
+            </div>,
+            document.body,
+          )}
+          {/* Tutorial presentation inside the Activity dock. */}
           <AssistantDialog
             title="Game Menu"
             stepId={currentStep?.id}
@@ -1273,7 +1256,7 @@ const PlayerTutorialAssistant: React.FC<TutorialAssistantProps> = ({
               </Button>
             </div>
           </AssistantDialog>
-        </div>
+        </>
       );
     }
 
@@ -1344,7 +1327,8 @@ const PlayerTutorialAssistant: React.FC<TutorialAssistantProps> = ({
     <>
       {highlight &&
         highlight.stepId === currentTutorialStep.id &&
-        !showCancelConfirmDialog && (
+        !showCancelConfirmDialog &&
+        createPortal(
           <div className={cn("fixed inset-0 z-[60]", pointerEvents)}>
             <div className="absolute inset-0 min-h-[2000px] bg-black/30" />
 
@@ -1387,10 +1371,11 @@ const PlayerTutorialAssistant: React.FC<TutorialAssistantProps> = ({
                 ),
               }}
             />
-          </div>
+          </div>,
+          document.body,
         )}
 
-      {/* Assistant panel bottom-right - large, game-like dialog */}
+      {/* Tutorial presentation inside the Activity dock. */}
       {!currentTutorialStep.hideDialog &&
         !showOrderingDialog &&
         !showCancelConfirmDialog && (

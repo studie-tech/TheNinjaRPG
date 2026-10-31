@@ -5,6 +5,9 @@ import type { ComponentProps, ReactNode } from "react";
 import { type Control, useController } from "react-hook-form";
 import { CommentOnConversation } from "@/layout/Comment";
 import * as CommentModule from "@/layout/Comment";
+import * as Avatar from "@/layout/Avatar";
+import { CompactComment } from "@/layout/CompactComment";
+import * as PostModule from "@/layout/Post";
 import * as Confirm from "@/layout/Confirm";
 import { ConversationComments } from "@/layout/ConversationComments";
 import type { PostProps } from "@/layout/Post";
@@ -18,6 +21,7 @@ const edit = vi.fn();
 vi.mock("@/app/_trpc/client", () => ({
   api: {
     useUtils: () => ({ comments: { getConversationComments: { invalidate: vi.fn() } } }),
+    profile: { toggleBlacklistEntry: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) } },
     comments: {
       editConversationComment: { useMutation: () => ({ mutate: edit, isPending: false }) },
       deleteConversationComment: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -26,9 +30,6 @@ vi.mock("@/app/_trpc/client", () => ({
 }));
 vi.mock("@/utils/UserContext", () => ({ useUserData: () => ({ data: { userId: "friend", role: "USER" } }) }));
 vi.mock("@/libs/toast", createToastMock);
-vi.mock("@/layout/Post", () => ({
-  default: ({ children, options }: { children: ReactNode; options?: ReactNode }) => <div>{options}{children}</div>,
-}));
 vi.mock("@/layout/RichInput", () => ({
   default: ({ control, disabled }: { control: Control<MutateCommentSchema>; disabled?: boolean }) => {
     const { field } = useController({ control, name: "comment" });
@@ -39,17 +40,20 @@ vi.mock("@/layout/ModerationSummary", () => ({ ModerationSummary: () => null }))
 vi.mock("@/layout/Report", () => ({ default: () => null }));
 vi.mock("@/layout/EmojiPicker", () => ({ default: () => null }));
 
+let postSpy: { mockRestore: () => void };
 let confirmSpy: { mockRestore: () => void };
 let rowSpy: { mockRestore: () => void } | undefined;
 let parseSpy: { mockRestore: () => void } | undefined;
 beforeEach(() => {
   ensureDom();
   vi.clearAllMocks();
+  postSpy = vi.spyOn(PostModule, "default").mockImplementation(({ children, options }) => <div>{options}{children}</div>);
   confirmSpy = vi.spyOn(Confirm, "default").mockImplementation(() => null);
 });
 afterEach(() => {
   cleanup();
   confirmSpy.mockRestore();
+  postSpy.mockRestore();
   rowSpy?.mockRestore();
   parseSpy?.mockRestore();
   rowSpy = undefined;
@@ -279,5 +283,37 @@ describe("conversation comment row isolation", () => {
     expect(view.getByRole("button", { name: "React first" }).hasAttribute("disabled")).toBe(true);
     expect(view.getByRole("button", { name: "Quote first" }).hasAttribute("disabled")).toBe(true);
     for (const [rendered] of renders.mock.calls.slice(-3)) expect(rendered.canEdit).toBe(false);
+  });
+});
+
+
+describe("compact chat identity", () => {
+  it("uses Tavern title colours and preserves the custom avatar in the larger preview", async () => {
+    const descriptors = ["Event", "CustomEvent", "ResizeObserver"].map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperties(globalThis, {
+      Event: { configurable: true, value: window.Event },
+      CustomEvent: { configurable: true, value: window.CustomEvent },
+      ResizeObserver: { configurable: true, value: class { observe() {} unobserve() {} disconnect() {} } },
+    });
+    const avatar = vi.spyOn(Avatar, "default").mockImplementation((props) => <img src={props.href ?? undefined} alt={props.alt} width={props.size} />);
+    try {
+      const styledUser = { ...user, displayTitle: "Village Guardian", tavernTitleColor: "COBALT" as const, avatar: "https://example.com/custom-avatar.gif" };
+      const view = render(<CompactComment user={styledUser} comment={comment} tavernStyling editing={false} setEditing={() => {}}>Message</CompactComment>);
+      expect(view.getByText("Village Guardian").className).toContain("bg-cyan-500");
+      expect(view.getByText("Village Guardian").className).toContain("text-black");
+      fireEvent.click(view.getByRole("button", { name: "Actions for Friend" }));
+      const images = view.getAllByRole("img", { name: "Friend" }) as HTMLImageElement[];
+      expect(images.some((image) => image.width === 160 && image.src === styledUser.avatar)).toBe(true);
+      expect(view.getByRole("menuitem", { name: "See profile" }).getAttribute("href")).toBe("/username/Friend");
+      view.unmount();
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    } finally {
+      avatar.mockRestore();
+      ["Event", "CustomEvent", "ResizeObserver"].forEach((name, index) => {
+        const descriptor = descriptors[index];
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+        else Reflect.deleteProperty(globalThis, name);
+      });
+    }
   });
 });

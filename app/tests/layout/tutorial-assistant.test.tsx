@@ -55,7 +55,7 @@ vi.mock("@/hooks/tutorial", () => {
   return { TUTORIAL_STEPS: [step], TUTORIAL_HOSPITALIZED_STEP: step, useTutorialStep: () => ({ currentStep: testMocks().step, currentStepNumber: 0, isAssistantVisible: true, setIsAssistantVisible: vi.fn(), updateTutorialStep: vi.fn(), handleNextStep: testMocks().next }) };
 });
 vi.mock("@/hooks/useAbVariant", () => ({ useAbVariant: () => ({ variant: "A" }) }));
-vi.mock("@/layout/Logbook", () => ({ useCheckRewards: () => {
+vi.mock("@/layout/Logbook", () => ({ LogbookEntry: () => null, useCheckRewards: () => {
   testMocks().rewardHook();
   return { checkRewards: vi.fn(), isCheckingRewards: false };
 } }));
@@ -66,12 +66,15 @@ const componentSpies: { mockRestore: () => void }[] = [];
 
 let close: (() => void) | undefined;
 const animationFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
+const customEvent = Object.getOwnPropertyDescriptor(globalThis, "CustomEvent");
 beforeEach(() => {
   componentSpies.push(vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
     const data = mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData;
     return { data: data ? select(data) : undefined, updateUser: mocks.updateUser } as never;
   }));
   ensureDom();
+  localStorage.clear();
+  Object.defineProperty(globalThis, "CustomEvent", { configurable: true, value: window.CustomEvent });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   // Bun shares modules between suites; restore Objective after each test.
   componentSpies.push(vi.spyOn(objective, "Objective").mockImplementation(() => null));
@@ -125,6 +128,8 @@ afterEach(() => {
   close?.();
   close = undefined;
   mocks.client.clear();
+  if (customEvent) Object.defineProperty(globalThis, "CustomEvent", customEvent);
+  else Reflect.deleteProperty(globalThis, "CustomEvent");
   if (animationFrame) Object.defineProperty(globalThis, "requestAnimationFrame", animationFrame);
   else Reflect.deleteProperty(globalThis, "requestAnimationFrame");
 });
@@ -245,6 +250,7 @@ describe("TutorialAssistant disable reconciliation", () => {
     await act(async () => { resolve({ success: true, message: "Saved" }); });
     expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)).toEqual(profile(300, "other"));
     expect(mocks.updateUser).not.toHaveBeenCalled();
-    expect(view.getByRole("button", { name: "Skip Tutorial" })).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Skip Tutorial" })).toBeNull();
+    expect(view.getByRole("button", { name: "Disable tutorial" })).toBeTruthy();
   });
 });

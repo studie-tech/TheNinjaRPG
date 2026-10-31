@@ -13,6 +13,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { IMG_LAYOUT_MOBILE_TOP, IMG_LOGO_SHORT } from "@/drizzle/constants";
+import { useActivityDock } from "@/hooks/useActivityDock";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -55,6 +56,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   showMobileNotifications,
   mobileNotificationCount,
 }) => {
+  const { swapSides } = useActivityDock();
   return (
     <div
       className="tnr-pixel-game absolute top-0 bottom-0 w-full md:relative"
@@ -65,7 +67,10 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
           className={cn(
             "fixed bottom-1 rounded-full bg-slate-500",
             userData
-              ? "left-1 z-[61] md:bottom-[80px] md:left-5"
+              ? cn(
+                  "z-[65] md:bottom-5",
+                  swapSides ? "left-1 md:left-5" : "right-1 md:right-5",
+                )
               : "right-1 z-50 md:right-5 md:bottom-5",
           )}
         >
