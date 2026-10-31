@@ -83,6 +83,35 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("travel scene ground depth", () => {
+  it("grounds border walls in neighboring water and refreshes their retained terrain after a layout change", async () => {
+    const state=snapshotFixture(),water=state.window[0]!,village=windowEntry(725,1);
+    const ocean=(entry:TravelWindowEntry)=>{
+      entry.map={...entry.map,objects:[],tiles:Array.from({length:144},(_,i)=>({x:i%12,y:Math.floor(i/12),terrain:"ocean",battleBiome:"ocean",zone:"water",walkCost:1,blocked:false}))};
+    };
+    ocean(water);ocean(village);
+    water.structures=[];village.villageType="VILLAGE";
+    village.structures=[{...village.structures[0]!,longitude:6,latitude:0}];
+    state.window=[water,village];state.terrains=new Map([["ocean",BUILTIN_TERRAINS_BY_KEY.get("ocean")!]]);
+    const {scene}=await sceneFixture(state);
+    const bank=()=>scene.sectors.get(724)!.grid.getHex({col:6,row:11})!;
+    expect(bank().spec?.isWater).toBe(false);
+    expect(bank().spec?.depression).toBe(0);
+    await scene.updateWindow();
+    const previous=scene.sectors.get(724)!;
+    village.structures=[{...village.structures[0]!,longitude:2}];
+    await scene.updateWindow();
+    expect(scene.sectors.get(724)).not.toBe(previous);
+    expect(bank().spec?.isWater).toBe(true);
+    expect(scene.sectors.get(724)!.grid.getHex({col:2,row:11})!.spec?.isWater).toBe(false);
+    const retained=scene.sectors.get(724)!;
+    state.sector=725;state.window=[{...village,dy:0},{...water,dy:-1}];
+    await scene.updateWindow();
+    expect(scene.sectors.get(724)).toBe(retained);
+    village.structures=[];state.window=[{...village,dy:0},{...water,dy:-1}];
+    await scene.updateWindow();
+    expect(scene.sectors.get(724)!.grid.getHex({col:2,row:11})!.spec?.isWater).toBe(true);
+  });
+
   it.each([false, true])("retains shoreline topology across account refreshes (shared navigation: %s)", async (shared) => {
     const state = snapshotFixture(), entry = state.window[0]!;
     entry.globalTileType = 0;

@@ -47,6 +47,8 @@ export interface VillageWallPlan {
   vertices: VillageWallVertex[];
   /** Closed boundary loops as ordered vertex ids (first id is not repeated). */
   contours: string[][];
+  /** Local footing cells, including walls continuing from a neighboring sector. */
+  foundationKeys?: Set<string>;
 }
 
 /**
@@ -55,9 +57,9 @@ export interface VillageWallPlan {
  * reaching back over the masonry even when their trunks are farther away.
  */
 export const getVillageWallDecorationClearanceKeys = (
-  plan: Pick<VillageWallPlan, "edges">,
+  plan: Pick<VillageWallPlan, "edges" | "foundationKeys">,
 ) => {
-  const keys = new Set<string>();
+  const keys = new Set<string>(plan.foundationKeys);
   for (const edge of plan.edges) {
     keys.add(getSectorTileKey(edge.tile.x, edge.tile.y));
     const outside = getNeighborCoordinates(edge.tile)[edge.direction];
@@ -71,7 +73,10 @@ export const getVillageWallDecorationClearanceKeys = (
 };
 
 /** Both faces bordering each wall support its masonry and share scenery clearance. */
-export const getVillageWallFoundationKeys = (plan: Pick<VillageWallPlan, "edges">) => {
+export const getVillageWallFoundationKeys = (
+  plan: Pick<VillageWallPlan, "edges" | "foundationKeys">,
+) => {
+  if (plan.foundationKeys) return plan.foundationKeys;
   const keys = new Set<string>();
   for (const edge of plan.edges) {
     keys.add(getSectorTileKey(edge.tile.x, edge.tile.y));
@@ -429,4 +434,63 @@ export const planVillageWalls = (
     vertices,
     contours,
   };
+};
+
+/** Distribute wall footings across the same aligned sector offsets used by travel rendering. */
+export const planVillageWallWindow = (
+  entries: {
+    sector: number;
+    dx: number;
+    dy: number;
+    map: VillageWallMap;
+    structures: VillageWallStructure[];
+    villageType: string | null;
+  }[],
+) => {
+  const center =
+    entries.find((entry) => entry.dx === 0 && entry.dy === 0) ?? entries[0];
+  const plans = new Map(
+    entries.map((entry) => [
+      entry.sector,
+      usesVillageWalls(entry.villageType)
+        ? planVillageWalls(entry.map, entry.structures)
+        : null,
+    ]),
+  );
+  if (!center) return plans;
+  const { width, height } = center.map;
+  const byOffset = new Map(entries.map((entry) => [`${entry.dx},${entry.dy}`, entry]));
+  for (const entry of entries) {
+    const plan = plans.get(entry.sector);
+    if (!plan || entry.map.width !== width || entry.map.height !== height) continue;
+    // Only owned edges emit footings; imported cells must not propagate a second time.
+    for (const key of getVillageWallFoundationKeys({ edges: plan.edges })) {
+      const point = parseCoordinateKey(key);
+      const dx = Math.floor(point.x / width),
+        dy = Math.floor(point.y / height);
+      const target = byOffset.get(`${entry.dx + dx},${entry.dy + dy}`);
+      const local = { x: point.x - dx * width, y: point.y - dy * height };
+      if (
+        !target ||
+        target.map.width !== width ||
+        target.map.height !== height ||
+        !inBounds(target.map, local)
+      )
+        continue;
+      let targetPlan = plans.get(target.sector);
+      if (!targetPlan) {
+        targetPlan = {
+          structures: [],
+          interior: [],
+          edges: [],
+          vertices: [],
+          contours: [],
+        };
+        plans.set(target.sector, targetPlan);
+      }
+      targetPlan.foundationKeys ??= getVillageWallFoundationKeys(targetPlan);
+      targetPlan.foundationKeys.add(getSectorTileKey(local.x, local.y));
+    }
+  }
+  return plans;
 };
