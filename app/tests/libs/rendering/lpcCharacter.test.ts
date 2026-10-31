@@ -371,12 +371,14 @@ describe("layered LPC actors", () => {
     // The server recipe takes precedence over a stale cached profile body style.
     expect(create.mock.calls[0]?.[1]).toEqual(appearance);
     expect(renders).toHaveLength(1);
-    expect((root.children[0] as Graphics).context.fillStyle.color).toBe(0x3c80bb);
+    expect((root.children[0] as Graphics).context.fillStyle.color).toBe(0x081115);
+    expect((root.children[0] as Graphics).context.strokeStyle.color).toBe(0x3c80bb);
     user.allianceStatus = "ENEMY";
     actors.sync(snapshot);
     const hostile = actors.container.children[0]!;
     expect(root.destroyed).toBe(true);
-    expect((hostile.children[0] as Graphics).context.fillStyle.color).toBe(0xb84040);
+    expect((hostile.children[0] as Graphics).context.fillStyle.color).toBe(0x081115);
+    expect((hostile.children[0] as Graphics).context.strokeStyle.color).toBe(0xb84040);
     actors.setViewport({ minX: -farTile.center.x, maxX: -farTile.center.x, minY: -farTile.center.y, maxY: -farTile.center.y });
     expect(actors.container.children).toHaveLength(2);
     const distant = actors.container.children.find((child) => child !== hostile)!;

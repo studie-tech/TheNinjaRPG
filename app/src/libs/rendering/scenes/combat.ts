@@ -100,15 +100,16 @@ export const createCombatScene = async (options: {
     const groundLayer = new RenderLayer(),
       depthLayer = new RenderLayer({ sortableChildren: true }),
       uiLayer = new RenderLayer();
-    lightingLayer.addChild(groundLayer, depthLayer);
     const [terrain, art] = await Promise.all([
       createHexTerrain(game, data.terrain, false),
       createWorldSprites(game, data.scenery, shadows),
     ]);
     if (game.isDisposed()) throw new DOMException("Combat cancelled", "AbortError");
     if (shadows) game.own(shadows.registerTerrain(terrain.container, data.terrain));
-    const outlines = new Graphics(),
+    const outlines = new Graphics({ label: "combat-grid-outlines" }),
       labels = new Container();
+    // Tile markings share the ground plane, beneath physical fighters and scenery.
+    lightingLayer.addChild(groundLayer, outlines, labels, depthLayer);
     const actors = createCombatActors(
       game,
       data.grid,
@@ -146,8 +147,6 @@ export const createCombatScene = async (options: {
       lightingLayer,
       effects.ground,
       weather.container,
-      outlines,
-      labels,
       uiLayer,
       actors.container,
       effects.container,

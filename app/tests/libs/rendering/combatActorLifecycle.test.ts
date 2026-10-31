@@ -105,6 +105,12 @@ describe("combat actor reconciliation", () => {
       expect(root.getChildIndex(marker)).toBeLessThan(root.getChildIndex(art));
       expect(marker.getLocalBounds().maxY).toBeLessThan(tile.height * 0.5);
     }
+    expect(root.children[0]!.width).toBeLessThan(tile.width * 0.5);
+    expect(root.children[0]!.height).toBeLessThanOrEqual(tile.height * 0.2);
+    if (isAi) {
+      const figure = art.children[0]!.children.find((child) => child.label === "aiAvatar")!;
+      expect(root.children[0]!.y).toBeCloseTo(figure.y - figure.height / 2);
+    }
     expect(threat.y - threat.height / 2).toBeCloseTo(health.y + health.height / 2);
     for (const label of ["combat-health", "combat-stamina", "combat-chakra"]) {
       const meter = root.getChildByLabel(label)!;
@@ -188,6 +194,8 @@ describe("combat actor reconciliation", () => {
       expect((bounds.minY + bounds.maxY) / 2).toBeCloseTo(footY);
     }
     expect(root.children[0]?.position).toMatchObject({ x: tile.width / 2, y: footY });
+    expect(root.children[0]!.width).toBeLessThan(tile.width * 0.4);
+    expect(root.children[0]!.height).toBeLessThan(tile.height * 0.2);
   });
   it("pulses selection size and opacity around a fixed foot point and freezes for reduced motion", async () => {
     const { actors, selection, hover, user } = await setup(false, resolveSpriteAppearance({}));

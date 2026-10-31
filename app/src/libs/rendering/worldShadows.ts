@@ -749,13 +749,13 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             (dynamic ? dynamicOccluders : staticOccluders).push(record.occluder);
         }
         if (dynamic && record.occluder) {
-          // An elevated fill directly over the feet keeps the pool centered and the self shadow compact.
+          // An overhead fill stays above the head while its falloff reaches the ground around the feet.
           recordLights.push({
             x: (characterFoot?.x ?? record.occluder.footX) - anchorX,
             y:
               (characterFoot ? characterFoot.y * 2 : record.occluder.footY) -
               anchorY * 2,
-            z: characterHeight * 2 + 2,
+            z: characterHeight + 2,
             reach: characterHeight * 0.65,
             color: [3, 2.5, 1.8],
           });

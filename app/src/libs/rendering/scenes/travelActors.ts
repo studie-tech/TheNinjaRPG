@@ -140,7 +140,8 @@ export const createTravelActors = (
               recipe.tile.height * 0.35 * LPC_TRAVEL_SCALE,
               recipe.tile.height * 0.12 * LPC_TRAVEL_SCALE,
             )
-            .fill({ color, alpha: 0.55 }),
+            .fill({ color: 0x081115, alpha: 0.4 })
+            .stroke({ color, alpha: 0.45, width: recipe.tile.height * 0.015 }),
         );
       }
       scope.own(() => {
@@ -576,7 +577,7 @@ export const travelAvatar = (
 const LPC_TRAVEL_SCALE = 0.7;
 const LPC_TRAVEL_HEIGHT = 1.8 * LPC_TRAVEL_SCALE;
 const LPC_TRAVEL_FOOT_Y = 0.1;
-const LPC_TRAVEL_CONTACT_Y = 0.2;
+const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
 const isActorControl = (kind: string) =>
   kind === "attack" || kind === "heal" || kind === "info" || kind === "talk";
 

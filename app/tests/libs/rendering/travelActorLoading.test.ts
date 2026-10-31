@@ -97,7 +97,7 @@ describe("travel actor artwork loading", () => {
       expect(body).toBeInstanceOf(Graphics);
       expect(body?.visible).toBe(true);
       expect(root.parentRenderLayer).toBe(depth);
-      expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * 0.2));
+      expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64)));
       const point = bodyPoint(root, tile);
       expect(actors.hit(point.x, point.y)).toMatchObject({ type: "avatar", userId: `loading-${index}` });
     }
@@ -117,9 +117,9 @@ describe("travel actor artwork loading", () => {
     expect(fallback.scale.y).toBeCloseTo(-tile.height * 1.8 * 0.7);
     expect(fallback.y - fallback.scale.x / 2).toBeCloseTo(tile.height * 0.1);
     const shadow = (root.children[0] as Graphics).getLocalBounds();
-    expect(shadow.width).toBeCloseTo(tile.height * 0.35 * 2 * 0.7);
-    expect(shadow.height).toBeCloseTo(tile.height * 0.12 * 2 * 0.7);
-    expect(shadow.y + shadow.height / 2).toBeCloseTo(tile.height * 0.2);
+    expect(shadow.width).toBeCloseTo(tile.height * (0.35 * 2 * 0.7 + 0.015));
+    expect(shadow.height).toBeCloseTo(tile.height * (0.12 * 2 * 0.7 + 0.015));
+    expect(shadow.y + shadow.height / 2).toBeCloseTo(tile.height * (0.1 + 1.8 * 0.7 * 4 / 64));
     actors.sync(snapshot([player(0, { longitude: 1 })])); actors.animate(frame);
     const expectedBounds = fallback.getBounds();
     const expectedPosition = root.position.clone();
@@ -130,7 +130,7 @@ describe("travel actor artwork loading", () => {
     expect(fallback.destroyed).toBe(true);
     const bounds = body.getBounds();
     for (const key of ["minX", "maxX", "minY", "maxY"] as const) expect(bounds[key]).toBeCloseTo(expectedBounds[key]);
-    expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * 0.2 + actors.container.y));
+    expect(root.zIndex).toBeCloseTo(-(root.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64) + actors.container.y));
     const point = body.getGlobalPosition();
     expect(actors.hit(point.x, point.y)).toMatchObject({ type: "avatar", userId: "loading-0" });
   });

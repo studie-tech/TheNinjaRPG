@@ -171,7 +171,7 @@ describe("travel scene ground depth", () => {
     advance(frame(1100, false));
     const height = sector.grid.getHex({ col: 4, row: 4 })!.height;
     expect(actor.y).not.toBe(before);
-    expect(actor.zIndex).toBeCloseTo(-(actor.y + height * 0.2 + sector.position.y));
+    expect(actor.zIndex).toBeCloseTo(-(actor.y + height * (0.1 + 1.8 * 0.7 * 4 / 64) + sector.position.y));
     expect(stage.renderGroup!.structureDidChange).toBe(true);
     for (let tick = 0; tick < 8; tick++) advance(frame(1200 + tick));
     expect(depth.renderLayerChildren.find((child) => child.label === "user:self")).toBe(actor);
@@ -193,14 +193,14 @@ describe("travel scene ground depth", () => {
     expect(scene.sectors.get(724)).toBe(original);
     const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
     const tile = neighbor.grid.getHex({ col: 4, row: 4 })!;
-    expect(actor.zIndex).toBeCloseTo(-(actor.y + tile.height * 0.2 + neighbor.position.y));
+    expect(actor.zIndex).toBeCloseTo(-(actor.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64) + neighbor.position.y));
     // Moving the retained center far enough triggers the production rebase branch.
     neighbor.position = { x: 100_000, y: 100_000 };
     await scene.updateWindow(); advance();
     expect(neighbor.position).toEqual({ x: 0, y: 0 });
     expect(neighborArt.sprite.zIndex).toBeCloseTo(-neighborArt.description.groundY);
     expect(art.sprite.zIndex).toBeCloseTo(-(art.description.groundY + original.position.y));
-    expect(actor.zIndex).toBeCloseTo(-(actor.y + tile.height * 0.2));
+    expect(actor.zIndex).toBeCloseTo(-(actor.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64)));
     neighbor.art.setViewport({ minX: 100_000, maxX: 100_001, minY: 100_000, maxY: 100_001 }, 0);
     expect(neighborArt.sprite.renderable).toBe(false);
     expect(neighborArt.sprite.parentRenderLayer).toBe(depth);
@@ -212,7 +212,7 @@ describe("travel scene ground depth", () => {
     expect(neighborArt.sprite.destroyed).toBe(true);
   });
 
-  it("shrinks travel LPC art and shadows to 70% with a stable foot and shadow contact", async () => {
+  it("keeps compact travel LPC art and shadows at a shared foot contact", async () => {
     const { scene, depth } = await sceneFixture();
     const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
     const tile = scene.sectors.get(724)!.grid.getHex({ col: 4, row: 4 })!;
@@ -221,9 +221,9 @@ describe("travel scene ground depth", () => {
     expect(character.scale.x).toBeCloseTo(tile.height * 1.8 * 0.7);
     expect(character.y - character.scale.x / 2).toBeCloseTo(tile.height * 0.1);
     const bounds = shadow.getLocalBounds();
-    expect(bounds.width).toBeCloseTo(tile.height * 0.35 * 2 * 0.7);
-    expect(bounds.height).toBeCloseTo(tile.height * 0.12 * 2 * 0.7);
-    expect(bounds.y + bounds.height / 2).toBeCloseTo(tile.height * 0.2);
+    expect(bounds.width).toBeCloseTo(tile.height * (0.35 * 2 * 0.7 + 0.015));
+    expect(bounds.height).toBeCloseTo(tile.height * (0.12 * 2 * 0.7 + 0.015));
+    expect(bounds.y + bounds.height / 2).toBeCloseTo(tile.height * (0.1 + 1.8 * 0.7 * 4 / 64));
     expect(actor.zIndex).toBeCloseTo(-(actor.y + bounds.y + bounds.height / 2));
   });
 
@@ -332,7 +332,7 @@ describe("travel scene ground depth", () => {
     expect(counter.parentRenderLayer).toBe(overlay);
     const physical = actors.container.children.filter((child) => child.label.startsWith("user:"));
     expect(physical.every((child) => child.parentRenderLayer === depth)).toBe(true);
-    expect(physical.every((child) => Math.abs(child.zIndex + child.y + grid.getHex({ col: 4, row: 4 })!.height * 0.2) < 0.0001)).toBe(true);
+    expect(physical.every((child) => Math.abs(child.zIndex + child.y + grid.getHex({ col: 4, row: 4 })!.height * (0.1 + 1.8 * 0.7 * 4 / 64)) < 0.0001)).toBe(true);
     actors.setViewport({ minX: -100_000, maxX: -99_999, minY: -100_000, maxY: -99_999 });
     expect(counter.destroyed).toBe(true);
     expect(overlay.renderLayerChildren).not.toContain(counter);

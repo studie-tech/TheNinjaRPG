@@ -90,20 +90,21 @@ export const createCombatActors = (
           root = new Container(),
           artRoot = new Container();
         const character = parts.find((part) => part.character);
+        const figure = parts.find((part) => part.shadowCaster === "character");
         const figureScale = character ? LPC_COMBAT_SCALE : 1;
         // LPC feet sit near row 60 of the 64px frame; ground cues share that contact point.
         const groundY = character
           ? character.y - character.size * (0.5 - 4 / 64)
-          : tile.height * 0.28;
+          : figure
+            ? figure.y - figure.size / 2
+            : tile.height * 0.28;
         const shadowSprite = new Sprite(shadow);
         shadowSprite.anchor.set(0.5);
-        shadowSprite.width = tile.width * 0.8 * figureScale;
-        shadowSprite.height = tile.height * 0.5 * figureScale;
+        // A compact contact stays beneath the feet alongside directional light shadows.
+        shadowSprite.width = tile.width * 0.45 * figureScale;
+        shadowSprite.height = tile.height * 0.2 * figureScale;
         shadowSprite.scale.y *= -1;
-        shadowSprite.position.set(
-          tile.width / 2,
-          character ? groundY : tile.height * 0.3,
-        );
+        shadowSprite.position.set(tile.width / 2, figure ? groundY : tile.height * 0.3);
         const selection = groundSelection(tile, true, groundY),
           hover = groundSelection(tile, false, groundY);
         artRoot.label = "combat-art";
