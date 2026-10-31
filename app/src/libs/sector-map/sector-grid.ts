@@ -103,9 +103,8 @@ export const prepareSectorGrid = (
       tile.battleBiome = authoredTile?.battleBiome ?? spec.battleBiome;
 
       const hasStructureFoundation = structureTileKeys.has(tileKey);
-      // Structures and the village-facing tile below each wall segment use a
-      // flat, biome-appropriate foundation. This keeps walls from floating on
-      // recessed water/ice while leaving the exterior terrain untouched.
+      // Both sides of a wall need solid footing; authored land keeps its material,
+      // while recessed water and ice receive a flat, biome-appropriate foundation.
       if (hasStructureFoundation || wallFoundationKeys.has(tileKey)) {
         // Authored land defines foundations even when the globe biome differs.
         // Recessed water and ice use flat land and snow beneath structures.

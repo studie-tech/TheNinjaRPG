@@ -158,7 +158,7 @@ describe("planVillageWalls", () => {
     expect(clearance.has("5,5")).toBe(false);
   });
 
-  it("marks the village-side terrain below every wall segment as foundation", () => {
+  it("marks both terrain faces bordering every wall segment as foundation", () => {
     const plan = planVillageWalls(makeMap(), [physical(5, 5)]);
     const foundations = getVillageWallFoundationKeys(plan);
     expect(foundations.size).toBeGreaterThan(0);
@@ -166,7 +166,7 @@ describe("planVillageWalls", () => {
       expect(foundations.has(getSectorTileKey(edge.tile.x, edge.tile.y))).toBe(true);
       const outside = getNeighborCoordinates(edge.tile)[edge.direction];
       if (outside) {
-        expect(foundations.has(getSectorTileKey(outside.x, outside.y))).toBe(false);
+        expect(foundations.has(getSectorTileKey(outside.x, outside.y))).toBe(true);
       }
     }
   });
