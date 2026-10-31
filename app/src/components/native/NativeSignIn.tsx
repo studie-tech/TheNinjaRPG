@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "@clerk/nextjs";
 import {
   SiApple,
   SiDiscord,
@@ -7,7 +8,8 @@ import {
   SiGoogle,
 } from "@icons-pack/react-simple-icons";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { type NativeAuthResult, useNativeAuth } from "@/hooks/useNativeAuth";
 import { useNativeShell } from "@/hooks/useNativeShell";
@@ -35,9 +37,17 @@ const PROVIDERS: {
  */
 export default function NativeSignIn() {
   const isNativeShell = useNativeShell();
+  const { isLoaded, isSignedIn } = useSession();
+  const router = useRouter();
   const { isPending, signInWithApple, signInWithProvider } = useNativeAuth();
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Activating an account rebuilds the session boundary and can retire the original
+  // sign-in callback. Observe the live session so the replacement login also leaves.
+  useEffect(() => {
+    if (isNativeShell && isLoaded && isSignedIn) router.replace("/");
+  }, [isNativeShell, isLoaded, isSignedIn, router]);
 
   if (!isNativeShell) return null;
 
@@ -46,12 +56,6 @@ export default function NativeSignIn() {
     setActiveProvider(id);
     const result = await run();
     setActiveProvider(null);
-    if (result.status === "complete") {
-      // A fresh request lets the shell and home page route the new session to
-      // character creation or the existing character.
-      window.location.assign("/");
-      return;
-    }
     // A dismissed sheet is the player changing their mind, not something to report.
     if (result.status === "error") {
       void haptics.notify("ERROR");
