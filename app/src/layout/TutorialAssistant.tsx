@@ -1338,7 +1338,8 @@ const PlayerTutorialAssistant: React.FC<
         highlight.stepId === currentTutorialStep.id &&
         !showCancelConfirmDialog &&
         createPortal(
-          <div className={cn("fixed inset-0 z-[60]", pointerEvents)}>
+          <div className="pointer-events-none fixed inset-0 z-[60]">
+            {/* Only the highlighted control captures clicks; game controls stay reachable. */}
             <div className="absolute inset-0 min-h-[2000px] bg-black/30" />
 
             <div
