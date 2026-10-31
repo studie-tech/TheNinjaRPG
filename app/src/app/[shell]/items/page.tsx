@@ -31,6 +31,7 @@ import {
   COST_EXTRA_ITEM_SLOT,
   IMG_EQUIP_SILHOUETTE,
   ITEM_LEVEL_CAP,
+  NonActionItemTypes,
 } from "@/drizzle/constants";
 import type {
   Item,
@@ -46,6 +47,7 @@ import ContentBox from "@/layout/ContentBox";
 import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import { EquipmentPreview } from "@/layout/EquipmentPreview";
+import { LoadoutHotkeysPanel, useHotkeyAssignment } from "@/layout/HotkeyControls";
 import Image from "@/layout/Image";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -53,6 +55,7 @@ import Loader from "@/layout/Loader";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
+import { hotkeyLabel } from "@/libs/combat/hotkeys";
 import { applyActiveVariant } from "@/libs/combat/util";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
 import {
@@ -610,6 +613,33 @@ export default function MyItems() {
           </Confirm>
         </div>
       </div>
+      {userItems && (
+        <ContentBox
+          title="Battle Hotkeys"
+          subtitle="Keys for your equipped items"
+          initialBreak={true}
+        >
+          <LoadoutHotkeysPanel
+            kind="item"
+            actions={userItems
+              .filter(
+                (ui) =>
+                  ui.equipped !== "NONE" &&
+                  ui.quantity > 0 &&
+                  !NonActionItemTypes.includes(ui.item.itemType),
+              )
+              .map((ui) => ({
+                id: ui.itemId,
+                name: ui.item.name,
+                hidden: ui.item.hidden,
+              }))
+              .filter(
+                (action, index, list) =>
+                  list.findIndex((other) => other.id === action.id) === index,
+              )}
+          />
+        </ContentBox>
+      )}
     </>
   );
 }
@@ -1506,6 +1536,18 @@ const Character: React.FC<CharacterProps> = (props) => {
   // Set state
   const { useritems, userData } = props;
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    hotkeys,
+    assign: assignHotkey,
+    dialog: hotkeyDialog,
+  } = useHotkeyAssignment(
+    Object.fromEntries((useritems ?? []).map((ui) => [ui.itemId, ui.item.name])),
+  );
+  const hotkeyProps = {
+    hotkeys: hotkeys.byAction,
+    onAssignHotkey: (item: UserItem & Item) =>
+      assignHotkey({ id: item.itemId, name: item.name, kind: "item" }),
+  };
   const [slot, setSlot] = useState<ItemSlot | undefined>(undefined);
   const [useritem, setUserItem] = useState<UserItemWithRelations | undefined>(
     undefined,
@@ -1623,9 +1665,11 @@ const Character: React.FC<CharacterProps> = (props) => {
   const t3 = "top-[40%]";
   const t4 = "top-[60%]";
   const t5 = "top-[80%]";
+  const equipProps = { act, items, ...hotkeyProps };
 
   return (
     <div>
+      {hotkeyDialog}
       <div className="flex flex-row items-center justify-center text-center">
         <Image
           className="w-full opacity-50"
@@ -1634,21 +1678,21 @@ const Character: React.FC<CharacterProps> = (props) => {
           width={290}
           height={461}
         />
-        <Equip slot={"HEAD"} act={act} txt="Head" pos={t1} items={items} />
-        <Equip slot={"CHEST"} act={act} txt="Chest" pos={t2} items={items} />
-        <Equip slot={"WAIST"} act={act} txt="Waist" pos={t3} items={items} />
-        <Equip slot={"LEGS"} act={act} txt="Legs" pos={t4} items={items} />
-        <Equip slot={"FEET"} act={act} txt="Feet" pos={t5} items={items} />
-        <Equip slot={"KEYSTONE"} act={act} txt="Keystone" pos={l + t1} items={items} />
-        <Equip slot={"THROWN"} act={act} txt="Thrown" pos={r + t1} items={items} />
-        <Equip slot={"ITEM_1"} act={act} txt="Item" pos={l + t2} items={items} />
-        <Equip slot={"ITEM_2"} act={act} txt="Item" pos={r + t2} items={items} />
-        <Equip slot={"HAND_1"} act={act} txt="Hand" pos={l + t3} items={items} />
-        <Equip slot={"HAND_2"} act={act} txt="Hand" pos={r + t3} items={items} />
-        <Equip slot={"ITEM_3"} act={act} txt="Item" pos={l + t4} items={items} />
-        <Equip slot={"ITEM_4"} act={act} txt="Item" pos={r + t4} items={items} />
-        <Equip slot={"ITEM_5"} act={act} txt="Item" pos={l + t5} items={items} />
-        <Equip slot={"ITEM_6"} act={act} txt="Item" pos={r + t5} items={items} />
+        <Equip slot={"HEAD"} txt="Head" pos={t1} {...equipProps} />
+        <Equip slot={"CHEST"} txt="Chest" pos={t2} {...equipProps} />
+        <Equip slot={"WAIST"} txt="Waist" pos={t3} {...equipProps} />
+        <Equip slot={"LEGS"} txt="Legs" pos={t4} {...equipProps} />
+        <Equip slot={"FEET"} txt="Feet" pos={t5} {...equipProps} />
+        <Equip slot={"KEYSTONE"} txt="Keystone" pos={l + t1} {...equipProps} />
+        <Equip slot={"THROWN"} txt="Thrown" pos={r + t1} {...equipProps} />
+        <Equip slot={"ITEM_1"} txt="Item" pos={l + t2} {...equipProps} />
+        <Equip slot={"ITEM_2"} txt="Item" pos={r + t2} {...equipProps} />
+        <Equip slot={"HAND_1"} txt="Hand" pos={l + t3} {...equipProps} />
+        <Equip slot={"HAND_2"} txt="Hand" pos={r + t3} {...equipProps} />
+        <Equip slot={"ITEM_3"} txt="Item" pos={l + t4} {...equipProps} />
+        <Equip slot={"ITEM_4"} txt="Item" pos={r + t4} {...equipProps} />
+        <Equip slot={"ITEM_5"} txt="Item" pos={l + t5} {...equipProps} />
+        <Equip slot={"ITEM_6"} txt="Item" pos={r + t5} {...equipProps} />
         {isOpen && slot && (
           <Modal
             title="Select Item to Equip"
@@ -1795,10 +1839,15 @@ interface EquipProps {
   slot: ItemSlot;
   items: (UserItem & Item & { masteryWarning?: string })[] | undefined;
   act: (slot: ItemSlot) => void;
+  hotkeys?: Record<string, string>;
+  onAssignHotkey?: (item: UserItem & Item) => void;
 }
 
 const Equip: React.FC<EquipProps> = (props) => {
   const item = props.items?.find((item) => item.equipped === props.slot);
+  const canAssignHotkey =
+    item && item.quantity > 0 && !NonActionItemTypes.includes(item.itemType);
+  const hotkey = item && props.hotkeys?.[item.itemId];
   return (
     <button
       type="button"
@@ -1806,6 +1855,14 @@ const Equip: React.FC<EquipProps> = (props) => {
         item ? "" : "opacity-50"
       } rounded-xl hover:border-black hover:bg-slate-400`}
       onClick={() => props.act(props.slot)}
+      onContextMenu={
+        canAssignHotkey && props.onAssignHotkey
+          ? (event) => {
+              event.preventDefault();
+              props.onAssignHotkey?.(item);
+            }
+          : undefined
+      }
     >
       {item ? (
         <div className="relative h-full w-full">
@@ -1816,6 +1873,11 @@ const Equip: React.FC<EquipProps> = (props) => {
             rarity={item.rarity}
             className=""
           />
+          {canAssignHotkey && hotkey && (
+            <kbd className="pointer-events-none absolute top-[2px] left-[2px] z-10 rounded-[3px] border border-black/40 bg-white/90 px-[3px] font-mono text-[10px] font-bold text-black leading-[14px]">
+              {hotkeyLabel(hotkey)}
+            </kbd>
+          )}
           {/* Durability bar */}
           {item.maxDurability !== undefined &&
             item.durability !== undefined &&

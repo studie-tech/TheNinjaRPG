@@ -21,7 +21,11 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
-
+import {
+  DEFAULT_BASIC_HOTKEYS,
+  findLoadoutHotkeyConflict,
+  hotkeyLabel,
+} from "@/libs/combat/hotkeys";
 import {
   deletedReason,
   editedReason,
@@ -41,7 +45,6 @@ import {
   hasAnyJutsuEquipCap,
   type JutsuCapFlags,
 } from "@/libs/jutsu";
-
 import {
   getJutsuReskinMechanics,
   inheritJutsuReskinEffects,
@@ -77,6 +80,7 @@ import {
   isJutsuInTraining,
   isJutsuTrainToLearnRestricted,
 } from "@/libs/train";
+import { fetchItemLoadouts } from "@/queries/item";
 import {
   deleteJutsuForDelete,
   deleteUserJutsuForDelete,
@@ -158,6 +162,7 @@ import {
   updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically,
   updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically,
   updateJutsuLoadoutForRenameLoadout,
+  updateJutsuLoadoutForSetLoadoutHotkeys,
   updateJutsuLoadoutForUnequipAll,
   updateJutsuLoadoutIds,
   updateJutsuReskinForCreateReskin,
@@ -243,6 +248,7 @@ import {
   importJutsuLoadoutSchema,
   previewJutsuLoadoutSchema,
   renameLoadoutSchema,
+  setLoadoutHotkeysSchema,
   sharedJutsuLoadoutTextSchema,
 } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
@@ -434,20 +440,30 @@ export const jutsuRouter = createTRPCRouter({
   getLoadouts: protectedProcedure
     .meta({ mcp: { description: "Get user's jutsu loadouts" } })
     .query(async ({ ctx }) => {
-      const [loadouts, user] = await Promise.all([
+      const [loadouts, user, itemLoadouts] = await Promise.all([
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
         fetchLoadoutUser(ctx.drizzle, ctx.userId),
+        fetchItemLoadouts(ctx.drizzle, ctx.userId),
       ]);
       // Backfill any loadouts the user is entitled to but does not yet own. A
       // deterministic id + no-op upsert keeps concurrent reads from inserting
       // duplicates, and one batched insert avoids a round-trip per slot.
       const maxLoadouts = fedJutsuLoadouts(user);
+      // A newly unlocked loadout must not reclaim a basic key assigned to an item.
+      const itemKeys = new Set(
+        itemLoadouts.flatMap((row) => Object.values(row.hotkeys)),
+      );
+      const hotkeys = Object.fromEntries(
+        Object.entries(DEFAULT_BASIC_HOTKEYS)
+          .filter(([, key]) => itemKeys.has(key))
+          .map(([id]) => [id, ""]),
+      );
       const missing = buildMissingLoadouts(
         ctx.userId,
         "jutsu",
         loadouts.length,
         maxLoadouts,
-        { jutsuIds: [] as JutsuLoadout["jutsuIds"] },
+        { jutsuIds: [] as JutsuLoadout["jutsuIds"], hotkeys },
         new Date(),
       );
       return backfillLoadouts<JutsuLoadout>({
@@ -1844,6 +1860,37 @@ export const jutsuRouter = createTRPCRouter({
       };
     }),
 
+  setLoadoutHotkeys: protectedProcedure
+    .meta({ mcp: { description: "Set the battle hotkeys of a jutsu loadout" } })
+    .input(setLoadoutHotkeysSchema)
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [loadout, itemLoadouts] = await Promise.all([
+        findJutsuLoadoutForRenameLoadout(ctx.drizzle, input, ctx),
+        fetchItemLoadouts(ctx.drizzle, ctx.userId),
+      ]);
+      if (!loadout) return errorResponse("Loadout not found");
+      const conflict = findLoadoutHotkeyConflict("jutsu", input.hotkeys, itemLoadouts);
+      if (conflict) {
+        return errorResponse(
+          `${hotkeyLabel(conflict.key)} is used in ${conflict.loadoutName}. Change it there first.`,
+        );
+      }
+      // Concurrent edits on this account can leave a reversible binding conflict;
+      // resolveHotkeys still gives each key one action without requiring a transaction.
+      const result = await updateJutsuLoadoutForSetLoadoutHotkeys(
+        ctx.drizzle,
+        input,
+        ctx,
+      );
+      // MySQL reports no affected row when the keys did not change, so confirm
+      // ownership before calling an unchanged save a failure.
+      if (result.rowsAffected === 0) {
+        const exists = await findJutsuLoadoutForRenameLoadout(ctx.drizzle, input, ctx);
+        if (!exists) return errorResponse("Loadout not found");
+      }
+      return { success: true, message: "Hotkeys saved" };
+    }),
   renameLoadout: protectedProcedure
     .meta({ mcp: { description: "Rename a jutsu loadout" } })
     .input(renameLoadoutSchema)
