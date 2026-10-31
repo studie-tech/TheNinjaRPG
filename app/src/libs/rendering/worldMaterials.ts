@@ -277,12 +277,14 @@ export const createCharacterMaterialFrame = (
   texture: Texture,
   foot = texture.orig.height / 2 + 28,
 ) => {
-  const ratio = material.width / texture.source.pixelWidth;
+  // Rectangular CDN renditions can round width and height by different factors.
+  const ratioX = material.width / texture.source.pixelWidth,
+    ratioY = material.height / texture.source.pixelHeight;
   const rect = texture.frame.clone();
-  rect.x *= ratio;
-  rect.y *= ratio;
-  rect.width *= ratio;
-  rect.height *= ratio;
+  rect.x *= ratioX;
+  rect.y *= ratioY;
+  rect.width *= ratioX;
+  rect.height *= ratioY;
   const source = worldMaterialFrame(material, rect),
     { orig, trim } = texture;
   const vertices = Array.from(source.vertices),
@@ -301,10 +303,11 @@ export const createCharacterMaterialFrame = (
   project(points, 4);
   const indices = Array.from(source.indices);
   const volumes: AuthoredMaterialFrame["volumes"][number][] = [];
-  const pixel = 1 / ratio;
+  const pixelX = 1 / ratioX,
+    pixelY = 1 / ratioY;
   for (let y = 0; y < rect.height; y++) {
-    const top = foot - (trim?.y ?? 0) - y * pixel,
-      lower = Math.max(0, top - pixel);
+    const top = foot - (trim?.y ?? 0) - y * pixelY,
+      lower = Math.max(0, top - pixelY);
     if (top <= 0) continue;
     let start = -1;
     for (let x = 0; x <= Math.ceil(rect.width); x++) {
@@ -316,8 +319,8 @@ export const createCharacterMaterialFrame = (
       if (covered && start < 0) start = x;
       if ((covered || start < 0) && x < Math.ceil(rect.width)) continue;
       if (start < 0) continue;
-      const left = (trim?.x ?? 0) + start * pixel,
-        width = (Math.min(x, rect.width) - start) * pixel;
+      const left = (trim?.x ?? 0) + start * pixelX,
+        width = (Math.min(x, rect.width) - start) * pixelX;
       const depth = Math.min(width * 0.65, lower * 1.8);
       if (depth > 0) {
         const ring = Array.from({ length: 5 }, (_, index) => {

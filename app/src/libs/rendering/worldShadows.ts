@@ -627,12 +627,13 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           record.materials[record.sources.get(sprite.texture.source) ?? 0] ??
           record.materials[0];
         if (!material) continue;
-        const sourceRatio = material.width / sprite.texture.source.pixelWidth;
+        const sourceRatio = material.width / sprite.texture.source.pixelWidth,
+          heightRatio = material.height / sprite.texture.source.pixelHeight;
         const frameRect = sprite.texture.frame.clone();
         frameRect.x *= sourceRatio;
-        frameRect.y *= sourceRatio;
+        frameRect.y *= heightRatio;
         frameRect.width *= sourceRatio;
-        frameRect.height *= sourceRatio;
+        frameRect.height *= heightRatio;
         let frame = worldMaterialFrame(material, frameRect);
         if (record.character || (dynamic && material.isBillboard)) {
           let cached = characterFrames.get(sprite.texture);
@@ -1228,6 +1229,8 @@ const updateReceiverBatches = (
       const index = next.sources.indexOf(entry.material);
       const sourceRatio =
         entry.material.width / entry.record.sprite.texture.source.pixelWidth;
+      const heightRatio =
+        entry.material.height / entry.record.sprite.texture.source.pixelHeight;
       const frame = entry.record.sprite.texture.frame,
         m = entry.transform;
       // Inverse transpose of the source-pixel surface transform, scaled by object height.
@@ -1272,7 +1275,7 @@ const updateReceiverBatches = (
           (m[4] ?? 0) + (m[0] ?? 0) * logicalU + (m[2] ?? 0) * logicalV,
           (m[5] ?? 0) + (m[1] ?? 0) * logicalU + (m[3] ?? 0) * logicalV,
           ((frame.x + u * frame.width) * sourceRatio) / entry.material.width,
-          ((frame.y + v * frame.height) * sourceRatio) / entry.material.height,
+          ((frame.y + v * frame.height) * heightRatio) / entry.material.height,
           entry.height,
           index,
           entry.material.isBillboard
@@ -1289,7 +1292,7 @@ const updateReceiverBatches = (
           entry.material.width,
           entry.material.height,
           entry.height /
-            ((entry.record.character ? orig.height : frame.height) * sourceRatio),
+            ((entry.record.character ? orig.height : frame.height) * heightRatio),
           Number(entry.record.description.small === true),
           entry.record.wind ? entry.record.wind.group + 1 : 0,
           1 - v,

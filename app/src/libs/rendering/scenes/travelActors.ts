@@ -640,7 +640,12 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
             light: 0.65,
           }
         : user.isNpc
-          ? { rendition: 256, nearest: true, shadowCaster: "character" }
+          ? {
+              rendition: 256,
+              preserveAspect: true,
+              nearest: true,
+              shadowCaster: "character",
+            }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },
     ),
   );

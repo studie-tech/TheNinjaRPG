@@ -1,6 +1,6 @@
 import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, Graphics, RenderLayer, type Sprite, Texture } from "pixi.js";
 import { getBattleGrid } from "@/libs/combat/util";
 import { anonymousSpriteAppearance, resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
@@ -57,6 +57,17 @@ beforeEach(() => {
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await settle(); vi.restoreAllMocks(); });
 
 describe("travel actor artwork loading", () => {
+  it("preserves a roaming NPC's rectangular artwork proportions", async () => {
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4 * 8 * 4), width: 4, height: 8 }) });
+    vi.spyOn(Assets, "load").mockImplementation(async () => texture);
+    cleanups.push(() => texture.destroy(true));
+    const { actors, snapshot } = fixture();
+    actors.sync(snapshot([player(0, { isNpc: true, spriteAppearance: undefined, avatar: "rectangular-npc.png" })]));
+    await settle();
+    const figure = actors.container.children[0]!.getChildByLabel("avatar", true) as Sprite;
+    expect(Math.abs(figure.scale.x)).toBeCloseTo(Math.abs(figure.scale.y));
+    expect(figure.width / figure.height).toBeCloseTo(0.5);
+  });
   it("does not replay queued network waypoints after a timed walk finishes", async () => {
     const { actors, grid, snapshot } = fixture();
     const user = player(0, { longitude: 4, latitude: 4 });

@@ -40,6 +40,17 @@ const setup = async (isAi = true, spriteAppearance?: SpriteAppearance) => {
 };
 
 describe("combat actor reconciliation", () => {
+  it.each([[4, 8], [12, 8]])("preserves a %s by %s AI silhouette without stretching its contact plane", async (width, height) => {
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(width * height * 4), width, height }) });
+    vi.spyOn(Assets, "load").mockImplementation(async () => texture);
+    cleanups.push(() => texture.destroy(true));
+    const { root, selection, hover } = await setup();
+    const figure = root.getChildByLabel("combat-art")!.children[0]!.getChildByLabel("aiAvatar") as Sprite;
+    expect(Math.abs(figure.scale.x)).toBeCloseTo(Math.abs(figure.scale.y));
+    expect(figure.width / figure.height).toBeCloseTo(width / height);
+    const footY = figure.y + figure.scale.y * height * (1 - figure.anchor.y);
+    for (const marker of [root.children[0]!, selection, hover]) expect(marker.y).toBeCloseTo(footY);
+  });
   it("anchors padded AI contacts and selection to the visible footer when facing changes", async () => {
     const pixels = new Uint8Array(8 * 8 * 4);
     for (let y = 1; y < 6; y++) for (let x = 1; x < 4; x++) pixels[(y * 8 + x) * 4 + 3] = 255;

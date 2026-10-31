@@ -557,6 +557,7 @@ export const combatActorParts = (
     parts.push(
       part("aiAvatar", user.avatar || IMG_AVATAR_DEFAULT, h * 1.6, h * 0.9, {
         rendition: 256,
+        preserveAspect: true,
         nearest: true,
         shadowCaster: "character",
       }),

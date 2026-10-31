@@ -33,6 +33,21 @@ const decodeNormal = ([u, v]: readonly [number, number]) => {
 };
 
 describe("packed character shadow volumes", () => {
+  it("aligns rectangular rendition UVs and physical depth when each atlas axis rounds independently", () => {
+    const source = material(4, 3); source.isBillboard = true;
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 4; x++) paint(source, x, y, 0, 1);
+    const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(8 * 7 * 4), width: 8, height: 7 }) });
+    try {
+      const frame = createCharacterMaterialFrame(source, texture, 7);
+      expect(frame.volumes).toHaveLength(2);
+      const maxU = Math.max(...Array.from(frame.points).filter((_, i) => i % 4 === 0));
+      const maxV = Math.max(...Array.from(frame.points).filter((_, i) => i % 4 === 1));
+      expect(maxU).toBeLessThanOrEqual(1); expect(maxV).toBeLessThanOrEqual(1);
+      for (let i = 0; i < frame.points.length; i += 4) expect(frame.points[i + 1]! + frame.points[i + 2]!).toBeCloseTo(1);
+      const rowTops = frame.volumes!.map(volume => volume.vertices[1]!);
+      expect(rowTops).toEqual([expect.closeTo(0), expect.closeTo(1 / 3)]);
+    } finally { source.texture.destroy(true); texture.destroy(true); }
+  });
   it("simplifies small elevated canopy volumes without expanding their physical bounds or changing trunks and receiver data", () => {
     const source = material(100, 100);
     const leaf = Array.from({ length: 8 }, (_, i) => [50 + Math.cos(i * Math.PI / 4) * 3, 20 + Math.sin(i * Math.PI / 4) * 3, 64, 65] as const);
