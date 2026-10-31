@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getWorldCycleState } from "@/libs/dayNight";
 import { useUserData } from "@/utils/UserContext";
 
+/** Publishes the server-corrected instant and its cycle state together on each tick. */
 export const useDayNightCycle = (tickMs = 1000) => {
   const { timeDiff } = useUserData();
   const [now, setNow] = useState(() => new Date(Date.now() - timeDiff));
@@ -13,5 +14,5 @@ export const useDayNightCycle = (tickMs = 1000) => {
     return () => window.clearInterval(intervalId);
   }, [tickMs, timeDiff]);
 
-  return useMemo(() => getWorldCycleState(now), [now]);
+  return useMemo(() => ({ ...getWorldCycleState(now), now }), [now]);
 };

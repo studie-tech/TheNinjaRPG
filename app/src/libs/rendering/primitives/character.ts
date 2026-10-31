@@ -171,7 +171,12 @@ export const createLpcCharacter = async (
     if (!sprite.destroyed)
       sprite.destroy({ children: true, texture: false, textureSource: false });
   });
-  return { sprite, render, durations };
+  return {
+    sprite,
+    render,
+    durations,
+    layers: layers.map(({ child, sheet }) => ({ sprite: child, image: sheet.image })),
+  };
 };
 
 const sourceFrames = new WeakMap<TextureSource, Map<string, Texture>>();

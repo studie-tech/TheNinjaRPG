@@ -75,8 +75,8 @@ describe("layered LPC actors", () => {
     expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "idle", 2, 0)!));
     expect(body.texture.frame).not.toMatchObject(frameRectangle(lpcFrame(sheet, "idle", 2, 400)!));
     actor.render(frame(4000), "walk", 2);
-    actor.render(frame(4090), "walk", 2);
-    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "walk", 2, 90)!));
+    actor.render(frame(4180), "walk", 2);
+    expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "walk", 2, 180)!));
     actor.render(frame(5000), "slash", 2);
     actor.render(frame(5160), "slash", 2);
     expect(body.texture.frame).toMatchObject(frameRectangle(lpcFrame(sheet, "slash", 2, 160)!));
@@ -238,7 +238,7 @@ describe("layered LPC actors", () => {
     second.render(frame(1000), "walk", 2, true);
     const standing = secondPart.texture;
     expect(firstPart.texture).toBe(standing);
-    first.render(frame(1090), "walk", 2);
+    first.render(frame(1180), "walk", 2);
     const walking = firstPart.texture;
     expect(walking).not.toBe(standing);
     expect(secondPart.texture).toBe(standing);
@@ -253,13 +253,13 @@ describe("layered LPC actors", () => {
     imageSource.unload();
     expect(imageSource.destroyed).toBe(false);
     expect(walking.destroyed).toBe(false);
-    second.render(frame(1090), "walk", 2);
+    second.render(frame(1180), "walk", 2);
     expect(secondPart.texture).toBe(walking);
     expect(imageSource.listenerCount("resize")).toBe(listeners);
     const replacement = gameFixture();
     const third = await characters.createLpcCharacter(replacement.game, appearance);
     third.render(frame(1000), "walk", 2, true);
-    third.render(frame(1090), "walk", 2);
+    third.render(frame(1180), "walk", 2);
     const replacementPart = third.sprite.children[0] as Sprite;
     expect(replacementPart.texture).not.toBe(walking);
     expect(replacementPart.texture.source).toBe(replacement.source.source);
@@ -366,17 +366,19 @@ describe("layered LPC actors", () => {
     expect(renders[0]!.mock.calls.at(-1)?.[1]).toBe("idle");
     user.longitude = 11;
     actors.sync(snapshot);
-    for (let tick = 0; tick < 30; tick++) actors.animate(frame(1400 + tick * 1000 / 60));
+    for (let tick = 0; tick < 60; tick++) actors.animate(frame(1400 + tick * 1000 / 60));
     expect(root.x).toBeCloseTo(-grid.getHex({ col: 11, row: 1 })!.center.x);
     // The server recipe takes precedence over a stale cached profile body style.
     expect(create.mock.calls[0]?.[1]).toEqual(appearance);
     expect(renders).toHaveLength(1);
-    expect((root.children[0] as Graphics).context.fillStyle.color).toBe(0x3c80bb);
+    expect((root.children[0] as Graphics).context.fillStyle.color).toBe(0x081115);
+    expect((root.children[0] as Graphics).context.strokeStyle.color).toBe(0x3c80bb);
     user.allianceStatus = "ENEMY";
     actors.sync(snapshot);
     const hostile = actors.container.children[0]!;
     expect(root.destroyed).toBe(true);
-    expect((hostile.children[0] as Graphics).context.fillStyle.color).toBe(0xb84040);
+    expect((hostile.children[0] as Graphics).context.fillStyle.color).toBe(0x081115);
+    expect((hostile.children[0] as Graphics).context.strokeStyle.color).toBe(0xb84040);
     actors.setViewport({ minX: -farTile.center.x, maxX: -farTile.center.x, minY: -farTile.center.y, maxY: -farTile.center.y });
     expect(actors.container.children).toHaveLength(2);
     const distant = actors.container.children.find((child) => child !== hostile)!;
@@ -455,8 +457,8 @@ describe("layered LPC actors", () => {
     user.spriteAction = { id: "walk", animation: "walk", longitude, latitude };
     actors.sync({ battle });
     let tick = 0;
-    while (actors.animate({ now: 1000 + tick++ * 1000 / fps, delta: 1 / fps, reducedMotion }, user.userId, undefined) && tick < fps * 5) actors.sync({ battle });
-    expect(tick).toBeLessThan(fps * 5);
+    while (actors.animate({ now: 1000 + tick++ * 1000 / fps, delta: 1 / fps, reducedMotion }, user.userId, undefined) && tick < fps * 10) actors.sync({ battle });
+    expect(tick).toBeLessThan(fps * 10);
     if (reducedMotion) { expect(poses.size).toBe(1); expect(tick).toBe(5); }
     else expect(poses.size).toBeGreaterThanOrEqual(longitude === 8 ? 8 : 4);
     const target = grid.getHex({ col: longitude, row: latitude })!;

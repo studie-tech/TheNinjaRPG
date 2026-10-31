@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import type { VillageStructure } from "@/drizzle/schema";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
+import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
+import { createGenericStructure, createShrineStructure } from "@/libs/sector-map/structures";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { MapLocation } from "@/validators/mapLocation";
@@ -12,12 +14,33 @@ const grid = { getHex: ({ col, row }: { col: number; row: number }) => {
 const location: MapLocation = { id: "tower", sector: 724, longitude: 3, latitude: 4, name: "Tower", description: "A tower.", assetId: "art", scale: 1 };
 const asset = { id: "art", imageUrl: "tower.png", renderScale: 2.4 };
 const objects = [{ id: "tree", type: "decoration", x: 3, y: 4, assetKey: "tree" }];
-const descriptions = (locations: MapLocation[], assets = [asset], mapObjects = objects, structures: VillageStructure[] = []) => sectorSpriteDescriptions({ grid, map: { objects: mapObjects } as NormalizedSectorMap,
+const descriptions = (locations: MapLocation[], assets = [asset], mapObjects = objects, structures: VillageStructure[] = []) => sectorSpriteDescriptions({ grid, map: { sector: 0, objects: mapObjects } as NormalizedSectorMap,
   structures, wall: null, lightLayout: false, locations, mapAssets: assets,
-  decorations: new Map([["tree", { filepath: "tree.png", renderScale: 2 } as DecorationAsset]]),
+  decorations: new Map([["tree", { key: "tree", filepath: "tree.png", renderScale: 2 } as DecorationAsset]]),
 });
 
 describe("sector scenery recipes", () => {
+  it("renders a synthetic wilderness shrine with its native artwork, physical materials and forecourt", () => {
+    const structure = createShrineStructure({
+      formatVersion: 1, sector: 90_000, name: "Wilderness", width: 0, height: 0,
+      anchors: [], tiles: [], objects: [], exits: [],
+      metadata: { importedAt: "2026-01-01T00:00:00Z", source: "tiled" },
+    }, 1);
+    const art = WORLD_STRUCTURE_ART["akikaze/shrine"]!;
+    const sprite = descriptions([], [], [], [structure])[0]!;
+    expect(sprite).toMatchObject({ id: "sector-shrine", structureId: "sector-shrine", image: art.filepath, frame: art.frame, rendition: 0, nearest: true, shadowCaster: "building" });
+    expect(sprite.worldMaterial).toEqual({ material: art.material, surfaces: art.surfaces });
+    expect(sprite.entrance).toMatchObject({ hasCourt: true, courtSlope: art.courtSlope });
+  });
+  it("gives imported faction buildings matched materials and paving outside themed settlements", () => {
+    const art = { ...WORLD_STRUCTURE_ART["syndicate/bank"]!, sourceImage: "uploaded-faction-bank.webp", filepath: "uploaded-faction-atlas.webp" };
+    const structure = { ...createGenericStructure({ name: "Bank", route: art.route, image: art.sourceImage, longitude: 3, latitude: 4 }), worldArt: art };
+    const sprite = descriptions([], [], [], [structure])[0]!;
+    expect(sprite.worldMaterial).toEqual({ material: art.material, surfaces: art.surfaces });
+    expect(sprite.entrance).toMatchObject({ hasCourt: true, courtSlope: art.courtSlope });
+    expect(sprite.frame).toEqual(art.frame);
+    expect(sprite).toMatchObject({ image: art.filepath, rendition: 0 });
+  });
   it("draws one building for co-located objectives with an independent pin", () => {
     const sprites = descriptions([location, { ...location, id: "second" }]);
     expect(sprites).toHaveLength(2);

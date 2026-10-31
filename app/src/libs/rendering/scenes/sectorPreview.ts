@@ -1,5 +1,5 @@
 import alea from "alea";
-import { Container, Graphics } from "pixi.js";
+import { Container, Graphics, getMaxFragmentPrecision, RenderLayer } from "pixi.js";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import { calculateWidth2Height } from "@/libs/rendering/hexGeometry";
@@ -9,6 +9,9 @@ import { createGameRenderer } from "@/libs/rendering/runtime";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
+import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
+import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
+import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
@@ -57,7 +60,7 @@ export const createSectorPreview = async (options: {
       terrainRegistry,
       villageType ?? null,
     );
-    const data = buildSectorTerrainData(grid, prng, false);
+    const roads = planVillageLandscape(grid, structures, villageWallPlan);
     const descriptions = sectorSpriteDescriptions({
       map,
       grid,
@@ -67,16 +70,34 @@ export const createSectorPreview = async (options: {
       lightLayout: false,
       locations: options.data.locations,
       mapAssets: options.data.mapAssets,
+      roads,
     });
+    const data = buildSectorTerrainData(grid, prng, false, {
+      sector,
+      sprites: descriptions,
+      wall: villageWallPlan,
+      roads,
+    });
+    const world = new Container();
+    // Packed geometry decoding needs highp; static previews retain noon ambient light on mediump devices.
+    const shadows =
+      getMaxFragmentPrecision() === "highp"
+        ? createWorldShadows(game, world)
+        : undefined;
+    const lightingLayer = shadows?.container ?? new Container();
     const [terrain, art] = await Promise.all([
       createHexTerrain(game, data),
-      createWorldSprites(game, descriptions),
+      createWorldSprites(game, descriptions, shadows),
     ]);
     if (game.signal.aborted || game.isDisposed())
       throw new DOMException("Preview cancelled", "AbortError");
-    const world = new Container();
+    if (shadows) game.own(shadows.registerTerrain(terrain.container, data));
     const highlight = new Graphics();
-    world.addChild(terrain.container, highlight, art.container);
+    const depthLayer = new RenderLayer(),
+      uiLayer = new RenderLayer();
+    art.attachLayers({ world: depthLayer, ui: uiLayer });
+    lightingLayer.addChild(terrain.container, art.container, depthLayer);
+    world.addChild(lightingLayer, highlight, uiLayer);
     game.stage.addChild(world);
     let scale = 1;
     game.setResize((width, height) => {
@@ -105,6 +126,7 @@ export const createSectorPreview = async (options: {
       if (dragging)
         dragging.sprite.position.set(dragging.description.x, dragging.description.y);
       dragging = null;
+      shadows?.invalidate();
       target = null;
       highlight.clear();
       game.canvas.style.cursor = "default";
@@ -165,7 +187,21 @@ export const createSectorPreview = async (options: {
     game.listen("pointerleave", () => {
       if (!dragging) game.canvas.style.cursor = "default";
     });
-    game.setUpdate((frame) => art.animate(frame, scale));
+    game.setUpdate((frame) => {
+      const breeze = sampleWorldWind(frame, scale);
+      art.animate(frame, scale, null, breeze);
+      if (dragging) shadows?.invalidate();
+      shadows?.update(
+        worldSunlight(),
+        {
+          minX: 0,
+          maxX: logicalWidth,
+          minY: 0,
+          maxY: game.renderer.height / scale,
+        },
+        breeze,
+      );
+    });
     return { dispose: game.dispose, missingAssets: art.missing };
   } catch (error) {
     game.dispose();

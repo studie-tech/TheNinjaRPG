@@ -19,6 +19,8 @@ export const createGameRenderer = async (options: {
   /** Renderer/CSS pixel dimensions at resolution 1; observed mount width is used by default. */
   height: (width: number) => number;
   width?: number;
+  /** Logical coordinates stay in CSS pixels; lower resolutions use crisp CSS enlargement. */
+  resolution?: number;
   background?: number;
   backgroundAlpha?: number;
   touchAction?: "none" | "auto";
@@ -34,7 +36,7 @@ export const createGameRenderer = async (options: {
       width,
       height: options.height(width),
       preferWebGLVersion: 1,
-      resolution: 1,
+      resolution: options.resolution ?? 1,
       autoDensity: true,
       antialias: false,
       background: premultipliedClearColor(
@@ -55,12 +57,17 @@ export const createGameRenderer = async (options: {
     throw new DOMException("Scene initialization cancelled", "AbortError");
   }
   const stage = new Container();
-  const animation = new UniformGroup({ uTime: { value: 0, type: "f32" } });
+  // This group is shared by every animated terrain batch; publish it once per frame.
+  const animation = new UniformGroup(
+    { uTime: { value: 0, type: "f32" } },
+    { isStatic: true },
+  );
   stage.eventMode = "none";
   const assets = createSceneAssets();
   const canvas = renderer.canvas as HTMLCanvasElement;
   canvas.style.display = "block";
   canvas.style.width = "100%";
+  if (options.resolution !== undefined) canvas.style.imageRendering = "pixelated";
   canvas.style.touchAction = options.touchAction ?? "none";
   mount.appendChild(canvas);
   const motion = matchMedia("(prefers-reduced-motion: reduce)");

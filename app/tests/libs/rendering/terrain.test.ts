@@ -2,14 +2,16 @@ import alea from "alea";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { BufferImageSource, Mesh, Shader, Texture, UniformGroup } from "pixi.js";
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
+import type { VillageStructure } from "@/drizzle/schema";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
-import { hexTerrainAt } from "@/libs/rendering/terrainData";
+import { resolveWorldTerrain } from "@/libs/rendering/worldArt";
+import { createWaterShelf, hexTerrainAt } from "@/libs/rendering/terrainData";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import { PathCalculator } from "@/libs/hexgrid";
 import { buildWindowNav } from "@/libs/sector-map/navigation";
-import { isReachableCoordinate, isWalkableCoordinate } from "@/libs/sector-map/validation";
+import { getNeighborCoordinates, isReachableCoordinate, isWalkableCoordinate } from "@/libs/sector-map/validation";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 
@@ -21,9 +23,9 @@ const mapOf = (width: number, height: number): NormalizedSectorMap => ({
     return { x, y, terrain, walkCost: 1, blocked: false, zone: "wilderness", battleBiome: terrain === "dessert" ? "dessert" : terrain === "ice" ? "ice" : terrain === "snow" ? "snow" : terrain === "ocean" ? "ocean" : "ground" };
   }), objects: [], anchors: [], exits: [], metadata: { importedAt: "2026-01-01T00:00:00Z", source: "tiled" },
 });
-const prepare = (map: NormalizedSectorMap, light = false) => {
+const prepare = (map: NormalizedSectorMap, light = false, registry = mergeTerrainSpecs([])) => {
   const random = alea(map.sector + 1);
-  const { grid } = prepareSectorGrid(1024, random, 1, [], map, mergeTerrainSpecs([]), null);
+  const { grid } = prepareSectorGrid(1024, random, 1, [], map, registry, null);
   return { grid, data: buildSectorTerrainData(grid, random, light) };
 };
 
@@ -43,6 +45,43 @@ const renderer = (texture: (path: string) => Promise<Texture>) => {
 };
 
 describe("shared hex terrain textures", () => {
+  it.each(["ocean", "ice"] as const)("supports both sides of coastal walls over %s without filling distant water", (terrain) => {
+    const map = mapOf(15, 15);
+    map.tiles = map.tiles.map(tile => ({ ...tile, terrain, battleBiome: terrain }));
+    const authored = structuredClone(map);
+    const { grid, villageWallPlan } = prepareSectorGrid(1024, alea(1), terrain === "ocean" ? 0 : 3,
+      [{ longitude: 7, latitude: 7, hasPage: 1 }] as VillageStructure[], map, mergeTerrainSpecs([]), "VILLAGE");
+    expect(villageWallPlan!.edges.length).toBeGreaterThan(0);
+    for (const edge of villageWallPlan!.edges) {
+      const outside = getNeighborCoordinates(edge.tile)[edge.direction]!;
+      for (const point of [edge.tile, outside]) {
+        const tile = grid.getHex({ col: point.x, row: point.y })!;
+        expect(tile.spec?.isWater).toBe(false);
+        expect(tile.spec?.depression).toBe(0);
+        expect(tile.spec?.key).toBe(terrain === "ocean" ? "dessert" : "snow");
+      }
+    }
+    expect(grid.getHex({ col: 0, row: 0 })?.spec?.key).toBe(terrain);
+    expect(map).toEqual(authored);
+  });
+
+  it("retains authored dry land materials along the outside of village walls", () => {
+    const map = mapOf(15, 15);
+    map.tiles = map.tiles.map(tile => ({ ...tile, terrain: "dessert", battleBiome: "dessert" }));
+    const registry = mergeTerrainSpecs([]);
+    const { grid, villageWallPlan } = prepareSectorGrid(1024, alea(1), 3,
+      [{ longitude: 7, latitude: 7, hasPage: 1 }] as VillageStructure[], map, registry, "VILLAGE");
+    for (const edge of villageWallPlan!.edges) {
+      const outside = getNeighborCoordinates(edge.tile)[edge.direction]!;
+      expect(grid.getHex({ col: outside.x, row: outside.y })?.spec).toBe(registry.get("dessert"));
+    }
+  });
+
+  const textured = (map: NormalizedSectorMap) => {
+    const registry = mergeTerrainSpecs([]);
+    registry.set("ocean", { ...registry.get("ocean")!, textureUrl: "optional-water.png" });
+    return prepare(map, false, registry);
+  };
   it.each(["mixed", "ocean", "ice"] as const)("orders %s sector sides below neighboring faces and recessed outlines below flat land", async (kind) => {
     const map = mapOf(5, 3);
     if (kind !== "mixed") map.tiles = map.tiles.map((tile) => ({ ...tile, terrain: kind, battleBiome: kind }));
@@ -75,7 +114,7 @@ describe("shared hex terrain textures", () => {
   });
 
   it("keeps terrain geometry, palette and picking when one optional image fails", async () => {
-    const { grid, data } = prepare(mapOf(3, 2));
+    const { grid, data } = textured(mapOf(3, 2));
     const failedTexture = data.batches.find((batch) => batch.kind === "image")!.texture;
     const failure = new Error("HTTP 404 for optional terrain image");
     const image = new Texture({ source: new BufferImageSource({ resource: new Uint8Array([255, 255, 255, 255]), width: 1, height: 1 }) });
@@ -83,7 +122,7 @@ describe("shared hex terrain textures", () => {
     cleanups.push(() => image.destroy(true));
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const terrain = await createHexTerrain(game, data);
-    const meshes = terrain.container.children.filter((child): child is Mesh => child instanceof Mesh && Boolean(child.geometry.attributes.aTint));
+    const meshes = terrain.container.children.filter((child): child is Mesh => child instanceof Mesh && Boolean(child.geometry.attributes.aRawTint));
     expect(meshes).toHaveLength(data.batches.length);
     data.batches.forEach((batch, index) => {
       const mesh = meshes[index]!;
@@ -106,7 +145,7 @@ describe("shared hex terrain textures", () => {
     let reject = (_error: Error) => {};
     const pending = new Promise<Texture>((_resolve, fail) => { reject = fail; });
     const { game, controller, own } = renderer(() => pending);
-    const terrain = createHexTerrain(game, prepare(mapOf(2, 2)).data);
+    const terrain = createHexTerrain(game, textured(mapOf(2, 2)).data);
     if (cancel === "abort") controller.abort(); else game.dispose();
     const failure = new Error("Image load failed after cancellation");
     reject(failure);
@@ -117,7 +156,7 @@ describe("shared hex terrain textures", () => {
   it("preserves an image loader's AbortError even before its signal is aborted", async () => {
     const failure = new DOMException("Image load cancelled", "AbortError");
     const { game, own } = renderer(async () => { throw failure; });
-    await expect(createHexTerrain(game, prepare(mapOf(2, 2)).data)).rejects.toBe(failure);
+    await expect(createHexTerrain(game, textured(mapOf(2, 2)).data)).rejects.toBe(failure);
     expect(own).not.toHaveBeenCalled();
   });
 
@@ -125,11 +164,31 @@ describe("shared hex terrain textures", () => {
     const failure = new Error("Shader initialization failed");
     const { game } = renderer(async () => Texture.WHITE);
     vi.spyOn(Shader, "from").mockImplementation(() => { throw failure; });
-    await expect(createHexTerrain(game, prepare(mapOf(2, 2)).data)).rejects.toBe(failure);
+    await expect(createHexTerrain(game, textured(mapOf(2, 2)).data)).rejects.toBe(failure);
   });
 });
 
 describe("shared hex terrain data", () => {
+  it("draws narrow paths over intact terrain in both detail modes without changing picking or navigation", () => {
+    const map = mapOf(3, 2);
+    map.tiles = map.tiles.map((tile) => ({ ...tile, terrain: "ground", battleBiome: "ground", zone: tile.x === 1 ? "road" : "wilderness" }));
+    const before = structuredClone(map);
+    const { grid, data } = prepare(map);
+    expect(data.surface.length).toBeGreaterThan(0);
+    expect(data.surfaceColors.length / 3).toBe(data.surface.length / 2);
+    expect([...data.surface, ...data.surfaceColors].every(Number.isFinite)).toBe(true);
+    for (const tile of grid) expect(hexTerrainAt(grid, data.faceOffsets, tile.x, tile.y)).toBe(tile);
+    expect(prepare(map, true).data.surface.length).toBeGreaterThan(0);
+    const bare = { ...map, tiles: map.tiles.map((tile) => ({ ...tile, zone: "wilderness" as const })) };
+    expect(data.batches).toEqual(prepare(bare).data.batches);
+    const road = grid.getHex({ col: 1, row: 0 })!;
+    const xs = Array.from(data.surface).filter((_, index) => index % 2 === 0);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(road.width * 0.4);
+    const paved = { ...map, tiles: map.tiles.map((tile) => ({ ...tile, zone: "road" as const })) };
+    expect(prepare(paved).data.surface.length).toBeGreaterThan(0);
+    expect(map).toEqual(before);
+  });
+
   it("preserves positive fractional terrain costs in both navigation grids", () => {
     const map = mapOf(1, 1);
     map.tiles[0]!.walkCost = 0.5;
@@ -156,7 +215,7 @@ describe("shared hex terrain data", () => {
     if (terrain !== "ocean") {
       const batch = data.batches.find((batch) => batch.tiles.some((entry) => entry.key === "1,0"))!;
       const start = batch.tiles.find((entry) => entry.key === "1,0")!.start * 4;
-      const color = Number.parseInt(tile.spec!.colors[2]!.slice(1), 16);
+      const color = Number.parseInt(resolveWorldTerrain(tile.spec!).colors[2]!.slice(1), 16);
       expect([...batch.rawColors.slice(start, start + 4)]).toEqual([color >> 16, (color >> 8) & 255, color & 255, 255]);
     }
   });
@@ -221,5 +280,68 @@ describe("shared hex terrain data", () => {
     const a = prepare(map).data, b = prepare(map).data;
     expect(a.batches).toEqual(b.batches);
     expect(a.ground).toEqual(b.ground);
+  });
+});
+
+
+describe("coastal water depth", () => {
+  const coast = (sector: number, hasLand: boolean) => {
+    const map = mapOf(8, 6);
+    map.sector = sector;
+    map.tiles = map.tiles.map((tile) => ({ ...tile,
+      terrain: hasLand && tile.x < 5 ? "ground" : "ocean",
+      battleBiome: hasLand && tile.x < 5 ? "ground" : "ocean",
+    }));
+    return map;
+  };
+
+  it("keeps shared water vertices continuous across a sector boundary without changing faces or navigation", () => {
+    const maps = [coast(222, true), coast(223, false)];
+    const nav = buildWindowNav(maps.map((map, dx) => ({ dx, dy: 0, map })), 10)!;
+    const grids = maps.map((map) => prepare(map).grid);
+    const materials = new Map();
+    for (const [dx, grid] of grids.entries())
+      for (const tile of grid)
+        materials.set(nav.toUnified(dx, 0, tile.col, tile.row)!, { isWater: !!tile.spec?.isWater });
+    const shelf = createWaterShelf(nav.pathFinder.grid, materials);
+    const seams: Map<string, number[]>[] = [];
+    for (const [dx, grid] of grids.entries()) {
+      const before = grid.toArray().map((tile) => [tile.cost, tile.blocked, tile.spec]);
+      const local = grid.getHex({ col: 0, row: 0 })!;
+      const unified = nav.toUnified(dx, 0, 0, 0)!;
+      const sample = (point: { x: number; y: number }) => shelf({
+        x: unified.x + (point.x - local.x) * unified.width / local.width,
+        y: unified.y + (point.y - local.y) * unified.height / local.height,
+      });
+      const plain = buildSectorTerrainData(grid, alea(1), false);
+      const data = buildSectorTerrainData(grid, alea(1), false, { waterDepthAt: sample });
+      expect(data.batches.map((batch) => batch.positions)).toEqual(plain.batches.map((batch) => batch.positions));
+      expect(data.faceOffsets).toEqual(plain.faceOffsets);
+      expect(grid.toArray().map((tile) => [tile.cost, tile.blocked, tile.spec])).toEqual(before);
+      const water = data.batches.find((batch) => batch.layer < 0)!;
+      const vertices = new Map<string, number[]>();
+      for (let index = 0; index < water.positions.length; index += 2) {
+        const x = water.positions[index]! + dx * 8 * local.width * 0.75;
+        const y = water.positions[index + 1]!;
+        vertices.set(`${x.toFixed(4)},${y.toFixed(4)}`, [...water.colors.slice(index / 2 * 3, index / 2 * 3 + 3)]);
+      }
+      seams.push(vertices);
+    }
+    const shared = [...seams[0]!].filter(([point]) => seams[1]!.has(point));
+    expect(shared.length).toBeGreaterThan(3);
+    for (const [point, color] of shared) expect(seams[1]!.get(point)).toEqual(color);
+  });
+
+  it("keeps custom water textures and light layout outside the stock depth treatment", () => {
+    const map = coast(222, true), registry = mergeTerrainSpecs([]);
+    const ocean = registry.get("ocean")!;
+    registry.set("ocean", { ...ocean, colors: ["#203040", "#304050", "#405060"] });
+    const colored = prepare(map, false, registry).data;
+    expect(colored.batches.find((batch) => batch.layer < 0)?.texture).toBe(ocean.textureUrl);
+    registry.set("ocean", { ...ocean, textureUrl: "custom-water.png" });
+    const { grid } = prepareSectorGrid(1024, alea(1), 1, [], map, registry, null);
+    const custom = buildSectorTerrainData(grid, alea(1), false, { sector: 222 });
+    expect(custom.batches.find((batch) => batch.layer < 0)?.texture).toBe("custom-water.png");
+    expect(buildSectorTerrainData(grid, alea(1), true, { sector: 222 }).animatedTiles).toBe(0);
   });
 });

@@ -1,21 +1,39 @@
 import type { CombatBiome } from "@/drizzle/constants";
 import { COMBAT_BIOMES } from "@/drizzle/constants";
 import type { TerrainHex } from "@/libs/hexgrid";
-import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
+import {
+  decorationShadowShape,
+  type WorldSpriteDescription,
+} from "@/libs/rendering/sectorSprites";
+import {
+  resolveWorldDecoration,
+  resolveWorldTerrain,
+  WORLD_UNDERSTORY,
+} from "@/libs/rendering/worldArt";
+import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import type { GlobalTile } from "@/libs/sector-map/world-types";
 import { getBiomeFromGlobalTile } from "@/libs/travel";
 
-const decorationFilepath = (key: string) => {
+/** Resolve atlas views without changing seeded scenery selection. */
+const decorationArt = (key: string, biome?: CombatBiome) => {
   const asset = DECORATION_ASSETS_BY_KEY.get(key);
   if (!asset) throw new Error(`Unknown decoration asset ${key}`);
-  return asset.filepath;
+  const art = resolveWorldDecoration(asset, biome);
+  return {
+    filepath: art.filepath,
+    frame: art.frame,
+    shadow: art.shadow,
+    shadowCaster:
+      art.shadow || art.windAffected ? decorationShadowShape(art.key) : undefined,
+    heightScale: art.heightScale,
+  };
 };
 const terrain = (key: string, variant: number) => {
   const spec = BUILTIN_TERRAINS_BY_KEY.get(key);
   if (!spec) throw new Error(`Unknown built-in terrain ${key}`);
-  return { spec, variant };
+  return { spec: resolveWorldTerrain(spec), variant };
 };
 
 /** Retained procedural biome bands shared by combat and tower-defense renderers. */
@@ -103,6 +121,10 @@ export const getProceduralTerrain = (
 
 export type AssetType = {
   filepath: string;
+  frame?: DecorationAsset["frame"];
+  shadow?: number;
+  shadowCaster?: WorldSpriteDescription["shadowCaster"];
+  heightScale?: number;
   chance: number;
   scale: number;
   scaleVariation?: number;
@@ -112,11 +134,30 @@ export type AssetType = {
   randomRotation?: boolean;
 };
 
+/** Climate details participate in the same seeded choice and never change traversal cost. */
+const groundDetailProps = (assets: DecorationAsset[], chance: number): AssetType[] =>
+  assets.map((asset) => ({
+    filepath: asset.filepath,
+    frame: asset.frame,
+    heightScale: asset.renderScale,
+    chance,
+    scale: 1,
+    scaleVariation: 0.15,
+    posVariation: 0.3,
+    small: true,
+    windAffected: asset.windAffected,
+    shadowCaster: asset.windAffected ? "canopy" : undefined,
+  }));
+
 // Ground assets settings default
 export const GROUND_ASSETS_PROPS: AssetType[] = [
+  ...groundDetailProps(
+    WORLD_UNDERSTORY.ground.filter((_, index) => [2, 3, 4, 7].includes(index)),
+    0.16,
+  ),
   // Small assets
   {
-    filepath: decorationFilepath("grass.tuft"),
+    ...decorationArt("grass.tuft"),
     chance: 0.5,
     scale: 1,
     scaleVariation: 0.2,
@@ -125,7 +166,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath: decorationFilepath("grass.sprout"),
+    ...decorationArt("grass.sprout"),
     chance: 0.3,
     scale: 1,
     scaleVariation: 0.2,
@@ -134,7 +175,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath: decorationFilepath("grass.flower"),
+    ...decorationArt("grass.flower"),
     chance: 0.1,
     scale: 0.7,
     scaleVariation: 0.2,
@@ -143,7 +184,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath: decorationFilepath("grass.pebble"),
+    ...decorationArt("grass.pebble"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -153,7 +194,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
   },
   // Green Trees
   {
-    filepath: decorationFilepath("tree.green.round"),
+    ...decorationArt("tree.green.round"),
     chance: 0.7,
     scale: 2,
     scaleVariation: 0.7,
@@ -161,7 +202,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     windAffected: true,
   },
   {
-    filepath: decorationFilepath("tree.green.tall"),
+    ...decorationArt("tree.green.tall"),
     chance: 0.7,
     scale: 2,
     scaleVariation: 0.7,
@@ -169,7 +210,7 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
     windAffected: true,
   },
   {
-    filepath: decorationFilepath("tree.green.wide"),
+    ...decorationArt("tree.green.wide"),
     chance: 0.5,
     scale: 2,
     scaleVariation: 0.7,
@@ -180,34 +221,35 @@ export const GROUND_ASSETS_PROPS: AssetType[] = [
 
 // Dessert assets settings default
 export const DESSERT_ASSET_PROPS: AssetType[] = [
+  ...groundDetailProps(WORLD_UNDERSTORY.dessert, 0.3),
   // Cactus
   {
-    filepath: decorationFilepath("cactus.saguaro"),
+    ...decorationArt("cactus.saguaro"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
     posVariation: 0.25,
-    windAffected: true,
+    windAffected: false,
   },
   {
-    filepath: decorationFilepath("cactus.barrel"),
+    ...decorationArt("cactus.barrel"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
     posVariation: 0.25,
-    windAffected: true,
+    windAffected: false,
   },
   {
-    filepath: decorationFilepath("cactus.cluster"),
+    ...decorationArt("cactus.cluster"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
     posVariation: 0.25,
-    windAffected: true,
+    windAffected: false,
   },
   // Stones
   {
-    filepath: decorationFilepath("rock.sand"),
+    ...decorationArt("rock.sand", "dessert"),
     chance: 0.2,
     scale: 1,
     scaleVariation: 0.2,
@@ -215,7 +257,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath: decorationFilepath("rock.grey"),
+    ...decorationArt("rock.grey", "dessert"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -223,7 +265,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath: decorationFilepath("rock.slate"),
+    ...decorationArt("rock.slate", "dessert"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -235,7 +277,7 @@ export const DESSERT_ASSET_PROPS: AssetType[] = [
 // Dessert assets settings default
 export const ICE_ASSET_PROPS: AssetType[] = [
   {
-    filepath: decorationFilepath("ice.floe"),
+    ...decorationArt("ice.floe"),
     chance: 0.1,
     scale: 0.9,
     scaleVariation: 0.2,
@@ -247,9 +289,10 @@ export const ICE_ASSET_PROPS: AssetType[] = [
 
 // Dessert assets settings default
 export const SNOW_ASSET_PROPS: AssetType[] = [
+  ...groundDetailProps(WORLD_UNDERSTORY.snow, 0.3),
   // Stones
   {
-    filepath: decorationFilepath("rock.grey"),
+    ...decorationArt("rock.grey"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -257,7 +300,7 @@ export const SNOW_ASSET_PROPS: AssetType[] = [
     small: true,
   },
   {
-    filepath: decorationFilepath("rock.slate"),
+    ...decorationArt("rock.slate"),
     chance: 0.1,
     scale: 1,
     scaleVariation: 0.2,
@@ -266,7 +309,7 @@ export const SNOW_ASSET_PROPS: AssetType[] = [
   },
   // Green Trees
   {
-    filepath: decorationFilepath("tree.snow.pine"),
+    ...decorationArt("tree.snow.pine"),
     chance: 0.4,
     scale: 2,
     scaleVariation: 0.7,
@@ -309,7 +352,9 @@ export const proceduralDecoration = (
       ? 1
       : 5);
   if (!selected) return { cost, description: null };
-  const size = selected.scale + (selected.scaleVariation ?? 0) * (prng() - 0.5);
+  const size =
+    (selected.scale + (selected.scaleVariation ?? 0) * (prng() - 0.5)) *
+    (selected.heightScale ?? 1);
   const x =
     -hex.center.x +
     hex.width / 2 +
@@ -319,16 +364,20 @@ export const proceduralDecoration = (
     id: `scenery:${hex.col},${hex.row}`,
     kind: "decoration",
     image: selected.filepath,
+    frame: selected.frame,
+    shadow: selected.shadow,
+    shadowCaster: selected.shadowCaster,
+    preserveAspect: !!selected.frame,
     size: size * hex.height,
     x,
     y,
-    groundY: y,
+    groundY: y - (size * hex.height) / 2,
     small: selected.small === true,
     // Keep enlarged pixel-art scenery crisp without increasing canvas resolution.
     rendition: selected.small ? 50 : 128,
     nearest: true,
     wind: selected.windAffected ? (Math.floor(rand * 4) * Math.PI) / 2 : null,
-    rotation: selected.randomRotation ? rand * Math.PI * 2 : 0,
+    rotation: !selected.frame && selected.randomRotation ? rand * Math.PI * 2 : 0,
   };
   return { cost, description };
 };

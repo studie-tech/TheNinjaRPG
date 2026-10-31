@@ -16,4 +16,9 @@ describe("travel sector identity", () => {
     expect(key(entry, "v2")).not.toBe(key());
     expect(key(entry, "v1", true)).not.toBe(key());
   });
+  it("invalidates neighboring wall footings while retaining identical cells in any insertion order", () => {
+    const a=travelSectorKey(entry,"v1",false,[],new Set(["4,0","5,0"]));
+    expect(travelSectorKey(entry,"v1",false,[],new Set(["5,0","4,0"]))).toBe(a);
+    expect(travelSectorKey(entry,"v1",false,[],new Set(["6,0"]))).not.toBe(a);
+  });
 });

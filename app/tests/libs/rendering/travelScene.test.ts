@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Texture } from "pixi.js";
+import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
+import * as terrainData from "@/libs/rendering/terrainData";
+import * as navigation from "@/libs/sector-map/navigation";
+import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import * as terrain from "@/libs/rendering/primitives/terrain";
 import * as runtime from "@/libs/rendering/runtime";
 import { createTravelScene, type TravelSnapshot, type TravelWindowEntry } from "@/libs/rendering/scenes/travel";
@@ -23,7 +27,7 @@ const windowEntry = (sector = 724, dy = 0): TravelWindowEntry => ({
 });
 const snapshotFixture = (): TravelSnapshot => ({
   sector: 724, actorRevision: 0, viewer, users: [player()], minBracket: -1, showUsers: true, friendlyAttack: false, structureObjectiveIds: new Set(), window: [windowEntry()], nav: null, col: 4, row: 4, enabled: true, brightness: 1,
-  decorations: new Map([["tree", { filepath: "depth-tree.png", renderScale: 3 } as DecorationAsset]]), terrains: new Map(), libraryVersion: "depth", locations: [], mapAssets: [],
+  decorations: new Map([["tree", { key: "tree", filepath: "depth-tree.png", renderScale: 3 } as DecorationAsset]]), terrains: new Map(), libraryVersion: "depth", locations: [], mapAssets: [],
 });
 /** Keep real scene/actor/artwork geometry and ownership; replace only GPU setup and image decoding. */
 const gameFixture = () => {
@@ -31,6 +35,8 @@ const gameFixture = () => {
   const owned = new Set<() => void>();
   const stage = new Container({ isRenderGroup: true });
   const canvas = document.createElement("canvas");
+  canvas.getBoundingClientRect = () => new DOMRect(0, 0, 1024, 600);
+  const listeners = new window.AbortController();
   let update = (_frame: runtime.GameFrame) => {};
   let disposed = false;
   const game = {
@@ -38,9 +44,10 @@ const gameFixture = () => {
     own: (cleanup: () => void) => { owned.add(cleanup); },
     disown: (cleanup: () => void) => { owned.delete(cleanup); },
     isDisposed: () => disposed,
-    setResize: () => {}, setBackground: () => {}, listen: () => {},
+    setResize: () => {}, setBackground: () => {}, invalidate: () => {},
+    listen: (type: string, callback: EventListener) => canvas.addEventListener(type, callback, { signal: listeners.signal }),
     setUpdate: (next: typeof update) => { update = next; },
-    dispose: () => { if (disposed) return; disposed = true; controller.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); },
+    dispose: () => { if (disposed) return; disposed = true; controller.abort(); listeners.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); },
   } as unknown as runtime.GameRenderer;
   cleanups.push(game.dispose);
   vi.spyOn(runtime, "createGameRenderer").mockResolvedValue(game);
@@ -48,17 +55,23 @@ const gameFixture = () => {
     const container = new Container();
     const dispose = () => { if (!container.destroyed) container.destroy({ children: true }); };
     scope.own(dispose);
-    return { container, dispose, isAnimated: false, setTints: () => {} };
+    return { container, dispose, isAnimated: false, setLighting: () => {}, setTints: () => {} };
   });
-  return { game, stage, advance: (next = frame()) => update(next) };
+  const event = (type: string, x: number, y: number) => {
+    const pointer = new window.MouseEvent(type, { button: 0, clientX: x, clientY: y });
+    Object.defineProperty(pointer, "pointerId", { value: 1 }); canvas.dispatchEvent(pointer);
+  };
+  return { game, stage, event, advance: (next = frame()) => update(next) };
 };
-const sceneFixture = async (state = snapshotFixture()) => {
+const sceneFixture = async (state = snapshotFixture(), initialZoom = 1) => {
   const fixture = gameFixture();
-  const scene = await createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => ({ ...state }), onError: (error) => { throw error; }, onReady: () => {}, onTap: () => {}, onHover: () => {}, onZoom: () => {}, initialZoom: 1 });
+  const onTap = vi.fn();
+  const scene = await createTravelScene({ mount: document.createElement("div"), signal: fixture.game.signal, lightLayout: false, getSnapshot: () => ({ ...state }), onError: (error) => { throw error; }, onReady: () => {}, onTap, onHover: () => {}, onZoom: () => {}, initialZoom });
   fixture.advance(); await settle();
   const world = fixture.stage.children[0]!;
-  const layers = world.children.filter((child) => child instanceof RenderLayer);
-  return { ...fixture, scene, state, world, depth: layers[1]!, overlay: layers[2]! };
+  const collect = (node: Container): RenderLayer[] => node.children.flatMap((child) => child instanceof RenderLayer ? [child] : collect(child));
+  const layers = collect(world);
+  return { ...fixture, scene, state, world, onTap, depth: layers[2]!, overlay: layers[3]! };
 };
 beforeEach(() => {
   const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
@@ -70,6 +83,53 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("travel scene ground depth", () => {
+  it("grounds border walls in neighboring water and refreshes their retained terrain after a layout change", async () => {
+    const state=snapshotFixture(),water=state.window[0]!,village=windowEntry(725,1);
+    const ocean=(entry:TravelWindowEntry)=>{
+      entry.map={...entry.map,objects:[],tiles:Array.from({length:144},(_,i)=>({x:i%12,y:Math.floor(i/12),terrain:"ocean",battleBiome:"ocean",zone:"water",walkCost:1,blocked:false}))};
+    };
+    ocean(water);ocean(village);
+    water.structures=[];village.villageType="VILLAGE";
+    village.structures=[{...village.structures[0]!,longitude:6,latitude:0}];
+    state.window=[water,village];state.terrains=new Map([["ocean",BUILTIN_TERRAINS_BY_KEY.get("ocean")!]]);
+    const {scene}=await sceneFixture(state);
+    const bank=()=>scene.sectors.get(724)!.grid.getHex({col:6,row:11})!;
+    expect(bank().spec?.isWater).toBe(false);
+    expect(bank().spec?.depression).toBe(0);
+    await scene.updateWindow();
+    const previous=scene.sectors.get(724)!;
+    village.structures=[{...village.structures[0]!,longitude:2}];
+    await scene.updateWindow();
+    expect(scene.sectors.get(724)).not.toBe(previous);
+    expect(bank().spec?.isWater).toBe(true);
+    expect(scene.sectors.get(724)!.grid.getHex({col:2,row:11})!.spec?.isWater).toBe(false);
+    const retained=scene.sectors.get(724)!;
+    state.sector=725;state.window=[{...village,dy:0},{...water,dy:-1}];
+    await scene.updateWindow();
+    expect(scene.sectors.get(724)).toBe(retained);
+    village.structures=[];state.window=[{...village,dy:0},{...water,dy:-1}];
+    await scene.updateWindow();
+    expect(scene.sectors.get(724)!.grid.getHex({col:2,row:11})!.spec?.isWater).toBe(true);
+  });
+
+  it.each([false, true])("retains shoreline topology across account refreshes (shared navigation: %s)", async (shared) => {
+    const state = snapshotFixture(), entry = state.window[0]!;
+    entry.globalTileType = 0;
+    state.terrains = new Map([["ocean", BUILTIN_TERRAINS_BY_KEY.get("ocean")!]]);
+    if (shared) state.nav = navigation.buildWindowNav(state.window, 10);
+    const nav = vi.spyOn(navigation, "buildWindowNav"), shelf = vi.spyOn(terrainData, "createWaterShelf");
+    const { scene } = await sceneFixture(state);
+    const builds = [nav.mock.calls.length, shelf.mock.calls.length];
+    expect(builds[0]).toBe(shared ? 0 : 1); expect(builds[1]).toBeGreaterThan(0);
+    state.viewer = { ...state.viewer, latitude: 5 } as UserWithRelations;
+    state.locations = [...state.locations];
+    await scene.updateWindow(); await scene.updateWindow();
+    expect([nav.mock.calls.length, shelf.mock.calls.length]).toEqual(builds);
+    entry.map = { ...entry.map, tiles: [{ x: 4, y: 4, terrain: "grass", walkCost: 1, battleBiome: "ground", blocked: false, zone: "safezone" }] };
+    if (shared) state.nav = navigation.buildWindowNav(state.window, 10);
+    await scene.updateWindow();
+    expect(nav.mock.calls.length).toBe(builds[0]! + 1); expect(shelf.mock.calls.length).toBe(builds[1]! + 1);
+  });
   it.each(["village", "structure", "landmark"] as const)("draws a same-tile actor behind a %s building and a front-adjacent actor in front", async (kind) => {
     const state = snapshotFixture();
     state.users = [player({ longitude: 8, latitude: 5 })];
@@ -111,7 +171,7 @@ describe("travel scene ground depth", () => {
     advance(frame(1100, false));
     const height = sector.grid.getHex({ col: 4, row: 4 })!.height;
     expect(actor.y).not.toBe(before);
-    expect(actor.zIndex).toBeCloseTo(-(actor.y + height * 0.2 + sector.position.y));
+    expect(actor.zIndex).toBeCloseTo(-(actor.y + height * (0.1 + 1.8 * 0.7 * 4 / 64) + sector.position.y));
     expect(stage.renderGroup!.structureDidChange).toBe(true);
     for (let tick = 0; tick < 8; tick++) advance(frame(1200 + tick));
     expect(depth.renderLayerChildren.find((child) => child.label === "user:self")).toBe(actor);
@@ -133,14 +193,14 @@ describe("travel scene ground depth", () => {
     expect(scene.sectors.get(724)).toBe(original);
     const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
     const tile = neighbor.grid.getHex({ col: 4, row: 4 })!;
-    expect(actor.zIndex).toBeCloseTo(-(actor.y + tile.height * 0.2 + neighbor.position.y));
+    expect(actor.zIndex).toBeCloseTo(-(actor.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64) + neighbor.position.y));
     // Moving the retained center far enough triggers the production rebase branch.
     neighbor.position = { x: 100_000, y: 100_000 };
     await scene.updateWindow(); advance();
     expect(neighbor.position).toEqual({ x: 0, y: 0 });
     expect(neighborArt.sprite.zIndex).toBeCloseTo(-neighborArt.description.groundY);
     expect(art.sprite.zIndex).toBeCloseTo(-(art.description.groundY + original.position.y));
-    expect(actor.zIndex).toBeCloseTo(-(actor.y + tile.height * 0.2));
+    expect(actor.zIndex).toBeCloseTo(-(actor.y + tile.height * (0.1 + 1.8 * 0.7 * 4 / 64)));
     neighbor.art.setViewport({ minX: 100_000, maxX: 100_001, minY: 100_000, maxY: 100_001 }, 0);
     expect(neighborArt.sprite.renderable).toBe(false);
     expect(neighborArt.sprite.parentRenderLayer).toBe(depth);
@@ -152,7 +212,7 @@ describe("travel scene ground depth", () => {
     expect(neighborArt.sprite.destroyed).toBe(true);
   });
 
-  it("shrinks travel LPC art and shadows to 70% with a stable foot and shadow contact", async () => {
+  it("keeps compact travel LPC art and shadows at a shared foot contact", async () => {
     const { scene, depth } = await sceneFixture();
     const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
     const tile = scene.sectors.get(724)!.grid.getHex({ col: 4, row: 4 })!;
@@ -161,9 +221,9 @@ describe("travel scene ground depth", () => {
     expect(character.scale.x).toBeCloseTo(tile.height * 1.8 * 0.7);
     expect(character.y - character.scale.x / 2).toBeCloseTo(tile.height * 0.1);
     const bounds = shadow.getLocalBounds();
-    expect(bounds.width).toBeCloseTo(tile.height * 0.35 * 2 * 0.7);
-    expect(bounds.height).toBeCloseTo(tile.height * 0.12 * 2 * 0.7);
-    expect(bounds.y + bounds.height / 2).toBeCloseTo(tile.height * 0.2);
+    expect(bounds.width).toBeCloseTo(tile.height * (0.35 * 2 * 0.7 + 0.015));
+    expect(bounds.height).toBeCloseTo(tile.height * (0.12 * 2 * 0.7 + 0.015));
+    expect(bounds.y + bounds.height / 2).toBeCloseTo(tile.height * (0.1 + 1.8 * 0.7 * 4 / 64));
     expect(actor.zIndex).toBeCloseTo(-(actor.y + bounds.y + bounds.height / 2));
   });
 
@@ -231,7 +291,7 @@ describe("travel scene ground depth", () => {
 
   it("keeps controls and encounter/count markers above scenery and prioritizes visible controls over nearer bodies", async () => {
     const { scene, game, world, depth, overlay } = await sceneFixture();
-    expect(world.getChildIndex(depth)).toBeLessThan(world.getChildIndex(overlay));
+    expect(world.getChildIndex(depth.parent!)).toBeLessThan(world.getChildIndex(overlay));
     const grid = scene.sectors.get(724)!.grid;
     const actors = createTravelActors(game, { depth, overlay }); world.addChild(actors.container);
     const users = [player({ userId: "other" }), player({ userId: "nearer", longitude: 6, latitude: 3 }), player({ userId: "npc", isNpc: true, npcPlacementId: "npc", npcInteractionType: "FRIENDLY" }), player({ userId: "fighter", longitude: 10, latitude: 10, status: "BATTLE", battleId: "battle" })];
@@ -272,10 +332,85 @@ describe("travel scene ground depth", () => {
     expect(counter.parentRenderLayer).toBe(overlay);
     const physical = actors.container.children.filter((child) => child.label.startsWith("user:"));
     expect(physical.every((child) => child.parentRenderLayer === depth)).toBe(true);
-    expect(physical.every((child) => Math.abs(child.zIndex + child.y + grid.getHex({ col: 4, row: 4 })!.height * 0.2) < 0.0001)).toBe(true);
+    expect(physical.every((child) => Math.abs(child.zIndex + child.y + grid.getHex({ col: 4, row: 4 })!.height * (0.1 + 1.8 * 0.7 * 4 / 64)) < 0.0001)).toBe(true);
     actors.setViewport({ minX: -100_000, maxX: -99_999, minY: -100_000, maxY: -99_999 });
     expect(counter.destroyed).toBe(true);
     expect(overlay.renderLayerChildren).not.toContain(counter);
     expect(physical.every((child) => child.destroyed && !depth.renderLayerChildren.includes(child))).toBe(true);
+  });
+});
+
+
+describe("travel camera follow and inspection", () => {
+  it("damps tracking without replaying the final edge after its motion clock is removed", async () => {
+    const { scene, state, world, depth, advance } = await sceneFixture();
+    const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
+    const start = { x: world.x, y: world.y };
+    state.users = [player({ latitude: 6 })]; state.row = 6; state.actorRevision++;
+    state.motionSteps = new Map([["self", { from: { sector: 724, x: 4, y: 4 }, to: { sector: 724, x: 4, y: 6 }, startedAt: 1000, direction: "south", facing: 1 }]]);
+    advance(frame(1000 + SECTOR_WALK_STEP_MS, false));
+    const destination = scene.sectors.get(724)!.grid.getHex({ col: 4, row: 6 })!;
+    const finalY = Math.round(300 + (-destination.center.y + destination.height / 2));
+    expect(actor.y).toBeCloseTo(-destination.center.y);
+    expect(Math.abs(world.y - start.y)).toBeLessThan(Math.abs(finalY - start.y));
+    expect(world.y).not.toBe(start.y);
+    state.motionSteps = undefined;
+    let previous = Math.abs(finalY - world.y);
+    for (let tick = 0; tick < 120; tick++) {
+      advance(frame(1100 + tick * 1000 / 60, false));
+      expect(actor.y).toBeCloseTo(-destination.center.y);
+      const distance = Math.abs(finalY - world.y);
+      expect(distance).toBeLessThanOrEqual(previous);
+      previous = distance;
+    }
+    expect(world.y).toBe(finalY);
+  });
+
+  it("pans without walking, retains inspection across refreshes, and resumes follow on demand", async () => {
+    const { scene, state, world, event, advance, onTap } = await sceneFixture(undefined, 2);
+    const initial = { x: world.x, y: world.y };
+    event("pointerdown", 512, 300); event("pointermove", 542, 320);
+    advance(frame(1016, false));
+    expect(world.x).toBeCloseTo(initial.x + 30); expect(world.y).toBeCloseTo(initial.y + 20);
+    expect(scene.sectors.get(724)!.art.container.visible).toBe(true);
+    event("pointerup", 542, 320);
+    expect(onTap).not.toHaveBeenCalled();
+    const panned = { x: world.x, y: world.y };
+    state.users = [player({ latitude: 5 })]; state.row = 5; state.actorRevision++;
+    for (let tick = 0; tick < 30; tick++) advance(frame(1100 + tick * 16, false));
+    expect(world.position).toMatchObject(panned);
+    scene.recenter(); advance(frame(1600, false));
+    const destination = scene.sectors.get(724)!.grid.getHex({ col: 4, row: 5 })!;
+    const targetY = 300 + world.scale.x * (-destination.center.y + destination.height / 2);
+    expect(Math.abs(targetY - world.y)).toBeLessThan(Math.abs(targetY - panned.y));
+    expect(world.y).not.toBe(Math.round(targetY));
+    advance(frame(1700, true));
+    expect(world.y).toBe(Math.round(targetY));
+    event("pointerdown", 512, 300); event("pointerup", 514, 302);
+    expect(onTap).toHaveBeenCalledTimes(1);
+  });
+
+  it("has the same follow response at 30 and 60 frames per second", async () => {
+    const positions: number[] = [];
+    for (const fps of [30, 60]) {
+      const { state, world, advance } = await sceneFixture();
+      state.row = 8;
+      for (let tick = 1; tick <= fps / 2; tick++) advance({ now: 1000 + tick * 1000 / fps, delta: 1 / fps, reducedMotion: false });
+      positions.push(world.y);
+    }
+    expect(positions[0]).toBe(positions[1]);
+  });
+
+  it("bounds manual panning to the rendered window and ignores dragging while interaction is disabled", async () => {
+    const { game, state, world, event, advance } = await sceneFixture();
+    event("pointerdown", 512, 300); event("pointermove", 100_512, 100_300); event("pointerup", 100_512, 100_300);
+    advance(frame(1016, false));
+    expect(world.x).toBe(0);
+    const panned = { x: world.x, y: world.y };
+    state.enabled = false;
+    event("pointerdown", 512, 300); event("pointermove", -10_000, -10_000); event("pointerup", -10_000, -10_000);
+    advance(frame(1032, false));
+    expect(world.position).toMatchObject(panned);
+    expect(game.canvas.style.cursor).toBe("default");
   });
 });

@@ -184,9 +184,8 @@ const buildAnchors = (options: GeneratorOptions): AnchorSpec[] => {
  * (alea RNG). Worldgen fields are sampled at each tile's true 3D globe
  * position so terrain and biomes line up with neighbouring sectors across
  * every shared edge. Walkability is guaranteed for the full perimeter, the
- * road spine, all anchors, and the ensureWalkable tiles; a flood fill from
- * spawn then blocks any walkable pockets that cannot be reached. A final pass
- * turns walkable grass shorelines into sand.
+ * road spine, all anchors, and the ensureWalkable tiles. A final pass turns
+ * walkable grass shorelines into sand.
  */
 const generateCells = (options: GeneratorOptions) => {
   const { sector, width, height, village, seed } = options;
@@ -233,7 +232,11 @@ const generateCells = (options: GeneratorOptions) => {
         walkCost: 1,
       };
       let sea = false;
-      if (village) {
+      // Shared edge terrain comes from the same world fields on both sides,
+      // including where a settlement meets wilderness. Village landscaping
+      // applies inside the perimeter; its gameplay zone still covers the edge.
+      const isPerimeter = x === 0 || y === 0 || x === width - 1 || y === height - 1;
+      if (village && !isPerimeter) {
         // A village changes gameplay zones and guarantees its paths/anchors,
         // but does not repaint the underlying global biome. Coastal villages
         // and Wake Island therefore retain the water visible on the globe.
@@ -273,6 +276,9 @@ const generateCells = (options: GeneratorOptions) => {
           cell = { terrain: "snow", zone: "wilderness", blocked: false, walkCost: 2 };
         }
         landRow.push(voteTerrain);
+      }
+      if (village && isPerimeter) {
+        cell.zone = cell.terrain === "ocean" ? "water" : "village";
       }
       row.push(cell);
       seaRow.push(sea);

@@ -121,7 +121,10 @@ const Building: React.FC<BuildingProps> = (props) => {
       >
         <Link href={structure.route}>
           <Image
-            className={`${structure.level > 0 ? "hover:opacity-80" : "opacity-30"}`}
+            className={cn(
+              "aspect-square w-full object-contain object-bottom",
+              structure.level > 0 ? "hover:opacity-80" : "opacity-30",
+            )}
             src={structure.image}
             alt={structure.name}
             width={200}

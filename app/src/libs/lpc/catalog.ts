@@ -72,7 +72,7 @@ export const lpcFrame = (
   if (!frames?.length) return null;
   const duration =
     state === "walk"
-      ? 90
+      ? 180
       : state === "idle" || state === "combat"
         ? LPC_IDLE_FRAME_MS
         : LPC_ATTACK_FRAME_MS;

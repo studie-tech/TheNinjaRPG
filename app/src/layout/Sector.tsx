@@ -3,10 +3,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Grid } from "honeycomb-grid";
 import { useAtomValue } from "jotai";
-import { Swords } from "lucide-react";
+import { Minimize2, Swords } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useForm, useWatch } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
@@ -23,6 +24,7 @@ import {
   MAX_PVP_BRACKET,
   MEDNIN_MIN_RANK,
   RANKS_RESTRICTED_FROM_PVP,
+  SECTOR_WALK_STEP_MS,
   STRUCTURE_ADJACENTS,
   TERMINAL_DIALOG_PREFIX,
   WAR_SHRINE_IMAGE_BY_BIOME,
@@ -68,10 +70,18 @@ import {
   type TravelPick,
   type TravelSnapshot,
 } from "@/libs/rendering/scenes/travel";
-import { travelAvatar } from "@/libs/rendering/scenes/travelActors";
+import {
+  type TravelMotionStep,
+  travelAvatar,
+} from "@/libs/rendering/scenes/travelActors";
+import { worldMotionHeading } from "@/libs/rendering/worldArt";
+import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
-import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
-import { createGenericStructure } from "@/libs/sector-map/structures";
+import { buildWindowNav } from "@/libs/sector-map/navigation";
+import {
+  createGenericStructure,
+  createShrineStructure,
+} from "@/libs/sector-map/structures";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { sectorGridNeighbors } from "@/libs/sector-map/world-grid";
@@ -83,12 +93,12 @@ import type {
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
 import { hasRequiredRank } from "@/libs/train";
-import { getBiomeAtSectorAnchor } from "@/libs/travel";
 import { isTutorialCaptureStep } from "@/libs/tutorial";
 import { isWarAllies } from "@/libs/war";
 import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship, getAllyStatus } from "@/utils/alliance";
 import { round } from "@/utils/math";
+import { isStaffRole } from "@/utils/permissions";
 import { sleep } from "@/utils/time";
 import { blockingPopupOpenAtom, useRequiredUserData } from "@/utils/UserContext";
 import { MAP_LOCATION_REFRESH_MS, type MapLocation } from "@/validators/mapLocation";
@@ -120,6 +130,10 @@ interface SectorProps {
   showSorrounding: boolean;
   showActive: boolean;
   autoAttackMode: boolean;
+  isWorldExpanded: boolean;
+  /** Re-selecting the player tab resumes camera follow without remounting the scene. */
+  cameraFocusRevision: number;
+  setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
   setTarget: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
   setPosition: React.Dispatch<React.SetStateAction<SectorPoint | null>>;
@@ -170,7 +184,26 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const { sector, sectorWindow, target, showActive, autoAttackMode, centerEntry } =
     props;
   const sectorMap = centerEntry.map;
-  const { setTarget, setPosition } = props;
+  const { setTarget: setMovementTarget, setPosition } = props;
+  const { isWorldExpanded, setWorldExpanded } = props;
+  useEffect(() => {
+    if (!isWorldExpanded) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onEscape = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !document.querySelector('[role="dialog"][data-state="open"]')
+      )
+        setWorldExpanded(false);
+    };
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.body.style.overflow = overflow;
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [isWorldExpanded, setWorldExpanded]);
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
@@ -192,6 +225,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     -1,
   );
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("sectorZoom", 2.4);
+  const liveZoomRef = useRef<number | null>(null);
   // Global travel lands a tutorial player within a few tiles of the capture
   // target, so that step opens zoomed right in: the puppy and its marker fill
   // the view rather than being a speck somewhere on a 26x26 map. Only the
@@ -247,7 +281,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const pendingCrossRef = useRef<"north" | "east" | "south" | "west" | null>(null);
   // One logical grid over the whole 3x3 window, so paths and hover highlights
   // cross sector borders as if the world were a single map
-  const windowNavRef = useRef<WindowNav | null>(null);
+  // Account/quest refreshes leave map topology unchanged. Scene readiness must not rebuild this grid.
+  const windowNav = useMemo(
+    () => buildWindowNav(sectorWindow.sectors, 10),
+    [sectorWindow.sectors],
+  );
+  const windowNavRef = useRef(windowNav);
+  windowNavRef.current = windowNav;
   // Incremented whenever a completed crossing changes the window center, so
   // stale async window patches cannot win a race against the latest crossing.
   // The character's live tile during walk animations; authoritative for
@@ -259,12 +299,25 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // Client-authoritative sector id: updated imperatively the moment a
   // crossing commits (the prop lags a render behind), synced on prop change
   const walkAnimatingRef = useRef(false);
+  const motionStepsRef = useRef(new Map<string, TravelMotionStep>());
   const movePendingRef = useRef(false);
   const mountedRef = useRef(true);
   const sectorRef = useRef(sector);
   useEffect(() => {
     sectorRef.current = sector;
   }, [sector]);
+  const routeTargetRef = useRef<TravelSnapshot["routeTarget"]>(
+    target ? { sector, ...target } : null,
+  );
+  useEffect(() => {
+    routeTargetRef.current = target ? { sector: sectorRef.current, ...target } : null;
+  }, [target]);
+  /** Qualify a selected tile before crossings advance the sector ahead of React's props. */
+  const setTarget = (point: SectorPoint | null) => {
+    if (point) travel.scene.current?.recenter();
+    routeTargetRef.current = point ? { sector: sectorRef.current, ...point } : null;
+    setMovementTarget(point);
+  };
   const pendingNpcInteractRef = useRef<{
     placementId: string;
     positionVersion: number;
@@ -320,6 +373,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       void utils.travel.getSectorData.invalidate({ sector });
   }, [appearanceSignature, sector, utils]);
   timeDiffRef.current = timeDiff;
+  const [lightingPreviewDate, setLightingPreviewDate] = useState<Date | null>(null);
+  const lightingPreviewRef = useRef<Date | null>(null);
+  const [weatherPreview, setWeatherPreview] = useState<WorldWeather | null>(null);
+  const weatherPreviewRef = useRef<typeof weatherPreview>(null);
+  // The render loop reads only an authorized local preview; gameplay keeps the server clock.
+  lightingPreviewRef.current = isStaffRole(userData?.role) ? lightingPreviewDate : null;
+  weatherPreviewRef.current = isStaffRole(userData?.role) ? weatherPreview : null;
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
     {
@@ -386,6 +446,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     return [...base, createShrineStructure(sectorMap, props.tile.t)];
   }, [villageData?.structures, sectorMap, props.tile.t, dungeonStructures]);
   structuresRef.current = structures;
+  const currentServices = structures.filter(
+    (structure) =>
+      (structure.hasPage || structure.id === currentStructure?.id) &&
+      structure.longitude === currentStructure?.longitude &&
+      structure.latitude === currentStructure?.latitude,
+  );
 
   // Query for raids in this sector (only when user is in this sector)
   const { data: sectorRaidsData } = api.raids.getAvailableRaids.useQuery(
@@ -568,6 +634,19 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
   });
 
+  /** Publish only a real path edge; a newer edge owns cleanup if movement callbacks overlap. */
+  const publishMotionStep = (
+    userId: string,
+    from: TravelMotionStep["from"],
+    to: TravelMotionStep["to"],
+    heading: ReturnType<typeof worldMotionHeading>,
+  ) => {
+    if (from.sector === to.sector && from.x === to.x && from.y === to.y) return null;
+    const step = { from, to, ...heading, startedAt: performance.now() };
+    motionStepsRef.current.set(userId, step);
+    return step;
+  };
+
   // Convenience method for updating user list
   const updateUsersList = async (
     data: UserData,
@@ -627,7 +706,21 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             if (pathFinderRef.current && currentHex && targetHex) {
               const path = pathFinderRef.current.getShortestPath(currentHex, targetHex);
               if (path) {
+                const heading = worldMotionHeading(currentHex, targetHex);
                 for (const tile of path) {
+                  const before = usersRef.current[idx];
+                  const motion = before
+                    ? publishMotionStep(
+                        data.userId,
+                        {
+                          sector: data.sector,
+                          x: before.longitude,
+                          y: before.latitude,
+                        },
+                        { sector: data.sector, x: tile.col, y: tile.row },
+                        heading,
+                      )
+                    : null;
                   if (usersRef.current[idx]) {
                     usersRef.current[idx] = {
                       ...usersRef.current[idx],
@@ -643,7 +736,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                     };
                   }
                   actorRevisionRef.current++;
-                  await sleep(50);
+                  await sleep(SECTOR_WALK_STEP_MS);
+                  if (motion && motionStepsRef.current.get(data.userId) === motion)
+                    motionStepsRef.current.delete(data.userId);
                 }
               }
             }
@@ -732,10 +827,23 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     path: NonNullable<ReturnType<PathCalculator["getShortestPath"]>>,
     location: string,
   ) => {
-    if (!userData) return;
+    const first = path[0],
+      last = path.at(-1);
+    if (!userData || !first || !last) return;
     walkAnimatingRef.current = true;
+    const heading = worldMotionHeading(first, last);
     for (const tile of path) {
       if (!mountedRef.current || userRef.current?.status !== "AWAKE") break;
+      const before = animatedPositionRef.current ?? {
+        x: userData.longitude,
+        y: userData.latitude,
+      };
+      const motion = publishMotionStep(
+        userData.userId,
+        { sector: sectorRef.current, ...before },
+        { sector: sectorRef.current, x: tile.col, y: tile.row },
+        heading,
+      );
       originRef.current = tile;
       animatedPositionRef.current = { x: tile.col, y: tile.row };
       void updateUsersList(
@@ -749,7 +857,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         true,
         true, // Skip state update during animation
       );
-      await sleep(50);
+      await sleep(SECTOR_WALK_STEP_MS);
+      if (motion && motionStepsRef.current.get(userData.userId) === motion)
+        motionStepsRef.current.delete(userData.userId);
     }
     walkAnimatingRef.current = false;
   };
@@ -795,10 +905,21 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     location: string,
   ) => {
     const nav = windowNavRef.current;
-    if (!userData || !nav) return;
+    const first = unifiedPath[0],
+      last = unifiedPath.at(-1);
+    if (!userData || !nav || !first || !last) return;
     walkAnimatingRef.current = true;
-    for (const unifiedTile of unifiedPath) {
+    const heading = worldMotionHeading(first, last);
+    // Keep the origin for heading, but only animate tiles ahead of the actor.
+    for (const unifiedTile of unifiedPath.slice(1)) {
       if (!mountedRef.current || userRef.current?.status !== "AWAKE") break;
+      const before = {
+        sector: sectorRef.current,
+        ...(animatedPositionRef.current ?? {
+          x: userData.longitude,
+          y: userData.latitude,
+        }),
+      };
       const local = nav.fromUnified(unifiedTile);
       const entry = sectorWindowRef.current.sectors.find(
         (candidate) => candidate.dx === local.dx && candidate.dy === local.dy,
@@ -809,6 +930,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       }
       const hex = gridRef.current?.getHex({ col: local.col, row: local.row });
       if (!hex) continue;
+      const motion = publishMotionStep(
+        userData.userId,
+        before,
+        { sector: entry.sector, x: local.col, y: local.row },
+        heading,
+      );
       originRef.current = hex;
       animatedPositionRef.current = { x: local.col, y: local.row };
       void updateUsersList(
@@ -822,7 +949,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         true,
         true,
       );
-      await sleep(50);
+      await sleep(SECTOR_WALK_STEP_MS);
+      if (motion && motionStepsRef.current.get(userData.userId) === motion)
+        motionStepsRef.current.delete(userData.userId);
     }
     walkAnimatingRef.current = false;
   };
@@ -1144,10 +1273,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       const navPath =
         startU && goalU ? nav.pathFinder.getShortestPath(startU, goalU) : undefined;
       if (navPath && navPath.length > 1) {
+        routeTargetRef.current = crossDest;
         pendingWorldTargetRef.current = null;
-        // Walk across the border immediately (first tile is the edge we are
-        // already standing on, so skip it)
-        await animateWindowPath(navPath.slice(1), location);
+        await animateWindowPath(navPath, location);
         await reconcileCrossing(await crossingPromise);
         return;
       }
@@ -1224,20 +1352,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       showMutationToast(res);
       await refreshMovementPosition();
     }
-  };
-
-  /** Rebuild the unified window pathfinder from the current window's maps */
-  const rebuildWindowNav = () => {
-    windowNavRef.current = buildWindowNav(
-      sectorWindowRef.current.sectors.map((entry) => ({
-        dx: entry.dx,
-        dy: entry.dy,
-        map: entry.map,
-      })),
-      // Adjacency only depends on grid coordinates, so the hex size is
-      // arbitrary here (rendering uses the per-sector grids)
-      10,
-    );
   };
 
   const clearAllHighlights = () => travel.scene.current?.clearHighlights();
@@ -2026,13 +2140,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       const entry = travel.scene.current?.sectors.get(sectorRef.current);
       if (!entry) return;
       gridRef.current = entry.grid;
-      pathFinderRef.current = new PathCalculator(entry.grid);
+      if (pathFinderRef.current?.grid !== entry.grid)
+        pathFinderRef.current = new PathCalculator(entry.grid);
       const position = animatedPositionRef.current ?? {
         x: userRef.current?.longitude ?? 0,
         y: userRef.current?.latitude ?? 0,
       };
       originRef.current = entry.grid.getHex({ col: position.x, row: position.y });
-      rebuildWindowNav();
     },
   };
   const travelSnapshot = useRef<TravelSnapshot | null>(null);
@@ -2059,6 +2173,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     nav: windowNavRef.current,
     enabled: !props.showSorrounding,
     brightness: 1,
+    lightDate: null,
     decorations: mergedDecorations,
     terrains: mergedTerrains,
     libraryVersion,
@@ -2073,14 +2188,25 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         signal,
         onError,
         lightLayout,
-        initialZoom: openSectorZoomedIn ? SECTOR_MAX_ZOOM : storedZoom,
-        onZoom: setStoredZoom,
+        initialZoom:
+          liveZoomRef.current ?? (openSectorZoomedIn ? SECTOR_MAX_ZOOM : storedZoom),
+        onZoom: (zoom) => {
+          liveZoomRef.current = zoom;
+          setStoredZoom(zoom);
+        },
         getSnapshot: () => {
           const snapshot = travelSnapshot.current;
           if (!snapshot) throw new Error("Travel snapshot unavailable");
+          const lightDate =
+            lightingPreviewRef.current ??
+            (showDayNightMapOverlaysRef.current
+              ? new Date(Date.now() - timeDiffRef.current)
+              : null);
           return {
             ...snapshot,
             actorRevision: actorRevisionRef.current,
+            motionSteps: motionStepsRef.current,
+            routeTarget: pendingWorldTargetRef.current ?? routeTargetRef.current,
             sector: sectorRef.current,
             viewer: userRef.current,
             users: usersRef.current,
@@ -2090,9 +2216,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             enabled:
               !showSorroundingRef.current &&
               performance.now() >= ignoreMapClicksUntilRef.current,
-            brightness: showDayNightMapOverlaysRef.current
-              ? getWorldCycleBrightness(new Date(Date.now() - timeDiffRef.current))
-              : 1,
+            lightDate,
+            weather: weatherPreviewRef.current,
+            weatherTime: Date.now() - timeDiffRef.current,
+            brightness: lightDate ? getWorldCycleBrightness(lightDate) : 1,
           };
         },
         onTap: (hit) => travelCallbacks.current.onTap(hit),
@@ -2111,8 +2238,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }
         },
       }),
-    lightLayout,
+    `${lightLayout}:${isWorldExpanded}`,
   );
+  useEffect(() => {
+    if (travel.isReady) travel.scene.current?.recenter();
+  }, [travel.isReady, props.cameraFocusRevision]);
   useEffect(() => {
     if (!travel.isReady) return;
     travelCallbacks.current.onReady();
@@ -2156,8 +2286,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       ?.filter((asset) => asset.type === "SCENE_CHARACTER")
       .map((asset) => asset.image) ?? [];
 
-  return (
-    <>
+  const content = (
+    <div
+      data-world-expanded={isWorldExpanded ? "true" : undefined}
+      className={isWorldExpanded ? "fixed inset-0 z-50 bg-[#263c36]" : "relative"}
+    >
       <div className="relative">
         <div id="tutorial-travel-sector" ref={mountRef}></div>
         <aside
@@ -2192,7 +2325,27 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             Gold lines mark sector borders
           </div>
         </aside>
-        <DayNightIndicator className="absolute top-3 right-3 z-10 rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm" />
+        <div className="absolute top-3 right-3 z-10 flex items-start gap-2">
+          <DayNightIndicator
+            className="rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm"
+            previewDate={lightingPreviewDate}
+            onPreviewDateChange={setLightingPreviewDate}
+            previewWeather={weatherPreview}
+            onPreviewWeatherChange={setWeatherPreview}
+          />
+          {isWorldExpanded && (
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="bg-background/90"
+              aria-label="Exit expanded world"
+              onClick={() => setWorldExpanded(false)}
+            >
+              <Minimize2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       {travel.error && <WebGlError />}
       {inspectedLocations && (
@@ -2216,36 +2369,21 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         </Modal>
       )}
       {currentStructure && (
-        <div className="absolute bottom-3 left-3 z-20 max-w-[calc(50%-1.5rem)] rounded-lg bg-black/70 p-2 text-white shadow-lg sm:bottom-4 sm:left-4 sm:max-w-xs sm:p-4">
-          <div className="flex items-center gap-4">
-            <div className="hidden shrink-0 sm:block">
-              <Image
-                src={currentStructure.image}
-                alt={currentStructure.name}
-                width={48}
-                height={48}
-                className="rounded-md"
-              />
-            </div>
-            <div className="min-w-0">
-              <h3
-                className="truncate font-semibold text-sm sm:text-lg"
-                title={currentStructure.name}
-              >
-                {currentStructure.name}
-              </h3>
-              <Link
-                href={currentStructure.route}
-                className="mt-2 inline-block rounded-md bg-blue-500 px-2 py-2 font-medium text-white text-xs transition-colors hover:bg-blue-600 sm:px-4 sm:text-sm"
-              >
-                Enter {currentStructure.name}
-              </Link>
-            </div>
+        <div className="absolute bottom-3 left-3 z-20 max-w-[calc(50%-40px)] rounded-lg bg-black/80 p-3 text-white shadow-lg sm:bottom-4 sm:left-4 sm:max-w-xs">
+          <h3 className="font-semibold text-sm">
+            {currentServices.map((service) => service.name).join(" · ")}
+          </h3>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {currentServices.map((service) => (
+              <Button key={service.id} asChild size="sm" className="min-h-10">
+                <Link href={service.route}>Enter {service.name}</Link>
+              </Button>
+            ))}
           </div>
         </div>
       )}
       {/* Stack corner actions so dungeon, hover and raid cards share the map without overlap. */}
-      <div className="pointer-events-none absolute right-3 bottom-3 z-20 flex max-w-[calc(50%-1.5rem)] flex-col items-end gap-2 sm:right-4 sm:bottom-4 sm:max-w-xs">
+      <div className="pointer-events-none absolute right-3 bottom-3 z-20 flex max-w-[calc(50%-40px)] flex-col items-end gap-2 sm:right-4 sm:bottom-4 sm:max-w-xs">
         <MapLocationActions
           arrived={arrivedLocations}
           hovered={hoveredLocation}
@@ -2262,59 +2400,47 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }
         />
         {hoveredStructure && hoveredStructure.id !== currentStructure?.id && (
-          <div className="pointer-events-auto w-full rounded-lg bg-black/70 p-2 text-white shadow-lg sm:p-4">
-            <div className="flex items-center gap-4">
-              <div className="hidden shrink-0 sm:block">
-                <Image
-                  src={hoveredStructure.image}
-                  alt={hoveredStructure.name}
-                  width={48}
-                  height={48}
-                  className="rounded-md"
-                />
-              </div>
+          <div className="pointer-events-auto w-full rounded-lg bg-black/80 p-3 text-white shadow-lg">
+            <div className="flex items-center gap-3">
               <div className="min-w-0">
                 <h3
-                  className="truncate font-semibold text-sm sm:text-lg"
+                  className="truncate font-semibold text-sm"
                   title={hoveredStructure.name}
                 >
                   {hoveredStructure.name}
                 </h3>
-                <button
-                  type="button"
+                <Button
+                  size="sm"
                   onClick={() =>
                     setTarget({
                       x: hoveredStructure.longitude,
                       y: hoveredStructure.latitude,
                     })
                   }
-                  className="mt-2 inline-block rounded-md bg-blue-500 px-2 py-2 font-medium text-white text-xs transition-colors hover:bg-blue-600 sm:px-4 sm:text-sm"
+                  className="mt-2 min-h-10"
                 >
                   Go to {hoveredStructure.name}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
         )}
         {activeRaid && (
-          <div className="pointer-events-auto w-full rounded-lg bg-black/70 p-2 text-white shadow-lg sm:p-4">
-            <div className="flex items-center gap-4">
-              <Swords className="hidden h-12 w-12 shrink-0 text-red-500 sm:block" />
+          <div className="pointer-events-auto w-full rounded-lg bg-black/80 p-3 text-white shadow-lg">
+            <div className="flex items-center gap-3">
+              <Swords className="hidden h-6 w-6 shrink-0 text-red-500 sm:block" />
               <div className="min-w-0">
-                <h3
-                  className="truncate font-semibold text-sm sm:text-lg"
-                  title={activeRaid.name}
-                >
+                <h3 className="truncate font-semibold text-sm" title={activeRaid.name}>
                   {activeRaid.name}
                 </h3>
-                <p className="text-gray-300 text-sm">Active Raid in this sector</p>
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  variant="destructive"
                   onClick={() => setShowRaidModal(true)}
-                  className="mt-2 inline-block rounded-md bg-red-600 px-2 py-2 font-medium text-white text-xs transition-colors hover:bg-red-700 sm:px-4 sm:text-sm"
+                  className="mt-2 min-h-10"
                 >
                   View Raid
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -2535,19 +2661,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           </div>
         </Modal>
       )}
-    </>
+    </div>
   );
+  // Escape the shell's stacking context while keeping Radix dialogs above the world.
+  return isWorldExpanded ? createPortal(content, document.body) : content;
 };
 
 export default Sector;
-
-/**
- * Identity of the synthetic shrine, which is created once for the sector state
- * and again for the rendered scene. Both copies must share an id so a hit test
- * hit on the shrine sprite resolves back to a structure, the same way it does
- * for database-backed buildings.
- */
-const SECTOR_SHRINE_ID = "sector-shrine";
 
 /**
  * Mobile browsers synthesize a click on whatever sits under a dialog after the
@@ -2555,23 +2675,6 @@ const SECTOR_SHRINE_ID = "sector-shrine";
  * window so closing scouting cannot also walk to a tile.
  */
 const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
-
-const createShrineStructure = (map: NormalizedSectorMap, globalTileType: number) => {
-  const shrineAnchor = map.anchors.find((anchor) => anchor.key === "shrine.default");
-  return {
-    ...createGenericStructure({
-      name: "Sector Shrine",
-      route: "/shrine",
-      image:
-        WAR_SHRINE_IMAGE_BY_BIOME[
-          getBiomeAtSectorAnchor(map, "shrine.default", globalTileType)
-        ],
-      longitude: shrineAnchor?.x ?? 10,
-      latitude: shrineAnchor?.y ?? 5,
-    }),
-    id: SECTOR_SHRINE_ID,
-  };
-};
 
 interface SorroundingUsersProps {
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;

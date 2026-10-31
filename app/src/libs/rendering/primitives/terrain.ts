@@ -1,13 +1,15 @@
 import {
   BufferImageSource,
+  Color,
   Container,
   Geometry,
   Mesh,
   Shader,
   State,
   Texture,
+  UniformGroup,
 } from "pixi.js";
-import { linearRenderColor } from "@/libs/rendering/color";
+import { linearRenderColor, worldLighting } from "@/libs/rendering/color";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import {
   displayColorShader,
@@ -49,6 +51,10 @@ export const createHexTerrain = async (
   const geometries: Geometry[] = [],
     shaders: Shader[] = [];
   const noise = createNoiseTexture();
+  const ambient = new UniformGroup({
+    uAmbient: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" },
+  });
+  let lastBrightness = 1;
   const recolor: ((tints: ReadonlyMap<string, TerrainTint>) => void)[] = [];
   let disposed = false;
   const own = (
@@ -77,9 +83,10 @@ export const createHexTerrain = async (
     const shader = Shader.from({
       gl: {
         vertex: `precision highp float; attribute vec2 aPosition; ${project2DShader} void main() { gl_Position = project2D(aPosition); }`,
-        fragment: `precision mediump float; uniform vec4 uFill; ${displayColorShader} void main() { gl_FragColor = vec4(displayColor(uFill.rgb) * uFill.a, uFill.a); }`,
+        fragment: `precision mediump float; uniform vec4 uFill; uniform vec3 uAmbient; ${displayColorShader} void main() { gl_FragColor = vec4(displayColor(uFill.rgb) * uAmbient * uFill.a, uFill.a); }`,
       },
       resources: {
+        ambient,
         fill: {
           uFill: {
             value: new Float32Array([color.r, color.g, color.b, alpha]),
@@ -90,9 +97,9 @@ export const createHexTerrain = async (
     });
     own(geometry, shader, order);
   };
-  colorMesh(data.ground, "#696969", 1, false, 0);
+  colorMesh(data.ground, "#655944", 1, false, 0);
   // Opaque faces cover buried dirt edges; recessed outlines stay below flat land.
-  colorMesh(data.groundEdges, "#555555", 0.25, true, 1);
+  colorMesh(data.groundEdges, "#394a35", 0.18, true, 1);
   data.batches.forEach((batch, index) => {
     const order = batch.layer < 0 ? 2 : 4;
     const colors = new Float32Array(batch.colors);
@@ -114,19 +121,20 @@ ${project2DShader}
 void main() { vUV = aUV; vTint = aTint; vRawTint = aRawTint.rgb; vWave = aWave; gl_Position = project2D(aPosition); }`,
         fragment: `precision mediump float;
 varying vec2 vUV; varying vec3 vTint; varying vec3 vRawTint; varying float vWave;
-uniform sampler2D uTexture; uniform float uKind; uniform float uTime;
+uniform sampler2D uTexture; uniform float uKind; uniform float uTime; uniform vec3 uAmbient;
 ${displayColorShader}
 ${waterUVShader}
 void main() {
   vec2 uv = vWave >= 0.0 ? waterUV(vUV, uTime + vWave) : vUV;
   uv = vec2(fract(uv.x), 1.0 - fract(uv.y));
   vec3 color = vTint;
-  if (uKind > 1.5) color *= linearColor(texture2D(uTexture, uv).rgb);
-  else if (uKind > 0.5) color *= clamp(vRawTint + texture2D(uTexture, uv).r - 16.0 / 255.0, 0.0, 1.0);
-  gl_FragColor = vec4(displayColor(color), 1.0);
+  if (uKind > 1.5) color *= 0.78 + dot(linearColor(texture2D(uTexture, uv).rgb), vec3(0.2126, 0.7152, 0.0722)) * 0.35;
+  else if (uKind > 0.5) color *= 0.84 + texture2D(uTexture, uv).r * 0.32;
+  gl_FragColor = vec4(displayColor(color) * uAmbient, 1.0);
 }`,
       },
       resources: {
+        ambient,
         animation: game.animation,
         uTexture: (images[index] ?? (batch.kind === "noise" ? noise : Texture.WHITE))
           .source,
@@ -160,10 +168,26 @@ void main() {
     own(geometry, shader, order, state);
     if (batch.layer !== data.batches[index + 1]?.layer) {
       const edges = data.edges.get(batch.layer);
-      if (edges) colorMesh(edges, "#555555", 0.25, true, order + 1);
+      if (edges) colorMesh(edges, "#324b36", 0.025, true, order + 1);
     }
   });
-  if (showBoundary) colorMesh(data.boundary, "#ffc23e", 0.85, true, 6);
+  if (data.surface.length) {
+    const geometry = new Geometry({
+      attributes: {
+        aPosition: { buffer: data.surface, format: "float32x2", stride: 8 },
+        aTint: { buffer: data.surfaceColors, format: "float32x3", stride: 12 },
+      },
+    });
+    const shader = Shader.from({
+      gl: {
+        vertex: `precision highp float; attribute vec2 aPosition; attribute vec3 aTint; varying vec3 vTint; varying vec2 vGround; ${project2DShader} void main() { vTint = aTint; vGround = aPosition; gl_Position = project2D(aPosition); }`,
+        fragment: `precision mediump float; varying vec3 vTint; varying vec2 vGround; uniform vec3 uAmbient; uniform sampler2D uGrain; ${displayColorShader} void main() { float grain = texture2D(uGrain, fract(vGround / 128.0)).r; gl_FragColor = vec4(displayColor(vTint * (0.88 + grain * 0.24)) * uAmbient, 1.0); }`,
+      },
+      resources: { ambient, uGrain: noise.source },
+    });
+    own(geometry, shader, 4.5);
+  }
+  if (showBoundary) colorMesh(data.boundary, "#b1b785", 0.18, true, 6);
   const dispose = () => {
     if (disposed) return;
     disposed = true;
@@ -177,6 +201,15 @@ void main() {
     container,
     dispose,
     isAnimated: data.animatedTiles > 0,
+    setLighting: (brightness: number) => {
+      brightness = Math.round(brightness * 256) / 256;
+      if (lastBrightness === brightness) return;
+      lastBrightness = brightness;
+      ambient.uniforms.uAmbient.set(
+        new Color(worldLighting(brightness).tint).toArray().slice(0, 3),
+      );
+      ambient.update();
+    },
     setTints: (tints: ReadonlyMap<string, TerrainTint>) => {
       for (const update of recolor) update(tints);
     },
@@ -188,9 +221,22 @@ const createNoiseTexture = () => {
   let state = 0x93a41;
   for (let index = 0; index < pixels.length; index += 4) {
     state = Math.imul(state ^ (state >>> 15), 0x21f0aaad);
-    const noise = state >>> 27;
+    const noise = 96 + (state >>> 27) * 2;
     pixels[index] = pixels[index + 1] = pixels[index + 2] = noise;
     pixels[index + 3] = 255;
+  }
+  // Connected clusters read as material grain instead of television noise.
+  for (let cluster = 0; cluster < 95; cluster++) {
+    const x = (cluster * 29 + 7) % 62,
+      y = (cluster * 17 + 3) % 62;
+    for (const [dx, dy, tone] of [
+      [0, 0, 184],
+      [1, 0, 168],
+      [1, 1, 88],
+    ] as const) {
+      const index = ((y + dy) * 64 + x + dx) * 4;
+      pixels[index] = pixels[index + 1] = pixels[index + 2] = tone;
+    }
   }
   return new Texture({
     source: new BufferImageSource({
@@ -198,7 +244,7 @@ const createNoiseTexture = () => {
       width: 64,
       height: 64,
       format: "rgba8unorm",
-      scaleMode: "linear",
+      scaleMode: "nearest",
     }),
   });
 };
