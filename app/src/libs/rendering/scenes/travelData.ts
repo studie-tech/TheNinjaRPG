@@ -7,6 +7,7 @@ export const travelSectorKey = (
   libraryVersion: string,
   lightLayout: boolean,
   locations: MapLocation[],
+  foundations?: ReadonlySet<string>,
 ) =>
   JSON.stringify([
     entry.sector,
@@ -23,4 +24,5 @@ export const travelSectorKey = (
     libraryVersion,
     lightLayout,
     locations,
+    foundations ? [...foundations].sort() : [],
   ]);

@@ -42,6 +42,7 @@ import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { planVillageWallWindow } from "@/libs/sector-map/village-walls";
 import { getBiomeFromTileType } from "@/libs/travel";
 import { clamp } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
@@ -261,6 +262,7 @@ export const createTravelScene = async (options: {
           (a, b) =>
             Number(b.sector === snapshot.sector) - Number(a.sector === snapshot.sector),
         );
+      const wallPlans = planVillageWallWindow(snapshot.window);
       // A shared shoreline field spans the same aligned grid as travel, without changing its navigation.
       const hasWaterShelf =
         !options.lightLayout &&
@@ -285,6 +287,7 @@ export const createTravelScene = async (options: {
             snapshot.libraryVersion,
             options.lightLayout,
             snapshot.locations.filter((location) => location.sector === entry.sector),
+            wallPlans.get(entry.sector)?.foundationKeys,
           );
           const cached = sectors.get(entry.sector);
           if (cached?.sourceKey === sourceKey)
@@ -306,6 +309,7 @@ export const createTravelScene = async (options: {
                 entry.map,
                 snapshot.terrains,
                 entry.villageType,
+                wallPlans.get(entry.sector) ?? null,
               ),
             },
           ] as const;
@@ -392,6 +396,7 @@ export const createTravelScene = async (options: {
               entry.map,
               snapshot.terrains,
               entry.villageType,
+              wallPlans.get(entry.sector) ?? null,
             ));
           }
           const roads = planVillageLandscape(grid, entry.structures, villageWallPlan);

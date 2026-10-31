@@ -17,10 +17,14 @@ import {
   getVillageWallFoundationKeys,
   planVillageWalls,
   usesVillageWalls,
+  type VillageWallPlan,
 } from "@/libs/sector-map/village-walls";
 import { getBiomeFromTileType } from "@/libs/travel";
 
-/** Shared terrain, structure-foundation and navigation data for a sector's renderers. */
+/**
+ * Shared terrain, structure-foundation and navigation data for a sector's renderers.
+ * A preplanned wall layout carries footing cells shared with neighboring sectors.
+ */
 export const prepareSectorGrid = (
   width: number,
   prng: () => number,
@@ -29,6 +33,7 @@ export const prepareSectorGrid = (
   sectorMap: NormalizedSectorMap,
   terrainRegistry: Map<string, TerrainSpec>,
   villageType: string | null,
+  wallPlan?: VillageWallPlan | null,
 ) => {
   const { width: sectorWidth, height: sectorHeight } = sectorMap;
   const authoredTiles = new Map(
@@ -63,9 +68,12 @@ export const prepareSectorGrid = (
       structureTileKeys.add(`${s.longitude + dCol},${s.latitude + dRow}`);
     }
   }
-  const villageWallPlan = usesVillageWalls(villageType)
-    ? planVillageWalls(sectorMap, allStructures)
-    : null;
+  const villageWallPlan =
+    wallPlan === undefined
+      ? usesVillageWalls(villageType)
+        ? planVillageWalls(sectorMap, allStructures)
+        : null
+      : wallPlan;
   const wallFoundationKeys = villageWallPlan
     ? getVillageWallFoundationKeys(villageWallPlan)
     : new Set<string>();
