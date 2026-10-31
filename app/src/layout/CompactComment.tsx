@@ -136,97 +136,99 @@ export function CompactComment(props: CompactCommentProps) {
             ))}
           </div>
         )}
-      </div>
-      <div
-        className={cn(
-          "bg-popover absolute -top-[8px] right-[4px] z-10 hidden items-center gap-[2px] rounded-md border px-[2px] shadow-sm group-hover:flex focus-within:flex",
-          emojiOpen && "flex",
-        )}
-      >
-        {props.toggleReaction && (
-          <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
-            <PopoverTrigger asChild>
-              <ActionButton label="Add reaction">
-                <SmilePlus />
-              </ActionButton>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" collisionPadding={8}>
-              {/* The popover closes on outside clicks; the picker's own handler would
+        <div
+          className={cn(
+            "bg-popover absolute -top-[8px] right-[4px] z-10 hidden items-center gap-[2px] rounded-md border px-[2px] shadow-sm group-hover:flex focus-within:flex [@media(hover:none)]:static [@media(hover:none)]:ml-auto [@media(hover:none)]:flex [@media(hover:none)]:w-fit",
+            emojiOpen && "flex",
+          )}
+        >
+          {props.toggleReaction && (
+            <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+              <PopoverTrigger asChild>
+                <ActionButton label="Add reaction">
+                  <SmilePlus />
+                </ActionButton>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" collisionPadding={8}>
+                {/* The popover closes on outside clicks; the picker's own handler would
                   also catch the click that reopens it. */}
-              <EmojiPicker
-                perLine={8}
-                onSelect={(native) => {
-                  props.toggleReaction?.(native);
-                  setEmojiOpen(false);
+                <EmojiPicker
+                  perLine={8}
+                  onSelect={(native) => {
+                    props.toggleReaction?.(native);
+                    setEmojiOpen(false);
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+          {props.setQuoteId && (
+            <ActionButton
+              label={isQuoted ? "Stop replying" : "Reply"}
+              pressed={isQuoted}
+              onClick={() => props.setQuoteId?.(comment.id)}
+            >
+              <Reply />
+            </ActionButton>
+          )}
+          {isAuthor && props.editComment && (
+            <ActionButton
+              label="Edit message"
+              pressed={props.editing}
+              onClick={() => props.setEditing((prev) => !prev)}
+            >
+              <SquarePen />
+            </ActionButton>
+          )}
+          {userData && (isAuthor || canSeeSecretData(userData.role)) && (
+            <ModerationSummary
+              userId={user.userId}
+              username={user.username}
+              trigger={
+                <ActionButton label="Moderation summary">
+                  <BarChart2 />
+                </ActionButton>
+              }
+            />
+          )}
+          {!isAuthor && !comment.isReported && (
+            <ReportUser
+              user={user}
+              content={comment}
+              system="conversation_comment"
+              button={
+                <ActionGlyph label="Report message">
+                  <Flag />
+                </ActionGlyph>
+              }
+            />
+          )}
+          {userData &&
+            canDeleteComment(userData, user.userId) &&
+            props.deleteComment && (
+              <Confirm
+                id={`delete-comment-${comment.id}`}
+                title="Confirm Deletion"
+                button={
+                  <ActionGlyph label="Delete message">
+                    <Trash2 />
+                  </ActionGlyph>
+                }
+                disabled={props.isDeletePending}
+                confirmClassName="bg-red-600 text-white hover:bg-red-700"
+                proceed_label="Delete comment"
+                proceed_loading_label="Deleting"
+                isLoading={props.isDeletePending}
+                keepOpenOnAccept={true}
+                onAccept={(e) => {
+                  e.preventDefault();
+                  if (!props.isDeletePending) props.deleteComment?.({ id: comment.id });
                 }}
-              />
-            </PopoverContent>
-          </Popover>
-        )}
-        {props.setQuoteId && (
-          <ActionButton
-            label={isQuoted ? "Stop replying" : "Reply"}
-            pressed={isQuoted}
-            onClick={() => props.setQuoteId?.(comment.id)}
-          >
-            <Reply />
-          </ActionButton>
-        )}
-        {isAuthor && props.editComment && (
-          <ActionButton
-            label="Edit message"
-            pressed={props.editing}
-            onClick={() => props.setEditing((prev) => !prev)}
-          >
-            <SquarePen />
-          </ActionButton>
-        )}
-        {userData && (isAuthor || canSeeSecretData(userData.role)) && (
-          <ModerationSummary
-            userId={user.userId}
-            username={user.username}
-            trigger={
-              <ActionButton label="Moderation summary">
-                <BarChart2 />
-              </ActionButton>
-            }
-          />
-        )}
-        {!isAuthor && !comment.isReported && (
-          <ReportUser
-            user={user}
-            content={comment}
-            system="conversation_comment"
-            button={
-              <ActionGlyph label="Report message">
-                <Flag />
-              </ActionGlyph>
-            }
-          />
-        )}
-        {userData && canDeleteComment(userData, user.userId) && props.deleteComment && (
-          <Confirm
-            id={`delete-comment-${comment.id}`}
-            title="Confirm Deletion"
-            button={
-              <ActionGlyph label="Delete message">
-                <Trash2 />
-              </ActionGlyph>
-            }
-            disabled={props.isDeletePending}
-            confirmClassName="bg-red-600 text-white hover:bg-red-700"
-            proceed_label="Delete comment"
-            proceed_loading_label="Deleting"
-            isLoading={props.isDeletePending}
-            keepOpenOnAccept={true}
-            onAccept={(e) => {
-              e.preventDefault();
-              if (!props.isDeletePending) props.deleteComment?.({ id: comment.id });
-            }}
-          >
-            <p>Delete this comment by {user.username}? This cannot be undone.</p>
-          </Confirm>
-        )}
+              >
+                <p>Delete this comment by {user.username}? This cannot be undone.</p>
+              </Confirm>
+            )}
+        </div>
       </div>
     </article>
   );

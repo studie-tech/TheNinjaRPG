@@ -74,7 +74,14 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
 }) => {
   return (
     <div className="absolute top-0 bottom-0 w-full md:relative">
-      <div className="fixed right-1 bottom-1 z-50 rounded-full bg-slate-500 md:right-5 md:bottom-5">
+      <div
+        className={cn(
+          "fixed bottom-1 rounded-full bg-slate-500",
+          userData
+            ? "left-1 z-[61] md:bottom-[80px] md:left-5"
+            : "right-1 z-50 md:right-5 md:bottom-5",
+        )}
+      >
         <LowerRightHelpBtn className="hidden md:block">
           {userData ? (
             <MessagesSquare className={cn(variantClasses.yellowButton)} />

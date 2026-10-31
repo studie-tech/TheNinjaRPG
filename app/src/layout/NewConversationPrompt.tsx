@@ -62,6 +62,13 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     props.defaultOpen ?? false,
   );
   const createSubmissionRef = useRef(false);
+  const previousCreateDialogOpenRef = useRef(isCreateDialogOpen);
+
+  useEffect(() => {
+    if (previousCreateDialogOpenRef.current === isCreateDialogOpen) return;
+    previousCreateDialogOpenRef.current = isCreateDialogOpen;
+    props.onOpenChange?.(isCreateDialogOpen);
+  }, [isCreateDialogOpen, props.onOpenChange]);
 
   const create = useForm<CreateConversationSchema>({
     resolver: zodResolver(createConversationSchema),
@@ -116,7 +123,6 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
       if (data.success) {
         create.reset();
         setIsCreateDialogOpen(false);
-        props.onOpenChange?.(false);
         if (data.conversationId) props.setSelectedConvo?.(data.conversationId);
       }
     },
@@ -150,7 +156,6 @@ export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (prop
     setIsCreateDialogOpen((current) => {
       const next = typeof value === "function" ? value(current) : value;
       const resolved = !next && createSubmissionRef.current ? current : next;
-      if (resolved !== current) props.onOpenChange?.(resolved);
       return resolved;
     });
   };

@@ -15,6 +15,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
+import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
@@ -47,7 +48,12 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
 
   return (
     <div className="tnr-theme-game" data-layout-variant={props.variant}>
-      <div className="fixed right-5 bottom-5 z-50 hidden min-[1100px]:block">
+      <div
+        className={cn(
+          "fixed hidden min-[1100px]:block",
+          userData ? "bottom-[80px] left-5 z-[61]" : "right-5 bottom-5 z-50",
+        )}
+      >
         <LowerRightHelpBtn className="theme-header-button shadow-lg">
           <MessagesSquare aria-hidden="true" />
         </LowerRightHelpBtn>

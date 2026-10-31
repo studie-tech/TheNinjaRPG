@@ -1,5 +1,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { getDefaultStore } from "jotai";
+import { chatPanelAtom } from "@/libs/chatPanel";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
@@ -70,6 +72,7 @@ beforeEach(() => {
     return { data: data ? select(data) : undefined, updateUser: mocks.updateUser } as never;
   }));
   ensureDom();
+  getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   // Bun shares modules between suites; restore Objective after each test.
   componentSpies.push(vi.spyOn(objective, "Objective").mockImplementation(() => null));
   componentSpies.push(vi.spyOn(sortableList, "SortableList").mockImplementation(() => null));
@@ -117,6 +120,7 @@ describe("TutorialAssistant highlight activation", () => {
 });
 afterEach(() => {
   cleanup();
+  getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
   for (const spy of componentSpies.splice(0)) spy.mockRestore();
   close?.();
   close = undefined;
@@ -125,6 +129,22 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, "requestAnimationFrame");
 });
 const renderAssistant = () => render(<TutorialAssistant rightSideBarOpen={false} setRightSideBarOpen={() => {}} rightSideBarRef={{ current: null }} />);
+
+it("pauses tutorial controls while chatting and restores the saved lesson on close", () => {
+  mocks.step = { ...mocks.step, showNextButton: true };
+  const view = renderAssistant();
+  expect(view.getByRole("region", { name: "Tutorial: Welcome" })).toBeTruthy();
+  act(() => getDefaultStore().set(chatPanelAtom, { owner: "chat", tab: "tavern" }));
+  expect(view.queryByRole("region", { name: "Tutorial: Welcome" })).toBeNull();
+  fireEvent.keyDown(window, { key: "Enter" });
+  expect(mocks.next).not.toHaveBeenCalled();
+  expect(mocks.disable).not.toHaveBeenCalled();
+  act(() => getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" }));
+  expect(view.getByRole("region", { name: "Tutorial: Welcome" })).toBeTruthy();
+  fireEvent.keyDown(window, { key: "Enter" });
+  expect(mocks.next).toHaveBeenCalledTimes(1);
+  expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData.tutorialOn).toBe(true);
+});
 const confirmDisable = (view: ReturnType<typeof renderAssistant>) => {
   fireEvent.click(view.getByRole("button", { name: "Disable tutorial" }));
   fireEvent.click(view.getByRole("button", { name: "Skip Tutorial" }));

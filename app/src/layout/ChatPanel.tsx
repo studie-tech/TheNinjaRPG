@@ -86,7 +86,7 @@ export function ChatPanel({ children, className }: ChatPanelProps) {
         {open && !isPhone && (
           <PopoverContent
             side="top"
-            align="end"
+            align="start"
             collisionPadding={8}
             onInteractOutside={ignoreToastInteractions()}
             className={cn(

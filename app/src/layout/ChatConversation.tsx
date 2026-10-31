@@ -60,6 +60,7 @@ export function ChatConversation({
   const [unseen, setUnseen] = useState(0);
 
   const newestId = allComments?.[0]?.id;
+  const newestIsOwn = !!userData && allComments?.[0]?.authorId === userData.userId;
   const loadedCount = allComments?.length ?? 0;
 
   // While shown, this conversation's messages and pings count as seen.
@@ -79,8 +80,10 @@ export function ChatConversation({
     const previousNewest = newestIdRef.current;
     newestIdRef.current = newestId;
     if (newestId !== previousNewest) {
-      if (isAtBottomRef.current || previousNewest === undefined) {
+      if (isAtBottomRef.current || previousNewest === undefined || newestIsOwn) {
         list.scrollTop = list.scrollHeight;
+        isAtBottomRef.current = true;
+        setUnseen(0);
       } else {
         setUnseen((count) => count + 1);
       }
@@ -88,7 +91,7 @@ export function ChatConversation({
       list.scrollTop += list.scrollHeight - scrollHeightRef.current;
     }
     scrollHeightRef.current = list.scrollHeight;
-  }, [newestId, loadedCount]);
+  }, [newestId, loadedCount, newestIsOwn]);
 
   // Keep unsent text when the panel closes or another chat opens, and restore it.
   const draftKey = convoId ?? convoTitle ?? "";

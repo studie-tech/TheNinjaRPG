@@ -1,6 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
+import { useAtomValue } from "jotai";
 import { ArrowRight, Loader2, Settings2, Sparkles, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -33,6 +34,7 @@ import { useAbVariant } from "@/hooks/useAbVariant";
 import Image from "@/layout/Image";
 import { useCheckRewards } from "@/layout/Logbook";
 import { Objective } from "@/layout/Objective";
+import { chatPanelAtom } from "@/libs/chatPanel";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
 import {
@@ -361,10 +363,12 @@ interface TutorialAssistantProps {
 const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
   const pathname = usePublicPathname();
   const { data: userData } = useUserDataSelector((user) => user.userId);
+  const isChatOpen = useAtomValue(chatPanelAtom).owner !== null;
   // The game shell also wraps public pages. Reward hooks require a player and redirect
   // anonymous visitors, so keep them unmounted until the profile is available.
-  // Browser authentication must also finish without game actions covering it.
-  if (!userData || isBrowserAuthPath(pathname)) return null;
+  // Keep browser authentication clear and unmount presentation listeners while chatting.
+  // The saved tutorial step and preference remain available when the assistant returns.
+  if (!userData || isBrowserAuthPath(pathname) || isChatOpen) return null;
   return <PlayerTutorialAssistant {...props} />;
 };
 

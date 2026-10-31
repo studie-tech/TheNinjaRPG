@@ -232,6 +232,7 @@ export default function ChatPanelBody({
           <TavernPane
             fixedTavern={phoneChat?.kind === "tavern" ? phoneChat.tavern : undefined}
             onMessageUser={openMessageWith}
+            onClose={onClose}
           />
         )}
       </div>
@@ -243,9 +244,11 @@ export default function ChatPanelBody({
 function TavernPane({
   fixedTavern,
   onMessageUser,
+  onClose,
 }: {
   fixedTavern?: string;
   onMessageUser: (user: ChatStartUser) => void;
+  onClose: () => void;
 }) {
   const { data: userData } = useUserData();
   const { availTaverns, localTavern, canAccessGlobal, isLoading } =
@@ -330,6 +333,17 @@ function TavernPane({
       toolbarStart={tavernSwitch}
       toolbarEnd={
         <>
+          <Link
+            href="/tavern"
+            onClick={() => {
+              setSelected(tavern);
+              onClose();
+            }}
+            className="inline-flex h-[32px] shrink-0 items-center gap-[4px] rounded-md px-[6px] text-[12px] hover:bg-accent"
+          >
+            <ExternalLink className="h-[14px] w-[14px]" aria-hidden />
+            Full Tavern
+          </Link>
           {conversationId && (
             <MuteButton label={tavern} conversationId={conversationId} />
           )}
@@ -340,7 +354,7 @@ function TavernPane({
   );
 }
 
-/** Mute-all, blocked players and a link to the full tavern page. */
+/** Mute-all and blocked players. */
 function TavernMoreMenu() {
   const [open, setOpen] = useState(false);
   const [showBlocked, setShowBlocked] = useState(false);
@@ -392,14 +406,6 @@ function TavernMoreMenu() {
             <MenuButton onClick={() => setShowBlocked(true)}>
               <Ban /> Blocked users
             </MenuButton>
-            <Link
-              href="/tavern"
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              className={menuItemClass}
-            >
-              <ExternalLink /> Open full tavern page
-            </Link>
           </div>
         )}
       </PopoverContent>
@@ -529,7 +535,7 @@ function InboxPane({
         ) : (
           <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-[12px] p-[24px] text-center text-[13px]">
             <p>No private messages yet.</p>
-            {newConversation}
+            {hideRail && newConversation}
           </div>
         )}
       </div>

@@ -1003,15 +1003,6 @@ export const createConvo = async (info: {
     isPublic = false,
   } = info;
   const insertId = convoId ?? nanoid();
-  // Push notifications early
-  const pusher = getServerPusher();
-  receiverUserIds.forEach(
-    (userId) =>
-      void pusher.trigger(userId, "event", {
-        type: "newInbox",
-        conversationId: insertId,
-      }),
-  );
   // Unique users to insert in conversation
   const uniqueUserIds = [...new Set([...receiverUserIds, senderUserId, authorUserId])];
   // Update DB concurrently
@@ -1041,6 +1032,14 @@ export const createConvo = async (info: {
       insertId,
     ),
   ]);
+  const pusher = getServerPusher();
+  receiverUserIds.forEach(
+    (userId) =>
+      void pusher.trigger(userId, "event", {
+        type: "newInbox",
+        conversationId: insertId,
+      }),
+  );
   notifyPrivateConversation(client, {
     conversationId: insertId,
     isPublic,
