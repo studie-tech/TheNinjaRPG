@@ -6,7 +6,7 @@ import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import { getWorldCyclePosition } from "@/libs/dayNight";
 import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import type { UserWithRelations } from "@/routers/profile";
-import { UserContext } from "@/utils/UserContext";
+import * as userContext from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
 
 const cycleStart = WORLD_CYCLE_SECONDS * 1000 * 100;
@@ -15,8 +15,9 @@ let now = 0;
 const onChange = vi.fn();
 const onWeatherChange = vi.fn();
 const originalCustomEvent = globalThis.CustomEvent;
+const { UserContext } = userContext;
 
-/** Controlled map preview with the real clock hook and context, without shared module mocks. */
+/** Provider-controlled map preview with the real world clock. */
 const PreviewMap = ({ role = "OWNER", editable = true, initialDate = null, initialWeather = null }: {
   role?: UserRole | null; editable?: boolean; initialDate?: Date | null; initialWeather?: WorldWeather | null;
 }) => {
@@ -34,6 +35,8 @@ const PreviewMap = ({ role = "OWNER", editable = true, initialDate = null, initi
 beforeEach(() => {
   ensureDom();
   globalThis.CustomEvent = window.CustomEvent;
+  // Staff access and the server-clock offset belong to this fixture's provider.
+  vi.spyOn(userContext, "useUserData").mockImplementation(() => useContext(UserContext));
   onChange.mockClear();
   onWeatherChange.mockClear();
   now = cycleStart + WORLD_DAY_SECONDS * 500 + timeDiff;
