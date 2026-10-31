@@ -6,8 +6,10 @@ import {
   BarChart3,
   Dices,
   Droplets,
+  GraduationCap,
   Heart,
   History,
+  LayoutTemplate,
   Loader2,
   Mail,
   MessageCircle,
@@ -32,6 +34,7 @@ import {
   Upload,
   UserRound,
   Users,
+  Volume2,
   X,
   Zap,
 } from "lucide-react";
@@ -100,6 +103,7 @@ import Countdown from "@/layout/Countdown";
 import { CharacterDeletionSettings } from "@/layout/DeleteUserButton";
 import { DiscordLinkSettings } from "@/layout/DiscordLinkSettings";
 import { ElementalMastery } from "@/layout/ElementalMastery";
+import { GameSettingsPanel } from "@/layout/GameSettings";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
@@ -114,6 +118,7 @@ import { ReadingSettings } from "@/layout/ReadingSettings";
 import { CurrentSageMode } from "@/layout/SageMode";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import { Titles } from "@/layout/Titles";
+import { TutorialSettings } from "@/layout/TutorialSettings";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -188,7 +193,7 @@ import {
  * The navigator mounts only the selected editor; availability queries stay upfront.
  */
 export function ProfileEdit() {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserData();
   const { data: emailReminder } = api.misc.getPersonalEmailReminder.useQuery();
   const { data: discordStatus } = api.discord.getStatus.useQuery();
 
@@ -368,9 +373,23 @@ export function ProfileEdit() {
     {
       id: "display",
       title: "Display & navigation",
-      description: "Text size, reading comfort, and mobile shortcuts",
+      description: "Game layout, text size, reading comfort, and mobile shortcuts",
       icon: Settings,
       settings: [
+        {
+          id: "layout",
+          title: "Game layout",
+          description: "Layout, lighter layout, sidebars, and map overlays",
+          keywords: "theme template skin design sidebar day night overlay",
+          icon: LayoutTemplate,
+          content: (
+            <GameSettingsPanel
+              userData={userData}
+              updateUser={updateUser}
+              section="display"
+            />
+          ),
+        },
         {
           id: "reading",
           title: "Display settings",
@@ -386,6 +405,44 @@ export function ProfileEdit() {
           keywords: "phone buttons menu",
           icon: Smartphone,
           content: <MobileNavSettings />,
+        },
+      ],
+    },
+    {
+      id: "sound",
+      title: "Sound & music",
+      description: "Soundtrack, Nindo audio, combat and button sounds",
+      icon: Volume2,
+      settings: [
+        {
+          id: "audio",
+          title: "Sound & music",
+          description: "Music, sound effects, and effect volume",
+          keywords: "audio music soundtrack sfx volume mute nindo",
+          icon: Volume2,
+          content: (
+            <GameSettingsPanel
+              userData={userData}
+              updateUser={updateUser}
+              section="audio"
+            />
+          ),
+        },
+      ],
+    },
+    {
+      id: "help",
+      title: "Help & tutorial",
+      description: "Tutorial mode, player guide, and support tickets",
+      icon: GraduationCap,
+      settings: [
+        {
+          id: "tutorial",
+          title: "Help & tutorial",
+          description: "Tutorial mode, player guide, and support tickets",
+          keywords: "tutorial guide help support quests",
+          icon: GraduationCap,
+          content: <TutorialSettings />,
         },
       ],
     },
@@ -500,7 +557,7 @@ export function ProfileEdit() {
   ];
 
   return (
-    <ContentBox title="Profile settings" padding={false}>
+    <ContentBox title="Settings" padding={false}>
       <ProfileSettingsNavigation groups={groups} />
     </ContentBox>
   );

@@ -355,7 +355,11 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
       <Link href="/help" id="tutorial-bugs" aria-label="Bugs">
         <Bug className="mx-1 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
       </Link>
-      <GameSettingsPopover userData={userData} updateUser={updateUser} />
+      <GameSettingsPopover
+        userData={userData}
+        updateUser={updateUser}
+        section="audio"
+      />
       {variant === "default" && (
         <Eclipse
           className="mx-1 h-6 min-h-6 w-6 min-w-6 rounded-full bg-blue-100 bg-yellow-100 bg-opacity-80 p-1 text-slate-700 hover:cursor-pointer hover:bg-blue-300 hover:text-black xl:h-7 xl:min-h-7 xl:w-7 xl:min-w-7 dark:bg-blue-100"
