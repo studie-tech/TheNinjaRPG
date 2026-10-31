@@ -2,6 +2,7 @@ import alea from "alea";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { BufferImageSource, Mesh, Shader, Texture, UniformGroup } from "pixi.js";
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
+import type { VillageStructure } from "@/drizzle/schema";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
@@ -10,7 +11,7 @@ import { createWaterShelf, hexTerrainAt } from "@/libs/rendering/terrainData";
 import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import { PathCalculator } from "@/libs/hexgrid";
 import { buildWindowNav } from "@/libs/sector-map/navigation";
-import { isReachableCoordinate, isWalkableCoordinate } from "@/libs/sector-map/validation";
+import { getNeighborCoordinates, isReachableCoordinate, isWalkableCoordinate } from "@/libs/sector-map/validation";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 
@@ -44,6 +45,38 @@ const renderer = (texture: (path: string) => Promise<Texture>) => {
 };
 
 describe("shared hex terrain textures", () => {
+  it.each(["ocean", "ice"] as const)("supports both sides of coastal walls over %s without filling distant water", (terrain) => {
+    const map = mapOf(15, 15);
+    map.tiles = map.tiles.map(tile => ({ ...tile, terrain, battleBiome: terrain }));
+    const authored = structuredClone(map);
+    const { grid, villageWallPlan } = prepareSectorGrid(1024, alea(1), terrain === "ocean" ? 0 : 3,
+      [{ longitude: 7, latitude: 7, hasPage: 1 }] as VillageStructure[], map, mergeTerrainSpecs([]), "VILLAGE");
+    expect(villageWallPlan!.edges.length).toBeGreaterThan(0);
+    for (const edge of villageWallPlan!.edges) {
+      const outside = getNeighborCoordinates(edge.tile)[edge.direction]!;
+      for (const point of [edge.tile, outside]) {
+        const tile = grid.getHex({ col: point.x, row: point.y })!;
+        expect(tile.spec?.isWater).toBe(false);
+        expect(tile.spec?.depression).toBe(0);
+        expect(tile.spec?.key).toBe(terrain === "ocean" ? "dessert" : "snow");
+      }
+    }
+    expect(grid.getHex({ col: 0, row: 0 })?.spec?.key).toBe(terrain);
+    expect(map).toEqual(authored);
+  });
+
+  it("retains authored dry land materials along the outside of village walls", () => {
+    const map = mapOf(15, 15);
+    map.tiles = map.tiles.map(tile => ({ ...tile, terrain: "dessert", battleBiome: "dessert" }));
+    const registry = mergeTerrainSpecs([]);
+    const { grid, villageWallPlan } = prepareSectorGrid(1024, alea(1), 3,
+      [{ longitude: 7, latitude: 7, hasPage: 1 }] as VillageStructure[], map, registry, "VILLAGE");
+    for (const edge of villageWallPlan!.edges) {
+      const outside = getNeighborCoordinates(edge.tile)[edge.direction]!;
+      expect(grid.getHex({ col: outside.x, row: outside.y })?.spec).toBe(registry.get("dessert"));
+    }
+  });
+
   const textured = (map: NormalizedSectorMap) => {
     const registry = mergeTerrainSpecs([]);
     registry.set("ocean", { ...registry.get("ocean")!, textureUrl: "optional-water.png" });

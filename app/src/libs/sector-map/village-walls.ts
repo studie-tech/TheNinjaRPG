@@ -70,13 +70,16 @@ export const getVillageWallDecorationClearanceKeys = (
   return keys;
 };
 
-/**
- * Interior boundary tiles whose terrain face sits directly beneath a wall.
- * Repainting only the village side creates a natural shore/foundation while
- * preserving the authored terrain immediately outside the enclosure.
- */
-export const getVillageWallFoundationKeys = (plan: Pick<VillageWallPlan, "edges">) =>
-  new Set(plan.edges.map((edge) => getSectorTileKey(edge.tile.x, edge.tile.y)));
+/** Both faces bordering each wall support its masonry and share scenery clearance. */
+export const getVillageWallFoundationKeys = (plan: Pick<VillageWallPlan, "edges">) => {
+  const keys = new Set<string>();
+  for (const edge of plan.edges) {
+    keys.add(getSectorTileKey(edge.tile.x, edge.tile.y));
+    const outside = getNeighborCoordinates(edge.tile)[edge.direction];
+    if (outside) keys.add(getSectorTileKey(outside.x, outside.y));
+  }
+  return keys;
+};
 
 interface VillageWallMap {
   width: number;
