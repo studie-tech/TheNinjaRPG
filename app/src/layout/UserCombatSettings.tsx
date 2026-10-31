@@ -70,6 +70,40 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
       >
         <section className="space-y-3 rounded-lg border p-3">
           <p className="font-semibold text-[10px] text-muted-foreground uppercase">
+            Screen
+          </p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col">
+              <p className="font-semibold text-sm">Battle focus</p>
+              <p className="text-muted-foreground text-xs">
+                Full-window battlefield, actions and battle history
+              </p>
+            </div>
+            <Switch
+              checked={config.battleFocus}
+              onCheckedChange={config.setBattleFocus}
+              aria-label="Toggle battle focus"
+            />
+          </div>
+          {config.battleFocus && (
+            <div className="hidden items-center justify-between gap-3 lg:flex">
+              <div className="flex flex-col">
+                <p className="font-semibold text-sm">Swap actions and log</p>
+                <p className="text-muted-foreground text-xs">
+                  On desktop, put the log below the field and actions beside it
+                </p>
+              </div>
+              <Switch
+                checked={config.swapFocusPanels}
+                onCheckedChange={config.setSwapFocusPanels}
+                aria-label="Swap actions and log"
+              />
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3 rounded-lg border p-3">
+          <p className="font-semibold text-[10px] text-muted-foreground uppercase">
             Battle visuals
           </p>
           <div className="flex items-center justify-between gap-3">
@@ -127,45 +161,50 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Small action icons</p>
-              <p className="text-muted-foreground text-xs">
-                Hide labels and fit more per row
-              </p>
-            </div>
-            <Switch
-              checked={config.useSmallActions}
-              onCheckedChange={config.toggleSmallActions}
-              aria-label="Toggle compact action icons"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Show battle log</p>
-              <p className="text-muted-foreground text-xs">
-                Display combat history below the field
-              </p>
-            </div>
-            <Switch
-              checked={config.showBattleLog}
-              onCheckedChange={config.toggleBattleLog}
-              aria-label="Toggle battle log visibility"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Show timeline</p>
-              <p className="text-muted-foreground text-xs">
-                Display recent actions timeline
-              </p>
-            </div>
-            <Switch
-              checked={config.showTimeline}
-              onCheckedChange={config.toggleTimeline}
-              aria-label="Toggle combat timeline visibility"
-            />
-          </div>
+          {/* Battle focus always uses small icons and shows the log and timeline. */}
+          {!config.battleFocus && (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col">
+                  <p className="font-semibold text-sm">Small action icons</p>
+                  <p className="text-muted-foreground text-xs">
+                    Hide labels and fit more per row
+                  </p>
+                </div>
+                <Switch
+                  checked={config.useSmallActions}
+                  onCheckedChange={config.toggleSmallActions}
+                  aria-label="Toggle compact action icons"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col">
+                  <p className="font-semibold text-sm">Show battle log</p>
+                  <p className="text-muted-foreground text-xs">
+                    Display combat history below the field
+                  </p>
+                </div>
+                <Switch
+                  checked={config.showBattleLog}
+                  onCheckedChange={config.toggleBattleLog}
+                  aria-label="Toggle battle log visibility"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col">
+                  <p className="font-semibold text-sm">Show timeline</p>
+                  <p className="text-muted-foreground text-xs">
+                    Display recent actions timeline
+                  </p>
+                </div>
+                <Switch
+                  checked={config.showTimeline}
+                  onCheckedChange={config.toggleTimeline}
+                  aria-label="Toggle combat timeline visibility"
+                />
+              </div>
+            </>
+          )}
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
               <p className="font-semibold text-sm">Show aggro meters</p>
@@ -213,63 +252,65 @@ export const UserCombatSettings: React.FC<UserCombatSettingsProps> = ({
           </div>
         </section>
 
-        <section className="space-y-3 rounded-lg border p-3">
-          <div className="flex items-center justify-between">
-            <p className="font-semibold text-[10px] text-muted-foreground uppercase">
-              Layout Order
-            </p>
-            {JSON.stringify(config.layoutOrder) !==
-              JSON.stringify(DEFAULT_LAYOUT_ORDER) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs"
-                onClick={config.resetLayoutOrder}
-              >
-                <RotateCcw className="mr-1 h-3 w-3" />
-                Reset
-              </Button>
-            )}
-          </div>
-          <SortableList
-            items={config.layoutOrder
-              .filter((id) => {
-                if (id === "timeline" && !config.showTimeline) return false;
-                if (id === "battlelog" && !config.showBattleLog) return false;
-                return true;
-              })
-              .map((id) => ({
-                id,
-                label: COMBAT_LAYOUT_COMPONENTS.find((c) => c.id === id)?.label ?? id,
-              }))}
-            onReorder={(items) => {
-              const reorderedIds = items.map(
-                (item) => item.id as CombatLayoutComponentId,
-              );
-              // Hidden items stay at the end in their original relative order
-              const hiddenIds = config.layoutOrder.filter(
-                (id) =>
-                  (id === "timeline" && !config.showTimeline) ||
-                  (id === "battlelog" && !config.showBattleLog),
-              );
-              config.setLayoutOrder([...reorderedIds, ...hiddenIds]);
-            }}
-            itemClassName="py-1.5"
-          />
-          <div className="flex items-center justify-between gap-3 border-t pt-2">
-            <div className="flex flex-col">
-              <p className="font-semibold text-sm">Use tabs</p>
-              <p className="text-muted-foreground text-xs">
-                Group actions, timeline & log in tabs
+        {!config.battleFocus && (
+          <section className="space-y-3 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-[10px] text-muted-foreground uppercase">
+                Layout Order
               </p>
+              {JSON.stringify(config.layoutOrder) !==
+                JSON.stringify(DEFAULT_LAYOUT_ORDER) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={config.resetLayoutOrder}
+                >
+                  <RotateCcw className="mr-1 h-3 w-3" />
+                  Reset
+                </Button>
+              )}
             </div>
-            <Switch
-              checked={config.useTabs}
-              onCheckedChange={config.toggleUseTabs}
-              aria-label="Toggle tabs layout"
+            <SortableList
+              items={config.layoutOrder
+                .filter((id) => {
+                  if (id === "timeline" && !config.showTimeline) return false;
+                  if (id === "battlelog" && !config.showBattleLog) return false;
+                  return true;
+                })
+                .map((id) => ({
+                  id,
+                  label: COMBAT_LAYOUT_COMPONENTS.find((c) => c.id === id)?.label ?? id,
+                }))}
+              onReorder={(items) => {
+                const reorderedIds = items.map(
+                  (item) => item.id as CombatLayoutComponentId,
+                );
+                // Hidden items stay at the end in their original relative order
+                const hiddenIds = config.layoutOrder.filter(
+                  (id) =>
+                    (id === "timeline" && !config.showTimeline) ||
+                    (id === "battlelog" && !config.showBattleLog),
+                );
+                config.setLayoutOrder([...reorderedIds, ...hiddenIds]);
+              }}
+              itemClassName="py-1.5"
             />
-          </div>
-        </section>
+            <div className="flex items-center justify-between gap-3 border-t pt-2">
+              <div className="flex flex-col">
+                <p className="font-semibold text-sm">Use tabs</p>
+                <p className="text-muted-foreground text-xs">
+                  Group actions, timeline & log in tabs
+                </p>
+              </div>
+              <Switch
+                checked={config.useTabs}
+                onCheckedChange={config.toggleUseTabs}
+                aria-label="Toggle tabs layout"
+              />
+            </div>
+          </section>
+        )}
 
         {lightLayoutChanged && (
           <Button
