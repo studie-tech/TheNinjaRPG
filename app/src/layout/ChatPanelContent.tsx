@@ -348,29 +348,23 @@ function TavernPane({
       toolbarStart={tavernSwitch}
       toolbarEnd={
         <>
-          <Link
-            href="/tavern"
-            onClick={() => {
-              setSelected(tavern);
-              onClose();
-            }}
-            className="inline-flex h-[32px] shrink-0 items-center gap-[4px] rounded-md px-[6px] text-[12px] hover:bg-accent"
-          >
-            <ExternalLink className="h-[14px] w-[14px]" aria-hidden />
-            Full Tavern
-          </Link>
           {conversationId && (
             <MuteButton label={tavern} conversationId={conversationId} />
           )}
-          <TavernMoreMenu />
+          <TavernMoreMenu
+            onOpenFullTavern={() => {
+              setSelected(tavern);
+              onClose();
+            }}
+          />
         </>
       }
     />
   );
 }
 
-/** Mute-all and blocked players. */
-function TavernMoreMenu() {
+/** Full Tavern link, mute-all and blocked players. */
+function TavernMoreMenu({ onOpenFullTavern }: { onOpenFullTavern: () => void }) {
   const [open, setOpen] = useState(false);
   const [showBlocked, setShowBlocked] = useState(false);
   const mutes = useChatMutes();
@@ -409,6 +403,17 @@ function TavernMoreMenu() {
           </div>
         ) : (
           <div role="menu" aria-label="More chat options">
+            <Link
+              href="/tavern"
+              role="menuitem"
+              className={menuItemClass}
+              onClick={() => {
+                setOpen(false);
+                onOpenFullTavern();
+              }}
+            >
+              <ExternalLink aria-hidden /> Open full Tavern
+            </Link>
             <MenuButton
               onClick={() => mutes.setChatMuted(!mutes.chatMuted)}
               disabled={mutes.isPending}

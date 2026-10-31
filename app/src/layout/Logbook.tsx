@@ -355,7 +355,7 @@ interface LogbookEntryProps {
   tracker: QuestTrackerType;
   showScene?: boolean;
   hideTitle?: boolean;
-  /** Keep objectives in one column inside a narrow activity panel. */
+  /** Narrow activity panel: one objective column and no abandon control. */
   compact?: boolean;
 }
 
@@ -644,6 +644,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
         <div className="ml-3">
           <div className="mt-2 flex flex-row items-center">
             {!isAbandoned &&
+              !props.compact &&
               !!questStartedAt &&
               quest.questType !== "starter" &&
               [

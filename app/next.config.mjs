@@ -31,8 +31,6 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 /** @type {import("next").NextConfig} */
 const config = {
-  // Floating game controls occupy both corners, including in full-screen mobile chat.
-  devIndicators: false,
   reactCompiler: true, // Fix user search, money sending, combat, search jutsu name
   experimental: {
     // TypeScript 7 ships a native CLI rather than the JavaScript compiler API.
