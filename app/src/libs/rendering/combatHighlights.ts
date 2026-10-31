@@ -63,3 +63,54 @@ export const combatHighlightPlan = (info: {
   }
   return { tints, edges, valid };
 };
+
+/** Shared targeting edges follow visible face elevations; a selected color owns its shared border. */
+export const combatHighlightEdges = (
+  selections: { tile: TerrainHex; color: number }[],
+  offsets: ReadonlyMap<string, number>,
+) => {
+  const tiles = new Map<string, (typeof selections)[number]>();
+  for (const entry of selections) {
+    const key = `${entry.tile.col},${entry.tile.row}`;
+    tiles.delete(key);
+    tiles.set(key, entry);
+  }
+  const edges = new Map<
+    string,
+    {
+      a: { x: number; y: number };
+      b: { x: number; y: number };
+      color: number;
+      offset: number;
+      hidden: boolean;
+    }
+  >();
+  for (const { tile, color } of tiles.values()) {
+    const offset = offsets.get(`${tile.col},${tile.row}`) ?? 0;
+    tile.corners.forEach((a, index) => {
+      const b = tile.corners[(index + 1) % tile.corners.length];
+      if (!b) return;
+      const key = [a, b]
+        .map((p) => `${p.x.toFixed(4)},${p.y.toFixed(4)}`)
+        .sort()
+        .join(":");
+      const before = edges.get(key);
+      // A continuous range needs no second outline across its shoreline's vertical step.
+      const hidden = !!before && before.offset !== offset && before.color === color;
+      edges.set(key, { a, b, color, offset, hidden });
+    });
+  }
+  const batches = new Map<string, { layer: number; color: number; points: number[] }>();
+  for (const { a, b, color, offset, hidden } of edges.values()) {
+    if (hidden) continue;
+    const layer = offset < 0 ? -0.5 : 0,
+      key = `${layer}:${color}`;
+    let batch = batches.get(key);
+    if (!batch) {
+      batch = { layer, color, points: [] };
+      batches.set(key, batch);
+    }
+    batch.points.push(a.x, a.y + offset, b.x, b.y + offset);
+  }
+  return [...batches.values()];
+};
