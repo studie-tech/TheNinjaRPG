@@ -3,6 +3,9 @@ import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Texture } 
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
+import * as terrainData from "@/libs/rendering/terrainData";
+import * as navigation from "@/libs/sector-map/navigation";
+import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import * as terrain from "@/libs/rendering/primitives/terrain";
 import * as runtime from "@/libs/rendering/runtime";
 import { createTravelScene, type TravelSnapshot, type TravelWindowEntry } from "@/libs/rendering/scenes/travel";
@@ -80,6 +83,24 @@ beforeEach(() => {
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("travel scene ground depth", () => {
+  it.each([false, true])("retains shoreline topology across account refreshes (shared navigation: %s)", async (shared) => {
+    const state = snapshotFixture(), entry = state.window[0]!;
+    entry.globalTileType = 0;
+    state.terrains = new Map([["ocean", BUILTIN_TERRAINS_BY_KEY.get("ocean")!]]);
+    if (shared) state.nav = navigation.buildWindowNav(state.window, 10);
+    const nav = vi.spyOn(navigation, "buildWindowNav"), shelf = vi.spyOn(terrainData, "createWaterShelf");
+    const { scene } = await sceneFixture(state);
+    const builds = [nav.mock.calls.length, shelf.mock.calls.length];
+    expect(builds[0]).toBe(shared ? 0 : 1); expect(builds[1]).toBeGreaterThan(0);
+    state.viewer = { ...state.viewer, latitude: 5 } as UserWithRelations;
+    state.locations = [...state.locations];
+    await scene.updateWindow(); await scene.updateWindow();
+    expect([nav.mock.calls.length, shelf.mock.calls.length]).toEqual(builds);
+    entry.map = { ...entry.map, tiles: [{ x: 4, y: 4, terrain: "grass", walkCost: 1, battleBiome: "ground", blocked: false, zone: "safezone" }] };
+    if (shared) state.nav = navigation.buildWindowNav(state.window, 10);
+    await scene.updateWindow();
+    expect(nav.mock.calls.length).toBe(builds[0]! + 1); expect(shelf.mock.calls.length).toBe(builds[1]! + 1);
+  });
   it.each(["village", "structure", "landmark"] as const)("draws a same-tile actor behind a %s building and a front-adjacent actor in front", async (kind) => {
     const state = snapshotFixture();
     state.users = [player({ longitude: 8, latitude: 5 })];

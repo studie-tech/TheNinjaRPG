@@ -212,10 +212,15 @@ export const createTravelScene = async (options: {
         getBackgroundColor(map.tiles[0]?.battleBiome ?? "ground").color,
       );
     };
-    /**
-     * Latest request wins: cancel pending builds, retaining completed sectors until
-     * departure, successful replacement or disposal. Initialization requests the current sector only.
-     */
+    // Account refreshes do not change water topology; retain its grid and per-sector signatures together.
+    let shoreline: {
+      key: string;
+      nav: ReturnType<typeof buildWindowNav>;
+      coast: Map<TerrainHex, { isWater: boolean }>;
+      shelf: ReturnType<typeof createWaterShelf> | null;
+      keys: Map<number, string>;
+    } | null = null;
+    /** Latest request wins; completed sectors remain usable until departure or successful replacement. */
     const updateWindow = async (initial = false) => {
       for (const scope of pending) scope.dispose();
       pending.clear();
@@ -304,15 +309,30 @@ export const createTravelScene = async (options: {
           ] as const;
         }),
       );
-      const nav = hasWaterShelf ? buildWindowNav(snapshot.window, 10) : null;
-      const coast = new Map<TerrainHex, { isWater: boolean }>();
-      if (nav)
-        for (const entry of snapshot.window)
-          for (const tile of prepared.get(entry.sector)?.grid ?? []) {
-            const unified = nav.toUnified(entry.dx, entry.dy, tile.col, tile.row);
-            if (unified) coast.set(unified, { isWater: !!tile.spec?.isWater });
-          }
-      const shelf = nav ? createWaterShelf(nav.pathFinder.grid, coast) : null;
+      const shorelineKey = JSON.stringify([
+        hasWaterShelf,
+        snapshot.window.map((entry) => [
+          entry.sector,
+          entry.dx,
+          entry.dy,
+          prepared.get(entry.sector)?.sourceKey,
+        ]),
+      ]);
+      if (!shoreline || shoreline.key !== shorelineKey) {
+        const nav = hasWaterShelf
+          ? (snapshot.nav ?? buildWindowNav(snapshot.window, 10))
+          : null;
+        const coast = new Map<TerrainHex, { isWater: boolean }>();
+        if (nav)
+          for (const entry of snapshot.window)
+            for (const tile of prepared.get(entry.sector)?.grid ?? []) {
+              const unified = nav.toUnified(entry.dx, entry.dy, tile.col, tile.row);
+              if (unified) coast.set(unified, { isWater: !!tile.spec?.isWater });
+            }
+        const shelf = nav ? createWaterShelf(nav.pathFinder.grid, coast) : null;
+        shoreline = { key: shorelineKey, nav, coast, shelf, keys: new Map() };
+      }
+      const { nav, coast, shelf } = shoreline;
       for (const entry of ordered) {
         if (disposed || token !== generation) return;
         const locations = snapshot.locations.filter(
@@ -325,7 +345,8 @@ export const createTravelScene = async (options: {
           localOrigin = grid.getHex({ col: 0, row: 0 });
         // Only nearby dry cells affect a retained sector's shelf; distant window changes keep its artwork cached.
         const shoreKey =
-          shelf && unifiedOrigin
+          shoreline.keys.get(entry.sector) ??
+          (shelf && unifiedOrigin
             ? [...coast]
                 .filter(
                   ([tile, material]) =>
@@ -341,7 +362,8 @@ export const createTravelScene = async (options: {
                 )
                 .sort()
                 .join(";")
-            : "";
+            : "");
+        shoreline.keys.set(entry.sector, shoreKey);
         const key = preparedSector.sourceKey + (shelf ? `water:${shoreKey}` : "");
         const position = {
           x: origin.x + entry.dx * spanX,
@@ -404,7 +426,7 @@ export const createTravelScene = async (options: {
           });
           const [terrain, art] = await Promise.all([
             createHexTerrain(scope, data),
-            createWorldSprites(scope, descriptions, shadows),
+            createWorldSprites(scope, descriptions, shadows, true),
           ]);
           if (disposed || token !== generation) {
             scope.dispose();

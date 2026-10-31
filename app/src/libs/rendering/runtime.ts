@@ -57,7 +57,11 @@ export const createGameRenderer = async (options: {
     throw new DOMException("Scene initialization cancelled", "AbortError");
   }
   const stage = new Container();
-  const animation = new UniformGroup({ uTime: { value: 0, type: "f32" } });
+  // This group is shared by every animated terrain batch; publish it once per frame.
+  const animation = new UniformGroup(
+    { uTime: { value: 0, type: "f32" } },
+    { isStatic: true },
+  );
   stage.eventMode = "none";
   const assets = createSceneAssets();
   const canvas = renderer.canvas as HTMLCanvasElement;

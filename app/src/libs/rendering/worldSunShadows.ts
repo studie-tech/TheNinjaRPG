@@ -40,18 +40,27 @@ export const createSunShadows = (game: GameRenderer) => {
     new RenderTarget({ colorTextures: [dynamicTexture], depth: true }),
   ] as const;
   const layers = [new Container(), new Container()] as const;
-  const wind = new UniformGroup({
-    uWind: { value: new Float32Array(4), type: "vec4<f32>" },
-    uWindSmall: { value: new Float32Array(4), type: "vec4<f32>" },
-  });
-  const uniforms = new UniformGroup({
-    uSun: { value: new Float32Array([0, -0.5, 0.866]), type: "vec3<f32>" },
-    uSunRight: { value: new Float32Array([1, 0, 0]), type: "vec3<f32>" },
-    uSunUp: { value: new Float32Array([0, 0.866, 0.5]), type: "vec3<f32>" },
-    uSunOrigin: { value: new Float32Array(3), type: "vec3<f32>" },
-    uSunBounds: { value: new Float32Array([-1, -1, 2, 2]), type: "vec4<f32>" },
-    uSunDepth: { value: new Float32Array([-1, 2, 64 / 510, 1024]), type: "vec4<f32>" },
-  });
+  const wind = new UniformGroup(
+    {
+      uWind: { value: new Float32Array(4), type: "vec4<f32>" },
+      uWindSmall: { value: new Float32Array(4), type: "vec4<f32>" },
+    },
+    { isStatic: true },
+  );
+  const uniforms = new UniformGroup(
+    {
+      uSun: { value: new Float32Array([0, -0.5, 0.866]), type: "vec3<f32>" },
+      uSunRight: { value: new Float32Array([1, 0, 0]), type: "vec3<f32>" },
+      uSunUp: { value: new Float32Array([0, 0.866, 0.5]), type: "vec3<f32>" },
+      uSunOrigin: { value: new Float32Array(3), type: "vec3<f32>" },
+      uSunBounds: { value: new Float32Array([-1, -1, 2, 2]), type: "vec4<f32>" },
+      uSunDepth: {
+        value: new Float32Array([-1, 2, 64 / 510, 1024]),
+        type: "vec4<f32>",
+      },
+    },
+    { isStatic: true },
+  );
   const geometries = new Map<MaterialFrame, CachedGeometry>();
   const idleGeometries = new Map<MaterialFrame, CachedGeometry>();
   const idleBudget = 4 * 1024 * 1024;
@@ -113,6 +122,28 @@ export const createSunShadows = (game: GameRenderer) => {
     staticDirty = true,
     dynamicDirty = true,
     disposed = false;
+  let previousCasters: SunCaster[][] = [[], []];
+  let previousBatchView = "";
+  /** Wind and light changes redraw retained geometry without rebuilding its batches. */
+  const renderDepth = () => {
+    if (staticDirty) {
+      game.renderer.render({
+        container: layers[0],
+        target: targets[0],
+        clear: true,
+        clearColor: [0, 0, 0, 0],
+      });
+    }
+    if (dynamicDirty) {
+      game.renderer.render({
+        container: layers[1],
+        target: targets[1],
+        clear: true,
+        clearColor: [0, 0, 0, 0],
+      });
+    }
+    staticDirty = dynamicDirty = false;
+  };
   return {
     staticTexture,
     dynamicTexture,
@@ -212,6 +243,34 @@ export const createSunShadows = (game: GameRenderer) => {
         ]);
         uniforms.update();
       }
+      // Cull to the retained atlas footprint so subpixel camera motion reuses its caster batches.
+      const batchViewKey = viewKey;
+      const layersCasters = [
+        casters.filter((caster) => !caster.dynamic),
+        casters.filter((caster) => caster.dynamic),
+      ];
+      const retained = layersCasters.map((next, layer) => {
+        const previous = previousCasters[layer] ?? [];
+        return (
+          previousBatchView === batchViewKey &&
+          previous.length === next.length &&
+          previous.every((entry, index) => {
+            const current = next[index];
+            return (
+              current &&
+              entry.id === current.id &&
+              entry.key === current.key &&
+              entry.frame === current.frame &&
+              entry.material === current.material &&
+              entry.wind === current.wind
+            );
+          })
+        );
+      });
+      if (retained.every(Boolean)) {
+        renderDepth();
+        return;
+      }
       // Include neighbouring filtered samples and grazing receiver planes in the culling margin.
       const padding =
         (Math.hypot(
@@ -222,7 +281,17 @@ export const createSunShadows = (game: GameRenderer) => {
         (resolution * 0.08);
       const batches = new Map<string, { casters: SunCaster[]; instanced: boolean }>();
       for (const caster of casters) {
-        if (!shadowReachesViewport(caster, viewport, x, y, minReceiverHeight, padding))
+        if (retained[caster.dynamic ? 1 : 0]) continue;
+        if (
+          !shadowReachesViewport(
+            caster,
+            { minX, minY, maxX, maxY },
+            x,
+            y,
+            minReceiverHeight,
+            padding,
+          )
+        )
           continue;
         const instanced = canInstance && !caster.dynamic;
         let frameId = frameIds.get(caster.frame);
@@ -367,30 +436,19 @@ export const createSunShadows = (game: GameRenderer) => {
         }
       }
       for (const [id, entry] of entries)
-        if (!batches.has(id)) {
+        if (!retained[entry.dynamic ? 1 : 0] && !batches.has(id)) {
           if (entry.dynamic) dynamicDirty = true;
           else staticDirty = true;
           releaseEntry(entry);
           entries.delete(id);
         }
       trimGeometries();
-      if (staticDirty) {
-        game.renderer.render({
-          container: layers[0],
-          target: targets[0],
-          clear: true,
-          clearColor: [0, 0, 0, 0],
-        });
-      }
-      if (dynamicDirty) {
-        game.renderer.render({
-          container: layers[1],
-          target: targets[1],
-          clear: true,
-          clearColor: [0, 0, 0, 0],
-        });
-      }
-      staticDirty = dynamicDirty = false;
+      layersCasters.forEach((next, layer) => {
+        if (!retained[layer])
+          previousCasters[layer] = next.map((caster) => ({ ...caster }));
+      });
+      previousBatchView = batchViewKey;
+      renderDepth();
     },
     invalidate: () => {
       staticDirty = dynamicDirty = true;
@@ -402,6 +460,7 @@ export const createSunShadows = (game: GameRenderer) => {
       for (const layer of layers) layer.destroy({ children: true });
       for (const { geometry } of geometries.values()) geometry.destroy(true);
       entries.clear();
+      previousCasters = [];
       geometries.clear();
       idleGeometries.clear();
       idleBytes = 0;

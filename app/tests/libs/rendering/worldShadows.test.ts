@@ -625,6 +625,61 @@ describe("physical world lighting", () => {
       f.dispose(); source.dispose();
     }
   });
+  it("keeps fixed scenery receiver buffers while a character moves between their painter-ordered batches", async () => {
+    const f = fixture(), source = materialSourceFixture();
+    const sprites = [20, 40, 60].map((x, index) => {
+      const sprite = new Sprite(source.texture); sprite.position.set(x, 40);
+      sprite.width = sprite.height = 20; sprite.zIndex = index + 1; f.parent.addChild(sprite); return sprite;
+    });
+    const releases = sprites.map((sprite, index) => f.shadows.register(sprite, {
+      id: `retained:${index}`, kind: index === 1 ? "character" : "decoration", image: `retained:${index}.png`,
+      size: 20, x: sprite.x, y: sprite.y, groundY: 0, shadowCaster: index === 1 ? "character" : "building",
+    }, [], undefined, index === 1 ? undefined : f.parent));
+    try {
+      await Promise.all(releases.map((release) => release.ready));
+      f.shadows.update(worldSunlight(), viewport);
+      const layer = f.render.mock.calls[1]![0]!.container;
+      expect(layer.children).toHaveLength(3);
+      const buffers: ReturnType<Geometry["getBuffer"]>[] = layer.children.map((mesh: { geometry: Geometry }) => mesh.geometry.getBuffer("aPosition"));
+      const uploads = buffers.map((buffer) => vi.spyOn(buffer, "update"));
+      sprites[1]!.x += 0.125;
+      f.shadows.update(worldSunlight(), viewport);
+      expect(uploads.map((upload) => upload.mock.calls.length)).toEqual([0, 1, 0]);
+      expect(layer.children.map((mesh: { geometry: Geometry }) => mesh.geometry.getBuffer("aPosition"))).toEqual(buffers);
+    } finally { releases.forEach((release) => release()); f.dispose(); source.dispose(); }
+  });
+  it("matches mutable scenery across camera anchors, owner transforms, visibility and explicit child invalidation", async () => {
+    const source = materialSourceFixture(), cached = fixture(), mutable = fixture();
+    const fixtures = [cached, mutable];
+    const sprites = fixtures.map((f) => {
+      const sprite = new Sprite(source.texture); sprite.position.set(40, 40); sprite.width = sprite.height = 20; f.parent.addChild(sprite); return sprite;
+    });
+    const releases = fixtures.map((f, index) => f.shadows.register(sprites[index]!, {
+      id: "scenery-pose", kind: "decoration", image: "scenery-pose.png", size: 20, x: 40, y: 40, groundY: 0, shadowCaster: "building",
+    }, [], undefined, index === 0 ? f.parent : undefined));
+    try {
+      await Promise.all(releases.map((release) => release.ready));
+      const layers: Container[] = [];
+      const compare = (bounds = viewport) => {
+        fixtures.forEach((f, index) => {
+          f.shadows.update(worldSunlight(), bounds);
+          layers[index] ??= f.render.mock.calls[1]![0]!.container;
+        });
+        const values = layers.map((layer) => layer.children.map((mesh) => Array.from((mesh as unknown as { geometry: Geometry }).geometry.getBuffer("aPosition").data)));
+        expect(values[0]).toEqual(values[1]);
+      };
+      compare(); compare();
+      compare({ minX: 30.125, maxX: 130.125, minY: 0, maxY: 100 });
+      fixtures.forEach((f) => f.parent.position.set(150.25, 10.125));
+      compare({ minX: 129.125, maxX: 229.125, minY: 0, maxY: 100 });
+      fixtures.forEach((f) => { f.parent.visible = false; }); compare();
+      fixtures.forEach((f) => { f.parent.visible = true; f.parent.position.set(0, 0); }); compare();
+      sprites.forEach((sprite) => { sprite.x += 1.125; sprite.alpha = 0.5; }); cached.shadows.invalidate(); compare();
+      sprites.forEach((sprite) => { sprite.alpha = 1; }); cached.shadows.invalidate(); compare();
+      cached.restore(); compare();
+      releases.forEach((release) => release()); compare();
+    } finally { releases.forEach((release) => release()); fixtures.forEach((f) => f.dispose()); source.dispose(); }
+  });
   it("retains unchanged receiver/light passes and refreshes them after context restoration", () => {
     const f = fixture();
     f.shadows.update(worldSunlight(), viewport);

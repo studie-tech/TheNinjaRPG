@@ -224,6 +224,25 @@ describe("retained sunlight depth", () => {
       expect(f.render.mock.calls).toHaveLength(4);
     } finally { f.dispose(); }
   });
+  it("retains sunward edge casters while panning within one atlas footprint", () => {
+    const cached = fixture(true), fresh = fixture(true);
+    const caster = { ...cached.caster("edge", false), transform: new Float32Array([10, 0, 0, -20, 155, 40]) };
+    const other = { ...fresh.caster("edge", false), transform: caster.transform.slice() };
+    const direction = { x: 1, y: -0.6, z: 1 }, shifted = { ...viewport, minX: 20, maxX: 120 };
+    try {
+      cached.sun.update([caster], viewport, direction);
+      const layer = cached.render.mock.calls[0]![0]!.container;
+      expect(layer.children).toHaveLength(1);
+      const geometry = layer.children[0].geometry;
+      const upload = vi.spyOn(geometry.getBuffer("aObject"), "update");
+      cached.sun.update([caster], shifted, direction);
+      fresh.sun.update([other], shifted, direction);
+      const expected = fresh.render.mock.calls[0]![0]!.container.children[0].geometry;
+      expect(geometry.instanceCount).toBe(expected.instanceCount);
+      expect(Array.from(geometry.getBuffer("aObject").data)).toEqual(Array.from(expected.getBuffer("aObject").data));
+      expect(upload).not.toHaveBeenCalled();
+    } finally { cached.dispose(); fresh.dispose(); }
+  });
   it("keeps subpixel camera movement cached and invalidates both maps when requested", () => {
     const f = fixture(), caster = f.caster("tree", false);
     f.sun.update([caster], viewport, worldSunlight());

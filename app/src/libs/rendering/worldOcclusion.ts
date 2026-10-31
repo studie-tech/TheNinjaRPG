@@ -28,7 +28,7 @@ export const createWorldOcclusion = (
     budgetMs?: number;
   } = {},
 ) => {
-  const header = createFieldBuffer(FIELD_SIZE * 2, FIELD_SIZE),
+  const header = createFieldBuffer(FIELD_SIZE * 2, FIELD_SIZE, !options.incremental),
     references = createFieldBuffer(TABLE_WIDTH, 1),
     prisms = createFieldBuffer(TABLE_WIDTH, 1);
   const buffers = [header, references, prisms];
@@ -224,6 +224,7 @@ export const createWorldOcclusion = (
       const x = texel % FIELD_SIZE,
         y = Math.floor(texel / FIELD_SIZE),
         index = (y * FIELD_SIZE * 2 + x) * 4;
+      header.occupied?.scratch.add(index / 4).add(index / 4 + FIELD_SIZE);
       write24(header.scratch, index, reference);
       header.scratch[index + 3] = value.refs.length & 255;
       header.scratch[index + FIELD_SIZE * 4] = value.refs.length >>> 8;
@@ -303,6 +304,8 @@ export const createWorldOcclusion = (
     };
   }
   const publish = (request: FieldRequest, result: FieldResult) => {
+    for (const { buffer } of result.plans)
+      if (buffer.occupied) buffer.occupied.pixels = new Set(buffer.occupied.scratch);
     const changed =
       result.plans.some((plan) => plan.end > plan.start || plan.resized) ||
       !sameDomain(published?.domain, request.domain) ||
@@ -1025,7 +1028,11 @@ function* instanceStamp(
 }
 
 /** Numeric RGBA8 tables retain a staging copy so incomplete updates cannot reach the shader. */
-const createFieldBuffer = (width: number, height: number): FieldBuffer => {
+const createFieldBuffer = (
+  width: number,
+  height: number,
+  sparse = false,
+): FieldBuffer => {
   const pixels = new Uint8Array(width * height * 4);
   const source = new BufferImageSource({
     resource: pixels,
@@ -1036,6 +1043,9 @@ const createFieldBuffer = (width: number, height: number): FieldBuffer => {
     scaleMode: "nearest",
   });
   return {
+    occupied: sparse
+      ? { scratch: new Set<number>(), pixels: new Set<number>() }
+      : undefined,
     pixels,
     scratch: new Uint8Array(pixels.length),
     source,
@@ -1050,9 +1060,17 @@ function* prepareBuffer(
   const resized = height !== buffer.source.pixelHeight;
   if (buffer.scratch.length !== buffer.source.pixelWidth * height * 4)
     buffer.scratch = new Uint8Array(buffer.source.pixelWidth * height * 4);
-  for (let offset = 0; offset < buffer.scratch.length; offset += 16384) {
-    buffer.scratch.fill(0, offset, offset + 16384);
-    yield;
+  if (buffer.occupied) {
+    // Actor fields keep the full-resolution contact grid, but only populated
+    // cells need clearing. Include abandoned staging writes after a rejected build.
+    const words = new Uint32Array(buffer.scratch.buffer);
+    for (const index of buffer.occupied.scratch) words[index] = 0;
+    buffer.occupied.scratch = new Set<number>();
+  } else {
+    for (let offset = 0; offset < buffer.scratch.length; offset += 16384) {
+      buffer.scratch.fill(0, offset, offset + 16384);
+      yield;
+    }
   }
   return { buffer, height, resized, start: buffer.scratch.length / 4, end: 0 };
 }
@@ -1065,12 +1083,17 @@ function* compareBuffer(plan: BufferPlan): Generator<void, void> {
   }
   const previous = new Uint32Array(plan.buffer.pixels.buffer),
     next = new Uint32Array(plan.buffer.scratch.buffer);
-  for (let i = 0; i < next.length; i++) {
+  const occupied = plan.buffer.occupied;
+  const indices = occupied
+    ? new Set([...occupied.pixels, ...occupied.scratch])
+    : next.keys();
+  let compared = 0;
+  for (const i of indices) {
     if (previous[i] !== next[i]) {
       plan.start = Math.min(plan.start, i);
-      plan.end = i + 1;
+      plan.end = Math.max(plan.end, i + 1);
     }
-    if (i % 2048 === 0) yield;
+    if (++compared % 2048 === 0) yield;
   }
 }
 const tableHeight = (texels: number, retained: number) =>
@@ -1367,6 +1390,8 @@ type FieldResult = {
   precision: number;
 };
 type FieldBuffer = {
+  /** Sparse headers retain both staging and published support so departed cells are cleared. */
+  occupied?: { scratch: Set<number>; pixels: Set<number> };
   pixels: Uint8Array;
   scratch: Uint8Array;
   source: BufferImageSource;

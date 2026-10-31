@@ -77,7 +77,7 @@ import {
 import { worldMotionHeading } from "@/libs/rendering/worldArt";
 import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { mergeDecorationAssets } from "@/libs/sector-map/decorations";
-import { buildWindowNav, type WindowNav } from "@/libs/sector-map/navigation";
+import { buildWindowNav } from "@/libs/sector-map/navigation";
 import {
   createGenericStructure,
   createShrineStructure,
@@ -281,7 +281,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const pendingCrossRef = useRef<"north" | "east" | "south" | "west" | null>(null);
   // One logical grid over the whole 3x3 window, so paths and hover highlights
   // cross sector borders as if the world were a single map
-  const windowNavRef = useRef<WindowNav | null>(null);
+  // Account/quest refreshes leave map topology unchanged. Scene readiness must not rebuild this grid.
+  const windowNav = useMemo(
+    () => buildWindowNav(sectorWindow.sectors, 10),
+    [sectorWindow.sectors],
+  );
+  const windowNavRef = useRef(windowNav);
+  windowNavRef.current = windowNav;
   // Incremented whenever a completed crossing changes the window center, so
   // stale async window patches cannot win a race against the latest crossing.
   // The character's live tile during walk animations; authoritative for
@@ -1348,20 +1354,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     }
   };
 
-  /** Rebuild the unified window pathfinder from the current window's maps */
-  const rebuildWindowNav = () => {
-    windowNavRef.current = buildWindowNav(
-      sectorWindowRef.current.sectors.map((entry) => ({
-        dx: entry.dx,
-        dy: entry.dy,
-        map: entry.map,
-      })),
-      // Adjacency only depends on grid coordinates, so the hex size is
-      // arbitrary here (rendering uses the per-sector grids)
-      10,
-    );
-  };
-
   const clearAllHighlights = () => travel.scene.current?.clearHighlights();
 
   const { mutate: move, isPending: isMoving } = api.travel.moveInSector.useMutation({
@@ -2148,13 +2140,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       const entry = travel.scene.current?.sectors.get(sectorRef.current);
       if (!entry) return;
       gridRef.current = entry.grid;
-      pathFinderRef.current = new PathCalculator(entry.grid);
+      if (pathFinderRef.current?.grid !== entry.grid)
+        pathFinderRef.current = new PathCalculator(entry.grid);
       const position = animatedPositionRef.current ?? {
         x: userRef.current?.longitude ?? 0,
         y: userRef.current?.latitude ?? 0,
       };
       originRef.current = entry.grid.getHex({ col: position.x, row: position.y });
-      rebuildWindowNav();
     },
   };
   const travelSnapshot = useRef<TravelSnapshot | null>(null);

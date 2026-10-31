@@ -557,6 +557,29 @@ describe("custom-art occlusion profiles", () => {
 });
 
 describe("retained exact occlusion fields", () => {
+  it("matches dense fields after actors cross cells in both directions, depart, and recover from rejection", async () => {
+    const sparse = createWorldOcclusion(), dense = createWorldOcclusion({ incremental: true });
+    const frame = [box(0, 0, 1, 1, 0, 0.5)];
+    const actor = (x: number, y: number) => record(`actor:${x}:${y}`, [], {
+      volumes: frame, transform: new Float32Array([2, 0, 0, -2, x, y]), height: 8,
+    });
+    try {
+      for (const actors of [[actor(80, 80)], [actor(20, 20)], [actor(70, 80), actor(20, 20)], [], [actor(80, 80)]]) {
+        const nextRevision = dense.revision + 1;
+        sparse.update(actors, viewport, 16); dense.update(actors, viewport, 16);
+        await waitForRevision(dense, nextRevision);
+        expect(matchesSnapshot(sparse, packedSnapshot(dense))).toEqual([true, true, true]);
+      }
+      const previous = packedSnapshot(sparse);
+      const invalid = Array.from({ length: MAX_CELL_INSTANCES + 1 }, (_, index) => ({ ...actor(30, 30), key: `overflow:${index}` }));
+      expect(() => sparse.update(invalid, viewport, 16)).toThrow(RangeError);
+      expect(sparse.error).toBeInstanceOf(RangeError);
+      expect(matchesSnapshot(sparse, previous)).toEqual([true, true, true]);
+      sparse.update([], viewport, 16);
+      expect(sparse.error).toBeNull();
+      expect(bytes(sparse.texture).every((value) => value === 0)).toBe(true);
+    } finally { sparse.dispose(); dense.dispose(); }
+  });
   it("reuses a returning canonical frame while exact Float32 poses rebuild instance headers and stamps", () => {
     const a = trackedFrame(), b = trackedFrame(1, 0.75), field = createWorldOcclusion();
     try {

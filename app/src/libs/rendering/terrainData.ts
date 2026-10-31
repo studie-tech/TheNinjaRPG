@@ -269,11 +269,12 @@ export const hexTerrainAt = (
   );
   for (const tile of candidates) {
     const dy = offsets.get(`${tile.col},${tile.row}`) ?? 0;
+    const corners = tile.corners;
     let sign = 0,
       inside = true;
-    for (let index = 0; index < tile.corners.length; index++) {
-      const a = tile.corners[index],
-        b = tile.corners[(index + 1) % tile.corners.length];
+    for (let index = 0; index < corners.length; index++) {
+      const a = corners[index],
+        b = corners[(index + 1) % corners.length];
       if (!a || !b) continue;
       const cross = (b.x - a.x) * (y - a.y - dy) - (b.y - a.y) * (x - a.x);
       if (Math.abs(cross) < 1e-7) continue;
