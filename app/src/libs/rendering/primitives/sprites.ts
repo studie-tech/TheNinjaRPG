@@ -42,11 +42,14 @@ import {
  * Owns upright artwork in a Y-up world. Resolves after all art attempts, counting
  * skipped images in missing; cancellation rejects. Viewport bounds/padding are
  * container-local world units, and animate's zoom is renderer pixels per world unit.
+ * staticScenery retains fixed child poses for lighting; layer/owner movement and wind
+ * remain live. Call worldShadows.invalidate() after other direct child pose changes.
  */
 export const createWorldSprites = async (
   game: GameRenderer,
   descriptions: WorldSpriteDescription[],
   worldShadows?: WorldShadows,
+  staticScenery = false,
 ) => {
   const assets = createSceneAssets();
   const masked: ReturnType<typeof acquireMaskedTexture>[] = [];
@@ -234,6 +237,12 @@ export const createWorldSprites = async (
             sprite,
             result.value.motion ? description : { ...description, motion: undefined },
             result.value.motion?.views,
+            undefined,
+            staticScenery &&
+              !description.motion &&
+              description.shadowCaster !== "character"
+              ? container
+              : undefined,
           ),
         );
       if (
@@ -339,6 +348,12 @@ export const createWorldSprites = async (
       : [],
   );
   let viewport: (WorldBounds & { padding: number }) | null = null;
+  let attached: {
+    ground?: RenderLayer;
+    world: RenderLayer;
+    ui: RenderLayer;
+    offsetY: number;
+  } | null = null;
   return {
     container,
     entries,
@@ -349,6 +364,16 @@ export const createWorldSprites = async (
       layers: { ground?: RenderLayer; world: RenderLayer; ui: RenderLayer },
       offsetY = 0,
     ) => {
+      if (
+        attached &&
+        attached.ground === layers.ground &&
+        attached.world === layers.world &&
+        attached.ui === layers.ui &&
+        attached.offsetY === offsetY
+      )
+        return;
+      attached = { ...layers, offsetY };
+      worldShadows?.invalidate();
       for (const entry of entries) {
         // Contact masks and emitter pools must draw after terrain, before upright artwork.
         if (entry.shadow) layers.ground?.attach(entry.shadow);
