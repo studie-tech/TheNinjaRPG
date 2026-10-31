@@ -150,6 +150,15 @@ it("pauses tutorial controls while chatting and restores the saved lesson on clo
   expect(mocks.next).toHaveBeenCalledTimes(1);
   expect(mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData.tutorialOn).toBe(true);
 });
+
+it("lets Activity controls handle Enter and arrow keys without advancing the lesson", () => {
+  mocks.step = { ...mocks.step, showNextButton: true };
+  const view = renderAssistant();
+  fireEvent.keyDown(view.getByRole("button", { name: "Swap Chat and Activity sides" }), { key: "Enter" });
+  fireEvent.keyDown(view.getByRole("tab", { name: "Tutorial" }), { key: "ArrowRight" });
+  expect(mocks.next).not.toHaveBeenCalled();
+  expect(view.getByRole("tab", { name: "Quests" }).getAttribute("aria-selected")).toBe("true");
+});
 const confirmDisable = (view: ReturnType<typeof renderAssistant>) => {
   fireEvent.click(view.getByRole("button", { name: "Disable tutorial" }));
   fireEvent.click(view.getByRole("button", { name: "Skip Tutorial" }));

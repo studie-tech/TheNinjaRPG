@@ -79,9 +79,26 @@ export function ActivityDock({ children }: { children: ReactNode }) {
                   type="button"
                   role="tab"
                   aria-selected={tab === value}
+                  tabIndex={tab === value ? 0 : -1}
                   aria-controls={`${panelId}-${value}`}
                   id={`${panelId}-${value}-tab`}
                   onClick={() => setTab(value)}
+                  onKeyDown={(event) => {
+                    const next =
+                      event.key === "Home"
+                        ? "tutorial"
+                        : event.key === "End"
+                          ? "quests"
+                          : ["ArrowLeft", "ArrowRight"].includes(event.key)
+                            ? value === "tutorial"
+                              ? "quests"
+                              : "tutorial"
+                            : undefined;
+                    if (!next) return;
+                    event.preventDefault();
+                    setTab(next);
+                    document.getElementById(`${panelId}-${next}-tab`)?.focus();
+                  }}
                   className={cn(
                     "flex h-9 items-center gap-1.5 rounded-md px-2 text-sm",
                     tab === value

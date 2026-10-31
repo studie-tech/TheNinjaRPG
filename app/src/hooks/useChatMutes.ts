@@ -38,11 +38,13 @@ export const useChatMutes = () => {
         );
       },
       onSettled: (_result, _error, _patch, userId) => {
+        // The global session guard can reject before this hook's onMutate runs.
+        const savingUserId = userId ?? pendingUserId.current;
         pendingUserId.current = undefined;
-        if (!userId) return;
+        if (!savingUserId) return;
         store.set(chatMutePendingAtom, (current) => {
           const next = { ...current };
-          delete next[userId];
+          delete next[savingUserId];
           return next;
         });
       },

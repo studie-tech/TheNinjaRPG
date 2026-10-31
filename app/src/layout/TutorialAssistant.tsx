@@ -907,6 +907,15 @@ const PlayerTutorialAssistant: React.FC<
       // Let the confirmation dialog own its keyboard interactions. In particular,
       // Enter on its focused action must not also advance the obscured tutorial.
       if (showCancelConfirmDialog) return;
+      const target = event.target;
+      // Focused controls own their keys, including Activity tabs and panel actions.
+      if (
+        target instanceof Element &&
+        target.closest(
+          'button, a, input, textarea, select, [contenteditable="true"], [role="dialog"]',
+        )
+      )
+        return;
       // Check for Enter key or ArrowLeft key
       if (event.key === "Enter" || event.key === "ArrowRight") {
         event.preventDefault();

@@ -1,5 +1,5 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import { afterEach, expect, it, vi } from "bun:test";
@@ -17,7 +17,7 @@ import * as userContext from "@/utils/UserContext";
 const testApi = createTRPCReact<AppRouter>();
 afterEach(() => { cleanup(); getDefaultStore().set(chatMutePendingAtom, {}); vi.restoreAllMocks(); });
 
-function setup(ids: string[] = []) {
+function setup(ids: string[] = [], rejectBeforeMutation = false) {
   let respond!: (value: { success: boolean; message: string } | Error) => void;
   const fetch = vi.fn(async () => {
     const value = await new Promise<{ success: boolean; message: string } | Error>((resolve) => { respond = resolve; });
@@ -32,7 +32,7 @@ function setup(ids: string[] = []) {
   });
   vi.spyOn(userContext, "useUserData").mockImplementation(() => ({ data, updateUser }) as never);
   const feedback = vi.spyOn(toast, "showMutationToast").mockImplementation(() => {});
-  const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  const queryClient = new QueryClient({ mutationCache: new MutationCache({ onMutate: () => { if (rejectBeforeMutation) throw new Error("Session changed"); } }), defaultOptions: { mutations: { retry: false } } });
   const trpc = testApi.createClient({ links: [httpBatchLink({ url: "http://localhost/api/trpc", transformer: superjson, fetch })] });
   const hook = renderHook(() => ({ ...useChatMutes(), second: useChatMutes() }), { wrapper: ({ children }: { children: ReactNode }) => (
     <testApi.Provider client={trpc} queryClient={queryClient}><QueryClientProvider client={queryClient}>{children}</QueryClientProvider></testApi.Provider>
@@ -113,4 +113,14 @@ it("captures the saving account before mutation callbacks and releases its share
   await waitFor(() => expect(hook.result.current.isPending).toBe(false));
   expect(hook.result.current.chatMuted).toBe(false);
   expect(getDefaultStore().get(chatMutePendingAtom)).toEqual({});
+});
+
+
+it("releases the mute lock when the global session guard rejects before local onMutate", async () => {
+  const hook = setup([], true);
+  act(() => hook.result.current.setChatMuted(true));
+  await waitFor(() => expect(getDefaultStore().get(chatMutePendingAtom)).toEqual({}));
+  expect(hook.fetch).not.toHaveBeenCalled();
+  expect(hook.updateUser).not.toHaveBeenCalled();
+  expect(hook.result.current.isPending).toBe(false);
 });
