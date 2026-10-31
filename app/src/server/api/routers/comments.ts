@@ -7,6 +7,7 @@ import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import {
   type Conversation,
   conversationComment,
+  type UserData,
   user2conversation,
   userBlackList,
   userData,
@@ -129,19 +130,7 @@ export const commentsRouter = createTRPCRouter({
       );
       const nextCursor = comments.length < input.limit ? null : currentCursor + 1;
       // If not able to see secret data, hide reporter
-      if (!canSeeSecretData(user.role)) {
-        comments.forEach((comment) => {
-          if (comment.user.role !== "USER") {
-            comment.user.username = "moderator";
-            comment.user.avatar = IMG_AVATAR_DEFAULT;
-            comment.user.rank = "STUDENT";
-            comment.user.isOutlaw = false;
-            comment.user.level = 0;
-            comment.user.role = "MODERATOR";
-            comment.user.federalStatus = "NONE";
-          }
-        });
-      }
+      if (!canSeeSecretData(user.role)) maskStaffReportCommentAuthors(comments);
       return {
         data: comments,
         nextCursor: nextCursor,
@@ -842,6 +831,31 @@ interface FetchConvoOptions {
   title?: string;
   userId: string;
 }
+
+/**
+ * Replaces staff authors of report comments with an anonymous moderator profile.
+ * Comments whose author has no user row (deleted accounts, system bots) have a null
+ * `user` and are left unchanged; the report UI renders them without an author.
+ */
+export const maskStaffReportCommentAuthors = (
+  comments: {
+    user: Pick<
+      UserData,
+      "username" | "avatar" | "rank" | "isOutlaw" | "level" | "role" | "federalStatus"
+    > | null;
+  }[],
+) => {
+  for (const comment of comments) {
+    if (!comment.user || comment.user.role === "USER") continue;
+    comment.user.username = "moderator";
+    comment.user.avatar = IMG_AVATAR_DEFAULT;
+    comment.user.rank = "STUDENT";
+    comment.user.isOutlaw = false;
+    comment.user.level = 0;
+    comment.user.role = "MODERATOR";
+    comment.user.federalStatus = "NONE";
+  }
+};
 
 /**
  * Loads a conversation with the requesting account's read and participant-wide send restrictions.
