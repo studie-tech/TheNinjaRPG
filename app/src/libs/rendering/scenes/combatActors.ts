@@ -325,6 +325,18 @@ export const createCombatActors = (
         entry.sprite.scale.x =
           Math.abs(entry.sprite.scale.x) *
           (facing !== (user.avatarFacing ?? "left") ? -1 : 1);
+        if (entry.sprite instanceof Sprite) {
+          const sprite = entry.sprite;
+          sprite.updateLocalTransform();
+          // Contacts and physical shadows share the visible footer, including mirrored asymmetric cutouts.
+          const foot = sprite.localTransform.apply({
+            x: sprite.texture.orig.width * (0.5 - sprite.anchor.x),
+            y: sprite.texture.orig.height * (1 - sprite.anchor.y),
+          });
+          for (const marker of [record.shadow, record.selection, record.hover])
+            marker.position.copyFrom(foot);
+          record.groundY = foot.y;
+        }
       }
     }
     const maxima = getMaxPools(user, snapshot.battle, snapshot.battle.usersEffects);

@@ -33,6 +33,23 @@ const decodeNormal = ([u, v]: readonly [number, number]) => {
 };
 
 describe("packed character shadow volumes", () => {
+  it("uses a cutout's visible footer for heights and finite side-lit depth at fractional rendition coordinates", () => {
+    const source = material(4, 4); source.isBillboard = true;
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) paint(source, x, y, 0, 1);
+    const albedo = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(8 * 8 * 4), width: 8, height: 8 }) });
+    const texture = new Texture({ source: albedo.source, frame: new Rectangle(1, 1, 5, 5) });
+    try {
+      const frame = createCharacterMaterialFrame(source, texture, texture.orig.height);
+      expect(frame.volumes!.length).toBeGreaterThan(0);
+      for (let i = 0; i < frame.vertices.length; i += 6) {
+        if (frame.vertices[i + 5] !== 1) continue;
+        expect(frame.vertices[i + 1]! + frame.vertices[i + 2]!).toBeCloseTo(1);
+      }
+      for (let i = 0; i < frame.points.length; i += 4)
+        expect(frame.points[i + 1]! + frame.points[i + 2]!).toBeCloseTo(1);
+      expect(Array.from(frame.vertices).every(Number.isFinite)).toBe(true);
+    } finally { texture.destroy(false); albedo.destroy(true); source.texture.destroy(true); }
+  });
   const make = () => {
     const source = material(32, 32); source.isBillboard = true;
     for (let y = 0; y < 29; y++) for (let x = 5; x < 27; x++) {

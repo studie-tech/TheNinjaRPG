@@ -14,6 +14,44 @@ const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("world sprite atlas ownership", () => {
+  it("retains authored character frames so material coordinates keep their published dimensions", async () => {
+    const pixels = new Uint8Array(8 * 8 * 4); pixels[4 * (2 * 8 + 2) + 3] = 255;
+    const texture = new Texture({ source: new BufferImageSource({ resource: pixels, width: 8, height: 8 }) });
+    vi.spyOn(Assets, "load").mockImplementation(async () => texture);
+    const game = { own() {}, signal: new AbortController().signal } as unknown as GameRenderer;
+    const art = await createWorldSprites(game, [{ id: "authored-ai", kind: "aiAvatar", image: "/world-art/training-dummy.webp", size: 16, x: 10, y: 20, groundY: 0, shadowCaster: "character" }]);
+    cleanups.push(() => { art.dispose(); texture.destroy(true); });
+    expect((art.entries[0]!.sprite as Sprite).texture).toBe(texture);
+    expect(art.entries[0]!.bounds).toMatchObject({ minX: 2, maxX: 18, minY: 12, maxY: 28 });
+  });
+  it("grounds padded character cutouts without moving or rescaling their visible pixels, including mirrored poses", async () => {
+    const pixels = new Uint8Array(8 * 8 * 4);
+    for (let y = 1; y < 6; y++) for (let x = 1; x < 4; x++) pixels[(y * 8 + x) * 4 + 3] = 255;
+    const texture = new Texture({ source: new BufferImageSource({ resource: pixels, width: 8, height: 8 }) });
+    vi.spyOn(Assets, "load").mockImplementation(async () => texture);
+    const game = { own() {}, signal: new AbortController().signal } as unknown as GameRenderer;
+    const art = await createWorldSprites(game, [{ id: "padded-ai", kind: "aiAvatar", image: "padded-cutout.png", size: 16, x: 10, y: 20, groundY: 0, shadowCaster: "character" }]);
+    cleanups.push(() => { art.dispose(); texture.destroy(true); });
+    const entry = art.entries[0]!, sprite = entry.sprite as Sprite;
+    expect(sprite.texture.frame).toMatchObject({ x: 1, y: 1, width: 3, height: 5 });
+    expect(sprite.scale).toMatchObject({ x: 2, y: -2 });
+    expect(entry.bounds).toMatchObject({ minX: 4, maxX: 10, minY: 16, maxY: 26 });
+    for (const facing of [1, -1]) {
+      sprite.scale.x = 2 * facing;
+      sprite.updateLocalTransform();
+      const pixel = sprite.localTransform.apply({ x: 1.5 - sprite.anchor.x * 3, y: 2.5 - sprite.anchor.y * 5 });
+      expect(pixel.x).toBeCloseTo(10 + facing * ((1 + 1.5 - 4) * 2));
+      expect(pixel.y).toBeCloseTo(20 - (1 + 2.5 - 4) * 2);
+      const foot = sprite.localTransform.apply({ x: 3 * (0.5 - sprite.anchor.x), y: 5 * (1 - sprite.anchor.y) });
+      expect(foot.x).toBeCloseTo(10 - 3 * facing);
+      expect(foot.y).toBeCloseTo(16);
+    }
+    const view = sprite.texture;
+    art.dispose();
+    expect(view.destroyed).toBe(true);
+    expect(texture.destroyed).toBe(false);
+    expect(texture.source.destroyed).toBe(false);
+  });
   it("preserves native source URLs while positive rendition widths use the image CDN", async () => {
     const load = vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
     const assets = createSceneAssets();

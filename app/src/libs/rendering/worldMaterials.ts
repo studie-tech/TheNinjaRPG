@@ -1,5 +1,5 @@
 import { BufferImageSource, Rectangle, Texture } from "pixi.js";
-import { createSceneAssets } from "@/libs/rendering/assets";
+import { createSceneAssets, readTexturePixels } from "@/libs/rendering/assets";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import {
   type WorldAssetSource,
@@ -50,10 +50,10 @@ const materials = createLeaseCache<WorldMaterial>({
         console.warn(
           "Authored material dimensions do not match world artwork; using a physical fallback",
         );
-      const coverage = readPixels(albedo, width, height);
+      const coverage = readTexturePixels(albedo, width, height);
       const pixels =
         material && hasAuthoredMaterial
-          ? readPixels(material, width, height)
+          ? readTexturePixels(material, width, height)
           : new Uint8Array(width * height * 4);
       const fallbackNormal = encodeWorldNormal(0, -1, 0);
       for (let y = 0; y < height; y++)
@@ -267,13 +267,14 @@ export const worldMaterialFrame = (
 };
 
 /**
- * Packed character frames retain their logical foot row. Rounded row volumes extend
- * behind the visible card along the camera ray, so side lighting cannot collapse
+ * Characters retain their logical foot row, or the visible footer of a trimmed cutout.
+ * Rounded row volumes extend behind the visible card along the camera ray, so side lighting cannot collapse
  * the caster to a line or expand its camera silhouette. Shared frame caches own the mesh.
  */
 export const createCharacterMaterialFrame = (
   material: WorldMaterial,
   texture: Texture,
+  foot = texture.orig.height / 2 + 28,
 ) => {
   const ratio = material.width / texture.source.pixelWidth;
   const rect = texture.frame.clone();
@@ -292,30 +293,30 @@ export const createCharacterMaterialFrame = (
       data[i + 1] =
         ((data[i + 1] ?? 0) * (trim?.height ?? orig.height) + (trim?.y ?? 0)) /
         orig.height;
-      data[i + 2] = Math.max(0, 0.5 + 28 / orig.height - (data[i + 1] ?? 0));
+      data[i + 2] = Math.max(0, foot / orig.height - (data[i + 1] ?? 0));
     }
   };
   project(vertices, 6);
   project(points, 4);
   const indices = Array.from(source.indices);
   const volumes: AuthoredMaterialFrame["volumes"][number][] = [];
-  const pixel = 1 / ratio,
-    foot = orig.height / 2 + 28;
+  const pixel = 1 / ratio;
   for (let y = 0; y < rect.height; y++) {
     const top = foot - (trim?.y ?? 0) - y * pixel,
       lower = Math.max(0, top - pixel);
     if (top <= 0) continue;
     let start = -1;
-    for (let x = 0; x <= rect.width; x++) {
+    for (let x = 0; x <= Math.ceil(rect.width); x++) {
       const covered =
         x < rect.width &&
-        (material.pixels[((rect.y + y) * material.width + rect.x + x) * 4 + 3] ?? 0) >=
-          128;
+        (material.pixels[
+          (Math.floor(rect.y + y) * material.width + Math.floor(rect.x + x)) * 4 + 3
+        ] ?? 0) >= 128;
       if (covered && start < 0) start = x;
-      if ((covered || start < 0) && x < rect.width) continue;
+      if ((covered || start < 0) && x < Math.ceil(rect.width)) continue;
       if (start < 0) continue;
       const left = (trim?.x ?? 0) + start * pixel,
-        width = (x - start) * pixel;
+        width = (Math.min(x, rect.width) - start) * pixel;
       const depth = Math.min(width * 0.65, lower * 1.8);
       if (depth > 0) {
         const ring = Array.from({ length: 5 }, (_, index) => {
@@ -514,16 +515,6 @@ export const encodeWorldNormal = (x: number, y: number, z: number) => {
       (1 - Math.abs(x)) * (y < 0 ? -1 : 1),
     ];
   return [x * 0.5 + 0.5, y * 0.5 + 0.5] as const;
-};
-
-const readPixels = (texture: Texture, width: number, height: number) => {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) throw new Error("Cannot read world material data");
-  context.drawImage(texture.source.resource as CanvasImageSource, 0, 0, width, height);
-  return new Uint8Array(context.getImageData(0, 0, width, height).data);
 };
 
 /** Atlas geometry loads on demand and shares its material lease and idle-cache lifetime. */
