@@ -21,6 +21,7 @@ import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import type { HexTerrainData } from "@/libs/rendering/terrainData";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
+import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import {
   lightingFragment,
   lightingVertex,
@@ -29,6 +30,7 @@ import {
 } from "@/libs/rendering/worldLightingShaders";
 import {
   acquireWorldMaterial,
+  canopyShadowFrame,
   createCharacterMaterialFrame,
   type MaterialFrame,
   type WorldMaterial,
@@ -116,6 +118,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     {
       uViewport: { value: new Float32Array(4), type: "vec4<f32>" },
       uReceiverSize: { value: new Float32Array([1, 1]), type: "vec2<f32>" },
+      uWorldScale: { value: 1, type: "f32" },
     },
     { isStatic: true },
   );
@@ -191,6 +194,9 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     { x: number; y: number; matrix: Matrix; visible: boolean; drawRoot?: Container }
   >();
   const characterFrames = new WeakMap<Texture, MaterialFrame>();
+  let shadowLights = new Set<PointLight>();
+  let shadowLightFlags: number[] = [],
+    shadowSelectionKey = "";
   const pointBuffer = new Buffer({
     data: new Float32Array(0),
     usage: BufferUsage.VERTEX | BufferUsage.COPY_DST,
@@ -474,7 +480,18 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         height = Math.max(1, Math.min(2048, game.renderer.height));
       if (receiver.width !== width || receiver.height !== height) {
         receiver.resize(width, height);
-        points.resize(width, height);
+        invalidate();
+      }
+      const pointWidth = Math.max(
+          1,
+          Math.ceil(width * WORLD_DETAIL.localLightResolution),
+        ),
+        pointHeight = Math.max(
+          1,
+          Math.ceil(height * WORLD_DETAIL.localLightResolution),
+        );
+      if (points.width !== pointWidth || points.height !== pointHeight) {
+        points.resize(pointWidth, pointHeight);
         invalidate();
       }
       // Pixi transforms this rectangle through the container matrix; camera bounds must stay in local world units.
@@ -486,6 +503,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       );
       view.uniforms.uViewport.set([viewport.minX, viewport.minY, spanX, spanY]);
       view.uniforms.uReceiverSize.set([width, height]);
+      view.uniforms.uWorldScale = scale;
       view.update();
       const visible: VisibleCaster[] = [],
         sunCasters: SunCaster[] = [],
@@ -681,6 +699,10 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         let sunEntry: SunCaster | null = null;
         // Receiving authored surface light does not make a small prop a sun or local-light occluder.
         if (description.shadowCaster) {
+          const shadowFrame =
+            description.shadowCaster === "canopy" && !description.small
+              ? canopyShadowFrame(material, frame)
+              : frame;
           // Shared wind uniforms deform the retained base pose in every physical pass.
           const stable = transform,
             casterHeight = objectHeight;
@@ -688,7 +710,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           sunEntry = {
             id: record.id,
             key: stableKey,
-            frame,
+            frame: shadowFrame,
             material,
             transform: stable,
             height: casterHeight,
@@ -699,7 +721,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           const fieldKey = `${record.id}:${sprite.texture.uid}:${frameRect.x}:${frameRect.y}:${frameRect.width}:${frameRect.height}:${[stable[0], stable[1], stable[2], stable[3], Math.fround((stable[4] ?? 0) + anchorX), Math.fround((stable[5] ?? 0) + anchorY)]}:${casterHeight}`;
           if (record.occlusionKey !== fieldKey) {
             // Instances share authored local geometry; the field inverts this same source transform per ray.
-            const volumes = frame.volumes;
+            const volumes = shadowFrame.volumes;
             const sourceTransform =
               volumes || record.wind
                 ? new Float32Array([
@@ -793,6 +815,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
                   ? [7.0, 3.4, 0.9]
                   : [3.8, 1.8, 0.5],
               castsShadows: true,
+              fixture: record.id,
             });
           }
         record.cached = {
@@ -852,19 +875,42 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       for (const record of scenery) {
         const cached = record.cached;
         if (!cached || !boundsOverlap(cached.receiver.bounds, viewport, 384)) continue;
+        // Flat distant cover inherits terrain and spends no receiver, sun or local-occlusion work.
+        if (
+          record.description.small &&
+          cached.receiver.height * scale <= WORLD_DETAIL.groundLightingPixels[0]
+        )
+          continue;
         visible.push(cached.receiver);
         if (cached.sun) sunCasters.push(cached.sun);
         if (record.occluder) staticOccluders.push(record.occluder);
       }
       // Keep a conservative static batch while panning; the viewport clips it at full screen density.
-      const receivers = visible.filter(
-        (entry) =>
+      const flatDetails = new Set<string>(),
+        flatOccluders = new Set<Occluder>();
+      const receivers = visible.filter((entry) => {
+        if (
+          entry.record.description.small &&
+          entry.height * scale <= WORLD_DETAIL.groundLightingPixels[0]
+        ) {
+          flatDetails.add(entry.record.id);
+          if (entry.record.occluder) flatOccluders.add(entry.record.occluder);
+          return false;
+        }
+        return (
           entry.record.sprite.alpha >= 0.75 &&
           boundsOverlap(
             entry.bounds,
             entry.record.sceneryOwner ? sceneryViewport : viewport,
             2,
-          ),
+          )
+        );
+      });
+      const detailedSunCasters = sunCasters.filter(
+        (caster) => !flatDetails.has(caster.id),
+      );
+      const detailedOccluders = staticOccluders.filter(
+        (caster) => !flatOccluders.has(caster),
       );
       receivers.sort(receiverOrder);
       const viewKey = `${viewport.minX}:${viewport.minY}:${spanX}:${spanY}`;
@@ -912,7 +958,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         });
       }
       if (light.day > 0) {
-        sun.update(sunCasters, viewport, light, breeze, minReceiverHeight);
+        sun.update(detailedSunCasters, viewport, light, breeze, minReceiverHeight);
         hasSunCasters = true;
       } else if (hasSunCasters) {
         sun.update([], viewport, light);
@@ -925,9 +971,9 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         maxY: globalViewport.maxY * 2 + 192,
       };
       staticField.update(
-        staticOccluders,
+        detailedOccluders,
         fieldBounds,
-        occlusionHeightRange(staticOccluders),
+        occlusionHeightRange(detailedOccluders),
       );
       dynamicField.update(
         dynamicOccluders,
@@ -962,7 +1008,39 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         dynamicField.prisms.source.pixelWidth,
         dynamicField.prisms.source.pixelHeight,
       ]);
-      const nextPointGeometryKey = `${viewKey}:${lights.map((l) => `${l.x}:${l.y}:${l.z}:${l.reach}:${l.color}:${l.castsShadows}`).join(";")}:${Math.round(light.day * 256)}`;
+      const nextPointGeometryKey = `${viewKey}:${lights.map((l) => `${l.fixture}:${l.x}:${l.y}:${l.z}:${l.reach}:${l.color}:${l.castsShadows}`).join(";")}:${Math.round(light.day * 256)}`;
+      // Emitter-order flags retain the selection across equivalent cached light objects.
+      if (shadowSelectionKey !== nextPointGeometryKey) {
+        shadowSelectionKey = nextPointGeometryKey;
+        const centerX = (viewport.minX + viewport.maxX) / 2,
+          centerY = (viewport.minY + viewport.maxY) / 2;
+        const ranked = lights
+          .filter(
+            (l) =>
+              l.castsShadows && boundsOverlap(pointLightBounds(l, light.day), viewport),
+          )
+          .sort((a, b) => {
+            const score = (l: PointLight) =>
+              (l.reach * Math.max(...l.color) * (shadowLights.has(l) ? 1.15 : 1)) /
+              (l.reach + Math.hypot(l.x - centerX, l.y * 0.5 + l.z - centerY));
+            return score(b) - score(a);
+          });
+        const fixtures = new Set<string | undefined>(),
+          selected = new Set<PointLight>();
+        // Each nearby building gets a primary shadow before overlapping secondary windows spend the budget.
+        for (const l of ranked) {
+          if (selected.size >= WORLD_DETAIL.shadowLights) break;
+          if (fixtures.has(l.fixture)) continue;
+          fixtures.add(l.fixture);
+          selected.add(l);
+        }
+        for (const l of ranked) {
+          if (selected.size >= WORLD_DETAIL.shadowLights) break;
+          selected.add(l);
+        }
+        shadowLights = selected;
+        shadowLightFlags = lights.map((l) => Number(shadowLights.has(l)));
+      }
       const nextPointKey =
         nextReceiverKey +
         `${staticField.revision}:${dynamicField.revision}` +
@@ -990,23 +1068,11 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         if (pointGeometryKey !== nextPointGeometryKey) {
           pointGeometryKey = nextPointGeometryKey;
           const vertices: number[] = [];
-          for (const l of lights) {
+          for (const [index, l] of lights.entries()) {
             // Expand the ground reach after reading cached fixtures so stationary lights follow dusk and dawn.
-            const radius = Math.hypot(l.z, l.reach * (1.5 - light.day * 0.5));
-            const cy = l.y * 0.5 + l.z,
-              ry = radius * Math.sqrt(1.25);
-            if (
-              !boundsOverlap(
-                {
-                  minX: l.x - radius,
-                  maxX: l.x + radius,
-                  minY: cy - ry,
-                  maxY: cy + ry,
-                },
-                viewport,
-              )
-            )
-              continue;
+            const quad = pointLightBounds(l, light.day);
+            const { radius, cy, ry } = quad;
+            if (!boundsOverlap(quad, viewport)) continue;
             for (const [u, v] of corners)
               vertices.push(
                 l.x + (u - 0.5) * radius * 2,
@@ -1016,7 +1082,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
                 l.z,
                 radius,
                 ...l.color,
-                Number(l.castsShadows),
+                shadowLightFlags[index] ?? 0,
               );
           }
           pointBuffer.data = new Float32Array(vertices);
@@ -1071,6 +1137,22 @@ const corners = [
   [1, 1],
   [0, 1],
 ] as const;
+/** Light selection and drawing use the same projected sphere, so offscreen fixtures spend no shadow budget. */
+const pointLightBounds = (light: PointLight, day: number) => {
+  const radius = Math.hypot(light.z, light.reach * (1.5 - day * 0.5));
+  const cy = light.y * 0.5 + light.z,
+    ry = radius * Math.sqrt(1.25);
+  return {
+    radius,
+    cy,
+    ry,
+    minX: light.x - radius,
+    maxX: light.x + radius,
+    minY: cy - ry,
+    maxY: cy + ry,
+  };
+};
+
 const quadBounds = (m: Float32Array) => {
   const x = [
     m[4] ?? 0,
@@ -1208,6 +1290,7 @@ const updateReceiverBatches = (
           entry.material.height,
           entry.height /
             ((entry.record.character ? orig.height : frame.height) * sourceRatio),
+          Number(entry.record.description.small === true),
           entry.record.wind ? entry.record.wind.group + 1 : 0,
           1 - v,
         );
@@ -1223,13 +1306,14 @@ const updateReceiverBatches = (
       });
       const geometry = new Geometry({
         attributes: {
-          aPosition: { buffer, format: "float32x2", stride: 76, offset: 0 },
-          aUV: { buffer, format: "float32x2", stride: 76, offset: 8 },
-          aData: { buffer, format: "float32x4", stride: 76, offset: 16 },
-          aNormalX: { buffer, format: "float32x3", stride: 76, offset: 32 },
-          aNormalY: { buffer, format: "float32x3", stride: 76, offset: 44 },
-          aPixel: { buffer, format: "float32x3", stride: 76, offset: 56 },
-          aWind: { buffer, format: "float32x2", stride: 76, offset: 68 },
+          aPosition: { buffer, format: "float32x2", stride: 80, offset: 0 },
+          aUV: { buffer, format: "float32x2", stride: 80, offset: 8 },
+          aData: { buffer, format: "float32x4", stride: 80, offset: 16 },
+          aNormalX: { buffer, format: "float32x3", stride: 80, offset: 32 },
+          aNormalY: { buffer, format: "float32x3", stride: 80, offset: 44 },
+          // Native dimensions, world units per texel, and the low-cover material marker.
+          aPixel: { buffer, format: "float32x4", stride: 80, offset: 56 },
+          aWind: { buffer, format: "float32x2", stride: 80, offset: 72 },
         },
       });
       const shader = Shader.from({
@@ -1270,11 +1354,12 @@ const destroyBatch = (batch: ReceiverBatch) => {
 };
 const receiverVertex = `precision highp float; attribute vec2 aPosition; attribute vec2 aUV; attribute vec4 aData;
 attribute vec3 aNormalX; attribute vec3 aNormalY;
-attribute vec3 aPixel; attribute vec2 aWind;
+attribute vec4 aPixel; attribute vec2 aWind;
 ${worldWindShader}
-varying vec2 vUV; varying vec4 vData; varying vec3 vNormalX; varying vec3 vNormalY; varying vec3 vPixel; uniform vec4 uViewport;
+varying vec2 vUV; varying vec4 vData; varying vec3 vNormalX; varying vec3 vNormalY; varying vec3 vPixel; varying float vDetail; uniform vec4 uViewport; uniform float uWorldScale;
 void main() { vUV = aUV; vData = aData; vNormalX = aNormalX; vNormalY = aNormalY;
-  vPixel = aPixel;
+  vPixel = aPixel.xyz;
+  vDetail = aPixel.w > 0.5 ? smoothstep(${WORLD_DETAIL.groundLightingPixels[0].toFixed(1)}, ${WORLD_DETAIL.groundLightingPixels[1].toFixed(1)}, aData.x * uWorldScale) : 1.0;
   float dx = worldWind(aWind.x);
   // Inverse transpose of the rooted shear, including a rotated source plane.
   float slope = dx / max(aData.x, 0.00001);
@@ -1286,7 +1371,7 @@ void main() { vUV = aUV; vData = aData; vNormalX = aNormalX; vNormalY = aNormalY
   gl_Position = vec4((position - uViewport.xy) / uViewport.zw * 2.0 - 1.0, 0.0, 1.0); }`;
 const receiverFragment = `precision highp float;
 precision highp sampler2D; // Preserve material flags, coverage and height before receiver encoding.
-varying vec2 vUV; varying vec4 vData; varying vec3 vNormalX; varying vec3 vNormalY; varying vec3 vPixel;
+varying vec2 vUV; varying vec4 vData; varying vec3 vNormalX; varying vec3 vNormalY; varying vec3 vPixel; varying float vDetail;
 ${Array.from({ length: 8 }, (_, i) => `uniform sampler2D uMaterial${i};`).join("\n")}
 ${materialShader}
 void main() {
@@ -1306,6 +1391,9 @@ void main() {
   if (!billboard && abs(facingCamera) > 0.05)
     height += (2.0 * sourceNormal.y * sourceOffset.y - sourceNormal.x * sourceOffset.x) / facingCamera * vPixel.z;
   vec3 n = normalize(vNormalX * sourceNormal.x + vNormalY * sourceNormal.y + vec3(0.0, 0.0, sourceNormal.z));
+  // Tiny cover inherits the ground plane gradually; primary art keeps its full physical material.
+  height *= vDetail;
+  n = normalize(mix(vec3(0.0, 0.0, 1.0), n, vDetail));
   vec2 normal = octNormal(n);
   gl_FragColor = vec4((floor(normal.x * 31.0 + 0.5) * 8.0 + flags) / 255.0, normal.y, packHeight(height));
 }`;
@@ -1387,6 +1475,7 @@ type PointLight = {
   color: [number, number, number];
   /** Character fill lights illuminate freely; fixed fixtures trace scene occlusion. */
   castsShadows: boolean;
+  fixture?: string;
 };
 
 /** Numeric snapshots avoid rebuilding strings for stationary scenery on every animation frame. */

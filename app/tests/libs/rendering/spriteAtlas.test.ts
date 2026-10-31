@@ -14,6 +14,23 @@ const cleanups: (() => void)[] = [];
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
 
 describe("world sprite atlas ownership", () => {
+  it("fades barely resolved ground cover smoothly, restores it on zoom and keeps offscreen props culled", async () => {
+    const game = { own() {}, signal: new AbortController().signal } as unknown as GameRenderer;
+    vi.spyOn(Assets, "load").mockImplementation(async () => Texture.WHITE);
+    const art = await createWorldSprites(game, [{ id: "ground:fade", kind: "decoration", image: "ground-fade.png", size: 8, x: 10, y: 10, groundY: 0, small: true, opacity: 0.8 }]);
+    cleanups.push(() => art.dispose());
+    const sprite = art.entries[0]!.sprite;
+    const frame = { now: 0, delta: 0, reducedMotion: false };
+    art.animate(frame, 0.25);
+    expect(sprite.alpha).toBe(0); expect(sprite.renderable).toBe(false);
+    art.animate(frame, 0.625);
+    expect(sprite.alpha).toBeCloseTo(0.4); expect(sprite.renderable).toBe(true);
+    art.animate(frame, 1);
+    expect(sprite.alpha).toBe(0.8);
+    art.setViewport({ minX: 200, minY: 200, maxX: 300, maxY: 300 }, 0);
+    art.animate(frame, 2);
+    expect(sprite.alpha).toBe(0.8); expect(sprite.renderable).toBe(false);
+  });
   it("retains authored character frames so material coordinates keep their published dimensions", async () => {
     const pixels = new Uint8Array(8 * 8 * 4); pixels[4 * (2 * 8 + 2) + 3] = 255;
     const texture = new Texture({ source: new BufferImageSource({ resource: pixels, width: 8, height: 8 }) });

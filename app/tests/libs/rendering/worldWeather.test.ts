@@ -45,8 +45,8 @@ describe("regional world weather", () => {
       expect(weather.container.children).toHaveLength(1);
       expect(mesh.eventMode).toBe("none");
       const count = geometry.getBuffer("aPosition").data.length / 2;
-      expect(count).toBeGreaterThan(light ? 384 : 1536);
-      expect(count).toBeLessThanOrEqual(light ? 400 : 1600);
+      expect(count).toBeGreaterThan(light ? 270 : 1070);
+      expect(count).toBeLessThanOrEqual(light ? 300 : 1130);
       expect(geometry.buffers.reduce((bytes, buffer) => bytes + buffer.data.byteLength, 0)).toBeLessThan(48 * 1024);
       const state = mesh.shader!.resources.weather.uniforms;
       expect(Array.from(state.uWeather)).toEqual([1, 1, 1, 1]);

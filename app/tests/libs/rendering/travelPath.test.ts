@@ -39,7 +39,7 @@ describe("travel route ribbon", () => {
       path.animate(frame(200), { x: 0, y: 0 });
       expect(path.motes[0]!.x).toBeGreaterThan(first);
       expect(last).toBeGreaterThan(9000);
-      expect(path.motes).toHaveLength(24);
+      expect(path.motes).toHaveLength(12);
       expect(draw).toHaveBeenCalledTimes(2);
     } finally { draw.mockRestore(); path.container.destroy({ children: true }); }
   });

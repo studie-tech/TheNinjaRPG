@@ -35,6 +35,7 @@ import {
   worldSpriteBounds,
 } from "@/libs/rendering/visibility";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
+import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import {
   MAX_SMALL_WORLD_WIND,
@@ -405,6 +406,8 @@ export const createWorldSprites = async (
   const hasGpuWind = entries.some(
     (entry) => entry.sprite instanceof WindSprite && entry.description.wind != null,
   );
+  const groundDetails = entries.filter((entry) => entry.description.small);
+  let detailZoom = Number.NaN;
   let viewport: (WorldBounds & { padding: number }) | null = null;
   let attached: {
     ground?: RenderLayer;
@@ -474,16 +477,17 @@ export const createWorldSprites = async (
       viewport = { ...bounds, padding };
       // Offscreen sprites keep their decoded lease but do not upload or join a GPU batch.
       for (const entry of entries) {
-        entry.sprite.renderable = boundsOverlap(
-          entry.bounds,
-          bounds,
-          padding +
-            (entry.description.wind == null
-              ? 0
-              : entry.description.small
-                ? MAX_SMALL_WORLD_WIND
-                : MAX_WORLD_WIND),
-        );
+        entry.sprite.renderable =
+          boundsOverlap(
+            entry.bounds,
+            bounds,
+            padding +
+              (entry.description.wind == null
+                ? 0
+                : entry.description.small
+                  ? MAX_SMALL_WORLD_WIND
+                  : MAX_WORLD_WIND),
+          ) && entry.sprite.alpha > 0;
         if (entry.shadow) entry.shadow.renderable = entry.sprite.renderable;
         if (entry.light) entry.light.renderable = entry.sprite.renderable;
       }
@@ -494,6 +498,31 @@ export const createWorldSprites = async (
       movement: WorldMotionDirection | null = null,
       sampledWind?: WorldWind,
     ) => {
+      if (zoom !== detailZoom && groundDetails.length) {
+        detailZoom = zoom;
+        const [hidden, visible] = WORLD_DETAIL.groundFadePixels;
+        for (const entry of groundDetails) {
+          const pixels = Math.abs(entry.sprite.height) * zoom;
+          const fade =
+            visible > hidden
+              ? Math.max(0, Math.min(1, (pixels - hidden) / (visible - hidden)))
+              : 1;
+          entry.sprite.alpha =
+            (entry.description.opacity ?? 1) * fade * fade * (3 - 2 * fade);
+          entry.sprite.renderable =
+            entry.sprite.alpha > 0 &&
+            (!viewport ||
+              boundsOverlap(
+                entry.bounds,
+                viewport,
+                viewport.padding + MAX_SMALL_WORLD_WIND,
+              ));
+          if (entry.shadow) entry.shadow.renderable = entry.sprite.renderable;
+          if (entry.light) entry.light.renderable = entry.sprite.renderable;
+        }
+        // Fixed scenery owns retained material poses; a zoom-driven fade changes that snapshot.
+        worldShadows?.invalidate();
+      }
       const direction = frame.reducedMotion ? null : movement;
       motionElapsed = direction ? motionElapsed + frame.delta * 1000 : 0;
       for (const entry of animated) {

@@ -5,6 +5,7 @@ import {
   type WorldAssetSource,
   worldAssetSource,
 } from "@/libs/rendering/worldAssetSources";
+import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { WorldShadowShape } from "@/libs/rendering/worldShadows";
 
 const loaded = new Map<string, WorldMaterial>();
@@ -348,6 +349,84 @@ export const createCharacterMaterialFrame = (
     points,
     volumes: closed,
   };
+};
+
+const canopyFrames = new WeakMap<MaterialFrame, MaterialFrame>();
+
+/** Small elevated leaf volumes share bounded boxes; trunks, receiver surfaces and albedo stay exact. */
+export const canopyShadowFrame = (material: WorldMaterial, frame: MaterialFrame) => {
+  if (!frame.volumes?.length || WORLD_DETAIL.canopyVolumeSpan <= 0) return frame;
+  const cached = canopyFrames.get(frame);
+  if (cached) return cached;
+  let simplified = false;
+  const volumes = frame.volumes.map((volume) => {
+    let x0 = Infinity,
+      y0 = Infinity,
+      z0 = Infinity,
+      x1 = -Infinity,
+      y1 = -Infinity,
+      z1 = -Infinity;
+    const original: [number, number, number, number][] = [];
+    for (let i = 0; i < volume.vertices.length; i += 4) {
+      const x = volume.vertices[i] ?? 0,
+        y = volume.vertices[i + 1] ?? 0,
+        lower = volume.vertices[i + 2] ?? 0,
+        upper = volume.vertices[i + 3] ?? 0;
+      original.push([x, y, lower, upper]);
+      const physicalY = -2 * (y + upper);
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, physicalY);
+      y1 = Math.max(y1, physicalY);
+      z0 = Math.min(z0, lower);
+      z1 = Math.max(z1, upper);
+    }
+    if (z0 < 0.2 || Math.max(x1 - x0, y1 - y0, z1 - z0) > WORLD_DETAIL.canopyVolumeSpan)
+      return { vertices: original, indices: Array.from(volume.indices) };
+    simplified = true;
+    return {
+      vertices: [
+        [x0, -y0 / 2 - z1, z0, z1],
+        [x1, -y0 / 2 - z1, z0, z1],
+        [x1, -y1 / 2 - z1, z0, z1],
+        [x0, -y1 / 2 - z1, z0, z1],
+      ] as [number, number, number, number][],
+      indices: [0, 1, 2, 0, 2, 3],
+    };
+  });
+  if (!simplified) {
+    canopyFrames.set(frame, frame);
+    return frame;
+  }
+  const vertices: number[] = [],
+    indices: number[] = [],
+    remap = new Map<number, number>();
+  for (let i = 0; i < frame.indices.length; i += 3) {
+    const triangle = Array.from(frame.indices.subarray(i, i + 3));
+    if (triangle.some((index) => frame.vertices[index * 6 + 5] === 0)) continue;
+    for (const index of triangle) {
+      if (!remap.has(index)) {
+        remap.set(index, vertices.length / 6);
+        vertices.push(...frame.vertices.subarray(index * 6, index * 6 + 6));
+      }
+      indices.push(remap.get(index) ?? 0);
+    }
+  }
+  const closed = appendAuthoredGeometry(
+    { frame: [0, 0, 1, 1], surfaces: [], volumes },
+    material,
+    new Rectangle(0, 0, 1, 1),
+    vertices,
+    indices,
+  );
+  const result = {
+    ...frame,
+    vertices: new Float32Array(vertices),
+    indices: new Uint16Array(indices),
+    volumes: closed,
+  };
+  canopyFrames.set(frame, result);
+  return result;
 };
 
 const appendAuthoredGeometry = (

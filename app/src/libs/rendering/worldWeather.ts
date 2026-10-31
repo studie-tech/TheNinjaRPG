@@ -2,12 +2,14 @@ import alea from "alea";
 import { Container, Geometry, Mesh, Shader, UniformGroup } from "pixi.js";
 import type { CombatBiome } from "@/drizzle/constants";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
+import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import { clamp } from "@/utils/math";
 
 /** One texture-free draw places pixel precipitation above world art and below identity/UI layers. */
 export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
   const container = new Container({ label: "world-weather", eventMode: "none" });
-  const capacity = lightLayout ? 96 : 384;
+  const fullCapacity = lightLayout ? 96 : 384;
+  const capacity = Math.ceil(fullCapacity * WORLD_DETAIL.weatherDensity);
   const atmosphere = lightLayout ? 3 : 9;
   let geometry: Geometry | undefined, shader: Shader | undefined;
   let disposed = false;
@@ -50,7 +52,7 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
             random(),
             random(),
             random(),
-            i < atmosphere ? (i === 0 ? -1 : -2) : (i - atmosphere) / capacity,
+            i < atmosphere ? (i === 0 ? -1 : -2) : (i - atmosphere) / fullCapacity,
           ];
           positions.set([0, 0, 1, 0, 1, 1, 0, 1], i * 8);
           for (let vertex = 0; vertex < 4; vertex++)
@@ -81,7 +83,9 @@ export const createWorldWeather = (game: GameRenderer, lightLayout = false) => {
       view[0] = width;
       view[1] = height;
       view[2] = Math.max(1, Math.floor(width / 700));
-      view[3] = Math.min(capacity, Math.ceil((width * height) / 1800)) / capacity;
+      view[3] =
+        (Math.min(fullCapacity, Math.ceil((width * height) / 1800)) / fullCapacity) *
+        WORLD_DETAIL.weatherDensity;
       // Power-of-two travel rates and sway periods meet at this clock seam without a particle jump.
       state[0] = (((frame.now % 64_000) + 64_000) % 64_000) / 1000;
       state[1] = weather.kind === "rain" ? 1 : weather.kind === "snow" ? 2 : 3;

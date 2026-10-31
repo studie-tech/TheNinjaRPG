@@ -104,6 +104,50 @@ describe("world sunlight", () => {
 });
 
 describe("physical world lighting", () => {
+  it("keeps every light pool while budgeting visible fixture shadows and retaining stationary light buffers", async () => {
+    const buildFrame = worldMaterials.worldMaterialFrame;
+    const frameSpy = vi.spyOn(worldMaterials, "worldMaterialFrame").mockImplementation((material, rect) => ({
+      ...buildFrame(material, rect), emitters: [0.2, 0.4, 0.6, 0.8].map((x) => ({ x, y: 0.5, height: 0.5 })),
+    }));
+    const f = fixture(), source = materialSourceFixture();
+    const registrations: (() => void)[] = [];
+    try {
+      for (let i = 0; i < 4; i++) {
+        const sprite = new Sprite(source.texture);
+        sprite.scale.set(20, -20); sprite.position.set(10 + i * 20, 50); f.parent.addChild(sprite);
+        const registration = f.shadows.register(sprite, { id: `budget-${i}`, kind: "structure", image: `fixture-budget-${i}.png`, size: 40, x: sprite.x, y: 50, groundY: 30, shadowCaster: "building" });
+        registrations.push(registration); await registration.ready;
+      }
+      const night = worldSunlight(new Date((WORLD_DAY_SECONDS + 10) * 1000));
+      f.shadows.update(night, viewport);
+      const pointPass = f.render.mock.calls.at(-1)![0]!;
+      expect([pointPass.target.width, pointPass.target.height]).toEqual([600, 450]);
+      const buffer = pointPass.container.children[0].geometry.getBuffer("aPosition");
+      const data = buffer.data as Float32Array;
+      expect(data).toHaveLength(16 * 6 * 10);
+      const flags = Array.from({ length: 16 }, (_, i) => data[i * 60 + 9]!);
+      expect(flags.reduce((a, b) => a + b, 0)).toBe(12);
+      for (let i = 0; i < 4; i++) expect(flags.slice(i * 4, i * 4 + 4)).toContain(1);
+      const upload = vi.spyOn(buffer, "update"), draws = f.render.mock.calls.length;
+      f.shadows.update(night, viewport);
+      expect(upload).not.toHaveBeenCalled(); expect(f.render).toHaveBeenCalledTimes(draws);
+    } finally { registrations.forEach((release) => release()); f.dispose(); source.dispose(); frameSpy.mockRestore(); }
+  });
+  it("inherits terrain lighting for distant small props and restores their receiver and shadows at close zoom", async () => {
+    const f = fixture(), source = materialSourceFixture();
+    try {
+      const art = await createWorldSprites(f.game, [{ id: "ground:receiver-lod", kind: "decoration", image: "ground-material-lod.png", size: 8, x: 40, y: 40, groundY: 32, small: true, shadowCaster: "canopy" }], f.shadows, true);
+      f.parent.addChild(art.container);
+      f.shadows.update(worldSunlight(), viewport);
+      const near = f.render.mock.calls.find(([call]) => call.container.children.some((mesh: { geometry?: Geometry }) => mesh.geometry?.attributes?.aData));
+      expect(near).toBeUndefined();
+      f.world.scale.set(4, -4); f.world.position.set(0, 600);
+      art.animate({ now: 0, delta: 0, reducedMotion: false }, 4);
+      f.render.mockClear(); f.shadows.update(worldSunlight(), viewport);
+      expect(f.render.mock.calls.some(([call]) => call.container.children.some((mesh: { geometry?: Geometry }) => mesh.geometry?.attributes?.aData))).toBe(true);
+      art.dispose();
+    } finally { f.dispose(); source.dispose(); }
+  });
   it("maps generated fallback receiver height to its cropped atlas frame", async () => {
     const shaders = vi.spyOn(Shader, "from");
     const f = fixture(), source = materialSourceFixture();
@@ -123,10 +167,10 @@ describe("physical world lighting", () => {
       const geometry = mesh.geometry as Geometry;
       const attribute = geometry.getAttribute("aData");
       expect(attribute.format).toBe("float32x4");
-      expect(attribute.stride).toBe(76);
+      expect(attribute.stride).toBe(80);
       expect(attribute.offset).toBe(16);
       const data = geometry.getBuffer("aData").data as Float32Array;
-      for (let i = 0; i < data.length; i += 19)
+      for (let i = 0; i < data.length; i += 20)
         expect(Array.from(data.slice(i + 4, i + 8))).toEqual([40, 0, 0.5, 0.5]);
       const fragment = shaders.mock.calls.map(([options]) => options.gl?.fragment ?? "")
         .find((fragment) => fragment.includes("uniform sampler2D uMaterial0;"))!;
@@ -335,7 +379,7 @@ describe("physical world lighting", () => {
       const data = mesh.geometry.getBuffer("aNormalY").data as Float32Array;
       // Under sy=.5Y+Z, a front normal (0,-1,0) becomes (1,-1,0) before normalization.
       expect(Array.from(data.slice(11, 14))).toEqual([expect.closeTo(-1), expect.closeTo(1), expect.closeTo(0)]);
-      expect(mesh.geometry.getAttribute("aNormalY").stride).toBe(76);
+      expect(mesh.geometry.getAttribute("aNormalY").stride).toBe(80);
       registration();
     } finally { f.dispose(); source.dispose(); }
   });

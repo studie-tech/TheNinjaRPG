@@ -1,12 +1,13 @@
 import { Container, Graphics, Sprite, Texture } from "pixi.js";
 import type { GameFrame } from "@/libs/rendering/runtime";
+import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 
 /** A retained ground ribbon rounds route corners; pooled motes travel toward its destination. */
 export const createTravelPath = () => {
   const container = new Container({ label: "travel-path" });
   const ribbon = new Graphics({ label: "travel-path-ribbon" });
   const destination = new Graphics({ label: "travel-path-destination" });
-  const motes = Array.from({ length: 24 }, () => {
+  const motes = Array.from({ length: WORLD_DETAIL.routeMotes }, () => {
     const sprite = new Sprite(Texture.WHITE);
     sprite.anchor.set(0.5);
     sprite.tint = 0xddfff0;
@@ -85,8 +86,8 @@ export const createTravelPath = () => {
         const bx = point.x + (after.x - point.x) * 0.2;
         const by = point.y + (after.y - point.y) * 0.2;
         append(ax, ay);
-        for (let step = 1; step <= 5; step++) {
-          const t = step / 5,
+        for (let step = 1; step <= WORLD_DETAIL.routeCornerSamples; step++) {
+          const t = step / WORLD_DETAIL.routeCornerSamples,
             a = 1 - t;
           append(
             a * a * ax + 2 * a * t * point.x + t * t * bx,
@@ -119,7 +120,10 @@ export const createTravelPath = () => {
     const length = samples.at(-1)?.distance ?? 0;
     container.visible = length > 0.01;
     if (!container.visible) return;
-    const count = Math.min(motes.length, Math.ceil(length / (width * 0.65))),
+    const count = Math.min(
+        motes.length,
+        Math.ceil(length / (width * WORLD_DETAIL.routeMoteSpacing)),
+      ),
       spacing = length / count;
     const phase = frame.reducedMotion ? 0 : (frame.now * width * 0.0006) % spacing;
     let segment = 1;

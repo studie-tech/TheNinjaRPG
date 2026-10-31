@@ -13,7 +13,7 @@ import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
 import { STONE_VILLAGE_WALL_KIT } from "@/libs/sector-map/village-wall-assets";
-import { acquireWorldMaterial, createCharacterMaterialFrame, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
+import { acquireWorldMaterial, canopyShadowFrame, createCharacterMaterialFrame, type AuthoredMaterialFrame, encodeWorldNormal, type WorldMaterial, worldMaterialFrame } from "@/libs/rendering/worldMaterials";
 import { worldSunlight } from "@/libs/rendering/worldShadows";
 import { createSunShadows } from "@/libs/rendering/worldSunShadows";
 
@@ -33,6 +33,31 @@ const decodeNormal = ([u, v]: readonly [number, number]) => {
 };
 
 describe("packed character shadow volumes", () => {
+  it("simplifies small elevated canopy volumes without expanding their physical bounds or changing trunks and receiver data", () => {
+    const source = material(100, 100);
+    const leaf = Array.from({ length: 8 }, (_, i) => [50 + Math.cos(i * Math.PI / 4) * 3, 20 + Math.sin(i * Math.PI / 4) * 3, 64, 65] as const);
+    const trunk = [[48, 20, 0, 60], [52, 20, 0, 60], [52, 25, 0, 60], [48, 25, 0, 60]] as const;
+    source.surfaceFrames = [{ frame: [0, 0, 100, 100], surfaces: [{ vertices: [[0, 0, 0], [100, 0, 0], [100, 100, 0]], indices: [0, 1, 2] }], volumes: [
+      { vertices: leaf, indices: [0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5, 0, 5, 6, 0, 6, 7] },
+      { vertices: trunk, indices: [0, 1, 2, 0, 2, 3] },
+    ] }];
+    try {
+      const frame = worldMaterialFrame(source, new Rectangle(0, 0, 100, 100));
+      const original = frame.vertices.slice(), coarse = canopyShadowFrame(source, frame);
+      expect(coarse).toBe(canopyShadowFrame(source, frame));
+      expect(coarse.indices.length).toBeLessThan(frame.indices.length);
+      expect(coarse.points).toBe(frame.points); expect(coarse.emitters).toBe(frame.emitters);
+      expect(frame.vertices).toEqual(original);
+      expect(coarse.volumes![1]).toEqual(frame.volumes![1]);
+      const bounds = (vertices: Float32Array) => {
+        const x: number[] = [], y: number[] = [], z: number[] = [];
+        for (let i = 0; i < vertices.length; i += 4) { x.push(vertices[i]!); y.push(-2 * (vertices[i + 1]! + vertices[i + 3]!)); z.push(vertices[i + 2]!, vertices[i + 3]!); }
+        return [Math.min(...x), Math.max(...x), Math.min(...y), Math.max(...y), Math.min(...z), Math.max(...z)];
+      };
+      const a = bounds(coarse.volumes![0]!.vertices), b = bounds(frame.volumes![0]!.vertices);
+      a.forEach((value, i) => expect(value).toBeCloseTo(b[i]!, 6));
+    } finally { source.texture.destroy(true); }
+  });
   it("uses a cutout's visible footer for heights and finite side-lit depth at fractional rendition coordinates", () => {
     const source = material(4, 4); source.isBillboard = true;
     for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) paint(source, x, y, 0, 1);
