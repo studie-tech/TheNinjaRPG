@@ -194,7 +194,7 @@ describe("physical world lighting", () => {
       f.shadows.update(worldSunlight(), viewport);
       const points = () => f.render.mock.calls.at(-1)![0]!.container.children[0].geometry.getBuffer("aPosition").data as Float32Array;
       expect(points()).toHaveLength(6 * 9);
-      expect(Array.from(points().slice(2, 5))).toEqual([40, 84, 130]);
+      expect(Array.from(points().slice(2, 5))).toEqual([40, 84, 66]);
       expect(occluders).toHaveLength(2);
       for (const occluder of occluders) expect(occluder).toMatchObject({ footX: 40, footY: 84, width: 64, height: logicalSize });
       const receiver = f.render.mock.calls.find(([call]) => call.container.children[0]?.geometry?.attributes?.aData)![0].container.children[0];
@@ -206,12 +206,12 @@ describe("physical world lighting", () => {
       expect(data[6 * stride + 1]).toBeCloseTo(children[1]!.toGlobal({ x: 24 - 32, y: 20 - 32 }).y);
       root.x += 3;
       f.shadows.update(worldSunlight(), viewport);
-      expect(Array.from(points().slice(2, 5))).toEqual([43, 84, 130]);
+      expect(Array.from(points().slice(2, 5))).toEqual([43, 84, 66]);
       expect(receiver.geometry.getBuffer("aPosition").data[0]).toBeCloseTo(first.x + 3);
       children[0]!.visible = false;
       f.shadows.update(worldSunlight(), viewport);
       expect(points()).toHaveLength(6 * 9);
-      expect(Array.from(points().slice(2, 5))).toEqual([43, 84, 130]);
+      expect(Array.from(points().slice(2, 5))).toEqual([43, 84, 66]);
     } finally { for (const lease of leases) lease(); f.dispose(); for (const view of views) view.destroy(false); source.dispose(); fieldSpy.mockRestore(); }
   });
 
@@ -239,7 +239,7 @@ describe("physical world lighting", () => {
       const daytime = lightData().slice();
       expect(daytime).toHaveLength(3 * 6 * 9);
       const character = daytime.slice(2 * 6 * 9);
-      expect(Array.from(character.slice(2, 5))).toEqual([40, 40, 82]);
+      expect(Array.from(character.slice(2, 5))).toEqual([40, 40, 42]);
       f.shadows.update(night, viewport);
       const nighttime = lightData();
       expect(nighttime).toHaveLength(3 * 6 * 9);
@@ -250,6 +250,11 @@ describe("physical world lighting", () => {
       expect(groundReach(daytime.slice(6 * 9))).toBeCloseTo(14, 4);
       expect(groundReach(nighttime.slice(6 * 9))).toBeCloseTo(21, 4);
       expect(groundReach(nighttime.slice(2 * 6 * 9))).toBeLessThan(40);
+      const footLight = nighttime.slice(2 * 6 * 9);
+      // The overhead light must illuminate the ground after its height-dependent falloff.
+      const floorFalloff = 1 - footLight[4]! / footLight[5]!;
+      expect(footLight[6]! * floorFalloff ** 2).toBeGreaterThan(0.15);
+      expect(footLight[4]).toBeGreaterThan(40);
       f.shadows.update(day, viewport);
       expect(lightData()).toEqual(daytime);
     } finally {
@@ -419,7 +424,7 @@ describe("physical world lighting", () => {
         expect(current?.transform?.[4]).toBe(expected);
         expect(sun.shader.resources.object.uniforms.uObject[2]).toBe(expected);
         expect(receiver.geometry.getBuffer("aPosition").data[0]).toBe(expected);
-        expect(Array.from(point.geometry.getBuffer("aPosition").data.slice(2, 5))).toEqual([expected, 40, 82]);
+        expect(Array.from(point.geometry.getBuffer("aPosition").data.slice(2, 5))).toEqual([expected, 40, 42]);
         const draws = f.render.mock.calls.length;
         f.shadows.update(worldSunlight(), viewport);
         expect(f.render).toHaveBeenCalledTimes(draws);

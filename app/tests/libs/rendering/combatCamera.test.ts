@@ -53,6 +53,18 @@ const setup = async (zoom = 2) => {
 };
 
 describe("combat camera gestures", () => {
+  it("keeps grid markings below physical actors and their HUD", async () => {
+    const { world, user } = await setup();
+    const outlines = world.getChildByLabel("combat-grid-outlines", true)!;
+    const actors = world.children.find((child) => child.getChildByLabel(user.userId)) as Container;
+    const fighter = actors.getChildByLabel(user.userId)!;
+    const art = fighter.getChildByLabel("combat-art")!;
+    const depth = art.parentRenderLayer!, ground = outlines.parent!;
+    expect(depth.parent).toBe(ground);
+    expect(ground.getChildIndex(outlines)).toBeLessThan(ground.getChildIndex(depth));
+    const hud = fighter.getChildByLabel("combat-health")!;
+    expect(world.getChildIndex(hud.parentRenderLayer!)).toBeGreaterThan(world.getChildIndex(ground));
+  });
   it("retains a manually panned view across frames, resize and unchanged battle refreshes", async () => {
     const { world, drag, tick, refresh, resize, onTap } = await setup();
     const initial = world.position.clone();
