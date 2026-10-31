@@ -258,6 +258,33 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
     expect((await db.select().from(auctionOffer))[0]?.status).toBe("SOLD");
   });
 
+  it("keeps reserved trade items out of home storage so the offer stays fulfillable", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ homeType: "TOWN_HOUSE" }).where(eq(userData.userId, "owner"));
+    const offer = await postTrade(50);
+    const home = await callerFor(homeRouter, "owner");
+    expect(await home.toggleStoreItem({ userItemId: "owner-gems" })).toMatchObject({ success: false, message: "This item is reserved in an auction or trade offer and can't be stored" });
+    expect((await db.select().from(userItem).where(eq(userItem.id, "owner-gems")))[0]).toMatchObject({ isInAuction: true, storedAtHome: false });
+    const supplier = await callerFor(auctionRouter, "supplier");
+    expect((await supplier.acceptAuctionOffer({ offerId: offer.id, userItemId: "supplier-ore" })).success).toBe(true);
+  });
+
+  it("explains a stored reserved item on accept and lets its owner retrieve it to recover the offer", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ homeType: "TOWN_HOUSE" }).where(eq(userData.userId, "owner"));
+    const offer = await postTrade(50);
+    // Rows stored before the escrow guard existed.
+    await db.update(userItem).set({ storedAtHome: true }).where(eq(userItem.id, "owner-gems"));
+    const supplier = await callerFor(auctionRouter, "supplier");
+    expect(await supplier.acceptAuctionOffer({ offerId: offer.id, userItemId: "supplier-ore" })).toMatchObject({ success: false, message: "The seller's offered item is currently unavailable; ask them to retrieve it or cancel the offer" });
+    expect((await db.select().from(auctionOffer))[0]?.status).toBe("ACTIVE");
+    const home = await callerFor(homeRouter, "owner");
+    expect((await home.toggleStoreItem({ userItemId: "owner-gems" })).success).toBe(true);
+    expect((await db.select().from(userItem).where(eq(userItem.id, "owner-gems")))[0]).toMatchObject({ isInAuction: true, storedAtHome: false });
+    expect((await supplier.acceptAuctionOffer({ offerId: offer.id, userItemId: "supplier-ore" })).success).toBe(true);
+    expect((await db.select().from(userItem).where(eq(userItem.id, "owner-gems")))[0]).toMatchObject({ userId: "supplier", isInAuction: false, storedAtHome: false });
+  });
+
   it("rejects unavailable inventory, insufficient quantities and mismatched items", async () => {
     const offer = await postRequest();
     const db = await getTestDatabase();
