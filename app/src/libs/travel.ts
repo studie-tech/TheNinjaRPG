@@ -6,7 +6,10 @@ import {
 import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
 import { isQuestComplete } from "@/libs/objectives";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
-import { getSectorTile } from "@/libs/sector-map/validation";
+import {
+  findNearestWalkableCoordinate,
+  getSectorTile,
+} from "@/libs/sector-map/validation";
 import type {
   GlobalMapData,
   GlobalTile,
@@ -84,19 +87,15 @@ export const findLandingNear = (
   return tile ? { x: tile.x, y: tile.y } : null;
 };
 
-/** Uniformly random walkable landing point for global travel. */
+/** Center global arrivals on the map, using the nearest tile when its center is absent. */
 export const findGlobalTravelDestination = (
-  sectorMap: Pick<NormalizedSectorMap, "tiles">,
-  randomIndex: (upperBound: number) => number,
-) => {
-  const walkableTiles = sectorMap.tiles;
-  if (walkableTiles.length === 0) return null;
-
-  const index = randomIndex(walkableTiles.length);
-  const tile = walkableTiles[index];
-  if (!tile) return null;
-  return { x: tile.x, y: tile.y };
-};
+  sectorMap: Pick<NormalizedSectorMap, "width" | "height" | "tiles" | "anchors">,
+) =>
+  findNearestWalkableCoordinate(
+    sectorMap,
+    { x: Math.floor(sectorMap.width / 2), y: Math.floor(sectorMap.height / 2) },
+    null,
+  );
 
 // Calculate distance between two points on the hexasphere
 export const calcGlobalTravelTime = (
