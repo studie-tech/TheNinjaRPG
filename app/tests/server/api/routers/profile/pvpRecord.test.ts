@@ -55,13 +55,7 @@ describeWithDatabase("public PvP record visibility", () => {
   });
 
   it("publishes the record only after its owner opts in", async () => {
-    expect(
-      (
-        await (
-          await callerFor(profileRouter, "owner")
-        ).updatePreferences({ showPvpRecord: true })
-      ).success,
-    ).toBe(true);
+    expect(await (await callerFor(profileRouter, "owner")).updatePreferences({ showPvpRecord: true })).toMatchObject({ success: true, userPatch: { showPvpRecord: true } });
     const profile = await (await callerFor(profileRouter, "viewer")).getPublicUser({
       userId: "owner",
     });

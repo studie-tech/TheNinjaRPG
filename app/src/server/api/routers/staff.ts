@@ -6,7 +6,9 @@ import { after } from "next/server";
 import { z } from "zod";
 import type { UserStatus } from "@/drizzle/constants";
 import { huntingProgress, huntingReceipt, huntingSession } from "@/drizzle/schema";
+import { effectiveMasteries } from "@/libs/mastery";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
+import { calcMaxEnergy } from "@/libs/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
 import { incrementAnbuMemberCount } from "@/queries/anbu";
@@ -27,7 +29,7 @@ import {
 import { findStoreUserIdAlias, insertStoreUserIdAlias } from "@/queries/purchases";
 import { deleteRankedQueueForUser } from "@/queries/pvprank";
 import { clearQueueBattleId, deleteQueueById, listQueueMembers } from "@/queries/raids";
-import { deleteUserSkills } from "@/queries/skillTree";
+import { deleteUserSkills, fetchMasterySources } from "@/queries/skillTree";
 import {
   applyDevelopmentBackup,
   clearDevelopmentBackupTarget,
@@ -267,6 +269,7 @@ import {
   canUseMonitoringTests,
 } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const staffRouter = createTRPCRouter({
   // Content Backups
@@ -415,7 +418,7 @@ export const staffRouter = createTRPCRouter({
       });
     }),
   unequipAllJutsus: protectedProcedure
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -434,15 +437,21 @@ export const staffRouter = createTRPCRouter({
         updateJutsuLoadoutForUnequipAllJutsus(ctx.drizzle),
       ]);
       return {
+        userPatch: user.isAi
+          ? {}
+          : { ...(user.jutsuLoadout ? { loadout: { jutsuIds: [] } } : {}) },
         success: true,
         message: `All jutsu has been unequipped for all non-AI users.`,
       };
     }),
   unequipAllGear: protectedProcedure
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, sources] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchMasterySources(ctx.drizzle, ctx.userId),
+      ]);
       // Guard
       if (!canUnequipAllUsers(user)) {
         return errorResponse("You do not have permission to unequip all gear");
@@ -455,12 +464,26 @@ export const staffRouter = createTRPCRouter({
         updateItemLoadoutForUnequipAllGear(ctx.drizzle),
       ]);
       return {
+        userPatch:
+          !user.isAi && sources
+            ? {
+                items: [],
+                effectiveMasteries: effectiveMasteries({
+                  ...user,
+                  ...sources,
+                  items: [],
+                }),
+                maxEnergy: calcMaxEnergy({ ...user, ...sources, items: [] }),
+              }
+            : user.isAi
+              ? {}
+              : undefined,
         success: true,
         message: `All gear has been unequipped for all non-AI users.`,
       };
     }),
   forceAwake: protectedProcedure
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .input(
       z.object({
         userId: z.string(),
@@ -543,6 +566,7 @@ export const staffRouter = createTRPCRouter({
       return {
         success: true,
         message: "You have changed user's state to awake",
+        userPatch: input.userId === ctx.userId ? undefined : {},
       };
     }),
   insertUserBadge: protectedProcedure
@@ -739,7 +763,7 @@ export const staffRouter = createTRPCRouter({
   // VERY dangerous - used to e.g. link up unlinked accounts with new userIds from clerk
   updateUserId: protectedProcedure
     .input(z.object({ userId: z.string(), newUserId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [user, fromUser, toUser, sourceAlias, destinationAlias] = await Promise.all(
@@ -919,7 +943,12 @@ export const staffRouter = createTRPCRouter({
       // races moves still in flight.
       const failed = moves.find((move) => move.status === "rejected");
       if (failed) throw failed.reason;
-      return { success: true, message: "UserId updated" };
+
+      return {
+        success: true,
+        message: "UserId updated",
+        userPatch: user.villageId ? undefined : {},
+      };
     }),
   // Delete referral from user
   deleteReferral: protectedProcedure

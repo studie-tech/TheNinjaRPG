@@ -13,8 +13,10 @@ import {
   randomCaptchaValue,
   showTrainingCapcha,
 } from "@/libs/captcha";
+import { getGameSettingBoost } from "@/libs/gameSettingBoost";
 import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
+import { calcActiveUserRegen } from "@/libs/profile";
 import { hasEnergyQueue } from "@/libs/queue";
 import {
   deleteEmailReminderForDeleteEmailReminder,
@@ -46,7 +48,8 @@ import {
   updateUserDataForAwardReputation,
   updateUserDataForSubmitNotification,
 } from "@/queries/misc";
-import { fetchUser } from "@/queries/profile";
+import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
+import { findMembershipUserCache } from "@/queries/socialUserCache";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -131,7 +134,7 @@ export const miscRouter = createTRPCRouter({
     }),
   submitNotification: protectedProcedure
     .input(z.object({ content: z.string().min(2).max(10000), senderId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query data
       const [user, sender] = await Promise.all([
@@ -222,20 +225,80 @@ export const miscRouter = createTRPCRouter({
     }),
   setEventGameSetting: protectedProcedure
     .input(changeSettingSchema)
-    .output(baseServerResponse)
+    .output(
+      userDeltaResponseSchema.extend({
+        boostNavigation: z
+          .object({
+            href: z.string(),
+            label: z.string(),
+            notice: z
+              .object({
+                href: z.string(),
+                name: z.string(),
+                color: z.literal("green"),
+                group: z.literal("Active boosts"),
+              })
+              .nullable(),
+          })
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, settings] = await Promise.all([
+        findMembershipUserCache(ctx.drizzle, ctx.userId),
+        fetchAllGameSettings(ctx.drizzle),
+      ]);
+      if (!user) return errorResponse("User not found");
       // Guards
       if (!canModifyEventGains(user.role)) return errorResponse("Not allowed");
       // Update
-      await updateGameSetting(
-        ctx.drizzle,
-        input.setting,
-        parseInt(input.multiplier, 10),
-        secondsFromNow(input.days * 24 * 3600),
-      );
-      return { success: true, message: `Setting set to: ${input.multiplier}X` };
+      const setting = {
+        name: input.setting,
+        value: parseInt(input.multiplier, 10),
+        time: secondsFromNow(input.days * 24 * 3600),
+      };
+      await updateGameSetting(ctx.drizzle, setting.name, setting.value, setting.time);
+      const changedSettings = [
+        ...settings.filter((entry) => entry.name !== setting.name),
+        { ...setting, id: "" },
+      ];
+      const boost = getGameSettingBoost(setting.name, changedSettings);
+      const [href, label] = {
+        trainingGainMultiplier: ["/traininggrounds", "gains"],
+        regenGainMultiplier: ["/profile", "regen"],
+        battleExpMultiplier: ["/battlearena", "battle exp"],
+        missionExpMultiplier: ["/missionhall", "mission exp"],
+        jutsuExpMultiplier: ["/jutsus", "jutsu exp"],
+        itemExpMultiplier: ["/items", "item exp"],
+      }[input.setting] as [string, string];
+      return {
+        success: true,
+        message: `Setting set to: ${input.multiplier}X`,
+        userPatch:
+          input.setting === "regenGainMultiplier"
+            ? {
+                regeneration: calcActiveUserRegen(user, changedSettings),
+                regenerationWithoutTimedBuffs: calcActiveUserRegen(
+                  user,
+                  changedSettings,
+                  false,
+                ),
+              }
+            : {},
+        boostNavigation: {
+          href,
+          label,
+          notice: boost
+            ? {
+                href,
+                name: `Global: ${boost.value}X ${label} | ${boost.daysLeft} days`,
+                color: "green" as const,
+                group: "Active boosts" as const,
+              }
+            : null,
+        },
+      };
     }),
   getDmgConfig: publicProcedure
     .meta({

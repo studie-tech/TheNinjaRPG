@@ -23,6 +23,7 @@ import type { AppRouter } from "@/server/api/root";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
+import { useRequiredUserData } from "@/utils/UserContext";
 
 type ShrineBattleData =
   inferRouterOutputs<AppRouter>["shrine"]["getShrineBattles"][number];
@@ -43,6 +44,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
   isProtected = false,
 }) => {
   const utils = api.useUtils();
+  const { updateUser, prepareUserUpdate } = useRequiredUserData();
   const router = useRouter();
 
   // Query for shrine battles
@@ -54,52 +56,63 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
   // Mutations
   const { mutate: challengeShrine, isPending: isChallenging } =
     api.shrine.challengeShrine.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success || data.userPatch)
+          await updateUser(data.userPatch, {
+            revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([
-            utils.shrine.getShrineBattles.invalidate(),
-            utils.profile.getUser.invalidate(),
-          ]);
+          await utils.shrine.getShrineBattles.invalidate();
         }
       },
     });
 
   const { mutate: joinBattle, isPending: isJoining } =
     api.shrine.joinShrineBattle.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success || data.userPatch)
+          await updateUser(data.userPatch, {
+            revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([
-            utils.shrine.getShrineBattles.invalidate(),
-            utils.profile.getUser.invalidate(),
-          ]);
+          await utils.shrine.getShrineBattles.invalidate();
         }
       },
     });
 
   const { mutate: leaveBattle, isPending: isLeaving } =
     api.shrine.leaveShrineBattle.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([
-            utils.shrine.getShrineBattles.invalidate(),
-            utils.profile.getUser.invalidate(),
-          ]);
+          await utils.shrine.getShrineBattles.invalidate();
         }
       },
     });
 
   const { mutate: initiateBattle, isPending: isInitiating } =
     api.shrine.initiateShrineBattle.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success || data.userPatch)
+          await updateUser(data.userPatch, {
+            revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([
-            utils.shrine.getShrineBattles.invalidate(),
-            utils.profile.getUser.invalidate(),
-          ]);
+          await utils.shrine.getShrineBattles.invalidate();
           if (data.battleId) pushToCombat(router, data.battleId);
         }
       },

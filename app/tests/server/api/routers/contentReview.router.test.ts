@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   actionLog,
   badge,
+  bloodline,
   contentProposal,
   contentProposalBasis,
   contentProposalChange,
@@ -25,6 +26,7 @@ import { ingestAgentSubmission, reviseAgentProposal } from "@/libs/contentReview
 import * as socials from "@/libs/socials";
 import { badgeRouter } from "@/server/api/routers/badge";
 import { contentReviewRouter } from "@/server/api/routers/contentReview";
+import { profileRouter } from "@/server/api/routers/profile";
 import type { AgentSubmission } from "@/validators/contentReview";
 import { insertItems, insertQuests, insertUsers } from "../../../setup/factories";
 import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
@@ -74,6 +76,7 @@ describeWithDatabase("content review", () => {
       contentProposalMedia,
       actionLog,
       badge,
+      bloodline,
       gameAsset,
       item,
       quest,
@@ -96,6 +99,23 @@ describeWithDatabase("content review", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it.each(["approve", "bulkApprove"] as const)("changes the reviewer's equipped lineage and derived regeneration through %s and revert", async (action) => {
+    const database = await getTestDatabase();
+    const ref = { entityType: "BLOODLINE" as const, entityId: "review-lineage" };
+    await database.insert(bloodline).values({ id: ref.entityId, name: "Review Lineage", rank: "A", image: "/bloodline.png", description: "A lineage.", regenIncrease: 10, effects: [] });
+    await database.update(userData).set({ bloodlineId: ref.entityId, regeneration: 10, status: "AWAKE", rank: "JONIN", level: 50, isOutlaw: true, primaryElement: "Fire", secondaryElement: "Water" }).where(eq(userData.userId, EDITOR));
+    const entity = (await loadEntities(database, [ref])).get(entityKey(ref.entityType, ref.entityId));
+    expect((await (await callerFor(contentReviewRouter, AUTHOR)).create({ ...ref, category: "BALANCE", title: "Adjust lineage regeneration", rationale: "Adjust the passive regeneration bonus.", data: { ...entity?.payload, regenIncrease: 40 } })).success).toBe(true);
+    const id = (await proposalRows())[0]!.id;
+    const reviewer = await callerFor(contentReviewRouter, EDITOR);
+    const profile = await callerFor(profileRouter, EDITOR);
+    expect((await profile.getUser()).userData).toMatchObject({ bloodline: { regenIncrease: 10 }, regeneration: 20 });
+    expect((await (action === "approve" ? reviewer.approve({ id }) : reviewer.bulkApprove({ ids: [id] }))).success).toBe(true);
+    expect((await profile.getUser()).userData).toMatchObject({ bloodline: { regenIncrease: 40 }, regeneration: 50 });
+    expect((await reviewer.revert({ id })).success).toBe(true);
+    expect((await profile.getUser()).userData).toMatchObject({ bloodline: { regenIncrease: 10 }, regeneration: 20 });
   });
 
   const revisionProposal = async (description = "Awarded for bravery in battle.") => ({

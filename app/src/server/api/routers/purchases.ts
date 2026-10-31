@@ -7,8 +7,17 @@ import {
 import { env } from "@/env/server.mjs";
 import { selectStorePurchaseForRecent } from "@/queries/purchases";
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";
 
 export const purchasesRouter = createTRPCRouter({
+  /** Webhooks grant value outside a request; receipts never stand in for current balances. */
+  userSnapshot: protectedProcedure.query(async ({ ctx }) => {
+    const update = await getPurchaseUserUpdate(ctx.drizzle, ctx.userId);
+    return {
+      userId: ctx.userId,
+      userPatch: update.userPatch ?? null,
+    };
+  }),
   /**
    * What the app is allowed to sell, and what each product is worth here. Prices come
    * from the store SDK on the device — they are localised and can change without a

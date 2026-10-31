@@ -62,7 +62,12 @@ export function CharacterDeletionSettings({
 
 /** Shared self-service and staff controls with pending guards and inline recovery. */
 function DeletionControls({ userData, label, className }: DeleteUserButtonProps) {
-  const { data: viewer, timeDiff } = useRequiredUserData();
+  const {
+    data: viewer,
+    timeDiff,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const utils = api.useUtils();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -90,23 +95,33 @@ function DeletionControls({ userData, label, className }: DeleteUserButtonProps)
           return;
         }
         closeDialog();
-        // Clerk remains signed in after character deletion. Clear the cached profile
-        // so native checkout, push, widgets, and activities stop using this character.
-        utils.profile.getUser.setData(undefined, (current) =>
-          current ? { ...current, userData: undefined } : current,
-        );
-        await Promise.all([
-          utils.profile.getUser.invalidate(),
-          utils.profile.getPublicUser.invalidate(),
-        ]);
-        router.push("/");
+        if (
+          data.affectedUserId &&
+          data.affectedUserId === utils.profile.getUser.getData()?.userData?.userId
+        ) {
+          // Removing the character immediately closes native checkout and clears device state.
+          await utils.profile.getUser.cancel();
+          utils.profile.getUser.setData(undefined, (current) =>
+            current?.userData && current.userData.userId === data.affectedUserId
+              ? {
+                  ...current,
+                  userData: undefined,
+                  achievementProgress: [],
+                  notifications: [],
+                }
+              : current,
+          );
+          router.push("/");
+        }
+        await utils.profile.getPublicUser.invalidate();
       },
     });
 
   const { mutate: toggleDeletionTimer, isPending: isTogglingDelete } =
     api.profile.toggleDeletionTimer.useMutation({
+      onMutate: prepareUserUpdate,
       onError: (error) => setError(error.message),
-      onSuccess: async (data) => {
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (!data.success) {
           setError(data.message);
@@ -115,7 +130,7 @@ function DeletionControls({ userData, label, className }: DeleteUserButtonProps)
         closeDialog();
         sendGTMEvent({ event: "toggle_deletion", character: userData.userId });
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, { revision, delta: data.userDelta }),
           utils.profile.getPublicUser.invalidate(),
         ]);
       },

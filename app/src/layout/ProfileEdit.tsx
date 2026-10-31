@@ -129,7 +129,6 @@ import {
 } from "@/libs/mobileNavConfig";
 import { useInfinitePagination } from "@/libs/pagination";
 import {
-  canAssignExperience,
   getAssignedCombatStatTotal,
   getRedistributableStatTotal,
 } from "@/libs/profile";
@@ -1272,7 +1271,7 @@ interface HistoricalAiAvatarProps {
 export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => {
   // Queries & mutations
   const [lastElement, setLastElement] = useState<HTMLButtonElement | null>(null);
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { size = "square" } = props;
   const disabledRef = useRef(Boolean(props.disabled));
   const operationGenerationRef = useRef(props.operationGeneration ?? 0);
@@ -1313,7 +1312,8 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
 
   // Update avatar mutation
   const updateAvatar = api.avatar.updateAvatar.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
       if (
         data.success &&
@@ -1325,11 +1325,15 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
           data.userPatch?.avatar !== undefined &&
           data.userPatch.avatarLight !== undefined
         )
-          await updateUser({
-            avatar: data.userPatch.avatar,
-            avatarLight: data.userPatch.avatarLight,
-          });
-        else await utils.profile.getUser.invalidate();
+          await updateUser(
+            {
+              avatar: data.userPatch.avatar,
+              avatarLight: data.userPatch.avatarLight,
+            },
+            { revision },
+          );
+        else if (props.contentType === "user")
+          await updateUser(undefined, { revision });
         if (
           props.onUpdate &&
           !disabledRef.current &&
@@ -1446,9 +1450,9 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
 const SwapVillage: React.FC = () => {
   // State
   const { data: userData } = useRequiredUserData();
+  const utils = api.useUtils();
   const [village, setVillage] = useState<Village | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const utils = api.useUtils();
 
   // Fetch data
   const { data, isFetching } = api.village.getAll.useQuery(undefined, {
@@ -1466,9 +1470,7 @@ const SwapVillage: React.FC = () => {
   const { mutate: swap, isPending: isSwapping } = api.village.swapVillage.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
-      if (data.success) {
-        await utils.profile.getUser.invalidate();
-      }
+      if (data.success) await utils.profile.getUser.invalidate();
     },
     onSettled: () => {
       document.body.style.cursor = "default";
@@ -1541,7 +1543,7 @@ const SwapVillage: React.FC = () => {
  */
 const SwapBloodline: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [bloodline, setBloodline] = useState<Bloodline | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const utils = api.useUtils();
@@ -1556,10 +1558,14 @@ const SwapBloodline: React.FC = () => {
   // Mutations
   const { mutate: swap, isPending: isSwapping } =
     api.bloodline.swapBloodline.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, {
+            revision,
+            achievementProgress: data.achievementProgress,
+          }),
           utils.bloodline.getSwapInfo.invalidate(),
         ]);
       },
@@ -1705,23 +1711,13 @@ const ResetStats: React.FC = () => {
   const { mutateAsync: updateStats, isPending } =
     api.blackmarket.updateStats.useMutation({
       onMutate: prepareUserUpdate,
-      onSuccess: async (data, input, revision) => {
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await updateUser(
-            (current) => {
-              const stats = statSchema.parse(input);
-              const updated = { ...current, ...stats };
-              // Capacity changes can add or remove the derived Assign XP notification.
-              if (
-                current.earnedExperience > 0 &&
-                canAssignExperience(current) !== canAssignExperience(updated)
-              )
-                return undefined;
-              return stats;
-            },
-            { revision, delta: data.userDelta },
-          ).catch(() => undefined);
+          await updateUser(data.userPatch, {
+            revision,
+            delta: data.userDelta,
+          }).catch(() => undefined);
         }
       },
       onError: (error) => {
@@ -1793,8 +1789,8 @@ const ResetStats: React.FC = () => {
  */
 const AvatarChange: React.FC = () => {
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const uploadRevision = useRef<number | undefined>(undefined);
 
   // Only show if we have userData
   if (!userData) return <Loader explanation="Loading profile page..." />;
@@ -1821,6 +1817,9 @@ const AvatarChange: React.FC = () => {
                 ? "avatarSilverUploader"
                 : "avatarGoldUploader"
           }
+          onUploadBegin={() => {
+            uploadRevision.current = prepareUserUpdate();
+          }}
           onClientUploadComplete={(res) => {
             const serverData = res?.[0]?.serverData;
             if (serverData?.error) {
@@ -1829,8 +1828,10 @@ const AvatarChange: React.FC = () => {
             }
             if (serverData?.fileUrl) {
               if ("userPatch" in serverData && serverData.userPatch)
-                void updateUser(serverData.userPatch);
-              else void utils.profile.getUser.invalidate();
+                void updateUser(serverData.userPatch, {
+                  revision: uploadRevision.current,
+                });
+              else void updateUser(undefined, { revision: uploadRevision.current });
             }
           }}
           onUploadError={(error: Error) => {
@@ -2747,11 +2748,12 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
   // Mutations
   const { mutate: unequipAllGear, isPending: isUnequipping } =
     api.staff.unequipAllGear.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, { revision }),
             utils.item.getUserItems.invalidate(),
           ]);
         }
@@ -2760,11 +2762,12 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
 
   const { mutate: unequipAllJutsus, isPending: isUnequippingJutsus } =
     api.staff.unequipAllJutsus.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, { revision }),
             utils.jutsu.getUserJutsus.invalidate(),
           ]);
         }
@@ -2797,11 +2800,15 @@ const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
 
   const { mutate: resetAllUsersSkillPoints, isPending: isResettingSkillTrees } =
     api.skillTree.resetAllUsersSkillPoints.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, {
+              revision,
+              achievementProgress: data.achievementProgress,
+            }),
             utils.skillTree.getUserSkills.invalidate(),
           ]);
         }
@@ -3030,18 +3037,7 @@ const ResetSkills: React.FC = () => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            updateUser(
-              () => {
-                if (
-                  !data.userPatch?.monthlySkillResets ||
-                  data.userPatch.maxEnergy === undefined ||
-                  !data.userPatch.effectiveMasteries
-                )
-                  return undefined;
-                return { userSkills: [], ...data.userPatch };
-              },
-              { revision, delta: data.userDelta },
-            ),
+            updateUser(data.userPatch, { revision, delta: data.userDelta }),
             utils.skillTree.getUserSkills.invalidate(),
             utils.skillTree.getResetInfo.invalidate(),
           ]);

@@ -57,17 +57,6 @@ export default function Hospital() {
           },
           { revision },
         );
-        // A newer hospitalization must retain its notification after reconciliation.
-        utils.profile.getUser.setData(undefined, (current) =>
-          current?.userData?.status === "AWAKE"
-            ? {
-                ...current,
-                notifications: current.notifications?.filter(
-                  (n) => n.href !== "/hospital",
-                ),
-              }
-            : undefined,
-        );
       }
     },
   });

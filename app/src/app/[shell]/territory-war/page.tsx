@@ -24,42 +24,46 @@ import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Live standings/lobbies, with server-clock deadline refresh and recoverable action feedback. */
 export default function TerritoryWarPage() {
-  const { data: user, timeDiff, updateUser } = useRequiredUserData();
+  const { data: user, timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
   const router = useRouter();
   const utils = api.useUtils();
   const ownTeamRef = useRef<HTMLDivElement>(null);
   const current = api.territoryWar.getCurrent.useQuery(undefined, {
     refetchInterval: 10000,
   });
-  const onSuccess = async (result: { success: boolean; message?: string }) => {
+  const onSuccess = async (
+    result: UserDeltaResponse,
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
+    // Admission can settle timed work before returning an expected rejection.
+    await updateUser(result.userPatch, { revision });
     showMutationToast({ ...result, message: result.message ?? "Updated team" });
-    await Promise.all([
-      utils.territoryWar.invalidate(),
-      utils.profile.getUser.invalidate(),
-    ]);
+    await utils.territoryWar.invalidate();
   };
   const create = api.territoryWar.createTeam.useMutation({
     onSuccess,
+    onMutate: prepareUserUpdate,
   });
   const join = api.territoryWar.joinTeam.useMutation({
     onSuccess,
+    onMutate: prepareUserUpdate,
   });
   const leave = api.territoryWar.leaveTeam.useMutation({
     onSuccess,
+    onMutate: prepareUserUpdate,
   });
   const start = api.territoryWar.startBattle.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, variables, revision) => {
       if (result.success && result.battleId) {
-        await updateUser({
-          status: "BATTLE",
-          battleId: result.battleId,
-          updatedAt: new Date(),
-        });
+        await updateUser(result.userPatch, { revision, delta: result.userDelta });
         pushToCombat(router, result.battleId);
-      } else await onSuccess(result);
+      } else await onSuccess(result, variables, revision);
     },
   });
   useRefreshAt(

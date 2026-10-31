@@ -27,6 +27,7 @@ import { initiateBattle } from "@/server/api/routers/combat";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Read the global competition and manage same-competitor guardian lobbies. */
 export const territoryWarRouter = createTRPCRouter({
@@ -72,6 +73,7 @@ export const territoryWarRouter = createTRPCRouter({
   /** Create a lobby; failed creator admission removes only an unused, unreserved lobby. */
   createTeam: protectedProcedure
     .input(z.object({ eventId: z.string() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [event, user] = await Promise.all([
         findTerritoryWarById(ctx.drizzle, input.eventId),
@@ -96,6 +98,7 @@ export const territoryWarRouter = createTRPCRouter({
   /** Changed eligibility/capacity returns recoverable feedback without reserving a place. */
   joinTeam: protectedProcedure
     .input(z.object({ teamId: z.string() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (user.isBanned || user.status !== "AWAKE")
@@ -106,19 +109,25 @@ export const territoryWarRouter = createTRPCRouter({
   /** Membership may be removed only before the launch reservation is claimed. */
   leaveTeam: protectedProcedure
     .input(z.object({ teamId: z.string() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const removed = await retryOnDeadlock(() =>
         executeRemovedForLeaveTeam(ctx.drizzle, ctx, input),
       );
       if (!removed.rowsAffected)
         return errorResponse("This team has already started or you have left it");
-      await wakeQueuedUser(ctx.drizzle, ctx.userId);
-      return { success: true, message: "Left the team" };
+      const woke = await wakeQueuedUser(ctx.drizzle, ctx.userId);
+      return {
+        success: true,
+        message: "Left the team",
+        userPatch: woke.rowsAffected ? { status: "AWAKE" } : undefined,
+      };
     }),
 
   /** Reserve once before reloading the roster; combat initiation validates its final members. */
   startBattle: protectedProcedure
     .input(z.object({ teamId: z.string() }))
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const team = await findMpvpBattleQueueForStartBattle(ctx.drizzle, input);
       if (
@@ -148,6 +157,7 @@ export const territoryWarRouter = createTRPCRouter({
         const result = await initiateBattle(
           {
             client: ctx.drizzle,
+            cacheUserId: ctx.userId,
             userIds: roster.map((member) => member.userId),
             targetIds: [event.guardianId],
             sector: event.sector,
@@ -169,7 +179,11 @@ export const territoryWarRouter = createTRPCRouter({
             }),
           ),
         );
-        return result;
+        return {
+          ...result,
+          userPatch: result.userPatch,
+          userDelta: result.userDelta,
+        };
       } finally {
         // Failed launches restore the lobby; a real battle keeps its membership until settlement.
         await retryOnDeadlock(() =>
@@ -207,7 +221,11 @@ const joinTeam = async (
     );
     joined = claimed.rowsAffected > 0;
     return joined
-      ? { success: true, message: "Joined the team. Start solo or wait for teammates" }
+      ? {
+          success: true,
+          message: "Joined the team. Start solo or wait for teammates",
+          userPatch: { status: "QUEUED" as const },
+        }
       : errorResponse("Your status or this team changed. Try again");
   } finally {
     if (!joined) await deleteBattleQueueMemberById(client, memberId);

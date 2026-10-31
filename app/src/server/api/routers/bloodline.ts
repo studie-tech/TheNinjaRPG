@@ -26,6 +26,7 @@ import {
   getFreeBloodlineSwaps,
   getPityRolls,
 } from "@/libs/bloodline";
+import { getBloodlinePassivePatch } from "@/libs/bloodlineUserCache";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 import {
   deletedReason,
@@ -33,11 +34,13 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { validateUserUpdateReason } from "@/libs/moderator";
+import { getUserQuests, mockAchievementHistoryEntries } from "@/libs/quest";
 import { callDiscordContent } from "@/libs/socials";
 import {
   deleteBloodlineForDelete,
   deleteBloodlineReskinForDeleteReskin,
   fetchBloodline,
+  fetchBloodlineProgressionUser,
   fetchBloodlineReskin,
   fetchBloodlines,
   fetchItemBloodlineRolls,
@@ -84,8 +87,16 @@ import {
   updateUserJutsuForUpdateBloodline,
 } from "@/queries/bloodline";
 import { refundPityCredit } from "@/queries/concurrency";
-import { fetchUser } from "@/queries/profile";
-import { fetchUpdatedUser } from "@/routers/profile";
+import {
+  fetchAchievementCatalogue,
+  fetchAllGameSettings,
+  fetchUser,
+} from "@/queries/profile";
+import {
+  canBootstrapQuestType,
+  fetchQuestBootstrap,
+  fetchUpdatedUser,
+} from "@/routers/profile";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -130,6 +141,8 @@ import { BloodlineValidator, type ZodAllTags } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
 
 const ALREADY_HAS_BLOODLINE_ERROR = "Already have a bloodline, please remove it first";
+
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const bloodlineRouter = createTRPCRouter({
   getAllNames: publicProcedure
@@ -251,7 +264,7 @@ export const bloodlineRouter = createTRPCRouter({
       mcp: { description: "Swap to a previously owned bloodline" },
     })
     .input(z.object({ bloodlineId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [updatedUser, line, historicBloodlines, lastTransfer, monthlySwaps] =
@@ -326,6 +339,7 @@ export const bloodlineRouter = createTRPCRouter({
         );
       }
 
+      // The live Bloodright refund and hydrated passive sources require profile reconciliation.
       return {
         success: true,
         message: `Bloodline swapped${isFreeSwap ? (isStaffFreeSwap ? " (Free for staff member)" : ` (Free for ${federalStatus} supporter)`) : ""}`,
@@ -691,15 +705,18 @@ export const bloodlineRouter = createTRPCRouter({
   // Natural bloodline roll: CAS on userData.updatedAt before RNG; unique index allows one NATURAL row per user.
   roll: protectedProcedure
     .meta({ mcp: { description: "Roll for a natural bloodline" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
-      const [user, prevRoll, allBloodlines, registrationRoll] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
-        fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
-        findBloodlineRollsForRoll(ctx.drizzle, ctx),
-      ]);
+      const [user, prevRoll, allBloodlines, registrationRoll, settings, progression] =
+        await Promise.all([
+          fetchBloodlineProgressionUser(ctx.drizzle, ctx.userId),
+          fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
+          fetchBloodlines(ctx.drizzle), // Fetch all bloodlines
+          findBloodlineRollsForRoll(ctx.drizzle, ctx),
+          fetchAllGameSettings(ctx.drizzle),
+          fetchBloodlineProgression(ctx.drizzle, ctx.userId),
+        ]);
       // Guard
       if (!user) return errorResponse("User not found");
       if (prevRoll) return errorResponse("You have already rolled a bloodline");
@@ -785,6 +802,12 @@ export const bloodlineRouter = createTRPCRouter({
             }
             return {
               success: true,
+              userPatch: bloodlineCachePatch(
+                user,
+                randomBloodline,
+                settings,
+                progression,
+              ),
               message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
             };
           }
@@ -810,14 +833,18 @@ export const bloodlineRouter = createTRPCRouter({
   pityRoll: protectedProcedure
     .meta({ mcp: { description: "Use pity roll for a bloodline" } })
     .input(z.object({ rank: z.enum(LetterRanks).optional().nullish() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, bloodlines, previousRolls] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchBloodlines(ctx.drizzle),
-        fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
-      ]);
+      const [user, bloodlines, previousRolls, settings, progression] =
+        await Promise.all([
+          fetchBloodlineProgressionUser(ctx.drizzle, ctx.userId),
+          fetchBloodlines(ctx.drizzle),
+          fetchItemBloodlineRolls(ctx.drizzle, ctx.userId),
+          fetchAllGameSettings(ctx.drizzle),
+          fetchBloodlineProgression(ctx.drizzle, ctx.userId),
+        ]);
+      if (!user) return errorResponse("User not found");
       if (user.bloodlineId) {
         return errorResponse(ALREADY_HAS_BLOODLINE_ERROR);
       }
@@ -859,14 +886,16 @@ export const bloodlineRouter = createTRPCRouter({
       // during the CAS — is NOT that marker, so the bloodline may already be granted, the credit
       // was legitimately spent, and it must not be handed back (avoids a grant + refund double
       // benefit even if a future edit throws a plain TRPCError from those side-effect writes).
+      let grantedAt: Date | undefined;
       try {
-        await updateBloodline(
+        const granted = await updateBloodline(
           ctx.drizzle,
           user,
           randomBloodline,
           0,
           `Pity roll for ${input.rank}: ${randomBloodline.name}`,
         );
+        grantedAt = granted.updatedAt;
       } catch (error) {
         if (error instanceof BloodlineGrantRejectedError) {
           // Swallow refund failures: the grant rejection is the meaningful error for the caller,
@@ -887,19 +916,27 @@ export const bloodlineRouter = createTRPCRouter({
       await insertBloodlineRollsForPityRoll(ctx.drizzle, ctx, randomBloodline, input);
       return {
         success: true,
+        userPatch: bloodlineCachePatch(
+          user,
+          randomBloodline,
+          settings,
+          progression,
+          grantedAt,
+        ),
         message: `You have been granted a bloodline: ${randomBloodline.name}`,
       };
     }),
   // Remove a bloodline from session user
   removeBloodline: protectedProcedure
     .meta({ mcp: { description: "Remove current bloodline" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const [user, roll] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
         fetchNaturalBloodlineRoll(ctx.drizzle, ctx.userId),
       ]);
+      if (!user) return errorResponse("User not found");
       // Guard
       if (user.status === "BATTLE")
         return errorResponse("You cannot change bloodline during battle");
@@ -937,13 +974,16 @@ export const bloodlineRouter = createTRPCRouter({
       mcp: { description: "Purchase a bloodline with reputation" },
     })
     .input(z.object({ bloodlineId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, line] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [user, line, settings, progression] = await Promise.all([
+        fetchBloodlineProgressionUser(ctx.drizzle, ctx.userId),
         fetchBloodline(ctx.drizzle, input.bloodlineId),
+        fetchAllGameSettings(ctx.drizzle),
+        fetchBloodlineProgression(ctx.drizzle, ctx.userId),
       ]);
+      if (!user) return errorResponse("User not found");
       // Guard
       if (!line) return errorResponse("Bloodline does not exist");
       if (user.bloodlineId) {
@@ -956,7 +996,7 @@ export const bloodlineRouter = createTRPCRouter({
         return errorResponse("Bloodline does not belong to your village");
       }
       // Update
-      await updateBloodline(
+      const granted = await updateBloodline(
         ctx.drizzle,
         user,
         line,
@@ -964,7 +1004,19 @@ export const bloodlineRouter = createTRPCRouter({
         `Bloodline Purchased: ${line.name}`,
       );
       await insertBloodlineRollsForPurchaseBloodline(ctx.drizzle, ctx, line);
-      return { success: true, message: "Bloodline purchased" };
+      const patch = bloodlineCachePatch(
+        user,
+        line,
+        settings,
+        progression,
+        granted.updatedAt,
+      );
+      return {
+        success: true,
+        message: "Bloodline purchased",
+        userPatch: patch,
+        userDelta: patch ? { reputationPoints: -BLOODLINE_COST[line.rank] } : undefined,
+      };
     }),
 });
 
@@ -1012,11 +1064,13 @@ export const updateBloodline = async (
   // Update user first, with a CAS on both reputation (atomic decrement, floor guard) and the
   // caller's pre-state bloodlineId (prevents a raced/duplicate grant from re-spending reputation
   // or clobbering a bloodline someone else already changed).
+  const updatedAt = new Date();
   const updateResult = await updateUserDataForUpdateBloodline(
     client,
     bloodline,
     repCost,
     user,
+    updatedAt,
   );
   if (!updateResult.rowsAffected) {
     throw new BloodlineGrantRejectedError("Unable to update bloodline");
@@ -1030,6 +1084,7 @@ export const updateBloodline = async (
     // Create a log entry for this action
     insertActionLogForUpdateBloodline(client, user, logMsg),
   ]);
+  return { updatedAt };
 };
 
 /**
@@ -1090,4 +1145,69 @@ export const bloodlineDatabaseFilter = (input?: BloodlineFilteringSchema) => {
       ? [eq(bloodline.hidden, input.hidden)]
       : [eq(bloodline.hidden, false)]),
   ];
+};
+
+/** Independent quest eligibility reads share the lineage mutation's opening query wave. */
+const fetchBloodlineProgression = async (client: DrizzleClient, userId: string) => {
+  const [achievements, questBootstrap] = await Promise.all([
+    fetchAchievementCatalogue(client),
+    fetchQuestBootstrap(client, userId),
+  ]);
+  return { achievements, questBootstrap };
+};
+
+/** Project new acquisitions; live refunds and progression reconcile through the profile. */
+const bloodlineCachePatch = (
+  user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineProgressionUser>>>,
+  line: Bloodline | null,
+  settings: Parameters<typeof getBloodlinePassivePatch>[2],
+  progression: {
+    questBootstrap: Awaited<ReturnType<typeof fetchQuestBootstrap>>;
+    achievements?: Awaited<ReturnType<typeof fetchAchievementCatalogue>>;
+  },
+  updatedAt?: Date,
+) => {
+  // Existing lineage can have concurrent Bloodright purchases refunded at live prices.
+  if (user.bloodlineId) return undefined;
+  const questUser = {
+    ...user,
+    userQuests: [...user.userQuests],
+  };
+  questUser.userQuests.push(
+    ...mockAchievementHistoryEntries(progression.achievements ?? [], questUser),
+  );
+  const activeQuestIds = new Set(getUserQuests(questUser).map((quest) => quest.id));
+  questUser.bloodlineId = line?.id ?? null;
+  const quests = getUserQuests(questUser);
+  const hasQuestEligibilityChange =
+    activeQuestIds.size !== quests.length ||
+    quests.some((quest) => !activeQuestIds.has(quest.id));
+  // Only acquisition changes the roll history that drives collection objectives.
+  const needsCollectionProgression =
+    line !== null &&
+    progression.achievements !== undefined &&
+    quests.some((quest) =>
+      quest.content.objectives.some(
+        (objective) =>
+          objective.task === "bloodline_collection" &&
+          objective.bloodlineRanks.includes(line.rank) &&
+          !user.questData
+            ?.find((tracker) => tracker.id === quest.id)
+            ?.goals.find((goal) => goal.id === objective.id)?.done,
+      ),
+    );
+  const needsQuestBootstrap = (["tier", "exam"] as const).some(
+    (type) =>
+      !quests.some((quest) => quest.questType === type) &&
+      canBootstrapQuestType(progression.questBootstrap, type, user.level),
+  );
+  // The canonical read owns collection receipts, quest admission and tracker retirement.
+  if (hasQuestEligibilityChange || needsCollectionProgression || needsQuestBootstrap)
+    return undefined;
+  return {
+    ...getBloodlinePassivePatch(user, line, settings),
+    bloodright: [],
+    bloodrightSpent: 0,
+    ...(updatedAt ? { updatedAt, bloodlineReskinId: null, activeReskin: null } : {}),
+  };
 };

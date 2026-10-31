@@ -1554,8 +1554,9 @@ export const combatRouter = createTRPCRouter({
       // PvP handovers belong to this encounter; only PvE toggles update the
       // non-PvP default, after the battle change succeeds.
       const rememberPreference = async (battleType: BattleType) => {
-        if (ManualStartBattleTypes.includes(battleType)) return;
+        if (ManualStartBattleTypes.includes(battleType)) return {};
         await updateUserDataForRememberPreference(ctx.drizzle, input, ctx);
+        return { defaultAutoCombat: input.enabled };
       };
 
       // Retry loop
@@ -1589,9 +1590,10 @@ export const combatRouter = createTRPCRouter({
         // with a version here — the battle already reads the way the player
         // asked for, so their choice is safe to remember.
         if (!!user.isAutoCombat === input.enabled) {
-          await rememberPreference(userBattle.battleType);
+          const userPatch = await rememberPreference(userBattle.battleType);
           return {
             success: true,
+            userPatch,
             message: "",
             battle: maskBattle(userBattle, ctx.userId),
           };
@@ -1617,12 +1619,13 @@ export const combatRouter = createTRPCRouter({
         );
 
         if (result.rowsAffected > 0) {
-          await rememberPreference(userBattle.battleType);
+          const userPatch = await rememberPreference(userBattle.battleType);
           void pusher.trigger(userBattle.id, "event", {
             version: userBattle.version + 1,
           });
           return {
             success: true,
+            userPatch,
             message: input.enabled
               ? "Your AI profile has taken over the battle"
               : "You have taken back control of the battle",
@@ -1844,6 +1847,8 @@ export const initiateBattle = async (
     /** NPC template IDs on the initiating team; repeated IDs request separate copies. */
     allyAiIds?: string[];
     client: DrizzleClient;
+    /** Session actor whose bounded admission update may be returned to the caller. */
+    cacheUserId?: string;
     /** Shared launch contract; each activity keeps its own progress and settlement policy. */
     coop?: CoopEncounter;
     /** Current rules, guarded session/allowance versions and rewards preloaded for settlement. */
@@ -1895,7 +1900,14 @@ export const initiateBattle = async (
   },
   battleType: BattleType,
   scaleGains = 1,
-) => {
+): Promise<
+  import("@/validators/base").BaseServerResponse & {
+    battleId?: string;
+    requiresUserRefresh?: boolean;
+    userPatch?: import("@/validators/userCache").UserCachePatch;
+    userDelta?: import("@/validators/userCache").UserDelta;
+  }
+> => {
   const { longitude, latitude, sector, userIds, targetIds, client } = info;
   const dungeonEncounter = info.coop?.kind === "dungeon" ? info.coop : undefined;
   const questEncounter = info.coop?.kind === "quest" ? info.coop : undefined;
@@ -2020,6 +2032,9 @@ export const initiateBattle = async (
   const queueOwners = fetchedUsers.filter(
     (user) => !user.isAi && hasDueTimedJob(user.queue),
   );
+  // Settlement can change resources and receipts outside the combat cache projection,
+  // including partial writes before an optional settlement failure.
+  let requiresUserRefresh = queueOwners.length > 0;
   if (queueOwners.length > 0) {
     try {
       await settleDueTimedQueues(client, queueOwners);
@@ -2039,6 +2054,7 @@ export const initiateBattle = async (
       !user.isAi && user.cookingJobs.some((job) => job.finishesAt <= new Date()),
   );
   if (cookingOwners.length) {
+    requiresUserRefresh = true;
     try {
       await Promise.all(
         cookingOwners.map((user) =>
@@ -2120,6 +2136,7 @@ export const initiateBattle = async (
         return errorResponse(
           `${owner.username} does not have the required dungeon entry items.`,
         );
+      requiresUserRefresh ||= charges.length > 0;
       owner.items = owner.items
         .map((row) => ({
           ...row,
@@ -2140,6 +2157,8 @@ export const initiateBattle = async (
       message: "You do not have the required entry items in your inventory.",
     };
   const hasEntryCharges = entryCharges.length > 0;
+  // Entry receipts and consumed equipment extend beyond the bounded combat cache patch.
+  requiresUserRefresh ||= hasEntryCharges;
   // Consumed equipment/consumables must not contribute stats or remain usable in battle.
   for (const player of fetchedUsers.filter(
     (u) => u.userId === info.questAttempt?.userId,
@@ -2153,6 +2172,10 @@ export const initiateBattle = async (
       }))
       .filter((row) => row.quantity > 0);
   }
+
+  const cacheActor = fetchedUsers.find(
+    (user) => user.userId === info.cacheUserId && !user.isAi && !user.isSummon,
+  );
 
   const profileCacheSnapshots = Object.fromEntries(
     fetchedUsers
@@ -3653,8 +3676,42 @@ export const initiateBattle = async (
     if (!dungeonEncounter) throw error;
     Sentry.captureException(error, { tags: { source: "dungeonBattlePublication" } });
   }
-  // Return the battle
-  return { success: true, message: "You have attacked", battleId };
+
+  // Ordinary admission leaves profile pools, trackers and passive sources unchanged.
+  // Training/pet-bank settlement and live immunity timers require canonical recovery.
+  const canProject =
+    !!cacheActor &&
+    !requiresUserRefresh &&
+    allParticipantIds.includes(cacheActor.userId) &&
+    !queuedParticipants.some((entry) => entry.user.userId === cacheActor.userId) &&
+    !["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType) &&
+    !warAggressorIds.includes(cacheActor.userId) &&
+    !bracketImmunityAggressorIds.includes(cacheActor.userId) &&
+    cacheActor.bracketImmunityLiftedUntil <= now;
+  const userPatch: import("@/validators/userCache").UserCachePatch | undefined =
+    canProject
+      ? {
+          status: "BATTLE",
+          battleId,
+          bracketImmunityPausedAt: null,
+          ...(stealthBreakUserIds.includes(cacheActor.userId)
+            ? { stealthActive: false, stealthActivatedAt: null }
+            : {}),
+        }
+      : undefined;
+  const userDelta: import("@/validators/userCache").UserDelta | undefined = userPatch
+    ? info.tournamentGame
+      ? {}
+      : { pveFights: 1 }
+    : undefined;
+  return {
+    success: true,
+    message: "You have attacked",
+    battleId,
+    requiresUserRefresh,
+    userPatch,
+    userDelta,
+  };
 };
 
 const summonCycleCause = Symbol("summonCycle");

@@ -1,7 +1,7 @@
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { actionLog, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage } from "@/drizzle/schema";
+import { actionLog, aiProfile, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userCookingJob, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage } from "@/drizzle/schema";
 import { ObjectiveReward } from "@/validators/rewards";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
@@ -15,7 +15,7 @@ import { makeCompleteBattle, makeUser } from "../../../libs/combat/helpers/battl
 describeWithDatabase("Dungeon parties and settlement", () => {
   beforeEach(async () => {
     stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected HTTP request in dungeon tests" });
-    await resetTables(actionLog, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage);
+    await resetTables(actionLog, aiProfile, battleHistory, battle, dungeon, dungeonRun, dungeonMember, userCookingJob, userData, village, userRewards, item, jutsu, userItem, userJutsu, rewardPackage);
     await insertUsers(["a", "b", "c", "outsider"].map((id) => ({userId: id, username: id, status: "AWAKE", sector: 1, money: 0, experience: 0, earnedExperience: 0, villagePrestige: 0, villageId: "village"})));
     const db = await getTestDatabase();
     await db.insert(village).values({id: "village", name: "Village", sector: 1, kageId: "a"});
@@ -26,7 +26,7 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const a = await callerFor(dungeonRouter, "a");
     const result = await a.create({id: "definition"});
     if (!result.success || !("id" in result)) throw Error("Lobby creation failed");
-    return {a, id: result.id};
+    return {a, id: result.id, result};
   };
 
   /** Capture rewards in a fully cleared run for completion-delivery regressions. */
@@ -104,6 +104,16 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const { a, id } = await lobby();
     await db.update(dungeonRun).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(dungeonRun.id, id));
     expect((await a.getState()).runs[0]).toMatchObject({ id, status: "ENDED", battleId: null });
+  });
+
+  it("reconciles an implicit lobby expiry before confirming a party action", async () => {
+    const db = await getTestDatabase();
+    const { a, id } = await lobby();
+    await db.update(dungeonRun).set({ expiresAt: null, createdAt: new Date(0) }).where(eq(dungeonRun.id, id));
+    expect(await a.act({ id, action: "ready" })).toMatchObject({ success: false, userPatch: undefined });
+    expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) })).toMatchObject({ status: "ENDED" });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "a") })).toMatchObject({ status: "AWAKE" });
+    expect(await db.query.dungeonMember.findFirst({ where: eq(dungeonMember.runId, id) })).toMatchObject({ activeUserId: null });
   });
 
   it("loads lobby membership and invitations through the state query", async () => {
@@ -284,13 +294,31 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     expect(run?.state).toMatchObject({memberIds: ["a"], invitedIds: [], readyIds: []});
   });
   it("requires an invitation, three members and unanimous readiness", async () => {
-    const {a, id} = await lobby(); const b = await callerFor(dungeonRouter, "b");
+    const {a, id, result} = await lobby(); const b = await callerFor(dungeonRouter, "b");
+    expect(result).toMatchObject({ userPatch: { status: "QUEUED" } });
     expect((await b.act({id, action: "accept"})).success).toBe(false);
-    expect((await a.act({id, action: "invite", userId: "b"})).success).toBe(true);
-    expect((await b.act({id, action: "accept"})).success).toBe(true);
+    expect(await a.act({id, action: "invite", userId: "b"})).toMatchObject({ success: true, userPatch: {} });
+    expect(await b.act({id, action: "accept"})).toMatchObject({ success: true, userPatch: { status: "QUEUED" } });
+    const db = await getTestDatabase();
+    expect(await db.query.userData.findFirst({where: eq(userData.userId, "b")})).toMatchObject({ status: "QUEUED" });
     expect((await b.act({id, action: "pause"})).success).toBe(false);
     expect((await a.act({id, action: "start"})).success).toBe(false);
     expect((await a.claim({id})).success).toBe(false);
+  });
+  it("requires canonical recovery when a rejected dungeon launch settles Cooking", async () => {
+    const db = await getTestDatabase();
+    const { a, id } = await lobby();
+    await db.update(userData).set({ rank: "JONIN", level: 50, isOutlaw: true, regeneration: 0, primaryElement: "Fire", secondaryElement: "Water" });
+    await db.insert(aiProfile).values({ id: "Default", userId: "default-ai", rules: [] });
+    await db.insert(userCookingJob).values({ id: "dungeon-cooking", userId: "a", experience: 23, finishesAt: new Date(0) });
+    await db.update(dungeonRun).set({ state: { ...dungeonBattleState().runState, readyIds: ["a", "b", "c"] } }).where(eq(dungeonRun.id, id));
+    await db.insert(dungeonMember).values(["b", "c"].map(userId => ({ runId: id, userId, activeUserId: userId })));
+    const result = await a.act({ id, action: "start" });
+    expect(result).toMatchObject({ success: false, message: "A dungeon enemy is unavailable" });
+    expect("userPatch" in result && result.userPatch).toBeFalsy();
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "a") })).toMatchObject({ cookingExperience: 23, status: "QUEUED", battleId: null });
+    expect(await db.query.userCookingJob.findMany()).toHaveLength(0);
+    expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, id) })).toMatchObject({ status: "LOBBY", battleId: null });
   });
   it("accepts only one of two simultaneous invitations into different parties", async () => {
     const {a, id} = await lobby(); const c = await callerFor(dungeonRouter, "c");
@@ -309,6 +337,26 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     const db = await getTestDatabase(); await db.update(userData).set({sector: 100}).where(eq(userData.userId, "b"));
     const b = await callerFor(dungeonRouter, "b"); expect((await b.act({id, action: "accept"})).success).toBe(true);
     expect((await db.query.dungeonRun.findFirst({where: eq(dungeonRun.id, id)}))?.state.readyIds).toHaveLength(0);
+  });
+
+  it("preserves shared reward balances for canonical reconciliation on claim and replay", async () => {
+    const db = await getTestDatabase();
+    const { a, id } = await completedLobby(dungeonContent());
+    const balances = () => db.query.userData.findFirst({ where: eq(userData.userId, "a"), with: { village: true } });
+    const first = await a.claim({ id });
+    expect(first).toMatchObject({ success: true, userPatch: undefined });
+    expect(await balances()).toMatchObject({
+      money: 100, earnedExperience: 10, villagePrestige: 2,
+      village: { id: "village", tokens: 5 },
+    });
+    await db.update(userData).set({ money: 109 }).where(eq(userData.userId, "a"));
+    const replay = await a.claim({ id });
+    expect(replay).toMatchObject({ success: true, userPatch: undefined });
+    expect(await balances()).toMatchObject({
+      money: 109, earnedExperience: 10, villagePrestige: 2,
+      village: { id: "village", tokens: 5 },
+    });
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "a") }))?.money).toBe(109);
   });
   it("grants the configured rewards once when claims race", async () => {
     const {a, id} = await lobby(); const db = await getTestDatabase();
@@ -369,7 +417,8 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     await completed("owned");
     const skipped = await a.claim({id: "owned"});
     expect(skipped).toMatchObject({success: true, reward: {jutsus: [], grantedDrops: [], rewards: {reward_jutsus: []}}});
-    expect(await a.claim({id: "owned"})).toEqual({...skipped, message: "Rewards already delivered."});
+    if (!("reward" in skipped)) throw new Error("Missing dungeon receipt");
+    expect(await a.claim({id: "owned"})).toMatchObject({success: true, message: "Rewards already delivered.", reward: skipped.reward});
     const techniques = await callerFor(jutsuRouter, "a");
     expect((await techniques.forget({id: "owned"})).success).toBe(true);
     await completed("forgotten");

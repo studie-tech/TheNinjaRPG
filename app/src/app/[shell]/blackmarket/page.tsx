@@ -178,6 +178,7 @@ const PityBloodlineRoll: React.FC<{
 }> = ({ userData }) => {
   // tRPC utils
   const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // Get data from DB
   const { data: prevRolls, isPending: isPendingRolls } =
@@ -187,11 +188,15 @@ const PityBloodlineRoll: React.FC<{
 
   // Pity roll mutation
   const { mutate: pityRoll, isPending } = api.bloodline.pityRoll.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
       if (data.success) {
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          updateUser(data.userPatch, {
+            revision,
+            achievementProgress: data.achievementProgress,
+          }),
           utils.bloodline.getItemRolls.invalidate(),
         ]);
       }

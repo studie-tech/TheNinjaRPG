@@ -40,7 +40,12 @@ interface ObjectiveProps {
 export const Objective: React.FC<ObjectiveProps> = (props) => {
   const utils = api.useUtils();
   const [modalOpen, setModalOpen] = useState(false);
-  const { data: userData, timeDiff } = useRequiredUserData();
+  const {
+    data: userData,
+    timeDiff,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const { objective, tier, tracker, titlePrefix, checkRewards } = props;
   const { image, title } = getObjectiveImage(objective);
 
@@ -63,9 +68,16 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
   // Retry battle mutation
   const { mutate: retryBattle, isPending: isRetrying } =
     api.quests.retryBattle.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        await utils.profile.getUser.invalidate();
+        if (data.success)
+          await updateUser(data.userPatch, {
+            revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+            achievementProgress: data.achievementProgress,
+          });
+        else await utils.profile.getUser.invalidate();
       },
     });
 

@@ -96,9 +96,7 @@ export default function VillageOverview() {
     api.village.leaveVillage.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success) {
-          await utils.profile.getUser.invalidate();
-        }
+        if (data.success) await utils.profile.getUser.invalidate();
       },
     });
 

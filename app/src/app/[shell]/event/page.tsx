@@ -14,6 +14,7 @@ import Post from "@/layout/Post";
 import RichInput from "@/layout/RichInput";
 import SliderField from "@/layout/SliderField";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
@@ -79,7 +80,12 @@ export const EventGainMultiplierPanel: React.FC<{
   initialBreak?: boolean;
 }> = ({ setting, title, subtitle, initialBreak }) => {
   const utils = api.useUtils();
-  const { data: userData, timeDiff } = useRequiredUserData();
+  const {
+    data: userData,
+    timeDiff,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const { data: settingData } = api.misc.getSetting.useQuery(
     { name: setting },
     { enabled: !!userData },
@@ -87,12 +93,32 @@ export const EventGainMultiplierPanel: React.FC<{
 
   const { mutate: setEventGameSetting, isPending } =
     api.misc.setEventGameSetting.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
             utils.misc.getSetting.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, {
+              revision,
+              notifications: (current: NavBarDropdownLink[] | undefined) => {
+                const nav = data.boostNavigation;
+                if (!nav || !current) return current;
+                return [
+                  ...current.filter(
+                    (entry) =>
+                      entry.color !== "toast" &&
+                      !(
+                        entry.href === nav.href &&
+                        entry.group === "Active boosts" &&
+                        entry.name.startsWith("Global: ") &&
+                        entry.name.includes(`X ${nav.label} | `)
+                      ),
+                  ),
+                  ...(nav.notice ? [nav.notice] : []),
+                ];
+              },
+            }),
           ]);
         }
       },
@@ -214,7 +240,7 @@ const TestErrorMonitoring: React.FC = () => {
 const NotificationSystem: React.FC = () => {
   // User state
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // utils
   const utils = api.useUtils();
@@ -237,10 +263,11 @@ const NotificationSystem: React.FC = () => {
   // Mutations
   const { mutate: submitNotification, isPending: l2 } =
     api.misc.submitNotification.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          ...(data.success ? [updateUser(data.userPatch, { revision })] : []),
           utils.misc.getPreviousNotifications.invalidate(),
         ]);
       },

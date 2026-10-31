@@ -31,13 +31,22 @@ import { LOADOUT_SHARE_MAX_LENGTH } from "@/validators/loadout";
 
 /** Connect sharing controls to authenticated tRPC and refresh slots/equipment after import. */
 export const JutsuLoadoutSharing = () => {
-  const { data: user } = useRequiredUserData();
+  const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const loadouts = api.jutsu.getLoadouts.useQuery(undefined, {
     enabled: !!user && fedJutsuLoadouts(user) > 0,
   });
   const preview = api.jutsu.previewJutsuLoadout.useMutation();
-  const replace = api.jutsu.importJutsuLoadout.useMutation();
+  const replace = api.jutsu.importJutsuLoadout.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess: (result, _variables, revision) =>
+      result.success
+        ? updateUser(result.userPatch, {
+            revision,
+            achievementProgress: result.achievementProgress,
+          })
+        : undefined,
+  });
 
   return (
     <JutsuLoadoutSharingDialog
@@ -50,7 +59,6 @@ export const JutsuLoadoutSharing = () => {
         await Promise.all([
           utils.jutsu.getLoadouts.invalidate(),
           utils.jutsu.getUserJutsus.invalidate(),
-          utils.profile.getUser.invalidate(),
         ]);
       }}
     />

@@ -53,8 +53,11 @@ export const ContentReviewDesk: React.FC = () => {
       setBulkIds(new Set());
       await Promise.all([
         utils.contentReview.getQueue.invalidate(),
-        utils.contentReview.getCounts.invalidate(),
         utils.contentReview.getStats.invalidate(),
+      ]);
+      // Queue reads can outdate suggestions; content can change equipped profile fields.
+      await Promise.all([
+        utils.contentReview.getCounts.invalidate(),
         utils.profile.getUser.invalidate(),
       ]);
     },

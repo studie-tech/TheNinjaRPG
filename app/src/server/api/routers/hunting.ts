@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import { huntingHabitat, huntingSession } from "@/drizzle/schema";
 import { huntingAllowance, huntingEligibility } from "@/libs/hunting/contracts";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
@@ -47,6 +48,7 @@ import {
   huntingSessionActionSchema,
   saveHuntingHabitatSchema,
 } from "@/validators/hunting";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 /** Staff-authored definitions and version-guarded, personal hunting sessions. */
 export const huntingRouter = createTRPCRouter({
@@ -216,6 +218,7 @@ export const huntingRouter = createTRPCRouter({
   accept: protectedProcedure
     .use(ratelimitMiddleware)
     .input(acceptHuntingContractSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, habitats, session, progress] = await Promise.all([
         findUserById(ctx.drizzle, ctx.userId),
@@ -244,7 +247,11 @@ export const huntingRouter = createTRPCRouter({
       if ((session?.version ?? null) !== input.version || session?.battleId)
         return errorResponse("Your hunting session changed. Refresh the board.");
       if (session?.contractId === contract.id)
-        return { success: true, message: "Your existing encounter is still assigned." };
+        return {
+          success: true,
+          userPatch: {},
+          message: "Your existing encounter is still assigned.",
+        };
       // Maps carry large JSON payloads; load only the contract's sectors after
       // eligibility and session guards pass.
       const maps = await listPublishedHuntingMaps(ctx.drizzle, contract.sectors);
@@ -305,12 +312,14 @@ export const huntingRouter = createTRPCRouter({
       }
       return {
         success: true,
+        userPatch: {},
         message: `Contract accepted. Travel to sector ${sector}.`,
       };
     }),
   /** Prepare accepted terms once, or finish the displayed session and reconcile reduced limits. */
   sessionAction: protectedProcedure
     .input(huntingSessionActionSchema)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, session] = await Promise.all([
         findUserById(ctx.drizzle, ctx.userId),
@@ -352,6 +361,7 @@ export const huntingRouter = createTRPCRouter({
         return saved.rowsAffected === 1
           ? {
               success: true,
+              userPatch: {},
               message: "Hunting finished. Your contract allowance is preserved.",
             }
           : errorResponse("Your session changed.");
@@ -371,20 +381,25 @@ export const huntingRouter = createTRPCRouter({
           "Travel to the assigned sector as an eligible Hunter before preparing.",
         );
       if (session.readyAt)
-        return { success: true, message: "Preparation has already started." };
+        return {
+          success: true,
+          userPatch: {},
+          message: "Preparation has already started.",
+        };
       const saved = await updateHuntingSessionForSessionAction(
         ctx.drizzle,
         contract,
         guard,
       );
       return saved.rowsAffected === 1
-        ? { success: true, message: "Preparation started." }
+        ? { success: true, userPatch: {}, message: "Preparation started." }
         : errorResponse("Your session changed.");
     }),
   /** Validate accepted terms and preload combat data before guarded encounter admission. */
   start: protectedProcedure
     .use(ratelimitMiddleware)
     .input(huntingIdSchema)
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const [user, session, progressRows, materials] = await Promise.all([
         findUserById(ctx.drizzle, ctx.userId),
@@ -433,9 +448,10 @@ export const huntingRouter = createTRPCRouter({
         return errorResponse(
           "A contract material is unavailable. Please contact staff.",
         );
-      return initiateBattle(
+      const result = await initiateBattle(
         {
           client: ctx.drizzle,
+          cacheUserId: ctx.userId,
           userIds: [ctx.userId],
           targetIds: [contract.aiId],
           sector: user.sector,
@@ -459,6 +475,7 @@ export const huntingRouter = createTRPCRouter({
         "HUNTING",
         0,
       );
+      return result;
     }),
 });
 

@@ -39,7 +39,7 @@ describeWithDatabase("battle AI control preference scope", () => {
   it.each(ManualStartBattleTypes.filter((type) => !AutoBattleTypes.includes(type)))("keeps %s handovers local to the battle, including repeated requests", async (battleType) => {
     const { db, caller } = await seed(battleType, false);
     for (const enabled of [true, true, false, false]) {
-      expect((await caller.toggleAutoCombat({ battleId: BATTLE, enabled })).success).toBe(true);
+      expect(await caller.toggleAutoCombat({ battleId: BATTLE, enabled })).toMatchObject({ success: true, userPatch: {} });
       const saved = (await db.query.battle.findFirst({ where: eq(battle.id, BATTLE) }))!;
       expect(saved.usersState.every((user) => !!user.isAutoCombat === enabled)).toBe(true);
       const profile = (await db.query.userData.findFirst({ where: eq(userData.userId, USER) }))!;
@@ -57,7 +57,7 @@ describeWithDatabase("battle AI control preference scope", () => {
   it("retains the saved non-PvP preference for arena handovers", async () => {
     const { db, caller } = await seed("ARENA", false);
     for (const enabled of [true, false]) {
-      expect((await caller.toggleAutoCombat({ battleId: BATTLE, enabled })).success).toBe(true);
+      expect(await caller.toggleAutoCombat({ battleId: BATTLE, enabled })).toMatchObject({ success: true, userPatch: { defaultAutoCombat: enabled } });
       expect((await db.query.userData.findFirst({ where: eq(userData.userId, USER) }))!.defaultAutoCombat).toBe(enabled);
     }
   });

@@ -33,6 +33,10 @@ import {
 } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
 import type { DrizzleClient } from "@/server/db";
+import {
+  completedQuestHistoryRelation,
+  userQuestHistoryRelation,
+} from "@/server/utils/achievementObjectives";
 
 /** Build the `storePurchase` selection for `recent`, including predicates on `userId`, `transactionId`, `productId`. */
 export const selectStorePurchaseForRecent = (
@@ -1170,3 +1174,16 @@ export const executeRowsForReconcileFederalStatuses = (
   client.execute(sql`UPDATE ${userData} FORCE INDEX (PRIMARY)
       SET ${userData.federalStatus} = ${federalStatus}
       WHERE ${and(inArray(userData.userId, ids), eligible)}`);
+
+/** Read balances and quest eligibility for purchase recovery and known grant projections. */
+export const findPurchaseUserSnapshot = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    with: {
+      userQuests: userQuestHistoryRelation,
+      completedQuests: completedQuestHistoryRelation,
+    },
+  });

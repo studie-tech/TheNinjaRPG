@@ -16,7 +16,9 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
+import { useRequiredUserData } from "@/utils/UserContext";
 import { objectiveImageMap } from "@/validators/objectives";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 export const VillageMission = ({
   villageId,
@@ -26,25 +28,42 @@ export const VillageMission = ({
   navTabs: React.ReactNode;
 }) => {
   const utils = api.useUtils();
+  const { updateUser, prepareUserUpdate } = useRequiredUserData();
   const [message, setMessage] = useState("");
   const { data, isPending, isError, refetch } = api.villageMission.get.useQuery(
     { id: villageId },
     { enabled: !!villageId, refetchInterval: 15000 },
   );
-  const onSuccess = async (result: { success: boolean; message: string }) => {
+  const onSuccess = async (
+    result: UserDeltaResponse,
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
+    if (result.success || result.userPatch)
+      await updateUser(result.userPatch, {
+        revision,
+        ...(result.userDelta ? { delta: result.userDelta } : {}),
+      });
     setMessage(result.message ?? "");
     showMutationToast(result);
-    if (result.success)
-      await Promise.all([
-        refetch(),
-        utils.village.get.invalidate(),
-        utils.profile.getUser.invalidate(),
-      ]);
+    if (result.success) await Promise.all([refetch(), utils.village.get.invalidate()]);
   };
   const onError = (error: { message: string }) => setMessage(error.message);
-  const select = api.villageMission.select.useMutation({ onSuccess, onError });
-  const claim = api.villageMission.claim.useMutation({ onSuccess, onError });
-  const cancel = api.villageMission.cancel.useMutation({ onSuccess, onError });
+  const select = api.villageMission.select.useMutation({
+    onSuccess,
+    onError,
+    onMutate: prepareUserUpdate,
+  });
+  const claim = api.villageMission.claim.useMutation({
+    onSuccess,
+    onError,
+    onMutate: prepareUserUpdate,
+  });
+  const cancel = api.villageMission.cancel.useMutation({
+    onSuccess,
+    onError,
+    onMutate: prepareUserUpdate,
+  });
   const mission = data?.mission;
   const isBusy = select.isPending || claim.isPending || cancel.isPending;
 

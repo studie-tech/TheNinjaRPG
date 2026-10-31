@@ -22,11 +22,7 @@ import {
 } from "@/queries/auctionOffers";
 import { fetchItem } from "@/queries/item";
 import { findUserById } from "@/queries/profile";
-import {
-  baseServerResponse,
-  errorResponse,
-  protectedProcedure,
-} from "@/server/api/trpc";
+import { errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
@@ -37,6 +33,10 @@ import {
   createAuctionOfferSchema,
   getAuctionOffersSchema,
 } from "@/validators/auction";
+import {
+  type UserDeltaResponse,
+  userDeltaResponseSchema,
+} from "@/validators/userCache";
 
 export const auctionOfferProcedures = {
   getAuctionOfferItems: protectedProcedure.query(({ ctx }) =>
@@ -55,7 +55,7 @@ export const auctionOfferProcedures = {
 
   createAuctionOffer: protectedProcedure
     .input(createAuctionOfferSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, requested, offered] = await Promise.all([
         findUserById(ctx.drizzle, ctx.userId),
@@ -120,13 +120,14 @@ export const auctionOfferProcedures = {
         return {
           success: true,
           message: "Offer posted; your payment is reserved until accepted or cancelled",
+          userDelta: input.offerType === "REQUEST" ? { bank: -input.ryo } : {},
         };
       });
     }),
 
   acceptAuctionOffer: protectedProcedure
     .input(acceptAuctionOfferSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [offer, accepter, supplied] = await Promise.all([
         findAuctionOfferForAcceptAuctionOffer(ctx.drizzle, input),
@@ -194,6 +195,7 @@ export const auctionOfferProcedures = {
         return {
           success: true,
           message: "Offer accepted; items and payment delivered",
+          userDelta: offer.offerType === "REQUEST" ? { bank: offer.ryo } : {},
         };
       });
       if (result.success)
@@ -203,7 +205,7 @@ export const auctionOfferProcedures = {
 
   cancelAuctionOffer: protectedProcedure
     .input(auctionOfferIdSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const offer = await findAuctionOfferForCancelAuctionOffer(
         ctx.drizzle,
@@ -229,7 +231,11 @@ export const auctionOfferProcedures = {
           ryo: offer.ryo,
           offeredUserItemId: offer.offeredUserItemId,
         });
-        return { success: true, message: "Offer cancelled; reserved payment returned" };
+        return {
+          success: true,
+          message: "Offer cancelled; reserved payment returned",
+          userDelta: offer.offerType === "REQUEST" ? { bank: offer.ryo } : {},
+        };
       });
     }),
 };
@@ -307,7 +313,7 @@ const requireOfferWrite = (rowsAffected: number, message: string) => {
 
 const runOfferMutation = async (
   database: DrizzleClient,
-  work: (tx: OfferTransaction) => Promise<{ success: boolean; message: string }>,
+  work: (tx: OfferTransaction) => Promise<UserDeltaResponse>,
 ) => {
   try {
     // These cross-user exchanges need multiple rows to commit together; a lone guarded update

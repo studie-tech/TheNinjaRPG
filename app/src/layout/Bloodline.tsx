@@ -32,15 +32,12 @@ interface PurchaseBloodlineProps {
  */
 export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [bloodline, setBloodline] = useState<Bloodline | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
   // Two-level filtering
   const state = useFiltering("A");
-
-  // utils
-  const utils = api.useUtils();
 
   // Fetch data
   const { data: bloodlines, isFetching } = api.bloodline.getAll.useInfiniteQuery(
@@ -57,13 +54,19 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
   // Mutations
   const { mutate: purchase, isPending: isPurchasing } =
     api.bloodline.purchaseBloodline.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        await utils.profile.getUser.invalidate();
+        if (data.success)
+          await updateUser(data.userPatch, {
+            revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
       },
-      onSettled: () => {
+      onSettled: (_data, error) => {
         setIsOpen(false);
         document.body.style.cursor = "default";
+        if (error) return updateUser(undefined, { revision: undefined });
       },
     });
 
@@ -173,8 +176,7 @@ interface CurrentBloodlineProps {
 
 export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
   // Get current bloodline
-  const { data: userData } = useRequiredUserData();
-  const utils = api.useUtils();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { data, isFetching } = api.bloodline.get.useQuery(
     { id: props.bloodlineId },
     {},
@@ -183,10 +185,14 @@ export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
   // Mutations
   const { mutate: remove, isPending: isRemoving } =
     api.bloodline.removeBloodline.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSettled: (_data, error) => {
+        if (error) return updateUser(undefined, { revision: undefined });
+      },
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(data.userPatch, { revision });
         }
       },
     });
@@ -243,14 +249,18 @@ interface RollBloodlineProps {
   initialBreak?: boolean;
 }
 export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
-  const utils = api.useUtils();
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   // State
   const { mutate: roll, isPending: isRolling } = api.bloodline.roll.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSettled: (_data, error) => {
+      if (error) return updateUser(undefined, { revision: undefined });
+    },
+    onSuccess: async (data, _variables, revision) => {
       props.refetch();
       showMutationToast({ ...data, title: "Bloodline Roll" });
       if (data.success) {
-        await utils.profile.getUser.invalidate();
+        await updateUser(data.userPatch, { revision });
       }
     },
   });

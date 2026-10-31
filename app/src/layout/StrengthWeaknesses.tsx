@@ -513,6 +513,7 @@ interface SkillsTabProps {
 }
 
 export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const includeHidden = canAccessHiddenSkillTree(userData.role);
   // State for folder UI
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -544,14 +545,18 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   // Skill Tree Mutations
   const { mutate: purchaseSkill, isPending: isPurchasing } =
     api.skillTree.purchaseSkill.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
             utils.skillTree.getUserSkills.invalidate(),
             utils.skillTree.getAll.invalidate(),
             utils.skillTree.getFolderStats.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data.userPatch, {
+              revision,
+              achievementProgress: data.achievementProgress,
+            }),
           ]);
         }
       },

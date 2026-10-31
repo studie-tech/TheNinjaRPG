@@ -295,6 +295,7 @@ interface TrainingProps {
  * @returns
  */
 const SenseiSystem: React.FC<TrainingProps> = (props) => {
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   // Settings
   const { userData } = props;
 
@@ -351,11 +352,12 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
 
   const { mutate: accept, isPending: isAccepting } =
     api.sensei.acceptRequest.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
-            ...(userData.rank === "GENIN" ? [utils.profile.getUser.invalidate()] : []),
+            updateUser(data.userPatch, { revision }),
             utils.sensei.getRequests.invalidate(),
             utils.sensei.getStudents.invalidate(),
           ]);
@@ -385,10 +387,11 @@ const SenseiSystem: React.FC<TrainingProps> = (props) => {
 
   const { mutate: leaveSensei, isPending: isLeaving } =
     api.sensei.leaveSensei.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
-          await utils.profile.getUser.invalidate();
+          await updateUser(data.userPatch, { revision });
         }
       },
     });

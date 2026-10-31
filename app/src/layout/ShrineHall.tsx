@@ -305,6 +305,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 
 const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
+  const { updateUser } = useRequiredUserData();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
   const now = useUtcNow(isActive, 60_000);
   const nowMs = now.getTime();
@@ -362,18 +363,18 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
     prevActiveBoostTypesRef.current = currentTypes;
   }, [nowMs, user.village?.shrineSettings?.activeBoosts]);
 
-  // When a UTC slot boundary just passed, the maintenance cron may have auto-activated
-  // a template boost. Refetch the user so activeBoosts updates and the toast effect above
-  // can fire. Global tRPC uses staleTime: Infinity, so without this nothing refreshes.
-  // Gated on template presence so the hot path scales with template users, not all viewers.
-  const invalidateUser = useCallback(
-    () => utils.profile.getUser.invalidate(),
-    [utils.profile.getUser],
-  );
+  // Scheduled boosts are activated by the cron; read their committed village state at the boundary.
+  const refreshBoostState = useCallback(async () => {
+    const revision = prepareUserUpdate();
+    const saved = await utils.shrine.getVillageBoostState.fetch(undefined, {
+      staleTime: 0,
+    });
+    if (saved) await updateUser({ village: saved }, { revision });
+  }, [prepareUserUpdate, updateUser, utils.shrine.getVillageBoostState]);
   useInvalidateOnSlotBoundary(
     nowMs,
     !!user.village?.shrineSettings?.boostTemplate?.length,
-    invalidateUser,
+    refreshBoostState,
   );
 
   if (!sectorData) return <Loader explanation="Loading shrine data" />;

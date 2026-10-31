@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import {
   EVENT_TOURNAMENT_LAUNCH_RECOVERY_SECONDS,
   EVENT_TOURNAMENT_READY_SECONDS,
@@ -45,7 +46,11 @@ import {
 } from "@/queries/tournamentEvents";
 import { initiateBattle } from "@/routers/combat";
 import { updateRewards } from "@/routers/quests";
-import { errorResponse, protectedProcedure } from "@/server/api/trpc";
+import {
+  baseServerResponse,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
@@ -159,7 +164,12 @@ export const eventTournamentProcedures = {
     }),
   /** Apply staff lifecycle and roster changes through the event version guard. */
   manageEvent: protectedProcedure
-    .input(eventTournamentActionSchema)
+    .input(
+      eventTournamentActionSchema.extend({
+        originSocketId: z.string().max(128).optional(),
+      }),
+    )
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, target] = await Promise.all([
         findUserRoleById(ctx.drizzle, ctx.userId),
@@ -331,13 +341,21 @@ export const eventTournamentProcedures = {
         await syncEventTournament(ctx.drizzle, input.tournamentId);
         // Remote roster additions must wake notice polling in the incoming player's tabs.
         if (input.userId && ["INVITE", "SUBSTITUTE"].includes(input.action))
-          await notifyEventParticipant(input.userId);
+          await notifyEventParticipant(
+            input.userId,
+            input.userId === ctx.userId ? input.originSocketId : undefined,
+          );
       }
       return result;
     }),
   /** Manage registration, advisory readiness and match acceptance through the event version guard. */
   participateEvent: protectedProcedure
-    .input(eventTournamentPlayerSchema)
+    .input(
+      eventTournamentPlayerSchema.extend({
+        originSocketId: z.string().max(128).optional(),
+      }),
+    )
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchEventUser(ctx.drizzle, ctx.userId);
       if (!user || user.isAi || user.isBanned)
@@ -426,7 +444,7 @@ export const eventTournamentProcedures = {
         await syncEventTournament(ctx.drizzle, input.tournamentId);
         // The action's local invalidation does not refresh this player's other tabs.
         if (["JOIN", "WITHDRAW", "DECLINE"].includes(input.action))
-          await notifyEventParticipant(ctx.userId);
+          await notifyEventParticipant(ctx.userId, input.originSocketId);
       }
       return result;
     }),
@@ -857,8 +875,11 @@ const audit = (event: EventTournamentState, userId: string, action: string) => {
 };
 
 /** Best-effort cache refresh; polling remains available when websocket delivery fails. */
-const notifyEventParticipant = async (userId: string) => {
+const notifyEventParticipant = async (userId: string, originSocketId?: string) => {
   await Promise.allSettled([
-    getServerPusher().trigger(userId, "event", { type: "eventTournament" }),
+    getServerPusher().trigger(userId, "event", {
+      type: "eventTournament",
+      ...(originSocketId ? { originSocketId } : {}),
+    }),
   ]);
 };

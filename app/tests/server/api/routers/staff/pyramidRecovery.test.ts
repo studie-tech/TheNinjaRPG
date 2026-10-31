@@ -6,6 +6,7 @@ import { getIsolatedPyramid } from "@/libs/questRun";
 import { combatRouter } from "@/server/api/routers/combat";
 import { huntingRouter } from "@/server/api/routers/hunting";
 import { profileRouter } from "@/server/api/routers/profile";
+import { createTRPCRouter } from "@/server/api/trpc";
 import { staffRouter } from "@/server/api/routers/staff";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { DialogObjective } from "@/validators/objectives";
@@ -40,6 +41,34 @@ describeWithDatabase("staff Pyramid recovery", () => {
     await runRawSql("DROP TRIGGER IF EXISTS staff_hunt_cleanup_failure");
     vi.restoreAllMocks();
     await resetTables(questHistory);
+  });
+
+  it("reconciles self recovery and closed histories through the canonical profile", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ role: "OWNER" }).where(eq(userData.userId, "hero"));
+    const profile = await callerFor(profileRouter, "hero");
+    const cached = (await profile.getUser()).userData!;
+    expect(getIsolatedPyramid(cached)?.id).toBe("attempt");
+    const result = await (await callerFor(createTRPCRouter({ staff: staffRouter }), "hero")).staff.forceAwake({ userId: "hero", reason: "Recover my stranded Pyramid run" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    expect(result).not.toHaveProperty("closedPyramidHistories");
+    const current = (await profile.getUser()).userData!;
+    expect(getIsolatedPyramid(current)).toBeUndefined();
+    expect(current.userQuests.some((entry) => entry.id === "attempt")).toBe(false);
+    expect(current.questData?.some((tracker) => tracker.id === "pyramid")).toBe(false);
+    expect(current.curHealth).toBe(cached.curHealth);
+  });
+
+  it("does not read recovery snapshots when staff target another account", async () => {
+    const db = await getTestDatabase();
+    const userReads = vi.spyOn(db.query.userData, "findFirst");
+    const historyReads = vi.spyOn(db.query.questHistory, "findMany");
+    const result = await (await callerFor(staffRouter, "staff")).forceAwake({ userId: "hero", reason: "Recover another stranded character" });
+    expect(result).toMatchObject({ success: true, userPatch: {} });
+    expect(result).not.toHaveProperty("closedPyramidHistories");
+    expect(userReads).toHaveBeenCalledTimes(2);
+    expect(historyReads).not.toHaveBeenCalled();
   });
 
   /** A terminal hunt whose preloaded reward snapshot still holds the admission's session version. */

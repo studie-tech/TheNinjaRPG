@@ -2,7 +2,7 @@
  * Database access for bloodline; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { and, eq, gte, isNotNull } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull } from "drizzle-orm";
 import type { z } from "zod";
 import type {
   BloodlineDifficultyRating,
@@ -16,8 +16,14 @@ import {
   bloodline,
   bloodlineReskin,
   bloodlineRolls,
+  userItem,
+  userSkill,
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import {
+  completedQuestHistoryRelation,
+  userQuestHistoryRelation,
+} from "@/server/utils/achievementObjectives";
 import { getUnique } from "@/utils/grouping";
 import { DAY_S, secondsFromDate } from "@/utils/time";
 import type { baseReskinSchema } from "@/validators/bloodline";
@@ -687,6 +693,7 @@ export const updateUserDataForUpdateBloodline = (
   bloodline: { id: undefined | string } | null,
   repCost: number,
   user: { userId: string; bloodlineId: null | string },
+  updatedAt = new Date(),
 ) =>
   client
     .update(userData)
@@ -696,7 +703,7 @@ export const updateUserDataForUpdateBloodline = (
       bloodlineReskinId: null,
       reputationPoints: sql`${userData.reputationPoints} - ${repCost}`,
       // Advance the whole-user version so a concurrent claimUserSnapshot CAS detects this write.
-      updatedAt: new Date(),
+      updatedAt,
     })
     .where(
       and(
@@ -744,4 +751,25 @@ export const insertActionLogForUpdateBloodline = (
     relatedId: user.userId,
     relatedMsg: "Bloodline Changed",
     relatedImage: user.avatarLight || user.avatar || IMG_AVATAR_DEFAULT,
+  });
+
+/** Load quest eligibility alongside passive sources for a lineage change. */
+export const fetchBloodlineProgressionUser = (client: DrizzleClient, userId: string) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    with: {
+      bloodline: true,
+      activeReskin: true,
+      clan: true,
+      village: { with: { structures: true } },
+      raidBuffs: true,
+      titles: true,
+      userSkills: { where: eq(userSkill.activated, true), with: { skill: true } },
+      items: {
+        where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
+        with: { item: true, imbuements: { with: { item: true } } },
+      },
+      userQuests: userQuestHistoryRelation,
+      completedQuests: completedQuestHistoryRelation,
+    },
   });

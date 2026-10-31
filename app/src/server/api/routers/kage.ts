@@ -42,11 +42,10 @@ import {
   findUserById,
   incrementUserVillagePrestige,
 } from "@/queries/profile";
-import { fetchVillage } from "@/queries/village";
 
+import { fetchVillage } from "@/queries/village";
 import { kageDefenseProcedures } from "@/routers/kageDefense";
 import { fetchUpdatedUser, updateNindo } from "@/routers/profile";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -67,6 +66,7 @@ import {
   kageVillageSchema,
   kageVoteSchema,
 } from "@/validators/kage";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import {
   structureUpgradeSchema,
   villageMaintenancePaymentSchema,
@@ -314,7 +314,10 @@ export const kageRouter = createTRPCRouter({
         ctx,
       );
       return result.rowsAffected > 0
-        ? { success: true, message: "Structure maintenance paid" }
+        ? {
+            success: true,
+            message: "Structure maintenance paid",
+          }
         : errorResponse(
             "Only the village Kage can pay an outstanding bill, and the village must have enough tokens",
           );
@@ -464,9 +467,9 @@ export const kageRouter = createTRPCRouter({
   /** Fill the current vacancy once, recording the approved motion's successor when applicable. */
   nominateKage: protectedProcedure
     .input(kageNominationSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      return (
+      const result =
         (await withKageDefense(ctx.drizzle, input.villageId, async (tx, hall) => {
           const [elder, candidate, motion] = await queryInTransaction([
             findUserById(tx, ctx.userId),
@@ -516,12 +519,24 @@ export const kageRouter = createTRPCRouter({
               return errorResponse("A successor has already been nominated");
           }
           if (candidate.rank === "ELDER") await setKageCandidateToJonin(tx, candidate);
-          await updateVillageForResignKage(tx, candidate, input);
+          const leaderUpdatedAt = new Date();
+          await updateVillageForResignKage(tx, candidate, input, leaderUpdatedAt);
           return {
             success: true,
             message: `${candidate.username} appointed Kage. Publish a schedule within ${KAGE_DEFENSE_SETUP_HOURS} hours.`,
+            userPatch: {
+              village: {
+                id: input.villageId,
+                kageId: candidate.userId,
+                leaderUpdatedAt,
+                kageSchedule: null,
+              },
+              ...(candidate.userId === ctx.userId && candidate.rank === "ELDER"
+                ? { rank: "JONIN" as const }
+                : {}),
+            },
           };
-        })) ?? errorResponse("Village not found")
-      );
+        })) ?? errorResponse("Village not found");
+      return result;
     }),
 });

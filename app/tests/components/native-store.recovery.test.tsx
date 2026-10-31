@@ -23,7 +23,10 @@ type NativeStoreMocks = {
   refetchRecent: AsyncMock;
   fetchRecent: AsyncMock;
   invalidateRecent: AsyncMock;
-  invalidateProfile: AsyncMock;
+  updateUser: AsyncMock;
+  fetchSnapshot: AsyncMock;
+  invalidateSnapshot: AsyncMock;
+  prepareUserUpdate: SyncMock;
   toast: SyncMock;
 };
 
@@ -52,7 +55,10 @@ function testMocks(): NativeStoreMocks {
     refetchRecent: vi.fn(),
     fetchRecent: vi.fn(),
     invalidateRecent: vi.fn(),
-    invalidateProfile: vi.fn(),
+    updateUser: vi.fn(),
+    fetchSnapshot: vi.fn(),
+    invalidateSnapshot: vi.fn(),
+    prepareUserUpdate: vi.fn(),
     toast: vi.fn(),
   };
   return globals.__nativeStoreMocks;
@@ -74,17 +80,23 @@ function testUser(): NativeStoreUser {
   return globals.__nativeStoreUser;
 }
 
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    useUtils: () => ({
+const testUtils = (() => {
+  let value: unknown;
+  return () => value ??= ({
       purchases: {
+        userSnapshot: { invalidate: testMocks().invalidateSnapshot, fetch: testMocks().fetchSnapshot },
         recent: {
           invalidate: testMocks().invalidateRecent,
           fetch: testMocks().fetchRecent,
         },
       },
-      profile: { getUser: { invalidate: testMocks().invalidateProfile } },
-    }),
+      profile: { getUser: { cancel: vi.fn(), setData: vi.fn() } },
+  });
+})();
+
+vi.mock("@/app/_trpc/client", () => ({
+  api: {
+    useUtils: () => testUtils(),
     purchases: {
       catalogue: {
         useQuery: () => ({
@@ -109,7 +121,7 @@ vi.mock("@/app/_trpc/client", () => ({
 }));
 
 vi.mock("@/utils/UserContext", () => ({
-  useUserData: () => testUser(),
+  useUserData: () => ({ ...testUser(), prepareUserUpdate: testMocks().prepareUserUpdate, updateUser: testMocks().updateUser }),
 }));
 
 vi.mock("@/env/client.mjs", () => ({
@@ -198,7 +210,10 @@ beforeEach(() => {
   mocks.refetchRecent.mockResolvedValue({ data: [], error: null });
   mocks.fetchRecent.mockResolvedValue([]);
   mocks.invalidateRecent.mockResolvedValue(undefined);
-  mocks.invalidateProfile.mockResolvedValue(undefined);
+  mocks.updateUser.mockResolvedValue(undefined);
+  mocks.prepareUserUpdate.mockReturnValue(1);
+  mocks.invalidateSnapshot.mockResolvedValue(undefined);
+  mocks.fetchSnapshot.mockResolvedValue({ userId: "player-1", userPatch: { reputationPoints: 10, reputationPointsTotal: 10, money: 0, federalStatus: "NONE" } });
   mocks.purchase.mockResolvedValue({ status: "cancelled" });
   mocks.restore.mockResolvedValue({
     activeEntitlements: [],
@@ -279,6 +294,8 @@ describe("NativeStore purchase recovery", () => {
       activeEntitlements: ["federal"], activeSubscriptions: [gold.productId],
       originalAppUserId: "player-1", transactions: [],
     });
+    const userPatch = { money: 0, federalStatus: "NONE", reputationPoints: 18, reputationPointsTotal: 18 };
+    testMocks().fetchSnapshot.mockResolvedValue({ userId: "player-1", userPatch });
     const view = render(<NativeStore />);
     await view.findByRole("button", { name: "Active" });
     await waitFor(() => expect(onState).toBeDefined());
@@ -290,11 +307,48 @@ describe("NativeStore purchase recovery", () => {
     expect(invalidate).not.toHaveBeenCalled();
     act(() => onState?.({ isActive: true }));
     await waitFor(() => expect(view.queryByRole("button", { name: "Active" })).toBeNull());
-    await waitFor(() => expect(testMocks().invalidateProfile).toHaveBeenCalled());
+    await waitFor(() => expect(testMocks().updateUser).toHaveBeenCalled());
+    expect(testMocks().updateUser).toHaveBeenCalledWith(userPatch, { revision: 1 });
     expect(invalidate).toHaveBeenCalledTimes(1);
     expect(testMocks().restore).not.toHaveBeenCalled();
     view.unmount();
     expect(remove).toHaveBeenCalled();
+  });
+
+  it("discards a delayed authoritative balance snapshot after switching accounts", async () => {
+    let onState: ((state: { isActive: boolean }) => void) | undefined;
+    capacitorWindow.Capacitor!.Plugins.App = {
+      addListener: (_event: string, callback: typeof onState) => {
+        onState = callback;
+        return { remove: vi.fn().mockResolvedValue(undefined) };
+      },
+    };
+    let finish: ((value: unknown) => void) | undefined;
+    testMocks().fetchSnapshot.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const view = render(<NativeStore />);
+    await waitFor(() => expect(onState).toBeDefined());
+    act(() => onState?.({ isActive: true }));
+    await waitFor(() => expect(finish).toBeDefined());
+    testUser().userId = undefined;
+    view.rerender(<NativeStore />);
+    await act(async () => { finish?.({ userId: "player-1", userPatch: { money: 0, reputationPoints: 500, reputationPointsTotal: 500, federalStatus: "GOLD" } }); });
+    expect(testMocks().updateUser).not.toHaveBeenCalled();
+  });
+
+  it("reconciles through the canonical profile when a balance confirmation is unavailable", async () => {
+    let onState: ((state: { isActive: boolean }) => void) | undefined;
+    capacitorWindow.Capacitor!.Plugins.App = {
+      addListener: (_event: string, callback: typeof onState) => {
+        onState = callback;
+        return { remove: vi.fn().mockResolvedValue(undefined) };
+      },
+    };
+    testMocks().fetchSnapshot.mockResolvedValue({ userId: "player-1", userPatch: null });
+    render(<NativeStore />);
+    await waitFor(() => expect(onState).toBeDefined());
+    act(() => onState?.({ isActive: true }));
+    await waitFor(() => expect(testMocks().updateUser).toHaveBeenCalledWith(undefined, { revision: 1 }));
+    expect(testUser().data?.userId).toBe("player-1");
   });
 
   it("shows a recoverable error when resume verification fails", async () => {
@@ -337,7 +391,7 @@ describe("NativeStore purchase recovery", () => {
     testUser().userId = undefined;
     view.rerender(<NativeStore />);
     await act(async () => { finish?.(); });
-    expect(testMocks().invalidateProfile).not.toHaveBeenCalled();
+    expect(testMocks().updateUser).not.toHaveBeenCalled();
     expect(view.queryByRole("button", { name: "Active" })).toBeNull();
   });
 
@@ -397,7 +451,7 @@ describe("NativeStore purchase recovery", () => {
       view.getByRole("button", { name: "Active" }).closest("div")!.textContent,
     ).toContain("Gold");
     expect(subscribe.disabled).toBe(false);
-    expect(testMocks().invalidateProfile).not.toHaveBeenCalled();
+    expect(testMocks().updateUser).not.toHaveBeenCalled();
   });
 
   it("persists the fresh baseline before awaiting the native purchase sheet", async () => {
@@ -466,7 +520,7 @@ describe("NativeStore purchase recovery", () => {
       });
       const view = render(<NativeStore />);
       await waitFor(() => expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]")).toEqual([]));
-      expect(testMocks().invalidateProfile).toHaveBeenCalled();
+      expect(testMocks().updateUser).toHaveBeenCalled();
       expect(view.queryByRole("button", { name: "Retry verification" })).toBeNull();
       expect((await view.findByRole("button", { name: "Buy" }) as HTMLButtonElement).disabled).toBe(false);
       expect(testMocks().purchase).not.toHaveBeenCalled();

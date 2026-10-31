@@ -100,11 +100,13 @@ import {
 } from "@/queries/clan";
 import {
   debitUserMoney,
+  fetchAllGameSettings,
   fetchUser,
   incrementUserMoney,
   refundUserReputationPoints,
 } from "@/queries/profile";
 import { deleteQueueById } from "@/queries/raids";
+import { findMembershipUserCache } from "@/queries/socialUserCache";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import { fetchStructures, fetchVillage, fetchVillages } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
@@ -122,6 +124,7 @@ import { syncStrongholdMembership } from "@/server/utils/faction";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { membershipUpdate } from "@/server/utils/push/messages";
+import { getMembershipUserPatch } from "@/server/utils/socialUserCache";
 import { canEditClans } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import { secondsFromDate } from "@/utils/time";
@@ -140,7 +143,7 @@ import {
   strictClanNameField,
 } from "@/validators/clan";
 import { idSchema } from "@/validators/misc";
-import { userDeltaResponseSchema } from "@/validators/userCache";
+import { type UserCachePatch, userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
 
@@ -197,12 +200,15 @@ export const clanRouter = createTRPCRouter({
         insertSectorForPurchaseHideout(ctx.drizzle, input, hideoutId),
         insertVillageForPurchaseHideout(ctx.drizzle, hideoutId, fetchedClan, input),
       ]);
-      return { success: true, message: "Hideout purchased successfully" };
+      return {
+        success: true,
+        message: "Hideout purchased successfully",
+      };
     }),
   upgradeHideoutToStronghold: protectedProcedure
     .meta({ mcp: { description: "Restore a former Stronghold" } })
     .input(restoreStrongholdSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan] = await Promise.all([
@@ -246,14 +252,31 @@ export const clanRouter = createTRPCRouter({
       );
       // A joined write restores the guarded settlement and charges its owning faction
       // together; a duplicate request or changed balance cannot leave a partial payment.
+      const lastMaintenancePaidAt = new Date();
       const result = await retryOnDeadlock(() =>
-        executeResultForUpgradeHideoutToStronghold(ctx.drizzle, guards),
+        executeResultForUpgradeHideoutToStronghold(
+          ctx.drizzle,
+          guards,
+          lastMaintenancePaidAt,
+        ),
       );
-      return result.rowsAffected > 0
-        ? { success: true, message: "Stronghold restored successfully" }
-        : errorResponse(
-            "Stronghold could not be restored; refresh the faction and check its balance and membership",
-          );
+      if (result.rowsAffected === 0)
+        return errorResponse(
+          "Stronghold could not be restored; refresh the faction and check its balance and membership",
+        );
+      return {
+        success: true,
+        message: "Stronghold restored successfully",
+        userDelta: { clan: { id: fetchedClan.id, bank: -STRONGHOLD_REESTABLISH_COST } },
+        userPatch: {
+          village: {
+            id: clanHideout.id,
+            type: "STRONGHOLD",
+            belowMemberMinimumSince: null,
+            lastMaintenancePaidAt,
+          },
+        },
+      };
     }),
   clanDonate: protectedProcedure
     .meta({
@@ -622,7 +645,10 @@ export const clanRouter = createTRPCRouter({
       // Mutate
       await insertClanForCreateClan(ctx.drizzle, clanId, villageData, input, user);
       // Create
-      return { success: true, message: `${groupLabel} created` };
+      return {
+        success: true,
+        message: `${groupLabel} created`,
+      };
     }),
   editClan: protectedProcedure
     .meta({ mcp: { description: "Edit clan/faction name and image" } })
@@ -737,13 +763,14 @@ export const clanRouter = createTRPCRouter({
             ? undefined
             : { reputationPoints: -CLAN_COLOR_CHANGE_REP_COST },
         userPatch: { village: { id: fetchedClan.villageId, hexColor: input.color } },
+        userExpected: { clanId: fetchedClan.id },
         message: `${groupLabel} color updated`,
       };
     }),
   promoteMember: protectedProcedure
     .meta({ mcp: { description: "Promote clan member to leadership" } })
     .input(z.object({ clanId: z.string(), memberId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, fetchedClan, member] = await Promise.all([
@@ -838,12 +865,23 @@ export const clanRouter = createTRPCRouter({
           : []),
       ]);
       // Create
-      return { success: true, message: "Member promoted" };
+      return {
+        success: true,
+        message: "Member promoted",
+        userPatch: {
+          ...(user.clanId === fetchedClan.id
+            ? { clan: { id: fetchedClan.id, ...updateData } }
+            : {}),
+          ...(isMemberColeader && hadHideout && user.villageId === fetchedClan.villageId
+            ? { village: { id: fetchedClan.villageId, kageId: input.memberId } }
+            : {}),
+        },
+      };
     }),
   demoteMember: protectedProcedure
     .meta({ mcp: { description: "Demote clan member from leadership" } })
     .input(z.object({ clanId: z.string(), memberId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, clanData, member] = await Promise.all([
@@ -883,19 +921,41 @@ export const clanRouter = createTRPCRouter({
         assasinField,
       );
       // Create
-      return { success: true, message: "Member demoted" };
+      return {
+        success: true,
+        message: "Member demoted",
+        userPatch:
+          user.clanId === clanData.id
+            ? {
+                clan: {
+                  id: clanData.id,
+                  coLeader1:
+                    clanData.coLeader1 === member.userId ? null : clanData.coLeader1,
+                  coLeader2:
+                    clanData.coLeader2 === member.userId ? null : clanData.coLeader2,
+                  coLeader3:
+                    clanData.coLeader3 === member.userId ? null : clanData.coLeader3,
+                  ...(isMemberAssassin && assasinField ? { [assasinField]: null } : {}),
+                },
+              }
+            : {},
+      };
     }),
   kickMember: protectedProcedure
     .meta({ mcp: { description: "Kick member from clan" } })
     .input(z.object({ clanId: z.string(), memberId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, fetchedClan, member] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [user, fetchedClan, member, settings] = await Promise.all([
+        input.memberId === ctx.userId
+          ? findMembershipUserCache(ctx.drizzle, ctx.userId)
+          : fetchUser(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
         fetchUser(ctx.drizzle, input.memberId),
+        input.memberId === ctx.userId ? fetchAllGameSettings(ctx.drizzle) : undefined,
       ]);
+      if (!user) return errorResponse("User not found");
       // Derived
       const isLeader = user.userId === fetchedClan?.leaderId;
       const isColeader = checkCoLeader(user.userId, fetchedClan);
@@ -919,21 +979,37 @@ export const clanRouter = createTRPCRouter({
         await updateClanForKickMember(ctx.drizzle, user, fetchedClan);
       }
       // Mutate
-      await removeFromClan(ctx.drizzle, fetchedClan, member, [
+      const membership = await removeFromClan(ctx.drizzle, fetchedClan, member, [
         `Kicked by ${user.username}`,
       ]);
       // Create
-      return { success: true, message: "Member kicked" };
+      return {
+        success: true,
+        message: "Member kicked",
+        userPatch: ["HIDEOUT", "STRONGHOLD"].includes(fetchedClan.village?.type ?? "")
+          ? undefined
+          : member.userId === ctx.userId
+            ? user.status === "AWAKE" &&
+              !user.isOutlaw &&
+              settings &&
+              "bloodline" in user
+              ? getMembershipUserPatch(user, null, settings)
+              : undefined
+            : user.clanId === fetchedClan.id
+              ? membership
+              : {},
+      };
     }),
   leaveClan: protectedProcedure
     .meta({ mcp: { description: "Leave current clan/faction" } })
     .input(z.object({ clanId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, fetchedClan] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [user, fetchedClan, settings] = await Promise.all([
+        findMembershipUserCache(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
       const groupLabel = user?.isOutlaw ? "faction" : "clan";
       const locationLabel = user?.isOutlaw ? "syndicate" : "village";
@@ -951,7 +1027,13 @@ export const clanRouter = createTRPCRouter({
         `Left ${groupLabel} on own accord`,
       ]);
       // Create
-      return { success: true, message: `User left ${groupLabel}` };
+      return {
+        success: true,
+        message: `User left ${groupLabel}`,
+        userPatch: user.isOutlaw
+          ? undefined
+          : getMembershipUserPatch(user, null, settings),
+      };
     }),
   upsertNotice: protectedProcedure
     .meta({ mcp: { description: "Update clan notice/order" } })
@@ -1025,7 +1107,7 @@ export const clanRouter = createTRPCRouter({
   convertPointsToRyo: protectedProcedure
     .meta({ mcp: { description: "Convert clan points into clan bank ryo" } })
     .input(clanPointConversionSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const [user, fetchedClan] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
@@ -1052,6 +1134,7 @@ export const clanRouter = createTRPCRouter({
         return errorResponse("Not enough clan points or leadership changed");
       return {
         success: true,
+        userDelta: { clan: { id: fetchedClan.id, points: -input.points, bank: ryo } },
         message: `Converted ${input.points.toLocaleString()} clan points to ${ryo.toLocaleString()} ryo in the clan bank`,
       };
     }),
@@ -1311,7 +1394,7 @@ export const clanRouter = createTRPCRouter({
   joinClanBattle: protectedProcedure
     .meta({ mcp: { description: "Join ongoing clan battle queue" } })
     .input(clanBattleIdSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, clanBattleData, queries] = await Promise.all([
@@ -1388,12 +1471,16 @@ export const clanRouter = createTRPCRouter({
         await undoClanBattleJoin(ctx.drizzle, user.userId, entryId);
         return errorResponse("Slot was taken. Please try again.");
       }
-      return { success: true, message: `Joined ${groupLabel} battle` };
+      return {
+        success: true,
+        message: `Joined ${groupLabel} battle`,
+        userPatch: { status: "QUEUED" },
+      };
     }),
   leaveClanBattle: protectedProcedure
     .meta({ mcp: { description: "Leave clan battle queue" } })
     .input(clanBattleIdSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, clanBattleData] = await Promise.all([
@@ -1410,20 +1497,24 @@ export const clanRouter = createTRPCRouter({
       if (user.status !== "QUEUED") return errorResponse(`Not queued in ${battleId}`);
       if (!queued) return errorResponse("Not in the queue");
       // Mutation
-      await removeFromClanBattle(
+      const woke = await removeFromClanBattle(
         ctx.drizzle,
         clanBattleData.queue,
         input.clanBattleId,
         ctx.userId,
       );
-      return { success: true, message: `Left ${groupLabel} battle` };
+      return {
+        success: true,
+        message: `Left ${groupLabel} battle`,
+        userPatch: woke?.rowsAffected ? { status: "AWAKE" } : undefined,
+      };
     }),
   kickFromClanBattle: protectedProcedure
     .meta({ mcp: { description: "Kick member from clan battle queue" } })
     .input(
       z.object({ clanBattleId: z.string(), targetId: z.string(), clanId: z.string() }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, target, fetchedClan, clanBattleData] = await Promise.all([
@@ -1454,18 +1545,29 @@ export const clanRouter = createTRPCRouter({
         route: "/clanhall",
         routeText: `To ${groupLabel} Hall`,
       });
-      await removeFromClanBattle(
+      const woke = await removeFromClanBattle(
         ctx.drizzle,
         clanBattleData.queue,
         input.clanBattleId,
         target.userId,
       );
-      return { success: true, message: `Kicked from ${groupLabel} battle` };
+      return {
+        success: true,
+        message: `Kicked from ${groupLabel} battle`,
+        userPatch:
+          input.targetId === ctx.userId
+            ? woke?.rowsAffected
+              ? { status: "AWAKE" }
+              : undefined
+            : {},
+      };
     }),
   /** Authorize staff or participating leadership, then remove the observed battle. */
   deleteClanBattle: protectedProcedure
     .meta({ mcp: { description: "Delete a clan battle and release its participants" } })
-    .input(clanBattleIdSchema)
+    .input(
+      clanBattleIdSchema.extend({ originSocketId: z.string().max(128).optional() }),
+    )
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const [user, clanBattleData, ledClans] = await Promise.all([
@@ -1488,7 +1590,12 @@ export const clanRouter = createTRPCRouter({
       if (!(await deleteClanBattle(ctx.drizzle, clanBattleData)))
         return errorResponse("Battle changed; refresh and try again");
       clanBattleData.queue.forEach((participant) => {
-        void pusher.trigger(participant.userId, "event", { type: "battleEnded" });
+        void pusher.trigger(participant.userId, "event", {
+          type: "battleEnded",
+          ...(participant.userId === ctx.userId && input.originSocketId
+            ? { originSocketId: input.originSocketId }
+            : {}),
+        });
       });
       await insertActionLogForDeleteClanBattle(ctx.drizzle, ctx, clanBattleData);
       return {
@@ -1499,7 +1606,7 @@ export const clanRouter = createTRPCRouter({
   initiateClanBattle: protectedProcedure
     .meta({ mcp: { description: "Start clan battle combat" } })
     .input(clanBattleIdSchema)
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [user, clanBattleData] = await Promise.all([
@@ -1552,6 +1659,7 @@ export const clanRouter = createTRPCRouter({
             client: ctx.drizzle,
             biome: "default",
             clanBattle: { queueId: input.clanBattleId, battleId },
+            cacheUserId: ctx.userId,
           },
           "CLAN_BATTLE",
         );
@@ -1569,7 +1677,13 @@ export const clanRouter = createTRPCRouter({
         await retryOnDeadlock(() =>
           updateUserDataForInitiateClanBattle(ctx.drizzle, allIds, input, battleId),
         );
-        return { success: true, message: `${groupLabel} battle initiated`, battleId };
+        return {
+          success: true,
+          message: `${groupLabel} battle initiated`,
+          battleId,
+          userPatch: result.userPatch,
+          userDelta: result.userDelta,
+        };
       } catch (error) {
         if (
           !(await deleteClanBattle(ctx.drizzle, { id: input.clanBattleId, battleId }))
@@ -1581,12 +1695,13 @@ export const clanRouter = createTRPCRouter({
     }),
   instantJoinAndLead: protectedProcedure
     .input(z.object({ clanId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const [user, fetchedClan] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
+      const [user, fetchedClan, settings] = await Promise.all([
+        findMembershipUserCache(ctx.drizzle, ctx.userId),
         fetchClan(ctx.drizzle, input.clanId),
+        fetchAllGameSettings(ctx.drizzle),
       ]);
       // Guard
       if (!fetchedClan) return errorResponse("Faction not found");
@@ -1605,8 +1720,32 @@ export const clanRouter = createTRPCRouter({
       ]);
 
       await syncStrongholdMembership(ctx.drizzle, fetchedClan.villageId);
+      const {
+        members: _members,
+        leader: _leader,
+        founder: _founder,
+        village: _village,
+        leaderOrder: _order,
+        elderNominee: _nominee,
+        ...savedClan
+      } = fetchedClan;
       return {
         success: true,
+        userPatch:
+          user.villageId !== fetchedClan.village?.id ||
+          ["HIDEOUT", "STRONGHOLD"].includes(fetchedClan.village?.type ?? "")
+            ? undefined
+            : getMembershipUserPatch(
+                user,
+                {
+                  ...savedClan,
+                  leaderId: user.userId,
+                  coLeader1: null,
+                  coLeader2: null,
+                  coLeader3: null,
+                },
+                settings,
+              ),
         message: `You have instantly joined and taken leadership of ${fetchedClan.name}`,
       };
     }),
@@ -1675,7 +1814,7 @@ const undoClanBattleJoin = async (
   entryId: string,
 ) => {
   await deleteBattleQueueMemberById(client, entryId);
-  await retryOnDeadlock(() => updateUserDataForUndoClanBattleJoin(client, userId));
+  return retryOnDeadlock(() => updateUserDataForUndoClanBattleJoin(client, userId));
 };
 
 /**
@@ -1687,10 +1826,10 @@ const undoClanBattleJoin = async (
  */
 export const removeFromClan = async (
   client: DrizzleClient,
-  clanData: NonNullable<ClanRouter["get"]>,
+  clanData: NonNullable<Awaited<ReturnType<typeof fetchClan>>>,
   user: UserData,
   reasons: string[],
-) => {
+): Promise<UserCachePatch | undefined> => {
   // Derived
   const userId = user.userId;
   const isLeader = clanData?.leaderId === userId;
@@ -1741,6 +1880,25 @@ export const removeFromClan = async (
         ]),
   ]);
   if (otherUser) await syncStrongholdMembership(client, clanData.villageId);
+  return otherUser
+    ? {
+        clan: {
+          id: clanData.id,
+          leaderId: isLeader ? otherUser.userId : clanData.leaderId,
+          coLeader1: coLeadersToRemove.includes(clanData.coLeader1)
+            ? null
+            : clanData.coLeader1,
+          coLeader2: coLeadersToRemove.includes(clanData.coLeader2)
+            ? null
+            : clanData.coLeader2,
+          coLeader3: coLeadersToRemove.includes(clanData.coLeader3)
+            ? null
+            : clanData.coLeader3,
+          elderNomineeId:
+            clanData.elderNomineeId === userId ? null : clanData.elderNomineeId,
+        },
+      }
+    : undefined;
 };
 
 /**
@@ -1757,16 +1915,15 @@ export const removeFromClanBattle = async (
 ) => {
   const entry = currentQueue.find((q) => q.userId === userId);
   if (!entry) return;
-  await Promise.all([
-    ...(currentQueue.length === 1
-      ? [
-          retryOnDeadlock(() =>
-            deleteMpvpBattleQueueForRemoveFromClanBattle(client, clanBattleId, entry),
-          ),
-        ]
-      : []),
+  const [, woke] = await Promise.all([
+    currentQueue.length === 1
+      ? retryOnDeadlock(() =>
+          deleteMpvpBattleQueueForRemoveFromClanBattle(client, clanBattleId, entry),
+        )
+      : undefined,
     undoClanBattleJoin(client, userId, entry.id),
   ]);
+  return woke;
 };
 
 export type ClanRouter = inferRouterOutputs<typeof clanRouter>;

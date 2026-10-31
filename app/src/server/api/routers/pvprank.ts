@@ -65,6 +65,7 @@ import {
   cleanRankedProhibitedSelections,
   fetchSanninRankedPlayers,
 } from "@/server/utils/ranked";
+import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canAwardReputation, canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -75,6 +76,7 @@ import {
   rankedQueueResponseSchema,
   rankedSeasonSchema,
 } from "@/validators/pvpRank";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const pvpRankRouter = createTRPCRouter({
   // Get the user's season rewards
@@ -125,9 +127,13 @@ export const pvpRankRouter = createTRPCRouter({
         reason: "RANKED_REWARDS",
       });
 
+      const cacheUpdate = getRewardUserUpdate({
+        rewards: processedRewards,
+      });
       return {
         success: true,
         message: "Season rewards claimed successfully",
+        ...cacheUpdate,
         rewards: {
           ...processedRewards,
           reward_titles: granted.titles.map((entry) => entry.name),
@@ -420,7 +426,7 @@ export const pvpRankRouter = createTRPCRouter({
   // Enter the ranked season
   enterRankedSeason: protectedProcedure
     .meta({ mcp: { description: "Enter the current ranked season" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -439,8 +445,17 @@ export const pvpRankRouter = createTRPCRouter({
         );
       }
       // Mutation
-      await updateUserDataForEnterRankedSeason(ctx.drizzle, user, ctx);
-      return { success: true, message: "Ranked season entered successfully" };
+      const result = await updateUserDataForEnterRankedSeason(ctx.drizzle, ctx);
+      if (result.rowsAffected !== 1)
+        return errorResponse(
+          "Your ranked entry or village prestige changed. Reload and try again.",
+        );
+      return {
+        success: true,
+        message: "Ranked season entered successfully",
+        userPatch: { rankedLp: 150 },
+        userDelta: { villagePrestige: -RANKED_ENTRY_COST },
+      };
     }),
 
   // Queue for ranked PVP battle

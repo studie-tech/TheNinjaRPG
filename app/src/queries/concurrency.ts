@@ -232,7 +232,7 @@ export const clearActiveNpcQuest = async ({
   userId: string;
   questId: string;
 }) => {
-  await client
+  return await client
     .update(userData)
     .set({ activeNpcQuestId: null })
     .where(and(eq(userData.userId, userId), eq(userData.activeNpcQuestId, questId)));

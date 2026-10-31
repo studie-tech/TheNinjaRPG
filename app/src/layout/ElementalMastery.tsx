@@ -20,16 +20,23 @@ import Link from "@/layout/Link";
 import { activeTrainedElement, providedElements } from "@/libs/elementalMastery";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 export const ElementalMastery = () => {
-  const { data: user } = useRequiredUserData();
+  const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const [message, setMessage] = useState("");
-  const onSuccess = async (result: { success: boolean; message: string }) => {
+  const onSuccess = async (
+    result: UserDeltaResponse,
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
     setMessage(result.message);
     showMutationToast(result);
     await Promise.all([
-      utils.profile.getUser.invalidate(),
+      ...(result.success
+        ? [updateUser(result.userPatch, { revision })]
+        : [utils.profile.getUser.invalidate()]),
       utils.profile.getPublicUser.invalidate(),
     ]);
   };
@@ -37,7 +44,11 @@ export const ElementalMastery = () => {
     setMessage("Could not save. Please try again.");
     void utils.profile.getUser.invalidate();
   };
-  const select = api.train.selectTrainedElement.useMutation({ onSuccess, onError });
+  const select = api.train.selectTrainedElement.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess,
+    onError,
+  });
   const isPending = select.isPending;
   if (!user) return null;
   const active = activeTrainedElement(user);

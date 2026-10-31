@@ -143,6 +143,8 @@ describeWithDatabase("shrine lobby objective war eligibility", () => {
 
     const result = await caller.initiateShrineBattle({ shrineBattleId: lobbyId });
     expect(result.success, result.message).toBe(true);
+    expect(result).not.toHaveProperty("userPatch");
+    expect(result).not.toHaveProperty("userDelta");
     const saved = (await db.query.battle.findFirst({ where: eq(battle.id, result.battleId!) }))!;
     expect(saved.battleType).toBe("SHRINE_WAR");
     expect(saved.extraState.wars[warId]?.objectiveState?.attackerEspionage).toBe(WAR_ESPIONAGE_TARGET);

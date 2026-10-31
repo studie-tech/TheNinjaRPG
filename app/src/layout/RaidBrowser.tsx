@@ -101,69 +101,94 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
     { enabled: !!selectedRaidId },
   );
 
+  // Preserve default error feedback while reconciling a potentially committed action.
+  const recoverUser = (_data: unknown, error: unknown) => {
+    if (error) return util.profile.getUser.invalidate();
+  };
   // Mutations
   const { mutate: joinQueue, isPending: joinPending } =
     api.raids.joinRaidQueue.useMutation({
+      onSettled: recoverUser,
       onMutate: prepareUserUpdate,
       onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         void util.raids.getUserRaidQueue.invalidate();
         void util.raids.getActiveRaidTeams.invalidate();
         void util.raids.getRaidDetails.invalidate();
-        if (data.success) {
-          void updateUser({ status: "QUEUED" }, { revision, delta: data.userDelta });
-        } else {
-          // Failed joins can roll back an already committed queue/status write.
-          void util.profile.getUser.invalidate();
-        }
+        void updateUser(data.userPatch, { revision, delta: data.userDelta });
       },
     });
 
   const { mutate: leaveQueue, isPending: leavePending } =
     api.raids.leaveRaidQueue.useMutation({
-      onSuccess: (data) => {
+      onSettled: recoverUser,
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         setIsReadyToQueue(false);
         void util.raids.getUserRaidQueue.invalidate();
         void util.raids.getActiveRaidTeams.invalidate();
         void util.raids.getRaidDetails.invalidate();
-        void util.profile.getUser.invalidate();
+        void updateUser(data.userPatch, {
+          revision,
+          delta: data.userDelta,
+          achievementProgress: data.achievementProgress,
+        });
       },
     });
 
   const { mutate: startBattle, isPending: startPending } =
     api.raids.startRaidBattle.useMutation({
-      onSuccess: (data) => {
+      onSettled: recoverUser,
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
         showMutationToast(data);
         void util.raids.getUserRaidQueue.invalidate();
         void util.raids.getRaidDetails.invalidate();
-        void util.profile.getUser.invalidate();
+        void updateUser(data.userPatch, {
+          revision,
+          delta: data.userDelta,
+          achievementProgress: data.achievementProgress,
+        });
       },
     });
 
   const { mutate: claimReward, isPending: claimPending } =
     api.raids.claimDamageReward.useMutation({
-      onSuccess: (data) => {
+      onSettled: recoverUser,
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
         if (data.success && "rewards" in data && data.rewards) {
-          showRewardToast([], data.rewards, data.message);
+          showRewardToast(data.announcements ?? [], data.rewards, data.message);
         } else {
           showMutationToast(data);
         }
         void util.raids.getRaidDetails.invalidate();
-        void util.profile.getUser.invalidate();
+        if (data.success)
+          void updateUser(data.userPatch, {
+            revision,
+            delta: data.userDelta,
+            achievementProgress: data.achievementProgress,
+          });
+        else void updateUser(undefined, { revision });
         if (data.success) void util.profile.getDashboard.invalidate();
       },
     });
 
   const { mutate: readyToQueue, isPending: readyPending } =
     api.raids.readyToQueue.useMutation({
-      onSuccess: (data) => {
+      onSettled: recoverUser,
+      onMutate: prepareUserUpdate,
+      onSuccess: (data, _variables, revision) => {
         if (data.success) {
           setIsReadyToQueue(true);
           void util.raids.getUserRaidQueue.invalidate();
           void util.raids.getActiveRaidTeams.invalidate();
-          void util.profile.getUser.invalidate();
         }
+        void updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
         showMutationToast(data);
       },
     });

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   BasicElementName,
   ElementNames,
+  FederalStatuses,
   MASTERY_RANKS,
   MasteryNames,
   OCCUPATIONS,
@@ -18,7 +19,6 @@ import type {
 import { baseServerResponse } from "@/validators/base";
 import { QuestTracker } from "@/validators/objectives";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
-import { boostTemplateEntrySchema } from "@/validators/shrine";
 
 export const userDeltaSchema = z.object({
   clan: z
@@ -26,6 +26,7 @@ export const userDeltaSchema = z.object({
       id: z.string(),
       bank: z.number().optional(),
       repTreasury: z.number().optional(),
+      points: z.number().optional(),
     })
     .optional(),
   village: z
@@ -47,8 +48,11 @@ export const userDeltaSchema = z.object({
   bloodlineMastery: z.number().optional(),
   sageMastery: z.number().optional(),
   dailyArenaFights: z.number().optional(),
+  pveFights: z.number().optional(),
+  dailyOverworldQuestRolls: z.number().optional(),
   dailySageActivations: z.number().optional(),
 
+  bank: z.number().optional(),
   money: z.number().optional(),
   petExperience: z.number().optional(),
   earnedExperience: z.number().optional(),
@@ -73,6 +77,29 @@ export type UserDelta = z.infer<typeof userDeltaSchema>;
 
 // Absolute values are kept separate from arithmetic deltas so a saved field is never added.
 export const userPatchSchema = z.object({
+  federalStatus: z.enum(FederalStatuses).optional(),
+  deletionAt: z.date().nullable().optional(),
+  isBanned: z.boolean().optional(),
+  isSilenced: z.boolean().optional(),
+  isTradeBanned: z.boolean().optional(),
+  isWarned: z.boolean().optional(),
+  rankedLp: z.number().optional(),
+  petTask: z.custom<NonNullable<UserWithRelations>["petTask"]>().optional(),
+  unreadNotifications: z.number().optional(),
+  activePetId: z.string().nullable().optional(),
+  petSlots: z.number().optional(),
+  petAcquisitions: z.number().optional(),
+  petDailyClaims: z
+    .object({ dayKey: z.string(), speciesIds: z.array(z.string()) })
+    .nullable()
+    .optional(),
+  bloodlineId: z.string().nullable().optional(),
+  bloodlineReskinId: z.string().nullable().optional(),
+  bloodline: z.custom<NonNullable<UserWithRelations>["bloodline"]>().optional(),
+  activeReskin: z.custom<NonNullable<UserWithRelations>["activeReskin"]>().optional(),
+  userSkills: z
+    .custom<NonNullable<UserWithRelations>["userSkills"]>(Array.isArray)
+    .optional(),
   cookingJobs: z
     .array(
       z.object({
@@ -91,6 +118,7 @@ export const userPatchSchema = z.object({
   dailySageActivations: z.number().optional(),
   dailyMedicalMissions: z.number().optional(),
   dailyWarMissions: z.number().optional(),
+  dailyOverworldQuestRolls: z.number().optional(),
   missionsD: z.number().optional(),
   missionsC: z.number().optional(),
   missionsB: z.number().optional(),
@@ -108,6 +136,12 @@ export const userPatchSchema = z.object({
   pvpFights: z.number().optional(),
   pvpExperience: z.number().optional(),
   pvpStreak: z.number().optional(),
+  dungeonsCompleted: z.number().optional(),
+  activeDungeonRunId: z.string().nullable().optional(),
+  raidsCompleted: z.number().optional(),
+  sageModeId: z.string().nullable().optional(),
+  sageMode: z.custom<NonNullable<UserWithRelations>["sageMode"]>().optional(),
+  titles: z.custom<NonNullable<UserWithRelations>["titles"]>(Array.isArray).optional(),
 
   updatedAt: z.date().optional(),
   petExperience: z.number().optional(),
@@ -203,33 +237,53 @@ export const userPatchSchema = z.object({
       ),
     )
     .optional(),
+  anbuId: z.string().nullable().optional(),
+  anbuSquad: z.custom<NonNullable<UserWithRelations>["anbuSquad"]>().optional(),
+  clanId: z.string().nullable().optional(),
+  villageId: z.string().nullable().optional(),
+  sector: z.number().optional(),
+  longitude: z.number().optional(),
+  latitude: z.number().optional(),
+  isOutlaw: z.boolean().optional(),
+  joinedVillageAt: z.date().optional(),
+  immunityUntil: z.date().optional(),
+  stealthActive: z.boolean().optional(),
+  stealthActivatedAt: z.date().nullable().optional(),
+  bracketImmunityLiftedUntil: z.date().nullable().optional(),
+  bracketImmunityPausedAt: z.date().nullable().optional(),
+  warParticipantUntil: z.date().nullable().optional(),
+  warMission: z.custom<NonNullable<UserWithRelations>["warMission"]>().optional(),
+  activeWars: z
+    .custom<NonNullable<UserWithRelations>["activeWars"]>(Array.isArray)
+    .optional(),
+  shrineBattles: z
+    .custom<NonNullable<UserWithRelations>["shrineBattles"]>(Array.isArray)
+    .optional(),
+  activeRaids: z
+    .custom<NonNullable<UserWithRelations>["activeRaids"]>(Array.isArray)
+    .optional(),
   clan: z
-    .object({
-      id: z.string(),
-      bank: z.number().optional(),
-      repTreasury: z.number().optional(),
-    })
+    .custom<
+      | (Partial<NonNullable<NonNullable<UserWithRelations>["clan"]>> & { id: string })
+      | null
+    >()
     .optional(),
   avatar: z.string().nullable().optional(),
   avatarLight: z.string().nullable().optional(),
   jutsuLoadout: z.string().optional(),
   loadout: z.object({ jutsuIds: z.array(z.string()) }).optional(),
   village: z
-    .object({
-      id: z.string(),
-      tokens: z.number().optional(),
-      hexColor: z.string().optional(),
-      shrineSettings: z
-        .object({
-          unlockedAiIds: z.array(z.string()).optional(),
-          activeBoosts: z.record(z.string(), z.string()).optional(),
-          activeAiIds: z.array(z.string()).optional(),
-          boostTemplate: z.array(boostTemplateEntrySchema).optional(),
-          boostTemplateUpdatedBy: z.string().optional(),
-          boostTemplateUpdatedAt: z.string().optional(),
+    .custom<
+      | (Partial<
+          Omit<NonNullable<NonNullable<UserWithRelations>["village"]>, "shrineSettings">
+        > & {
+          id: string;
+          shrineSettings?: Partial<
+            NonNullable<NonNullable<UserWithRelations>["village"]>["shrineSettings"]
+          >;
         })
-        .optional(),
-    })
+      | null
+    >()
     .optional(),
   occupation: z.enum(OCCUPATIONS).optional(),
   occupationSignupAt: z.date().optional(),
@@ -259,15 +313,27 @@ export const userPatchSchema = z.object({
     .optional(),
 });
 
+/** Scalar prerequisites supplied by the server for a confirmed cache update. */
+export const userExpectedSchema = userPatchSchema.pick({
+  status: true,
+  battleId: true,
+  activeDungeonRunId: true,
+  dungeonsCompleted: true,
+  clanId: true,
+});
+
 export const userDeltaResponseSchema = baseServerResponse.extend({
   userDelta: userDeltaSchema.optional(),
   userPatch: userPatchSchema.optional(),
+  userExpected: userExpectedSchema.optional(),
   url: z.string().nullish(),
   imageId: z.string().nullish(),
   videoId: z.string().nullish(),
   teamId: z.string().optional(),
   achievementProgress: z.custom<AchievementProgress[]>(Array.isArray).optional(),
   rewards: PostProcessedRewardSchema.optional(),
+  /** Feedback consumed by this response, independent of profile cache acceptance. */
+  announcements: z.array(z.string()).optional(),
   notifications: z.array(z.string()).optional(),
   userQuest: z
     .object({
@@ -286,3 +352,4 @@ export const userDeltaResponseSchema = baseServerResponse.extend({
 export type UserDeltaResponse = z.infer<typeof userDeltaResponseSchema>;
 
 export type UserCachePatch = z.infer<typeof userPatchSchema>;
+export type UserExpected = z.infer<typeof userExpectedSchema>;

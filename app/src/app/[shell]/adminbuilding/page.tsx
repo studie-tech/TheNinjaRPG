@@ -20,7 +20,8 @@ export default function AdministrationBuilding() {
   const util = api.useUtils();
 
   const [activeElement, setActiveElement] = useState<string>("");
-  const { userData, access } = useRequireInVillage("/adminbuilding");
+  const { userData, access, updateUser, prepareUserUpdate } =
+    useRequireInVillage("/adminbuilding");
 
   // Query
   const { data: hallData } = api.quests.allianceBuilding.useQuery(
@@ -36,12 +37,15 @@ export default function AdministrationBuilding() {
 
   // Mutations
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      await updateUser(data.userPatch, {
+        revision,
+        ...(data.userDelta ? { delta: data.userDelta } : {}),
+        achievementProgress: data.achievementProgress,
+      });
       showMutationToast(data);
-      await Promise.all([
-        util.profile.getUser.invalidate(),
-        util.quests.allianceBuilding.invalidate(),
-      ]);
+      await util.quests.allianceBuilding.invalidate();
     },
   });
 

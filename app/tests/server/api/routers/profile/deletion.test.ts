@@ -33,9 +33,10 @@ it.each([undefined, "", "delete my character", "Delete my character "])("rejects
 });
 
 it("starts a confirmed request and allows cancellation without typing", async () => {
-  expect(await caller().toggleDeletionTimer({ userId: "player", confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({ success: true });
+  const started = await caller().toggleDeletionTimer({ userId: "player", confirmation: CHARACTER_DELETION_CONFIRMATION });
+  expect(started).toMatchObject({ success: true, affectedUserId: "player", userPatch: { deletionAt: writeTimer.mock.calls[0]?.[1] }, userDelta: {} });
   deletionAt = new Date(Date.now() + 60_000);
-  expect(await caller().toggleDeletionTimer({ userId: "player" })).toMatchObject({ success: true });
+  expect(await caller().toggleDeletionTimer({ userId: "player" })).toMatchObject({ success: true, affectedUserId: "player", userPatch: { deletionAt: null }, userDelta: {} });
   expect(writeTimer).toHaveBeenCalledTimes(2);
 });
 

@@ -45,6 +45,7 @@ export const EventTournaments = ({
   staff?: boolean;
 }) => {
   const { data: user, status: userStatus } = useUserData();
+  const reconcile = useEventActionCache();
   const [editing, setEditing] = useState(false);
   const canManage = canManageTournaments(user?.role ?? "USER");
   const list = api.tournament.listEvents.useQuery(undefined, {
@@ -61,22 +62,23 @@ export const EventTournaments = ({
       utils.tournament.getEvent.invalidate(),
       utils.tournament.listEvents.invalidate(),
       utils.tournament.getEventNotices.invalidate(),
-      utils.profile.getUser.invalidate(),
     ]);
   };
   const [message, setMessage] = useState("");
   const manage = api.tournament.manageEvent.useMutation({
+    onSettled: reconcile.settle,
     onSuccess: async (result) => {
       setMessage(result.message);
       showMutationToast(result);
-      await refresh();
+      await Promise.all([refresh(), reconcile.apply()]);
     },
   });
   const participate = api.tournament.participateEvent.useMutation({
+    onSettled: reconcile.settle,
     onSuccess: async (result) => {
       setMessage(result.message);
       showMutationToast(result);
-      await refresh();
+      await Promise.all([refresh(), reconcile.apply()]);
     },
   });
   const event = details.data?.eventData;
@@ -85,13 +87,25 @@ export const EventTournaments = ({
     action: "JOIN" | "WITHDRAW" | "DECLINE" | "ACCEPT" | "READY" | "NOT_READY",
     seriesId?: string,
   ) => {
-    if (tournamentId) participate.mutate({ tournamentId, action, seriesId });
+    if (tournamentId)
+      participate.mutate({
+        tournamentId,
+        action,
+        seriesId,
+        originSocketId: reconcile.originSocketId(),
+      });
   };
   const staffAction = (
     action: "PUBLISH" | "SEED" | "BEGIN" | "CANCEL",
     extra: { payRewards?: boolean; scheduledAt?: number; seriesId?: string } = {},
   ) => {
-    if (tournamentId) manage.mutate({ tournamentId, action, ...extra });
+    if (tournamentId)
+      manage.mutate({
+        tournamentId,
+        action,
+        ...extra,
+        originSocketId: reconcile.originSocketId(),
+      });
   };
   if (userStatus === "pending") return <Loader explanation="Loading your account" />;
   if (staff && !canManage)
@@ -603,13 +617,17 @@ const StaffTournamentControls = ({
     defaultValues: { username: "", users: [] },
   });
   const utils = api.useUtils();
+  const reconcile = useEventActionCache();
   const mutation = api.tournament.manageEvent.useMutation({
+    onSettled: reconcile.settle,
     onSuccess: async (result) => {
       setMessage(result.message);
       showMutationToast(result);
       await Promise.all([
         utils.tournament.getEvent.invalidate(),
         utils.tournament.listEvents.invalidate(),
+        utils.tournament.getEventNotices.invalidate(),
+        reconcile.apply(),
       ]);
     },
   });
@@ -619,6 +637,7 @@ const StaffTournamentControls = ({
       action,
       seatId: seatId || undefined,
       userId: form.getValues("users")[0]?.userId,
+      originSocketId: reconcile.originSocketId(),
     });
   if (event.status === "COMPLETED") return null;
   if (event.status === "CANCELLED")
@@ -787,3 +806,23 @@ const StaffTournamentControls = ({
 
 /** Display event timestamps in the player's browser locale and time zone. */
 const date = (value: number) => new Date(value).toLocaleString();
+
+/** Reconcile synchronized launches, rewards and participation through the profile query. */
+const useEventActionCache = () => {
+  const { pusher } = useUserData();
+  const utils = api.useUtils();
+  return {
+    originSocketId: () => pusher?.connection.socket_id,
+    // Preserve the global error toast while recovering an action whose response was lost.
+    settle: (_result: unknown, error: unknown) => {
+      if (error)
+        return Promise.all([
+          utils.profile.getUser.invalidate(),
+          utils.tournament.getEvent.invalidate(),
+          utils.tournament.listEvents.invalidate(),
+          utils.tournament.getEventNotices.invalidate(),
+        ]);
+    },
+    apply: () => utils.profile.getUser.invalidate(),
+  };
+};

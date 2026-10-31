@@ -22,6 +22,10 @@ import {
   reputationAllowanceUsed,
 } from "@/server/utils/purchases/allowance";
 import {
+  fetchPurchaseUserCacheInputs,
+  getKnownPurchaseUserUpdate,
+} from "@/server/utils/purchases/cache";
+import {
   canonicalStoreUserId,
   isRetiredStoreUserId,
   setFederalStatusWithStoreFloor,
@@ -279,14 +283,14 @@ export const upgradeStripeFederalWithReps = async (
   userId: string,
   currentTier: FederalStatus,
   nextTier: FederalStatus,
+  inputs?: Awaited<ReturnType<typeof fetchPurchaseUserCacheInputs>>,
 ) => {
   const cost = calcFedUgradeCost(currentTier, nextTier);
   if (!cost || cost < 0) return errorResponse("Invalid federal support upgrade.");
-  const receipt = await findStripePaymentForUpgradeStripeFederalWithReps(
-    client,
-    userId,
-    currentTier,
-  );
+  const [receipt, purchaseInputs] = await Promise.all([
+    findStripePaymentForUpgradeStripeFederalWithReps(client, userId, currentTier),
+    inputs ?? fetchPurchaseUserCacheInputs(client, userId).catch(() => undefined),
+  ]);
   if (!receipt)
     return errorResponse(
       "Could not find a paid subscription you own for this upgrade.",
@@ -308,5 +312,13 @@ export const upgradeStripeFederalWithReps = async (
   return {
     success: true,
     message: "Federal support upgraded for the remainder of this billing period.",
+    ...getKnownPurchaseUserUpdate(
+      purchaseInputs,
+      { federalStatus: nextTier },
+      {
+        reputationPoints: -cost,
+        reputationPointsTotal: -cost,
+      },
+    ),
   };
 };

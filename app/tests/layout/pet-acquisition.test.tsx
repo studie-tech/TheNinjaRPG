@@ -38,7 +38,7 @@ beforeEach(() => {
     pets: testApi.pets,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: owner }) as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: owner, prepareUserUpdate: () => 1, updateUser: vi.fn(async () => {}) }) as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(Link, "default").mockImplementation(({ href, children }) => <a href={String(href)}>{children}</a>);

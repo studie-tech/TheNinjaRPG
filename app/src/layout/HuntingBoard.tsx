@@ -19,6 +19,7 @@ import {
 } from "@/libs/hunting/contracts";
 import { useUserData } from "@/utils/UserContext";
 import type { HuntingReceipt } from "@/validators/hunting";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /**
  * Browse and manage the same personal session from the occupation or combat result.
@@ -37,7 +38,7 @@ export function HuntingBoard({
 }) {
   const router = useRouter();
   const utils = api.useUtils();
-  const { updateUser } = useUserData();
+  const { updateUser, prepareUserUpdate } = useUserData();
   const [habitatId, setHabitatId] = useState("");
   const [creature, setCreature] = useState("");
   const [rank, setRank] = useState("");
@@ -50,33 +51,37 @@ export function HuntingBoard({
     refetchOnMount: "always",
   });
   /** Keep expected rejections beside the action and refetch authoritative state after success. */
-  const refresh = async (result: { success: boolean; message: string }) => {
+  const refresh = async (
+    result: UserDeltaResponse,
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
+    if (result.success || result.userPatch)
+      await updateUser(result.userPatch, { revision });
     setMessage(result.message);
     if (result.success)
-      await Promise.all([
-        board.refetch(),
-        utils.hunting.getSession.invalidate(),
-        utils.profile.getUser.invalidate(),
-      ]);
+      await Promise.all([board.refetch(), utils.hunting.getSession.invalidate()]);
   };
   const accept = api.hunting.accept.useMutation({
     onSuccess: refresh,
+    onMutate: prepareUserUpdate,
     onError: (e) => setMessage(e.message),
   });
   const action = api.hunting.sessionAction.useMutation({
     onSuccess: refresh,
+    onMutate: prepareUserUpdate,
     onError: (e) => setMessage(e.message),
   });
   const start = api.hunting.start.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       setMessage(result.message);
       if (result.success && "battleId" in result && result.battleId) {
         // Clear the previous result before publishing the new battle, as arena starts do.
         onStarted?.();
-        await updateUser({
-          status: "BATTLE",
-          battleId: result.battleId,
-          updatedAt: new Date(),
+        await updateUser(result.userPatch, {
+          revision,
+          ...(result.userDelta ? { delta: result.userDelta } : {}),
         });
         await Promise.all([
           utils.hunting.getBoard.invalidate(),

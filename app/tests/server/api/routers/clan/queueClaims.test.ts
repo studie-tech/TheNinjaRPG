@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import {
   battle,
@@ -15,7 +18,9 @@ import {
 import { Pusher } from "@/libs/pusher";
 import { clanRouter } from "@/server/api/routers/clan";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
+import { profileRouter } from "@/server/api/routers/profile";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
+import { prepareUserUpdate, updateUserCache, type UserPatch, type UserUpdateOptions } from "@/utils/userCache";
 import { insertUsers } from "../../../../setup/factories";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import {
@@ -87,6 +92,102 @@ describeWithDatabase("clan queue claim ownership", () => {
       slot: 0,
     });
   };
+
+  it.each(["before", "after", "lost", "disconnected", "reconnected"] as const)("recovers clan deletion once and preserves other sockets (%s)", async (delivery) => {
+    const db = await getTestDatabase();
+    await oldMembership();
+    await db.insert(mpvpBattleUser).values({ id: "enemy-old", clanBattleId: "old", userId: "enemy", side: "DEFENDER", slot: 0 });
+    await db.update(userData).set({ status: "QUEUED" });
+    const key = [["profile", "getUser"], { type: "query" }];
+    for (const userId of ["leader", "enemy"]) await callerForDatabase(profileRouter, userId, db).getUser();
+    const tabs = await Promise.all(["leader", "leader", "enemy"].map(async (userId, index) => {
+      const profile = callerForDatabase(profileRouter, userId, db);
+      const initial = await profile.getUser();
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      client.setQueryData(key, initial);
+      const read = vi.fn(() => profile.getUser());
+      const observer = new QueryObserver(client, { queryKey: key, queryFn: read, staleTime: Infinity });
+      const stop = observer.subscribe(() => {});
+      return { userId, client, read, stop, connection: { socket_id: delivery === "disconnected" && index === 0 ? undefined : `${index + 1}.1` } };
+    }));
+    const actor = tabs[0]!;
+    const source = readFileSync(join(import.meta.dirname, "../../../../../src/layout/Clan.tsx"), "utf8");
+    const callbacks = source.slice(source.indexOf("api.clan.deleteClanBattle.useMutation(")).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+    const action = source.match(/const onDeleteBattle = (async [\s\S]*?\n  \});/)?.[1];
+    if (!callbacks || !action) throw new Error("Clan deletion callbacks were not found");
+    const utilsFor = (tab: typeof actor) => ({ profile: { getUser: {
+      cancel: () => tab.client.cancelQueries({ queryKey: key, exact: true }),
+      invalidate: () => tab.client.invalidateQueries({ queryKey: key, exact: true }),
+    } }, clan: { getClanBattles: { invalidate: vi.fn() } }, combat: { getBattle: { invalidate: vi.fn() } } });
+    const options = new Function("prepareUserUpdate", "updateUser", "utils", `return (${callbacks});`)(
+      () => prepareUserUpdate(actor.client, key),
+      (patch: UserPatch | undefined, update: UserUpdateOptions) => updateUserCache(actor.client, key, patch, update),
+      utilsFor(actor),
+    ) as { onMutate?: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void>; onSettled: (data: unknown, error: unknown) => Promise<unknown> | undefined };
+    const handlerSource = readFileSync(join(import.meta.dirname, "../../../../../src/layout/PusherHandler.tsx"), "utf8");
+    const callback = handlerSource.match(/channel.bind\("event", (async [\s\S]*?\n      \})\);/)?.[1];
+    if (!callback) throw new Error("User event callback was not found");
+    const transpiler = new (require("bun").Transpiler)({ loader: "tsx", tsconfig: { compilerOptions: { jsx: "react" } } }) as { transformSync(source: string): string };
+    const factory = transpiler.transformSync(`function createHandler() { return (${callback}); }`);
+    const receivers = tabs.map((tab) => new Function("utils", "pusher", `${factory}\nreturn createHandler();`)(utilsFor(tab), { connection: tab.connection }) as (event: { type: string; originSocketId?: string }) => Promise<void>);
+    const trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+    const deliver = async () => {
+      for (const [index, tab] of tabs.entries()) {
+        if (delivery === "disconnected" && index === 0) continue;
+        const event = trigger.mock.calls.find(([recipient]) => recipient === tab.userId)?.[2];
+        if (event) await receivers[index]!(event as { type: string; originSocketId?: string });
+      }
+    };
+    const defaultError = vi.fn();
+    const removeBattle = vi.fn(async (input: { clanBattleId: string; originSocketId?: string }) => {
+      const revision = options.onMutate?.();
+      const result = await callerForDatabase(clanRouter, "leader", db).deleteClanBattle(input);
+      expect(result.success).toBe(true);
+      expect(result).not.toHaveProperty("userPatch");
+      if (delivery === "before" || delivery === "lost") await deliver();
+      if (delivery === "lost") {
+        const error = new Error("Response lost after deletion");
+        defaultError(error);
+        await options.onSettled(undefined, error);
+        throw error;
+      }
+      await options.onSuccess(result, input, revision);
+      await options.onSettled(result, undefined);
+      return result;
+    });
+    // Read the mutable connection at submission, including a newly connected socket.
+    if (delivery !== "disconnected") actor.connection.socket_id = "4.1";
+    const setDeleteError = vi.fn();
+    const invoke = new Function("deletingBattleId", "deleteSubmissionInFlight", "setDeleteError", "removeBattle", "pusher", "showMutationToast", "setDeletedBattleIds", "setDeletingBattleId", "joinedBattleId", "setJoinedBattleId", "utils", `return (${action});`)(
+      "old", { current: false }, setDeleteError, removeBattle, { connection: actor.connection }, vi.fn(), vi.fn(), vi.fn(), "old", vi.fn(), utilsFor(actor),
+    ) as () => Promise<void>;
+    try {
+      await invoke();
+      expect(removeBattle).toHaveBeenCalledWith({ clanBattleId: "old", originSocketId: delivery === "disconnected" ? undefined : "4.1" });
+      expect(actor.read).toHaveBeenCalledTimes(1);
+      if (["after", "disconnected", "reconnected"].includes(delivery)) {
+        if (delivery === "reconnected") actor.connection.socket_id = "5.1";
+        await deliver();
+      }
+      expect(actor.read).toHaveBeenCalledTimes(delivery === "reconnected" ? 2 : 1);
+      for (const tab of tabs.slice(1)) expect(tab.read).toHaveBeenCalledTimes(1);
+      for (const tab of tabs) expect(tab.client.getQueryData<{ userData: { status: string } }>(key)?.userData.status).toBe("AWAKE");
+      expect(defaultError).toHaveBeenCalledTimes(delivery === "lost" ? 1 : 0);
+      if (delivery === "lost") expect(setDeleteError).toHaveBeenCalledWith("Response lost after deletion");
+    } finally { for (const tab of tabs) { tab.stop(); tab.client.clear(); } }
+  });
+
+  it("returns the guarded wake outcome without a confirmation read", async () => {
+    const db = await getTestDatabase();
+    await oldMembership();
+    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "leader"));
+    const result = await callerForDatabase(clanRouter, "leader", db).leaveClanBattle({ clanBattleId: "old" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toEqual({ status: "AWAKE" });
+    expect(result.userDelta).toBeUndefined();
+    expect(await storedUser()).toEqual({ status: "AWAKE", battleId: null });
+    expect(await db.query.mpvpBattleUser.findMany()).toEqual([]);
+  });
 
   for (const operation of ["challenge", "join"] as const) {
     const join = (client: Awaited<ReturnType<typeof getTestDatabase>>) => {

@@ -22,6 +22,7 @@ import { getWarEspionage, getWarSide } from "@/libs/objectiveWar";
 import { pushToCombat } from "@/utils/routing";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Present masked objectives and war actions using the shared game surfaces and controls. */
 export const ObjectiveWarPanel = ({
@@ -39,7 +40,7 @@ export const ObjectiveWarPanel = ({
     success: boolean;
     message: string;
   } | null>(null);
-  const { data: user, updateUser, timeDiff } = useRequiredUserData();
+  const { data: user, updateUser, prepareUserUpdate, timeDiff } = useRequiredUserData();
   const router = useRouter();
   const utils = api.useUtils();
   const { data, error, isPending, refetch } = api.war.getObjectiveWarInfo.useQuery(
@@ -52,11 +53,19 @@ export const ObjectiveWarPanel = ({
     },
   );
   /** Refresh eligibility after accepted and rejected responses, retaining feedback by the controls. */
-  const refresh = (result: { success: boolean; message: string }) => {
+  const refresh = async (
+    result: UserDeltaResponse,
+    _variables: unknown,
+    revision: number | undefined,
+  ) => {
+    if (result.success || result.userPatch)
+      await updateUser(result.userPatch, {
+        revision,
+        ...(result.userDelta ? { delta: result.userDelta } : {}),
+      });
     setFeedback(result);
     void utils.war.getObjectiveWarInfo.invalidate({ warId });
     void utils.war.getActiveWars.invalidate();
-    void utils.profile.getUser.invalidate();
   };
   /** Publish the claimed battle locally before navigation so route guards see BATTLE. */
   const onBattleSuccess = async (result: {
@@ -77,7 +86,10 @@ export const ObjectiveWarPanel = ({
   /** Transport failures leave actions available for retry and remain visible in the panel. */
   const onError = (error: { message: string }) =>
     setFeedback({ success: false, message: error.message });
-  const onMutate = () => setFeedback(null);
+  const onMutate = () => {
+    setFeedback(null);
+    return prepareUserUpdate();
+  };
   const start = api.war.startWarMission.useMutation({
     onSuccess: refresh,
     onError,

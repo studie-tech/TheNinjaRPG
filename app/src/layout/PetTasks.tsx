@@ -20,7 +20,7 @@ import { formatQuestEntryCost } from "@/libs/questRun";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
-import type { PostProcessedRewards } from "@/validators/rewards";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Compact task management for the selected companion; the accepted task stays visible after job changes. */
 export const PetTasks = ({ petId }: { petId: string }) => {
@@ -298,6 +298,7 @@ const PetTaskTerms = ({
 
 /** Refresh authoritative task/account state even after a lost response, keeping committed dispatches recoverable. */
 const usePetTaskFeedback = () => {
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
   const openRewardChoice = useOpenRewardChoice();
   const [message, setMessage] = useState("");
@@ -309,29 +310,53 @@ const usePetTaskFeedback = () => {
       utils.quests.getPendingRewardChoices.invalidate(),
       utils.pets.getPet.invalidate(),
       utils.pets.getCollection.invalidate(),
-      utils.profile.getUser.invalidate(),
       utils.item.getUserItems.invalidate(),
     ]);
   return {
     message,
     handlers: {
-      onSuccess: async (data: {
-        success: boolean;
-        message: string;
-        rewards?: PostProcessedRewards;
-        notifications?: string[];
-        rewardChoicePending?: boolean;
-      }) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (
+        data: UserDeltaResponse & { closedAttempt?: { id: string; startedAt: number } },
+        _variables: unknown,
+        revision: number | undefined,
+      ) => {
         setMessage(data.success ? "" : data.message);
         if (data.success && data.rewards)
           showRewardToast(data.notifications ?? [], data.rewards, data.message);
         else showMutationToast(data);
         if (data.rewardChoicePending) void openRewardChoice();
-        await refresh();
+        await Promise.all([
+          refresh(),
+          data.success
+            ? updateUser(
+                data.userPatch
+                  ? (current) => ({
+                      ...data.userPatch,
+                      ...(data.closedAttempt
+                        ? {
+                            userQuests: current.userQuests.filter(
+                              (entry) =>
+                                entry.id !== data.closedAttempt?.id ||
+                                entry.startedAt?.getTime() !==
+                                  data.closedAttempt.startedAt,
+                            ),
+                          }
+                        : {}),
+                    })
+                  : undefined,
+                {
+                  revision,
+                  ...(data.userDelta ? { delta: data.userDelta } : {}),
+                  achievementProgress: data.achievementProgress,
+                },
+              )
+            : utils.profile.getUser.invalidate(),
+        ]);
       },
       onError: async (error: { message: string }) => {
         setMessage(error.message);
-        await refresh();
+        await Promise.all([refresh(), utils.profile.getUser.invalidate()]);
       },
     },
   };

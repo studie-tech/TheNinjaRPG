@@ -22,6 +22,7 @@ import {
   findDungeonMemberForClaim,
   findDungeonMemberForCreate,
   findDungeonRequirementSources,
+  findDungeonRewardUserCache,
   findDungeonRunForAct,
   findMapAssetForSave,
   findUserDataForGetAvailable,
@@ -62,6 +63,7 @@ import type { DrizzleClient } from "@/server/db";
 import { launchCoopEncounter } from "@/server/utils/coop";
 import { expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import { dungeonAdmission, fetchDungeonEntryData } from "@/server/utils/dungeonEntry";
+import { getDungeonRewardUserUpdate } from "@/server/utils/dungeonUserCache";
 import { notifyMapLocationsChanged } from "@/server/utils/mapLocations";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { canChangeContent } from "@/utils/permissions";
@@ -109,6 +111,11 @@ export const dungeonRouter = createTRPCRouter({
     const expiryNeedsRefresh = await Promise.all(
       runs.map((run) => expireDungeonRun(ctx.drizzle, run)),
     );
+    // Cleanup can restore pools and immunity as well as releasing the reservation.
+    let requiresUserRefresh = runs.some(
+      (run, index) =>
+        expiryNeedsRefresh[index] && run.state.memberIds.includes(ctx.userId),
+    );
     const ids = [
       ...new Set(runs.flatMap((r) => [...r.state.memberIds, ...r.state.invitedIds])),
     ];
@@ -131,7 +138,10 @@ export const dungeonRouter = createTRPCRouter({
           );
           if (run) {
             const claim = await claimDungeonQueue(ctx.drizzle, user.userId, run.id);
-            if (claim.rowsAffected === 1) user.status = "QUEUED";
+            if (claim.rowsAffected === 1) {
+              user.status = "QUEUED";
+              if (user.userId === ctx.userId) requiresUserRefresh = true;
+            }
           }
         }),
     );
@@ -151,6 +161,9 @@ export const dungeonRouter = createTRPCRouter({
       const missing = interrupted.filter(
         (r) => r.status === "STARTING" || !battles.some((b) => b.id === r.battleId),
       );
+      requiresUserRefresh ||= missing.some((run) =>
+        run.state.memberIds.includes(ctx.userId),
+      );
       await Promise.all(
         missing.map((r) =>
           rollbackDungeonStart(
@@ -169,11 +182,27 @@ export const dungeonRouter = createTRPCRouter({
       if (missing.length)
         currentRuns = await listDungeonRunForGetState(ctx.drizzle, currentRuns);
     }
+    const actor = users.find((user) => user.userId === ctx.userId);
     return {
       runs: currentRuns,
-      users,
+      // Battle identity is private to the actor's cache prerequisite, not the roster.
+      users: users.map(({ battleId: _battleId, ...user }) => user),
       members: members.filter((m) => m.userId === ctx.userId),
       serverTime: new Date(),
+      userPatch: requiresUserRefresh ? undefined : {},
+      // A different poll may have performed cleanup before these reads. Validate the
+      // observed account and reservation even when this invocation performed no writes.
+      userExpected: {
+        ...(actor ? { status: actor.status, battleId: actor.battleId } : {}),
+        activeDungeonRunId:
+          members.find(
+            (member) =>
+              member.activeUserId === ctx.userId &&
+              currentRuns.some(
+                (run) => run.id === member.runId && run.status !== "ENDED",
+              ),
+          )?.runId ?? null,
+      },
     };
   }),
   /** Staff may inspect hidden and expired definitions when authoring dungeon content. */
@@ -384,7 +413,12 @@ export const dungeonRouter = createTRPCRouter({
           return errorResponse("You already joined another dungeon.");
         throw error;
       }
-      return { success: true, message: "Lobby created.", id };
+      return {
+        success: true,
+        message: "Lobby created.",
+        userPatch: { status: "QUEUED" as const, activeDungeonRunId: id },
+        id,
+      };
     }),
   /** Apply one party version; membership changes also commit their cross-run reservation. */
   act: protectedProcedure
@@ -398,9 +432,11 @@ export const dungeonRouter = createTRPCRouter({
         listDungeonMemberForAct(ctx.drizzle, ctx, input),
       ]);
       if (!run || !user) return errorResponse("Dungeon not found.");
-      if (run.expiresAt && run.expiresAt.getTime() <= Date.now()) {
-        await expireDungeonRun(ctx.drizzle, run);
-        return errorResponse("The dungeon deadline expired.");
+      if (await expireDungeonRun(ctx.drizzle, run)) {
+        return {
+          ...errorResponse("The dungeon deadline expired."),
+          userPatch: undefined,
+        };
       }
       const { action } = input;
       const transition = transitionCoopParty(
@@ -463,7 +499,7 @@ export const dungeonRouter = createTRPCRouter({
         const expiresAt = run.state.entryPaidAt
           ? (run.expiresAt ?? secondsFromNow(DUNGEON_RUN_SECONDS))
           : secondsFromNow(DUNGEON_RUN_SECONDS);
-        return launchCoopEncounter({
+        const result = await launchCoopEncounter({
           reserve: async ({ battleId }) => {
             const claimed = await updateDungeonRunForReserve(
               ctx.drizzle,
@@ -478,6 +514,7 @@ export const dungeonRouter = createTRPCRouter({
             initiateBattle(
               {
                 client: ctx.drizzle,
+                cacheUserId: ctx.userId,
                 userIds: state.memberIds,
                 targetIds: floor.waves.flatMap((w) => w.aiIds),
                 biome: run.content.background,
@@ -503,6 +540,7 @@ export const dungeonRouter = createTRPCRouter({
           recover: ({ battleId }) =>
             rollbackDungeonStart(ctx.drizzle, run, battleId, run.version + 1),
         });
+        return result;
       }
 
       const queueChanged = new Error("Dungeon queue claim changed");
@@ -534,7 +572,15 @@ export const dungeonRouter = createTRPCRouter({
             : updateParty(ctx.drizzle),
         );
         return saved
-          ? { success: true, message: "Party updated." }
+          ? {
+              success: true,
+              message: "Party updated.",
+              userPatch: joined
+                ? { status: "QUEUED" as const, activeDungeonRunId: run.id }
+                : ending || removedUser === ctx.userId
+                  ? undefined
+                  : {},
+            }
           : errorResponse("The party changed. Refresh and try again.");
       } catch (error) {
         if (error === queueChanged)
@@ -552,15 +598,19 @@ export const dungeonRouter = createTRPCRouter({
       const [run, member, user] = await Promise.all([
         findDungeonRunForAct(ctx.drizzle, input),
         findDungeonMemberForClaim(ctx.drizzle, input, ctx),
-        findUserById(ctx.drizzle, ctx.userId),
+        findDungeonRewardUserCache(ctx.drizzle, ctx.userId),
       ]);
       if (!run || !member || !user || !run.state.memberIds.includes(ctx.userId))
         return errorResponse("You are not in this party.");
+      // The independently loaded actor can predate a concurrently committed receipt.
+      // Omit cache updates so replay reconciles through the canonical profile query.
       if (member.reward)
         return {
           success: true,
           message: "Rewards already delivered.",
           reward: member.reward,
+          userPatch: undefined,
+          userDelta: undefined,
         };
       if (
         run.status !== "COMPLETED" ||
@@ -651,7 +701,15 @@ export const dungeonRouter = createTRPCRouter({
         }),
       );
       return receipt
-        ? { success: true, message: "Completion rewards delivered.", reward: receipt }
+        ? {
+            success: true,
+            message: "Completion rewards delivered.",
+            reward: receipt,
+            // Releasing this squad changes navigation; a newer reservation must remain visible.
+            ...(member.activeUserId === ctx.userId
+              ? { userPatch: undefined, userDelta: undefined }
+              : getDungeonRewardUserUpdate(user, receipt.rewards)),
+          }
         : errorResponse("Rewards were already claimed. Refresh to view your receipt.");
     }),
 });

@@ -320,16 +320,21 @@ export const updateRankedLoadoutForUpdateRankedLoadout = (
  */
 export const updateUserDataForEnterRankedSeason = (
   client: Pick<DrizzleClient, "update">,
-  user: { villagePrestige: number },
   ctx: { userId: string },
 ) =>
   client
     .update(userData)
     .set({
       rankedLp: 150,
-      villagePrestige: user.villagePrestige - RANKED_ENTRY_COST,
+      villagePrestige: sql`${userData.villagePrestige} - ${RANKED_ENTRY_COST}`,
     })
-    .where(eq(userData.userId, ctx.userId));
+    .where(
+      and(
+        eq(userData.userId, ctx.userId),
+        lte(userData.rankedLp, 0),
+        gte(userData.villagePrestige, RANKED_ENTRY_COST),
+      ),
+    );
 
 /** Build the `rankedPvpQueue` insert for `queueForRankedPvp`. */
 export const insertRankedPvpQueueForQueueForRankedPvp = (

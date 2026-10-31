@@ -114,7 +114,7 @@ import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequireInVillage } from "@/utils/UserContext";
+import { useRequireInVillage, useUserData } from "@/utils/UserContext";
 import { UploadButton } from "@/utils/uploadthing";
 import {
   createMoneyTransferSchema,
@@ -344,7 +344,9 @@ interface ClanBattlesProps {
 export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   // Data
   const { clanId, canCreate } = props;
-  const { userData, timeDiff } = useRequireInVillage("/clanhall");
+  const { userData, timeDiff, updateUser, prepareUserUpdate } =
+    useRequireInVillage("/clanhall");
+  const { pusher } = useUserData();
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [deletingBattleId, setDeletingBattleId] = useState<string | null>(null);
@@ -385,14 +387,30 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   const router = useRouter();
 
   const { mutateAsync: removeBattle, isPending: isDeletingBattle } =
-    api.clan.deleteClanBattle.useMutation();
+    api.clan.deleteClanBattle.useMutation({
+      // A lost response may have committed deletion while its socket echo was suppressed.
+      onSettled: (_data, error) => {
+        if (error)
+          return Promise.all([
+            utils.profile.getUser.invalidate(),
+            utils.clan.getClanBattles.invalidate(),
+            utils.combat.getBattle.invalidate(),
+          ]);
+      },
+      onSuccess: async (data) => {
+        if (data.success) await utils.profile.getUser.invalidate();
+      },
+    });
   /** Keep rejection feedback in the dialog and refresh combat/profile after deletion. */
   const onDeleteBattle = async () => {
     if (!deletingBattleId || deleteSubmissionInFlight.current) return;
     deleteSubmissionInFlight.current = true;
     setDeleteError("");
     try {
-      const result = await removeBattle({ clanBattleId: deletingBattleId });
+      const result = await removeBattle({
+        clanBattleId: deletingBattleId,
+        originSocketId: pusher?.connection.socket_id,
+      });
       showMutationToast(result);
       if (!result.success) {
         setDeleteError(result.message);
@@ -403,7 +421,6 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       if (joinedBattleId === deletingBattleId) setJoinedBattleId(null);
       await Promise.all([
         utils.clan.getClanBattles.invalidate(),
-        utils.profile.getUser.invalidate(),
         utils.combat.getBattle.invalidate(),
       ]);
     } catch (error) {
@@ -427,7 +444,13 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     });
 
   const { mutateAsync: join } = api.clan.joinClanBattle.useMutation({
-    onSuccess: (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -452,10 +475,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
         next.delete(clanBattleId);
         return next;
       });
-      void Promise.all([
-        utils.profile.getUser.invalidate(),
-        utils.clan.getClanBattles.invalidate(),
-      ]).catch(() => undefined);
+      void utils.clan.getClanBattles.invalidate().catch(() => undefined);
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -465,7 +485,13 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   };
 
   const { mutateAsync: leave } = api.clan.leaveClanBattle.useMutation({
-    onSuccess: (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -486,10 +512,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       // best-effort so a transient refetch failure cannot expose a stale retry.
       setLeftBattleIds((current) => new Set(current).add(clanBattleId));
       setJoinedBattleId(null);
-      void Promise.all([
-        utils.profile.getUser.invalidate(),
-        utils.clan.getClanBattles.invalidate(),
-      ]).catch(() => undefined);
+      void utils.clan.getClanBattles.invalidate().catch(() => undefined);
     } catch {
       // The mutation's onError callback provides the user-facing error feedback.
     } finally {
@@ -503,7 +526,13 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   };
 
   const { mutateAsync: kick } = api.clan.kickFromClanBattle.useMutation({
-    onSuccess: (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -538,10 +567,8 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
       // stale queue cannot expose a second kick for the same member.
       kickedTargets.current.add(targetKey);
       setKickedTargetKeys((current) => new Set(current).add(targetKey));
-      void Promise.all([
-        utils.profile.getUser.invalidate(),
-        utils.clan.getClanBattles.invalidate(),
-      ])
+      void utils.clan.getClanBattles
+        .invalidate()
         .then(() => {
           // The refreshed queue is now authoritative. Stop suppressing this key
           // so a legitimate later rejoin to the same battle becomes visible.
@@ -585,13 +612,16 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
 
   const { mutate: initiate, isPending: isInitiating } =
     api.clan.initiateClanBattle.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success || data.userPatch)
+          await updateUser(data.userPatch, {
+            revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([
-            utils.profile.getUser.invalidate(),
-            utils.clan.getClanBattles.invalidate(),
-          ]);
+          await utils.clan.getClanBattles.invalidate();
           if (data.battleId) pushToCombat(router, data.battleId);
         }
       },
@@ -1237,18 +1267,14 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   const { mutateAsync: editColor, isPending: isEditingColor } =
     api.clan.editClanColor.useMutation({
       onMutate: prepareUserUpdate,
-      onSuccess: async (data, input, revision) => {
+      onSuccess: async (data, _input, revision) => {
         showMutationToast(data);
         if (data.success)
-          await updateUser(
-            (current) =>
-              current.village &&
-              current.village.id === data.userPatch?.village?.id &&
-              current.clanId === input.clanId
-                ? { village: { ...current.village, hexColor: input.color } }
-                : undefined,
-            { revision, delta: data.userDelta },
-          ).catch(() => undefined);
+          await updateUser(data.userPatch, {
+            revision,
+            delta: data.userDelta,
+            expected: data.userExpected,
+          }).catch(() => undefined);
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1257,8 +1283,15 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const { mutateAsync: leave, isPending: isLeavingClan } =
     api.clan.leaveClan.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.success || data.userPatch)
+          await updateUser(data.userPatch, {
+            revision,
+            achievementProgress: data.achievementProgress,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1278,10 +1311,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       // action open or make navigation depend on the network.
       setHasLeftGroup(true);
       setIsLeaveModalOpen(false);
-      void updateUser({ clanId: null });
       router.push("/clanhall");
       void Promise.allSettled([
-        utils.profile.getUser.invalidate(),
         utils.clan.get.invalidate(),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -1295,7 +1326,13 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const { mutateAsync: demote, isPending: isResigningLeadership } =
     api.clan.demoteMember.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
+        if (data.success || data.userPatch)
+          await updateUser(data.userPatch, {
+            revision,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
         showMutationToast(data);
       },
       onError: (error) => {
@@ -1390,7 +1427,13 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
     mutateAsync: upgradeHideoutToStronghold,
     isPending: isUpgradingToStronghold,
   } = api.clan.upgradeHideoutToStronghold.useMutation({
-    onSuccess: (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
       showMutationToast(data);
     },
     onError: (error) => {
@@ -1412,7 +1455,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       setIsStrongholdUpgradeModalOpen(false);
       void Promise.allSettled([
         utils.clan.get.invalidate(),
-        utils.profile.getUser.invalidate(),
         utils.village.getSectorOwnerships.invalidate(),
       ]);
     } catch {
@@ -1453,8 +1495,15 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   const { mutateAsync: instantJoinAndLead, isPending: isInstantlyJoiningAndLeading } =
     api.clan.instantJoinAndLead.useMutation({
-      onSuccess: (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
+        if (data.success || data.userPatch)
+          await updateUser(data.userPatch, {
+            revision,
+            achievementProgress: data.achievementProgress,
+            ...(data.userDelta ? { delta: data.userDelta } : {}),
+          });
       },
       onError: (error) => {
         showMutationToast({ success: false, message: error.message });
@@ -1480,10 +1529,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
       // before navigation; authoritative refreshes must never recreate the action.
       setHasInstantlyTakenLeadership(true);
       setIsInstantJoinModalOpen(false);
-      void updateUser({ clanId, villageId: clanData.village.id });
       router.push("/clanhall");
       void Promise.allSettled([
-        utils.profile.getUser.invalidate(),
         utils.clan.get.invalidate(),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -2516,7 +2563,7 @@ interface ClanMembersProps {
 export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
   // Destructure
   const { userId, clanId } = props;
-  const { userData } = useRequireInVillage("/clanhall");
+  const { userData, updateUser, prepareUserUpdate } = useRequireInVillage("/clanhall");
   const groupLabel = userData?.isOutlaw ? "faction" : "clan";
 
   // State
@@ -2564,18 +2611,47 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
 
   // Mutations
   const { mutateAsync: kick } = api.clan.kickMember.useMutation({
+    onMutate: prepareUserUpdate,
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
+    },
+
+    onSuccess: async (data, _variables, revision) => {
+      showMutationToast(data);
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          achievementProgress: data.achievementProgress,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
     },
   });
   const { mutateAsync: promote } = api.clan.promoteMember.useMutation({
+    onMutate: prepareUserUpdate,
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
     },
+
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
+    },
   });
   const { mutateAsync: demote } = api.clan.demoteMember.useMutation({
+    onMutate: prepareUserUpdate,
     onError: (error) => {
       showMutationToast({ success: false, message: error.message });
+    },
+
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
     },
   });
 
@@ -2715,7 +2791,6 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
     setPendingKickMemberId(memberId);
     try {
       const data = await kick({ clanId, memberId });
-      showMutationToast(data);
       if (!data.success) return;
 
       // The successful response proves this exact member was removed. Hide only
@@ -2725,7 +2800,6 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       setKickTargetId(null);
 
       await Promise.allSettled([
-        utils.profile.getUser.invalidate(),
         utils.clan.get.invalidate({ clanId }),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -2765,7 +2839,6 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       setPromoteTargetId(null);
 
       await Promise.allSettled([
-        utils.profile.getUser.invalidate(),
         utils.clan.get.invalidate({ clanId }),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -2811,7 +2884,6 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
       setDemoteTargetId(null);
 
       void Promise.allSettled([
-        utils.profile.getUser.invalidate(),
         utils.clan.get.invalidate({ clanId }),
         utils.clan.getRequests.invalidate(),
       ]);
@@ -3403,13 +3475,23 @@ const BoostRow: React.FC<BoostRowProps> = ({
 
 /** Confirm a clan-bank conversion and keep expected rejections visible for retry. */
 function ClanPointConversion({ clanId, points }: { clanId: string; points: number }) {
+  const { updateUser, prepareUserUpdate } = useRequireInVillage("/clanhall");
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState(1);
   const [error, setError] = useState("");
   // Modal callbacks can repeat before React renders the mutation's pending state.
   const submitting = useRef(false);
   const utils = api.useUtils();
-  const { mutateAsync: convert, isPending } = api.clan.convertPointsToRyo.useMutation();
+  const { mutateAsync: convert, isPending } = api.clan.convertPointsToRyo.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userPatch)
+        await updateUser(data.userPatch, {
+          revision,
+          ...(data.userDelta ? { delta: data.userDelta } : {}),
+        });
+    },
+  });
   const isValid = Number.isSafeInteger(amount) && amount > 0 && amount <= points;
   const onConvert = async () => {
     if (!isValid || submitting.current) return;
@@ -3425,10 +3507,7 @@ function ClanPointConversion({ clanId, points }: { clanId: string; points: numbe
       setIsOpen(false);
       setAmount(1);
       // Profile data also embeds clan balances used outside the clan hall.
-      await Promise.all([
-        utils.clan.get.invalidate(),
-        utils.profile.getUser.invalidate(),
-      ]);
+      await utils.clan.get.invalidate();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not convert points");
     } finally {

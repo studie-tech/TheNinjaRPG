@@ -189,8 +189,10 @@ export function NewOfferDialog({
   });
   const requestedId = useWatch({ control: form.control, name: "requestedItemId" });
   const offeredId = useWatch({ control: form.control, name: "offeredUserItemId" });
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const create = api.auction.createAuctionOffer.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
       if (result.success) {
         setIsOpen(false);
@@ -200,7 +202,7 @@ export function NewOfferDialog({
         await Promise.all([
           utils.auction.getAuctionOffers.invalidate(),
           utils.item.getUserItems.invalidate(),
-          utils.profile.getUser.invalidate(),
+          updateUser(result.userPatch, { revision, delta: result.userDelta }),
         ]);
       } else setError(result.message);
     },
@@ -420,30 +422,38 @@ function OfferCard({
   const [isOpen, setIsOpen] = useState(false);
   const [suppliedId, setSuppliedId] = useState("");
   const [error, setError] = useState("");
+  const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const refresh = async () => {
     await Promise.all([
       utils.auction.getAuctionOffers.invalidate(),
       utils.item.getUserItems.invalidate(),
-      utils.profile.getUser.invalidate(),
     ]);
   };
   const accept = api.auction.acceptAuctionOffer.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
       if (result.success) {
         setIsOpen(false);
         setError("");
-        await refresh();
+        await Promise.all([
+          refresh(),
+          updateUser(result.userPatch, { revision, delta: result.userDelta }),
+        ]);
       } else setError(result.message);
     },
     onError: (error) => setError(error.message),
   });
   const cancel = api.auction.cancelAuctionOffer.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
       if (result.success) {
         setError("");
-        await refresh();
+        await Promise.all([
+          refresh(),
+          updateUser(result.userPatch, { revision, delta: result.userDelta }),
+        ]);
       } else setError(result.message);
     },
     onError: (error) => setError(error.message),

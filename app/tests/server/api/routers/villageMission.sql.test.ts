@@ -223,6 +223,23 @@ describeWithDatabase("Village Missions and maintenance on real MySQL", () => {
     expect((await caller.get({ id: "v1" }))?.mission?.objectives[0]?.current).toBe(0);
   });
 
+  it("returns the confirmed mission clear and token delta without a postwrite SELECT", async () => {
+    const db = await getTestDatabase();
+    const caller = await leader();
+    await caller.select({ villageId: "v1" });
+    const missionId = (await state())!.activeMission!.id;
+    await recordVillageMissionProgress(db, "v1", "member", { combined_mission_effort: 14 });
+    const { result, statements } = await recordQueries(() => caller.claim({ villageId: "v1", missionId }));
+    expect(result).toMatchObject({ success: true,
+      userPatch: { village: { id: "v1", activeMission: null } },
+      userDelta: { village: { id: "v1", tokens: 100_000 } },
+    });
+    const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
+    expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
+    expect((await caller.claim({ villageId: "v1", missionId })).success).toBe(false);
+    expect(await state()).toMatchObject({ tokens: 600_000, activeMission: null });
+  });
+
   it.each([[100_000, 113_000], [50, 57]])("rounds %s Village Mission tokens with the claiming Kage's loyalty exactly once", async (rewardTokens, expectedTokens) => {
     const db = await getTestDatabase();
     await db.update(quest).set({ content: { reward: ObjectiveReward.parse({ reward_tokens: rewardTokens }), objectives: [SimpleObjective.parse(objective)], sceneBackground: "", sceneCharacters: [] } }).where(eq(quest.questType, "village_mission"));
@@ -232,7 +249,9 @@ describeWithDatabase("Village Missions and maintenance on real MySQL", () => {
     const missionId = (await state())?.activeMission?.id;
     await recordVillageMissionProgress(db, "v1", "member", { combined_mission_effort: 14 });
     const results = await Promise.all([caller.claim({ villageId: "v1", missionId }), caller.claim({ villageId: "v1", missionId })]);
-    expect(results.filter((result) => result.success)).toEqual([{ success: true, message: `${expectedTokens.toLocaleString()} tokens awarded to the village` }]);
+    const successful = results.filter((result) => result.success);
+    expect(successful).toHaveLength(1);
+    expect(successful[0]).toMatchObject({ success: true, message: `${expectedTokens.toLocaleString()} tokens awarded to the village`, userPatch: { village: { id: "v1", activeMission: null } }, userDelta: { village: { id: "v1", tokens: expectedTokens } } });
     expect((await state())?.tokens).toBe(500_000 + expectedTokens);
     expect((await state())?.activeMission).toBeNull();
     expect((await caller.claim({ villageId: "v1", missionId })).success).toBe(false);
