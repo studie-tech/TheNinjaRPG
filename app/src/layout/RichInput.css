@@ -23,3 +23,6 @@
 .rich-input-editor .ql-editor h2 { font-size: 1.25em; font-weight: 700; margin: 0.75rem 0; }
 .rich-input-editor .ql-editor h3 { font-size: 1.125em; font-weight: 600; margin: 0.5rem 0; }
 .rich-input-editor .ql-editor blockquote { border-left: 4px solid hsl(var(--primary)); padding-left: 0.75rem; margin: 0.75rem 0; font-style: italic; }
+/* One-row composer: a 32px line box so the inline buttons align with the text. */
+.rich-input-compact .ql-editor { padding: 6px 8px; }
+.rich-input-compact .ql-editor.ql-blank::before { left: 8px; right: 8px; }

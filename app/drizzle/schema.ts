@@ -2920,6 +2920,8 @@ export const userData = mysqlTable(
     sfxOn: boolean("sfxOn").default(true).notNull(),
     buttonSfxOn: boolean("buttonSfxOn").default(true).notNull(),
     iframesMuted: boolean("iframesMuted").default(false).notNull(),
+    chatMuted: boolean("chatMuted").default(false).notNull(),
+    mutedConversationIds: json("mutedConversationIds").$type<string[]>().default([]).notNull(),
     tutorialStep: tinyint("tutorialStep", { unsigned: true }).default(0).notNull(),
     tutorialOn: boolean("tutorialOn").default(true).notNull(),
     homeType: mysqlEnum("homeType", consts.HomeTypes).default("NONE").notNull(),

@@ -171,6 +171,25 @@ describe("conversation comment row isolation", () => {
     return { renders, parses };
   };
 
+  it("lists compact chat oldest first and loads older history from the top", () => {
+    observeRows();
+    const setLastElement = vi.fn();
+    // Pages arrive newest first.
+    const view = render(
+      <ConversationComments
+        {...listProps([row("3"), row("2"), row("1")])}
+        compact
+        setLastElement={setLastElement}
+      />,
+    );
+    const ids = Array.from(view.container.querySelectorAll("[data-testid]")).map(
+      (element) => element.getAttribute("data-testid"),
+    );
+    expect(ids).toEqual(["1", "2", "3"]);
+    const sentinel = setLastElement.mock.calls.find(([element]) => element)?.[0];
+    expect(sentinel?.textContent).toContain("Message 1");
+  });
+
   it("renders only changed cached rows in a 100-message history and reparses only changed content", () => {
     const { renders, parses } = observeRows();
     const history = Array.from({ length: 100 }, (_, i) => row(String(i)));

@@ -1,8 +1,7 @@
 "use client";
 
 import { UserRoundX } from "lucide-react";
-import { useEffect, useMemo } from "react";
-import { api } from "@/app/_trpc/client";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -13,12 +12,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { useSectorVillage } from "@/hooks/useSectorVillage";
+import { useTaverns } from "@/hooks/useTaverns";
 import BanInfo from "@/layout/BanInfo";
 import Conversation, { ConversationSkeleton } from "@/layout/Conversation";
 import NavTabs from "@/layout/NavTabs";
 import UserBlacklistControl from "@/layout/UserBlacklistControl";
-import { findVillageUserRelationship } from "@/utils/alliance";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export default function Tavern() {
@@ -30,48 +28,13 @@ export default function Tavern() {
 
   // Data
   const { data: userData } = useRequiredUserData();
-  const { data: villages } = api.village.getAll.useQuery(undefined, {
-    enabled: !!userData,
-  });
-  const { sectorVillage, isLoading: isLoadingSector } = useSectorVillage(userData);
-  const { data: globalTavernEnabled = true, isPending: isLoadingGlobalTavern } =
-    api.misc.getGlobalTavernEnabled.useQuery();
-
-  // Tavern name based on user village
-  const localTavern = useMemo(() => {
-    let tavern =
-      ["OUTLAW", "STRONGHOLD", "VILLAGE"].includes(userData?.village?.type ?? "") &&
-      userData?.village?.name
-        ? userData?.village?.name
-        : "Syndicate";
-
-    // Change to ally tavern if relevant
-    if (sectorVillage && userData) {
-      const relationship = findVillageUserRelationship(
-        sectorVillage,
-        userData.villageId ?? "syndicate",
-      );
-      if (relationship?.status === "ALLY") {
-        tavern = sectorVillage.name;
-      }
-    }
-    return tavern;
-  }, [userData, sectorVillage]);
-
-  // Check if user can access global tavern (enabled OR non-USER role)
-  const canAccessGlobal = globalTavernEnabled || userData?.role !== "USER";
-
-  // Check available taverns
-  const availTaverns = canAccessGlobal ? ["Global", localTavern] : [localTavern];
-  if (userData?.role !== "USER") {
-    villages
-      ?.filter((v) => ["OUTLAW", "VILLAGE"].includes(v.type))
-      .map((v) => v.name)
-      .filter((v) => !availTaverns.includes(v))
-      .forEach((v) => {
-        availTaverns.push(v);
-      });
-  }
+  const {
+    availTaverns,
+    localTavern,
+    canAccessGlobal,
+    globalTavernEnabled,
+    isLoading: isLoadingTaverns,
+  } = useTaverns(userData);
 
   // If no tavern defined, set the tavern
   useEffect(() => {
@@ -102,7 +65,7 @@ export default function Tavern() {
   };
 
   // Blockers
-  if (!userData || isLoadingSector || isLoadingGlobalTavern) {
+  if (!userData || isLoadingTaverns) {
     return <ConversationSkeleton {...convoProps} />;
   }
   if (userData.isBanned || userData.isSilenced) return <BanInfo />;

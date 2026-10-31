@@ -227,6 +227,8 @@ export const commentsRouter = createTRPCRouter({
         )
         .map((c) => ({
           ...c.conversation,
+          // Unread when the conversation changed after this player last read it.
+          lastReadAt: c.lastReadAt,
           users: c.conversation?.users.filter((u) => u.userData),
         }))
         .sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
@@ -625,7 +627,13 @@ export const commentsRouter = createTRPCRouter({
         updateConversationForCreateConversationComment(ctx.drizzle, convo),
         // Inbox news (database update)
         ...(usersIdsInConvo.length > 0 && !convo.isPublic && !skipInboxNotifications
-          ? [updateUserDataForCreateConversationComment(ctx.drizzle, usersIdsInConvo)]
+          ? [
+              updateUserDataForCreateConversationComment(
+                ctx.drizzle,
+                usersIdsInConvo,
+                convo.id,
+              ),
+            ]
           : []),
         // Public conversation stats
         ...(convo.isPublic
@@ -664,6 +672,7 @@ export const commentsRouter = createTRPCRouter({
         ...notifiedUserIds.map(({ userId, type }) =>
           pusher.trigger(userId, "event", {
             type: "pinged",
+            conversationId: convo.id,
             message: `${effectiveUsername} ${type === "mentioned" ? "pinged" : "quoted"} you in ${convo.title}`,
           }),
         ),
@@ -677,7 +686,12 @@ export const commentsRouter = createTRPCRouter({
         ...(usersIdsInConvo.length > 0 && !convo.isPublic && !skipInboxNotifications
           ? usersIdsInConvo
               .filter((id) => id !== effectiveUserId)
-              .map((userId) => pusher.trigger(userId, "event", { type: "newInbox" }))
+              .map((userId) =>
+                pusher.trigger(userId, "event", {
+                  type: "newInbox",
+                  conversationId: convo.id,
+                }),
+              )
           : []),
       ]);
 
@@ -990,15 +1004,19 @@ export const createConvo = async (info: {
     isStaffAvailable = false,
     isPublic = false,
   } = info;
+  const insertId = convoId ?? nanoid();
   // Push notifications early
   const pusher = getServerPusher();
   receiverUserIds.forEach(
-    (userId) => void pusher.trigger(userId, "event", { type: "newInbox" }),
+    (userId) =>
+      void pusher.trigger(userId, "event", {
+        type: "newInbox",
+        conversationId: insertId,
+      }),
   );
   // Unique users to insert in conversation
   const uniqueUserIds = [...new Set([...receiverUserIds, senderUserId, authorUserId])];
   // Update DB concurrently
-  const insertId = convoId ?? nanoid();
   const messageId = nanoid();
   const sanitized = sanitize(content);
   await Promise.all([
@@ -1014,7 +1032,7 @@ export const createConvo = async (info: {
       insertUser2conversationForCreateConvo(client, insertId, user),
     ),
     ...(receiverUserIds.length > 0
-      ? [updateUserDataForCreateConversationComment(client, receiverUserIds)]
+      ? [updateUserDataForCreateConversationComment(client, receiverUserIds, insertId)]
       : []),
     insertConversationComment(
       client,

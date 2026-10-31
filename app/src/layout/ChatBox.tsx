@@ -3,7 +3,7 @@
 import { type UIMessage, useChat } from "@ai-sdk/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { convertToModelMessages, DefaultChatTransport, isTextUIPart } from "ai";
-import { BrainCircuit, Meh, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { BrainCircuit, Meh, RotateCcw, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
@@ -15,6 +15,12 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/hooks/localstorage";
+import Link from "@/layout/Link";
 import RichInput from "@/layout/RichInput";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -23,12 +29,9 @@ import { type ChatMessageSchema, chatMessageSchema } from "@/validators/chat";
 
 export interface ChatBoxProps {
   className?: string;
-  position?: "fixed" | "relative";
-  onClose?: () => void;
-  showCloseButton?: boolean;
-  showHeader?: boolean;
-  showFeedback?: boolean;
   autoFocus?: boolean;
+  /** Switches the chat panel to the tavern from the help line. */
+  onAskTavern?: () => void;
 }
 
 const getMessageText = (message: UIMessage): string =>
@@ -39,29 +42,21 @@ const getMessageText = (message: UIMessage): string =>
 
 const ChatBox: React.FC<ChatBoxProps> = ({
   className,
-  position = "fixed",
-  onClose,
-  showCloseButton = true,
-  showHeader = true,
-  showFeedback = true,
   autoFocus = true,
+  onAskTavern,
 }) => {
   // State
   const { data: userData } = useUserData();
   const messagesRef = useRef<null | HTMLDivElement>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  // The conversation is kept per player in this browser until they clear it.
+  const storageKey = userData ? `${AI_CHAT_STORAGE_PREFIX}${userData.userId}` : null;
+  const [savedMessages] = useState(() => loadSavedMessages(storageKey));
 
-  const initialMessages: UIMessage[] = [
-    {
-      id: "initial",
-      role: "assistant" as const,
-      parts: [{ type: "text" as const, text: "Hello! How can I help you today?" }],
-    },
-  ];
-
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, setMessages, status } = useChat({
+    id: storageKey ?? undefined,
     transport: new DefaultChatTransport({ api: "/api/chat/support" }),
-    messages: initialMessages,
+    messages: savedMessages ?? INITIAL_MESSAGES,
     onError: (error) => {
       const message = error?.message || "Error sending message. Not allowed?";
       showMutationToast({ success: false, message: message });
@@ -69,6 +64,23 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   });
 
   const isLoading = status === "streaming" || status === "submitted";
+
+  // Save once an answer completes or fails; a failed question stays to retry.
+  useEffect(() => {
+    if (!storageKey || (status !== "ready" && status !== "error")) return;
+    if (messages.some((message) => message.role === "user")) {
+      safeLocalStorageSetItem(
+        storageKey,
+        JSON.stringify(messages.slice(-AI_CHAT_MAX_SAVED_MESSAGES)),
+      );
+    }
+  }, [messages, status, storageKey]);
+
+  const clearConversation = () => {
+    if (storageKey) safeLocalStorageRemoveItem(storageKey);
+    setMessages(INITIAL_MESSAGES);
+    setFeedbackSubmitted(false);
+  };
 
   // Feedback mutation
   const { mutate: submitFeedback, isPending: isSubmittingFeedback } =
@@ -132,26 +144,24 @@ const ChatBox: React.FC<ChatBoxProps> = ({
 
   // Render
   return (
-    <div
-      className={cn(
-        position === "fixed"
-          ? "fixed right-4 bottom-28 z-50 h-[32rem] min-w-96 max-w-96 shadow-lg"
-          : "w-full",
-        "flex flex-col overflow-hidden rounded-md bg-popover",
-        className,
-      )}
-    >
-      {showHeader && (
-        <header className="flex items-center justify-between border-b px-4 py-2">
-          <h4 className="font-medium text-lg">Chat</h4>
-          {showCloseButton && (
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
-              <span className="sr-only">Close chat window</span>
-            </Button>
-          )}
-        </header>
-      )}
+    <div className={cn("flex w-full flex-col overflow-hidden bg-popover", className)}>
+      <div className="flex shrink-0 items-center justify-between border-b px-3 py-1.5">
+        <p className="flex items-center gap-1.5 font-semibold text-sm">
+          <BrainCircuit className="h-4 w-4 text-muted-foreground" aria-hidden />
+          Seichi AI
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-muted-foreground"
+          disabled={!hasConversation || isLoading}
+          onClick={clearConversation}
+        >
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+          Clear
+        </Button>
+      </div>
       <div
         ref={messagesRef}
         role="log"
@@ -228,9 +238,10 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                 <FormControl>
                   <RichInput
                     plainText
+                    compact
                     id="message"
                     placeholder="Ask about the game…"
-                    height="40"
+                    height="32"
                     rows={1}
                     control={form.control}
                     disabled={isLoading}
@@ -245,7 +256,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
           />
         </Form>
 
-        {showFeedback && hasAnswer && !isLoading && (
+        {hasAnswer && !isLoading && (
           <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             {feedbackSubmitted ? (
               <p className="text-muted-foreground text-sm">Thanks for the feedback.</p>
@@ -270,6 +281,30 @@ const ChatBox: React.FC<ChatBoxProps> = ({
             )}
           </div>
         )}
+        <p className="mt-1.5 text-center text-muted-foreground text-xs">
+          Not what you needed?{" "}
+          {onAskTavern ? (
+            <button
+              type="button"
+              className="text-primary hover:underline"
+              onClick={onAskTavern}
+            >
+              Ask in the Tavern
+            </button>
+          ) : (
+            <Link href="/tavern" className="text-primary hover:underline">
+              Ask in the Tavern
+            </Link>
+          )}
+          {" · "}
+          <Link href="/support" className="text-primary hover:underline">
+            Support ticket
+          </Link>
+          {" · "}
+          <Link href="/guide" className="text-primary hover:underline">
+            Player guide
+          </Link>
+        </p>
       </div>
     </div>
   );
@@ -290,5 +325,39 @@ const FEEDBACK_OPTIONS = [
   { sentiment: "NEUTRAL", label: "Partly", icon: Meh },
   { sentiment: "NEGATIVE", label: "No", icon: ThumbsDown },
 ] as const;
+
+const INITIAL_MESSAGES: UIMessage[] = [
+  {
+    id: "initial",
+    role: "assistant",
+    parts: [{ type: "text", text: "Hello! How can I help you today?" }],
+  },
+];
+
+const AI_CHAT_STORAGE_PREFIX = "seichiAiChat:";
+const AI_CHAT_MAX_SAVED_MESSAGES = 50;
+
+/** Restore a saved conversation, ignoring anything that is not a list of text messages. */
+const loadSavedMessages = (key: string | null): UIMessage[] | null => {
+  if (!key) return null;
+  try {
+    const parsed: unknown = JSON.parse(safeLocalStorageGetItem(key) ?? "null");
+    if (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      parsed.every(
+        (message) =>
+          typeof message?.id === "string" &&
+          ["user", "assistant"].includes(message?.role) &&
+          Array.isArray(message?.parts),
+      )
+    ) {
+      return parsed as UIMessage[];
+    }
+  } catch {
+    // Unreadable data starts a fresh conversation.
+  }
+  return null;
+};
 
 export default ChatBox;

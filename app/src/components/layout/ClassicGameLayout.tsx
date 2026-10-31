@@ -2,14 +2,13 @@
 
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import {
-  CircleHelp,
   Earth,
   Eye,
   EyeOff,
   House,
   LogIn,
   Menu,
-  MessageCircleWarning,
+  MessagesSquare,
   Music,
 } from "lucide-react";
 import type React from "react";
@@ -78,7 +77,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
       <div className="fixed right-1 bottom-1 z-50 rounded-full bg-slate-500 md:right-5 md:bottom-5">
         <LowerRightHelpBtn className="hidden md:block">
           {userData ? (
-            <MessageCircleWarning className={cn(variantClasses.yellowButton)} />
+            <MessagesSquare className={cn(variantClasses.yellowButton)} />
           ) : (
             <Music className={cn(variantClasses.yellowButton)} />
           )}
@@ -376,7 +375,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
           <div className="flex justify-center">
             <LowerRightHelpBtn className="block md:hidden">
               {userData ? (
-                <CircleHelp className={cn(variantClasses.yellowButton)} />
+                <MessagesSquare className={cn(variantClasses.yellowButton)} />
               ) : (
                 <Music className={cn(variantClasses.yellowButton)} />
               )}

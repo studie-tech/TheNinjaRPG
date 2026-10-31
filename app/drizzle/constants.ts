@@ -2448,6 +2448,8 @@ export const SECTOR_TYPES = [
 
 // Conversation config
 export const CONVERSATION_PAUSE_HIDDEN_MINS = 5;
+/** Conversations a player can mute individually in the chat panel. */
+export const MAX_MUTED_CONVERSATIONS = 100;
 export const MESSAGING_MIN_LEVEL = 3;
 export const FORUM_MIN_LEVEL = 3;
 export const AUCTION_HOUSE_MIN_LEVEL = 15;
