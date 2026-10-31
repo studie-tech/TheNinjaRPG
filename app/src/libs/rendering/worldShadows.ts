@@ -198,9 +198,10 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
   });
   const pointGeometry = new Geometry({
     attributes: {
-      aPosition: { buffer: pointBuffer, format: "float32x2", stride: 36, offset: 0 },
-      aLight: { buffer: pointBuffer, format: "float32x4", stride: 36, offset: 8 },
-      aColor: { buffer: pointBuffer, format: "float32x3", stride: 36, offset: 24 },
+      aPosition: { buffer: pointBuffer, format: "float32x2", stride: 40, offset: 0 },
+      aLight: { buffer: pointBuffer, format: "float32x4", stride: 40, offset: 8 },
+      aColor: { buffer: pointBuffer, format: "float32x3", stride: 40, offset: 24 },
+      aCastsShadows: { buffer: pointBuffer, format: "float32", stride: 40, offset: 36 },
     },
   });
   const pointShader = Shader.from({
@@ -758,6 +759,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             z: characterHeight + 2,
             reach: characterHeight * 0.65,
             color: [3, 2.5, 1.8],
+            castsShadows: false,
           });
         } else if (!dynamic)
           for (const emitter of frame.emitters) {
@@ -782,6 +784,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
                 description.shadowCaster === "column"
                   ? [7.0, 3.4, 0.9]
                   : [3.8, 1.8, 0.5],
+              castsShadows: true,
             });
           }
         record.cached = {
@@ -951,7 +954,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         dynamicField.prisms.source.pixelWidth,
         dynamicField.prisms.source.pixelHeight,
       ]);
-      const nextPointGeometryKey = `${viewKey}:${lights.map((l) => `${l.x}:${l.y}:${l.z}:${l.reach}:${l.color}`).join(";")}:${Math.round(light.day * 256)}`;
+      const nextPointGeometryKey = `${viewKey}:${lights.map((l) => `${l.x}:${l.y}:${l.z}:${l.reach}:${l.color}:${l.castsShadows}`).join(";")}:${Math.round(light.day * 256)}`;
       const nextPointKey =
         nextReceiverKey +
         `${staticField.revision}:${dynamicField.revision}` +
@@ -1005,6 +1008,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
                 l.z,
                 radius,
                 ...l.color,
+                Number(l.castsShadows),
               );
           }
           pointBuffer.data = new Float32Array(vertices);
@@ -1301,9 +1305,9 @@ const terrainVertex = `precision highp float; attribute vec3 aPosition; varying 
 void main() { vHeight = aPosition.z; gl_Position = vec4((aPosition.xy + uOffset - uViewport.xy) / uViewport.zw * 2.0 - 1.0, 0.0, 1.0); }`;
 const terrainFragment = `precision highp float; varying float vHeight; ${materialShader}
 void main() { gl_FragColor = vec4(128.0 / 255.0, 128.0 / 255.0, packHeight(vHeight)); }`;
-const pointVertex = `precision highp float; attribute vec2 aPosition; attribute vec4 aLight; attribute vec3 aColor;
-varying vec2 vWorld; varying vec4 vLight; varying vec3 vColor; uniform vec4 uViewport;
-void main() { vWorld = aPosition; vLight = aLight; vColor = aColor; gl_Position = vec4((aPosition - uViewport.xy) / uViewport.zw * 2.0 - 1.0, 0.0, 1.0); }`;
+const pointVertex = `precision highp float; attribute vec2 aPosition; attribute vec4 aLight; attribute vec3 aColor; attribute float aCastsShadows;
+varying vec2 vWorld; varying vec4 vLight; varying vec3 vColor; varying float vCastsShadows; uniform vec4 uViewport;
+void main() { vWorld = aPosition; vLight = aLight; vColor = aColor; vCastsShadows = aCastsShadows; gl_Position = vec4((aPosition - uViewport.xy) / uViewport.zw * 2.0 - 1.0, 0.0, 1.0); }`;
 
 export type WorldShadowShape =
   | "canopy"
@@ -1373,6 +1377,8 @@ type PointLight = {
   /** Horizontal reach on terrain below the fixture; the night cycle scales this before projection. */
   reach: number;
   color: [number, number, number];
+  /** Character fill lights illuminate freely; fixed fixtures trace scene occlusion. */
+  castsShadows: boolean;
 };
 
 /** Numeric snapshots avoid rebuilding strings for stationary scenery on every animation frame. */

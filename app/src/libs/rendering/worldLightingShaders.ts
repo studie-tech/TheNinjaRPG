@@ -42,6 +42,7 @@ precision highp sampler2D; // Preserve encoded bytes in texture results before n
 varying vec2 vWorld;
 varying vec4 vLight;
 varying vec3 vColor;
+varying float vCastsShadows;
 uniform sampler2D uReceiver;
 uniform sampler2D uStaticField;
 uniform sampler2D uStaticReferences;
@@ -246,39 +247,43 @@ void main() {
   vec3 direction = scaledDelta / max(length(scaledDelta), 0.0001);
   float diffuse = max(dot(normal, direction), 0.0);
   if (diffuse <= 0.001) discard;
-  float surface = mod(floor(data.r * 255.0 + 0.5), 4.0);
-  float heightError = (surface < 0.5 ? 0.0 : uFieldHeights.z) + 512.0 / 65025.0;
-  float guard = heightError * abs(normal.z - 2.0 * normal.y) + uFieldHeights.w;
-  vec3 origin = p + normal * guard;
-  vec3 ray = vLight.xyz - direction * uFieldHeights.w - origin;
-  float visibility = 1.0, t = 0.0;
-  float previousStatic = -1.0, previousDynamic = -1.0;
-  float staticCell = uStaticBounds.z / 512.0, dynamicCell = uDynamicBounds.z / 512.0;
-  // Traverse both broad-phase grids; the complete ray segment in each cell is clipped
-  // against authored geometry. Grid size never expands an occluder or the receiver bias.
-  for (int i = 0; i < 192; i++) {
-    if (distanceToLight <= guard + uFieldHeights.w) break;
-    float sampleT = min(1.0, t + 0.00001);
-    vec3 q = origin + ray * sampleT;
-    // A complete-ray miss exhausts a singleton field; empty fields need no traversal either.
-    bool staticDone = uInstanceCounts.x < 0.5 || (uInstanceCounts.x < 1.5 && previousStatic >= 0.0);
-    bool dynamicDone = uInstanceCounts.y < 0.5 || (uInstanceCounts.y < 1.5 && previousDynamic >= 0.0);
-    float stepT = min(
-      staticDone ? 1.0 : min(nextBoundary(q.x, ray.x, uStaticBounds.x, staticCell), nextBoundary(q.y, ray.y, uStaticBounds.y, staticCell)),
-      dynamicDone ? 1.0 : min(nextBoundary(q.x, ray.x, uDynamicBounds.x, dynamicCell), nextBoundary(q.y, ray.y, uDynamicBounds.y, dynamicCell)));
-    float endT = min(1.0, sampleT + stepT);
-    vec3 first = origin + ray * t, last = origin + ray * endT;
-    // A boundary probe can round onto the preceding cell while its next edge advances.
-    // Query the segment interior so grid membership agrees with the tested prism segment.
-    vec2 samplePosition = (first.xy + last.xy) * 0.5;
-    float occluded = staticDone ? 0.0 : blocked(uStaticField, uStaticReferences, uStaticPrisms, uStaticBounds,
-      uStaticGeometry, uStaticTables, uFieldHeights.x, samplePosition, first, last, origin, ray, previousStatic);
-    if (occluded < 0.5 && !dynamicDone)
-      occluded = blocked(uDynamicField, uDynamicReferences, uDynamicPrisms, uDynamicBounds,
-        uDynamicGeometry, uDynamicTables, uFieldHeights.y, samplePosition, first, last, origin, ray, previousDynamic);
-    visibility *= 1.0 - occluded;
-    if (visibility < 0.5 || endT >= 1.0) break;
-    t = endT;
+  float visibility = 1.0;
+  // Foot-centered fill lights bypass occlusion; sunlight and fixed fixtures own projected shadows.
+  if (vCastsShadows > 0.5) {
+    float surface = mod(floor(data.r * 255.0 + 0.5), 4.0);
+    float heightError = (surface < 0.5 ? 0.0 : uFieldHeights.z) + 512.0 / 65025.0;
+    float guard = heightError * abs(normal.z - 2.0 * normal.y) + uFieldHeights.w;
+    vec3 origin = p + normal * guard;
+    vec3 ray = vLight.xyz - direction * uFieldHeights.w - origin;
+    float t = 0.0;
+    float previousStatic = -1.0, previousDynamic = -1.0;
+    float staticCell = uStaticBounds.z / 512.0, dynamicCell = uDynamicBounds.z / 512.0;
+    // Traverse both broad-phase grids; the complete ray segment in each cell is clipped
+    // against authored geometry. Grid size never expands an occluder or the receiver bias.
+    for (int i = 0; i < 192; i++) {
+      if (distanceToLight <= guard + uFieldHeights.w) break;
+      float sampleT = min(1.0, t + 0.00001);
+      vec3 q = origin + ray * sampleT;
+      // A complete-ray miss exhausts a singleton field; empty fields need no traversal either.
+      bool staticDone = uInstanceCounts.x < 0.5 || (uInstanceCounts.x < 1.5 && previousStatic >= 0.0);
+      bool dynamicDone = uInstanceCounts.y < 0.5 || (uInstanceCounts.y < 1.5 && previousDynamic >= 0.0);
+      float stepT = min(
+        staticDone ? 1.0 : min(nextBoundary(q.x, ray.x, uStaticBounds.x, staticCell), nextBoundary(q.y, ray.y, uStaticBounds.y, staticCell)),
+        dynamicDone ? 1.0 : min(nextBoundary(q.x, ray.x, uDynamicBounds.x, dynamicCell), nextBoundary(q.y, ray.y, uDynamicBounds.y, dynamicCell)));
+      float endT = min(1.0, sampleT + stepT);
+      vec3 first = origin + ray * t, last = origin + ray * endT;
+      // A boundary probe can round onto the preceding cell while its next edge advances.
+      // Query the segment interior so grid membership agrees with the tested prism segment.
+      vec2 samplePosition = (first.xy + last.xy) * 0.5;
+      float occluded = staticDone ? 0.0 : blocked(uStaticField, uStaticReferences, uStaticPrisms, uStaticBounds,
+        uStaticGeometry, uStaticTables, uFieldHeights.x, samplePosition, first, last, origin, ray, previousStatic);
+      if (occluded < 0.5 && !dynamicDone)
+        occluded = blocked(uDynamicField, uDynamicReferences, uDynamicPrisms, uDynamicBounds,
+          uDynamicGeometry, uDynamicTables, uFieldHeights.y, samplePosition, first, last, origin, ray, previousDynamic);
+      visibility *= 1.0 - occluded;
+      if (visibility < 0.5 || endT >= 1.0) break;
+      t = endT;
+    }
   }
   float falloff = max(0.0, 1.0 - distanceToLight / vLight.w);
   gl_FragColor = vec4(vColor * diffuse * falloff * falloff * visibility * uLightStrength, 1.0);
