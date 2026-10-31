@@ -35,22 +35,29 @@ const makeMap = (width: number, height: number, blocked: Set<string> = new Set()
 });
 
 describe("findGlobalTravelDestination", () => {
-  it("selects a walkable tile using the supplied random sample", () => {
-    expect(findGlobalTravelDestination(makeMap(3, 2), () => 3)).toEqual({
-      x: 0,
-      y: 1,
-    });
+  it("lands in the center of a standard sector", () => {
+    expect(findGlobalTravelDestination(makeMap(26, 26))).toEqual({ x: 13, y: 13 });
+  });
+
+  it("uses the authored dimensions for a rectangular sector", () => {
+    expect(findGlobalTravelDestination(makeMap(9, 5))).toEqual({ x: 4, y: 2 });
   });
 
   it("includes shaded terrain among landing tiles", () => {
     const map = makeMap(3, 1, new Set(["1,0"]));
 
-    expect(findGlobalTravelDestination(map, () => 0)).toEqual({ x: 0, y: 0 });
-    expect(findGlobalTravelDestination(map, () => 1)).toEqual({ x: 1, y: 0 });
+    expect(findGlobalTravelDestination(map)).toEqual({ x: 1, y: 0 });
+  });
+
+  it("uses the nearest tile to a missing center instead of an edge spawn anchor", () => {
+    const map = makeMap(9, 9);
+    map.tiles = [makeTile(0, 0), makeTile(4, 3), makeTile(8, 8)];
+
+    expect(findGlobalTravelDestination(map)).toEqual({ x: 4, y: 3 });
   });
 
   it("returns null when the sector has no tiles", () => {
-    expect(findGlobalTravelDestination(makeMap(0, 0), () => 0)).toBeNull();
+    expect(findGlobalTravelDestination(makeMap(0, 0))).toBeNull();
   });
 });
 
