@@ -152,6 +152,10 @@ export default async function RootLayout({
           telemetry={false}
           appearance={{
             elements: {
+              // Clerk modals (e.g. Manage account) render outside the light-pinned
+              // UserButton, so pin them too: the dark scheme pairs a dark card with
+              // the black foreground set below.
+              modalContent: { colorScheme: "light" },
               // Pixel sizes preserve touch targets against the game's smaller root font;
               // 16px inputs also prevent iOS focus zoom without disabling pinch zoom.
               formFieldInput: {
