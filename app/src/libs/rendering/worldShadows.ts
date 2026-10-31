@@ -616,10 +616,14 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         frameRect.width *= sourceRatio;
         frameRect.height *= sourceRatio;
         let frame = worldMaterialFrame(material, frameRect);
-        if (record.character) {
+        if (record.character || (dynamic && material.isBillboard)) {
           let cached = characterFrames.get(sprite.texture);
           if (!cached) {
-            cached = createCharacterMaterialFrame(material, sprite.texture);
+            cached = createCharacterMaterialFrame(
+              material,
+              sprite.texture,
+              record.character ? undefined : sprite.texture.orig.height,
+            );
             characterFrames.set(sprite.texture, cached);
           }
           frame = cached;
@@ -644,7 +648,11 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             ]);
         const objectHeight = record.wind ? description.size : Math.hypot(m.c, m.d) * h;
         const characterRoot = record.character ? origin(record.character) : undefined;
-        const characterFoot = characterRoot?.matrix.apply({ x: 0, y: 28 / 64 });
+        const characterFoot = characterRoot
+          ? characterRoot.matrix.apply({ x: 0, y: 28 / 64 })
+          : dynamic
+            ? m.apply({ x: w * (0.5 - sprite.anchor.x), y: h * (1 - sprite.anchor.y) })
+            : undefined;
         const characterHeight = characterRoot
           ? Math.hypot(characterRoot.matrix.c, characterRoot.matrix.d)
           : objectHeight;

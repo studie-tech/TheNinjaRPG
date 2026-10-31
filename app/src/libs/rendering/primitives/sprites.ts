@@ -7,7 +7,7 @@ import {
   Texture,
 } from "pixi.js";
 import { sampleAnimationClip } from "@/libs/rendering/animation";
-import { createSceneAssets } from "@/libs/rendering/assets";
+import { createSceneAssets, textureOpaqueFrame } from "@/libs/rendering/assets";
 import { worldLighting } from "@/libs/rendering/color";
 import { acquireMaskedTexture } from "@/libs/rendering/maskedTextures";
 import { createClipTextures } from "@/libs/rendering/primitives/animation";
@@ -34,6 +34,7 @@ import {
   type WorldBounds,
   worldSpriteBounds,
 } from "@/libs/rendering/visibility";
+import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import {
   MAX_SMALL_WORLD_WIND,
@@ -221,9 +222,46 @@ export const createWorldSprites = async (
       sprite.tint = description.tint ?? 0xffffff;
       sprite.alpha = description.opacity ?? 1;
       sprite.rotation = description.rotation ?? 0;
+      const isCharacterCutout =
+        sprite instanceof Sprite &&
+        texture &&
+        description.shadowCaster === "character" &&
+        !description.worldMaterial &&
+        !worldAssetSource(description.image) &&
+        !description.character &&
+        !description.mask &&
+        !description.motion;
+      if (isCharacterCutout && texture) {
+        const frame = textureOpaqueFrame(texture);
+        const scale = sprite.scale.clone();
+        // A view removes transparent margins; the adjusted anchor preserves every pixel and its mirrored pose.
+        sprite.anchor.set(
+          (sprite.anchor.x * texture.orig.width -
+            (texture.trim?.x ?? 0) -
+            (frame.x - texture.frame.x)) /
+            frame.width,
+          (sprite.anchor.y * texture.orig.height -
+            (texture.trim?.y ?? 0) -
+            (frame.y - texture.frame.y)) /
+            frame.height,
+        );
+        texture = new Texture({ source: texture.source, frame });
+        views.push(texture);
+        sprite.texture = texture;
+        sprite.scale.copyFrom(scale);
+      }
+      sprite.updateLocalTransform();
+      const characterFoot =
+        description.shadowCaster === "character" && sprite instanceof Sprite
+          ? sprite.localTransform.apply({
+              x: sprite.texture.orig.width * (0.5 - sprite.anchor.x),
+              y: sprite.texture.orig.height * (1 - sprite.anchor.y),
+            })
+          : undefined;
       const footY = character
         ? description.y - (description.size * 28) / 64
-        : (description.entrance?.y ??
+        : (characterFoot?.y ??
+          description.entrance?.y ??
           description.y - description.size * (1 - (description.anchorY ?? 0.5)));
       let shadow: Sprite | undefined;
       if (worldShadows && character) {
@@ -273,7 +311,7 @@ export const createWorldSprites = async (
         // A shared contact mask grounds the footprint without projecting roof or canopy pixels onto the terrain.
         shadow = new Sprite(shadowTexture);
         shadow.anchor.set(0.5);
-        shadow.position.set(description.x, footY);
+        shadow.position.set(characterFoot?.x ?? description.x, footY);
         shadow.width = sprite.width * 0.7;
         shadow.height = Math.min(
           description.size * description.shadow,
@@ -294,7 +332,7 @@ export const createWorldSprites = async (
         lightTexture ??= createPixelLightTexture();
         light = new Sprite(lightTexture);
         light.anchor.set(0.5);
-        light.position.set(description.x, footY);
+        light.position.set(characterFoot?.x ?? description.x, footY);
         light.width = description.size * description.light;
         light.height = light.width * 0.5;
         light.tint = 0xffaa52;
@@ -313,14 +351,15 @@ export const createWorldSprites = async (
         bounds: worldSpriteBounds({
           x: sprite.x,
           y: sprite.y,
-          width:
-            description.width ??
-            (description.preserveAspect
-              ? (description.size * (texture?.width ?? 1)) / (texture?.height ?? 1)
-              : description.size),
-          height: description.size,
-          anchorX: description.anchorX ?? 0.5,
-          anchorY: description.anchorY ?? 0.5,
+          width: isCharacterCutout
+            ? sprite.width
+            : (description.width ??
+              (description.preserveAspect
+                ? (description.size * (texture?.width ?? 1)) / (texture?.height ?? 1)
+                : description.size)),
+          height: isCharacterCutout ? sprite.height : description.size,
+          anchorX: isCharacterCutout ? sprite.anchor.x : (description.anchorX ?? 0.5),
+          anchorY: isCharacterCutout ? sprite.anchor.y : (description.anchorY ?? 0.5),
           rotation: sprite.rotation,
           shearY: description.shearY,
         }),

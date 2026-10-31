@@ -1,4 +1,4 @@
-import { Assets, type Texture } from "pixi.js";
+import { Assets, Rectangle, type Texture } from "pixi.js";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import { textureImageUrl } from "@/utils/image";
@@ -53,3 +53,49 @@ export const createSceneAssets = () => {
 };
 
 export type SceneAssets = ReturnType<typeof createSceneAssets>;
+
+/** Reads decoded RGBA data for material sampling and sprite contact bounds. */
+export const readTexturePixels = (texture: Texture, width: number, height: number) => {
+  const resource = texture.source.resource;
+  if (resource instanceof Uint8Array && resource.length === width * height * 4)
+    return resource.slice();
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("Cannot read world texture data");
+  context.drawImage(resource as CanvasImageSource, 0, 0, width, height);
+  return new Uint8Array(context.getImageData(0, 0, width, height).data);
+};
+
+const opaqueFrames = new WeakMap<Texture, Rectangle>();
+
+/** Character cutouts use their visible bounds as ground, without retaining a second pixel buffer. */
+export const textureOpaqueFrame = (texture: Texture) => {
+  const cached = opaqueFrames.get(texture);
+  if (cached) return cached;
+  const frame = texture.frame;
+  let result = frame;
+  try {
+    const width = texture.source.pixelWidth,
+      pixels = readTexturePixels(texture, width, texture.source.pixelHeight);
+    let minX = frame.right,
+      minY = frame.bottom,
+      maxX = -1,
+      maxY = -1;
+    for (let y = frame.y; y < frame.bottom; y++)
+      for (let x = frame.x; x < frame.right; x++)
+        if ((pixels[(y * width + x) * 4 + 3] ?? 0) > 0) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+    if (maxX >= minX && maxY >= minY)
+      result = new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+  } catch {
+    // Unreadable artwork remains visible with its full-frame contact point.
+  }
+  opaqueFrames.set(texture, result);
+  return result;
+};

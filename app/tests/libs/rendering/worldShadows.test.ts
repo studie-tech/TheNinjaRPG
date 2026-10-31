@@ -241,7 +241,7 @@ describe("physical world lighting", () => {
       const daytime = lightData().slice();
       expect(daytime).toHaveLength(3 * 6 * 10);
       const character = daytime.slice(2 * 6 * 10);
-      expect(Array.from(character.slice(2, 5))).toEqual([40, 40, 42]);
+      expect(Array.from(character.slice(2, 5))).toEqual([60, 0, 42]);
       f.shadows.update(night, viewport);
       const nighttime = lightData();
       expect(nighttime).toHaveLength(3 * 6 * 10);
@@ -431,7 +431,7 @@ describe("physical world lighting", () => {
         expect(current?.transform?.[4]).toBe(expected);
         expect(sun.shader.resources.object.uniforms.uObject[2]).toBe(expected);
         expect(receiver.geometry.getBuffer("aPosition").data[0]).toBe(expected);
-        expect(Array.from(point.geometry.getBuffer("aPosition").data.slice(2, 5))).toEqual([expected, 40, 42]);
+        expect(Array.from(point.geometry.getBuffer("aPosition").data.slice(2, 5))).toEqual([Math.fround(x + 20), 0, 42]);
         const draws = f.render.mock.calls.length;
         f.shadows.update(worldSunlight(), viewport);
         expect(f.render).toHaveBeenCalledTimes(draws);
