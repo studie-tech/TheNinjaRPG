@@ -169,6 +169,28 @@ describeWithDatabase("Dungeon parties and settlement", () => {
     expect(await db.query.dungeonRun.findMany()).toHaveLength(1);
     expect(await db.query.dungeonMember.findMany({where: eq(dungeonMember.activeUserId, "a")})).toHaveLength(1);
   });
+  it("retries a rolled-back leader reservation without recreating the lobby", async () => {
+    const db = await getTestDatabase();
+    let attempts = 0;
+    const retrying = new Proxy(withoutTransactions(db), {
+      get(target, property, receiver) {
+        if (property === "insert") return (table: Parameters<typeof db.insert>[0]) =>
+          table === dungeonMember
+            ? { values: async (values: typeof dungeonMember.$inferInsert) => {
+                attempts += 1;
+                if (attempts === 1) throw new Error("Wrapped query", { cause: new Error("Deadlock found when trying to get lock") });
+                return target.insert(dungeonMember).values(values);
+              } }
+            : target.insert(table);
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const api = callerForDatabase(dungeonRouter, "a", retrying);
+    expect((await api.create({ id: "definition" })).success).toBe(true);
+    expect(attempts).toBe(2);
+    expect(await db.query.dungeonRun.findMany()).toHaveLength(1);
+    expect(await db.query.dungeonMember.findMany({ where: eq(dungeonMember.activeUserId, "a") })).toHaveLength(1);
+  });
   it.each([false, true])("cleans only an empty failed lobby, preserving a committed membership (%p)", async (committed) => {
     const db = await getTestDatabase();
     const failing = new Proxy(withoutTransactions(db), {

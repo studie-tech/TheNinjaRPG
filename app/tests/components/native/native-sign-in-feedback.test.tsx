@@ -1,3 +1,5 @@
+import * as clerk from "@clerk/nextjs";
+import * as navigation from "next/navigation";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import NativeSignIn from "@/components/native/NativeSignIn";
@@ -11,6 +13,8 @@ const signIn = vi.fn<() => Promise<auth.NativeAuthResult>>();
 beforeEach(() => {
   ensureDom();
   signIn.mockReset();
+  vi.spyOn(clerk, "useSession").mockReturnValue({ isLoaded: true, isSignedIn: false } as ReturnType<typeof clerk.useSession>);
+  vi.spyOn(navigation, "useRouter").mockReturnValue({ replace: vi.fn() } as never);
   vi.spyOn(shell, "useNativeShell").mockReturnValue(true);
   vi.spyOn(appleAuth, "isSupported").mockReturnValue(true);
   vi.spyOn(auth, "useNativeAuth").mockReturnValue({

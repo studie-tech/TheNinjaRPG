@@ -9,7 +9,7 @@ import { conversation, conversationComment, parentalControl, user2conversation, 
 import { parentalControlsRouter } from "@/server/api/routers/parentalControls";
 import { commentsRouter, fetchConversation, fetchUsersToNotify } from "@/server/api/routers/comments";
 import { Pusher } from "@/libs/pusher";
-import { hashParentalPin } from "@/server/utils/parentalControls";
+import { hashParentalPin, verifyParentalPin } from "@/server/utils/parentalControls";
 import { createTRPCRouter } from "@/server/api/trpc";
 import { insertUsers } from "../../../setup/factories";
 import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
@@ -116,6 +116,29 @@ describeWithDatabase("parental controls", () => {
     const results = await Promise.all([api.save(settings), api.save({ ...settings, pin: "654321", tavernDisabled: false })]);
     expect(results.filter((r) => r.success)).toHaveLength(1);
     expect((await api.get()).version).toBe(1);
+  });
+  it("retries a rolled-back setup deadlock without replacing its PIN or version", async () => {
+    const db = await getTestDatabase();
+    let attempts = 0;
+    const retrying = new Proxy(db, {
+      get(target, property, receiver) {
+        if (property === "insert") return (table: Parameters<typeof db.insert>[0]) =>
+          table === parentalControl
+            ? { ignore: () => ({ values: async (values: typeof parentalControl.$inferInsert) => {
+                attempts += 1;
+                if (attempts === 1) throw new Error("Wrapped query", { cause: new Error("Deadlock found when trying to get lock") });
+                return target.insert(parentalControl).ignore().values(values);
+              } }) }
+            : target.insert(table);
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const api = callerForDatabase(parentalControlsRouter, "child", retrying);
+    expect((await api.save(settings)).success).toBe(true);
+    expect(attempts).toBe(2);
+    const stored = await db.query.parentalControl.findFirst({ where: eq(parentalControl.userId, "child") });
+    expect(stored?.version).toBe(1);
+    expect(await verifyParentalPin(settings.pin, stored!.pinHash!)).toBe(true);
   });
   it("sanitizes database errors containing PIN-derived credentials", async () => {
     const db = await getTestDatabase();

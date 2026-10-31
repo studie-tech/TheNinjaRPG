@@ -364,7 +364,11 @@ export const dungeonRouter = createTRPCRouter({
         lineup,
       );
       try {
-        await insertDungeonMember(ctx.drizzle, id, ctx.userId);
+        // Retry only the rolled-back reservation. The run already exists, and the
+        // unique activeUserId still decides which competing lobby can retain it.
+        await retryOnDeadlock(async () =>
+          insertDungeonMember(ctx.drizzle, id, ctx.userId),
+        );
         // A crash here can leave a reversible membership without queue protection. A
         // failed status claim removes only this run's reservation and never another activity.
         const queued = await claimDungeonQueue(ctx.drizzle, ctx.userId, id);
