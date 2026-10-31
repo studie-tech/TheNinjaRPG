@@ -24,7 +24,6 @@ import {
   NO_DURABILITY_LOSS_COMBATS,
   NonActionItemTypes,
   PET_BATTLE_CONFIG,
-  QuestBattleTypes,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   SAGE_MODE_DISABLED_BATTLES,
   SHARED_COOLDOWN_ROUNDS,
@@ -37,7 +36,7 @@ import {
 } from "@/libs/combat/constants";
 import { resolveElementalDamage } from "@/libs/combat/elementalDamage";
 import { recordMasteryUsage } from "@/libs/combat/mastery";
-import { areBattleAllies } from "@/libs/combat/participants";
+import { areBattleAllies, fitsBattleUsage } from "@/libs/combat/participants";
 import { resolvePotencyTags } from "@/libs/combat/potency";
 import { applyEffects, checkFriendlyFire } from "@/libs/combat/process";
 import { isClone } from "@/libs/combat/summon";
@@ -120,7 +119,6 @@ export const availableUserActions = (
   const isImmobilized = isUserImmobilized(userId, battle?.usersEffects);
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
-  const isQuestBattle = battle ? QuestBattleTypes.includes(battle.battleType) : false;
   const isRankedBattle =
     battle?.battleType === "RANKED_PVP" || battle?.battleType === "RANKED_SPARRING";
   // A player-piloted summon must not hand its controller a second Clear/Cleanse
@@ -205,14 +203,8 @@ export const availableUserActions = (
             )
               return false;
 
-            // If quest battle, exclude PVP-only jutsus
-            if (isQuestBattle && jutsu.battleUsageType === "PVP") {
+            if (!fitsBattleUsage(battle.battleType, jutsu.battleUsageType))
               return false;
-            }
-            // If non-quest battle, exclude PVE-only jutsus
-            if (!isQuestBattle && jutsu.battleUsageType === "PVE") {
-              return false;
-            }
             // Stealth prevents all jutsu, including defensive and support actions.
             if (isStealth) return false;
             // Filter out summon jutsu when summonPrevent is active
@@ -274,14 +266,7 @@ export const availableUserActions = (
             const item = getItem(battle, ui.itemId);
             if (!item) return false;
             if (item.preventBattleUsage) return false;
-            // If quest battle, exclude PVP-only items
-            if (isQuestBattle && item.battleUsageType === "PVP") {
-              return false;
-            }
-            // If non-quest battle, exclude PVE-only items
-            if (!isQuestBattle && item.battleUsageType === "PVE") {
-              return false;
-            }
+            if (!fitsBattleUsage(battle.battleType, item.battleUsageType)) return false;
             if (NonActionItemTypes.includes(item.itemType)) return false;
             if (ui.equipped === "NONE") return false;
             if (!user.isAi && !isRankedBattle && !hasMasteryRequirements(user, item)) {

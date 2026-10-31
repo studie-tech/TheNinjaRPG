@@ -1,4 +1,8 @@
-import type { BattleType } from "@/drizzle/constants";
+import {
+  type BattleType,
+  type BattleUsageType,
+  QuestBattleTypes,
+} from "@/drizzle/constants";
 import {
   COMBAT_BORDER_BOTTOM,
   COMBAT_BORDER_LEFT,
@@ -14,6 +18,24 @@ import {
  */
 export const supportsNpcAllies = (battleType: BattleType): boolean =>
   battleType === "QUEST" || battleType === "OVERWORLD";
+
+/**
+ * Whether PvE-only or PvP-only jutsu and items may be used in a battle type.
+ * Quest fights exclude PvP-only content. Battle Arena fights (ARENA, TRAINING)
+ * are against NPCs, so they also allow PvE-only content next to PvP-only
+ * content. Every other fight excludes PvE-only content.
+ */
+export const fitsBattleUsage = (
+  battleType: BattleType,
+  usage: BattleUsageType,
+): boolean => {
+  const isQuestBattle = QuestBattleTypes.includes(battleType);
+  if (usage === "PVP") return !isQuestBattle;
+  if (usage === "PVE") {
+    return isQuestBattle || battleType === "ARENA" || battleType === "TRAINING";
+  }
+  return true;
+};
 
 /**
  * Each battle has two fixed teams, stored as its left/right side at initiation.
