@@ -19,6 +19,11 @@ import {
   acquireSoftShadowTexture,
   createPixelLightTexture,
 } from "@/libs/rendering/primitives/shadow";
+import {
+  createWindSprite,
+  updateWindSprites,
+  WindSprite,
+} from "@/libs/rendering/primitives/windSprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import type {
   WorldMotionDirection,
@@ -184,7 +189,17 @@ export const createWorldSprites = async (
         });
         views.push(texture);
       }
-      const sprite = character?.sprite ?? new Sprite(texture ?? undefined);
+      const sprite =
+        character?.sprite ??
+        (description.mask || description.unlit || description.motion
+          ? new Sprite(texture ?? Texture.EMPTY)
+          : createWindSprite(
+              game.renderer,
+              texture ?? Texture.EMPTY,
+              description.wind == null
+                ? 0
+                : worldWindGroup(description.wind, description.small) + 1,
+            ));
       sprite.label = description.id;
       if (sprite instanceof Sprite)
         sprite.anchor.set(description.anchorX ?? 0.5, description.anchorY ?? 0.5);
@@ -327,7 +342,8 @@ export const createWorldSprites = async (
         entry.description.wind !== null && entry.description.wind !== undefined,
     )
     .flatMap((entry) => {
-      if (!(entry.sprite instanceof Sprite)) return [];
+      if (!(entry.sprite instanceof Sprite) || entry.sprite instanceof WindSprite)
+        return [];
       const sprite = entry.sprite;
       entry.sprite.updateLocalTransform();
       return [
@@ -346,6 +362,9 @@ export const createWorldSprites = async (
     entry.motion && entry.sprite instanceof Sprite
       ? [{ ...entry, sprite: entry.sprite }]
       : [],
+  );
+  const hasGpuWind = entries.some(
+    (entry) => entry.sprite instanceof WindSprite && entry.description.wind != null,
   );
   let viewport: (WorldBounds & { padding: number }) | null = null;
   let attached: {
@@ -459,8 +478,9 @@ export const createWorldSprites = async (
         entry.sprite.height = size;
         entry.sprite.scale.x = Math.abs(entry.sprite.scale.x) * facing;
       }
-      if (!wind.length) return;
+      if (!wind.length && !hasGpuWind) return;
       const breeze = sampledWind ?? sampleWorldWind(frame, zoom);
+      if (hasGpuWind) updateWindSprites(game.renderer, breeze);
       for (const entry of wind) {
         const { sprite, description } = entry;
         if (!sprite.renderable) continue;

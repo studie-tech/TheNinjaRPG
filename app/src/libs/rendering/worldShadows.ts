@@ -872,15 +872,17 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         nextTerrainKey += `${terrain.id}:${p.x}:${p.y}:${terrain.mesh.visible}`;
       }
       const receiverView = viewKey + nextTerrainKey;
-      const receiverChanged =
-        receiverView !== receiverKey ||
+      const contentsChanged =
         previousReceivers.length !== receivers.length ||
         receivers.some((entry, index) => entry !== previousReceivers[index]);
+      const receiverChanged = receiverView !== receiverKey || contentsChanged;
       if (receiverChanged) {
         receiverKey = receiverView;
         previousReceivers = receivers;
         receiverRevision++;
-        updateReceiverBatches(receiverBatches, receivers, materialLayer, view, wind);
+        // Camera uniforms do not change retained receiver vertices or texture slots.
+        if (contentsChanged)
+          updateReceiverBatches(receiverBatches, receivers, materialLayer, view, wind);
       }
       const nextReceiverKey = String(receiverRevision);
       const hasWindReceivers = receivers.some((entry) => entry.record.wind);
