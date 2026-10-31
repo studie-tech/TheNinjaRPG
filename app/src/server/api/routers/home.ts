@@ -600,6 +600,13 @@ export const homeRouter = createTRPCRouter({
       if (userItemResult.equipped !== "NONE") {
         return errorResponse("You can't store/retrieve already equipped items");
       }
+      // Escrowed rows must stay carried so the auction/offer can still deliver them.
+      // Retrieval stays open so a previously stored escrowed row can be recovered.
+      if (!userItemResult.storedAtHome && userItemResult.isInAuction) {
+        return errorResponse(
+          "This item is reserved in an auction or trade offer and can't be stored",
+        );
+      }
       // Mutate
       if (userItemResult.storedAtHome) {
         const inventoryBucket = getInventoryBucket(userItemResult.item);

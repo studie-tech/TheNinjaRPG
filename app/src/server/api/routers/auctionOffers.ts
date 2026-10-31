@@ -153,6 +153,14 @@ export const auctionOfferProcedures = {
           offer.offeredUserItem.quantity !== offer.offeredQuantity)
       )
         return errorResponse("Offered item is no longer available");
+      if (
+        offer.offeredUserItem &&
+        (offer.offeredUserItem.storedAtHome ||
+          offer.offeredUserItem.equipped !== "NONE")
+      )
+        return errorResponse(
+          "The seller's offered item is currently unavailable; ask them to retrieve it or cancel the offer",
+        );
       if (!supplied) return errorResponse("Item is unavailable");
       const result = await runOfferMutation(ctx.drizzle, async (tx) => {
         // Claim the offer before either side moves. Every subsequent write rolls back on conflict.

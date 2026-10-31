@@ -226,6 +226,8 @@ export const executeResultForToggleStoreItem = (
             eq(userItem.id, input.userItemId),
             eq(userItem.storedAtHome, userItemResult.storedAtHome),
             gt(userItem.quantity, 0),
+            // Never move auction/offer escrow into home storage.
+            userItemResult.storedAtHome ? undefined : eq(userItem.isInAuction, false),
           )}
         `);
 

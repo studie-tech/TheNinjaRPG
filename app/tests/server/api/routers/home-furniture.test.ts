@@ -115,6 +115,17 @@ describeWithDatabase("owned furniture persistence", () => {
     expect((await snapshot()).inventory.find(({ id }) => id === "material-row")?.storedAtHome).toBe(change !== "state");
   });
 
+  it("does not store a row that enters auction escrow after the inventory read", async () => {
+    const db = await getTestDatabase();
+    await db.update(userItem).set({ storedAtHome: false }).where(eq(userItem.id, "material-row"));
+    const client = beforeStatements(db, userItem, [async () => {
+      await db.update(userItem).set({ isInAuction: true }).where(eq(userItem.id, "material-row"));
+    }]);
+    const api = callerForDatabase(homeRouter, userId, client);
+    expect((await api.toggleStoreItem({ userItemId: "material-row" })).success).toBe(false);
+    expect((await snapshot()).inventory.find(({ id }) => id === "material-row")).toMatchObject({ isInAuction: true, storedAtHome: false });
+  });
+
   it("ignores inventory with deleted item definitions in home reads and layout saves", async () => {
     const db = await getTestDatabase();
     await insertUserItems([{ id: "orphan-row", userId, itemId: "deleted-item", storedAtHome: true, homeX: 50, homeY: 50 }]);
