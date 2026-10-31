@@ -16,7 +16,10 @@ import { getBattlefieldHeightRatio } from "@/libs/combat/util";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
-import { combatHighlightPlan } from "@/libs/rendering/combatHighlights";
+import {
+  combatHighlightEdges,
+  combatHighlightPlan,
+} from "@/libs/rendering/combatHighlights";
 import {
   type CombatHoverCursor,
   getHighlightTilesCacheKey,
@@ -106,10 +109,21 @@ export const createCombatScene = async (options: {
     ]);
     if (game.isDisposed()) throw new DOMException("Combat cancelled", "AbortError");
     if (shadows) game.own(shadows.registerTerrain(terrain.container, data.terrain));
-    const outlines = new Graphics({ label: "combat-grid-outlines" }),
-      labels = new Container();
+    const labels = new Container();
+    const outlineLayers = new Map(
+      [...new Set(data.terrain.batches.map((batch) => batch.layer))].map((layer) => {
+        const graphics = new Graphics({
+          label: "combat-grid-outlines",
+          zIndex: layer < 0 ? 3.5 : 5.5,
+        });
+        // Higher opaque faces cover recessed strokes, just as they cover water and dirt.
+        terrain.container.addChild(graphics);
+        return [layer, graphics] as const;
+      }),
+    );
+    terrain.container.sortableChildren = true;
     // Tile markings share the ground plane, beneath physical fighters and scenery.
-    lightingLayer.addChild(groundLayer, outlines, labels, depthLayer);
+    lightingLayer.addChild(groundLayer, labels, depthLayer);
     const actors = createCombatActors(
       game,
       data.grid,
@@ -293,7 +307,7 @@ export const createCombatScene = async (options: {
       );
       if (key === highlightKey) return;
       highlightKey = key;
-      outlines.clear();
+      for (const graphics of outlineLayers.values()) graphics.clear();
       const plan = combatHighlightPlan({
         grid: data.grid,
         battle: snapshot.battle,
@@ -305,11 +319,17 @@ export const createCombatScene = async (options: {
         timeDiff: snapshot.timeDiff,
         targetTiles: snapshot.targetTiles,
       });
-      for (const { tile, color } of plan.edges) {
-        const offset = data.terrain.faceOffsets.get(`${tile.col},${tile.row}`) ?? 0;
-        outlines
-          .poly(tile.corners.flatMap((corner) => [corner.x, corner.y + offset]))
-          .stroke({ color, width: 1 / scale() });
+      for (const { layer, color, points } of combatHighlightEdges(
+        plan.edges,
+        data.terrain.faceOffsets,
+      )) {
+        const graphics = outlineLayers.get(layer);
+        if (!graphics) continue;
+        for (let index = 0; index < points.length; index += 4)
+          graphics
+            .moveTo(points[index] ?? 0, points[index + 1] ?? 0)
+            .lineTo(points[index + 2] ?? 0, points[index + 3] ?? 0);
+        graphics.stroke({ color, width: 1 / scale() });
       }
       terrain.setTints(plan.tints);
       desiredCursor = plan.valid ? "pointer" : "default";

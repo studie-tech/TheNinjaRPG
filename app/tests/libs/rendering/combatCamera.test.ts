@@ -17,9 +17,9 @@ beforeEach(() => {
 afterEach(() => { for (const dispose of cleanups.splice(0)) dispose(); vi.restoreAllMocks(); });
 
 /** Exercise actual scene transforms and gestures without a GPU or network textures. */
-const setup = async (zoom = 2) => {
+const setup = async (zoom = 2, lightLayout = true) => {
   const user = makeBattleUser("camera-user", { isAi: true, isOriginal: true, longitude: 6, latitude: 5 });
-  const battle = makeCompleteBattle({ usersState: [user], width: 12, height: 10 });
+  const battle = makeCompleteBattle({ usersState: [user], width: 12, height: 10, background: lightLayout ? "ground" : "ocean" });
   let snapshot = { battle, userId: user.userId, actions: [], timeDiff: 0, assets: [], requestedIds: new Set(), active: true, sound: false, volume: 0, showGridNumbers: false, inspect: true } as unknown as CombatSceneSnapshot;
   const height = 390 * getBattlefieldHeightRatio(12, 10), canvas = document.createElement("canvas");
   canvas.getBoundingClientRect = () => new DOMRect(0, 0, 390, height);
@@ -37,7 +37,7 @@ const setup = async (zoom = 2) => {
     dispose: () => { if (disposed) return; disposed = true; listeners.abort(); game.stage.destroy({ children: true }); for (const callback of owned) callback(); },
   } as unknown as GameRenderer;
   vi.spyOn(runtime, "createGameRenderer").mockResolvedValue(game);
-  const onTap = vi.fn(), scene = await createCombatScene({ mount: document.createElement("div"), signal: game.signal, onError: vi.fn(), getSnapshot: () => snapshot, onTap, onHover: vi.fn(), onZoom: vi.fn(), play() {}, initialZoom: zoom, lightLayout: true });
+  const onTap = vi.fn(), scene = await createCombatScene({ mount: document.createElement("div"), signal: game.signal, onError: vi.fn(), getSnapshot: () => snapshot, onTap, onHover: vi.fn(), onZoom: vi.fn(), play() {}, initialZoom: zoom, lightLayout, seed: "dANJxSd487DEuvNbNVZOK" });
   cleanups.push(scene.dispose);
   const world = game.stage.children[0] as Container;
   let now = 0;
@@ -60,10 +60,21 @@ describe("combat camera gestures", () => {
     const fighter = actors.getChildByLabel(user.userId)!;
     const art = fighter.getChildByLabel("combat-art")!;
     const depth = art.parentRenderLayer!, ground = outlines.parent!;
-    expect(depth.parent).toBe(ground);
-    expect(ground.getChildIndex(outlines)).toBeLessThan(ground.getChildIndex(depth));
+    expect(world.getChildIndex(ground)).toBeLessThan(world.getChildIndex(depth.parent!));
     const hud = fighter.getChildByLabel("combat-health")!;
     expect(world.getChildIndex(hud.parentRenderLayer!)).toBeGreaterThan(world.getChildIndex(ground));
+  });
+  it("places recessed targeting strokes between water and higher opaque land faces", async () => {
+    const { world } = await setup(2, false);
+    const terrain = world.children[0]!;
+    const strokes = terrain.children.filter(child => child.label === "combat-grid-outlines");
+    expect(strokes.map(child => child.zIndex).sort()).toEqual([3.5, 5.5]);
+    const water = terrain.children.filter(child => child.zIndex === 2), land = terrain.children.filter(child => child.zIndex === 4);
+    expect(water.length).toBeGreaterThan(0); expect(land.length).toBeGreaterThan(0);
+    const recessed = strokes.find(child => child.zIndex === 3.5)!;
+    for (const face of water) expect(face.zIndex).toBeLessThan(recessed.zIndex);
+    for (const face of land) expect(face.zIndex).toBeGreaterThan(recessed.zIndex);
+    expect(terrain.sortableChildren).toBe(true);
   });
   it("retains a manually panned view across frames, resize and unchanged battle refreshes", async () => {
     const { world, drag, tick, refresh, resize, onTap } = await setup();
