@@ -36,6 +36,9 @@ export const createWorldOcclusion = (
   // Geometry positions are local. This fixed origin lets shaders undo the scene's floating origin.
   const geometryBounds: WorldBounds = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
   const geometries = new Map<GeometryKey, CasterGeometry>();
+  // The frame cache owns compiled meshes; published layout metadata must not retain evicted frames.
+  let packedGeometries = new WeakMap<CasterGeometry, number>();
+  let packedGeometryCount = 0;
   const idleGeometries = new Map<GeometryKey, CasterGeometry>();
   const idleBudget = 4 * 1024 * 1024;
   let idleBytes = 0;
@@ -127,6 +130,12 @@ export const createWorldOcclusion = (
       worldPrecision = Math.max(worldPrecision, stamp.precision);
       yield;
     }
+    const geometryTexels = texels;
+    const retainGeometry =
+      geometryAddresses.size === packedGeometryCount &&
+      [...geometryAddresses].every(
+        ([geometry, address]) => packedGeometries.get(geometry) === address,
+      );
     for (const entry of entries)
       if (entry.geometry.order.length && overlaps(entry.stamp.bounds, domain)) {
         entry.address = texels;
@@ -216,8 +225,15 @@ export const createWorldOcclusion = (
       yield* prepareBuffer(
         references,
         tableHeight(totalReferences * 2, references.source.pixelHeight),
+        0,
+        totalReferences * 2,
       ),
-      yield* prepareBuffer(prisms, tableHeight(texels, prisms.source.pixelHeight)),
+      yield* prepareBuffer(
+        prisms,
+        tableHeight(texels, prisms.source.pixelHeight),
+        retainGeometry ? geometryTexels : 0,
+        texels,
+      ),
     ];
     let reference = 0;
     for (const [texel, value] of cells) {
@@ -242,6 +258,7 @@ export const createWorldOcclusion = (
     }
     const floats = new DataView(prisms.scratch.buffer);
     for (const [geometry, start] of geometryAddresses) {
+      if (retainGeometry) break;
       for (let i = 0; i < 5; i++)
         floats.setFloat32((start + i) * 4, geometry.header[i] ?? 0);
       const nodeStart = start + 5,
@@ -296,6 +313,7 @@ export const createWorldOcclusion = (
     for (const plan of plans) yield* compareBuffer(plan);
     return {
       plans,
+      geometryAddresses,
       maxCandidates: required,
       prismCount: totalPrisms,
       referenceCount: totalReferences,
@@ -304,6 +322,9 @@ export const createWorldOcclusion = (
     };
   }
   const publish = (request: FieldRequest, result: FieldResult) => {
+    packedGeometries = new WeakMap(result.geometryAddresses);
+    packedGeometryCount = result.geometryAddresses.size;
+    for (const plan of result.plans) plan.buffer.publishedTexels = plan.usedTexels;
     for (const { buffer } of result.plans)
       if (buffer.occupied) buffer.occupied.pixels = new Set(buffer.occupied.scratch);
     const changed =
@@ -499,6 +520,8 @@ export const createWorldOcclusion = (
       active = requested = published = rejected = null;
       stamps.clear();
       geometries.clear();
+      packedGeometries = new WeakMap();
+      packedGeometryCount = 0;
       idleGeometries.clear();
       idleBytes = 0;
       for (const buffer of buffers) buffer.texture.destroy(true);
@@ -965,6 +988,20 @@ function* instanceStamp(
   let group = -1,
     work = 0;
   for (let triangle = 0; triangle < geometry.groups.length; triangle++) {
+    // Most character and canopy prisms are elevated. Reject them before allocating
+    // decoded vertices and polygons; this uses the same packed lower-height test.
+    const offset = triangle * 12;
+    if (
+      (Math.min(
+        geometry.coordinates[offset + 2] ?? 0,
+        geometry.coordinates[offset + 6] ?? 0,
+        geometry.coordinates[offset + 10] ?? 0,
+      ) /
+        65535) *
+        (h[4] ?? 1) >
+      1e-6 / (m ? record.height : 1)
+    )
+      continue;
     const nextGroup = geometry.groups[triangle] ?? -1;
     if (nextGroup !== group) {
       flush();
@@ -974,7 +1011,6 @@ function* instanceStamp(
     const local = [0, 1, 2].map((corner) =>
       localVertex(geometry, triangle * 12 + corner * 4),
     );
-    if (Math.min(...local.map((v) => v[2])) > 1e-6 / (m ? record.height : 1)) continue;
     const contact = clipVolumePolygon(
       local,
       2,
@@ -1043,6 +1079,8 @@ const createFieldBuffer = (
     scaleMode: "nearest",
   });
   return {
+    stagedTexels: 0,
+    publishedTexels: 0,
     occupied: sparse
       ? { scratch: new Set<number>(), pixels: new Set<number>() }
       : undefined,
@@ -1056,10 +1094,19 @@ const createFieldBuffer = (
 function* prepareBuffer(
   buffer: FieldBuffer,
   height: number,
+  retainedTexels = 0,
+  usedTexels = buffer.source.pixelWidth * height,
 ): Generator<void, BufferPlan> {
   const resized = height !== buffer.source.pixelHeight;
   if (buffer.scratch.length !== buffer.source.pixelWidth * height * 4)
     buffer.scratch = new Uint8Array(buffer.source.pixelWidth * height * 4);
+  // Mesh addresses stay stable while only instance poses change. Copy their
+  // published bytes without repacking or comparing the immutable geometry.
+  if (retainedTexels) buffer.scratch.set(buffer.pixels.subarray(0, retainedTexels * 4));
+  // Retained texture capacity may exceed current occupancy. Include unfinished
+  // staging writes when clearing, so failed work cannot leave stale references.
+  const clearTexels = Math.max(buffer.stagedTexels, usedTexels);
+  buffer.stagedTexels = usedTexels;
   if (buffer.occupied) {
     // Actor fields keep the full-resolution contact grid, but only populated
     // cells need clearing. Include abandoned staging writes after a rejected build.
@@ -1067,12 +1114,20 @@ function* prepareBuffer(
     for (const index of buffer.occupied.scratch) words[index] = 0;
     buffer.occupied.scratch = new Set<number>();
   } else {
-    for (let offset = 0; offset < buffer.scratch.length; offset += 16384) {
-      buffer.scratch.fill(0, offset, offset + 16384);
+    for (let offset = retainedTexels * 4; offset < clearTexels * 4; offset += 16384) {
+      buffer.scratch.fill(0, offset, Math.min(clearTexels * 4, offset + 16384));
       yield;
     }
   }
-  return { buffer, height, resized, start: buffer.scratch.length / 4, end: 0 };
+  return {
+    buffer,
+    height,
+    resized,
+    retainedTexels,
+    usedTexels,
+    start: buffer.scratch.length / 4,
+    end: 0,
+  };
 }
 /** Locate changed texels without blocking a frame, allowing bounded partial texture uploads. */
 function* compareBuffer(plan: BufferPlan): Generator<void, void> {
@@ -1086,9 +1141,15 @@ function* compareBuffer(plan: BufferPlan): Generator<void, void> {
   const occupied = plan.buffer.occupied;
   const indices = occupied
     ? new Set([...occupied.pixels, ...occupied.scratch])
-    : next.keys();
+    : next
+        .subarray(
+          plan.retainedTexels,
+          Math.max(plan.usedTexels, plan.buffer.publishedTexels),
+        )
+        .keys();
   let compared = 0;
-  for (const i of indices) {
+  for (const index of indices) {
+    const i = occupied ? index : index + plan.retainedTexels;
     if (previous[i] !== next[i]) {
       plan.start = Math.min(plan.start, i);
       plan.end = Math.max(plan.end, i + 1);
@@ -1383,6 +1444,7 @@ type FieldRequest = {
 };
 type FieldResult = {
   plans: BufferPlan[];
+  geometryAddresses: ReadonlyMap<CasterGeometry, number>;
   maxCandidates: number;
   prismCount: number;
   referenceCount: number;
@@ -1390,6 +1452,8 @@ type FieldResult = {
   precision: number;
 };
 type FieldBuffer = {
+  stagedTexels: number;
+  publishedTexels: number;
   /** Sparse headers retain both staging and published support so departed cells are cleared. */
   occupied?: { scratch: Set<number>; pixels: Set<number> };
   pixels: Uint8Array;
@@ -1401,6 +1465,8 @@ type BufferPlan = {
   buffer: FieldBuffer;
   height: number;
   resized: boolean;
+  retainedTexels: number;
+  usedTexels: number;
   start: number;
   end: number;
 };

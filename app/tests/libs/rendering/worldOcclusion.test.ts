@@ -557,6 +557,22 @@ describe("custom-art occlusion profiles", () => {
 });
 
 describe("retained exact occlusion fields", () => {
+  it("retains mesh bytes while moved instances match a freshly packed field", () => {
+    const frame = trackedFrame(32), field = createWorldOcclusion(), fresh = createWorldOcclusion();
+    const original = normalizedRecord("first", frame), moved = normalizedRecord("moved", frame, 40.1875);
+    try {
+      field.update([original], viewport, 32);
+      const address = uint24(bytes(field.references), 0), geometry = bytes(field.prisms).slice(0, address * 4);
+      const writes = vi.spyOn(DataView.prototype, "setFloat32");
+      try {
+        field.update([moved], viewport, 32);
+        expect(writes).toHaveBeenCalledTimes(7);
+      } finally { writes.mockRestore(); }
+      fresh.update([moved], viewport, 32);
+      expect(matchesSnapshot(field, packedSnapshot(fresh))).toEqual([true, true, true]);
+      expect(bytes(field.prisms).slice(0, address * 4)).toEqual(geometry);
+    } finally { field.dispose(); fresh.dispose(); }
+  });
   it("matches dense fields after actors cross cells in both directions, depart, and recover from rejection", async () => {
     const sparse = createWorldOcclusion(), dense = createWorldOcclusion({ incremental: true });
     const frame = [box(0, 0, 1, 1, 0, 0.5)];
