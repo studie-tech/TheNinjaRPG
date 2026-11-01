@@ -80,6 +80,7 @@ export const worldSunlight = (date: Date | null = null) => {
  * All coordinates are Y-up: a material texel at screen (x,y), height h represents (x,2(y−h),h).
  */
 export const createWorldShadows = (game: GameRenderer, world: Container) => {
+  const canInstance = typeof game.renderer.gl?.drawElementsInstanced === "function";
   const container = new Container({ label: "physical-world" });
   const receiver = RenderTexture.create({
     width: 1,
@@ -182,6 +183,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
   let liveRecords: Caster[] = [];
   let sceneryCache: {
     bounds: WorldBounds;
+    scale: number;
     records: Caster[];
     owners: {
       owner: Container;
@@ -549,8 +551,15 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           baseWidth,
           baseHeight,
           padding,
-          anchorX: Math.floor(globalViewport.minX / 128) * 128,
-          anchorY: Math.floor(globalViewport.minY / 128) * 128,
+          // Local camera motion keeps cached poses; distant travel rebases within Float32 precision.
+          anchorX:
+            coverage && Math.abs(globalViewport.minX - coverage.anchorX) <= 1024
+              ? coverage.anchorX
+              : Math.floor(globalViewport.minX / 128) * 128,
+          anchorY:
+            coverage && Math.abs(globalViewport.minY - coverage.anchorY) <= 1024
+              ? coverage.anchorY
+              : Math.floor(globalViewport.minY / 128) * 128,
         };
       }
       const { anchorX, anchorY } = coverage;
@@ -630,6 +639,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       };
       const retainedScenery =
         sceneryCache &&
+        sceneryCache.scale === scale &&
         sceneryCache.bounds.minX === sceneryBounds.minX &&
         sceneryCache.bounds.maxX === sceneryBounds.maxX &&
         sceneryCache.bounds.minY === sceneryBounds.minY &&
@@ -643,7 +653,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             previous.group === current.drawRoot?.uid
           );
         });
-      const scenery: Caster[] = retainedScenery ? (sceneryCache?.records ?? []) : [];
+      let scenery: Caster[] = retainedScenery ? (sceneryCache?.records ?? []) : [];
       if (retainedScenery)
         for (const record of scenery)
           if (
@@ -946,11 +956,21 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         );
         sceneryCache = {
           bounds: sceneryBounds,
-          records: scenery.sort((a, b) =>
-            a.cached && b.cached
-              ? receiverOrder(a.cached.receiver, b.cached.receiver)
-              : 0,
-          ),
+          scale,
+          // Flat cover inherits terrain lighting; retain emitters even when their own material is flat.
+          records: scenery
+            .filter(
+              (record) =>
+                !record.description.small ||
+                (record.cached?.receiver.height ?? 0) * scale >
+                  WORLD_DETAIL.groundLightingPixels[0] ||
+                !!record.cached?.lights.length,
+            )
+            .sort((a, b) =>
+              a.cached && b.cached
+                ? receiverOrder(a.cached.receiver, b.cached.receiver)
+                : 0,
+            ),
           owners: [...owners].map((owner) => {
             const pose = origin(owner);
             return {
@@ -963,6 +983,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           }),
         };
       }
+      scenery = sceneryCache?.records ?? [];
       for (const record of scenery) {
         const cached = record.cached;
         if (!cached || !boundsOverlap(cached.receiver.bounds, viewport, 384)) continue;
@@ -1030,7 +1051,14 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         receiverRevision++;
         // Camera uniforms do not change retained receiver vertices or texture slots.
         if (contentsChanged)
-          updateReceiverBatches(receiverBatches, receivers, materialLayer, view, wind);
+          updateReceiverBatches(
+            receiverBatches,
+            receivers,
+            materialLayer,
+            view,
+            wind,
+            canInstance,
+          );
       }
       const nextReceiverKey = String(receiverRevision);
       const hasWindReceivers = receivers.some((entry) => entry.record.wind);
@@ -1295,6 +1323,7 @@ const updateReceiverBatches = (
   layer: Container,
   view: UniformGroup,
   wind: UniformGroup,
+  instanced: boolean,
 ) => {
   const pending: {
     sources: WorldMaterial[];
@@ -1348,8 +1377,8 @@ const updateReceiverBatches = (
           ? entry.record.sprite.texture.orig.width /
             entry.record.sprite.texture.orig.height
           : frame.width / frame.height,
-        h = entry.height,
-        a = (m[0] ?? 0) / aspect,
+        h = entry.height;
+      const a = (m[0] ?? 0) / aspect,
         b = -(m[2] ?? 0) * 0.5,
         c = -(m[2] ?? 0),
         d = (2 * (m[1] ?? 0)) / aspect,
@@ -1372,6 +1401,45 @@ const updateReceiverBatches = (
               (d * c - a * f) / determinant,
             ]
           : [0, 1, 0];
+      if (instanced) {
+        const { orig, trim } = entry.record.sprite.texture;
+        // One object record drives a shared quad; GPU positioning does not duplicate the per-object normal basis.
+        vertices.push(
+          m[0] ?? 0,
+          m[2] ?? 0,
+          m[4] ?? 0,
+          entry.material.width,
+          m[1] ?? 0,
+          m[3] ?? 0,
+          m[5] ?? 0,
+          entry.material.height,
+          (frame.x * sourceRatio) / entry.material.width,
+          (frame.y * heightRatio) / entry.material.height,
+          (frame.width * sourceRatio) / entry.material.width,
+          (frame.height * heightRatio) / entry.material.height,
+          h,
+          index,
+          entry.material.isBillboard
+            ? (frame.y -
+                (entry.record.character ? (trim?.y ?? 0) + orig.height / 2 - 28 : 0)) /
+                entry.record.sprite.texture.source.pixelHeight
+            : 0,
+          entry.material.isBillboard
+            ? (entry.record.character ? orig.height : frame.height) /
+                entry.record.sprite.texture.source.pixelHeight
+            : 0,
+          ...normalX,
+          h / ((entry.record.character ? orig.height : frame.height) * heightRatio),
+          ...normalY,
+          (entry.record.wind ? entry.record.wind.group + 2 : 1) *
+            (entry.record.description.small ? -1 : 1),
+          entry.record.character ? (trim?.x ?? 0) / orig.width : 0,
+          entry.record.character ? (trim?.y ?? 0) / orig.height : 0,
+          entry.record.character ? (trim?.width ?? orig.width) / orig.width : 1,
+          entry.record.character ? (trim?.height ?? orig.height) / orig.height : 1,
+        );
+        continue;
+      }
       for (const [u, v] of corners) {
         const { orig, trim } = entry.record.sprite.texture;
         const logicalU = entry.record.character
@@ -1417,19 +1485,79 @@ const updateReceiverBatches = (
         shrinkToFit: false,
       });
       const geometry = new Geometry({
-        attributes: {
-          aPosition: { buffer, format: "float32x2", stride: 80, offset: 0 },
-          aUV: { buffer, format: "float32x2", stride: 80, offset: 8 },
-          aData: { buffer, format: "float32x4", stride: 80, offset: 16 },
-          aNormalX: { buffer, format: "float32x3", stride: 80, offset: 32 },
-          aNormalY: { buffer, format: "float32x3", stride: 80, offset: 44 },
-          // Native dimensions, world units per texel, and the low-cover material marker.
-          aPixel: { buffer, format: "float32x4", stride: 80, offset: 56 },
-          aWind: { buffer, format: "float32x2", stride: 80, offset: 72 },
-        },
+        attributes: instanced
+          ? {
+              aCorner: {
+                buffer: new Buffer({
+                  data: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]),
+                  usage: BufferUsage.VERTEX,
+                }),
+                format: "float32x2",
+              },
+              aObjectX: {
+                buffer,
+                format: "float32x4",
+                stride: 112,
+                offset: 0,
+                instance: true,
+              },
+              aObjectY: {
+                buffer,
+                format: "float32x4",
+                stride: 112,
+                offset: 16,
+                instance: true,
+              },
+              aUVRect: {
+                buffer,
+                format: "float32x4",
+                stride: 112,
+                offset: 32,
+                instance: true,
+              },
+              aData: {
+                buffer,
+                format: "float32x4",
+                stride: 112,
+                offset: 48,
+                instance: true,
+              },
+              aNormalX: {
+                buffer,
+                format: "float32x4",
+                stride: 112,
+                offset: 64,
+                instance: true,
+              },
+              aNormalY: {
+                buffer,
+                format: "float32x4",
+                stride: 112,
+                offset: 80,
+                instance: true,
+              },
+              aTrim: {
+                buffer,
+                format: "float32x4",
+                stride: 112,
+                offset: 96,
+                instance: true,
+              },
+            }
+          : {
+              aPosition: { buffer, format: "float32x2", stride: 80, offset: 0 },
+              aUV: { buffer, format: "float32x2", stride: 80, offset: 8 },
+              aData: { buffer, format: "float32x4", stride: 80, offset: 16 },
+              aNormalX: { buffer, format: "float32x3", stride: 80, offset: 32 },
+              aNormalY: { buffer, format: "float32x3", stride: 80, offset: 44 },
+              // Native dimensions, world units per texel, and the low-cover material marker.
+              aPixel: { buffer, format: "float32x4", stride: 80, offset: 56 },
+              aWind: { buffer, format: "float32x2", stride: 80, offset: 72 },
+            },
       });
+      if (instanced) geometry.addIndex(new Uint16Array([0, 1, 2, 0, 2, 3]));
       const shader = Shader.from({
-        gl: { vertex: receiverVertex, fragment: receiverFragment },
+        gl: { vertex: receiverVertex(instanced), fragment: receiverFragment },
         resources: {
           view,
           wind,
@@ -1450,6 +1578,7 @@ const updateReceiverBatches = (
     }
     if (!batch) continue;
     batch.casters = next.casters;
+    if (instanced) batch.mesh.geometry.instanceCount = next.casters.length;
     batch.buffer.data = new Float32Array(vertices);
     batch.buffer.update();
     layer.setChildIndex(batch.mesh, i);
@@ -1464,22 +1593,42 @@ const destroyBatch = (batch: ReceiverBatch) => {
   batch.mesh.geometry.destroy(true);
   batch.mesh.destroy();
 };
-const receiverVertex = `precision highp float; attribute vec2 aPosition; attribute vec2 aUV; attribute vec4 aData;
-attribute vec3 aNormalX; attribute vec3 aNormalY;
-attribute vec4 aPixel; attribute vec2 aWind;
+const receiverVertex = (instanced: boolean) => `precision highp float;
+${
+  instanced
+    ? `attribute vec2 aCorner; attribute vec4 aObjectX; attribute vec4 aObjectY;
+attribute vec4 aUVRect; attribute vec4 aTrim; attribute vec4 aNormalX; attribute vec4 aNormalY;`
+    : `attribute vec2 aPosition; attribute vec2 aUV;
+attribute vec3 aNormalX; attribute vec3 aNormalY; attribute vec2 aWind; attribute vec4 aPixel;`
+}
+attribute vec4 aData;
 ${worldWindShader}
 varying vec2 vUV; varying vec4 vData; varying vec3 vNormalX; varying vec3 vNormalY; varying vec3 vPixel; varying float vDetail; uniform vec4 uViewport; uniform float uWorldScale;
-void main() { vUV = aUV; vData = aData; vNormalX = aNormalX; vNormalY = aNormalY;
-  vPixel = aPixel.xyz;
-  vDetail = aPixel.w > 0.5 ? smoothstep(${WORLD_DETAIL.groundLightingPixels[0].toFixed(1)}, ${WORLD_DETAIL.groundLightingPixels[1].toFixed(1)}, aData.x * uWorldScale) : 1.0;
-  float dx = worldWind(aWind.x);
+void main() {
+  ${
+    instanced
+      ? `vec2 logical = aTrim.xy + aCorner * aTrim.zw;
+  vec2 position = vec2(dot(aObjectX.xy, logical) + aObjectX.z,
+    dot(aObjectY.xy, logical) + aObjectY.z);
+  vUV = aUVRect.xy + aCorner * aUVRect.zw;
+  vNormalX = aNormalX.xyz; vNormalY = aNormalY.xyz;
+  vPixel = vec3(aObjectX.w, aObjectY.w, aNormalX.w);
+  float small = aNormalY.w < 0.0 ? 1.0 : 0.0;
+  float windCode = abs(aNormalY.w) - 1.0;`
+      : `vec2 position = aPosition; vUV = aUV; vNormalX = aNormalX; vNormalY = aNormalY;
+  vPixel = aPixel.xyz; float small = aPixel.w; float windCode = aWind.x;`
+  }
+  vData = aData;
+  vDetail = small > 0.5 ? smoothstep(${WORLD_DETAIL.groundLightingPixels[0].toFixed(1)}, ${WORLD_DETAIL.groundLightingPixels[1].toFixed(1)}, aData.x * uWorldScale) : 1.0;
+  float dx = worldWind(windCode);
   // Inverse transpose of the rooted shear, including a rotated source plane.
   float slope = dx / max(aData.x, 0.00001);
-  float stretch = 1.0 + slope * 0.5 * aNormalY.x;
+  vec3 rootedNormalY = vNormalY;
+  float stretch = 1.0 + slope * 0.5 * rootedNormalY.x;
   vNormalX.x /= stretch; vNormalY.x /= stretch;
-  vNormalX.yz -= vec2(slope * 0.5, slope) * aNormalY.y * vNormalX.x;
-  vNormalY.yz -= vec2(slope * 0.5, slope) * aNormalY.y * vNormalY.x;
-  vec2 position = aPosition + vec2(dx * aWind.y, 0.0);
+  vNormalX.yz -= vec2(slope * 0.5, slope) * rootedNormalY.y * vNormalX.x;
+  vNormalY.yz -= vec2(slope * 0.5, slope) * rootedNormalY.y * vNormalY.x;
+  position += vec2(dx * ${instanced ? "(1.0 - aCorner.y)" : "aWind.y"}, 0.0);
   gl_Position = vec4((position - uViewport.xy) / uViewport.zw * 2.0 - 1.0, 0.0, 1.0); }`;
 const receiverFragment = `precision highp float;
 precision highp sampler2D; // Preserve material flags, coverage and height before receiver encoding.

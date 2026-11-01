@@ -20,12 +20,12 @@ import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 
 ensureDom();
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
-const fixture = () => {
+const fixture = (instanced = false) => {
   const cleanups: (() => void)[] = [];
   const world = new Container(), parent = new Container();
   const render = vi.fn();
   const canvas = document.createElement("canvas");
-  const game = { visualEffects: { lighting: true, shadows: true, animations: true }, canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, render } } as unknown as GameRenderer;
+  const game = { visualEffects: { lighting: true, shadows: true, animations: true }, canvas, signal: new AbortController().signal, own: (cleanup: () => void) => cleanups.push(cleanup), renderer: { width: 800, height: 600, render, gl: instanced ? { drawElementsInstanced() {} } : undefined } } as unknown as GameRenderer;
   const shadows = createWorldShadows(game, world);
   world.addChild(shadows.container, parent);
   const terrain = {
@@ -184,22 +184,24 @@ describe("physical world lighting", () => {
       expect(view.uniforms.uViewport[2]! / view.uniforms.uReceiverSize[0]!).toBeCloseTo(50 / 400);
     } finally { f.dispose(); }
   });
-  it("retains occlusion for every visible fixture emitter and reuses stationary light buffers", async () => {
+  it.each([false, true])("retains every visible emitter and stationary light buffer (flat material: %s)", async (flat) => {
     const buildFrame = worldMaterials.worldMaterialFrame;
     const frameSpy = vi.spyOn(worldMaterials, "worldMaterialFrame").mockImplementation((material, rect) => ({
       ...buildFrame(material, rect), emitters: [0.2, 0.4, 0.6, 0.8].map((x) => ({ x, y: 0.5, height: 0.5 })),
     }));
     const f = fixture(), source = materialSourceFixture();
     const registrations: (() => void)[] = [];
+    if (flat) f.world.scale.set(0.25);
     try {
       for (let i = 0; i < 4; i++) {
         const sprite = new Sprite(source.texture);
         sprite.scale.set(20, -20); sprite.position.set(10 + i * 20, 50); f.parent.addChild(sprite);
-        const registration = f.shadows.register(sprite, { id: `fixture-${i}`, kind: "structure", image: `fixture-emitter-${i}.png`, size: 40, x: sprite.x, y: 50, groundY: 30, shadowCaster: "building" });
+        const registration = f.shadows.register(sprite, { id: `fixture-${i}`, kind: "structure", image: `fixture-emitter-${i}.png`, size: 40, x: sprite.x, y: 50, groundY: 30, shadowCaster: "building", small: flat }, [], undefined, flat ? f.parent : undefined);
         registrations.push(registration); await registration.ready;
       }
       const night = worldSunlight(new Date((WORLD_DAY_SECONDS + 10) * 1000));
       f.shadows.update(night, viewport);
+      expect(f.render.mock.calls[1]![0]!.container.children.length).toBe(flat ? 0 : 1);
       const pointPass = f.render.mock.calls.at(-1)![0]!;
       expect([pointPass.target.width, pointPass.target.height]).toEqual([624, 474]);
       const buffer = pointPass.container.children[0].geometry.getBuffer("aPosition");
@@ -214,6 +216,7 @@ describe("physical world lighting", () => {
       const fixed = (retained as Float32Array).slice(0, 12 * 60);
       const moving = (retained as Float32Array).slice(12 * 60);
       (f.parent.children.at(-1)! as Sprite).x += 1;
+      if (flat) f.shadows.invalidate();
       f.shadows.update(night, viewport);
       expect(buffer.data).toBe(retained);
       expect((buffer.data as Float32Array).slice(0, 12 * 60)).toEqual(fixed);
@@ -299,7 +302,7 @@ describe("physical world lighting", () => {
     } finally { f.dispose(); frameSpy.mockRestore(); source.dispose(); }
   });
 
-  it.each([64, 192])("preserves packed %ipx LPC layer geometry and shares one moving foot light across the outfit", async (logicalSize) => {
+  it.each([[64, false], [64, true], [192, false], [192, true]] as const)("preserves packed %ipx LPC layers and their shared moving foot light (instanced: %s)", async (logicalSize, instanced) => {
     const createField = worldFields.createWorldOcclusion;
     let occluders: readonly worldFields.Occluder[] = [];
     const fieldSpy = vi.spyOn(worldFields, "createWorldOcclusion").mockImplementation((options) => {
@@ -310,7 +313,7 @@ describe("physical world lighting", () => {
       };
       return field;
     });
-    const f = fixture(), source = materialSourceFixture();
+    const f = fixture(instanced), source = materialSourceFixture();
     const root = new Container();
     root.position.set(40, 70); root.scale.set(64, -64); f.parent.addChild(root);
     const views = [logicalSize / 2 + 26, logicalSize / 2 - 12].map((y) => new Texture({ source: source.texture.source,
@@ -330,16 +333,32 @@ describe("physical world lighting", () => {
       expect(occluders).toHaveLength(2);
       for (const occluder of occluders) expect(occluder).toMatchObject({ footX: 40, footY: 84, width: 64, height: logicalSize });
       const receiver = f.render.mock.calls.find(([call]) => call.container.children[0]?.geometry?.attributes?.aData)![0].container.children[0];
-      const data = receiver.geometry.getBuffer("aPosition").data as Float32Array;
-      const stride = receiver.geometry.attributes.aPosition.stride / 4;
+      const position = (layer: number) => {
+        if (!instanced) {
+          const stride = receiver.geometry.attributes.aPosition.stride / 4;
+          const data = receiver.geometry.getBuffer("aPosition").data as Float32Array;
+          return { x: data[layer * 6 * stride], y: data[layer * 6 * stride + 1] };
+        }
+        const data = receiver.geometry.getBuffer("aObjectX").data as Float32Array, offset = layer * 28;
+        // The shared quad starts at the trimmed source corner in logical outfit coordinates.
+        const u = data[offset + 24]!, v = data[offset + 25]!;
+        return { x: data[offset]! * u + data[offset + 1]! * v + data[offset + 2]!,
+          y: data[offset + 4]! * u + data[offset + 5]! * v + data[offset + 6]! };
+      };
+      if (instanced) {
+        expect(receiver.geometry.instanceCount).toBe(2);
+        expect(receiver.geometry.getBuffer("aObjectX").data).toHaveLength(2 * 28);
+        expect(receiver.geometry.getBuffer("aCorner").data).toHaveLength(8);
+        expect(Object.keys(receiver.geometry.attributes)).toHaveLength(8);
+      }
       const first = children[0]!.toGlobal({ x: 24 - 32, y: 58 - 32 });
-      expect(data[0]).toBeCloseTo(first.x); expect(data[1]).toBeCloseTo(first.y);
+      expect(position(0).x).toBeCloseTo(first.x); expect(position(0).y).toBeCloseTo(first.y);
       // The head layer's receiver remains elevated, even though its packed texture is only two pixels high.
-      expect(data[6 * stride + 1]).toBeCloseTo(children[1]!.toGlobal({ x: 24 - 32, y: 20 - 32 }).y);
+      expect(position(1).y).toBeCloseTo(children[1]!.toGlobal({ x: 24 - 32, y: 20 - 32 }).y);
       root.x += 3;
       f.shadows.update(worldSunlight(), viewport);
       expect(Array.from(points().slice(2, 5))).toEqual([43, 84, 66]);
-      expect(receiver.geometry.getBuffer("aPosition").data[0]).toBeCloseTo(first.x + 3);
+      expect(position(0).x).toBeCloseTo(first.x + 3);
       children[0]!.visible = false;
       f.shadows.update(worldSunlight(), viewport);
       expect(points()).toHaveLength(6 * 10);
@@ -824,6 +843,35 @@ describe("physical world lighting", () => {
       expect(layer.children.map((mesh: { geometry: Geometry }) => mesh.geometry.getBuffer("aPosition"))).toEqual(buffers);
     } finally { releases.forEach((release) => release()); f.dispose(); source.dispose(); }
   });
+  it("retains receiver poses during local camera travel and rebases distant views coherently", async () => {
+    const f = fixture(), source = materialSourceFixture();
+    const sprite = new Sprite(source.texture);
+    sprite.position.set(0, 40); sprite.width = 2400; sprite.height = 40; f.parent.addChild(sprite);
+    const release = f.shadows.register(sprite, {
+      id: "wide-wall", kind: "decoration", image: "wide-wall.png", size: 40,
+      x: 0, y: 40, groundY: 0, shadowCaster: "building",
+    }, [], undefined, f.parent);
+    try {
+      await release.ready;
+      f.shadows.update(worldSunlight(), viewport);
+      const layer = f.render.mock.calls[1]![0]!.container;
+      const mesh = layer.children[0], buffer = mesh.geometry.getBuffer("aPosition");
+      const upload = vi.spyOn(buffer, "update");
+      const initialProjection = buffer.data[0] - mesh.shader.resources.view.uniforms.uViewport[0];
+      for (const x of [200, 0, 200]) {
+        f.shadows.update(worldSunlight(), { ...viewport, minX: x, maxX: x + 100 });
+        expect(buffer).toBe(mesh.geometry.getBuffer("aPosition"));
+        expect(upload).not.toHaveBeenCalled();
+        expect(buffer.data[0] - mesh.shader.resources.view.uniforms.uViewport[0]).toBeCloseTo(initialProjection - x);
+      }
+      f.shadows.update(worldSunlight(), { ...viewport, minX: 1200, maxX: 1300 });
+      expect(upload).toHaveBeenCalledTimes(1);
+      expect(buffer.data[0] - mesh.shader.resources.view.uniforms.uViewport[0]).toBeCloseTo(initialProjection - 1200);
+      f.shadows.update(worldSunlight(), { ...viewport, minX: 1400, maxX: 1500 });
+      expect(upload).toHaveBeenCalledTimes(1);
+      expect(buffer.data[0] - mesh.shader.resources.view.uniforms.uViewport[0]).toBeCloseTo(initialProjection - 1400);
+    } finally { release(); f.dispose(); source.dispose(); }
+  });
   it("matches mutable scenery across camera anchors, owner transforms, visibility and explicit child invalidation", async () => {
     const source = materialSourceFixture(), cached = fixture(), mutable = fixture();
     const fixtures = [cached, mutable];
@@ -831,7 +879,7 @@ describe("physical world lighting", () => {
       const sprite = new Sprite(source.texture); sprite.position.set(40, 40); sprite.width = sprite.height = 20; f.parent.addChild(sprite); return sprite;
     });
     const releases = fixtures.map((f, index) => f.shadows.register(sprites[index]!, {
-      id: "scenery-pose", kind: "decoration", image: "scenery-pose.png", size: 20, x: 40, y: 40, groundY: 0, shadowCaster: "building",
+      id: "scenery-pose", kind: "decoration", image: "scenery-pose.png", size: 20, x: 40, y: 40, groundY: 0, shadowCaster: "building", small: true,
     }, [], undefined, index === 0 ? f.parent : undefined));
     try {
       await Promise.all(releases.map((release) => release.ready));
@@ -852,6 +900,11 @@ describe("physical world lighting", () => {
       fixtures.forEach((f) => { f.parent.visible = true; f.parent.position.set(0, 0); }); compare();
       sprites.forEach((sprite) => { sprite.x += 1.125; sprite.alpha = 0.5; }); cached.shadows.invalidate(); compare();
       sprites.forEach((sprite) => { sprite.alpha = 1; }); cached.shadows.invalidate(); compare();
+      for (const scale of [0.25, 2, 0.25, 1]) {
+        fixtures.forEach((f) => f.world.scale.set(scale));
+        compare();
+        expect(layers[0]!.children.length).toBe(scale === 0.25 ? 0 : 1);
+      }
       cached.restore(); compare();
       releases.forEach((release) => release()); compare();
     } finally { releases.forEach((release) => release()); fixtures.forEach((f) => f.dispose()); source.dispose(); }
