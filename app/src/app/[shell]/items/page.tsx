@@ -1,6 +1,5 @@
 "use client";
 
-import { getQueryKey } from "@trpc/react-query";
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -16,7 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import { startTransition, useRef, useState } from "react";
-import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -41,7 +40,7 @@ import type {
   UserItemWithRelations,
   UserItemWithVariants,
 } from "@/drizzle/schema";
-import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -874,16 +873,8 @@ const Backpack: React.FC<BackpackProps> = (props) => {
   // tRPC utility
   const utils = api.useUtils();
 
-  const inventoryCache = useQueryCacheUpdate<RouterOutputs["item"]["getUserItems"]>(
-    getQueryKey(api.item.getUserItems, undefined, "query"),
-  );
-  const variantsCache = useQueryCacheUpdate<
-    RouterOutputs["item"]["getUserItemsWithVariants"]
-  >(getQueryKey(api.item.getUserItemsWithVariants, undefined, "query"));
-  const prepareInventoryUpdate = () => ({
-    inventory: inventoryCache.prepareUpdate(),
-    variants: variantsCache.prepareUpdate(),
-  });
+  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
+    useInventoryCacheUpdate();
 
   // Handler for when mutations are settled
   const onSettled = () => {
@@ -960,23 +951,13 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     onSuccess: async (data, input, context) => {
       showMutationToast(data);
       if (data.success) {
-        await Promise.all([
-          inventoryCache.updateCache(
-            (rows) => getSoldInventory(rows, input.userItemId),
-            context.inventory,
-          ),
-          variantsCache.updateCache(
-            (rows) => getSoldInventory(rows, input.userItemId),
-            context.variants,
-          ),
-        ]);
+        await updateInventory(
+          (rows) => getSoldInventory(rows, input.userItemId),
+          context,
+        );
       }
     },
-    onError: () =>
-      Promise.all([
-        utils.item.getUserItems.invalidate(),
-        utils.item.getUserItemsWithVariants.invalidate(),
-      ]).then(() => undefined),
+    onError: invalidateInventory,
     onSettled,
   });
 
@@ -985,23 +966,13 @@ const Backpack: React.FC<BackpackProps> = (props) => {
     onSuccess: async (data, _input, context) => {
       showMutationToast(data);
       if (data.success) {
-        await Promise.allSettled([
-          inventoryCache.updateCache(
-            (rows) => getEquippedInventory(rows, data.equipmentChanges),
-            context.inventory,
-          ),
-          variantsCache.updateCache(
-            (rows) => getEquippedInventory(rows, data.equipmentChanges),
-            context.variants,
-          ),
-        ]);
+        await updateInventory(
+          (rows) => getEquippedInventory(rows, data.equipmentChanges),
+          context,
+        );
       }
     },
-    onError: () =>
-      Promise.all([
-        utils.item.getUserItems.invalidate(),
-        utils.item.getUserItemsWithVariants.invalidate(),
-      ]).then(() => undefined),
+    onError: invalidateInventory,
     onSettled,
   });
 

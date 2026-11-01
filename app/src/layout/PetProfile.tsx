@@ -1,12 +1,12 @@
 "use client";
 
-import { hashKey, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { PawPrint, Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
+import { api, type RouterInputs } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getAssignedPetCollection, getAssignedPetExperience } from "@/deltas/pets";
 import {
   CombatStatNames,
   MAP_WAKE_ISLAND_SECTOR,
@@ -46,7 +45,7 @@ import {
   PetGenders,
   PetSpawnPositions,
 } from "@/drizzle/constants";
-import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
+import { usePetCacheUpdate } from "@/hooks/usePetCacheUpdate";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import Confirm from "@/layout/Confirm";
@@ -145,12 +144,7 @@ export function PetProfile() {
         ? 3000
         : false,
   });
-  const petCache = useQueryCacheUpdate<RouterOutputs["pets"]["getPet"]>(
-    getQueryKey(api.pets.getPet, petInput, "query"),
-  );
-  const collectionCache = useQueryCacheUpdate<RouterOutputs["pets"]["getCollection"]>(
-    getQueryKey(api.pets.getCollection, undefined, "query"),
-  );
+  const { preparePetUpdate, updatePet } = usePetCacheUpdate(petInput);
   const pet = data?.pet;
   const isGenerating = !!pet && generatingPetIds.includes(pet.id);
   const aiProfile = useMemo(
@@ -275,26 +269,13 @@ export function PetProfile() {
   const assign = api.pets.assignExperience.useMutation({
     onMutate: () => ({
       user: prepareUserUpdate(),
-      pet: petCache.prepareUpdate(),
-      collection: collectionCache.prepareUpdate(),
+      pet: preparePetUpdate(),
     }),
     onSuccess: async (result, _variables, context) => {
       setMessage(result.success ? null : result.message);
       showMutationToast(result);
       if (result.success) {
-        await Promise.all([
-          utils.pets.getPet.invalidate(undefined, {
-            predicate: (query) => hashKey(query.queryKey) !== hashKey(context.pet.key),
-          }),
-          petCache.updateCache(
-            (current) => getAssignedPetExperience(current, result.petUpdate),
-            context.pet,
-          ),
-          collectionCache.updateCache(
-            (current) => getAssignedPetCollection(current, result.petUpdate),
-            context.collection,
-          ),
-        ]);
+        await updatePet(result.petUpdate, context.pet);
         // The confirmed owner update must not trigger a second pet-bank read.
         const next = result.userPatch;
         previousOwnerProgress.current = [

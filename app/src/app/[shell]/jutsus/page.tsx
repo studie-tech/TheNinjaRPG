@@ -1,8 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { hashKey } from "@tanstack/react-query";
-import { getQueryKey } from "@trpc/react-query";
 import {
   ArrowRightLeft,
   ChevronsDown,
@@ -16,13 +14,13 @@ import {
 } from "lucide-react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
-import { getEquippedJutsus, getEquippedJutsuUserPatch } from "@/deltas/jutsu";
+import { getEquippedJutsuUserPatch } from "@/deltas/jutsu";
 import {
   COST_EXTRA_JUTSU_SLOT,
   COST_RESKIN_JUTSU,
@@ -35,7 +33,7 @@ import {
   RESKIN_LIMIT,
 } from "@/drizzle/constants";
 import type { UserItemWithItem, UserJutsuWithRelations } from "@/drizzle/schema";
-import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
+import { useJutsuCacheUpdate } from "@/hooks/useJutsuCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -145,9 +143,7 @@ export default function MyJutsu() {
 
   // User Jutsus & items
   const jutsuInput = { ...getFilter(state), includeEquipped: true };
-  const jutsuCache = useQueryCacheUpdate<RouterOutputs["jutsu"]["getUserJutsus"]>(
-    getQueryKey(api.jutsu.getUserJutsus, jutsuInput, "query"),
-  );
+  const { prepareJutsuUpdate, updateJutsus } = useJutsuCacheUpdate(jutsuInput);
   const { data: userJutsus, isFetching: l1 } = api.jutsu.getUserJutsus.useQuery(
     jutsuInput,
     { enabled: !!userData, placeholderData: (previousData) => previousData },
@@ -210,24 +206,15 @@ export default function MyJutsu() {
   // Mutations
   const { mutate: equip, isPending: isToggling } = api.jutsu.toggleEquip.useMutation({
     onMutate: () => ({
-      query: jutsuCache.prepareUpdate(),
+      jutsus: prepareJutsuUpdate(),
       user: prepareUserUpdate(),
-      input: jutsuInput,
     }),
     onSuccess: async (data, variables, context) => {
       showMutationToast(data);
       if (data.success) {
         const change = data.data;
-        // Other filters can gain or lose this row and need authoritative membership.
-        void utils.jutsu.getUserJutsus.invalidate(undefined, {
-          predicate: (query) => hashKey(query.queryKey) !== hashKey(context.query.key),
-        });
         await Promise.allSettled([
-          jutsuCache.updateCache(
-            (rows) =>
-              getEquippedJutsus(rows, variables.userJutsuId, change, context.input),
-            context.query,
-          ),
+          updateJutsus(variables.userJutsuId, change, context.jutsus),
           ...(change
             ? [
                 updateUser(
