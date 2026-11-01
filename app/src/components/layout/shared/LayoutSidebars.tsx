@@ -317,7 +317,7 @@ interface SignedInIconsProps {
   variant: LayoutVariant;
   isSignedIn: boolean;
   userData?: UserWithRelations | null;
-  updateUser: (data: Partial<UserWithRelations>) => Promise<void>;
+  updateUser: (data: Partial<UserWithRelations>) => Promise<unknown>;
   onEventClick: () => void;
   onThemeToggle?: () => void;
 }

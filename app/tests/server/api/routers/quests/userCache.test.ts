@@ -1,3 +1,4 @@
+import { getQuestRewardDashboardUpdate } from "@/deltas/quests";
 import { eq } from "drizzle-orm";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
@@ -659,8 +660,27 @@ describeWithDatabase("confirmed quest cache responses", () => {
     },
   );
 
+  it.each([false, true])("confirms reward-free progress and retains settlement recovery (training=%s)", async settleTraining => {
+    const api = await callerFor(questsRouter, playerId);
+    expect((await api.startQuest({ questId: missionId, userSector: 0 })).success).toBe(true);
+    const profileApi = await callerFor(profileRouter, playerId);
+    const before = await profileApi.getDashboard();
+    if (settleTraining) {
+      await queueEnergy(playerId, [{ stat: "offence", energy: 40 }]);
+      await (await getTestDatabase()).update(userData).set({ curEnergy: 100 }).where(eq(userData.userId, playerId));
+    }
+    const { result, statements } = await recordQueries(() => api.checkRewards({ questId: missionId }));
+    expect(result).toMatchObject({ success: true, resolved: false, questCacheUpdate: { discoveryUnchanged: !settleTraining } });
+    expect(result.userPatch).toBeDefined();
+    expect(result.questCacheUpdate?.after).toEqual({ ...result.questCacheUpdate!.before, previousAttempts: 1 });
+    expect(await profileApi.getDashboard()).toEqual(before);
+    expect(statements.some(statement => /begin|start transaction/i.test(statement))).toBe(false);
+  });
+
   it("returns a completed repeatable mission without exposing it as active or recreating its tracker", async () => {
     const api = await callerFor(questsRouter, playerId);
+    const profileApi = await callerFor(profileRouter, playerId);
+    const dashboardBefore = await profileApi.getDashboard();
     expect((await api.startQuest({ questId: missionId, userSector: 0 })).success).toBe(true);
     const database = await getTestDatabase();
     await database.update(userData).set({ questData: [{ id: missionId, startAt: new Date().toISOString(), goals: [{ id: "train", value: 10, done: true, collected: false, recentlyDied: false }] }] }).where(eq(userData.userId, playerId));
@@ -668,6 +688,8 @@ describeWithDatabase("confirmed quest cache responses", () => {
     const reads = await countProfileReads();
     const result = await api.checkRewards({ questId: missionId });
     expect(result).toMatchObject({ success: true, resolved: true });
+    expect(result.questCacheUpdate).toBeDefined();
+    expect(getQuestRewardDashboardUpdate(dashboardBefore, result.questCacheUpdate!)).toEqual(await profileApi.getDashboard());
     const saved = await readPlayer();
     expect(result.userDelta?.money).toBe((saved?.money ?? 0) - (before?.money ?? 0));
     expect(result.userPatch?.earnedExperience).toBe(saved?.earnedExperience);

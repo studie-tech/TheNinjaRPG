@@ -48,7 +48,7 @@ import { useActiveLayout } from "@/utils/LayoutContext";
 interface GameSettingsProps {
   onNavigate?: () => void;
   userData?: UserWithRelations | null;
-  updateUser?: (data: Partial<UserWithRelations>) => Promise<void>;
+  updateUser?: (data: Partial<UserWithRelations>) => Promise<unknown>;
   trigger?: "audio" | "settings";
   triggerClassName?: string;
 }

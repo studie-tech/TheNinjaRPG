@@ -83,6 +83,7 @@ describeWithDatabase("quest reward inventory reconciliation", () => {
       const leaf = { invalidate: vi.fn(async () => undefined) };
       const bindings = {
         prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
+        prepareQuestRewardUpdate: vi.fn(), updateQuestRewards: vi.fn(async () => undefined),
         updateUser: (data: Parameters<typeof updateUserCache>[2], options: Parameters<typeof updateUserCache>[3]) => updateUserCache(client, profileKey, data, options),
         utils: { item: { getUserItems: { invalidate: invalidate(0) }, getUserItemsWithVariants: { invalidate: invalidate(1) } },
           profile: { getDashboard: leaf }, quests: { missionHall: leaf, specificQuests: leaf, getQuestHistory: leaf, allianceBuilding: leaf } },
@@ -116,6 +117,7 @@ describeWithDatabase("quest reward inventory reconciliation", () => {
           }
         }
         await options.onSuccess(result, { questId: missionId }, context);
+        expect(bindings.updateQuestRewards).toHaveBeenCalledWith(result, undefined, false);
         await Promise.all(invalidations);
         expect(getUser).toHaveBeenCalledTimes(fallback === "inflight" ? 2 : 1);
         expect(await db.query.userItem.findMany({ where: eq(userItem.userId, playerId) })).toMatchObject([{ itemId }]);

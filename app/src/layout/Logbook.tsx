@@ -11,6 +11,7 @@ import {
 import type { UserQuest } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
+import { useQuestRewardCacheUpdate } from "@/hooks/useQuestRewardCacheUpdate";
 import Accordion from "@/layout/Accordion";
 import { BattleHistoryTable } from "@/layout/BattleHistoryTable";
 import ContentBox from "@/layout/ContentBox";
@@ -875,6 +876,7 @@ export const useCheckRewards = () => {
   const utils = api.useUtils();
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const openRewardChoice = useOpenRewardChoice();
+  const { prepareQuestRewardUpdate, updateQuestRewards } = useQuestRewardCacheUpdate();
 
   // Tutorial step
   const { currentStep, handleNextStepAsync } = useTutorialStep();
@@ -882,14 +884,17 @@ export const useCheckRewards = () => {
   // Mutations
   const { mutate: checkRewards, isPending: isCheckingRewards } =
     api.quests.checkRewards.useMutation({
-      onMutate: () => ({ userRevision: prepareUserUpdate() }),
+      onMutate: () => ({
+        userRevision: prepareUserUpdate(),
+        quests: prepareQuestRewardUpdate(),
+      }),
       onSuccess: async (data, variables, context) => {
         // If a failutre, show a toast
         if (!data.success && "message" in data) {
           showMutationToast({ success: data.success, message: data.message });
         }
         // Apply claimed progress before releasing the loader or opening the reward picker.
-        await updateUser(data, {
+        const profileApplied = await updateUser(data, {
           revision: context?.userRevision,
           delta: data.userDelta,
         });
@@ -930,16 +935,10 @@ export const useCheckRewards = () => {
             showRewardToast(notifications, rewards, message, false, quest, badges);
         }
         // Only the academy tutorial needs refreshed quest lists before its next highlight.
-        const questRefresh = Promise.all([
-          utils.quests.missionHall.invalidate(),
-          utils.quests.specificQuests.invalidate(),
-        ]);
+        const questRefresh = updateQuestRewards(data, context.quests, profileApplied);
         // Reconcile other views without holding reward feedback or the collection loader.
         void Promise.allSettled([
           questRefresh,
-          utils.profile.getDashboard.invalidate(),
-          utils.quests.getQuestHistory.invalidate(),
-          utils.quests.allianceBuilding.invalidate(),
           // Profile reconciliation can grant collection items from unlocked achievements.
           utils.item.getUserItems.invalidate(),
           utils.item.getUserItemsWithVariants.invalidate(),

@@ -51,7 +51,7 @@ describe.each(flows)("$procedure purchase confirmation", ({ file, procedure }) =
   it("delivers consumed feedback before awaiting canonical recovery", async () => {
     const test = setup(file, procedure, []);
     let finish!: () => void;
-    test.updateUser.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+    test.updateUser.mockImplementationOnce(() => new Promise<boolean>((resolve) => { finish = () => resolve(false); }));
     const announcements = ["Started new quest: Purchase Child Mission"];
     try {
       const pending = test.options.onSuccess({ success: true, message: "Delivered", announcements }, undefined, undefined);
