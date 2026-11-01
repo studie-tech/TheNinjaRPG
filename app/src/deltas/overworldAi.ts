@@ -37,27 +37,6 @@ export const getOverworldBattleResponseUpdate = ({
 });
 
 /**
- * Forward known battle patch and delta only when neither user nor progression state requires
- * a refresh.
- */
-export const getOverworldBattleUserUpdate = ({
-  requiresUserRefresh,
-  requiresProgressionRefresh,
-  battleUserPatch,
-  battleUserDelta,
-}: {
-  requiresUserRefresh: boolean;
-  requiresProgressionRefresh: boolean;
-  battleUserPatch: UserCachePatch | undefined;
-  battleUserDelta: UserDelta | undefined;
-}) => ({
-  userPatch:
-    !requiresUserRefresh && !requiresProgressionRefresh ? battleUserPatch : undefined,
-  userDelta:
-    !requiresUserRefresh && !requiresProgressionRefresh ? battleUserDelta : undefined,
-});
-
-/**
  * Increment the guarded daily roll count and clear a stale quest slot only after a confirmed
  * release. Unsettled profiles or unconfirmed releases withhold the projection.
  */

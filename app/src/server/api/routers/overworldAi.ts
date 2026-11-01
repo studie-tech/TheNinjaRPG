@@ -4,7 +4,6 @@ import { z } from "zod";
 import {
   getAssignedOverworldQuestUserUpdate,
   getOverworldBattleResponseUpdate,
-  getOverworldBattleUserUpdate,
   getOverworldRollUserUpdate,
   getOverworldUnchangedPatch,
   getReleasedOverworldQuestUserUpdate,
@@ -514,11 +513,10 @@ export const overworldAiRouter = createTRPCRouter({
                 success: true,
                 message: "Battle started",
                 battleId: battle.battleId,
-                ...getOverworldBattleUserUpdate({
+                ...getOverworldBattleResponseUpdate({
                   requiresUserRefresh,
                   requiresProgressionRefresh,
-                  battleUserPatch: battle.userPatch,
-                  battleUserDelta: battle.userDelta,
+                  battle,
                 }),
               }
             : errorResponse(battle.message);
@@ -655,11 +653,10 @@ export const overworldAiRouter = createTRPCRouter({
               success: true,
               message: "Battle started",
               battleId: battle.battleId,
-              ...getOverworldBattleUserUpdate({
+              ...getOverworldBattleResponseUpdate({
                 requiresUserRefresh,
                 requiresProgressionRefresh,
-                battleUserPatch: battle.userPatch,
-                battleUserDelta: battle.userDelta,
+                battle,
               }),
             }
           : errorResponse(battle.message);

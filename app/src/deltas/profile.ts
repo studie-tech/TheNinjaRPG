@@ -432,39 +432,7 @@ export const getUpdateTavernColorUserUpdate = ({
   colorUpdate,
   cost,
 }: {
-  colorUpdate:
-    | {
-        tavernUsernameColor:
-          | "GOLD"
-          | "DEFAULT"
-          | "MIDNIGHT"
-          | "NAVY"
-          | "COBALT"
-          | "YELLOW"
-          | "SLATE"
-          | "CHARCOAL"
-          | "CRIMSON"
-          | "FUCHSIA"
-          | "MINT"
-          | "LIME";
-        tavernTitleColor?: undefined;
-      }
-    | {
-        tavernTitleColor:
-          | "GOLD"
-          | "DEFAULT"
-          | "MIDNIGHT"
-          | "NAVY"
-          | "COBALT"
-          | "YELLOW"
-          | "SLATE"
-          | "CHARCOAL"
-          | "CRIMSON"
-          | "FUCHSIA"
-          | "MINT"
-          | "LIME";
-        tavernUsernameColor?: undefined;
-      };
+  colorUpdate: ReturnType<typeof getTavernColorPatch>;
   cost: number;
 }) => ({
   userPatch: {

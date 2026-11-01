@@ -69,60 +69,6 @@ export const bloodlineCachePatch = (
 };
 
 /**
- * Wrap a confirmed bloodline roll in its safe acquisition patch; unsafe progression leaves
- * the patch undefined.
- */
-export const getRollUserUpdate = ({
-  user,
-  randomBloodline,
-  settings,
-  progression,
-}: {
-  user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineProgressionUser>>>;
-  randomBloodline: Bloodline;
-  settings: {
-    id: string;
-    name: string;
-    value: number;
-    time: Date;
-  }[];
-  progression: Parameters<typeof bloodlineCachePatch>[3];
-}) => ({
-  userPatch: bloodlineCachePatch(user, randomBloodline, settings, progression),
-});
-
-/**
- * Project a confirmed pity roll with its saved revision and cleared reskin. Unsafe
- * acquisition progression leaves the patch undefined.
- */
-export const getPityRollUserUpdate = ({
-  user,
-  randomBloodline,
-  settings,
-  progression,
-  grantedAt,
-}: {
-  user: NonNullable<Awaited<ReturnType<typeof fetchBloodlineProgressionUser>>>;
-  randomBloodline: Bloodline;
-  settings: {
-    id: string;
-    name: string;
-    value: number;
-    time: Date;
-  }[];
-  progression: Parameters<typeof bloodlineCachePatch>[3];
-  grantedAt: Date;
-}) => ({
-  userPatch: bloodlineCachePatch(
-    user,
-    randomBloodline,
-    settings,
-    progression,
-    grantedAt,
-  ),
-});
-
-/**
  * Pair a safe acquisition patch with the rank-based reputation debit; withhold both when
  * acquisition needs reconciliation.
  */

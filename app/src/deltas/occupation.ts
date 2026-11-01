@@ -2,7 +2,6 @@ import { getUserProgressionUpdate } from "@/deltas/profile";
 import type { QuestConsequence } from "@/libs/quest";
 import type { findCraftingQueueState } from "@/queries/occupation";
 import type { fetchUpdatedUser } from "@/routers/profile";
-import type { UserCachePatch } from "@/validators/userCache";
 
 /** Project the saved occupation and its signup timestamp. */
 export const getSelectOccupationUserUpdate = ({
@@ -13,20 +12,6 @@ export const getSelectOccupationUserUpdate = ({
   occupationSignupAt: Date;
 }) => ({
   userPatch: { occupation: inputOccupation, occupationSignupAt },
-});
-
-/** Combine confirmed progression with the resulting crafting experience. */
-export const getCraftItemUserUpdate = ({
-  progressionUserPatch,
-  userCraftingExperience,
-}: {
-  progressionUserPatch: UserCachePatch | undefined;
-  userCraftingExperience: number;
-}) => ({
-  userPatch: {
-    ...progressionUserPatch,
-    craftingExperience: userCraftingExperience,
-  },
 });
 
 /**
@@ -117,9 +102,9 @@ export const getCraftingUserUpdate = ({
   );
   return {
     ...progression,
-    ...getCraftItemUserUpdate({
-      progressionUserPatch: progression.userPatch,
-      userCraftingExperience: user.craftingExperience,
-    }),
+    userPatch: {
+      ...progression.userPatch,
+      craftingExperience: user.craftingExperience,
+    },
   };
 };

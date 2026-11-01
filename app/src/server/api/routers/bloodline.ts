@@ -5,9 +5,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
   bloodlineCachePatch,
-  getPityRollUserUpdate,
   getPurchaseBloodlineUserUpdate,
-  getRollUserUpdate,
 } from "@/deltas/bloodline";
 
 import {
@@ -800,9 +798,15 @@ export const bloodlineRouter = createTRPCRouter({
               }
               throw error;
             }
+            const userPatch = bloodlineCachePatch(
+              user,
+              randomBloodline,
+              settings,
+              progression,
+            );
             return {
               success: true,
-              ...getRollUserUpdate({ user, randomBloodline, settings, progression }),
+              userPatch,
               message: `After thorough examination, a bloodline was detected: ${randomBloodline.name}`,
             };
           }
@@ -909,15 +913,16 @@ export const bloodlineRouter = createTRPCRouter({
         throw error;
       }
       await insertBloodlineRollsForPityRoll(ctx.drizzle, ctx, randomBloodline, input);
+      const userPatch = bloodlineCachePatch(
+        user,
+        randomBloodline,
+        settings,
+        progression,
+        grantedAt,
+      );
       return {
         success: true,
-        ...getPityRollUserUpdate({
-          user,
-          randomBloodline,
-          settings,
-          progression,
-          grantedAt,
-        }),
+        userPatch,
         message: `You have been granted a bloodline: ${randomBloodline.name}`,
       };
     }),
