@@ -872,6 +872,27 @@ describe("physical world lighting", () => {
       expect(buffer.data[0] - mesh.shader.resources.view.uniforms.uViewport[0]).toBeCloseTo(initialProjection - 1400);
     } finally { release(); f.dispose(); source.dispose(); }
   });
+  it("retains fixed caster batches while the camera moves within its prepared scenery window", async () => {
+    const f = fixture(), source = materialSourceFixture();
+    const sprite = new Sprite(source.texture);
+    sprite.position.set(-365, 40); sprite.width = 20; sprite.height = 80; f.parent.addChild(sprite);
+    const release = f.shadows.register(sprite, {
+      id: "sunward-tree", kind: "decoration", image: "sunward-tree.png", size: 80,
+      x: -365, y: 40, groundY: 0, shadowCaster: "building",
+    }, [], undefined, f.parent);
+    try {
+      await release.ready;
+      const sunlight = { x: -1, y: 0, z: 0.1, day: 1 };
+      f.shadows.update(sunlight, { ...viewport, minX: 30, maxX: 130 });
+      const layer = f.render.mock.calls.find(([call]) => call.container.children.some((mesh: { geometry?: Geometry }) => mesh.geometry?.attributes.aPosition?.stride === 24))![0]!.container;
+      const draws = () => f.render.mock.calls.filter(([call]) => call.container === layer).length;
+      const initial = draws();
+      expect(layer.children).toHaveLength(1);
+      f.shadows.update(sunlight, { ...viewport, minX: 45, maxX: 145 });
+      expect(draws()).toBe(initial);
+      expect(layer.children).toHaveLength(1);
+    } finally { release(); f.dispose(); source.dispose(); }
+  });
   it("matches mutable scenery across camera anchors, owner transforms, visibility and explicit child invalidation", async () => {
     const source = materialSourceFixture(), cached = fixture(), mutable = fixture();
     const fixtures = [cached, mutable];
@@ -904,6 +925,14 @@ describe("physical world lighting", () => {
         fixtures.forEach((f) => f.world.scale.set(scale));
         compare();
         expect(layers[0]!.children.length).toBe(scale === 0.25 ? 0 : 1);
+        if (scale === 0.25) {
+          compare({ minX: 30.125, maxX: 130.125, minY: 0, maxY: 100 });
+          fixtures.forEach((f) => f.parent.scale.set(4));
+          compare({ minX: 128, maxX: 328, minY: 64, maxY: 264 });
+          expect(layers[0]!.children.length).toBe(1);
+          fixtures.forEach((f) => f.parent.scale.set(1)); compare();
+          expect(layers[0]!.children.length).toBe(0);
+        }
       }
       cached.restore(); compare();
       releases.forEach((release) => release()); compare();

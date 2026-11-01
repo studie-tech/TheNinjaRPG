@@ -181,10 +181,14 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     terrains = new Set<TerrainReceiver>();
   let orderedRecords: Caster[] | null = null;
   let liveRecords: Caster[] = [];
+  let sceneryOwners: Container[] = [];
   let sceneryCache: {
     bounds: WorldBounds;
     scale: number;
-    records: Caster[];
+    receivers: VisibleCaster[];
+    sun: SunCaster[];
+    occluders: Occluder[];
+    emitters: Caster[];
     owners: {
       owner: Container;
       matrix: Matrix;
@@ -311,6 +315,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     for (const record of records) for (const lease of record.leases) lease.release();
     records.clear();
     liveRecords = [];
+    sceneryOwners = [];
     orderedRecords = null;
     sceneryCache = null;
     for (const release of retired.splice(0)) release();
@@ -623,6 +628,14 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       if (!orderedRecords) {
         orderedRecords = nextRecords;
         liveRecords = orderedRecords.filter((record) => !record.sceneryOwner);
+        // Registrations own membership; camera selection only resnapshots owner poses.
+        sceneryOwners = [
+          ...new Set(
+            orderedRecords.flatMap((record) =>
+              record.sceneryOwner ? [record.sceneryOwner] : [],
+            ),
+          ),
+        ];
       }
       // Fixed scenery shares one coarse visibility/pose snapshot. Wind remains a live shader input.
       const sceneryBounds = {
@@ -653,9 +666,9 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             previous.group === current.drawRoot?.uid
           );
         });
-      let scenery: Caster[] = retainedScenery ? (sceneryCache?.records ?? []) : [];
+      const scenery: Caster[] = [];
       if (retainedScenery)
-        for (const record of scenery)
+        for (const record of sceneryCache?.emitters ?? [])
           if (
             record.cached &&
             boundsOverlap(record.cached.receiver.bounds, viewport, 384)
@@ -949,29 +962,49 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         } else appendLights(record, recordLights);
       }
       if (!retainedScenery) {
-        const owners = new Set(
-          orderedRecords.flatMap((record) =>
-            record.sceneryOwner ? [record.sceneryOwner] : [],
-          ),
-        );
+        // Fixed passes share the same conservative selection; wind deforms retained geometry on the GPU.
+        const receivers: VisibleCaster[] = [],
+          sun: SunCaster[] = [],
+          occluders: Occluder[] = [],
+          emitters: Caster[] = [];
+        const detailed = scenery
+          .filter(
+            (record) =>
+              !record.description.small ||
+              (record.cached?.receiver.height ?? 0) * scale >
+                WORLD_DETAIL.groundLightingPixels[0] ||
+              !!record.cached?.lights.length,
+          )
+          .sort((a, b) =>
+            a.cached && b.cached
+              ? receiverOrder(a.cached.receiver, b.cached.receiver)
+              : 0,
+          );
+        for (const record of detailed) {
+          const cached = record.cached;
+          if (!cached) continue;
+          if (cached.lights.length) emitters.push(record);
+          if (
+            record.description.small &&
+            cached.receiver.height * scale <= WORLD_DETAIL.groundLightingPixels[0]
+          )
+            continue;
+          if (
+            record.sprite.alpha >= 0.75 &&
+            boundsOverlap(cached.receiver.bounds, sceneryViewport, 2)
+          )
+            receivers.push(cached.receiver);
+          if (cached.sun) sun.push(cached.sun);
+          if (record.occluder) occluders.push(record.occluder);
+        }
         sceneryCache = {
           bounds: sceneryBounds,
           scale,
-          // Flat cover inherits terrain lighting; retain emitters even when their own material is flat.
-          records: scenery
-            .filter(
-              (record) =>
-                !record.description.small ||
-                (record.cached?.receiver.height ?? 0) * scale >
-                  WORLD_DETAIL.groundLightingPixels[0] ||
-                !!record.cached?.lights.length,
-            )
-            .sort((a, b) =>
-              a.cached && b.cached
-                ? receiverOrder(a.cached.receiver, b.cached.receiver)
-                : 0,
-            ),
-          owners: [...owners].map((owner) => {
+          receivers,
+          sun,
+          occluders,
+          emitters,
+          owners: sceneryOwners.map((owner) => {
             const pose = origin(owner);
             return {
               owner,
@@ -982,20 +1015,6 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
             };
           }),
         };
-      }
-      scenery = sceneryCache?.records ?? [];
-      for (const record of scenery) {
-        const cached = record.cached;
-        if (!cached || !boundsOverlap(cached.receiver.bounds, viewport, 384)) continue;
-        // Flat distant cover inherits terrain and spends no receiver, sun or local-occlusion work.
-        if (
-          record.description.small &&
-          cached.receiver.height * scale <= WORLD_DETAIL.groundLightingPixels[0]
-        )
-          continue;
-        visible.push(cached.receiver);
-        if (cached.sun) sunCasters.push(cached.sun);
-        if (record.occluder) staticOccluders.push(record.occluder);
       }
       // Keep a conservative static batch while panning; the viewport clips it at full screen density.
       const flatDetails = new Set<string>(),
@@ -1024,6 +1043,9 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       const detailedOccluders = staticOccluders.filter(
         (caster) => !flatOccluders.has(caster),
       );
+      receivers.push(...(sceneryCache?.receivers ?? []));
+      detailedSunCasters.push(...(sceneryCache?.sun ?? []));
+      detailedOccluders.push(...(sceneryCache?.occluders ?? []));
       receivers.sort(receiverOrder);
       const viewKey = `${viewport.minX}:${viewport.minY}:${spanX}:${spanY}`;
       let nextTerrainKey = "";
