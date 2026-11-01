@@ -36,7 +36,11 @@ import { prepareCombatTerrain } from "@/libs/rendering/scenes/combatTerrain";
 import { createRenderScope } from "@/libs/rendering/scope";
 import { hexTerrainAt } from "@/libs/rendering/terrainData";
 import { createWorldShadows, worldSunlight } from "@/libs/rendering/worldShadows";
-import { createWorldWeather, getWorldWeather } from "@/libs/rendering/worldWeather";
+import {
+  createWorldWeather,
+  getWorldWeather,
+  type WorldWeather,
+} from "@/libs/rendering/worldWeather";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import { clamp } from "@/utils/math";
 
@@ -425,12 +429,16 @@ export const createCombatScene = async (options: {
       transform();
       const breeze = sampleWorldWind(frame, scale());
       art.animate(frame, scale(), null, breeze);
-      const lightDate = snapshot.cycleEnabled
-        ? new Date(Date.now() - snapshot.timeDiff)
-        : null;
+      const lightDate =
+        snapshot.lightDate ??
+        (snapshot.cycleEnabled ? new Date(Date.now() - snapshot.timeDiff) : null);
       weather.update(
         frame,
-        getWorldWeather(snapshot.battle.background, snapshot.weatherTime ?? Number.NaN),
+        snapshot.weather ??
+          getWorldWeather(
+            snapshot.battle.background,
+            snapshot.weatherTime ?? Number.NaN,
+          ),
         world.position,
         lightDate ? getWorldCycleBrightness(lightDate) : WORLD_DAY_BRIGHTNESS,
       );
@@ -530,6 +538,9 @@ export type CombatSceneSnapshot = {
   timeDiff: number;
   /** Public/static previews stay at noon unless the world cycle is explicitly enabled. */
   cycleEnabled?: boolean;
+  /** Authorized local previews affect scenery without advancing battle time. */
+  lightDate?: Date | null;
+  weather?: WorldWeather | null;
   /** Live weather is independent of the day/night preference; static previews omit this clock. */
   weatherTime?: number;
   assets: GameAsset[];

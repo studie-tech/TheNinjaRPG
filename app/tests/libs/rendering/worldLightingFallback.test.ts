@@ -267,6 +267,7 @@ describe("world lighting precision fallback", () => {
     const battle = makeCompleteBattle({ width: 12, height: 10, usersEffects: [],
       usersState: [makeBattleUser("self", { isAi: false, longitude: 3, latitude: 2, spriteAppearance: resolveSpriteAppearance({}) })],
     }) as unknown as ReturnedBattle;
+    battle.createdAt = new Date(0);
     const snapshot: CombatSceneSnapshot = { battle, userId: "self", actions: [], timeDiff: 0,
       cycleEnabled: true, assets: [], requestedIds: new Set(), active: true, sound: false,
       volume: 0, showGridNumbers: false, inspect: false };
@@ -280,6 +281,25 @@ describe("world lighting precision fallback", () => {
     const actor = (fixture.game.stage.getChildByLabel("user:self", true) ?? fixture.game.stage.getChildByLabel("self", true))!.getChildByLabel("avatar", true) as Sprite;
     const pin = fixture.game.stage.getChildByLabel("fixture-pin", true) as Sprite, pinTint = pin.tint;
     expect(terrainAmbient(fixture.game.stage)).toEqual([1, 1, 1]);
+    const battleCreatedAt = battle.createdAt.getTime(), version = battle.version;
+    snapshot.lightDate = new Date((WORLD_DAY_SECONDS + 10) * 1000);
+    snapshot.weather = { kind: "snow", intensity: 0.5 };
+    await scene.renderAt(0);
+    const previewAmbient = terrainAmbient(fixture.game.stage);
+    expect(previewAmbient[0]).toBeLessThan(1);
+    const weather = fixture.game.stage.getChildByLabel("world-weather", true)!;
+    expect(weather.visible).toBe(true);
+    expect((weather.children[0] as Mesh).shader!.resources.weather.uniforms.uWeather[1]).toBe(2);
+    now.mockReturnValue(WORLD_DAY_SECONDS * 750);
+    await scene.renderAt(1000);
+    expect(terrainAmbient(fixture.game.stage)).toEqual(previewAmbient);
+    expect(battle.createdAt.getTime()).toBe(battleCreatedAt);
+    expect(battle.version).toBe(version);
+    snapshot.lightDate = null;
+    snapshot.weather = null;
+    await scene.renderAt(1000);
+    expect(terrainAmbient(fixture.game.stage)).toEqual([1, 1, 1]);
+    expect(weather.visible).toBe(false);
     now.mockReturnValue((WORLD_DAY_SECONDS + 10) * 1000);
     await scene.renderAt(0);
     expect(terrainAmbient(fixture.game.stage)[0]).toBeLessThan(1);
