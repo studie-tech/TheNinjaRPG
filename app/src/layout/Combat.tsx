@@ -759,25 +759,26 @@ const Combat: React.FC<CombatProps> = (props) => {
         target.closest("input, textarea, select, [contenteditable='true']")
       )
         return;
-      switch (event.key.toLowerCase()) {
-        case endTurnKeyRef.current:
-          // Same predicate the server authorizes with, so "w" fires on my own
-          // turn and on my piloted summon's turn, but not on my AI summon's
-          // (that one is auto-driven). actor.userId is the acting entity.
-          if (getTurnControl(actor, suid).isUserTurn) {
-            document.body.style.cursor = "wait";
-            if (canPerformAction()) {
-              performAction({
-                battleId: battleRef.current.id,
-                userId: actor.userId,
-                actionId: "wait",
-                longitude: actor.longitude,
-                latitude: actor.latitude,
-                version: battleRef.current.version,
-              });
-            }
+      // Modifier chords belong to the browser or OS, not to battle keys.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      // An `if`, not a `switch`: React Compiler cannot compile a ref read as a `case` label.
+      if (event.key.toLowerCase() === endTurnKeyRef.current) {
+        // Same predicate the server authorizes with, so "w" fires on my own
+        // turn and on my piloted summon's turn, but not on my AI summon's
+        // (that one is auto-driven). actor.userId is the acting entity.
+        if (getTurnControl(actor, suid).isUserTurn) {
+          document.body.style.cursor = "wait";
+          if (canPerformAction()) {
+            performAction({
+              battleId: battleRef.current.id,
+              userId: actor.userId,
+              actionId: "wait",
+              longitude: actor.longitude,
+              latitude: actor.latitude,
+              version: battleRef.current.version,
+            });
           }
-          break;
+        }
       }
     }
   };

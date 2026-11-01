@@ -53,7 +53,6 @@ export default function CombatPage() {
   const [lastViewedVersion, setLastViewedVersion] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>("actions");
   const [autoCombatError, setAutoCombatError] = useState<string>();
-  const hotkeys = useBattleHotkeys();
   const [hotkeyTarget, setHotkeyTarget] = useState<HotkeyTarget | null>(null);
 
   // Download and evaluate the scene while the battle query is in flight.
@@ -107,6 +106,11 @@ export default function CombatPage() {
   // The session user's own battle entry (auto combat is a property of the
   // player, not of whichever actor is currently controlled)
   const sessionBattleUser = battle?.usersState.find((u) => u.userId === userId);
+  // Keys follow this battle's loadouts, which the lobby can change.
+  const hotkeys = useBattleHotkeys({
+    jutsuLoadoutId: sessionBattleUser?.jutsuLoadout,
+    itemLoadoutId: sessionBattleUser?.itemLoadout,
+  });
   const isAutoCombatActive = !!sessionBattleUser?.isAutoCombat;
   const visibleTab =
     isAutoCombatActive && activeTab === "actions"

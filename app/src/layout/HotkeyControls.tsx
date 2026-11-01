@@ -38,6 +38,8 @@ export function HotkeyCaptureDialog({
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.key === "Escape") return; // The dialog closes itself.
+    // Keep keyboard navigation of the dialog's own buttons.
+    if (["Tab", "Enter", " ", "Shift"].includes(event.key)) return;
     event.preventDefault();
     event.stopPropagation();
     if (event.key === "Backspace" || event.key === "Delete") {

@@ -266,3 +266,16 @@ it("selects the visible history during auto combat and marks its actions read", 
   await waitFor(() => expect(history.textContent).toBe("History"));
   expect(view.queryByRole("tab", { name: "Actions" })).toBeNull();
 });
+
+it("reads battle hotkeys from the loadouts chosen for this battle", async () => {
+  const battle = makeCompleteBattle({
+    id: "lobby",
+    usersState: [makeUser({ userId: "player", jutsuLoadout: "battle-jutsu", itemLoadout: "battle-item" })],
+  });
+  const { view } = mount("lobby", async () => ({ battle, result: null }) as unknown as Response);
+  await waitFor(() => expect(view.getByText("Active battle lobby")).toBeDefined());
+  expect(battleHotkeys.useBattleHotkeys).toHaveBeenLastCalledWith({
+    jutsuLoadoutId: "battle-jutsu",
+    itemLoadoutId: "battle-item",
+  });
+});

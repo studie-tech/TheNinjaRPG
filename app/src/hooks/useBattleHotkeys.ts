@@ -21,9 +21,22 @@ export type { HotkeyKind } from "@/libs/combat/hotkeys";
  * Battle keys of the active jutsu and item loadouts, and a setter that saves a
  * change to the right loadout. Keys move within a loadout; a key already used by
  * any loadout of the other kind is refused so one key never means two actions.
+ * A battle passes its own loadout ids, since the lobby can switch them.
  */
-export const useBattleHotkeys = (options: { enabled?: boolean } = {}) => {
+export const useBattleHotkeys = (
+  options: {
+    enabled?: boolean;
+    jutsuLoadoutId?: string | null;
+    itemLoadoutId?: string | null;
+  } = {},
+) => {
   const { data: userData } = useUserData();
+  const jutsuLoadoutId =
+    options.jutsuLoadoutId !== undefined
+      ? options.jutsuLoadoutId
+      : userData?.jutsuLoadout;
+  const itemLoadoutId =
+    options.itemLoadoutId !== undefined ? options.itemLoadoutId : userData?.itemLoadout;
   const utils = api.useUtils();
   const enabled = !!userData && (options.enabled ?? true);
   const { data: jutsuLoadouts } = api.jutsu.getLoadouts.useQuery(undefined, {
@@ -32,8 +45,8 @@ export const useBattleHotkeys = (options: { enabled?: boolean } = {}) => {
   const { data: itemLoadouts } = api.item.getItemLoadouts.useQuery(undefined, {
     enabled,
   });
-  const jutsuLoadout = jutsuLoadouts?.find((l) => l.id === userData?.jutsuLoadout);
-  const itemLoadout = itemLoadouts?.find((l) => l.id === userData?.itemLoadout);
+  const jutsuLoadout = jutsuLoadouts?.find((l) => l.id === jutsuLoadoutId);
+  const itemLoadout = itemLoadouts?.find((l) => l.id === itemLoadoutId);
   const jutsuMap = jutsuLoadout?.hotkeys;
   const itemMap = itemLoadout?.hotkeys;
   const resolved = useMemo(
