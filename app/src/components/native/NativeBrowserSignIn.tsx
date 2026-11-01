@@ -92,28 +92,33 @@ export default function NativeBrowserSignIn() {
             </strong>
             ?
           </p>
-          <Button
-            className="min-h-[48px]"
-            disabled={approve.isPending}
-            onClick={() => void returnToApp()}
-          >
-            {approve.isPending ? "Returning…" : "Continue to the app"}
-          </Button>
-          {callback && (
-            <p>
-              <a href={callback}>Open the app</a>
-            </p>
-          )}
-          {!callback && (
+          <div className="grid grid-cols-2 items-stretch gap-3">
             <Button
-              variant="outline"
-              className="min-h-[48px]"
+              className="h-auto min-h-[48px] w-full whitespace-normal px-3 py-3 text-[14px] leading-snug"
               disabled={approve.isPending}
-              onClick={() => void switchAccount()}
+              onClick={() => void returnToApp()}
             >
-              Use another account
+              {approve.isPending ? "Returning…" : "Continue to the app"}
             </Button>
-          )}
+            {callback ? (
+              <Button
+                asChild
+                variant="outline"
+                className="h-auto min-h-[48px] w-full whitespace-normal px-3 py-3 text-[14px] leading-snug"
+              >
+                <a href={callback}>Open the app</a>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="h-auto min-h-[48px] w-full whitespace-normal px-3 py-3 text-[14px] leading-snug"
+                disabled={approve.isPending}
+                onClick={() => void switchAccount()}
+              >
+                Use another account
+              </Button>
+            )}
+          </div>
         </div>
       ) : step === "callback" ? (
         <AuthenticateWithRedirectCallback
