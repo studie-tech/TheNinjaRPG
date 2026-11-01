@@ -5,6 +5,7 @@ import type { SQL } from "drizzle-orm";
 import { and, eq } from "drizzle-orm";
 import { poll, userPollVote } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { clampActionLogText } from "@/utils/actionLog";
 
 /**
  * Fetch a poll by ID
@@ -100,7 +101,7 @@ export const insertActionLogForCreatePoll = (
       `Options: ${input.options.map((o) => (o.type === "text" ? o.text : o.username)).join(", ")}`,
     ],
     relatedId: pollId,
-    relatedMsg: `Poll created: ${input.title}`,
+    relatedMsg: clampActionLogText(`Poll created: ${input.title}`),
   });
 
 /** Build the `poll` update for `updatePoll`, using predicates on `id`. */
@@ -127,7 +128,7 @@ export const insertActionLogForUpdatePoll = (
       ...Object.entries(updateData).map(([k, v]) => `${k}: ${JSON.stringify(v)}`),
     ],
     relatedId: input.id,
-    relatedMsg: `Poll updated: ${existingPoll.title}`,
+    relatedMsg: clampActionLogText(`Poll updated: ${existingPoll.title}`),
   });
 
 /** Build the `pollOption` lookup for `vote`, using predicates on `id` and `pollId`. */
@@ -212,7 +213,7 @@ export const insertActionLogForAddOption = (
     tableName: "poll",
     changes: [`Added option to poll: ${existingPoll.title}`, `Option: ${input.text}`],
     relatedId: input.pollId,
-    relatedMsg: `Added option: ${input.text}`,
+    relatedMsg: clampActionLogText(`Added option: ${input.text}`),
   });
 
 /** Build the `pollOption` insert for `addOption`. */
@@ -248,7 +249,7 @@ export const insertActionLogForAddOption2 = (
       `User: ${input.username}`,
     ],
     relatedId: input.pollId,
-    relatedMsg: `Added user option: ${input.username}`,
+    relatedMsg: clampActionLogText(`Added user option: ${input.username}`),
   });
 
 /** Build the `poll` listing for `getPolls`, using the configured predicates. */
@@ -317,7 +318,9 @@ export const insertActionLogForClosePoll = (
     tableName: "poll",
     changes: [`${input.isActive ? "Reopened" : "Closed"} poll: ${existingPoll.title}`],
     relatedId: input.id,
-    relatedMsg: `${input.isActive ? "Reopened" : "Closed"} poll: ${existingPoll.title}`,
+    relatedMsg: clampActionLogText(
+      `${input.isActive ? "Reopened" : "Closed"} poll: ${existingPoll.title}`,
+    ),
   });
 
 /** Build the `pollOption` lookup for `deletePollOption`, using predicates on `id` and `pollId`. */

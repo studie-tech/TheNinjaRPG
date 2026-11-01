@@ -31,6 +31,7 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { encryptToken } from "@/server/utils/discord/secrets";
+import { clampActionLogText } from "@/utils/actionLog";
 
 /** Build the `discordLink` lookup for `getStatus`, using predicates on `userId`. */
 export const findDiscordLinkForGetStatus = (
@@ -445,7 +446,7 @@ export const logDiscordAction = (
     userId: entry.actorUserId,
     tableName: "discordLink",
     relatedId: entry.targetUserId,
-    relatedMsg: entry.message.slice(0, 191),
+    relatedMsg: clampActionLogText(entry.message),
     relatedImage: entry.image ?? null,
     changes: entry.changes,
   });

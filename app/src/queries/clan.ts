@@ -58,6 +58,7 @@ import {
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
+import { clampActionLogText } from "@/utils/actionLog";
 
 /**
  * Fetches a clan battle by its ID.
@@ -430,7 +431,7 @@ export const insertActionLogForClanDonate = (
     tableName: "clan",
     changes: [message],
     relatedId: fetchedClan.id,
-    relatedMsg: message,
+    relatedMsg: clampActionLogText(message),
     relatedImage: fetchedClan.image,
   });
 
