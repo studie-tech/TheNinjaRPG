@@ -104,6 +104,7 @@ export const useCombatUpdates = (state: BattleState) => {
     [battleCache.updateCache, utils],
   );
 
+  /** Merge committed history rows, retaining recovery for incomplete or filtered cache pages. */
   const updateLogs = useCallback(
     async (
       id: string,

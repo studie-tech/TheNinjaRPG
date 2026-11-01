@@ -262,6 +262,8 @@ export const getQuestRewardProjectionUpdate = ({
 /**
  * Project the completion counters written by a successful claim. Only reward-free,
  * nonterminal progress leaves discovery and history unchanged; other lists still refresh.
+ * Carry loaded counters as `before` and absolute claim counters as `after`.
+ * Profile settlements and consequences require discovery refreshes even with zero rewards.
  */
 export const getQuestRewardCacheUpdate = (
   entry: Pick<
@@ -310,7 +312,10 @@ export const getQuestRewardCacheUpdate = (
   };
 };
 
-/** Patch loaded discovery counters only against their confirmed baseline, preserving raid summaries. */
+/**
+ * Patch loaded discovery counters against their confirmed baseline, preserving raid summaries.
+ * Return undefined for changed counters or newer attempts so callers refetch.
+ */
 export const getQuestRewardDashboardUpdate = (
   current: RouterOutputs["profile"]["getDashboard"],
   update: ReturnType<typeof getQuestRewardCacheUpdate>,

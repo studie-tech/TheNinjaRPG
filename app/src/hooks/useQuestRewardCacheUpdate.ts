@@ -9,9 +9,12 @@ export const useQuestRewardCacheUpdate = () => {
   const dashboard = useQueryCacheUpdate<RouterOutputs["profile"]["getDashboard"]>(
     getQueryKey(api.profile.getDashboard, undefined, "query"),
   );
-  /** Capture discovery's revision before the reward claim starts. */
+  /** Capture the dashboard revision before the reward claim starts. */
   const prepareQuestRewardUpdate = dashboard.prepareUpdate;
-  /** A profile refetch can trigger further quest effects, so only accepted local updates may project. */
+  /**
+   * A profile refetch can trigger further quest effects; profileApplied must be updateUser's result.
+   * Missing projections retain dashboard and quest-list refetches.
+   */
   const updateQuestRewards = async (
     result: RouterOutputs["quests"]["checkRewards"],
     snapshot: ReturnType<typeof prepareQuestRewardUpdate>,

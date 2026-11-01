@@ -434,7 +434,10 @@ export const getAutoCombatPreferencePatch = (
 ) =>
   ManualStartBattleTypes.includes(battleType) ? {} : { defaultAutoCombat: enabled };
 
-/** Merge complete, unfiltered first pages, including saved logs and reordered committed deltas. */
+/**
+ * Merge committed rows into complete, unfiltered first pages without regressing newer logs.
+ * Return undefined when completeness cannot be proved so callers refetch.
+ */
 export const mergeBattleEntries = (
   previous: BattleAction[] | undefined,
   incoming: BattleAction[],
@@ -480,7 +483,10 @@ export const mergeBattleEntries = (
   return entries;
 };
 
-/** Apply only this battle's confirmed action response, never replacing a newer cached version. */
+/**
+ * Apply a matching battle's confirmed response while preserving a newer cached version.
+ * Return undefined for mismatched identities so the captured query is reconciled.
+ */
 export const getCombatStateUpdate = (
   current: RouterOutputs["combat"]["getBattle"],
   response: Pick<BattleState, "battle" | "result">,
