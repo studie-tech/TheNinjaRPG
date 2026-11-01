@@ -162,7 +162,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
       await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, userId));
     }
     await cache.callbacks.refresh(response, revision);
-    const refreshed = await cache.refetchState.mock.results[0]?.value;
+    const refreshed = await (cache.refetchState.mock.results[0]?.value as ReturnType<typeof cache.refetchState>);
     if (scenario === "cleanup") {
       expect(refreshed?.data?.userPatch).toBeUndefined();
       expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, "concurrent-run") })).toMatchObject({ status: "ENDED" });
