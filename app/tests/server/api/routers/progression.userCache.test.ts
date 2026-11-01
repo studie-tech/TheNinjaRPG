@@ -1,13 +1,18 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import * as Sentry from "@sentry/nextjs";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { BLOODLINE_COST, ELEMENTAL_MASTERY_CAP, REMOVAL_COST } from "@/drizzle/constants";
-import { bloodline, bloodlineRolls, gameSetting, notification, quest, questHistory, skillTree, userData, userSkill, userVote } from "@/drizzle/schema";
+import { bloodline, bloodlineRolls, gameSetting, notification, quest, questHistory, skillTree, userCookingJob, userData, userQueue, userSkill, userVote } from "@/drizzle/schema";
 import { calcEnergy } from "@/libs/profile";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { miscRouter } from "@/server/api/routers/misc";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { trainRouter } from "@/server/api/routers/train";
+import { prepareUserUpdate, updateUserCache, type UserUpdate, type UserUpdateOptions } from "@/utils/userCache";
 import { IncreaseMasteryTag, IncreaseMaxPoolsTag } from "@/validators/combat";
 import { petSkillFixture } from "../../../libs/pets/helpers/abilities";
 import { insertUsers } from "../../../setup/factories";
@@ -23,7 +28,7 @@ const effects = [
 describeWithDatabase("confirmed progression cache responses", () => {
   afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
-    await resetTables(bloodlineRolls, bloodline, notification, questHistory, quest, userSkill, skillTree, userVote, gameSetting, userData);
+    await resetTables(bloodlineRolls, bloodline, notification, questHistory, quest, userCookingJob, userQueue, userSkill, skillTree, userVote, gameSetting, userData);
     await insertUsers([{ userId, username: "ProgressCache", role: "OWNER", rank: "JONIN", level: 50,
       primaryElement: "Fire", secondaryElement: "Water", status: "AWAKE", isOutlaw: true,
       regeneration: 20, ninjutsuMastery: 100, reputationPoints: 1000, seichiSilver: 200,
@@ -76,6 +81,94 @@ describeWithDatabase("confirmed progression cache responses", () => {
     expect(result.userPatch?.effectiveMasteries?.ninjutsuMastery).toBe(150);
     expect((await db.query.userData.findFirst({ where: eq(userData.userId, userId) }))?.skillPoints).toBe(5);
   });
+
+  it.each(["timed hydration failure", "later timed kind failure", "Cooking hydration failure", "successful Cooking hydration"] as const)(
+    "reconciles skill activation after %s", async (scenario) => {
+      const db = await getTestDatabase();
+      const cooking = scenario.includes("Cooking");
+      const succeeds = scenario === "successful Cooking hydration";
+      const future = new Date(Date.now() + 60_000);
+      const past = new Date(Date.now() - 60_000);
+      await db.insert(skillTree).values(petSkillFixture({ id: "cache-skill", effects }));
+      if (cooking) {
+        await db.insert(userCookingJob).values({ id: "skill-cooking", userId, experience: 30, finishesAt: future });
+      } else {
+        await db.insert(userQueue).values({ id: "skill-jutsu", userId, kind: "JUTSU", position: 1,
+          jutsuId: "unavailable-jutsu", reservedRyo: 100, durationSeconds: 60, startsAt: future, finishesAt: future });
+        if (scenario === "later timed kind failure") {
+          await db.insert(userQueue).values({ id: "skill-craft", userId, kind: "CRAFT", position: 1,
+            itemId: "unavailable-item", quantity: 1, materials: [], durationSeconds: 60, startsAt: future, finishesAt: future });
+        }
+      }
+      const profile = callerForDatabase(profileRouter, userId, db);
+      const initial = await profile.getUser();
+      if (cooking) await db.update(userCookingJob).set({ finishesAt: past }).where(eq(userCookingJob.userId, userId));
+      else await db.update(userQueue).set({ startsAt: past, finishesAt: past }).where(eq(userQueue.userId, userId));
+
+      const error = new Error("Settlement follow-up read unavailable");
+      const readProfile = db.query.userData.findFirst.bind(db.query.userData);
+      let profileReads = 0;
+      vi.spyOn(db.query.userData, "findFirst").mockImplementation(((config: Parameters<typeof readProfile>[0]) => {
+        if (config?.with?.attributes && ++profileReads === 2 && scenario.endsWith("hydration failure")) throw error;
+        return readProfile(config);
+      }) as never);
+      const readQueue = db.query.userQueue.findMany.bind(db.query.userQueue);
+      let failedCraft = false;
+      vi.spyOn(db.query.userQueue, "findMany").mockImplementation(((config: Parameters<typeof readQueue>[0]) => {
+        if (config?.with?.item && scenario === "later timed kind failure" && !failedCraft) {
+          failedCraft = true;
+          throw error;
+        }
+        return readQueue(config);
+      }) as never);
+      const warning = vi.spyOn(Sentry, "captureException").mockReturnValue("warning-event");
+
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const key = ["skill-settlement-profile"];
+      const getUser = vi.fn(() => profile.getUser());
+      client.setQueryData(key, initial);
+      const observer = new QueryObserver(client, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+      const unsubscribe = observer.subscribe(() => {});
+      try {
+        // Execute the Skills tab's mutation callbacks with the real cache merger.
+        const source = readFileSync(join(import.meta.dirname, "../../../../src/layout/StrengthWeaknesses.tsx"), "utf8");
+        const call = source.indexOf("api.skillTree.purchaseSkill.useMutation(");
+        const callbacks = source.slice(call).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+        if (!callbacks) throw new Error("Skill purchase callbacks were not found");
+        const invalidate = vi.fn(async () => {});
+        const leaf = { invalidate };
+        const utils = { skillTree: { getUserSkills: leaf, getAll: leaf, getFolderStats: leaf } };
+        const updateUser = (update: UserUpdate | undefined, options: UserUpdateOptions) => updateUserCache(client, key, update, options);
+        const options = new Function("prepareUserUpdate", "updateUser", "showMutationToast", "utils", `return (${callbacks});`)(
+          () => prepareUserUpdate(client, key), updateUser, vi.fn(), utils,
+        ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
+        const revision = options.onMutate();
+        expect(revision).toBeDefined();
+        const result = await callerForDatabase(skillTreeRouter, userId, db).purchaseSkill({ skillId: "cache-skill" });
+        expect(result.success).toBe(true);
+        expect(result.userPatch).toEqual(succeeds ? expect.anything() : undefined);
+        if (!succeeds) {
+          expect(warning).toHaveBeenCalledWith(error, { level: "warning", tags: {
+            source: cooking ? "settleCookingExperience" : "settleUserQueues",
+          } });
+        }
+        // The first timed kind commits independently of the following kind or hydration.
+        const saved = await db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+        expect(saved?.cookingExperience).toBe(cooking ? 30 : 0);
+        expect(saved?.money).toBe(initial.userData!.money + (cooking ? 0 : 100));
+        expect(await db.query.userCookingJob.findMany()).toEqual([]);
+        expect((await db.query.userQueue.findMany()).map((row) => row.id)).toEqual(failedCraft ? ["skill-craft"] : []);
+        await options.onSuccess(result, { skillId: "cache-skill" }, revision);
+        expect(getUser).toHaveBeenCalledTimes(succeeds ? 0 : 1);
+        const cached = client.getQueryData<typeof initial>(key)?.userData;
+        expect(cached?.cookingExperience).toBe(saved?.cookingExperience);
+        expect(cached?.money).toBe(saved?.money);
+        expect(cached?.queue).toEqual([]);
+        expect(cached?.cookingJobs).toEqual([]);
+        expect(cached?.userSkills).toEqual([expect.objectContaining({ skillId: "cache-skill", activated: true })]);
+      } finally { unsubscribe(); client.clear(); }
+    },
+  );
 
   it("keeps a completed global skill reset canonical for concurrent skill sources", async () => {
     const db = await getTestDatabase();

@@ -2706,7 +2706,10 @@ const fetchUpdatedUserOnce = async (
       requiresUserRefresh = true;
       requiresProgressionRefresh = true;
     } catch (error) {
-      // The queues stay as they are and are settled on the next request.
+      // Earlier queue kinds may have committed before settlement or hydration failed.
+      // Keep the display snapshot usable, but withhold projections until a fresh read.
+      requiresUserRefresh = true;
+      requiresProgressionRefresh = true;
       Sentry.captureException(error, {
         level: "warning",
         tags: { source: "settleUserQueues" },
@@ -2721,7 +2724,9 @@ const fetchUpdatedUserOnce = async (
         user = await queryUpdatedUser();
       }
     } catch (error) {
-      // Keep the loaded profile usable; unclaimed receipts retry on the next refresh.
+      // XP may have committed before hydration failed; the loaded profile is display-only.
+      requiresUserRefresh = true;
+      requiresProgressionRefresh = true;
       Sentry.captureException(error, {
         level: "warning",
         tags: { source: "settleCookingExperience" },
