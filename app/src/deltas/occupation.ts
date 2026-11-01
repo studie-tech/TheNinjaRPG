@@ -2,6 +2,7 @@ import { getUserProgressionUpdate } from "@/deltas/profile";
 import type { QuestConsequence } from "@/libs/quest";
 import type { findCraftingQueueState } from "@/queries/occupation";
 import type { fetchUpdatedUser } from "@/routers/profile";
+import type { CraftingQueueMaterial } from "@/validators/train";
 
 /** Project the saved occupation and its signup timestamp. */
 export const getSelectOccupationUserUpdate = ({
@@ -26,15 +27,7 @@ export const getCancelQueuedCraftUserUpdate = ({
   cancelledEntryId,
 }: {
   cancelledRemaining: number;
-  cancelledEntryMaterials:
-    | {
-        userItemId: string;
-        itemId: string;
-        quantity: number;
-        storedAtHome: boolean;
-        name?: string | undefined;
-      }[]
-    | null;
+  cancelledEntryMaterials: CraftingQueueMaterial[] | null;
   snapshotItems: {
     id: string;
   }[];

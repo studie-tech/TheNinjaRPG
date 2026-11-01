@@ -10,6 +10,7 @@ import {
 import { hasEnergyQueue } from "@/libs/queue";
 
 import { getNextUserSnapshotAt } from "@/server/utils/concurrency";
+import type { PetTask } from "@/validators/petTasks";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
@@ -77,14 +78,7 @@ export const getStartPetTaskUserUpdate = ({
   task,
 }: {
   projectionUserPatch: UserCachePatch | undefined;
-  task: {
-    petId: string;
-    questHistoryId: string;
-    questId: string;
-    startedAt: number;
-    questVersion: number;
-    finishesAt: number;
-  };
+  task: PetTask;
 }) => ({
   userPatch: { ...projectionUserPatch, petTask: task },
 });

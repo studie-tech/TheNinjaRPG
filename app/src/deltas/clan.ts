@@ -4,7 +4,7 @@ import {
   CLAN_COLOR_CHANGE_REP_COST,
   STRONGHOLD_REESTABLISH_COST,
 } from "@/drizzle/constants";
-import type { Clan, UserData } from "@/drizzle/schema";
+import type { Clan, GameSetting, UserData } from "@/drizzle/schema";
 import { hasEnergyQueue } from "@/libs/queue";
 
 import type { findMembershipUserCache } from "@/queries/socialUserCache";
@@ -177,14 +177,7 @@ export const getKickMemberUserUpdate = ({
   memberUserId: string;
   ctxUserId: string;
   user: UserData | NonNullable<Awaited<ReturnType<typeof findMembershipUserCache>>>;
-  settings:
-    | {
-        id: string;
-        name: string;
-        value: number;
-        time: Date;
-      }[]
-    | undefined;
+  settings: GameSetting[] | undefined;
   fetchedClanId: string;
   membership: UserCachePatch | undefined;
 }) => ({
@@ -208,12 +201,7 @@ export const getLeaveClanUserUpdate = ({
   settings,
 }: {
   user: NonNullable<Awaited<ReturnType<typeof findMembershipUserCache>>>;
-  settings: {
-    id: string;
-    name: string;
-    value: number;
-    time: Date;
-  }[];
+  settings: GameSetting[];
 }) => ({
   userPatch: user.isOutlaw ? undefined : getMembershipUserPatch(user, null, settings),
 });
@@ -299,12 +287,7 @@ export const getInstantJoinAndLeadUserUpdate = ({
   fetchedClanVillageId: string;
   fetchedClanVillageType: "VILLAGE" | "OUTLAW" | "SAFEZONE" | "HIDEOUT" | "STRONGHOLD";
   savedClan: Clan;
-  settings: {
-    id: string;
-    name: string;
-    value: number;
-    time: Date;
-  }[];
+  settings: GameSetting[];
 }) => ({
   userPatch:
     user.villageId !== fetchedClanVillageId ||

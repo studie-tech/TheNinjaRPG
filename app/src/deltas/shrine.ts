@@ -5,6 +5,7 @@ import {
   SHRINE_WEEKLY_MAINTENANCE_COST,
 } from "@/drizzle/constants";
 import type { fetchUpdatedUser, UserWithRelations } from "@/routers/profile";
+import type { BoostTemplateEntry } from "@/validators/shrine";
 
 /** Debit the matching village's shrine upgrade tokens unless the profile requires a refresh. */
 export const getUpgradeShrineUserUpdate = ({
@@ -120,11 +121,7 @@ export const getSetBoostTemplateUserUpdate = ({
   requiresUserRefresh,
 }: {
   userVillageId: string;
-  inputTemplate: {
-    boostType: "Training" | "PVP" | "Mission" | "Errands" | "Crafting";
-    dayOfWeek: number;
-    slotIndex: number;
-  }[];
+  inputTemplate: BoostTemplateEntry[];
   userUsername: string;
   templateUpdatedAt: string;
   requiresUserRefresh: boolean;
