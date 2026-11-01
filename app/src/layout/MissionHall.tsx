@@ -89,7 +89,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
     onMutate: () => ({ userRevision: prepareUserUpdate() }),
     onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
-      await updateUser(data.userPatch, {
+      await updateUser(data, {
         revision: context?.userRevision,
         achievementProgress: data.achievementProgress,
       });
@@ -119,6 +119,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
       const data = await startQuest({
         questId: request.questId,
         userSector: request.userSector,
+        supportsAnnouncements: true,
       });
       if (
         startRequestRef.current !== request ||
@@ -135,7 +136,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
       setCommittedStart({ context: request.context, questId: request.questId });
       setPendingQuestId(null);
       void Promise.allSettled([
-        updateUser(data.userPatch, {
+        updateUser(data, {
           revision: userRevision,
           achievementProgress: data.achievementProgress,
         }),
@@ -547,6 +548,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                                   userVillageId: userData.isOutlaw
                                     ? VILLAGE_SYNDICATE_ID
                                     : userData.villageId,
+                                  supportsAnnouncements: true,
                                 },
                                 {
                                   onSettled: () => {

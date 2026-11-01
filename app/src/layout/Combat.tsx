@@ -5,7 +5,7 @@ import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, type RouterInputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { combatProfilePatch } from "@/deltas/combat";
+import { combatProfilePatch, getCombatInventoryUpdate } from "@/deltas/combat";
 import {
   AutoBattleTypes,
   IMG_INITIATIVE_D20,
@@ -22,7 +22,9 @@ import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { TUTORIAL_STEPS, useTutorialStep } from "@/hooks/tutorial";
+import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePageActive } from "@/hooks/usePageActive";
+import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { CombatAggro } from "@/layout/CombatAggro";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
 import { CombatRewards } from "@/layout/CombatRewards";
@@ -139,6 +141,8 @@ const Combat: React.FC<CombatProps> = (props) => {
   const completionRevisionRef = useRef<{
     battleId: string;
     revision: number | undefined;
+    inventory?: ReturnType<typeof prepareInventoryUpdate>;
+    sector?: ReturnType<typeof prepareSectorUpdate>;
   } | null>(null);
 
   // Tutorial step
@@ -156,6 +160,8 @@ const Combat: React.FC<CombatProps> = (props) => {
     updateUser,
     prepareUserUpdate,
   } = useRequiredUserData();
+  const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
+  const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
   const [isInLobby, setIsInLobby] = useState(
     () =>
       !!battleState.battle &&
@@ -428,7 +434,11 @@ const Combat: React.FC<CombatProps> = (props) => {
       onMutateCheck();
       document.body.style.cursor = "wait";
       setBattleState({ battle: battleRef.current, result: null, isPending: true });
-      return prepareUserUpdate();
+      return {
+        revision: prepareUserUpdate(),
+        inventory: prepareInventoryUpdate(),
+        sector: prepareSectorUpdate(),
+      };
     },
     onSettled: (data, error, variables) => {
       document.body.style.cursor = "default";
@@ -444,9 +454,9 @@ const Combat: React.FC<CombatProps> = (props) => {
     onError: () => {
       setBattleState({ battle: battleRef.current, result: null, isPending: false });
     },
-    onSuccess: async (data, _variables, revision) => {
+    onSuccess: async (data, _variables, context) => {
       if (data.result && data.battleUpdate) {
-        completionRevisionRef.current = { battleId: data.battleUpdate.id, revision };
+        completionRevisionRef.current = { battleId: data.battleUpdate.id, ...context };
       }
       // Clear the selected action only when control actually hands off to (or
       // away from) another actor — e.g. to/from a piloted summon. On the
@@ -891,22 +901,40 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
     endedBattleInvalidationRef.current = endedBattleId ?? null;
     const profileUpdate = props.battleState.result?.profileUpdate;
-    const capturedCompletion = completionRevisionRef.current;
+    const capturedCompletion =
+      completionRevisionRef.current?.battleId === endedBattleId
+        ? completionRevisionRef.current
+        : null;
     const revision =
       capturedCompletion && capturedCompletion.battleId === endedBattleId
         ? capturedCompletion.revision
         : prepareUserUpdate();
     const reconcileProfile = async () => {
-      await updateUser(
+      const inventory = capturedCompletion?.inventory ?? prepareInventoryUpdate();
+      const sector = capturedCompletion?.sector ?? prepareSectorUpdate();
+      const profileApplied = await updateUser(
         profileUpdate
           ? (current) => combatProfilePatch(current, profileUpdate)
           : undefined,
         { revision, delta: profileUpdate?.userDelta },
       );
+      // A recovery read can grant achievement items beyond the combat settlement.
+      await Promise.all([
+        updateInventory(
+          profileApplied
+            ? (rows) => getCombatInventoryUpdate(rows, profileUpdate)
+            : undefined,
+          inventory,
+        ),
+        // PvP, raids and world encounters can also change opponents and public objectives.
+        updateSector(
+          profileApplied && props.battleState.battle?.battleType === "ARENA",
+          sector,
+        ),
+      ]);
     };
     void Promise.all([
       reconcileProfile(),
-      utils.travel.getSectorData.invalidate(),
       // Both scoring battle types are public; their frozen competitors stay private.
       ...(["TERRITORY_WAR", "COMBAT"].includes(
         props.battleState.battle?.battleType ?? "",
@@ -917,9 +945,6 @@ const Combat: React.FC<CombatProps> = (props) => {
             utils.clan.invalidate(),
           ]
         : []),
-      // Battles consume items and can drop loot
-      utils.item.getUserItems.invalidate(),
-      utils.item.getUserItemsWithVariants.invalidate(),
       // Invalidate raid queries when a RAID battle ends so boss HP is refreshed
       ...(props.battleState.battle?.battleType === "RAID"
         ? [

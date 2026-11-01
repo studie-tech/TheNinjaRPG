@@ -83,13 +83,22 @@ describeWithDatabase("quest reward inventory reconciliation", () => {
       const leaf = { invalidate: vi.fn(async () => undefined) };
       const bindings = {
         prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
-        prepareQuestRewardUpdate: vi.fn(), updateQuestRewards: vi.fn(async () => undefined),
+        prepareQuestRewardUpdate: vi.fn(), updateQuestRewards: vi.fn(),
         updateUser: (data: Parameters<typeof updateUserCache>[2], options: Parameters<typeof updateUserCache>[3]) => updateUserCache(client, profileKey, data, options),
         utils: { item: { getUserItems: { invalidate: invalidate(0) }, getUserItemsWithVariants: { invalidate: invalidate(1) } },
           profile: { getDashboard: leaf }, quests: { missionHall: leaf, specificQuests: leaf, getQuestHistory: leaf, allianceBuilding: leaf } },
         showMutationToast: vi.fn(), showRewardToast: vi.fn(), openRewardChoice: vi.fn(),
         currentStep: undefined, handleNextStepAsync: vi.fn(),
       };
+      // Execute the feature hook's actual recovery policy after the real profile reconciliation.
+      const hookSource = readFileSync(join(import.meta.dirname, "../../src/hooks/useQuestRewardCacheUpdate.ts"), "utf8");
+      const start = hookSource.indexOf("  const updateQuestRewards = async (");
+      const end = hookSource.indexOf("\n  return {", start);
+      if (start < 0 || end < 0) throw new Error("Quest reward cache controller was not found");
+      const code = new (require("bun").Transpiler)({ loader: "ts" }).transformSync(hookSource.slice(start, end));
+      bindings.updateQuestRewards.mockImplementation(new Function("dashboard", "utils", `${code}; return updateQuestRewards;`)(
+        { updateCache: async () => false }, bindings.utils,
+      ));
       // Run the production reward callbacks against real profile reads and both observed inventories.
       const source = readFileSync(join(import.meta.dirname, "../../src/layout/Logbook.tsx"), "utf8");
       const callbacks = source.match(/api\.quests\.checkRewards\.useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];

@@ -69,7 +69,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
     onSuccess: async (data, _variables, context) => {
       showMutationToast(data);
       setStartError(data.success ? "" : data.message);
-      await updateUser(data.userPatch, {
+      await updateUser(data, {
         revision: context?.userRevision,
         achievementProgress: data.achievementProgress,
       });
@@ -270,6 +270,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                                 startQuest({
                                   questId: quest.id,
                                   userSector: userData.sector,
+                                  supportsAnnouncements: true,
                                 })
                               }
                             >
@@ -301,6 +302,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                                 startQuest({
                                   questId: quest.id,
                                   userSector: userData.sector,
+                                  supportsAnnouncements: true,
                                 })
                               }
                             >

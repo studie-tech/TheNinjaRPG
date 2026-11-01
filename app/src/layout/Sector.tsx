@@ -32,6 +32,7 @@ import { useDayNightMapOverlays } from "@/hooks/day-night-overlay";
 import { useGameScene } from "@/hooks/game-scene";
 import { safeLocalStorageGetItem, useLocalStorage } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
@@ -307,6 +308,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     updateUser,
     prepareUserUpdate,
   } = useRequiredUserData();
+  const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(props.sector);
   const appearanceSignature = useMemo(
     () => JSON.stringify(resolveSpriteAppearance(userData ?? {})),
     [userData],
@@ -329,6 +331,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       // missed, so poll the sector snapshot on a short interval. Pause that
       // interval while the tab is in the background.
       refetchInterval: 10_000,
+      // A confirmed movement patch is fresh for the same window as the presence poll.
+      staleTime: 10_000,
       refetchIntervalInBackground: false,
     },
   );
@@ -1260,7 +1264,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         ? animateWalk(path, userRef.current?.location ?? "")
         : Promise.resolve();
       void walk.catch(() => undefined);
-      return { walk };
+      return { walk, sector: prepareSectorUpdate() };
     },
     onSuccess: async (res, input, context) => {
       const walk = context?.walk ?? Promise.resolve();
@@ -1285,6 +1289,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         return;
       }
       await runJourneySegment(data, walk);
+      // Crossings retain their destination read; ordinary movement keeps this exact key current.
+      if (userRef.current?.sector === input.sector && context?.sector) {
+        await updateSector(true, context.sector);
+      }
     },
     onError: async (_error, _input, context) => {
       await context?.walk.catch(() => undefined);

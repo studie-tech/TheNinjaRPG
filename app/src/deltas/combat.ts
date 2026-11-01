@@ -196,23 +196,8 @@ export const combatProfilePatch = (
     update.baseline.hadTrainingQueue
   )
     return;
-  if (current.items.length !== update.baseline.items.length) return;
-  const itemFields = [
-    "quantity",
-    "durability",
-    "level",
-    "experience",
-    "equipped",
-  ] as const;
-  for (const item of current.items) {
-    const original = update.baseline.items.find((row) => row.id === item.id);
-    if (!original || itemFields.some((field) => original[field] !== item[field]))
-      return;
-  }
-  const items = current.items.flatMap((item) => {
-    const changed = update.items.find((row) => row.id === item.id);
-    return changed && changed.quantity > 0 ? [{ ...item, ...changed }] : [];
-  });
+  const items = getCombatInventoryUpdate(current.items, update);
+  if (!items) return;
   return {
     ...update.userPatch,
     // Retain omitted public trackers, but respect removals from loaded quests.
@@ -235,6 +220,32 @@ export const combatProfilePatch = (
     maxEnergy: update.userPatch.maxEnergy,
     effectiveMasteries: update.userPatch.effectiveMasteries,
   };
+};
+
+/** Apply confirmed combat item changes only to the admission baseline, preserving view extensions. */
+export const getCombatInventoryUpdate = <
+  T extends CombatCacheBaseline["items"][number],
+>(
+  current: T[],
+  update: CombatProfileUpdate | undefined,
+): T[] | undefined => {
+  if (!update || current.length !== update.baseline.items.length) return;
+  const itemFields = [
+    "quantity",
+    "durability",
+    "level",
+    "experience",
+    "equipped",
+  ] as const;
+  for (const item of current) {
+    const original = update.baseline.items.find((row) => row.id === item.id);
+    if (!original || itemFields.some((field) => original[field] !== item[field]))
+      return;
+  }
+  return current.flatMap((item) => {
+    const changed = update.items.find((row) => row.id === item.id);
+    return changed && changed.quantity > 0 ? [{ ...item, ...changed }] : [];
+  });
 };
 
 /**

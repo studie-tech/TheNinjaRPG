@@ -39,8 +39,8 @@ export default function AdministrationBuilding() {
   const { mutate: startQuest, isPending } = api.quests.startQuest.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      await updateUser(data, { revision });
       showMutationToast(data);
+      await updateUser(data, { revision });
       await util.quests.allianceBuilding.invalidate();
     },
   });
@@ -129,6 +129,7 @@ export default function AdministrationBuilding() {
                             startQuest({
                               questId: quest.id,
                               userSector: userData.sector,
+                              supportsAnnouncements: true,
                             })
                           }
                         >

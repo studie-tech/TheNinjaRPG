@@ -14,7 +14,7 @@ ensureDom();
 const api = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
 const stops: (() => void)[] = [];
-beforeEach(() => Object.assign(vi.spyOn(appClient, "api" as never), { profile: api.profile, quests: api.quests, useUtils: api.useUtils }));
+beforeEach(() => Object.assign(vi.spyOn(appClient, "api" as never), { profile: api.profile, quests: api.quests, item: api.item, useUtils: api.useUtils }));
 afterEach(() => { cleanup(); stops.splice(0).forEach(stop => stop()); clients.splice(0).forEach(client => client.clear()); vi.restoreAllMocks(); });
 
 /** Observe the actual feature keys to count server recovery requested by the hook. */
@@ -27,7 +27,9 @@ const setup = () => {
     getQueryKey(api.quests.missionHall, { villageId: "leaf", level: 50 }, "query"),
     getQueryKey(api.quests.specificQuests, { questType: "story", level: 50 }, "query"),
     getQueryKey(api.quests.getQuestHistory, { limit: 10 }, "query"),
-    getQueryKey(api.quests.allianceBuilding, { level: 50 }, "query")];
+    getQueryKey(api.quests.allianceBuilding, { level: 50 }, "query"),
+    getQueryKey(api.item.getUserItems, undefined, "query"),
+    getQueryKey(api.item.getUserItemsWithVariants, undefined, "query")];
   const reads = keys.map((queryKey, i) => {
     const value = i === 0 ? current : [];
     client.setQueryData(queryKey, value);
@@ -54,7 +56,8 @@ it("patches confirmed completion counters while retaining list-membership refres
   test.result.questCacheUpdate = { ...test.result.questCacheUpdate, after: { ...test.result.questCacheUpdate.after, previousCompletes: 1 }, discoveryUnchanged: false };
   await act(async () => test.view.result.current.updateQuestRewards(test.result, test.view.result.current.prepareQuestRewardUpdate(), true));
   expect(test.reads[0]).not.toHaveBeenCalled();
-  test.reads.slice(1).forEach(read => expect(read).toHaveBeenCalledTimes(1));
+  test.reads.slice(1, 5).forEach(read => expect(read).toHaveBeenCalledTimes(1));
+  test.reads.slice(5).forEach(read => expect(read).not.toHaveBeenCalled());
   expect(test.client.getQueryData<{ candidates: { previousCompletes: number }[] }>(test.keys[0]!)?.candidates[0]?.previousCompletes).toBe(1);
 });
 

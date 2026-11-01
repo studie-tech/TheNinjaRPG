@@ -11,6 +11,7 @@ import type { ZodAllTags } from "@/validators/combat";
 import { makeBattleUser, makeCompleteBattle } from "../libs/combat/helpers/battleScenario";
 import { calcBattleResult, maskBattle } from "@/libs/combat/util";
 import { QuestTracker } from "@/validators/objectives";
+import { getCombatInventoryUpdate } from "@/deltas/combat";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const fixture = () => {
@@ -35,6 +36,19 @@ const fixture = () => {
   const current = { ...raw, status: "BATTLE", battleId: "fight", money: 100, experience: 200, dailyArenaFights: 0, maxEnergy: calcMaxEnergy(raw), userQuests: [], questData: [] } as unknown as NonNullable<UserWithRelations>;
   return { raw, snapshot, current, update };
 };
+
+it("projects confirmed combat items into inventory views without losing extensions or accepting changed baselines", () => {
+  const { update } = fixture();
+  const rows = update.baseline.items.map(row => ({ ...row, variants: ["skin"] }));
+  const next = getCombatInventoryUpdate(rows, update);
+  expect(next?.[0]?.durability).toBe(0);
+  expect(next?.[0]?.variants).toBe(rows[0]!.variants);
+  expect(rows[0]?.durability).toBe(100);
+  expect(getCombatInventoryUpdate([{ ...rows[0]!, quantity: 2 }], update)).toBeUndefined();
+  expect(getCombatInventoryUpdate([], update)).toBeUndefined();
+  expect(getCombatInventoryUpdate(rows, undefined)).toBeUndefined();
+  expect(getCombatInventoryUpdate(rows, { ...update, items: update.items.map(row => ({ ...row, quantity: 0 })) })).toEqual([]);
+});
 
 describe("confirmed combat profile reconciliation", () => {
   it.each(["sparse", "complete"])("merges %s public tracker snapshots while replacing loaded targets and appending new trackers", (snapshot) => {

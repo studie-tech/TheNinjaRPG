@@ -712,12 +712,12 @@ export const insertActionLogForAdjustUserJutsu = (
     relatedImage: userjutsu.jutsu.image,
   });
 
-/** Build the `userJutsu` update for `startTraining`, using predicates on `id` and `userId`. */
+/** Increment the owned level only against its loaded baseline so concurrent starts cannot share a projection. */
 export const updateUserJutsuForStartTraining = (
   client: Pick<DrizzleClient, "update">,
   trainingStartedAt: Date,
   finishTraining: Date,
-  userjutsuObj: { id: string },
+  userjutsuObj: { id: string; level: number },
   ctx: { userId: string },
 ) =>
   client
@@ -726,9 +726,15 @@ export const updateUserJutsuForStartTraining = (
       level: sql`${userJutsu.level} + 1`,
       trainingStartedAt,
       finishTraining,
-      updatedAt: new Date(),
+      updatedAt: trainingStartedAt,
     })
-    .where(and(eq(userJutsu.id, userjutsuObj.id), eq(userJutsu.userId, ctx.userId)));
+    .where(
+      and(
+        eq(userJutsu.id, userjutsuObj.id),
+        eq(userJutsu.userId, ctx.userId),
+        eq(userJutsu.level, userjutsuObj.level),
+      ),
+    );
 
 /** Build the `userJutsu` insert for `startTraining`, updating duplicate keys. */
 export const insertUserJutsuForStartTraining = (
@@ -1397,6 +1403,7 @@ export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
   jutsuId: string,
   loadoutId: string,
   userId: string,
+  expectedJutsuIds?: string[],
 ) =>
   client
     .update(jutsuLoadout)
@@ -1408,6 +1415,9 @@ export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
         eq(jutsuLoadout.id, loadoutId),
         eq(jutsuLoadout.userId, userId),
         isActiveJutsuLoadoutSql(userId, loadoutId),
+        expectedJutsuIds
+          ? sql`${jutsuLoadout.jutsuIds} = CAST(${JSON.stringify(expectedJutsuIds)} AS JSON)`
+          : undefined,
         sql`NOT JSON_CONTAINS(${jutsuLoadout.jutsuIds}, JSON_QUOTE(${jutsuId}))`,
       ),
     );
@@ -1423,6 +1433,7 @@ export const updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically = (
   userId: string,
 
   jutsuId: string,
+  expectedJutsuIds?: string[],
 ) =>
   client
     .update(jutsuLoadout)
@@ -1437,6 +1448,9 @@ export const updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically = (
         eq(jutsuLoadout.id, loadoutId),
         eq(jutsuLoadout.userId, userId),
         isActiveJutsuLoadoutSql(userId, loadoutId),
+        expectedJutsuIds
+          ? sql`${jutsuLoadout.jutsuIds} = CAST(${JSON.stringify(expectedJutsuIds)} AS JSON)`
+          : undefined,
         // Exact membership — do not use unescaped JSON_SEARCH (LIKE wildcards).
         sql`JSON_CONTAINS(${jutsuLoadout.jutsuIds}, JSON_QUOTE(${jutsuId}))`,
       ),

@@ -82,6 +82,7 @@ import { useLocalStorage } from "@/hooks/localstorage";
 import { useMap } from "@/hooks/map";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
+import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import AutoAttackModal from "@/layout/AutoAttackModal";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -222,6 +223,7 @@ function Travel() {
     prepareUserUpdate,
     updateUser,
   } = useRequiredUserData();
+  const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
   const pins = parseTravelPins(storedPins?.[userData?.userId ?? ""]);
   const savePins = (next: TravelPin[]) => {
     if (userData) setStoredPins({ ...storedPins, [userData.userId]: next });
@@ -616,18 +618,22 @@ function Travel() {
 
   const { mutate: finishGlobalMove, isPending: isFinishingTravel } =
     api.travel.finishGlobalMove.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (result, _variables, revision) => {
+      onMutate: () => ({
+        revision: prepareUserUpdate(),
+        sector: prepareSectorUpdate(),
+      }),
+      onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
         if (!result.success) return;
         const patch = result.userPatch;
-        await updateUser(
+        const profileApplied = await updateUser(
           patch
             ? (current) =>
                 globalTravelFinishPatch(current, patch, result.projectedQuestIds)
             : undefined,
-          { revision, delta: result.userDelta },
+          { revision: context.revision, delta: result.userDelta },
         );
+        await updateSector(profileApplied, context.sector);
         if (currentStep?.title === "Travel") await handleNextStepAsync();
         setActiveTab(sectorLink);
       },

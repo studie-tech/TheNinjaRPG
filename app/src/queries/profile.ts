@@ -823,20 +823,24 @@ export const selectContentProposalForGetUser = (
     .from(contentProposal)
     .where(eq(contentProposal.status, "PENDING"));
 
-/** Build the `userData` update for `getUser`, setting `unreadRecruitRewards`, using predicates on `userId`. */
-export const updateUserDataForGetUser = (
+/** Claim only the loaded announcement counters so competing delivery or new feedback cannot be erased. */
+export const claimUserAnnouncements = (
   client: Pick<DrizzleClient, "update">,
-  user: { unreadRecruitRewards: number },
-  ctx: { userId: string },
+  user: { userId: string; unreadNotifications: number; unreadRecruitRewards: number },
+  claimedAt: Date,
 ) =>
   client
     .update(userData)
-    .set({
-      unreadRecruitRewards: sql`GREATEST(${userData.unreadRecruitRewards} - ${user.unreadRecruitRewards}, 0)`,
-    })
-    .where(eq(userData.userId, ctx.userId));
+    .set({ unreadNotifications: 0, unreadRecruitRewards: 0, updatedAt: claimedAt })
+    .where(
+      and(
+        eq(userData.userId, user.userId),
+        eq(userData.unreadNotifications, user.unreadNotifications),
+        eq(userData.unreadRecruitRewards, user.unreadRecruitRewards),
+      ),
+    );
 
-/** Build the `notification` listing for `getUser`. */
+/** Build the notification listing for the loaded unread count. */
 export const listNotificationForGetUser = (
   client: Pick<DrizzleClient, "query">,
   user: { unreadNotifications: number },
@@ -845,16 +849,6 @@ export const listNotificationForGetUser = (
     limit: user.unreadNotifications,
     orderBy: desc(notification.createdAt),
   });
-
-/** Build the `userData` update for `getUser`, setting `unreadNotifications`, using predicates on `userId`. */
-export const updateUserDataForGetUser2 = (
-  client: Pick<DrizzleClient, "update">,
-  ctx: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({ unreadNotifications: 0 })
-    .where(eq(userData.userId, ctx.userId));
 
 /** Build the `userData` lookup for `getAi`, using predicates on `userId` and `isAi`. */
 export const findUserDataForGetAi = (

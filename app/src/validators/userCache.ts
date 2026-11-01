@@ -99,6 +99,7 @@ export const userPatchSchema = z.object({
   rankedLp: z.number().optional(),
   petTask: z.custom<NonNullable<UserWithRelations>["petTask"]>().optional(),
   unreadNotifications: z.number().optional(),
+  unreadRecruitRewards: z.number().optional(),
   activePetId: z.string().nullable().optional(),
   petSlots: z.number().optional(),
   petAcquisitions: z.number().optional(),

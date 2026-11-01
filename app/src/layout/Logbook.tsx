@@ -873,7 +873,6 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
  * @returns The checkRewards mutation.
  */
 export const useCheckRewards = () => {
-  const utils = api.useUtils();
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   const openRewardChoice = useOpenRewardChoice();
   const { prepareQuestRewardUpdate, updateQuestRewards } = useQuestRewardCacheUpdate();
@@ -937,12 +936,7 @@ export const useCheckRewards = () => {
         // Only the academy tutorial needs refreshed quest lists before its next highlight.
         const questRefresh = updateQuestRewards(data, context.quests, profileApplied);
         // Reconcile other views without holding reward feedback or the collection loader.
-        void Promise.allSettled([
-          questRefresh,
-          // Profile reconciliation can grant collection items from unlocked achievements.
-          utils.item.getUserItems.invalidate(),
-          utils.item.getUserItemsWithVariants.invalidate(),
-        ]);
+        void Promise.allSettled([questRefresh]);
         if (
           currentStep?.title === "Academy Dialog Option" &&
           variables?.nextObjectiveId
