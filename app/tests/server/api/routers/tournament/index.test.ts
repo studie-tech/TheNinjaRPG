@@ -283,6 +283,23 @@ describe("syncTournamentState", () => {
     expect(client.delete).toHaveBeenCalledWith(tournament);
   });
 
+  it("recognizes the name key when it only appears in sqlMessage", async () => {
+    const { client, insertValues } = createClient();
+    const driverError = Object.assign(new Error("ER_DUP_ENTRY"), {
+      sqlMessage:
+        "Duplicate entry 'Test Tournament' for key 'TournamentRecord.HistoricalTournament_name_key'",
+    });
+    insertValues.mockRejectedValueOnce(
+      new Error("Failed query: insert into `TournamentRecord`", { cause: driverError }),
+    );
+
+    const result = await syncTournament(client);
+
+    expect(result).toEqual({ success: true, message: "Tournament synchronized." });
+    expect(insertValues).toHaveBeenCalledTimes(2);
+    expect(updateRewardsMock).toHaveBeenCalledTimes(1);
+  });
+
   it("does not pay again when the archived-name retry loses to a pending peer", async () => {
     const { client, insertValues } = createClient({
       recordResponses: [null, createTournamentRecord({ winnerId: null })],

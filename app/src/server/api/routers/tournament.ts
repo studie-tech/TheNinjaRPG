@@ -372,7 +372,14 @@ const isTournamentRecordNameConflict = (error: unknown): boolean => {
   if (!isMysqlDuplicateKeyError(error)) return false;
   let current: unknown = error;
   for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
-    if (current.message.includes(TOURNAMENT_RECORD_NAME_KEY)) return true;
+    const sqlMessage = (current as { sqlMessage?: unknown }).sqlMessage;
+    if (
+      current.message.includes(TOURNAMENT_RECORD_NAME_KEY) ||
+      (typeof sqlMessage === "string" &&
+        sqlMessage.includes(TOURNAMENT_RECORD_NAME_KEY))
+    ) {
+      return true;
+    }
     current = current.cause;
   }
   return false;
