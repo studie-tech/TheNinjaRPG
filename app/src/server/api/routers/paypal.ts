@@ -42,7 +42,6 @@ import {
   updateWebStoreOrderForCreateStoreOrder,
 } from "@/queries/paypal";
 import { fetchUser, findUserById } from "@/queries/profile";
-
 import {
   type BaseServerResponse,
   baseServerResponse,
@@ -56,6 +55,10 @@ import {
   lockPurchaseBuyer,
   reputationAllowanceUsed,
 } from "@/server/utils/purchases/allowance";
+import {
+  fetchPurchaseUserCacheInputs,
+  getKnownPurchaseUserUpdate,
+} from "@/server/utils/purchases/cache";
 import {
   canonicalStoreUserId,
   isDeletedStoreUserId,
@@ -87,6 +90,7 @@ import {
   storeBundleSchemaForItems,
   storeCheckoutSchema,
 } from "@/validators/points";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 import type { DrizzleClient } from "../../db";
 
 type PaypalAmount = {
@@ -256,7 +260,7 @@ export const paypalRouter = createTRPCRouter({
   captureStoreOrder: protectedProcedure
     .input(z.object({ orderId: z.string().min(15).max(20) }))
     .output(
-      baseServerResponse.extend({
+      userDeltaResponseSchema.extend({
         purchase: z
           .object({
             transactionId: z.string(),
@@ -290,6 +294,18 @@ export const paypalRouter = createTRPCRouter({
         return errorResponse(
           "Payment does not match this checkout. No payment was captured.",
         );
+      if (order?.status !== "COMPLETED" && order?.status !== "APPROVED")
+        return errorResponse(
+          "Approve this checkout with PayPal before capturing payment. No payment was captured.",
+        );
+      // Only an undelivered scalar self purchase can use an arithmetic projection.
+      // Gifts leave the actor unchanged; inventory and receipt replays need recovery.
+      const purchaseInputsQuery =
+        !snapshot.grantedAt &&
+        snapshot.recipientId === ctx.userId &&
+        !snapshot.contents.items.length
+          ? fetchPurchaseUserCacheInputs(ctx.drizzle, ctx.userId).catch(() => undefined)
+          : undefined;
       // A completed order can still contain a failed capture: recovery releases the
       // saved attempt, while a new capture POST below must claim a fresh token.
       let captureAttemptId = snapshot.captureAttemptId;
@@ -303,17 +319,11 @@ export const paypalRouter = createTRPCRouter({
             )
           : Promise.resolve();
       if (order?.status !== "COMPLETED") {
-        if (order?.status !== "APPROVED")
-          return errorResponse(
-            "Approve this checkout with PayPal before capturing payment. No payment was captured.",
-          );
         captureAttemptId = nanoid();
-        const allowanceError = await authorizeStoreCapture(
-          ctx.drizzle,
-          snapshotId,
-          ctx.userId,
-          captureAttemptId,
-        );
+        const [allowanceError] = await Promise.all([
+          authorizeStoreCapture(ctx.drizzle, snapshotId, ctx.userId, captureAttemptId),
+          purchaseInputsQuery,
+        ]);
         if (allowanceError) return errorResponse(allowanceError);
         order = await requestStorePaypalOrder(
           token,
@@ -341,7 +351,8 @@ export const paypalRouter = createTRPCRouter({
         return errorResponse(
           "Payment is awaiting confirmation. Use Lookup Transaction after it clears.",
         );
-      return deliverStoreOrder(ctx.drizzle, {
+      const purchaseInputs = await purchaseInputsQuery;
+      const result = await deliverStoreOrder(ctx.drizzle, {
         snapshotId,
         captureId: capture.id,
         orderId: input.orderId,
@@ -350,6 +361,24 @@ export const paypalRouter = createTRPCRouter({
         invoiceId: capture.invoice_id ?? order?.purchase_units?.[0]?.invoice_id,
         raw: order,
       });
+      const { delivery, ...response } = result;
+      if (!delivery) return response;
+      if (delivery.recipientId !== ctx.userId)
+        return { ...response, userPatch: {}, userDelta: {} };
+      return {
+        ...response,
+        ...(!delivery.contents.items.length
+          ? getKnownPurchaseUserUpdate(
+              purchaseInputs,
+              {},
+              {
+                money: delivery.contents.money,
+                reputationPoints: delivery.contents.reputationPoints,
+                reputationPointsTotal: delivery.contents.reputationPoints,
+              },
+            )
+          : {}),
+      };
     }),
 
   resolveOrder: protectedProcedure
@@ -433,7 +462,7 @@ export const paypalRouter = createTRPCRouter({
         orderId: z.string().min(1).max(191).optional(),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const token = await getPaypalAccessToken();
       const subscription = await getPaypalSubscription(input.subscriptionId, token);
@@ -494,7 +523,7 @@ export const paypalRouter = createTRPCRouter({
         status: z.enum(FederalStatuses),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       if (input.expectedUserId !== ctx.userId)
         return errorResponse("Your account changed. Reload before purchasing.");
@@ -522,7 +551,12 @@ export const paypalRouter = createTRPCRouter({
         throw error;
       }
 
-      return { success: true, message: "OK" };
+      return {
+        success: true,
+        message: "OK",
+        userDelta: { reputationPoints: -cost },
+        userPatch: input.userId === ctx.userId ? { federalStatus: input.status } : {},
+      };
     }),
   // Upgrade a subscription for a user. Can only be done by the user who created the subscription
   upgradeSubscription: protectedProcedure
@@ -532,7 +566,7 @@ export const paypalRouter = createTRPCRouter({
         plan: z.enum(FederalStatuses),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Self only, which is all the UI ever offers. Without it the caller can name any
       // subscriber: the upgrade price is the delta between their tier and the new one, so
@@ -542,10 +576,12 @@ export const paypalRouter = createTRPCRouter({
       if (input.userId !== ctx.userId) {
         return errorResponse("You can only upgrade your own subscription");
       }
-      const [upgrader, target] = await Promise.all([
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
-      ]);
+      const purchaseInputs = await fetchPurchaseUserCacheInputs(
+        ctx.drizzle,
+        ctx.userId,
+      );
+      const target = purchaseInputs[0];
+      if (!target) return errorResponse("Complete registration before upgrading.");
       const subscription = await findPaypalSubscriptionForUpgradeSubscription(
         ctx.drizzle,
         target,
@@ -558,6 +594,7 @@ export const paypalRouter = createTRPCRouter({
           ctx.userId,
           target.federalStatus,
           input.plan,
+          purchaseInputs,
         );
       // Get cost, and ensure that we are actually upgrading
       const cost = calcFedUgradeCost(subscription.federalStatus, input.plan);
@@ -565,7 +602,7 @@ export const paypalRouter = createTRPCRouter({
         return errorResponse(`Invalid: ${subscription.federalStatus} to ${input.plan}`);
       }
       // Check that we have enough reputation points
-      if (upgrader.reputationPoints < cost) {
+      if (target.reputationPoints < cost) {
         return errorResponse(`Not enough reputation points`);
       }
       // The balance, displayed tier, and paid ledger must advance together. A single
@@ -585,7 +622,18 @@ export const paypalRouter = createTRPCRouter({
           "Your balance or subscription changed. Reload and try again.",
         );
 
-      return { success: true, message: "OK" };
+      return {
+        success: true,
+        message: "OK",
+        ...getKnownPurchaseUserUpdate(
+          purchaseInputs,
+          { federalStatus: input.plan },
+          {
+            reputationPoints: -cost,
+            reputationPointsTotal: -cost,
+          },
+        ),
+      };
     }),
   // Cancel paypal subscription
   cancelPaypalSubscription: protectedProcedure
@@ -1290,7 +1338,7 @@ export const reconcilePaypalSubscription = async (input: {
     return errorResponse("This subscription belongs to another account.");
   // PayPal's subscription approval/reporting APIs can omit an order ID. Retain its
   // provider reference so the renewal job does not classify paid billing as rep-funded.
-  return updateSubscription({
+  const result = await updateSubscription({
     client: input.client,
     ...owners,
     subscriptionId: input.subscription.id,
@@ -1298,6 +1346,14 @@ export const reconcilePaypalSubscription = async (input: {
     federalStatus: getPaypalSubscriptionStatus(input.subscription).newStatus,
     status: input.subscription.status,
   });
+  return {
+    ...result,
+    // Only the canonical recipient's cross-provider entitlement changes.
+    userPatch:
+      result.success && input.callerId && input.callerId !== owners.affectedUserId
+        ? {}
+        : undefined,
+  };
 };
 
 /** Decode the legacy buyer-recipient reference without accepting ambiguous identities. */

@@ -8,7 +8,6 @@ import {
 } from "@/drizzle/constants";
 import { getServerPusher, updateRaidTeamsOnSector } from "@/libs/pusher";
 import { postProcessRewards } from "@/libs/quest";
-import { hasEnergyQueue } from "@/libs/queue";
 import {
   getRaidChatConversationId,
   getRaidObjectiveData,
@@ -85,7 +84,7 @@ import {
 } from "@/queries/raids";
 import { deleteSectorByNumber } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
-import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchUpdatedUser, getUserProgressionUpdate } from "@/routers/profile";
 import { updateRewards } from "@/routers/quests";
 import {
   baseServerResponse,
@@ -98,13 +97,17 @@ import type { DrizzleClient } from "@/server/db";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { raidBattleStarted } from "@/server/utils/push/messages";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
+import { getRewardUserUpdate } from "@/server/utils/rewardUserCache";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
 import { AllTags } from "@/validators/combat";
 import type { RaidObjectiveType } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { userDeltaResponseSchema } from "@/validators/userCache";
+import {
+  type UserDeltaResponse,
+  userDeltaResponseSchema,
+} from "@/validators/userCache";
 
 export const raidsRouter = createTRPCRouter({
   /**
@@ -575,7 +578,7 @@ export const raidsRouter = createTRPCRouter({
    */
   readyToQueue: protectedProcedure
     .use(ratelimitMiddleware)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const [user, queueEntry] = await Promise.all([
@@ -584,30 +587,37 @@ export const raidsRouter = createTRPCRouter({
       ]);
       // Guard
       if (!user) return errorResponse("User not found");
+      // Validation does not change the profile; reconcile only a mismatched activity status.
+      const reject = (message: string) => ({
+        ...errorResponse(message),
+        userDelta: {},
+        userExpected: { status: user.status },
+      });
       const bannedReady = guardNotBannedFromRaids(user, "queue for raids");
       if (bannedReady) return bannedReady;
       if (user.status === "HOSPITALIZED") {
-        return errorResponse("You cannot ready up while hospitalized");
+        return reject("You cannot ready up while hospitalized");
       }
       if (user.status === "BATTLE") {
-        return errorResponse("You cannot ready up while in an active battle");
+        return reject("You cannot ready up while in an active battle");
       }
       if (user.status === "TRAVEL") {
-        return errorResponse("You cannot ready up while traveling");
+        return reject("You cannot ready up while traveling");
       }
       if (user.status === "ASLEEP") {
-        return errorResponse("You cannot ready up while sleeping");
+        return reject("You cannot ready up while sleeping");
       }
       if (
         user.status === "QUEUED" &&
         queueEntry?.clanBattle?.battleType !== "RAID_BATTLE"
       ) {
-        return errorResponse(
+        return reject(
           "You are in another battle queue. Please leave it before readying for a raid.",
         );
       }
       const userId = user.userId;
       // CAS: only transition from the status we read to avoid racing concurrent requests.
+      let confirmedAwake = false;
       if (user.status !== "AWAKE") {
         const updateResult = await updateUserDataForReadyToQueue(ctx.drizzle, userId, {
           status: user.status,
@@ -617,6 +627,7 @@ export const raidsRouter = createTRPCRouter({
             "Failed to update status - your status may have changed",
           );
         }
+        confirmedAwake = true;
       } else {
         // Already AWAKE: guard against clearing an active travel that hasn't finished yet.
         const isTraveling = user.travelFinishAt && user.travelFinishAt > new Date();
@@ -626,7 +637,8 @@ export const raidsRouter = createTRPCRouter({
         // Clear any stale dirty fields. No rowsAffected check here — MySQL reports 0
         // when the SET is a no-op (fields already null), which is indistinguishable
         // from a concurrent status change. We already confirmed AWAKE above.
-        await updateUserDataForReadyToQueue2(ctx.drizzle, userId);
+        const result = await updateUserDataForReadyToQueue2(ctx.drizzle, userId);
+        confirmedAwake = result.rowsAffected === 1;
       }
       // Step 1: remove user from team + other independent cleanups in parallel.
       // mpvpBattleUser must be deleted before the NOT EXISTS team-cleanup check in step 2.
@@ -672,7 +684,15 @@ export const raidsRouter = createTRPCRouter({
         const pusher = getServerPusher();
         void updateRaidTeamsOnSector(pusher, teamSector);
       }
-      return { success: true, message: "You are ready to queue!" };
+      return {
+        success: true,
+        message: confirmedAwake
+          ? "You are ready to queue!"
+          : "Ready status checked; refresh your current activity if needed.",
+        userPatch: confirmedAwake
+          ? { status: "AWAKE" as const, travelFinishAt: null, battleId: null }
+          : undefined,
+      };
     }),
 
   /**
@@ -708,14 +728,20 @@ export const raidsRouter = createTRPCRouter({
 
       // Guard - basic validations
       if (!user) return errorResponse("User not found");
+      // Rejections before admission leave profile data untouched unless its status is stale.
+      const reject = (message: string) => ({
+        ...errorResponse(message),
+        userDelta: {},
+        userExpected: { status: user.status },
+      });
       const bannedJoin = guardNotBannedFromRaids(user, "queue for raids");
       if (bannedJoin) return bannedJoin;
-      if (!raid) return errorResponse("Raid not found");
+      if (!raid) return reject("Raid not found");
       if (existingQueueEntries.length > 0) {
-        return errorResponse("Already in a battle queue");
+        return reject("Already in a battle queue");
       }
       if (user.status !== "AWAKE") {
-        return errorResponse("You cannot join a raid queue in your current status");
+        return reject("You cannot join a raid queue in your current status");
       }
 
       // Guard - raid active state
@@ -724,43 +750,38 @@ export const raidsRouter = createTRPCRouter({
       if (!raidValidation.isValid) {
         if (raidValidation.error === "This raid has ended") {
           await checkAndCleanupExpiredRaid(ctx.drizzle, raid.id);
+          return errorResponse(raidValidation.error);
         }
-        return errorResponse(raidValidation.error);
+        return reject(raidValidation.error);
       }
 
       // Derived - raid data from objective
       const raidData = getRaidObjectiveData(raid);
       if (!raidData) {
-        return errorResponse(
-          "This raid is not properly configured (invalid objective)",
-        );
+        return reject("This raid is not properly configured (invalid objective)");
       }
 
       // Guard - user must be in the raid's sector to join
       if (raidData.sector !== null && user.sector !== raidData.sector) {
-        return errorResponse(
-          `You must travel to sector ${raidData.sector} to join this raid`,
-        );
+        return reject(`You must travel to sector ${raidData.sector} to join this raid`);
       }
 
       // Guard - exclusive raid eligibility (sector check required)
       if (raidData.isExclusive) {
         if (!user.villageId) {
-          return errorResponse("You must be in a village to join exclusive raids");
+          return reject("You must be in a village to join exclusive raids");
         }
         if (raidData.sector === null) {
-          return errorResponse("This exclusive raid is not properly configured");
+          return reject("This exclusive raid is not properly configured");
         }
 
         // Check capture deadline and grace period
         if (raid.raidCaptureDeadline && raid.raidCaptureDeadline < now) {
           if (!raid.raidGracePeriodEnd) {
-            return errorResponse("This raid's capture deadline has passed");
+            return reject("This raid's capture deadline has passed");
           }
           if (raid.raidGracePeriodEnd < now) {
-            return errorResponse(
-              "This raid's capture deadline and grace period have ended",
-            );
+            return reject("This raid's capture deadline and grace period have ended");
           }
         }
 
@@ -784,7 +805,7 @@ export const raidsRouter = createTRPCRouter({
             ));
 
         if (!sectorOwnership && !isAttackerOrAlly) {
-          return errorResponse("Your village does not control this sector");
+          return reject("Your village does not control this sector");
         }
       }
 
@@ -795,10 +816,10 @@ export const raidsRouter = createTRPCRouter({
       if (teamId) {
         // Guard - validate pre-fetched team
         if (!teamData) {
-          return errorResponse("Team not found or battle already started");
+          return reject("Team not found or battle already started");
         }
         if (teamData.queue.length >= RAID_BATTLE_MAX_USERS_PER_TEAM) {
-          return errorResponse("Team is full");
+          return reject("Team is full");
         }
       } else {
         // Mutation - create new team with atomic count guard
@@ -813,7 +834,7 @@ export const raidsRouter = createTRPCRouter({
 
         // Guard - check if insert succeeded
         if (insertResult.rowsAffected === 0) {
-          return errorResponse(
+          return reject(
             "Maximum number of raid teams reached. Please join an existing team.",
           );
         }
@@ -889,7 +910,8 @@ export const raidsRouter = createTRPCRouter({
         success: true,
         message: "Joined raid queue",
         teamId,
-        userDelta: hasEnergyQueue(user) ? undefined : {},
+        userPatch: { status: "QUEUED" },
+        userDelta: {},
       };
     }),
 
@@ -899,38 +921,48 @@ export const raidsRouter = createTRPCRouter({
   leaveRaidQueue: protectedProcedure
     .meta({ mcp: { description: "Leave the raid queue" } })
     .use(ratelimitMiddleware)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query - parallel fetch user and queue entry
-      const [{ user }, queueEntry] = await Promise.all([
+      const [snapshot, queueEntry] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         findMpvpBattleUserForLeaveRaidQueue(ctx.drizzle, ctx),
       ]);
 
+      const { user } = snapshot;
+      const initialUpdate = getRaidSnapshotUpdate(snapshot);
+      const reject = (message: string) => ({
+        ...errorResponse(message),
+        ...initialUpdate,
+      });
       // Guard
-      if (!user) return errorResponse("User not found");
-      if (!queueEntry) return errorResponse("You are not in a queue");
+      if (!user) return reject("User not found");
+      if (!queueEntry) return reject("You are not in a queue");
       if (!queueEntry.clanBattle) {
         // Queue entry exists but clan battle was deleted - clean up orphaned entry.
         // The deterministic raid-chat conversation id is not recoverable from
         // here (the parent queue row holding attackerEntityId is gone), so purge
         // every raid-chat membership row this user owns to drop access to any
         // stale conversation that survived a prior raid reset.
-        await Promise.all([
+        const [, wake] = await Promise.all([
           deleteBattleQueueMemberById(ctx.drizzle, queueEntry.id),
           wakeQueuedUser(ctx.drizzle, ctx.userId),
           purgeAllRaidChatMembershipsForUser(ctx.drizzle, ctx.userId),
         ]);
-        return { success: true, message: "Left the queue" };
+        return {
+          success: true,
+          message: "Left the queue",
+          ...raidQueueWakeUpdate(initialUpdate, wake.rowsAffected === 1),
+        };
       }
       if (queueEntry.clanBattle.battleType !== "RAID_BATTLE") {
-        return errorResponse("You are not in a raid queue");
+        return reject("You are not in a raid queue");
       }
       // Allow leaving if not in a real battle (claiming state is allowed)
       const isClaimingState =
         queueEntry.clanBattle.battleId?.startsWith("claiming-") ?? false;
       if (queueEntry.clanBattle.battleId !== null && !isClaimingState) {
-        return errorResponse("Battle has already started");
+        return reject("Battle has already started");
       }
 
       // Store sector before operations for Pusher notification
@@ -940,7 +972,7 @@ export const raidsRouter = createTRPCRouter({
 
       // Mutation - delete queue entry, update user status, drop chat
       // membership, and cleanup claiming ID in parallel.
-      await Promise.all([
+      const [, wake] = await Promise.all([
         deleteBattleQueueMemberById(ctx.drizzle, queueEntry.id),
         wakeQueuedUser(ctx.drizzle, ctx.userId),
         purgeRaidChatMembership(ctx.drizzle, raidChatConversationId, ctx.userId),
@@ -968,6 +1000,7 @@ export const raidsRouter = createTRPCRouter({
       return {
         success: true,
         message: "Left raid queue",
+        ...raidQueueWakeUpdate(initialUpdate, wake.rowsAffected === 1),
       };
     }),
 
@@ -980,19 +1013,25 @@ export const raidsRouter = createTRPCRouter({
     })
     .use(ratelimitMiddleware)
     .input(z.object({ teamId: z.string() }))
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Query - parallel fetch user and team
-      const [{ user }, team] = await Promise.all([
+      const [snapshot, team] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         findMpvpBattleQueueForStartRaidBattle(ctx.drizzle, input),
       ]);
 
+      const { user } = snapshot;
+      const initialUpdate = getRaidSnapshotUpdate(snapshot);
+      const reject = (message: string) => ({
+        ...errorResponse(message),
+        ...initialUpdate,
+      });
       // Guard - basic validations
-      if (!user) return errorResponse("User not found");
+      if (!user) return reject("User not found");
       const bannedStart = guardNotBannedFromRaids(user, "start raid battles");
-      if (bannedStart) return bannedStart;
-      if (!team) return errorResponse("Team not found");
+      if (bannedStart) return { ...bannedStart, ...initialUpdate };
+      if (!team) return reject("Team not found");
 
       // Check battleId state - handle stale claiming states or already started battles
       if (team.battleId !== null) {
@@ -1007,13 +1046,13 @@ export const raidsRouter = createTRPCRouter({
           const pusher = getServerPusher();
           void updateRaidTeamsOnSector(pusher, team.sector);
         } else {
-          return errorResponse("Battle already started or being claimed");
+          return reject("Battle already started or being claimed");
         }
       }
 
       const userInTeam = team.queue.find((m) => m.userId === ctx.userId);
       if (!userInTeam) {
-        return errorResponse("You are not in this team");
+        return reject("You are not in this team");
       }
 
       // Guard - lobby time check (with 2 second buffer for network latency)
@@ -1026,18 +1065,18 @@ export const raidsRouter = createTRPCRouter({
         Date.now() < lobbyTimeElapsed.getTime() - LOBBY_BUFFER_MS &&
         team.queue.length < RAID_BATTLE_MAX_USERS_PER_TEAM
       ) {
-        return errorResponse("Please wait for the lobby timer or full team");
+        return reject("Please wait for the lobby timer or full team");
       }
 
       // Query - get raid quest data
       const raid = await fetchQuest(ctx.drizzle, team.attackerEntityId);
 
       // Guard - raid validations
-      if (!raid) return errorResponse("Raid quest not found");
+      if (!raid) return reject("Raid quest not found");
 
       const raidData = getRaidObjectiveData(raid);
       if (!raidData?.firstAiId) {
-        return errorResponse("Raid boss AI not configured");
+        return reject("Raid boss AI not configured");
       }
 
       const now = new Date();
@@ -1045,8 +1084,9 @@ export const raidsRouter = createTRPCRouter({
       if (!raidValidation.isValid) {
         if (raidValidation.error === "This raid has ended") {
           await checkAndCleanupExpiredRaid(ctx.drizzle, raid.id);
+          return errorResponse(raidValidation.error);
         }
-        return errorResponse(raidValidation.error);
+        return reject(raidValidation.error);
       }
 
       // Mutation - claim the battle atomically
@@ -1054,7 +1094,7 @@ export const raidsRouter = createTRPCRouter({
       const claimResult = await claimBattleQueue(ctx.drizzle, claimId, input.teamId);
 
       if (claimResult.rowsAffected === 0) {
-        return errorResponse("Battle was already started by another player");
+        return reject("Battle was already started by another player");
       }
 
       // Query - re-fetch current queue members after claim for fresh state
@@ -1063,13 +1103,13 @@ export const raidsRouter = createTRPCRouter({
       // Guard - members validation after claim
       if (currentQueueMembers.length === 0) {
         await clearQueueBattleId(ctx.drizzle, input.teamId);
-        return errorResponse("No team members available to start battle");
+        return reject("No team members available to start battle");
       }
 
       const isStillMember = currentQueueMembers.some((m) => m.userId === ctx.userId);
       if (!isStillMember) {
         await releaseBattleQueueClaim(ctx.drizzle, input.teamId, claimId);
-        return errorResponse("You are no longer in this team");
+        return reject("You are no longer in this team");
       }
 
       // Derived
@@ -1080,6 +1120,7 @@ export const raidsRouter = createTRPCRouter({
         const result = await initiateBattle(
           {
             userIds: attackerUserIds,
+            cacheUserId: ctx.userId,
             client: ctx.drizzle,
             targetIds: [raidData.firstAiId],
             raidQuestId: raid.id,
@@ -1110,6 +1151,7 @@ export const raidsRouter = createTRPCRouter({
             success: true,
             message: "Raid battle started",
             battleId: result.battleId,
+            ...confirmRaidBattleUpdate(initialUpdate, result),
           };
         } else {
           await rollbackStartRaidBattle({
@@ -1120,7 +1162,10 @@ export const raidsRouter = createTRPCRouter({
             raidId: raid.id,
           });
 
-          return errorResponse(result.message ?? "Failed to start battle");
+          return {
+            ...errorResponse(result.message ?? "Failed to start battle"),
+            ...confirmRaidBattleUpdate(initialUpdate, {}),
+          };
         }
       } catch (err) {
         await rollbackStartRaidBattle({
@@ -1153,19 +1198,29 @@ export const raidsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Query - parallel fetch user, participation, and threshold
-      const [{ user }, participation, threshold] = await Promise.all([
+      const [snapshot, participation, threshold] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         findRaidParticipationForGetRaidDetails(ctx.drizzle, input, ctx),
         findRaidDamageThresholdForClaimDamageReward(ctx.drizzle, input),
       ]);
 
+      const { user } = snapshot;
+      // Expected rejections can return progression already settled by the opening read.
+      const reject = (message: string) => ({
+        ...errorResponse(message),
+        ...getRaidSnapshotUpdate(snapshot),
+      });
       // Guard
-      if (!user) return errorResponse("User not found");
-      if (!participation)
-        return errorResponse("You have not participated in this raid");
-      if (!threshold) return errorResponse("Threshold not found");
+      if (!user) return reject("User not found");
+      if (!participation) return reject("You have not participated in this raid");
+      if (!threshold) return reject("Threshold not found");
       const block = raidRewardBlockMessage(participation, threshold);
-      if (block) return errorResponse(block);
+      if (block) {
+        // Another claim can pay rewards outside the opening progression snapshot.
+        if (participation.rewardsClaimed.includes(threshold.id))
+          return { ...errorResponse(block), userDelta: undefined };
+        return reject(block);
+      }
 
       // Derived
       const rewards = threshold.rewards;
@@ -1179,7 +1234,10 @@ export const raidsRouter = createTRPCRouter({
 
       // Guard - claim result
       if (claimResult.rowsAffected === 0) {
-        return errorResponse("You have already claimed this reward");
+        return {
+          ...errorResponse("You have already claimed this reward"),
+          userDelta: undefined,
+        };
       }
 
       // Derived - post-process rewards to convert item format
@@ -1189,13 +1247,14 @@ export const raidsRouter = createTRPCRouter({
       // Note: We intentionally do NOT roll back the claim on failure because updateRewards is not atomic.
       // If we rolled back, a retry could double-grant rewards that succeeded before the failure.
       // Keeping the claim marked prevents double-grants; partial failures can be investigated manually.
-      const { items, jutsus, bloodlines, badges, titles } = await updateRewards({
+      const granted = await updateRewards({
         client: ctx.drizzle,
         user,
         rewards: processedRewards,
         reason: "RAID",
       });
 
+      const { items, jutsus, bloodlines, badges, titles } = granted;
       // Grant combat effects as raid buff if present
       if (threshold.effects && threshold.effects.length > 0) {
         const expiresAt = new Date(
@@ -1227,6 +1286,13 @@ export const raidsRouter = createTRPCRouter({
         success: true,
         message: "Raid Reward Claimed",
         rewards: displayRewards,
+        ...getRewardUserUpdate({
+          rewards: processedRewards,
+          requiresRelations:
+            snapshot.requiresProgressionRefresh || (threshold.effects?.length ?? 0) > 0,
+          progression: () =>
+            getUserProgressionUpdate(user, snapshot.publishedAchievementIds),
+        }),
       };
     }),
 });
@@ -1442,3 +1508,48 @@ const ensureRaidChatConversation = async (
 
   return conversationId;
 };
+
+/** Reuse the upfront progression projection unless automatic effects still need reconciliation. */
+const getRaidSnapshotUpdate = (
+  snapshot: Awaited<ReturnType<typeof fetchUpdatedUser>>,
+) => {
+  const update =
+    snapshot.user && !snapshot.requiresProgressionRefresh
+      ? getUserProgressionUpdate(snapshot.user, snapshot.publishedAchievementIds)
+      : undefined;
+  return { ...update, userDelta: update ? {} : undefined };
+};
+
+/** A successful guarded wake changes only the actor's queue status. */
+const raidQueueWakeUpdate = (
+  initial: ReturnType<typeof getRaidSnapshotUpdate>,
+  woke: boolean,
+) => ({
+  ...initial,
+  userPatch:
+    woke && initial.userPatch
+      ? { ...initial.userPatch, status: "AWAKE" as const }
+      : undefined,
+  userDelta: woke && initial.userPatch ? {} : undefined,
+});
+
+/**
+ * Combine admission state with a safe upfront progression snapshot.
+ * Unknown admission or progression state must reconcile as one profile.
+ */
+const confirmRaidBattleUpdate = (
+  initial: ReturnType<typeof getRaidSnapshotUpdate>,
+  result: Pick<UserDeltaResponse, "userPatch" | "userDelta"> & {
+    requiresUserRefresh?: boolean;
+  },
+) => ({
+  ...initial,
+  userPatch:
+    !result.requiresUserRefresh && result.userPatch && initial.userPatch
+      ? { ...initial.userPatch, ...result.userPatch }
+      : undefined,
+  userDelta:
+    !result.requiresUserRefresh && result.userPatch && initial.userPatch
+      ? result.userDelta
+      : undefined,
+});

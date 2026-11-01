@@ -54,12 +54,11 @@ export default function Kitchen({ image }: { image?: string }) {
   const queue = api.occupation.getCraftingQueue.useQuery(undefined, {
     refetchInterval: 15000,
   });
-  const refresh = async (refreshProfile = true) => {
+  const refresh = async () => {
     await Promise.all([
       utils.item.getUserItems.invalidate(),
       utils.item.getUserItemsWithVariants.invalidate(),
       utils.occupation.getCraftingQueue.invalidate(),
-      ...(refreshProfile ? [utils.profile.getUser.invalidate()] : []),
       utils.profile.getSidebarTimers.invalidate(),
     ]);
   };
@@ -71,13 +70,7 @@ export default function Kitchen({ image }: { image?: string }) {
       if (result.success) {
         setSelectedId("");
         setBatches(1);
-        await Promise.all([
-          refresh(false),
-          updateUser(result.userPatch, {
-            revision,
-            achievementProgress: result.achievementProgress,
-          }),
-        ]);
+        await Promise.all([refresh(), updateUser(result, { revision })]);
       }
     },
     onError: (error) => setMessage(error.message),
@@ -86,10 +79,14 @@ export default function Kitchen({ image }: { image?: string }) {
     },
   });
   const cancel = api.occupation.cancelQueuedCraft.useMutation({
-    onSuccess: async (result) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (result, _variables, revision) => {
       showMutationToast(result);
       setMessage(result.message);
-      await refresh();
+      await Promise.all([
+        refresh(),
+        ...(result.success ? [updateUser(result, { revision })] : []),
+      ]);
     },
     onError: (error) => setMessage(error.message),
   });

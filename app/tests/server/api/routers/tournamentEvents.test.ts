@@ -1,4 +1,6 @@
 import { fetchEvent, fetchEventNoticeState } from "@/queries/tournamentEvents";
+import * as eventQueries from "@/queries/tournamentEvents";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
@@ -17,11 +19,13 @@ import {
   battle,
   battleHistory,
   questHistory,
+  quest,
   tournament,
   tournamentMatch,
   tournamentRewardClaim,
   trainingLog,
   userData,
+  userCookingJob,
   userQueue,
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
@@ -34,6 +38,7 @@ import {
   generateEventBracket,
 } from "@/libs/tournament/events";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
+import { profileRouter } from "@/server/api/routers/profile";
 import { tournamentRouter } from "@/server/api/routers/tournament";
 import { maintainEventTournaments, syncEventTournament } from "@/server/api/routers/tournamentEvents";
 import type { DrizzleClient } from "@/server/db";
@@ -73,7 +78,9 @@ describeWithDatabase("event tournament persistence", () => {
       aiProfile,
       trainingLog,
       userQueue,
+      userCookingJob,
       questHistory,
+      quest,
       userData,
     );
   });
@@ -94,6 +101,19 @@ describeWithDatabase("event tournament persistence", () => {
       expect(measured.result?.eventData?.status).toBe(status);
       expect(measured.statements.filter((statement) => /from .Tournament./i.test(statement))).toHaveLength(1);
     }
+  });
+
+  it("uses canonical recovery after publishing and synchronizing an event", async () => {
+    const db = await getTestDatabase();
+    await insertUsers([{ userId: "staff", role: "CODER" }]);
+    const staff = await callerFor(tournamentRouter, "staff");
+    const created = await staff.saveEvent({ config: eventConfig("Publish confirmation") });
+    if (!("tournamentId" in created)) throw new Error(created.message);
+    const result = await staff.manageEvent({ tournamentId: created.tournamentId, action: "PUBLISH" });
+    expect(result.success).toBe(true);
+    expect(result).not.toHaveProperty("userPatch");
+    expect(result).not.toHaveProperty("eventNotices");
+    expect(await db.query.tournament.findFirst()).toMatchObject({ eventData: { status: "REGISTRATION" } });
   });
 
   it.each([false, true])("refreshes an expired event after its synchronization claim (competing: %s)", async (competing) => {
@@ -126,11 +146,11 @@ describeWithDatabase("event tournament persistence", () => {
     if (!("tournamentId" in created)) throw new Error(created.message);
     const { tournamentId } = created;
     await staff.manageEvent({ tournamentId, action: "PUBLISH" });
-    for (const userId of ["first", "second"]) await staff.manageEvent({ tournamentId, action: "INVITE", userId });
+    for (const userId of ["first", "second"]) await staff.manageEvent({ tournamentId, action: "INVITE", userId, originSocketId: "1.1" });
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("first", "event", { type: "eventTournament" });
     expect((await first.getEventNotices())[0]?.message).toBe("You have a tournament invitation");
     vi.spyOn(Pusher.prototype, "trigger").mockClear();
-    await first.participateEvent({ tournamentId, action: "JOIN" });
+    expect(await first.participateEvent({ tournamentId, action: "JOIN" })).toMatchObject({ success: true });
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("first", "event", { type: "eventTournament" });
     expect(await first.getEventNotices()).toEqual([]);
     expect((await second.getEventNotices())[0]?.message).toBe("You have a tournament invitation");
@@ -151,7 +171,7 @@ describeWithDatabase("event tournament persistence", () => {
     await first.participateEvent({ tournamentId, seriesId, action: "NOT_READY" });
     expect((await fetchEvent(database, tournamentId))!.eventData!.series[0]!.readyUserIds).toEqual(["second"]);
     const seatId = event.participants.find((p) => p.userId === "second")!.id;
-    expect((await staff.manageEvent({ tournamentId, action: "SUBSTITUTE", seatId, userId: "replacement" })).success).toBe(true);
+    expect((await staff.manageEvent({ tournamentId, action: "SUBSTITUTE", seatId, userId: "replacement", originSocketId: "1.1" })).success).toBe(true);
     expect(Pusher.prototype.trigger).toHaveBeenCalledWith("replacement", "event", { type: "eventTournament" });
     event = (await fetchEvent(database, tournamentId))!.eventData!;
     expect(event.series[0]!.readyUserIds).toEqual([]);
@@ -162,6 +182,36 @@ describeWithDatabase("event tournament persistence", () => {
     expect((await first.participateEvent({ tournamentId, seriesId, action: "READY" })).success).toBe(false);
     expect((await first.participateEvent({ tournamentId, seriesId, action: "ACCEPT" })).success).toBe(true);
     expect(await first.getEventNotices()).toEqual([]);
+  });
+
+  it.each(["JOIN", "WITHDRAW", "DECLINE"] as const)("identifies the originating socket for %s without suppressing other tabs", async (action) => {
+    await insertUsers(["staff", "player"].map((userId) => ({
+      userId, role: userId === "staff" ? "CODER" : "USER", status: "AWAKE", sector: MAP_WAKE_ISLAND_SECTOR,
+    })));
+    const staff = await callerFor(tournamentRouter, "staff");
+    const player = await callerFor(tournamentRouter, "player");
+    const created = await staff.saveEvent({ config: eventConfig("Socket roster") });
+    if (!("tournamentId" in created)) throw new Error(created.message);
+    const { tournamentId } = created;
+    await staff.manageEvent({ tournamentId, action: "PUBLISH" });
+    if (action === "WITHDRAW") await player.participateEvent({ tournamentId, action: "JOIN" });
+    if (action === "DECLINE") await staff.manageEvent({ tournamentId, action: "INVITE", userId: "player" });
+    vi.spyOn(Pusher.prototype, "trigger").mockClear();
+    expect((await player.participateEvent({ tournamentId, action, originSocketId: "2.1" })).success).toBe(true);
+    expect(Pusher.prototype.trigger).toHaveBeenCalledWith("player", "event", { type: "eventTournament", originSocketId: "2.1" });
+    expect(Pusher.prototype.trigger).toHaveBeenCalledTimes(1);
+  });
+
+  it("identifies the actor's socket when staff invite themselves", async () => {
+    await insertUsers([{ userId: "staff", role: "CODER", status: "AWAKE", sector: MAP_WAKE_ISLAND_SECTOR }]);
+    const staff = await callerFor(tournamentRouter, "staff");
+    const created = await staff.saveEvent({ config: eventConfig("Staff invitation") });
+    if (!("tournamentId" in created)) throw new Error(created.message);
+    const { tournamentId } = created;
+    await staff.manageEvent({ tournamentId, action: "PUBLISH" });
+    vi.spyOn(Pusher.prototype, "trigger").mockClear();
+    expect((await staff.manageEvent({ tournamentId, action: "INVITE", userId: "staff", originSocketId: "3.1" })).success).toBe(true);
+    expect(Pusher.prototype.trigger).toHaveBeenCalledWith("staff", "event", { type: "eventTournament", originSocketId: "3.1" });
   });
 
   it("returns invitations and ready matches after unrelated active events fill the notice limit", async () => {
@@ -534,6 +584,35 @@ describeWithDatabase("event tournament persistence", () => {
     return { database, game, accept };
   };
 
+  it.each([false, true])("reconciles the accepting actor's Cooking when a match launches (receipt: %s)", async (hasCooking) => {
+    const { database, game, accept } = await readyEvent();
+    const userId = game.userIds[1]!;
+    if (hasCooking) await database.insert(userCookingJob).values({ id: "event-cooking", userId, experience: 99, finishesAt: new Date(Date.now() + 3600_000) });
+    const profile = await callerFor(profileRouter, userId);
+    const initial = await profile.getUser();
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ["event-admission-profile"];
+    const read = vi.fn(() => profile.getUser());
+    cache.setQueryDefaults(key, { queryFn: read });
+    cache.setQueryData(key, initial);
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      if (hasCooking) await database.update(userCookingJob).set({ finishesAt: new Date(0) });
+      const response = await accept(userId);
+      expect(response.success).toBe(true);
+      await cache.invalidateQueries({ queryKey: key });
+      const saved = await database.query.userData.findFirst({ where: eq(userData.userId, userId) });
+      const cached = cache.getQueryData<typeof initial>(key)!.userData;
+      expect(saved?.cookingExperience).toBe(hasCooking ? 99 : 0);
+      expect(cached?.cookingExperience).toBe(saved?.cookingExperience);
+      expect(cached?.cookingJobs).toHaveLength(0);
+      expect(cached?.status).toBe("BATTLE");
+      expect(cached?.battleId).toBe(saved?.battleId);
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(response).not.toHaveProperty("userPatch");
+    } finally { unsubscribe(); cache.clear(); }
+  });
   it("blocks open-world attacks on registered entrants until they withdraw", async () => {
     const database = await getTestDatabase();
     await insertUsers(

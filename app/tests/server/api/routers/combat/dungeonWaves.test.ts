@@ -46,7 +46,7 @@ describeWithDatabase("dungeon wave preparation", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each([false, true])("ends an initiated dungeon only after three completed missed rounds (publication failure: %p)", async (publicationFails) => {
+  it.each([[false, false], [true, false], [false, true]] as const)("ends an initiated dungeon only after three completed missed rounds (publication failure: %p, tickets: %p)", async (publicationFails, hasTickets) => {
     if (publicationFails) vi.spyOn(Pusher.prototype, "trigger").mockRejectedValue(new Error("Pusher unavailable"));
     const client = await getTestDatabase();
     const meta = dungeonBattleState({
@@ -56,10 +56,15 @@ describeWithDatabase("dungeon wave preparation", () => {
     const waves = [{ aiIds: [OPENER], delayRounds: 0 }];
     const liftedUntil = new Date(Date.now() + 1800000);
     content.tiers[0]![0]!.waves = waves;
+    content.requirements.requiredItemId = hasTickets ? "wave-ticket" : null;
     await insertUsers([
       ...MEMBERS.map((userId) => ({ userId, username: userId, status: "QUEUED" as const, level: 50, rank: "JONIN" as const, bracketImmunityLiftedUntil: liftedUntil })),
       { userId: OPENER, username: "Enemy", isAi: true, level: 50, rank: "JONIN" as const },
     ]);
+    if (hasTickets) {
+      await insertItems([{ id: "wave-ticket" }]);
+      await insertUserItems(MEMBERS.map((userId) => ({ id: `ticket-${userId}`, userId, itemId: "wave-ticket", quantity: 1, equipped: "ITEM_1" as const })));
+    }
     await client.insert(aiProfile).values({ id: "Default", userId: OPENER, rules: [] });
     await client.insert(dungeon).values({ id: "wave-definition", content, updatedAt: new Date() });
     await client.insert(dungeonRun).values({
@@ -68,10 +73,16 @@ describeWithDatabase("dungeon wave preparation", () => {
       battleId: "wave-fight", expiresAt: new Date(meta.expiresAt), createdAt: new Date(),
     });
     await client.insert(dungeonMember).values(MEMBERS.map((userId) => ({ runId: meta.runId, userId, activeUserId: userId })));
-    expect((await initiateBattle({
-      client, userIds: MEMBERS, targetIds: [OPENER],
-      coop: { kind: "dungeon", ...meta, battleId: "wave-fight", waves },
-    }, "QUEST")).success).toBe(true);
+    const admission = await initiateBattle({
+      client, cacheUserId: MEMBERS[0], userIds: MEMBERS, targetIds: [OPENER],
+      coop: { kind: "dungeon", ...meta, content, battleId: "wave-fight", waves },
+    }, "QUEST");
+    expect(admission.success).toBe(true);
+    expect(admission.requiresUserRefresh).toBe(hasTickets);
+    if (hasTickets) {
+      expect(admission.userPatch).toBeUndefined();
+      expect(await client.query.userItem.findMany()).toHaveLength(0);
+    }
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     const initial = (await client.query.battle.findFirst())!;
     expect((await client.query.userData.findFirst({where: eq(userData.userId, MEMBERS[0]!)}))?.bracketImmunityPausedAt).not.toBeNull();

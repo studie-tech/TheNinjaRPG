@@ -331,6 +331,7 @@ describeWithDatabase("Cooking production and consumption", () => {
     expect(result.user?.userId).toBe(userId);
     expect(result.user?.cookingExperience).toBe(0);
     expect(result.requiresUserRefresh).toBe(true);
+    expect(result.requiresProgressionRefresh).toBe(true);
     expect(profileReads).toBe(2);
     expect(warning).toHaveBeenCalledWith(error, {
       level: "warning", tags: { source: "settleCookingExperience" },

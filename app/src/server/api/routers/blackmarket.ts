@@ -558,6 +558,7 @@ export const blackMarketRouter = createTRPCRouter({
         return {
           success: true,
           message: `User stats updated for ${cost} reputation points`,
+          userPatch: input,
           userDelta: hasEnergyQueue(user) ? undefined : { reputationPoints: -cost },
         };
       }

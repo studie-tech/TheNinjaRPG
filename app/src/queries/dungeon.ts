@@ -36,6 +36,7 @@ import {
 } from "@/drizzle/schema";
 import type { CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
+import { activityCompletionExtras } from "@/server/utils/achievementObjectives";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import type { DungeonContent, DungeonRunState } from "@/validators/dungeon";
 
@@ -108,7 +109,13 @@ export const listUserDataForGetState = (
 ) =>
   client.query.userData.findMany({
     where: inArray(userData.userId, ids),
-    columns: { userId: true, username: true, status: true, isBanned: true },
+    columns: {
+      userId: true,
+      username: true,
+      status: true,
+      battleId: true,
+      isBanned: true,
+    },
   });
 
 /** Build the `dungeonMember` listing for `getState`, using predicates on `runId`. */
@@ -865,3 +872,13 @@ const expiredDungeonState = (run: { state: DungeonRunState; status?: string }) =
       ? `The ${DUNGEON_LOBBY_SECONDS / 60}-minute dungeon lobby expired.`
       : "The one-hour dungeon deadline expired.",
 });
+
+/** Load the payout actor and completion count together in the opening wave. */
+export const findDungeonRewardUserCache = (
+  client: Pick<DrizzleClient, "query">,
+  userId: string,
+) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, userId),
+    extras: (table) => activityCompletionExtras(table.userId),
+  });

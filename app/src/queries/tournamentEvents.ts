@@ -16,7 +16,9 @@ export const fetchEvent = (client: DrizzleClient, id: string) =>
 /** Fetch the account and distinct mastered jutsu needed for event eligibility in parallel. */
 export const fetchEventUser = async (client: DrizzleClient, id: string) => {
   const [user, mastered] = await Promise.all([
-    client.query.userData.findFirst({ where: eq(userData.userId, id) }),
+    client.query.userData.findFirst({
+      where: eq(userData.userId, id),
+    }),
     client.query.userJutsu.findMany({
       where: and(eq(userJutsu.userId, id), gte(userJutsu.level, JUTSU_TRAIN_LEVEL_CAP)),
       columns: { jutsuId: true },

@@ -252,7 +252,7 @@ import {
   jutsuTrainingQueueOutputSchema,
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import { fetchUpdatedUser } from "./profile";
+import { fetchUpdatedUser, getUserProgressionUpdate } from "./profile";
 
 /** "level 3" or "levels 3-5" */
 const formatLevelRange = (from: number, to: number) =>
@@ -494,10 +494,19 @@ export const jutsuRouter = createTRPCRouter({
           computeJutsuLoadoutAssignments({ jutsuIds, userjutsus, user, masteries }),
       );
       const loadout = loadouts.find((loadout) => loadout.id === id);
-      return result.success && loadout && !data.requiresUserRefresh
+      const progression =
+        result.success && loadout && data.requiresProgressionRefresh === false
+          ? getUserProgressionUpdate(user, data.publishedAchievementIds)
+          : undefined;
+      return progression && loadout
         ? {
             ...result,
-            userPatch: { jutsuLoadout: id, loadout: { jutsuIds: loadout.jutsuIds } },
+            ...progression,
+            userPatch: {
+              ...progression.userPatch,
+              jutsuLoadout: id,
+              loadout: { jutsuIds: loadout.jutsuIds },
+            },
           }
         : result;
     }),
@@ -518,7 +527,7 @@ export const jutsuRouter = createTRPCRouter({
   /** Revalidate the preview, preserve the destination name and equip active imports atomically. */
   importJutsuLoadout: protectedProcedure
     .input(importJutsuLoadoutSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const result = await prepareJutsuLoadoutImport(ctx.drizzle, ctx.userId, input);
       if (!result.success) return result;
@@ -527,13 +536,24 @@ export const jutsuRouter = createTRPCRouter({
           "Loadout or eligibility changed. Preview again before replacing.",
         );
       }
-      const { loadout, user, userjutsus, preview } = result;
+      const { loadout, user, userjutsus, preview, cacheUpdate } = result;
       if (preview.jutsuIds.length === 0) {
         return errorResponse(
           "No usable jutsu to import. The loadout was left unchanged.",
         );
       }
       const isActive = user.jutsuLoadout === loadout.id;
+      const appliedUpdate = cacheUpdate
+        ? {
+            ...cacheUpdate,
+            userPatch: {
+              ...cacheUpdate.userPatch,
+              ...(isActive
+                ? { jutsuLoadout: loadout.id, loadout: { jutsuIds: preview.jutsuIds } }
+                : {}),
+            },
+          }
+        : {};
       const guard = and(
         eq(jutsuLoadout.id, loadout.id),
         eq(jutsuLoadout.userId, ctx.userId),
@@ -570,7 +590,7 @@ export const jutsuRouter = createTRPCRouter({
         ) {
           return errorResponse("Loadout changed. Preview again before replacing.");
         }
-        return { success: true, message: "Loadout already matches" };
+        return { success: true, message: "Loadout already matches", ...appliedUpdate };
       }
 
       // Drizzle's update builder targets one table; joined SQL keeps saved order
@@ -583,7 +603,7 @@ export const jutsuRouter = createTRPCRouter({
       if (changed.rowsAffected === 0) {
         return errorResponse("Loadout changed. Preview again before replacing.");
       }
-      return { success: true, message: "Loadout replaced" };
+      return { success: true, message: "Loadout replaced", ...appliedUpdate };
     }),
 
   getReskinParents: protectedProcedure.query(({ ctx }) =>
@@ -779,11 +799,11 @@ export const jutsuRouter = createTRPCRouter({
   evolveJutsu: protectedProcedure
     .meta({ mcp: { description: "Evolve a jutsu into its evolution" } })
     .input(evolveJutsuSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
       const [
-        { user },
+        snapshot,
         userJutsus,
         evolutionJutsu,
         allLoadouts,
@@ -797,6 +817,7 @@ export const jutsuRouter = createTRPCRouter({
         findJutsuReskinForEvolveJutsu(ctx.drizzle, ctx, input),
         fetchQueuedJutsuIds(ctx.drizzle, ctx.userId),
       ]);
+      const { user } = snapshot;
       // Guards
       if (!user) return errorResponse("User not found");
       if (user.status !== "AWAKE")
@@ -838,7 +859,7 @@ export const jutsuRouter = createTRPCRouter({
           "You don't have the required bloodline item equipped for this evolution",
         );
       // Quest tracking
-      const { trackers } = getNewTrackers(user, [
+      const { trackers, consequences, questIdsUpdated } = getNewTrackers(user, [
         { task: "jutsus_mastered", increment: 1 },
         {
           task: "train_specific_jutsu",
@@ -917,7 +938,38 @@ export const jutsuRouter = createTRPCRouter({
           input,
         ),
       ]);
-      return { success: true, message: `Evolved into ${evolutionJutsu.name}!` };
+      const activeLoadout = loadoutsToUpdate.find(
+        (loadout) => loadout.id === user.jutsuLoadout,
+      );
+      const progression =
+        snapshot.requiresProgressionRefresh === false &&
+        consequences.length === 0 &&
+        !user.userQuests.some(
+          (entry) =>
+            questIdsUpdated.includes(entry.questId) &&
+            (entry.quest.teamEnabled ||
+              ["tier", "daily", "achievement"].includes(entry.quest.questType)),
+        )
+          ? getUserProgressionUpdate(
+              { ...user, questData: trackers },
+              snapshot.publishedAchievementIds,
+            )
+          : undefined;
+      return {
+        success: true,
+        message: `Evolved into ${evolutionJutsu.name}!`,
+        ...(progression
+          ? {
+              ...progression,
+              userPatch: {
+                ...progression.userPatch,
+                ...(activeLoadout
+                  ? { loadout: { jutsuIds: activeLoadout.jutsuIds } }
+                  : {}),
+              },
+            }
+          : {}),
+      };
     }),
 
   /** Validate content and species/default-loadout compatibility before saving a jutsu. */
@@ -1019,7 +1071,7 @@ export const jutsuRouter = createTRPCRouter({
       if (
         input.data.requiredSkillId &&
         !input.data.reskinParentJutsuId &&
-        (!requiredSkill || requiredSkill.pathType !== "SKILL")
+        requiredSkill?.pathType !== "SKILL"
       ) {
         return errorResponse("Select a valid SkillTree skill entry");
       }
@@ -2250,6 +2302,10 @@ const prepareJutsuLoadoutImport = async (
     .digest("hex");
   return {
     success: true as const,
+    cacheUpdate:
+      data.requiresProgressionRefresh === false
+        ? getUserProgressionUpdate(user, data.publishedAchievementIds)
+        : undefined,
     preview: { ...preview, token },
     loadout,
     user,

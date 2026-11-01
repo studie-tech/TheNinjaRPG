@@ -129,9 +129,11 @@ describe("clan zero-cost cache responses", () => {
     ["clanDonate", 50, FACTION_REPUTATION_TREASURY_LIMIT],
     ["toBank", 0, 0],
   ] as const) {
-    it(`${endpoint} skips reads and writes for ${requested} requested with treasury ${treasury}`, async () => {
+    it.each([false, true])(`${endpoint} confirms no changes for ${requested} requested with treasury ${treasury} and queued training=%s`, async (hasTraining) => {
       const userRead = vi.fn().mockResolvedValue({
         userId: "clan-zero-user",
+        energyQueueHead: 0,
+        energyQueueTail: hasTraining ? 1 : 0,
         clanId: "clan-zero-clan",
         money: 100,
         reputationPoints: 100,
@@ -153,11 +155,9 @@ describe("clan zero-cost cache responses", () => {
       const result = await (endpoint === "clanDonate"
         ? caller.clanDonate({ clanId: "clan-zero-clan", reputationPoints: requested })
         : caller.toBank({ clanId: "clan-zero-clan", amount: 0 }));
-      expect(result).toMatchObject({
-        success: true,
-        userDelta: {},
-        userPatch: { clan: { id: "clan-zero-clan" } },
-      });
+      expect(result.success).toBe(true);
+      expect(result.userDelta).toEqual({});
+      expect(result.userPatch).toEqual({});
       expect(userRead).toHaveBeenCalledTimes(1);
       expect(clanRead).toHaveBeenCalledTimes(1);
       expect(database.update).not.toHaveBeenCalled();

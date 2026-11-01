@@ -93,6 +93,50 @@ describeWithDatabase("Avatar cache reconciliation", () => {
     expect(result.userDelta).toEqual({ reputationPoints: -1 });
   });
 
+  it("confirms no profile change or history write when the generated file upload fails", async () => {
+    const database = await getTestDatabase();
+    await database
+      .update(userData)
+      .set({ reputationPoints: 1 })
+      .where(eq(userData.userId, userId));
+    const before = await database.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+    });
+    stubGeneration();
+    vi.spyOn(replicate, "fastTxt2imgReplicate").mockResolvedValue({
+      data: null,
+      error: { code: "UPLOAD_FAILED", message: "Upload failed" },
+    } as Awaited<ReturnType<typeof replicate.fastTxt2imgReplicate>>);
+    vi.spyOn(replicate, "createThumbnail").mockResolvedValue(null);
+    const writeHistory = vi.fn(async () => undefined);
+    const counted = countUserReads(
+      beforeStatements(database, historicalAvatar, [writeHistory]),
+    );
+    const result = await callerForDatabase(
+      avatarRouter,
+      userId,
+      counted.client,
+    ).createAvatar();
+    expect(result).toEqual({
+      success: false,
+      message: "Failed to create avatar",
+      userDelta: {},
+    });
+    expect(counted.getReads()).toBe(1);
+    expect(counted.getUserWrites()).toBe(0);
+    expect(writeHistory).not.toHaveBeenCalled();
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, userId),
+      }),
+    ).toEqual(before);
+    expect(
+      await database.query.historicalAvatar.findMany({
+        where: eq(historicalAvatar.userId, userId),
+      }),
+    ).toEqual([]);
+  });
+
   it("does not return a patch or debit when the guarded payment loses its balance", async () => {
     const database = await getTestDatabase();
     await database

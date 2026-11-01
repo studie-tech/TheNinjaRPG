@@ -17,6 +17,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import { idSchema } from "@/validators/misc";
+import { userDeltaResponseSchema } from "@/validators/userCache";
 
 const pusher = getServerPusher();
 
@@ -105,7 +106,7 @@ export const senseiRouter = createTRPCRouter({
   acceptRequest: protectedProcedure
     .meta({ mcp: { description: "Accept a sensei request" } })
     .input(idSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch
       const [request, user] = await Promise.all([
@@ -144,7 +145,11 @@ export const senseiRouter = createTRPCRouter({
           route: "/traininggrounds",
           routeText: "To Training Grounds",
         });
-        return { success: true, message: "Request accepted" };
+        return {
+          success: true,
+          message: "Request accepted",
+          userPatch: user.rank === "GENIN" ? { senseiId } : {},
+        };
       }
       return errorResponse("Student already has a sensei");
     }),
@@ -173,7 +178,7 @@ export const senseiRouter = createTRPCRouter({
     }),
   leaveSensei: protectedProcedure
     .meta({ mcp: { description: "Leave your current sensei" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Query
       const user = await fetchUser(ctx.drizzle, ctx.userId);
@@ -183,6 +188,6 @@ export const senseiRouter = createTRPCRouter({
       }
       // Update
       await updateUserDataForRemoveStudent(ctx.drizzle, user);
-      return { success: true, message: "Left sensei" };
+      return { success: true, message: "Left sensei", userPatch: { senseiId: null } };
     }),
 });

@@ -86,7 +86,7 @@ describe("PlanetScale aggregate counts", () => {
         if (query.startsWith("select count(*)")) {
           return { fields: [int64Count], rows: [[remaining]] };
         }
-        if (query.includes("QuestHistory")) return {};
+        if (query.startsWith("select")) return {};
         if (query.startsWith("delete") || query.startsWith("update")) {
           return { rowsAffected: 1 };
         }

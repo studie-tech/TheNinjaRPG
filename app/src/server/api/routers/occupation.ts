@@ -38,6 +38,7 @@ import {
 import { fetchItemWithCraftingRequirements, insertUserItems } from "@/queries/item";
 import {
   deleteUserItemImbuementForRemoveImbuement,
+  findCraftingQueueState,
   findUserItemImbuementForRemoveImbuement,
   insertUserCookingJobForCraftItem,
   insertUserItemForRemoveImbuement,
@@ -76,6 +77,7 @@ import {
   lastQueuePosition,
   returnCraftMaterials,
   settleCraftingQueue,
+  toQueuedCraft,
 } from "@/server/utils/userQueue";
 import { getQueueTotalCapacity } from "@/utils/paypal";
 import { canChangeContent } from "@/utils/permissions";
@@ -623,11 +625,34 @@ export const occupationRouter = createTRPCRouter({
   cancelQueuedCraft: protectedProcedure
     .meta({ mcp: { description: "Cancel a queued craft and return its materials" } })
     .input(cancelQueuedJobInputSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      const cancelled = await cancelQueuedCraft(ctx.drizzle, ctx.userId, input.queueId);
+      const snapshot = await findCraftingQueueState(ctx.drizzle, ctx.userId);
+      if (!snapshot) return errorResponse("User not found");
+      const cancelled = await cancelQueuedCraft(
+        ctx.drizzle,
+        ctx.userId,
+        input.queueId,
+        snapshot.queue.filter((row) => row.kind === "CRAFT").map(toQueuedCraft),
+      );
       if (!cancelled) return errorResponse("That queued craft already started");
-      return { success: true, message: "Queued craft cancelled, materials returned" };
+      // With no remaining craft, cancellation changes only this receipt and inventory.
+      // Starting/rescheduling another craft can settle progression and needs recovery.
+      return {
+        success: true,
+        message: "Queued craft cancelled, materials returned",
+        userPatch:
+          cancelled.remaining === 0 &&
+          !cancelled.entry.materials?.some((material) =>
+            snapshot.items.some((entry) => entry.id === material.userItemId),
+          )
+            ? {
+                queue: snapshot.queue
+                  .filter((row) => row.id !== cancelled.entry.id)
+                  .map(({ item: _item, ...row }) => row),
+              }
+            : undefined,
+      };
     }),
 
   imbueItem: protectedProcedure

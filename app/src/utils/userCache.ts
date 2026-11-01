@@ -6,15 +6,24 @@ import {
   SHRINE_BOOST_TYPES,
   UserRanks,
 } from "@/drizzle/constants";
+import { activeDungeonNotification } from "@/libs/dungeon";
+import { GLOBAL_GAME_BOOSTS } from "@/libs/gameSettingBoost";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { canAssignExperience } from "@/libs/profile";
+import { getReducedGainsDays } from "@/libs/train";
+import { getUserFactionNotifications } from "@/libs/userNotifications";
 import type {
   AchievementProgress,
   UserWithRelations,
 } from "@/server/api/routers/profile";
 import { isPlainObject } from "@/utils/typeutils";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
-import type { UserCachePatch, UserDelta } from "@/validators/userCache";
+import type {
+  UserCachePatch,
+  UserDelta,
+  UserDeltaResponse,
+  UserExpected,
+} from "@/validators/userCache";
 
 type User = NonNullable<UserWithRelations>;
 type UserCache = {
@@ -23,45 +32,123 @@ type UserCache = {
   notifications?: NavBarDropdownLink[];
 };
 type KnownUserPatch = Partial<User> | UserCachePatch;
+/** Profile fields, or a pure projection that withholds unsafe state with undefined. */
 export type UserPatch =
   | KnownUserPatch
   | ((current: User) => KnownUserPatch | undefined);
 
+/** Standard mutation responses carry their confirmed profile fields and metadata together. */
+type UserResponse = Pick<
+  UserDeltaResponse,
+  "success" | "userDelta" | "userExpected" | "achievementProgress" | "userNotifications"
+> & { userPatch?: KnownUserPatch };
+
+/** Local projections and server responses share the same identity and revision checks. */
+export type UserUpdate = UserPatch | UserResponse;
+
+/** Capture a settled profile revision; undefined requires mutation reconciliation. */
 export const prepareUserUpdate = (client: QueryClient, key: QueryKey) => {
   // An action can render before the initial profile; leave that loading query running.
   // Pending or invalidated reads may reconcile another action, so keep those too.
   const state = client.getQueryState<UserCache>(key);
-  if (!state?.data?.userData || state?.isInvalidated || state?.fetchStatus !== "idle") {
+  if (
+    !state?.data?.userData ||
+    state.status === "error" ||
+    state.isInvalidated ||
+    state.fetchStatus !== "idle"
+  ) {
     return undefined;
   }
   return state.dataUpdateCount;
 };
 
+/** Cache metadata bound to the profile revision captured before a mutation. */
 export type UserUpdateOptions = {
+  /** The prepareUserUpdate result; undefined forces authoritative recovery. */
   revision: number | undefined;
   // Omit delta for a known patch; an explicitly missing server delta requires a refresh.
   delta?: UserDelta;
   achievementProgress?: AchievementProgress[];
+  /** Server-known scalar state that must already match the captured cache. */
+  expected?: UserExpected;
+  /** Server-known scalar state that must match the complete projected user. */
+  expectedAfter?: UserExpected;
+  userNotifications?: UserDeltaResponse["userNotifications"];
+  notifications?: (
+    current: NavBarDropdownLink[] | undefined,
+  ) => NavBarDropdownLink[] | undefined;
 };
 
-/** Merge local fields or reconcile a confirmed mutation against its captured revision. */
+/**
+ * Apply local fields or a confirmed response against its captured profile revision.
+ * Unsafe snapshots invalidate; accepted fields and metadata update together.
+ * Consumed announcements are delivered separately by the mutation toast path.
+ */
 export const updateUserCache = async (
   client: QueryClient,
   key: QueryKey,
-  patch: UserPatch | undefined,
+  update: UserUpdate | undefined,
   mutation?: UserUpdateOptions,
 ) => {
+  let patch: UserPatch | undefined;
+  const response =
+    update &&
+    typeof update !== "function" &&
+    "success" in update &&
+    typeof update.success === "boolean"
+      ? update
+      : undefined;
+  if (response) {
+    patch = response.userPatch;
+    mutation = {
+      ...mutation,
+      revision: mutation?.revision,
+      // An explicitly withheld delta must keep authoritative recovery even with a patch.
+      ...("userDelta" in response ? { delta: response.userDelta } : {}),
+      expected: response.userExpected ?? mutation?.expected,
+      achievementProgress:
+        response.achievementProgress ?? mutation?.achievementProgress,
+      userNotifications: response.userNotifications ?? mutation?.userNotifications,
+    };
+  } else patch = update as UserPatch | undefined;
+
+  const delta =
+    mutation && "delta" in mutation
+      ? mutation.delta
+      : patch === undefined
+        ? undefined
+        : {};
+  // Confirmed no-ops leave in-flight reconciliation and other mutations' revisions intact.
+  if (
+    response &&
+    delta !== undefined &&
+    Object.keys(delta).length === 0 &&
+    !Object.keys(patch ?? {}).length &&
+    mutation?.achievementProgress === undefined &&
+    !mutation?.expected &&
+    !mutation?.expectedAfter &&
+    !mutation?.userNotifications &&
+    !mutation?.notifications
+  )
+    return;
   if (!mutation) {
     if (!patch) return;
     const before = client.getQueryState(key);
-    let needsRefresh = !!before?.isInvalidated || before?.fetchStatus !== "idle";
+    let needsRefresh =
+      before?.status === "error" ||
+      !!before?.isInvalidated ||
+      before?.fetchStatus !== "idle";
     await client.cancelQueries({ queryKey: key, exact: true });
     client.setQueryData<UserCache>(key, (old) => {
       const state = client.getQueryState(key);
-      needsRefresh ||= !!state?.isInvalidated || state?.fetchStatus !== "idle";
+      needsRefresh ||=
+        state?.status === "error" ||
+        !!state?.isInvalidated ||
+        state?.fetchStatus !== "idle";
       if (!old?.userData) return undefined;
       const known = typeof patch === "function" ? patch(old.userData) : patch;
-      const user = known && mergeUserChanges(old.userData, known);
+      const user =
+        known && mergeUserChanges(old.userData, known, {}, undefined, USER_RELATIONS);
       if (!user) {
         needsRefresh = true;
         return undefined;
@@ -73,10 +160,8 @@ export const updateUserCache = async (
     return;
   }
   const { revision } = mutation;
-  const delta =
-    "delta" in mutation ? mutation.delta : patch === undefined ? undefined : {};
   if (delta === undefined || revision === undefined) {
-    // Invalidation reuses an initial fetch without cached data. Cancel it first so
+    // An initial fetch may contain a pre-mutation snapshot. Cancel it first so
     // a snapshot taken before the mutation cannot satisfy this reconciliation.
     await client.cancelQueries({ queryKey: key, exact: true });
     await client.invalidateQueries({ queryKey: key, exact: true });
@@ -97,22 +182,71 @@ export const updateUserCache = async (
     const state = client.getQueryState(key);
     if (
       !old?.userData ||
+      state?.status === "error" ||
       state?.dataUpdateCount !== revision ||
       state.isInvalidated ||
-      state.fetchStatus !== "idle"
+      state.fetchStatus !== "idle" ||
+      Object.entries(mutation.expected ?? {}).some(
+        ([field, value]) =>
+          value !== undefined && old.userData?.[field as keyof User] !== value,
+      )
     ) {
       return undefined;
     }
     const known = typeof patch === "function" ? patch(old.userData) : patch;
     if (patch && known === undefined) return undefined;
-    const user = mergeUserChanges(old.userData, known ?? {}, delta, USER_DELTA_CAPS);
-    if (!user) return undefined;
+    const user = mergeUserChanges(
+      old.userData,
+      known ?? {},
+      delta,
+      USER_DELTA_CAPS,
+      USER_RELATIONS,
+    );
+    if (
+      !user ||
+      Object.entries(mutation.expectedAfter ?? {}).some(
+        ([field, value]) => value !== undefined && user[field as keyof User] !== value,
+      )
+    )
+      return undefined;
     applied = true;
-    return mergeUserCache(old, user, mutation.achievementProgress);
+    const result = mergeUserCache(old, user, mutation.achievementProgress);
+    if (mutation.userNotifications && result.notifications) {
+      const { setting, notice } = mutation.userNotifications.globalBoost;
+      const { href, label } = GLOBAL_GAME_BOOSTS[setting];
+      result.notifications = [
+        ...result.notifications.filter(
+          (entry) =>
+            entry.color !== "toast" &&
+            !(
+              entry.href === href &&
+              entry.group === "Active boosts" &&
+              entry.name.startsWith("Global: ") &&
+              entry.name.includes(`X ${label} | `)
+            ),
+        ),
+        ...(notice ? [notice] : []),
+      ];
+    }
+    if (mutation.notifications)
+      result.notifications = mutation.notifications(result.notifications);
+    return result;
   });
   if (!applied) await client.invalidateQueries({ queryKey: key, exact: true });
 };
 
+/** Foreign-key changes require replacement of the matching embedded relation. */
+const USER_RELATIONS = {
+  anbuSquad: "anbuId",
+  clan: "clanId",
+  village: "villageId",
+  bloodline: "bloodlineId",
+  activeReskin: "bloodlineReskinId",
+  sageMode: "sageModeId",
+  questParty: "questPartyId",
+} as const;
+
+/** Mirror server-side caps when applying confirmed numeric deltas locally. */
 const USER_DELTA_CAPS = {
   skillPoints: MAX_SKILL_POINTS,
   medicalExperience: MEDNIN_EXP_CAP,
@@ -125,6 +259,7 @@ const mergeUserChanges = <T extends object>(
   patch: object,
   delta: object = {},
   caps?: Readonly<Record<string, number>>,
+  relations?: Readonly<Record<string, string>>,
 ): T | undefined => {
   const original = current as Record<string, unknown>;
   const values = patch as Record<string, unknown>;
@@ -135,10 +270,77 @@ const mergeUserChanges = <T extends object>(
   )
     return undefined;
   const updated = { ...original, ...values };
+  // A changed membership must carry its complete relation, never fields from the old owner.
+  for (const [relation, foreignKey] of Object.entries(relations ?? {})) {
+    if (values[foreignKey] === undefined || values[foreignKey] === original[foreignKey])
+      continue;
+    const value = values[relation];
+    if (
+      amounts[relation] !== undefined ||
+      (values[foreignKey] === null
+        ? value !== null
+        : !isCacheObject(value) || value.id !== values[foreignKey])
+    )
+      return undefined;
+    updated[relation] = value;
+  }
   for (const field in { ...values, ...amounts }) {
     const value = values[field];
     const amount = amounts[field];
+    const foreignKey = relations?.[field];
+    if (
+      foreignKey &&
+      values[foreignKey] !== undefined &&
+      values[foreignKey] !== original[foreignKey]
+    )
+      continue;
     if (amount === undefined && value === original[field]) continue;
+    // Sparse list changes preserve unrelated entries and reject unknown update targets.
+    if (isCacheObject(amount) && ("remove" in amount || "update" in amount)) {
+      const entries = original[field];
+      if (!Array.isArray(entries) || value !== undefined) return undefined;
+      const changes = amount as {
+        remove?: Record<string, string | number>[];
+        update?: (Record<string, unknown> & { id: string })[];
+      };
+      if (
+        changes.update?.some(
+          (change) => !entries.some((entry) => entry.id === change.id),
+        )
+      )
+        return undefined;
+      updated[field] = entries
+        .filter(
+          (entry) =>
+            !changes.remove?.some((match) =>
+              Object.entries(match).every(
+                ([key, expected]) =>
+                  (entry[key] instanceof Date ? entry[key].getTime() : entry[key]) ===
+                  expected,
+              ),
+            ),
+        )
+        .map((entry) => {
+          const change = changes.update?.find((change) => change.id === entry.id);
+          return change ? { ...entry, ...change } : entry;
+        });
+      continue;
+    }
+    // Mission assignments, Kage schedules and complete shrine settings are saved JSON snapshots.
+    if (
+      amount === undefined &&
+      isCacheObject(value) &&
+      (field === "activeMission" ||
+        field === "warMission" ||
+        field === "kageSchedule" ||
+        (field === "shrineSettings" &&
+          Array.isArray(value.unlockedAiIds) &&
+          Array.isArray(value.activeAiIds) &&
+          isCacheObject(value.activeBoosts)))
+    ) {
+      updated[field] = value;
+      continue;
+    }
     if (isCacheObject(value) || isCacheObject(amount)) {
       const merged = mergeUserChanges(
         isCacheObject(original[field]) ? original[field] : {},
@@ -159,13 +361,18 @@ const mergeUserChanges = <T extends object>(
 const isCacheObject = (value: unknown): value is Record<string, unknown> =>
   isPlainObject(value) && !(value instanceof Date);
 
-/** Keep navigation derived from profile fields in the same atomic cache update. */
+/** Keep confirmed profile state and derived navigation in the same cache update. */
 const mergeUserCache = (
   old: UserCache,
   user: User,
   achievementProgress?: AchievementProgress[],
 ): UserCache => {
-  const desired: NavBarDropdownLink[] = [];
+  const factionNotifications = getUserFactionNotifications(user);
+  const previousFactionNames = new Set(
+    getUserFactionNotifications(old.userData ?? undefined).map((entry) => entry.name),
+  );
+  const desired: NavBarDropdownLink[] = [...factionNotifications];
+  if (user.activeDungeonRunId) desired.push(activeDungeonNotification);
   if (
     UserRanks.includes(user.rank) &&
     user.earnedExperience > 0 &&
@@ -181,6 +388,22 @@ const mergeUserCache = (
     desired.push({ href: "/combat", name: "In combat", color: "red" });
   if (user.status === "HOSPITALIZED")
     desired.push({ href: "/hospital", name: "In hospital", color: "red" });
+  if (user.deletionAt)
+    desired.push({
+      href: "/profile?tab=edit&settings=deletion&setting=character",
+      name: "Deletion requested",
+      color: "red",
+    });
+  if (user.isBanned) desired.push({ href: "/reports", name: "Banned!", color: "red" });
+  if (user.isTradeBanned)
+    desired.push({ href: "/reports", name: "Trade Banned!", color: "red" });
+  const reducedDays = getReducedGainsDays(user);
+  if (reducedDays > 0)
+    desired.push({
+      href: "/village",
+      name: `Slowed ${Math.ceil(reducedDays)} days`,
+      color: "red",
+    });
   for (const boostType of SHRINE_BOOST_TYPES) {
     const boost =
       getShrineBoost(
@@ -199,7 +422,17 @@ const mergeUserCache = (
   let notifications = old.notifications?.flatMap((entry) => {
     if (
       entry.id !== "tutorial-unassigned-stats" &&
-      !["Assign XP", "In combat", "In hospital"].includes(entry.name) &&
+      ![
+        "Assign XP",
+        "In combat",
+        "In hospital",
+        "Deletion requested",
+        "Banned!",
+        "Trade Banned!",
+        activeDungeonNotification.name,
+      ].includes(entry.name) &&
+      !(entry.href === "/village" && /^Slowed \d+ days$/.test(entry.name)) &&
+      !previousFactionNames.has(entry.name) &&
       !(
         entry.href === "/shrine" &&
         entry.group === "Active boosts" &&
@@ -209,8 +442,13 @@ const mergeUserCache = (
       return [entry];
     const index = desired.findIndex((next) => next.name === entry.name);
     if (index < 0) return [];
-    desired.splice(index, 1);
-    return [entry];
+    const next = desired.splice(index, 1)[0]!;
+    const unchanged = Object.entries({ ...entry, ...next }).every(
+      ([field]) =>
+        entry[field as keyof NavBarDropdownLink] ===
+        next[field as keyof NavBarDropdownLink],
+    );
+    return [unchanged ? entry : next];
   });
   if (notifications) {
     notifications.push(...desired);

@@ -238,10 +238,15 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      await updateUserDataForLeaveVillage(ctx.drizzle, user, ctx);
+      const saved = await updateUserDataForLeaveVillage(ctx.drizzle, user, ctx);
+      if (!saved.rowsAffected)
+        return errorResponse("Your status changed. Try again while awake.");
 
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
-      return { success: true, message: "You have left the village" };
+      return {
+        success: true,
+        message: "You have left the village",
+      };
     }),
   joinVillage: protectedProcedure
     .meta({ mcp: { description: "Join a village as an outlaw" } })
@@ -271,15 +276,20 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      await Promise.all([
+      const [saved] = await Promise.all([
         updateUserDataForJoinVillage(ctx.drizzle, village, user, ctx),
         // Clear current sensei requests for this user
         deleteRequests(ctx.drizzle, ctx.userId),
         // Remove the user as sensei for any active students
         updateUserDataForJoinVillage2(ctx.drizzle, ctx),
       ]);
+      if (!saved.rowsAffected)
+        return errorResponse("Your status changed. Try again while awake.");
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
-      return { success: true, message: "You have joined the village" };
+      return {
+        success: true,
+        message: "You have joined the village",
+      };
     }),
   swapVillage: protectedProcedure
     .input(z.object({ villageId: z.string() }))
@@ -314,7 +324,7 @@ export const villageRouter = createTRPCRouter({
       }
 
       // Update
-      await Promise.all([
+      const [saved] = await Promise.all([
         updateUserDataForSwapVillage(ctx.drizzle, village, user, cost, ctx),
         // Clear current sensei requests for this user
         deleteRequests(ctx.drizzle, ctx.userId),
@@ -322,8 +332,13 @@ export const villageRouter = createTRPCRouter({
         updateUserDataForJoinVillage2(ctx.drizzle, ctx),
       ]);
 
+      if (!saved.rowsAffected)
+        return errorResponse("Your status changed. Try again while awake.");
       scheduleDiscordSync(ctx.drizzle, ctx.userId);
-      return { success: true, message: "You have swapped villages" };
+      return {
+        success: true,
+        message: "You have swapped villages",
+      };
     }),
   getAlliances: publicProcedure
     .meta({

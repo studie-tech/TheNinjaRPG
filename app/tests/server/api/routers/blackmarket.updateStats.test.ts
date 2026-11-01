@@ -69,6 +69,7 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
 
     expect(result.success).toBe(true);
     expect(result.userDelta).toEqual({ reputationPoints: -COST_RESET_STATS });
+    expect(result.userPatch).toMatchObject({ offence: 30_000, defence: 30_000, willpower: 2_500 });
     const user = await readUser();
     expect(user.offence).toBe(30_000);
     expect(user.defence).toBe(30_000);

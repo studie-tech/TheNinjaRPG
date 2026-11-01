@@ -525,10 +525,11 @@ export const executeResultForAbandon = (
 export const updateQuestHistoryForAbandon = (
   client: Pick<DrizzleClient, "update">,
   current: { id: string },
+  now = new Date(),
 ) =>
   client
     .update(questHistory)
-    .set({ completed: 0, endAt: new Date() })
+    .set({ completed: 0, endAt: now })
     .where(
       and(
         eq(questHistory.id, current.id),
@@ -543,11 +544,12 @@ export const updateUserDataForAbandon = (
   questData: import("@/validators/objectives").QuestTrackerType[],
   input: { id: string },
   ctx: { userId: string },
+  now = new Date(),
 ) =>
   client
     .update(userData)
     .set({
-      questFinishAt: new Date(),
+      questFinishAt: now,
       questData,
       activeNpcQuestId: sql`IF(${userData.activeNpcQuestId} = ${input.id}, NULL, ${userData.activeNpcQuestId})`,
     })

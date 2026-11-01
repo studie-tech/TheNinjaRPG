@@ -129,7 +129,7 @@ export function Profile() {
         sideOffset={8}
         className="max-h-[80dvh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto"
       >
-        <DashboardSettings userData={userData} updateUser={updateUser} />
+        <DashboardSettings userData={userData} />
       </PopoverContent>
     </Popover>
   ) : null;

@@ -1074,7 +1074,7 @@ it.each([true, false])("applies the confirmed bank without refetching the profil
   fireEvent.click(view.getByRole("button", { name: "Assign experience" }));
   await waitFor(() => expect(cachedOwner()?.petExperience).toBe(isActive ? 99 : 50));
   await view.findByText("99 training points available");
-  expect(updateUser).toHaveBeenCalledWith(isActive ? { petExperience: 99 } : {}, { revision: expect.any(Number) });
+  expect(updateUser).toHaveBeenCalledWith({ success: true, message: "Experience assigned", userPatch: isActive ? { petExperience: 99 } : {} }, { revision: expect.any(Number) });
   expect(getUser).not.toHaveBeenCalled();
   expect(invalidate.mock.calls.some(([filters]) => JSON.stringify(filters?.queryKey).includes('"profile"'))).toBe(false);
 });

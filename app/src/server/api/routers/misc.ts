@@ -13,8 +13,10 @@ import {
   randomCaptchaValue,
   showTrainingCapcha,
 } from "@/libs/captcha";
+import { getGlobalGameSettingNotification } from "@/libs/gameSettingBoost";
 import { fetchDmgConfig, getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
+import { calcActiveUserRegen } from "@/libs/profile";
 import { hasEnergyQueue } from "@/libs/queue";
 import {
   deleteEmailReminderForDeleteEmailReminder,
@@ -46,7 +48,8 @@ import {
   updateUserDataForAwardReputation,
   updateUserDataForSubmitNotification,
 } from "@/queries/misc";
-import { fetchUser } from "@/queries/profile";
+import { fetchAllGameSettings, fetchUser } from "@/queries/profile";
+import { findMembershipUserCache } from "@/queries/socialUserCache";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -131,13 +134,16 @@ export const miscRouter = createTRPCRouter({
     }),
   submitNotification: protectedProcedure
     .input(z.object({ content: z.string().min(2).max(10000), senderId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query data
-      const [user, sender] = await Promise.all([
+      const [user, otherSender] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.senderId),
+        input.senderId !== ctx.userId
+          ? fetchUser(ctx.drizzle, input.senderId)
+          : undefined,
       ]);
+      const sender = otherSender ?? user;
       // Guards
       if (!canSubmitNotification(user.role)) return errorResponse("Not allowed");
       if (user.userId !== sender.userId && !sender.isAi) {
@@ -222,20 +228,52 @@ export const miscRouter = createTRPCRouter({
     }),
   setEventGameSetting: protectedProcedure
     .input(changeSettingSchema)
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Query
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, settings] = await Promise.all([
+        input.setting === "regenGainMultiplier"
+          ? findMembershipUserCache(ctx.drizzle, ctx.userId)
+          : fetchUser(ctx.drizzle, ctx.userId),
+        input.setting === "regenGainMultiplier"
+          ? fetchAllGameSettings(ctx.drizzle)
+          : undefined,
+      ]);
+      if (!user) return errorResponse("User not found");
       // Guards
       if (!canModifyEventGains(user.role)) return errorResponse("Not allowed");
       // Update
-      await updateGameSetting(
-        ctx.drizzle,
-        input.setting,
-        parseInt(input.multiplier, 10),
-        secondsFromNow(input.days * 24 * 3600),
-      );
-      return { success: true, message: `Setting set to: ${input.multiplier}X` };
+      const setting = {
+        name: input.setting,
+        value: parseInt(input.multiplier, 10),
+        time: secondsFromNow(input.days * 24 * 3600),
+      };
+      await updateGameSetting(ctx.drizzle, setting.name, setting.value, setting.time);
+      const changedSettings = [
+        ...(settings ?? []).filter((entry) => entry.name !== setting.name),
+        { ...setting, id: "" },
+      ];
+      return {
+        success: true,
+        message: `Setting set to: ${input.multiplier}X`,
+        userPatch:
+          input.setting === "regenGainMultiplier"
+            ? {
+                regeneration: calcActiveUserRegen(user, changedSettings),
+                regenerationWithoutTimedBuffs: calcActiveUserRegen(
+                  user,
+                  changedSettings,
+                  false,
+                ),
+              }
+            : {},
+        userNotifications: {
+          globalBoost: {
+            setting: input.setting,
+            notice: getGlobalGameSettingNotification(input.setting, setting),
+          },
+        },
+      };
     }),
   getDmgConfig: publicProcedure
     .meta({

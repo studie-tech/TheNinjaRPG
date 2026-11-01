@@ -223,7 +223,7 @@ export const updateUserDataForClaimActiveNpcQuest = (
  * Releases the slot — CONDITIONAL on the specific questId so a concurrent interaction at a
  * different NPC can't clear a slot another NPC legitimately owns.
  */
-export const clearActiveNpcQuest = async ({
+export const clearActiveNpcQuest = ({
   client,
   userId,
   questId,
@@ -231,12 +231,11 @@ export const clearActiveNpcQuest = async ({
   client: DrizzleClient;
   userId: string;
   questId: string;
-}) => {
-  await client
+}) =>
+  client
     .update(userData)
     .set({ activeNpcQuestId: null })
     .where(and(eq(userData.userId, userId), eq(userData.activeNpcQuestId, questId)));
-};
 
 /**
  * Build the `mpvpBattleUser` selection for `battleClaimRollbackStatus`, including

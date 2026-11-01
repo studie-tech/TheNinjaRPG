@@ -29,11 +29,13 @@ export const WarDashboardNotices = () => {
     refetchInterval: 60000,
   });
   const convert = api.war.convertWarPoints.useMutation({
-    onMutate: () => setFeedback(null),
-    onSuccess: (result) => {
+    onMutate: () => {
+      setFeedback(null);
+    },
+    onSuccess: async (result) => {
       setFeedback(result);
       void utils.war.getWarPointClaims.invalidate();
-      if (result.success) void utils.profile.getUser.invalidate();
+      if (result.success) await utils.profile.getUser.invalidate();
     },
     onError: (error) => setFeedback({ success: false, message: error.message }),
   });

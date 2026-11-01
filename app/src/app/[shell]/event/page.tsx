@@ -79,7 +79,12 @@ export const EventGainMultiplierPanel: React.FC<{
   initialBreak?: boolean;
 }> = ({ setting, title, subtitle, initialBreak }) => {
   const utils = api.useUtils();
-  const { data: userData, timeDiff } = useRequiredUserData();
+  const {
+    data: userData,
+    timeDiff,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const { data: settingData } = api.misc.getSetting.useQuery(
     { name: setting },
     { enabled: !!userData },
@@ -87,12 +92,13 @@ export const EventGainMultiplierPanel: React.FC<{
 
   const { mutate: setEventGameSetting, isPending } =
     api.misc.setEventGameSetting.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
             utils.misc.getSetting.invalidate(),
-            utils.profile.getUser.invalidate(),
+            updateUser(data, { revision }),
           ]);
         }
       },
@@ -214,7 +220,7 @@ const TestErrorMonitoring: React.FC = () => {
 const NotificationSystem: React.FC = () => {
   // User state
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const { data: userData } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
 
   // utils
   const utils = api.useUtils();
@@ -237,10 +243,11 @@ const NotificationSystem: React.FC = () => {
   // Mutations
   const { mutate: submitNotification, isPending: l2 } =
     api.misc.submitNotification.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         await Promise.all([
-          utils.profile.getUser.invalidate(),
+          ...(data.success ? [updateUser(data, { revision })] : []),
           utils.misc.getPreviousNotifications.invalidate(),
         ]);
       },

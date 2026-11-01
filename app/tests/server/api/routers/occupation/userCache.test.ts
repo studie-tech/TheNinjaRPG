@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import { craftingRequirement, item, quest, questHistory, userCookingJob, userData, userItem, userQueue, userVote } from "@/drizzle/schema";
@@ -8,9 +8,10 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertItems, insertQuestHistory, insertQuests, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../../setup/testDatabase";
 
 describeWithDatabase("crafting user cache quest progress", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
     await resetTables(userCookingJob, userQueue, userItem, craftingRequirement, item, questHistory, quest, userVote, userData);
     await insertUsers([{ userId: "crafter", username: "Crafter", status: "AWAKE", level: 50, rank: "JONIN", primaryElement: "Fire", secondaryElement: "Water", occupation: "CRAFTING", isOutlaw: true, federalStatus: "GOLD", regenAt: new Date(), updatedAt: new Date() }]);
@@ -21,6 +22,175 @@ describeWithDatabase("crafting user cache quest progress", () => {
     await db.insert(userVote).values({ id: "vote", userId: "crafter", secret: "secret01", lastVoteAt: new Date() });
   });
 
+
+  it.each(["none", "mission", "achievement"] as const)("reconciles total XP goals when cancelling starts the following craft (%s)", async (questType) => {
+    const db = await getTestDatabase();
+    if (questType !== "none") {
+      await insertQuests([{ id: "craft-total", questType, content: {
+        objectives: [AllObjectives.parse({ id: "total", task: "crafting_experience", value: 10 })],
+        reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+      } }]);
+      if (questType === "mission") {
+        await insertQuestHistory([{ userId: "crafter", questId: "craft-total", questType }]);
+        await db.update(userData).set({ questData: [QuestTracker.parse({ id: "craft-total", goals: [{ id: "total", value: 0, done: false }] })] }).where(eq(userData.userId, "crafter"));
+      }
+    }
+    const caller = await callerFor(occupationRouter, "crafter");
+    expect((await caller.craftItem({ itemId: "crafted", quantity: 1 })).success).toBe(true);
+    expect((await caller.craftItem({ itemId: "crafted", quantity: 1 })).success).toBe(true);
+    expect((await caller.craftItem({ itemId: "crafted", quantity: 1 })).success).toBe(true);
+    const waiting = await db.query.userQueue.findMany();
+    expect(waiting).toHaveLength(2);
+    const profile = await callerFor(profileRouter, "crafter");
+    const initial = await profile.getUser();
+    if (questType !== "none") expect(initial.userData?.questData?.find((entry) => entry.id === "craft-total")?.goals[0]).toMatchObject({ value: 5, done: false });
+    const key = [["profile", "getUser"], { type: "query" }];
+    const client = new QueryClient();
+    client.setQueryData(key, initial);
+    let reads = 0;
+    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return profile.getUser(); } });
+    const stop = observer.subscribe(() => undefined);
+    await db.update(userItem).set({ craftingFinishedAt: new Date(Date.now() - 60000) });
+    try {
+      const revision = prepareUserUpdate(client, key);
+      const result = await caller.cancelQueuedCraft({ queueId: waiting[0]!.id });
+      expect(result.success).toBe(true);
+      expect(result.userPatch).toBeUndefined();
+      expect(result.userDelta).toBeUndefined();
+      await updateUserCache(client, key, result.userPatch, { revision, delta: result.userDelta });
+      const authoritative = await profile.getUser();
+      const cached = client.getQueryData<typeof initial>(key)!;
+      expect(cached.userData?.queue).toEqual([]);
+      expect(cached.userData?.craftingExperience).toBe(10);
+      expect(cached.userData?.cookingJobs).toEqual([]);
+      expect(cached.userData?.questData).toEqual(authoritative.userData?.questData);
+      expect(cached.achievementProgress).toMatchObject(authoritative.achievementProgress.map(({ startedAt: _startedAt, ...entry }) => entry));
+      if (questType !== "none") expect(cached.userData?.questData?.find((entry) => entry.id === "craft-total")?.goals[0]).toMatchObject({ value: 10, done: true });
+      expect(reads).toBe(1);
+    } finally { stop(); client.clear(); }
+  });
+
+  it("keeps a warmed virtual achievement when cancellation does not start another craft", async () => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "craft-total", questType: "achievement", content: {
+      objectives: [AllObjectives.parse({ id: "total", task: "crafting_experience", value: 10 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    const profile = await callerFor(profileRouter, "crafter");
+    const initial = await profile.getUser();
+    expect(initial.userData?.questData?.[0]?.goals[0]).toMatchObject({ value: 0, done: false });
+    await db.insert(userQueue).values({ id: "waiting-craft", userId: "crafter", kind: "CRAFT", position: 0, itemId: "crafted", quantity: 1, materials: [], durationSeconds: 60, startsAt: new Date(Date.now() + 3600000), finishesAt: new Date(Date.now() + 3660000) });
+    const key = [["profile", "getUser"], { type: "query" }];
+    const client = new QueryClient();
+    client.setQueryData(key, initial);
+    let reads = 0;
+    const observer = new QueryObserver(client, { queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return profile.getUser(); } });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      const revision = prepareUserUpdate(client, key);
+      const result = await (await callerFor(occupationRouter, "crafter")).cancelQueuedCraft({ queueId: "waiting-craft" });
+      expect(result.userPatch).toBeDefined();
+      await updateUserCache(client, key, result.userPatch, { revision });
+      const cached = client.getQueryData<typeof initial>(key)!;
+      expect(cached.userData?.questData).toEqual(initial.userData?.questData);
+      expect(cached.achievementProgress).toEqual(initial.achievementProgress);
+      expect(reads).toBe(0);
+    } finally { stop(); client.clear(); }
+  });
+
+  it("returns materials and removes the last craft without postwrite SELECTs", async () => {
+    const db = await getTestDatabase();
+    const caller = await callerFor(occupationRouter, "crafter");
+    await caller.craftItem({ itemId: "crafted", quantity: 1 });
+    await caller.craftItem({ itemId: "crafted", quantity: 1 });
+    const waiting = (await db.query.userQueue.findFirst())!;
+    const { result, statements } = await recordQueries(() => caller.cancelQueuedCraft({ queueId: waiting.id }));
+    expect(result).toMatchObject({ success: true, userPatch: { queue: [] } });
+    const lastWrite = statements.reduce((last, statement, index) => /^\s*(update|insert|delete)/i.test(statement) ? index : last, -1);
+    expect(statements.slice(lastWrite + 1).some((statement) => /^\s*select/i.test(statement))).toBe(false);
+    expect((await caller.cancelQueuedCraft({ queueId: waiting.id })).success).toBe(false);
+    expect(await db.query.userQueue.findMany()).toEqual([]);
+    expect(await db.query.userItem.findFirst({ where: eq(userItem.id, "material-stack") })).toMatchObject({ quantity: 19 });
+  });
+
+  it("starts and reschedules crafts by queue position after cancellation", async () => {
+    const db = await getTestDatabase();
+    await insertItems(["first", "second", "third"].map((id) => ({ id, name: id, canBeCrafted: true, stackSize: 1, craftingExperience: 1 })));
+    const scheduledAt = Date.now() + 3600000;
+    for (const [id, position, itemId] of [
+      ["a-third", 3, "third"],
+      ["b-second", 2, "second"],
+      ["c-first", 1, "first"],
+      ["z-cancelled", 0, "crafted"],
+    ] as const) {
+      await db.insert(userQueue).values({ id, position, itemId, userId: "crafter", kind: "CRAFT", quantity: 1, durationSeconds: 600, materials: [], startsAt: new Date(scheduledAt + position * 600000), finishesAt: new Date(scheduledAt + (position + 1) * 600000) });
+    }
+    // Refresh statistics so a fresh database does not mask ordering with its position index.
+    await runRawSql("ANALYZE TABLE UserQueue");
+    const result = await (await callerFor(occupationRouter, "crafter")).cancelQueuedCraft({ queueId: "z-cancelled" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toBeUndefined();
+    const outputs = await db.query.userItem.findMany({ where: eq(userItem.itemId, "first") });
+    expect(outputs).toHaveLength(1);
+    expect((await db.query.userItem.findMany()).map((entry) => entry.itemId).sort()).toEqual(["first", "material"]);
+    const waiting = await db.query.userQueue.findMany({ orderBy: (row, { asc }) => asc(row.position) });
+    expect(waiting.map((entry) => entry.itemId)).toEqual(["second", "third"]);
+    expect(waiting[0]?.startsAt).toEqual(outputs[0]?.craftingFinishedAt);
+    expect(waiting[0]?.finishesAt?.getTime()).toBe(waiting[0]!.startsAt!.getTime() + 600000);
+    expect(waiting[1]?.startsAt).toEqual(waiting[0]?.finishesAt);
+    expect(waiting[1]?.finishesAt?.getTime()).toBe(waiting[1]!.startsAt!.getTime() + 600000);
+  });
+
+  it.each([
+    { role: "USER" as const, sector: 1, hideLocation: true, visible: false },
+    { role: "USER" as const, sector: 723, hideLocation: true, visible: true },
+    { role: "CONTENT" as const, sector: 1, hideLocation: true, visible: true },
+    { role: "USER" as const, sector: 1, hideLocation: false, visible: true },
+  ])("projects unchanged virtual achievement coordinates when cancelling a craft (%s)", async ({ role, sector, hideLocation }) => {
+    const db = await getTestDatabase();
+    await insertQuests([{ id: "virtual-location", questType: "achievement", hidden: false, content: {
+      objectives: [AllObjectives.parse({ id: "target", task: "move_to_location", hideLocation, sector: 723, longitude: 41, latitude: 37 })],
+      reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    } }]);
+    const privateTracker = QuestTracker.parse({ id: "virtual-location", goals: [{ id: "target", sector: 723, longitude: 41, latitude: 37, value: 0, done: false }] });
+    await db.update(userData).set({ role, sector, regeneration: 0, questData: [privateTracker] }).where(eq(userData.userId, "crafter"));
+    const profile = await callerFor(profileRouter, "crafter");
+    const initial = await profile.getUser();
+    const before = (await db.query.userData.findFirst({ where: eq(userData.userId, "crafter") }))!;
+    expect(await db.query.questHistory.findMany({ where: eq(questHistory.userId, "crafter") })).toEqual([]);
+    await db.insert(userQueue).values({ id: "waiting-craft", userId: "crafter", kind: "CRAFT", position: 0, itemId: "crafted", quantity: 1, materials: [], durationSeconds: 60, startsAt: new Date(Date.now() + 3600000), finishesAt: new Date(Date.now() + 3660000) });
+    const key = [["profile", "getUser"], { type: "query" }];
+    const client = new QueryClient();
+    client.setQueryData(key, initial);
+    try {
+      const revision = prepareUserUpdate(client, key);
+      const result = await (await callerFor(occupationRouter, "crafter")).cancelQueuedCraft({ queueId: "waiting-craft" });
+      expect(result.success).toBe(true);
+      expect(result.userPatch).toBeDefined();
+      // Unchanged trackers remain in the warmed public profile without another privacy lookup.
+      expect(result.userPatch).not.toHaveProperty("persistedQuestData");
+      expect(result.userPatch).not.toHaveProperty("questData");
+      await updateUserCache(client, key, result.userPatch, { revision });
+      expect(client.getQueryData<typeof initial>(key)?.userData?.questData).toEqual(initial.userData?.questData);
+      const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, "crafter") }))!;
+      expect(saved.questData).toEqual(before.questData);
+      expect(saved.questData?.[0]?.goals[0]).toMatchObject({ sector: 723, longitude: 41, latitude: 37 });
+    } finally { client.clear(); }
+  });
+
+  it("preserves private persisted coordinates without projecting unchanged trackers", async () => {
+    const db = await getTestDatabase();
+    const privateTracker = QuestTracker.parse({ id: "removed-location", goals: [{ id: "target", sector: 723, longitude: 41, latitude: 37, value: 2 }] });
+    await db.update(userData).set({ questData: [privateTracker] }).where(eq(userData.userId, "crafter"));
+    await db.insert(userQueue).values({ id: "waiting-craft", userId: "crafter", kind: "CRAFT", position: 0, itemId: "crafted", quantity: 1, materials: [], durationSeconds: 60, startsAt: new Date(Date.now() + 3600000), finishesAt: new Date(Date.now() + 3660000) });
+    const definitions = vi.spyOn(db.query.quest, "findMany");
+    const result = await (await callerFor(occupationRouter, "crafter")).cancelQueuedCraft({ queueId: "waiting-craft" });
+    expect(result).toMatchObject({ success: true, userPatch: { queue: [] } });
+    expect(result.userPatch).not.toHaveProperty("persistedQuestData");
+    expect(result.userPatch).not.toHaveProperty("questData");
+    expect(definitions).not.toHaveBeenCalled();
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, "crafter") }))?.questData).toEqual([privateTracker]);
+  });
   it.each(["mission", "achievement", "queued"] as const)("publishes only committed production progress (%s)", async (scenario) => {
     const db = await getTestDatabase();
     const questType = scenario === "achievement" ? "achievement" : "mission";

@@ -6,12 +6,12 @@ import {
   ACTIVE_VOTING_SITES,
   BasicElementName,
   CHARACTER_DELETION_CONFIRMATION,
+  CHARACTER_DELETION_DELAY_DAYS,
   COST_CHANGE_USERNAME,
   type CombatStatName,
   CombatStatNames,
   getTavernColorChangeCost,
   getUserCaps,
-  KAGE_DEFENSE_REMINDER_HOURS,
   KAGE_MIN_PRESTIGE,
   MAX_ATTRIBUTES,
   MAX_SKILL_POINTS,
@@ -55,8 +55,12 @@ import {
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
 import { getWorldCyclePosition } from "@/libs/dayNight";
+import { activeDungeonNotification } from "@/libs/dungeon";
 import { elementalGainRoom } from "@/libs/elementalMastery";
-import { getGameSettingBoost } from "@/libs/gameSettingBoost";
+import {
+  getGameSettingBoost,
+  getGlobalGameSettingNotifications,
+} from "@/libs/gameSettingBoost";
 import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
 import { getLayoutExperimentAssignments } from "@/libs/layoutPreference";
 import {
@@ -121,6 +125,7 @@ import {
   inferJutsuTrainingStartedAt,
   settleQueuedTraining,
 } from "@/libs/train";
+import { getUserFactionNotifications } from "@/libs/userNotifications";
 import { fetchSquad } from "@/queries/anbu";
 import { incrementUserBank } from "@/queries/bank";
 import { fetchClan } from "@/queries/clan";
@@ -303,7 +308,6 @@ import {
 import { fetchMercenaryWarId } from "@/server/utils/warMercenary";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
-import { getKageSetupDeadline } from "@/utils/kage";
 import {
   canAwardExperience,
   canChangeContent,
@@ -328,7 +332,13 @@ import {
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
-import { isDifferentDay, secondsFromDate, secondsPassed } from "@/utils/time";
+import {
+  DAY_S,
+  isDifferentDay,
+  secondsFromDate,
+  secondsFromNow,
+  secondsPassed,
+} from "@/utils/time";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 import { insertAiSchema } from "@/validators/aiInput";
 import { mutateContentSchema } from "@/validators/comments";
@@ -562,11 +572,14 @@ export const profileRouter = createTRPCRouter({
   updatePreferences: protectedProcedure
     .meta({ mcp: { description: "Update user game preferences" } })
     .input(updateUserPreferencesSchema)
-    .output(baseServerResponse)
+    .output(
+      baseServerResponse.extend({ userPatch: updateUserPreferencesSchema.optional() }),
+    )
     .mutation(async ({ ctx, input }) => {
       const result = await updateUserDataForUpdatePreferences(ctx.drizzle, input, ctx);
       return {
         success: result.rowsAffected > 0,
+        userPatch: result.rowsAffected > 0 ? input : undefined,
         message:
           result.rowsAffected > 0
             ? "Updated preferences"
@@ -820,13 +833,7 @@ export const profileRouter = createTRPCRouter({
           );
           if (claim.rowsAffected === 1) user.status = "QUEUED";
         }
-        notifications.push({
-          href: "/dungeon",
-          name: "Active Dungeon Squad",
-          color: "green",
-          alwaysShow: true,
-          notificationCount: 1,
-        });
+        notifications.push(activeDungeonNotification);
       }
       // Ignore stale invitations for disabled or terminal teams, as the discovery page does.
       const invitations = questInvitations.filter(
@@ -920,179 +927,7 @@ export const profileRouter = createTRPCRouter({
         });
       }
 
-      // Shrine notifications (use Set to avoid duplicate sectors)
-      const userWithRelations = user as UserWithRelations;
-      const shrineDefenseSectors = [
-        ...new Set(
-          userWithRelations?.shrineBattles
-            ?.filter((b) => b.defenderEntityId === user?.villageId)
-            .map((b) => b.sector)
-            .filter(Boolean) ?? [],
-        ),
-      ];
-      const shrineOffenseSectors = [
-        ...new Set(
-          userWithRelations?.shrineBattles
-            ?.filter((b) => b.attackerEntityId === user?.villageId)
-            .map((b) => b.sector)
-            .filter(Boolean) ?? [],
-        ),
-      ];
-
-      if (shrineDefenseSectors.length > 0) {
-        notifications.push({
-          href: "/travel",
-          name: `${shrineDefenseSectors.length > 1 ? "Shrines" : "Shrine"} under attack (${shrineDefenseSectors.length > 1 ? "Sectors" : "Sector"} ${shrineDefenseSectors.join(", ")})`,
-          color: "red",
-          alwaysShow: true,
-        });
-      }
-      if (shrineOffenseSectors.length > 0) {
-        notifications.push({
-          href: "/travel",
-          name: `We are attacking ${shrineOffenseSectors.length > 1 ? "Shrines" : "Shrine"} (${shrineOffenseSectors.length > 1 ? "Sectors" : "Sector"} ${shrineOffenseSectors.join(", ")})`,
-          color: "blue",
-          alwaysShow: true,
-        });
-      }
-
-      // Gather sectors under war attack for this user's village (use Set to avoid duplicate sectors)
-      const warDefenseSectors = [
-        ...new Set(
-          userWithRelations?.activeWars
-            ?.filter((w) => {
-              const isDefender = w.defenderVillageId === user?.villageId;
-              const isDefenderAlly = w.warAllies?.some(
-                (a) =>
-                  a.villageId === user?.villageId &&
-                  a.supportVillageId === w.defenderVillageId,
-              );
-              return (isDefender || isDefenderAlly) && w.sector;
-            })
-            .map((w) => w.sector)
-            .filter(Boolean) ?? [],
-        ),
-      ];
-
-      const warOffenseSectors = [
-        ...new Set(
-          userWithRelations?.activeWars
-            ?.filter((w) => {
-              const isAttacker = w.attackerVillageId === user?.villageId;
-              const isAttackerAlly = w.warAllies?.some(
-                (a) =>
-                  a.villageId === user?.villageId &&
-                  a.supportVillageId === w.attackerVillageId,
-              );
-              return (isAttacker || isAttackerAlly) && w.sector;
-            })
-            .map((w) => w.sector)
-            .filter(Boolean) ?? [],
-        ),
-      ];
-
-      if (warDefenseSectors.length > 0) {
-        notifications.push({
-          href: "/travel",
-          name: `${warDefenseSectors.length > 1 ? "Sectors" : "Sector"} under attack (${warDefenseSectors.length > 1 ? "Sectors" : "Sector"} ${warDefenseSectors.join(", ")})`,
-          color: "red",
-          alwaysShow: true,
-        });
-      }
-      if (warOffenseSectors.length > 0) {
-        notifications.push({
-          href: "/travel",
-          name: `We are attacking ${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} (${warOffenseSectors.length > 1 ? "Sectors" : "Sector"} ${warOffenseSectors.join(", ")})`,
-          color: "blue",
-          alwaysShow: true,
-        });
-      }
-
-      // Village war / raid notifications (VILLAGE_WAR and WAR_RAID have sector=0)
-      const villageWars =
-        userWithRelations?.activeWars?.filter(
-          (w) =>
-            (w.type === "VILLAGE_WAR" || w.type === "WAR_RAID") &&
-            (w.attackerVillageId === user?.villageId ||
-              w.defenderVillageId === user?.villageId ||
-              w.warAllies?.some((a) => a.villageId === user?.villageId)),
-        ) ?? [];
-      for (const w of villageWars) {
-        const isAttacker = w.attackerVillageId === user?.villageId;
-        const isDefender = w.defenderVillageId === user?.villageId;
-        const isAttackerAlly = w.warAllies?.some(
-          (a) =>
-            a.villageId === user?.villageId &&
-            a.supportVillageId === w.attackerVillageId,
-        );
-        const defenderName = w.defenderVillage?.name ?? "another village";
-        const attackerName = w.attackerVillage?.name ?? "another village";
-        const label = isAttacker
-          ? `At war: attacking ${defenderName}`
-          : isDefender
-            ? `At war: defending vs ${attackerName}`
-            : isAttackerAlly
-              ? `Supporting ${attackerName} attacking ${defenderName}`
-              : `Supporting ${defenderName} defending vs ${attackerName}`;
-        notifications.push({
-          href: "/townhall",
-          name: label,
-          color: "red",
-          alwaysShow: true,
-        });
-      }
-
-      // Remind the incumbent for the whole publication window; missing it removes the title.
-      const kageVillage = user?.village;
-      const setupDeadline =
-        user &&
-        !user.isAi &&
-        kageVillage?.type === "VILLAGE" &&
-        kageVillage.kageId === user.userId
-          ? getKageSetupDeadline(kageVillage)
-          : null;
-      if (setupDeadline) {
-        const isPaused =
-          kageVillage?.kageSchedule?.kageId === user?.userId &&
-          !!kageVillage?.kageSchedule?.paused;
-        const isUrgent =
-          setupDeadline.getTime() - now.getTime() <=
-          KAGE_DEFENSE_REMINDER_HOURS * 3600_000;
-        notifications.push({
-          href: "/townhall",
-          name: "Missing kage schedule!",
-          color: isUrgent && !isPaused ? "red" : "blue",
-          alwaysShow: true,
-        });
-      }
-
-      // Raid notifications
-      const openRaids =
-        userWithRelations?.activeRaids?.filter((r) => r.raidType === "open") ?? [];
-      const exclusiveRaids =
-        userWithRelations?.activeRaids?.filter((r) => r.raidType === "exclusive") ?? [];
-
-      // Group by sector to avoid duplicate sector mentions
-      const openRaidSectors = [...new Set(openRaids.map((r) => r.sector))];
-      const exclusiveRaidSectors = [...new Set(exclusiveRaids.map((r) => r.sector))];
-
-      if (openRaidSectors.length > 0) {
-        notifications.push({
-          href: "/travel",
-          name: `Open ${openRaidSectors.length > 1 ? "Raids" : "Raid"} available (${openRaidSectors.length > 1 ? "Sectors" : "Sector"} ${openRaidSectors.join(", ")})`,
-          color: "red",
-          alwaysShow: true,
-        });
-      }
-
-      if (exclusiveRaidSectors.length > 0) {
-        notifications.push({
-          href: "/travel",
-          name: `Village ${exclusiveRaidSectors.length > 1 ? "Raids" : "Raid"} active (${exclusiveRaidSectors.length > 1 ? "Sectors" : "Sector"} ${exclusiveRaidSectors.join(", ")})`,
-          color: "red",
-          alwaysShow: true,
-        });
-      }
+      notifications.push(...getUserFactionNotifications(user, now));
 
       // Add notification for unvoted polls
       if (
@@ -1123,60 +958,7 @@ export const profileRouter = createTRPCRouter({
         });
       }
       // Settings
-      const trainingBoost = getGameSettingBoost("trainingGainMultiplier", settings);
-      if (trainingBoost) {
-        notifications.push({
-          href: "/traininggrounds",
-          name: `Global: ${trainingBoost.value}X gains | ${trainingBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const regenBoost = getGameSettingBoost("regenGainMultiplier", settings);
-      if (regenBoost) {
-        notifications.push({
-          href: "/profile",
-          name: `Global: ${regenBoost.value}X regen | ${regenBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const battleExpBoost = getGameSettingBoost("battleExpMultiplier", settings);
-      if (battleExpBoost) {
-        notifications.push({
-          href: "/battlearena",
-          name: `Global: ${battleExpBoost.value}X battle exp | ${battleExpBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const missionExpBoost = getGameSettingBoost("missionExpMultiplier", settings);
-      if (missionExpBoost) {
-        notifications.push({
-          href: "/missionhall",
-          name: `Global: ${missionExpBoost.value}X mission exp | ${missionExpBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const jutsuExpBoost = getGameSettingBoost("jutsuExpMultiplier", settings);
-      if (jutsuExpBoost) {
-        notifications.push({
-          href: "/jutsus",
-          name: `Global: ${jutsuExpBoost.value}X jutsu exp | ${jutsuExpBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
-      const itemExpBoost = getGameSettingBoost("itemExpMultiplier", settings);
-      if (itemExpBoost) {
-        notifications.push({
-          href: "/items",
-          name: `Global: ${itemExpBoost.value}X item exp | ${itemExpBoost.daysLeft} days`,
-          color: "green",
-          group: "Active boosts",
-        });
-      }
+      notifications.push(...getGlobalGameSettingNotifications(settings));
       // User specific
       if (user) {
         // War-time regen boost
@@ -1392,7 +1174,16 @@ export const profileRouter = createTRPCRouter({
         }
       }
       return {
-        userData: user ? { ...user, pvpBoost: getPvpBoost(user, settings) } : user,
+        userData: user
+          ? {
+              ...user,
+              pvpBoost: getPvpBoost(user, settings),
+              activeDungeonRunId:
+                activeDungeon && activeDungeon.status !== "ENDED"
+                  ? activeDungeon.id
+                  : null,
+            }
+          : user,
         achievementProgress: achievementProgress,
         notifications: notifications,
         isEventParticipant: tournamentNoticeState.isEventParticipant,
@@ -2317,13 +2108,14 @@ export const profileRouter = createTRPCRouter({
    */
   toggleDeletionTimer: protectedProcedure
     .input(z.object({ userId: z.string(), confirmation: z.string().optional() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema.extend({ affectedUserId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, target] = await Promise.all([
+      const [user, otherTarget] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
+        input.userId !== ctx.userId ? fetchUser(ctx.drizzle, input.userId) : undefined,
       ]);
+      const target = otherTarget ?? user;
       // Guard. A running ban or silence does not block deletion: deleteUser leaves a
       // sanction tombstone that a new account inherits.
       if (ctx.userId !== input.userId && !canDeleteUsers(user.role)) {
@@ -2339,8 +2131,17 @@ export const profileRouter = createTRPCRouter({
         );
       }
       // Mutate
-      await updateUserDataForToggleDeletionTimer(ctx.drizzle, target, input);
-      return { success: true, message: "Deletion timer toggled" };
+      const deletionAt = target.deletionAt
+        ? null
+        : secondsFromNow(CHARACTER_DELETION_DELAY_DAYS * DAY_S);
+      await updateUserDataForToggleDeletionTimer(ctx.drizzle, deletionAt, input);
+      return {
+        success: true,
+        message: "Deletion timer toggled",
+        affectedUserId: input.userId,
+        userPatch: input.userId === ctx.userId ? { deletionAt } : {},
+        userDelta: {},
+      };
     }),
   /** Enforce the elapsed wait and self-confirmation before the deletion safeguards run. */
   confirmDeletion: protectedProcedure
@@ -2348,13 +2149,14 @@ export const profileRouter = createTRPCRouter({
       mcp: { description: "Confirm and execute account deletion" },
     })
     .input(z.object({ userId: z.string(), confirmation: z.string().optional() }))
-    .output(baseServerResponse)
+    .output(baseServerResponse.extend({ affectedUserId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [user, target] = await Promise.all([
+      const [user, otherTarget] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
+        input.userId !== ctx.userId ? fetchUser(ctx.drizzle, input.userId) : undefined,
       ]);
+      const target = otherTarget ?? user;
       // Guard
       if (!target.deletionAt || target.deletionAt > new Date()) {
         return errorResponse("Deletion timer not passed yet");
@@ -2379,7 +2181,7 @@ export const profileRouter = createTRPCRouter({
       // Mutate
       const rejected = await deleteUser(ctx.drizzle, input.userId);
       if (rejected) return rejected;
-      return { success: true, message: "User deleted" };
+      return { success: true, message: "User deleted", affectedUserId: input.userId };
     }),
   claimVotes: protectedProcedure
     .meta({ mcp: { description: "Claim reputation points for voting" } })
@@ -2904,7 +2706,10 @@ const fetchUpdatedUserOnce = async (
       requiresUserRefresh = true;
       requiresProgressionRefresh = true;
     } catch (error) {
-      // The queues stay as they are and are settled on the next request.
+      // Earlier queue kinds may have committed before settlement or hydration failed.
+      // Keep the display snapshot usable, but withhold projections until a fresh read.
+      requiresUserRefresh = true;
+      requiresProgressionRefresh = true;
       Sentry.captureException(error, {
         level: "warning",
         tags: { source: "settleUserQueues" },
@@ -2919,7 +2724,9 @@ const fetchUpdatedUserOnce = async (
         user = await queryUpdatedUser();
       }
     } catch (error) {
-      // Keep the loaded profile usable; unclaimed receipts retry on the next refresh.
+      // XP may have committed before hydration failed; the loaded profile is display-only.
+      requiresUserRefresh = true;
+      requiresProgressionRefresh = true;
       Sentry.captureException(error, {
         level: "warning",
         tags: { source: "settleCookingExperience" },
@@ -3197,6 +3004,8 @@ const fetchUpdatedUserOnce = async (
     if (removedFromSquad) {
       user.anbuId = null;
       user.anbuSquad = null;
+      requiresUserRefresh = true;
+      requiresProgressionRefresh = true;
     }
     if (needsClanCleanup) {
       user.clanId = null;
@@ -3862,6 +3671,8 @@ export type UserWithRelations =
       regenerationWithoutTimedBuffs?: number;
       displayTitle?: string;
       dungeonsCompleted?: number;
+      /** Current reservation, including a completed squad awaiting its claim. */
+      activeDungeonRunId?: string | null;
       raidsCompleted?: number;
       titles?: (UserTitle & { title?: import("@/drizzle/schema").Title })[];
       raidBuffs?: TimedBuff[];
@@ -3874,7 +3685,7 @@ export type UserWithRelations =
       bloodline?: Bloodline | null;
       sageMode?: SageMode | null;
       activeReskin?: BloodlineReskin | null;
-      anbuSquad?: { name: string } | null;
+      anbuSquad?: { name: string; id?: string; points?: number } | null;
       attributes?: { attribute: string }[];
       clan?: Clan | null;
       items: (UserItem & {

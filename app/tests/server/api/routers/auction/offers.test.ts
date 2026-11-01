@@ -42,14 +42,14 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
   const postRequest = async (ryo = 300, quantity = 10) => {
     const api = await callerFor(auctionRouter, "owner");
     const result = await api.createAuctionOffer({ offerType: "REQUEST", requestedItemId: "ore", requestedQuantity: quantity, ryo });
-    expect(result.success).toBe(true);
+    expect(result).toMatchObject({ success: true, userDelta: { bank: -ryo } });
     const rows = await (await getTestDatabase()).select().from(auctionOffer);
     return rows[0]!;
   };
   const postTrade = async (quantity = 20, requestedItemId = "ore", requestedQuantity = 10) => {
     const api = await callerFor(auctionRouter, "owner");
     const result = await api.createAuctionOffer({ offerType: "TRADE", requestedItemId, requestedQuantity, offeredUserItemId: "owner-gems", offeredQuantity: quantity });
-    expect(result.success).toBe(true);
+    expect(result).toMatchObject({ success: true, userDelta: {} });
     const rows = await (await getTestDatabase()).select().from(auctionOffer);
     return rows[0]!;
   };
@@ -85,7 +85,7 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
     const offer = await postRequest();
     expect(await balances()).toMatchObject({ owner: 700, supplier: 100 });
     const supplier = await callerFor(auctionRouter, "supplier");
-    expect((await supplier.acceptAuctionOffer({ offerId: offer.id, userItemId: "supplier-ore" })).success).toBe(true);
+    expect(await supplier.acceptAuctionOffer({ offerId: offer.id, userItemId: "supplier-ore" })).toMatchObject({ success: true, userDelta: offer.offerType === "REQUEST" ? { bank: offer.ryo } : {} });
     expect((await supplier.acceptAuctionOffer({ offerId: offer.id, userItemId: "supplier-ore" })).success).toBe(false);
     expect(await balances()).toMatchObject({ owner: 700, supplier: 400 });
     const rows = await (await getTestDatabase()).select().from(userItem).where(eq(userItem.itemId, "ore"));
@@ -149,7 +149,7 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
     expect(initial.find((row) => row.id === "owner-gems")?.quantity).toBe(30);
     expect(initial.find((row) => row.id === offer.offeredUserItemId)).toMatchObject({ quantity: 20, isInAuction: true, activeVariantId: "cosmetic" });
     const supplier = await callerFor(auctionRouter, "supplier");
-    expect((await supplier.acceptAuctionOffer({ offerId: offer.id, userItemId: "supplier-ore" })).success).toBe(true);
+    expect(await supplier.acceptAuctionOffer({ offerId: offer.id, userItemId: "supplier-ore" })).toMatchObject({ success: true, userDelta: offer.offerType === "REQUEST" ? { bank: offer.ryo } : {} });
     const transferred = await db.select().from(userItem).where(eq(userItem.id, offer.offeredUserItemId!));
     expect(transferred[0]).toMatchObject({ userId: "supplier", quantity: 20, isInAuction: false, activeVariantId: null });
     expect(await balances()).toMatchObject({ owner: 1000, supplier: 100 });

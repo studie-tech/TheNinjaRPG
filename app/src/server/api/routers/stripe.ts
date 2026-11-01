@@ -13,7 +13,12 @@ import {
   updateStripeCheckoutForCancelCheckout,
   updateStripeCheckoutForCreateCheckout,
 } from "@/queries/stripe";
-import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
+import {
+  baseServerResponse,
+  createTRPCRouter,
+  errorResponse,
+  protectedProcedure,
+} from "@/server/api/trpc";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
@@ -289,6 +294,7 @@ export const stripeRouter = createTRPCRouter({
           .max(255),
       }),
     )
+    .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const session = await getStripe().checkout.sessions.retrieve(input.sessionId);
       const checkout = session.metadata?.tnrCheckoutId

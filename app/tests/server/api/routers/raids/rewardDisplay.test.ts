@@ -165,7 +165,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
           .mockRejectedValue(new Error("Content names were already loaded by payout")),
       );
       const catalogueReads = vi.spyOn(database.query.bloodline, "findMany");
-      // Profile hydration loads collection metadata without rereading reward names.
+      // The opening profile read loads collection metadata without rereading reward names.
       const catalogueQuery = {
         columns: { id: true, rank: true, hidden: true },
         where: eq(bloodline.hidden, false),
@@ -177,6 +177,8 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
       });
       expect(result).toMatchObject({
         success: true,
+        userDelta: undefined,
+        userPatch: undefined,
         rewards: {
           reward_items: ["Potion B", "Potion A", "Potion A"],
           reward_jutsus: owned ? [] : ["Reward Jutsu"],
@@ -185,6 +187,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
         },
       });
       for (const reread of rereads) expect(reread).not.toHaveBeenCalled();
+      // Content rewards leave collection progression for canonical reconciliation.
       expect(catalogueReads.mock.calls).toEqual([[catalogueQuery]]);
       const inventory = await database.query.userItem.findMany({
         where: eq(userItem.userId, "raid-reward-user"),
@@ -211,7 +214,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
         ).reduce((sum, row) => sum + row.quantity, 0),
       ).toBe(3);
       for (const reread of rereads) expect(reread).not.toHaveBeenCalled();
-      expect(catalogueReads.mock.calls).toEqual([[catalogueQuery], [catalogueQuery]]);
+      expect(catalogueReads.mock.calls).toEqual(Array.from({ length: 2 }, () => [catalogueQuery]));
     },
   );
 });

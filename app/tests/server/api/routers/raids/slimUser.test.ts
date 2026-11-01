@@ -61,7 +61,7 @@ describe("raid list/join slim user fetches", () => {
     );
   });
 
-  it("loads join guard fields and pending training for cache reconciliation", async () => {
+  it("loads only the join guard fields", async () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     await fetchRaidJoinUser({ query: { userData: { findFirst } } } as never, "user-1");
     expect(findFirst).toHaveBeenCalledWith(
@@ -71,8 +71,6 @@ describe("raid list/join slim user fetches", () => {
           sector: true,
           status: true,
           isBanned: true,
-          energyQueueHead: true,
-          energyQueueTail: true,
         },
       }),
     );
@@ -83,8 +81,6 @@ describe("raid list/join slim user fetches", () => {
         "sector",
         "status",
         "villageId",
-        "energyQueueHead",
-        "energyQueueTail",
       ].sort(),
     );
   });

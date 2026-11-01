@@ -124,7 +124,7 @@ describe("CraftingCatalog crafting rank gate", () => {
     const invalidate = vi.fn();
     Object.assign(vi.spyOn(client, "api" as never), {
       ...client.api,
-      useUtils: () => ({ profile: { getUser: { invalidate } } }),
+      useUtils: () => ({ profile: { getUser: { invalidate: invalidate } } }),
     });
     const effect = DecreaseCraftingTime.parse({ power: 10 });
     const userData = {
@@ -154,13 +154,11 @@ describe("CraftingCatalog crafting rank gate", () => {
     const duration = () => view.getByText("Total Crafting Time:").parentElement?.textContent;
     expect(duration()).toBe("Total Crafting Time:60m");
     act(() => {
-      setSystemTime(start + 6000);
       vi.advanceTimersByTime(6000);
     });
     expect(duration()).toBe("Total Crafting Time:54m");
     expect(invalidate).toHaveBeenCalledTimes(1);
     act(() => {
-      setSystemTime(start + 16_000);
       vi.advanceTimersByTime(10_000);
     });
     expect(duration()).toBe("Total Crafting Time:48m");

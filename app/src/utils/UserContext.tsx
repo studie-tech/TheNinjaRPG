@@ -30,7 +30,7 @@ import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import {
   prepareUserUpdate as captureUserUpdate,
-  type UserPatch,
+  type UserUpdate,
   type UserUpdateOptions,
   updateUserCache,
 } from "@/utils/userCache";
@@ -77,7 +77,7 @@ type UserContextValue = {
   isSignedIn: boolean;
   prepareUserUpdate: () => number | undefined;
   updateUser: (
-    patch: UserPatch | undefined,
+    patch: UserUpdate | undefined,
     mutation?: UserUpdateOptions,
   ) => Promise<void>;
   updateNotifications: (
@@ -188,7 +188,7 @@ export function UserContextProvider(props: {
     [queryClient, userQueryKey],
   );
   const updateUser = useCallback(
-    (patch: UserPatch | undefined, mutation?: UserUpdateOptions) =>
+    (patch: UserUpdate | undefined, mutation?: UserUpdateOptions) =>
       updateUserCache(queryClient, userQueryKey, patch, mutation),
     [queryClient, userQueryKey],
   );

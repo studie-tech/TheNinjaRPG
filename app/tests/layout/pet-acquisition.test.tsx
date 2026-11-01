@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import { createTRPCReact } from "@trpc/react-query";
+import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
@@ -38,7 +38,7 @@ beforeEach(() => {
     pets: testApi.pets,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: owner }) as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: owner, prepareUserUpdate: () => 1, updateUser: vi.fn(async () => {}) }) as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(Link, "default").mockImplementation(({ href, children }) => <a href={String(href)}>{children}</a>);
@@ -148,6 +148,11 @@ for (const collectionUnavailable of [false, true]) {
       return { success: true, message: "Appearance ready" };
     });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+    queryClient.setQueryData(profileKey, { userData: owner });
+    const getUser = vi.fn(async () => ({ userData: owner }));
+    const profileObserver = new QueryObserver(queryClient, { queryKey: profileKey, queryFn: getUser, staleTime: Infinity });
+    const unsubscribeProfile = profileObserver.subscribe(() => {});
     const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
       const respond = async () => {
         if (op.path === "pets.acquirePet") return acquire(op.input as RouterInputs["pets"]["acquirePet"]);
@@ -195,11 +200,47 @@ for (const collectionUnavailable of [false, true]) {
       fireEvent.click(within(dialog).getByRole("button", { name: "Generate appearance" }));
       await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
       expect(acquire).toHaveBeenCalledTimes(1);
+      expect(getUser).toHaveBeenCalledTimes(1);
     } finally {
+      unsubscribeProfile();
       queryClient.clear();
     }
   });
 }
+
+it.each(["returned failure", "transport error"])("refreshes companion data without fetching the profile after an appearance %s", async (outcome) => {
+  const message = outcome === "returned failure" ? "Appearance could not be generated" : "Appearance response interrupted";
+  const pet = { id: "saved", name: "Miso", rank: 2, avatar: "/miso.webp", artRank: 1, generationStatus: "FAILED" };
+  const { view, queryClient, mutations } = renderAcquisition({ pet, pets: [pet], canAcquire: false }, () => {
+    if (outcome === "transport error") throw new Error(message);
+    return { success: false, message };
+  });
+  const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+  const collectionKey = getQueryKey(testApi.pets.getCollection, undefined, "query");
+  queryClient.setQueryData(profileKey, { userData: owner });
+  queryClient.setQueryData(collectionKey, [pet]);
+  const getUser = vi.fn(async () => ({ userData: owner }));
+  const getCollection = vi.fn(async () => [pet]);
+  const profileObserver = new QueryObserver(queryClient, { queryKey: profileKey, queryFn: getUser, staleTime: Infinity });
+  const collectionObserver = new QueryObserver(queryClient, { queryKey: collectionKey, queryFn: getCollection, staleTime: Infinity });
+  const unsubscribeProfile = profileObserver.subscribe(() => {});
+  const unsubscribeCollection = collectionObserver.subscribe(() => {});
+  try {
+    fireEvent.click(await view.findByRole("button", { name: "Retry appearance" }));
+    await view.findByText(message);
+    await waitFor(() => expect((view.getByRole("button", { name: "Retry appearance" }) as HTMLButtonElement).disabled).toBe(false));
+    expect(mutations).toHaveBeenCalledTimes(1);
+    expect(mutations).toHaveBeenCalledWith("pets.generateAppearance", { petId: pet.id });
+    expect(getUser).not.toHaveBeenCalled();
+    expect(getCollection).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryState(getQueryKey(testApi.pets.getPet, undefined, "query"))?.dataUpdateCount).toBe(2);
+    expect(view.getByRole("alert").textContent).toBe(message);
+  } finally {
+    unsubscribeProfile();
+    unsubscribeCollection();
+    queryClient.clear();
+  }
+});
 
 for (const federalStatus of ["NONE", "GOLD"] as const) {
   it(`guides ${federalStatus} accounts through one trait at a time and preserves choices when going back`, async () => {
@@ -532,7 +573,7 @@ for (const isFull of [false, true]) {
   });
 }
 
-function renderAcquisition(initialData: Record<string, unknown>) {
+function renderAcquisition(initialData: Record<string, unknown>, mutate?: (procedure: string, input: unknown) => unknown) {
   let data = {
     pet: null, pets: [], activePetId: null, slots: 1, maxSlots: 6,
     dayKey, options, optionCount: 3, replacementCost: 0, replacementSilverCost: 0, canAcquire: true,
@@ -545,6 +586,13 @@ function renderAcquisition(initialData: Record<string, unknown>) {
   const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
     if (op.path !== "pets.getPet") {
       mutations(op.path, op.input);
+      if (mutate) {
+        void Promise.resolve().then(() => mutate(op.path, op.input)).then((data) => {
+          observer.next({ result: { data } });
+          observer.complete();
+        }, (error) => observer.error(TRPCClientError.from(error)));
+        return;
+      }
       observer.error(TRPCClientError.from(new Error(`Unexpected procedure ${op.path}`)));
       return;
     }

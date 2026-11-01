@@ -109,6 +109,10 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     expect(owner?.petAcquisitions).toBe(1);
     expect(owner?.reputationPoints).toBe(200);
     expect(owner?.petDailyClaims).toEqual({ dayKey: input.dayKey, speciesIds: [input.speciesId] });
+    expect(results.find((result) => result.success)?.userPatch).toMatchObject({
+      activePetId: owner?.activePetId, petExperience: 0, petAcquisitions: 1,
+      petDailyClaims: owner?.petDailyClaims,
+    });
     expect((await caller.acquirePet(input)).success).toBe(false);
     expect((await caller.getPet()).options.species.some(({ id }) => id === input.speciesId)).toBe(false);
   });
@@ -242,6 +246,7 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
       ? await caller.acquirePet({ ...input, currency: "SEICHI_SILVER" })
       : await caller.unlockSlot({ currency: "SEICHI_SILVER" });
     expect(result.success).toBe(true);
+    expect(result.userDelta).toEqual({ seichiSilver: -PET_SEICHI_SILVER_COST });
     expect(await readOwner(database)).toMatchObject({ reputationPoints: 200, seichiSilver: 0, petSlots: purchase === "slot" ? 2 : 1, petAcquisitions: purchase === "adoption" ? 2 : 1 });
     expect(await database.query.userPet.findMany()).toHaveLength(purchase === "adoption" ? 1 : 0);
   });
@@ -429,8 +434,10 @@ describeWithDatabase("Companion ownership, economy and generation", () => {
     expect(await caller.getPet({ petId: "parked" })).toMatchObject({ slots: 1, bonusSlots: 0, canAcquire: false, unusedExperience: 30, pet: { id: "parked", experience: 100 } });
     expect((await caller.acquirePet(input)).success).toBe(false);
     expect(await readOwner(database)).toEqual(before);
-    expect((await caller.activatePet({ petId: "parked" })).success).toBe(true);
-    expect((await caller.feedPet({ petId: "parked", userItemId: "meal-stack", expectedQuantity: 2 })).success).toBe(true);
+    expect(await caller.activatePet({ petId: "parked" })).toMatchObject({ success: true,
+      userPatch: { activePetId: "parked", petExperience: 30 } });
+    expect(await caller.feedPet({ petId: "parked", userItemId: "meal-stack", expectedQuantity: 2 })).toMatchObject({ success: true,
+      userDelta: { petExperience: PET_FEED_EXPERIENCE_BY_RARITY.COMMON } });
     expect(await readOwner(database)).toMatchObject({ activePetId: "parked", petSlots: 1, petExperience: 30 + PET_FEED_EXPERIENCE_BY_RARITY.COMMON, reputationPoints: 200 });
     expect(await readPet(database, petId)).toMatchObject({ storedExperience: 10, experience: 200 });
     expect(await readPet(database, "parked")).toMatchObject({ storedExperience: 0, experience: 100 });

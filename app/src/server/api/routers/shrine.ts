@@ -65,15 +65,15 @@ import {
   updateVillageForUpgradeShrine,
   updateVillageForUpgradeShrine2,
 } from "@/queries/shrine";
+import { findVillageBoostUserCache } from "@/queries/socialUserCache";
 import {
   fetchAlliances,
   findVillageById,
   findVillageBySector,
 } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
-import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
 import {
-  baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -82,6 +82,7 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
+// Pusher instance
 import { findRelationship } from "@/utils/alliance";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
@@ -89,10 +90,13 @@ import { getBoostTemplateSchema, setBoostTemplateSchema } from "@/validators/shr
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchActiveWars } from "./war";
 
-// Pusher instance
 const pusher = getServerPusher();
 
 export const shrineRouter = createTRPCRouter({
+  /** Observe cron-activated boosts without loading unrelated profile progression. */
+  getVillageBoostState: protectedProcedure.query(async ({ ctx }) => {
+    return (await findVillageBoostUserCache(ctx.drizzle, ctx.userId))?.village ?? null;
+  }),
   // Get all AI names
   getShrineAis: publicProcedure
     .meta({ mcp: { description: "Get all shrine AI defenders" } })
@@ -634,11 +638,11 @@ export const shrineRouter = createTRPCRouter({
   challengeShrine: protectedProcedure
     .meta({ mcp: { description: "Challenge a shrine to battle" } })
     .input(z.object({ sectorNumber: z.number() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch user and sector data
       const [
-        { user },
+        { user, requiresUserRefresh },
         targetSector,
         activeWars,
         relationships,
@@ -764,6 +768,7 @@ export const shrineRouter = createTRPCRouter({
 
       // Create new shrine battle queue with rollback on failure
       const shrineBattleId = nanoid();
+      const createdAt = new Date();
       const result = await queueAwakeUser(ctx.drizzle, user);
       if (result.rowsAffected === 0) return errorResponse("Was not awake?");
 
@@ -775,6 +780,7 @@ export const shrineRouter = createTRPCRouter({
           attackerSide,
           targetSector,
           input,
+          createdAt,
         );
 
         try {
@@ -807,6 +813,30 @@ export const shrineRouter = createTRPCRouter({
 
       return {
         success: true,
+        userPatch: requiresUserRefresh
+          ? undefined
+          : {
+              status: "QUEUED",
+              shrineBattles: [
+                ...((user as NonNullable<UserWithRelations>).shrineBattles ?? []),
+                ...(attackerSide === user.villageId ||
+                targetSector.villageId === user.villageId
+                  ? [
+                      {
+                        id: shrineBattleId,
+                        createdAt,
+                        battleType: "SHRINE_BATTLE" as const,
+                        attackerEntityId: attackerSide,
+                        defenderEntityId: targetSector.villageId,
+                        sector: input.sectorNumber,
+                        battleId: null,
+                        winnerId: null,
+                        territoryWarId: null,
+                      },
+                    ]
+                  : []),
+              ],
+            },
         message: `Shrine attack party created! Waiting for more attackers (min ${SHRINE_BATTLE_MIN_ATTACKERS})`,
       };
     }),
@@ -820,26 +850,30 @@ export const shrineRouter = createTRPCRouter({
         side: z.enum(["ATTACKER", "DEFENDER"]),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
 
       // Fetch user and battle data
-      const [{ user }, shrineBattle, existingUserBattles, activeWars] =
-        await Promise.all([
-          fetchUpdatedUser({
-            client: ctx.drizzle,
-            userId: ctx.userId,
-          }),
-          findMpvpBattleQueueForJoinShrineBattle(
-            ctx.drizzle,
-            input,
-            shrineLobbyStaleBefore,
-          ),
-          // Check if user is already in any active battle queue
-          fetchActiveUserMpvpBattles(ctx.drizzle, ctx.userId),
-          fetchActiveWars(ctx.drizzle),
-        ]);
+      const [
+        { user, requiresUserRefresh },
+        shrineBattle,
+        existingUserBattles,
+        activeWars,
+      ] = await Promise.all([
+        fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+        }),
+        findMpvpBattleQueueForJoinShrineBattle(
+          ctx.drizzle,
+          input,
+          shrineLobbyStaleBefore,
+        ),
+        // Check if user is already in any active battle queue
+        fetchActiveUserMpvpBattles(ctx.drizzle, ctx.userId),
+        fetchActiveWars(ctx.drizzle),
+      ]);
 
       // Guards
       if (!user) return errorResponse("User not found");
@@ -941,6 +975,7 @@ export const shrineRouter = createTRPCRouter({
 
       return {
         success: true,
+        userPatch: requiresUserRefresh ? undefined : { status: "QUEUED" },
         message: `Joined shrine battle as ${input.side.toLowerCase()}`,
       };
     }),
@@ -949,10 +984,10 @@ export const shrineRouter = createTRPCRouter({
   leaveShrineBattle: protectedProcedure
     .meta({ mcp: { description: "Leave a shrine battle queue" } })
     .input(z.object({ shrineBattleId: z.string() }))
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Fetch user data
-      const { user } = await fetchUpdatedUser({
+      const { user, requiresUserRefresh } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
       });
@@ -989,25 +1024,49 @@ export const shrineRouter = createTRPCRouter({
         if (battle && battle.createdAt <= shrineLobbyStaleBefore) {
           // Lobby is confirmed stale — reset status immediately so the user
           // isn't blocked until the cron tick clears it.
-          await wakeQueuedUser(ctx.drizzle, user.userId);
-          return errorResponse("Shrine battle expired");
+          const wake = await wakeQueuedUser(ctx.drizzle, user.userId);
+          return {
+            ...errorResponse("Shrine battle expired"),
+            userPatch:
+              !requiresUserRefresh && wake.rowsAffected === 1
+                ? {
+                    status: "AWAKE",
+                    shrineBattles:
+                      (user as NonNullable<UserWithRelations>).shrineBattles ?? [],
+                  }
+                : undefined,
+          };
         }
         return errorResponse("Not in this shrine battle queue");
       }
 
       // Only update user status if we successfully deleted the queue entry
-      await wakeQueuedUser(ctx.drizzle, user.userId);
+      const wake = await wakeQueuedUser(ctx.drizzle, user.userId);
 
       // If no one left in queue, delete the battle queue
       const counts = await selectMpvpBattleUserForLeaveShrineBattle(ctx.drizzle, input);
       const remaining = counts[0]?.remaining ?? 0;
 
-      if (remaining === 0) {
-        // Only delete if battleId is still null (battle hasn't started)
-        await deleteUnclaimedBattleQueue(ctx.drizzle, input.shrineBattleId);
-      }
+      const removed =
+        remaining === 0
+          ? await deleteUnclaimedBattleQueue(ctx.drizzle, input.shrineBattleId)
+          : undefined;
 
-      return { success: true, message: "Left shrine battle queue" };
+      return {
+        success: true,
+        message: "Left shrine battle queue",
+        userPatch:
+          !requiresUserRefresh &&
+          wake.rowsAffected === 1 &&
+          (remaining > 0 || removed?.rowsAffected === 1)
+            ? {
+                status: "AWAKE",
+                shrineBattles: (
+                  (user as NonNullable<UserWithRelations>).shrineBattles ?? []
+                ).filter((entry) => remaining > 0 || entry.id !== input.shrineBattleId),
+              }
+            : undefined,
+      };
     }),
 
   // Initiate shrine battle (start the battle after lobby time)
@@ -1015,7 +1074,7 @@ export const shrineRouter = createTRPCRouter({
   initiateShrineBattle: protectedProcedure
     .meta({ mcp: { description: "Start a shrine battle" } })
     .input(z.object({ shrineBattleId: z.string() }))
-    .output(baseServerResponse.extend({ battleId: z.string().optional() }))
+    .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const shrineLobbyStaleBefore = shrineLobbyFreshAfter();
 

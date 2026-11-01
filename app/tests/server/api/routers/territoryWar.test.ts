@@ -1,24 +1,57 @@
-import { fetchBattle } from "@/queries/combat";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { aiProfile, battle, battleHistory, clan, mpvpBattleQueue, mpvpBattleUser, territoryWar, userData, userVote, village } from "@/drizzle/schema";
+import { aiProfile, battle, battleHistory, clan, mpvpBattleQueue, mpvpBattleUser, territoryWar, userCookingJob, userData, userVote, village } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
-
+import { fetchBattle } from "@/queries/combat";
 import { clanRouter } from "@/server/api/routers/clan";
 import { homeRouter } from "@/server/api/routers/home";
+import { profileRouter } from "@/server/api/routers/profile";
 import { territoryWarRouter } from "@/server/api/routers/territoryWar";
 import { cleanupTerritoryWarTeams } from "@/server/utils/territoryWar";
+import type { UserUpdate, UserUpdateOptions } from "@/utils/userCache";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { insertUsers } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
-import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
 
 const caller = (id = "leader") => callerFor(territoryWarRouter, id);
 const team = async () => (await getTestDatabase()).query.mpvpBattleQueue.findFirst();
+type Profile = RouterOutputs["profile"]["getUser"];
+const clients: QueryClient[] = [];
+const subscriptions: (() => void)[] = [];
+const page = readFileSync(join(import.meta.dirname, "../../../../src/app/[shell]/territory-war/page.tsx"), "utf8");
+const onSuccessSource = page.slice(page.indexOf("  const onSuccess ="), page.indexOf("  const create ="));
+const transpiler = new (require("bun").Transpiler)({ loader: "tsx" }) as { transformSync(source: string): string };
+const callbackFactory = transpiler.transformSync(`function createCallback() { ${onSuccessSource} return onSuccess; }`);
+
+/** Exercise the page's shared callback with an observed profile and the production cache merger. */
+const cachedProfile = (initial: Profile, read: () => Promise<Profile>) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
+  const key = ["territory-war-cache-profile"];
+  const refetch = vi.fn(read);
+  client.setQueryData(key, initial);
+  const observer = new QueryObserver(client, { queryKey: key, queryFn: refetch, staleTime: Infinity });
+  subscriptions.push(observer.subscribe(() => {}));
+  const showMutationToast = vi.fn();
+  const invalidate = vi.fn(async () => {});
+  const onSuccess = new Function("updateUser", "showMutationToast", "utils", `${callbackFactory}\nreturn createCallback();`)(
+    (update: UserUpdate | undefined, options: UserUpdateOptions) => updateUserCache(client, key, update, options),
+    showMutationToast, { territoryWar: { invalidate } },
+  ) as (result: UserDeltaResponse, input: unknown, revision: number | undefined) => Promise<void>;
+  return { refetch, showMutationToast, invalidate, prepare: () => prepareUserUpdate(client, key), onSuccess,
+    current: () => client.getQueryData<Profile>(key)! };
+};
 
 describeWithDatabase("Territory War participation", () => {
   beforeEach(async () => {
-    await resetTables(battleHistory, battle, mpvpBattleUser, mpvpBattleQueue, territoryWar, clan, village, userVote, userData, aiProfile);
+    await resetTables(battleHistory, battle, mpvpBattleUser, mpvpBattleQueue, territoryWar, clan, village, userCookingJob, userVote, userData, aiProfile);
     const db = await getTestDatabase();
     await db.insert(village).values([
       { id: "home", name: "Home", sector: 1, kageId: "leader" },
@@ -31,7 +64,7 @@ describeWithDatabase("Territory War participation", () => {
     await db.insert(territoryWar).values({ id: "event", predecessorId: "initial", sector: 100, guardianId: "guardian", startsAt: new Date(Date.now() - 1000), endsAt: new Date(Date.now() + 1800000) });
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { subscriptions.splice(0).forEach((stop) => stop()); clients.splice(0).forEach((client) => client.clear()); vi.restoreAllMocks(); });
 
   it("validates sector and competitor and caps a team at three players", async () => {
     const leader = await caller();
@@ -48,6 +81,54 @@ describeWithDatabase("Territory War participation", () => {
     expect(snapshot.usersState.filter(user => !user.isAi && !user.isSummon)).toHaveLength(3);
     expect(snapshot.usersState.filter(user => user.isAi && !user.isSummon)).toHaveLength(1);
     expect(new Set(Object.values(snapshot.extraState.territoryWar!.competitors).map(comp => comp.id))).toEqual(new Set(["village:home"]));
+  });
+
+  it.each(["missing", "expired", "resolved"] as const)("confirms a read-only unavailable event rejection without a profile read: %s", async (scenario) => {
+    const db = await getTestDatabase();
+    if (scenario === "expired") await db.update(territoryWar).set({ endsAt: new Date(0) });
+    if (scenario === "resolved") await db.update(territoryWar).set({ resolvedAt: new Date() });
+    const profile = callerForDatabase(profileRouter, "leader", db);
+    const initial = await profile.getUser();
+    const cache = cachedProfile(initial, () => profile.getUser());
+    const revision = cache.prepare();
+    await db.insert(userCookingJob).values({ id: "unsettled-cooking", userId: "leader", experience: 23, finishesAt: new Date(0) });
+    const measured = await recordQueries(() => callerForDatabase(territoryWarRouter, "leader", db).createTeam({ eventId: scenario === "missing" ? "missing" : "event" }));
+    expect(measured.result).toMatchObject({ success: false, message: "This Territory War has ended", userDelta: {} });
+    expect(measured.statements).toHaveLength(3);
+    expect(measured.statements.every((statement) => /^select /i.test(statement))).toBe(true);
+    await cache.onSuccess(measured.result, undefined, revision);
+    expect(cache.refetch).not.toHaveBeenCalled();
+    expect(cache.current().userData).toEqual(initial.userData);
+    expect(cache.showMutationToast).toHaveBeenCalledWith(measured.result);
+    expect(cache.invalidate).toHaveBeenCalledTimes(1);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "leader") })).toMatchObject({ status: "AWAKE", cookingExperience: 0 });
+    expect(await db.query.userCookingJob.findMany()).toHaveLength(1);
+    expect(await team()).toBeUndefined();
+  });
+
+  it("requires canonical recovery when a rejected Territory War launch settles Cooking", async () => {
+    const db = await getTestDatabase();
+    const leader = await caller();
+    expect((await leader.createTeam({ eventId: "event" })).success).toBe(true);
+    const id = (await team())!.id;
+    expect((await (await caller("ally")).joinTeam({ teamId: id })).success).toBe(true);
+    const profile = callerForDatabase(profileRouter, "leader", db);
+    const cache = cachedProfile(await profile.getUser(), () => profile.getUser());
+    const revision = cache.prepare();
+    await db.update(userData).set({ isBanned: true }).where(eq(userData.userId, "ally"));
+    await db.insert(userCookingJob).values({ id: "territory-cooking", userId: "leader", experience: 23, finishesAt: new Date(0) });
+    const result = await leader.startBattle({ teamId: id });
+    expect(result).toMatchObject({ success: false, message: "All teammates must represent the same village or faction and be queued in the event sector" });
+    expect(result.userPatch).toBeUndefined();
+    expect(result.userDelta).toBeUndefined();
+    await cache.onSuccess(result, undefined, revision);
+    expect(cache.refetch).toHaveBeenCalledTimes(1);
+    expect(cache.current().userData).toMatchObject({ cookingExperience: 23, cookingJobs: [], status: "QUEUED", battleId: null });
+    expect(cache.showMutationToast).toHaveBeenCalledWith(result);
+    expect(cache.invalidate).toHaveBeenCalledTimes(1);
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "leader") })).toMatchObject({ cookingExperience: 23, status: "QUEUED", battleId: null });
+    expect(await db.query.userCookingJob.findMany()).toHaveLength(0);
+    expect((await team())?.battleId).toBeNull();
   });
 
   it.each(["leave", "start", "expire"] as const)("preserves an admitted teammate after creator rejection so they can %s", async (recovery) => {

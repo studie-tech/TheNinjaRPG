@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { userData, userReport, userReportComment } from "@/drizzle/schema";
 import { reportsRouter } from "@/server/api/routers/reports";
@@ -21,6 +21,7 @@ const decision = {
  * Exercise real router decisions so permissions also cover persisted restrictions and audit comments.
  */
 describeWithDatabase("moderator trade ban removal", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
     const db = await getTestDatabase();
     await resetTables(userReportComment, userReport, userData);
@@ -93,6 +94,17 @@ describeWithDatabase("moderator trade ban removal", () => {
         }),
       ]),
     );
+  });
+
+  it("keeps report count recovery canonical after a committed moderation decision", async () => {
+    const db = await getTestDatabase();
+    const result = await callerForDatabase(reportsRouter, "staff", db).tradeBan(decision);
+    expect(result.success).toBe(true);
+    expect(result).not.toHaveProperty("userPatch");
+    expect(result).not.toHaveProperty("userDelta");
+    expect(result).not.toHaveProperty("pendingReportCount");
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "target") })).toMatchObject({ isTradeBanned: true });
+    expect(await db.query.userReportComment.findMany()).toHaveLength(1);
   });
 
   it("keeps trading restricted until the last active trade ban is cleared", async () => {
