@@ -120,8 +120,10 @@ export const createTravelScene = async (options: {
     game.stage.addChild(world);
     const sectors = new Map<number, TravelSector>();
     const movements = new Map<string, TravelActorMovement>();
+    let sceneryScale = Number.NaN;
     /** Keep draw order global while retained sector scopes continue owning their sprites. */
     const placeArt = (art: TravelSector["art"], position: { x: number; y: number }) => {
+      sceneryScale = Number.NaN;
       art.attachLayers(
         { ground: groundArtLayer, world: depthLayer, ui: uiLayer },
         position.y,
@@ -569,6 +571,7 @@ export const createTravelScene = async (options: {
             maxY: camera.y + halfHeight,
           }
         : null;
+      const refreshDetails = sceneryScale !== scale();
       for (const rendered of sectors.values()) {
         const bounds = {
           minX: rendered.position.x,
@@ -592,9 +595,11 @@ export const createTravelScene = async (options: {
               },
               Math.max(6, game.renderer.width * 0.0035) / scale(),
             );
-          rendered.art.animate(frame, scale(), null, breeze);
         }
+        if (visible || refreshDetails)
+          rendered.art.animate(frame, scale(), null, breeze);
       }
+      sceneryScale = scale();
       const pointer = controls.pointer();
       let hoverTile: TravelPick["tile"] = null;
       if (!pointer || !snapshot.enabled || controls.dragging()) {

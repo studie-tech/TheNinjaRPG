@@ -407,6 +407,7 @@ export const createWorldSprites = async (
     (entry) => entry.sprite instanceof WindSprite && entry.description.wind != null,
   );
   const groundDetails = entries.filter((entry) => entry.description.small);
+  let flatGround: Container | null = null;
   let detailZoom = Number.NaN;
   let viewport: (WorldBounds & { padding: number }) | null = null;
   let attached: {
@@ -436,11 +437,19 @@ export const createWorldSprites = async (
         return;
       attached = { ...layers, offsetY };
       worldShadows?.invalidate();
+      if (flatGround) flatGround.zIndex = -offsetY;
       for (const entry of entries) {
         // Contact masks and emitter pools must draw after terrain, before upright artwork.
         if (entry.shadow) layers.ground?.attach(entry.shadow);
         if (entry.light) layers.ground?.attach(entry.light);
         entry.sprite.zIndex = -(entry.description.groundY + offsetY);
+        if (flatGround && entry.sprite.parent === flatGround) {
+          if (layers.ground) {
+            layers.ground.attach(flatGround);
+            continue;
+          }
+          container.addChild(entry.sprite);
+        }
         (entry.description.mask || entry.description.unlit
           ? layers.ui
           : layers.world
@@ -522,6 +531,22 @@ export const createWorldSprites = async (
         const [hidden, visible] = WORLD_DETAIL.groundFadePixels;
         for (const entry of groundDetails) {
           const pixels = Math.abs(entry.sprite.height) * zoom;
+          if (attached && !entry.description.mask && !entry.description.unlit) {
+            if (attached.ground && pixels <= WORLD_DETAIL.groundLightingPixels[0]) {
+              // Retained ground instructions keep actor motion from repacking flat cover.
+              flatGround ??= new Container({
+                isRenderGroup: true,
+                label: "flat-ground",
+              });
+              if (!flatGround.parent) container.addChild(flatGround);
+              flatGround.zIndex = -attached.offsetY;
+              if (entry.sprite.parent !== flatGround) flatGround.addChild(entry.sprite);
+              attached.ground.attach(flatGround);
+            } else {
+              if (entry.sprite.parent === flatGround) container.addChild(entry.sprite);
+              attached.world.attach(entry.sprite);
+            }
+          }
           const fade =
             visible > hidden
               ? Math.max(0, Math.min(1, (pixels - hidden) / (visible - hidden)))
@@ -539,6 +564,13 @@ export const createWorldSprites = async (
           if (entry.shadow) entry.shadow.renderable = entry.sprite.renderable;
           if (entry.light) entry.light.renderable = entry.sprite.renderable;
         }
+        if (flatGround && !flatGround.children.length) {
+          flatGround.destroy();
+          flatGround = null;
+        }
+        flatGround?.sortChildren();
+        attached?.ground?.sortRenderLayerChildren();
+        attached?.world.sortRenderLayerChildren();
         // Fixed scenery owns retained material poses; a zoom-driven fade changes that snapshot.
         worldShadows?.invalidate();
       }
