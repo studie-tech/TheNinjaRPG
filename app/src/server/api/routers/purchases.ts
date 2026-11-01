@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getPurchaseSnapshotUserUpdate } from "@/delta/purchases";
+import { getPurchaseSnapshotUserUpdate } from "@/deltas/purchases";
 import {
   STORE_FEDERAL_PRODUCTS,
   STORE_PLATFORMS,

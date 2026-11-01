@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getUserProgressionUpdate } from "@/delta/profile";
-import { getRewardUserUpdate } from "@/delta/quests";
+import { getUserProgressionUpdate } from "@/deltas/profile";
+import { getRewardUserUpdate } from "@/deltas/quests";
 import {
   confirmRaidBattleUpdate,
   getJoinRaidQueueUserUpdate,
@@ -9,7 +9,7 @@ import {
   getRaidQueueWakeUserUpdate,
   getRaidSnapshotUpdate,
   raidQueueWakeUpdate,
-} from "@/delta/raids";
+} from "@/deltas/raids";
 import {
   RAID_BATTLE_LOBBY_SECONDS,
   RAID_BATTLE_MAX_USERS_PER_TEAM,

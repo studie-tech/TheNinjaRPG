@@ -5,7 +5,7 @@ import {
   getCancelQueuedCraftUserUpdate,
   getCraftingUserUpdate,
   getSelectOccupationUserUpdate,
-} from "@/delta/occupation";
+} from "@/deltas/occupation";
 
 import {
   CRAFTING_TIMES_MINS,

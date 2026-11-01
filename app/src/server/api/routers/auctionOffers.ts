@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 import {
   getAuctionOfferCreditUserUpdate,
   getCreateAuctionOfferUserUpdate,
-} from "@/delta/auctionOffers";
+} from "@/deltas/auctionOffers";
 import { AUCTION_HOUSE_MIN_LEVEL, auctionHouseLevelMessage } from "@/drizzle/constants";
 import type { UserItemWithRelations, userData } from "@/drizzle/schema";
 import { isEquippableUserItem, isImbuing } from "@/libs/item";

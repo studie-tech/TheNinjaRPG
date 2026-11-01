@@ -1,4 +1,4 @@
-import { canBootstrapQuestType } from "@/delta/profile";
+import { canBootstrapQuestType } from "@/deltas/profile";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";

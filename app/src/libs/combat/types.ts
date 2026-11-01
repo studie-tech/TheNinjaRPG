@@ -1,4 +1,4 @@
-import type { CombatCacheSnapshot, CombatProfileUpdate } from "@/delta/combat";
+import type { CombatCacheSnapshot, CombatProfileUpdate } from "@/deltas/combat";
 import type {
   AttackMethods,
   AttackTargets,

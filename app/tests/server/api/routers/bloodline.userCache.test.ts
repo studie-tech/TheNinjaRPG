@@ -1,4 +1,4 @@
-import type { UserPatch, UserUpdateOptions } from "@/delta/profile";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import * as crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

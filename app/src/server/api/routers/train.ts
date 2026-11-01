@@ -1,11 +1,11 @@
 import * as Sentry from "@sentry/nextjs";
 import { eq, gte, isNull, sql } from "drizzle-orm";
 import { after } from "next/server";
-import { getUserProgressionUpdate } from "@/delta/profile";
+import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   getSavedTrainingQueueUserUpdate,
   getSelectTrainedElementUserUpdate,
-} from "@/delta/train";
+} from "@/deltas/train";
 import {
   BasicElementName,
   getUserCaps,

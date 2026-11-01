@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { getBuyFoodUserUpdate } from "@/delta/village";
+import { getBuyFoodUserUpdate } from "@/deltas/village";
 import type { AllianceState, AllianceVillageType } from "@/drizzle/constants";
 import {
   ALLIANCE_VILLAGE_TYPES,

@@ -23,8 +23,8 @@ import {
   getSelectItemLoadoutUserUpdate,
   getUnchangedEquipmentUserUpdate,
   getUnequippedUserUpdate,
-} from "@/delta/item";
-import { getUserProgressionUpdate } from "@/delta/profile";
+} from "@/deltas/item";
+import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   ANBU_ITEMSHOP_DISCOUNT_PERC,
   CACHE_MAX_GRANTED_ITEMS,

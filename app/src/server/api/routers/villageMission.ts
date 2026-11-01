@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { getCancelUserUpdate, getClaimUserUpdate } from "@/delta/villageMission";
+import { getCancelUserUpdate, getClaimUserUpdate } from "@/deltas/villageMission";
 
 import { boostPvpGain } from "@/libs/pvpExperience";
 import { collapseRewards } from "@/libs/rewards";

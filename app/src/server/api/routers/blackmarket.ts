@@ -9,7 +9,7 @@ import {
   getRerollElementUserUpdate,
   getTakeOfferUserUpdate,
   getUpdateStatsUserUpdate,
-} from "@/delta/blackmarket";
+} from "@/deltas/blackmarket";
 import type { ElementName } from "@/drizzle/constants";
 import {
   BasicElementName,

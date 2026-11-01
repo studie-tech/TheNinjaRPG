@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getUnchangedHuntingUserUpdate } from "@/delta/hunting";
+import { getUnchangedHuntingUserUpdate } from "@/deltas/hunting";
 import { huntingHabitat, huntingSession } from "@/drizzle/schema";
 import { huntingAllowance, huntingEligibility } from "@/libs/hunting/contracts";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";

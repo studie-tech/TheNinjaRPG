@@ -17,7 +17,7 @@ import {
   getToBankUserUpdate,
   getUnchangedClanUserUpdate,
   getUpgradeHideoutToStrongholdUserUpdate,
-} from "@/delta/clan";
+} from "@/deltas/clan";
 
 import {
   ASSASSIN_MAX_PER_FACTION,

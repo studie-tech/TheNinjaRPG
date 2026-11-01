@@ -10,7 +10,7 @@ import {
   getReleasePetUserUpdate,
   getUnchangedPetUserUpdate,
   getUnlockSlotUserUpdate,
-} from "@/delta/pets";
+} from "@/deltas/pets";
 import {
   CombatStatNames,
   MAP_WAKE_ISLAND_SECTOR,

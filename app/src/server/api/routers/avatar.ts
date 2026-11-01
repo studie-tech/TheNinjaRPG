@@ -4,7 +4,7 @@ import {
   getGeneratedAvatarPatch,
   getSelectedAvatarPatch,
   getUnchargedAvatarUserUpdate,
-} from "@/delta/avatar";
+} from "@/deltas/avatar";
 import { COST_GENERATE_AVATAR, ContentTypes } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import {

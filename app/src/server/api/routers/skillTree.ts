@@ -1,11 +1,11 @@
 import { eq, isNull, like, notInArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getUserProgressionUpdate } from "@/delta/profile";
+import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   getPurchaseSkillUserUpdate,
   getResetSkillPointsUserUpdate,
-} from "@/delta/skillTree";
+} from "@/deltas/skillTree";
 import {
   COST_SKILL_RESET,
   IMG_AVATAR_DEFAULT,

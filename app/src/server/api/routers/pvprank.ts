@@ -1,8 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getEnterRankedSeasonUserUpdate } from "@/delta/pvprank";
-import { getRewardUserUpdate } from "@/delta/quests";
+import { getEnterRankedSeasonUserUpdate } from "@/deltas/pvprank";
+import { getRewardUserUpdate } from "@/deltas/quests";
 import {
   RANKED_ENTRY_COST,
   RANKED_LEGEND_LP_REQUIREMENT,

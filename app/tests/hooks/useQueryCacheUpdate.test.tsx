@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "bun:test";
 import type { ReactNode } from "react";
-import { getRenamedLoadouts } from "@/delta/loadout";
+import { getRenamedLoadouts } from "@/deltas/loadout";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { ensureDom } from "../setup/dom.mjs";
 

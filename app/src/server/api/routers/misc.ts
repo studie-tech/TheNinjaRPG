@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
   getAwardReputationUserUpdate,
   getSetEventGameSettingUserUpdate,
-} from "@/delta/misc";
+} from "@/deltas/misc";
 import {
   DMG_SETTING_NAMES,
   Sentiment,

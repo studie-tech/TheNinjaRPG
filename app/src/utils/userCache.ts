@@ -5,7 +5,7 @@ import {
   type UserPatch,
   type UserUpdate,
   type UserUpdateOptions,
-} from "@/delta/profile";
+} from "@/deltas/profile";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 
 /** Capture a settled profile revision; undefined requires mutation reconciliation. */

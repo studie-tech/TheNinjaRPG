@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getMoveStructureUserUpdate } from "@/delta/worldMap";
+import { getMoveStructureUserUpdate } from "@/deltas/worldMap";
 import { type SectorMapStatus, SectorMapStatuses } from "@/drizzle/constants";
 import { sectorMap } from "@/drizzle/schema";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";

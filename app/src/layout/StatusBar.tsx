@@ -6,7 +6,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { combatCacheEnergy } from "@/delta/combat";
+import { combatCacheEnergy } from "@/deltas/combat";
 import { REGEN_SECONDS } from "@/drizzle/constants";
 import type { UserStatus } from "@/drizzle/schema";
 import { cn } from "@/libs/shadui";

@@ -11,7 +11,7 @@ import {
   getToggleVillageAiDefenderUserUpdate,
   getUnlockAiDefenderUserUpdate,
   getUpgradeShrineUserUpdate,
-} from "@/delta/shrine";
+} from "@/deltas/shrine";
 import {
   IMG_AVATAR_DEFAULT,
   MAP_RESERVED_SECTORS,

@@ -7,7 +7,7 @@ import {
   getDungeonRewardUserUpdate,
   getDungeonStateUserUpdate,
   getUnchangedDungeonUserUpdate,
-} from "@/delta/dungeon";
+} from "@/deltas/dungeon";
 import { DUNGEON_RUN_SECONDS, DUNGEON_SOLO_PETS } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import { transitionCoopParty } from "@/libs/coop";

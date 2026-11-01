@@ -4,7 +4,7 @@ import { and, eq, gt, isNotNull, lt, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
-import { getFinishGlobalMoveUserUpdate } from "@/delta/travel";
+import { getFinishGlobalMoveUserUpdate } from "@/deltas/travel";
 import {
   ANBU_STEALTH_BASE_CHANCE_PERC,
   ANBU_STEALTH_CHANGE_PER_LEVEL,

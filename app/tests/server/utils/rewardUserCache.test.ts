@@ -1,6 +1,6 @@
 import { expect, it, vi } from "bun:test";
 import { postProcessRewards } from "@/libs/quest";
-import { getRewardUserUpdate } from "@/delta/quests";
+import { getRewardUserUpdate } from "@/deltas/quests";
 import { ObjectiveReward } from "@/validators/rewards";
 
 it.each(["experience", "relations", "scalar"] as const)("projects reward progress only when the %s delivery can use it", (kind) => {

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { aiProfile, battle, item, quest, questHistory, questParty, userData, userItem, userPet } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
 import { filterCombatQuests } from "@/libs/combat/quests";
-import { captureCombatCacheSnapshot, combatProfilePatch } from "@/delta/combat";
+import { captureCombatCacheSnapshot, combatProfilePatch } from "@/deltas/combat";
 import { calcBattleResult } from "@/libs/combat/util";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { getActiveObjectives, getNewTrackers, mockAchievementHistoryEntries } from "@/libs/quest";

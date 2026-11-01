@@ -24,7 +24,7 @@ import {
 } from "drizzle-orm";
 import { type AnyMySqlColumn, alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
-import type { CombatCacheSnapshot } from "@/delta/combat";
+import type { CombatCacheSnapshot } from "@/deltas/combat";
 import {
   BATTLE_ARENA_HEAL_COST,
   type BattleDataEntryType,

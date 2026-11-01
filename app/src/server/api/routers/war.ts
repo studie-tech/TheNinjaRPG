@@ -6,7 +6,7 @@ import {
   getCancelWarMissionUserUpdate,
   getCompleteWarMissionUserUpdate,
   getInviteMercenaryUserUpdate,
-} from "@/delta/war";
+} from "@/deltas/war";
 import {
   ELDER_MIN_VOTING_COUNT,
   ELDER_WAR_VOTE_HOURS,

@@ -18,7 +18,7 @@ import {
 } from "react";
 import type { AchievementProgress, UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
-import type { UserUpdate, UserUpdateOptions } from "@/delta/profile";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import type { StructureRoute } from "@/drizzle/constants";
 import { useMasteryQueueRefresh } from "@/hooks/useMasteryQueueRefresh";
 import { useRefreshAt } from "@/hooks/useRefreshAt";

@@ -6,7 +6,7 @@ import {
   combatCacheEnergy,
   combatCacheIntegerDelta,
   combatCacheItems,
-} from "@/delta/combat";
+} from "@/deltas/combat";
 import {
   ELITE_JONIN_JUTSU_ADVANCED_XP_TO_LEVEL,
   ELITE_JONIN_JUTSU_LEVEL_CAP,

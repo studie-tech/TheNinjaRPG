@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   getCreateConceptArtUserUpdate,
   getCreateVideoUserUpdate,
-} from "@/delta/conceptart";
+} from "@/deltas/conceptart";
 import {
   COST_CONCEPT_IMAGE,
   COST_CONCEPT_VIDEO,

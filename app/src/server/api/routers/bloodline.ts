@@ -8,7 +8,7 @@ import {
   getPityRollUserUpdate,
   getPurchaseBloodlineUserUpdate,
   getRollUserUpdate,
-} from "@/delta/bloodline";
+} from "@/deltas/bloodline";
 
 import {
   BLOODLINE_COST,

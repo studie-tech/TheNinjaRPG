@@ -2,7 +2,7 @@ import {
   getPurchaseUserUpdate,
   getRefundUserUpdate,
   getResetUserUpdate,
-} from "@/delta/bloodright";
+} from "@/deltas/bloodright";
 import { COST_SKILL_RESET, MAX_BLOODRIGHT_TIERS } from "@/drizzle/constants";
 import { getBloodrightRefundIds } from "@/libs/bloodright";
 import {

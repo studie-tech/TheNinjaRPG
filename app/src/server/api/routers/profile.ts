@@ -15,7 +15,7 @@ import {
   getUpdateUsernameUserUpdate,
   getUserProgressionUpdate,
   getUseUnusedExperiencePointsUserUpdate,
-} from "@/delta/profile";
+} from "@/deltas/profile";
 import {
   ACTIVE_VOTING_SITES,
   BasicElementName,

@@ -4,7 +4,7 @@ import {
   getCaptureStoreOrderUserUpdate,
   getReconcilePaypalSubscriptionUserUpdate,
   getSubscribeWithRepsUserUpdate,
-} from "@/delta/paypal";
+} from "@/deltas/paypal";
 import {
   FEDERAL_MONTHLY_USD_CENTS,
   FederalStatuses,

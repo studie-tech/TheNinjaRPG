@@ -5,7 +5,7 @@ import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, type RouterInputs, useGlobalOnMutateProtect } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { combatProfilePatch } from "@/delta/combat";
+import { combatProfilePatch } from "@/deltas/combat";
 import {
   AutoBattleTypes,
   IMG_INITIATIVE_D20,

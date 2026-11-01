@@ -9,8 +9,8 @@ import {
   getSelectJutsuLoadoutUserUpdate,
   getTransferLevelUserUpdate,
   getUpdateUserJutsuOrderUserUpdate,
-} from "@/delta/jutsu";
-import { getUserProgressionUpdate } from "@/delta/profile";
+} from "@/deltas/jutsu";
+import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   COST_RESKIN_JUTSU,
   JUTSU_LEVEL_CAP,

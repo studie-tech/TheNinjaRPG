@@ -3,7 +3,7 @@
 import { getQueryKey } from "@trpc/react-query";
 import type React from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import { getRenamedLoadouts } from "@/delta/loadout";
+import { getRenamedLoadouts } from "@/deltas/loadout";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import { showMutationToast } from "@/libs/toast";

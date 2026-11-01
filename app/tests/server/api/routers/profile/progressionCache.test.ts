@@ -1,4 +1,4 @@
-import { getUserProgressionUpdate } from "@/delta/profile";
+import { getUserProgressionUpdate } from "@/deltas/profile";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { MASTERY_RANK_CAPS, MAX_SKILL_POINTS, SENSEI_MAX_STUDENT_LEVEL } from "@/drizzle/constants";

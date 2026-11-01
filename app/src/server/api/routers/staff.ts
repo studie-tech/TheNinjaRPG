@@ -8,7 +8,7 @@ import {
   getUnequipAllGearUserUpdate,
   getUnequipAllJutsusUserUpdate,
   getUpdateUserIdUserUpdate,
-} from "@/delta/staff";
+} from "@/deltas/staff";
 import type { UserStatus } from "@/drizzle/constants";
 import { huntingProgress, huntingReceipt, huntingSession } from "@/drizzle/schema";
 

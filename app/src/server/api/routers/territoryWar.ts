@@ -4,7 +4,7 @@ import {
   getCreateTeamUserUpdate,
   getJoinTeamUserUpdate,
   getLeaveTeamUserUpdate,
-} from "@/delta/territoryWar";
+} from "@/deltas/territoryWar";
 import {
   TERRITORY_WAR_INTERVAL_HOURS,
   TERRITORY_WAR_TEAM_SIZE,

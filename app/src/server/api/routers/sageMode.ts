@@ -1,7 +1,7 @@
 import { eq, like } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getRemoveSageModeUserUpdate } from "@/delta/sageMode";
+import { getRemoveSageModeUserUpdate } from "@/deltas/sageMode";
 import { REMOVAL_COST } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { sageMode } from "@/drizzle/schema";

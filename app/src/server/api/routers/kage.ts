@@ -1,6 +1,6 @@
 import { and, eq, exists, gte, lte } from "drizzle-orm";
 import { z } from "zod";
-import { getNominateKageUserUpdate } from "@/delta/kage";
+import { getNominateKageUserUpdate } from "@/deltas/kage";
 import {
   ELDER_KAGE_REMOVAL_VOTE_DAYS,
   ELDER_MIN_VOTING_COUNT,

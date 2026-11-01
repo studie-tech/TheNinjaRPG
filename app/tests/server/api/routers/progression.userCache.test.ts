@@ -1,4 +1,4 @@
-import type { UserUpdate, UserUpdateOptions } from "@/delta/profile";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as Sentry from "@sentry/nextjs";

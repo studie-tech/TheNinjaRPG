@@ -1,4 +1,4 @@
-import { canBootstrapQuestType } from "@/delta/profile";
+import { canBootstrapQuestType } from "@/deltas/profile";
 
 import { beforeEach, describe, expect, it } from "bun:test";
 import { quest, questHistory, type UserData } from "@/drizzle/schema";

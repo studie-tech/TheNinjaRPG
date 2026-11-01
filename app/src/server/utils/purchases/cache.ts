@@ -1,4 +1,4 @@
-import { canBootstrapQuestType } from "@/delta/profile";
+import { canBootstrapQuestType } from "@/deltas/profile";
 import { isAvailableUserQuests, mockAchievementHistoryEntries } from "@/libs/quest";
 import { fetchAchievementCatalogue } from "@/queries/profile";
 import { findPurchaseUserSnapshot } from "@/queries/purchases";

@@ -1,4 +1,4 @@
-import type { UserPatch, UserUpdateOptions } from "@/delta/profile";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as clerk from "@clerk/nextjs";

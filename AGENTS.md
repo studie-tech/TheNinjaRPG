@@ -21,7 +21,7 @@ Repository-wide agent instructions; `CLAUDE.md` imports this file. Paths below a
 - Keep test suites in `app/tests/`, organized by the corresponding source feature; use the shared setup in `app/tests/setup/`.
 - Bun module mocks persist across test files; verify affected suites together, since isolated passes can miss suite-order failures.
 - Use the existing tRPC routers and client hooks for application queries and mutations, with the established authentication and response conventions. Reserve standalone HTTP routes for integrations that require them, such as webhooks and scheduled jobs; SDK convenience alone is not a reason to bypass tRPC.
-- Build mutation cache patches, deltas, expected values and notification changes in `app/src/delta/`, grouped by feature. Keep these calculations pure and use already-loaded inputs; routers retain schemas, authorization, database orchestration and write-success guards. Preserve the distinction between an empty update and explicitly withheld data requiring reconciliation. `app/tests/delta/boundary.test.ts` enforces this boundary.
+- Build mutation cache patches, deltas, expected values and notification changes in `app/src/deltas/`, grouped by feature, with a purpose-specific JSDoc on each exported builder. Keep these calculations pure and use already-loaded inputs; routers retain schemas, authorization, database orchestration and write-success guards. Preserve the distinction between an empty update and explicitly withheld data requiring reconciliation. `app/tests/deltas/boundary.test.ts` enforces this boundary.
 - Cron endpoints must call `authenticateCronRequest` from `@/server/utils/cron` before timers, database access or other work. Keep their existing timing locks; authentication does not replace scheduling or concurrency guards.
 - If an existing pattern cannot meet a concrete requirement, verify the limitation, choose the smallest compatible extension and document why the exception is needed. When replacing an approach, migrate its callers and remove the obsolete implementation.
 
@@ -65,7 +65,7 @@ Next.js 15 App Router / React 19 / strict TypeScript; Tailwind, Shadcn/Radix; Dr
 | `app/src/server/api/` | `root.ts`: router registry; `trpc.ts`: middleware and `baseServerResponse`; `routers/`: endpoints |
 | `app/src/libs/` | Game logic by feature (combat, travel, bounty, etc.) |
 | `app/src/queries/` | Application database statements and reusable query helpers, grouped by feature; imported through `@/queries/*` |
-| `app/src/delta/` | Pure feature-specific cache patch and delta calculations; no database access or side effects. `utils/queryCache.ts` reconciles query revisions; `hooks/useQueryCacheUpdate.ts` binds confirmed mutations to an exact query key |
+| `app/src/deltas/` | Pure feature-specific cache patch and delta calculations; no database access or side effects. `utils/queryCache.ts` reconciles query revisions; `hooks/useQueryCacheUpdate.ts` binds confirmed mutations to an exact query key |
 | `app/src/validators/` | Shared Zod schemas and schemas consumed outside routers; router-only contracts stay inline |
 | `app/src/layout/` | Reusable game UI; prefer existing components |
 | `app/drizzle/` | `schema.ts`, `constants.ts`, `migrations/` |

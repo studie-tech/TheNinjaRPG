@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   getClaimStreakDayUserUpdate,
   getPurchaseEventPassUserUpdate,
-} from "@/delta/activityStreak";
+} from "@/deltas/activityStreak";
 
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { activityStreakConfig } from "@/drizzle/schema";

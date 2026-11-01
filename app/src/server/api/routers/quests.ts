@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { and, eq, gte, inArray, isNull, lte, ne, notExists, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { getUserProgressionUpdate } from "@/delta/profile";
+import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   getCancelPetTaskUserUpdate,
   getClaimedRewardChoiceUserUpdate,
@@ -13,7 +13,7 @@ import {
   getRewardUserDelta,
   getStartPetTaskUserUpdate,
   getUnchangedRewardChoiceUserUpdate,
-} from "@/delta/quests";
+} from "@/deltas/quests";
 import {
   ENERGY_QUEST_REWARDS,
   FARM_ACTIVITY_REWARD_TIME_REDUCTION_SECONDS,

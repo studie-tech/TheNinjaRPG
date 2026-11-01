@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getAcceptRequestUserUpdate, getLeaveSenseiUserUpdate } from "@/delta/sensei";
+import { getAcceptRequestUserUpdate, getLeaveSenseiUserUpdate } from "@/deltas/sensei";
 import { SENSEI_RANKS } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
 import { fetchUser } from "@/queries/profile";

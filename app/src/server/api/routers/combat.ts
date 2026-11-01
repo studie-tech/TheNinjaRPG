@@ -10,7 +10,7 @@ import {
   captureCombatCacheSnapshot,
   getAutoCombatPreferencePatch,
   getCombatAdmissionUserUpdate,
-} from "@/delta/combat";
+} from "@/deltas/combat";
 import {
   AdjustableBasicActions,
   AutoBattleTypes,

@@ -8,12 +8,12 @@ import {
   getOverworldRollUserUpdate,
   getOverworldUnchangedPatch,
   getReleasedOverworldQuestUserUpdate,
-} from "@/delta/overworldAi";
-import { getUserProgressionUpdate } from "@/delta/profile";
+} from "@/deltas/overworldAi";
+import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   getConfirmedRewardUserUpdate,
   getQuestRewardProjectionUpdate,
-} from "@/delta/quests";
+} from "@/deltas/quests";
 import { overworldAiPlacement, type UserQuest } from "@/drizzle/schema";
 
 import {
