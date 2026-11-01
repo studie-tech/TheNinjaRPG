@@ -8,6 +8,7 @@ import type { JutsuEquipCap } from "@/libs/jutsu";
 import { JUTSU_EQUIP_CAPS } from "@/libs/jutsu";
 import type { getJutsuReskinMechanics } from "@/libs/jutsu/reskins";
 import type { DrizzleClient } from "@/server/db";
+import { clampActionLogText } from "@/utils/actionLog";
 import type { baseReskinSchema } from "@/validators/jutsu";
 
 /** Fetch the stable slot order used for both display and allowance checks. */
@@ -1004,7 +1005,7 @@ export const insertActionLogForUpdateReskin = (
     tableName: "jutsu",
     changes: [`Reskin update rejected by AI: ${aiCheck.comment}`],
     relatedId: reskin.jutsuId,
-    relatedMsg: `Reskin update rejected by AI: ${reason}`,
+    relatedMsg: clampActionLogText(`Reskin update rejected by AI: ${reason}`),
     relatedImage: reskin.image,
   });
 

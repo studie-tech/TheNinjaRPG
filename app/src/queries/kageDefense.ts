@@ -1,3 +1,4 @@
+import { clampActionLogText } from "@/utils/actionLog";
 /**
  * Database access for kage defense; authorization and transaction scopes stay in callers.
  */
@@ -5,7 +6,6 @@
 import { and, asc, desc, eq, exists, gte, inArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
-  ACTION_LOG_RELATED_MSG_MAX_LENGTH,
   KAGE_DEFENSE_GRACE_MINUTES,
   KAGE_DEFENSE_NOTICE_HOURS,
   TERR_BOT_ID,
@@ -528,10 +528,7 @@ export const insertActionLogForRemoveAbsentKage = (
     userId: v.kageId,
     tableName: "village",
     relatedId: v.id,
-    relatedMsg: `${removedUsername} removed as Kage of ${v.name}`.slice(
-      0,
-      ACTION_LOG_RELATED_MSG_MAX_LENGTH,
-    ),
+    relatedMsg: clampActionLogText(`${removedUsername} removed as Kage of ${v.name}`),
     changes: [
       `Removed Kage: ${removedUsername} (${v.kageId})`,
       `Reason: ${removal.reason}`,

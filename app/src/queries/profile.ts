@@ -26,7 +26,6 @@ import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { UploadedFileData } from "uploadthing/types";
 import {
-  ACTION_LOG_RELATED_MSG_MAX_LENGTH,
   ACTIVE_VOTING_SITES,
   ALLIANCEHALL_LAT,
   ALLIANCEHALL_LONG,
@@ -101,6 +100,7 @@ import { hashIp } from "@/server/utils/ipHash";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
+import { clampActionLogText } from "@/utils/actionLog";
 import { getTimeOfLastReset, secondsFromNow } from "@/utils/time";
 import type { GetPublicUsersSchema, TavernColorChangeSchema } from "@/validators/user";
 
@@ -974,7 +974,9 @@ export const insertActionLogForUpdateUser = (
     tableName: "user",
     changes: [],
     relatedId: target.userId,
-    relatedMsg: `Updated attempted. Reason rejected by AI: ${input.data.reason}`,
+    relatedMsg: clampActionLogText(
+      `Updated attempted. Reason rejected by AI: ${input.data.reason}`,
+    ),
     relatedImage: target.avatarLight,
   });
 
@@ -1054,7 +1056,7 @@ export const insertActionLogForUpdateUser2 = (
     tableName: "user",
     changes: diff,
     relatedId: target.userId,
-    relatedMsg: input.data.reason,
+    relatedMsg: clampActionLogText(input.data.reason),
     relatedImage: target.avatarLight,
   });
 
@@ -1637,7 +1639,7 @@ export const insertActionLogForResetPetImageGeneration = (
     userId: ctx.userId,
     tableName: "user",
     relatedId: input.userId,
-    relatedMsg: input.reason.slice(0, ACTION_LOG_RELATED_MSG_MAX_LENGTH),
+    relatedMsg: clampActionLogText(input.reason),
     changes: [
       `Reset companion image attempts for ${pet.name} (${pet.id}) from ${pet.generationAttempts} to 0`,
     ],
@@ -1670,9 +1672,8 @@ export const insertActionLogForAdjustSeichiSilver = (
     tableName: "user",
     changes: [],
     relatedId: target.userId,
-    relatedMsg: `Seichi Silver adjustment rejected by AI: ${input.reason}`.slice(
-      0,
-      ACTION_LOG_RELATED_MSG_MAX_LENGTH,
+    relatedMsg: clampActionLogText(
+      `Seichi Silver adjustment rejected by AI: ${input.reason}`,
     ),
     relatedImage: target.avatarLight,
   });
@@ -1691,7 +1692,7 @@ export const insertActionLogForAdjustSeichiSilver2 = (
     tableName: "user",
     changes: [change],
     relatedId: target.userId,
-    relatedMsg: input.reason.slice(0, ACTION_LOG_RELATED_MSG_MAX_LENGTH),
+    relatedMsg: clampActionLogText(input.reason),
     relatedImage: target.avatarLight,
   });
 

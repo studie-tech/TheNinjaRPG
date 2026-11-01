@@ -24,6 +24,7 @@ import {
   completedQuestHistoryRelation,
   userQuestHistoryRelation,
 } from "@/server/utils/achievementObjectives";
+import { clampActionLogText } from "@/utils/actionLog";
 import { getUnique } from "@/utils/grouping";
 import { DAY_S, secondsFromDate } from "@/utils/time";
 import type { baseReskinSchema } from "@/validators/bloodline";
@@ -132,10 +133,7 @@ export const fetchBloodlines = async (client: DrizzleClient) => {
 
 import { count, desc, inArray, isNull, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import {
-  ACTION_LOG_RELATED_MSG_MAX_LENGTH,
-  IMG_AVATAR_DEFAULT,
-} from "@/drizzle/constants";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { jutsu, userData, userJutsu } from "@/drizzle/schema";
 import { bloodrightSwapRefund } from "@/libs/bloodright";
 
@@ -286,7 +284,7 @@ export const insertActionLogForUpdateReskin = (
     tableName: "bloodline",
     changes: [],
     relatedId: reskin.bloodlineId,
-    relatedMsg: `Reskin update rejected by AI: ${reason}`,
+    relatedMsg: clampActionLogText(`Reskin update rejected by AI: ${reason}`),
     relatedImage: reskin.image,
   });
 
@@ -400,9 +398,8 @@ export const insertActionLogForRemoveBloodlineFromPool = (
     tableName: "bloodline",
     changes: [],
     relatedId: target.userId,
-    relatedMsg: `Bloodline pool removal rejected by AI: ${input.reason}`.slice(
-      0,
-      ACTION_LOG_RELATED_MSG_MAX_LENGTH,
+    relatedMsg: clampActionLogText(
+      `Bloodline pool removal rejected by AI: ${input.reason}`,
     ),
     relatedImage: target.avatarLight,
   });
@@ -421,7 +418,7 @@ export const insertActionLogForRemoveBloodlineFromPool2 = (
     tableName: "bloodline",
     changes: [change],
     relatedId: target.userId,
-    relatedMsg: input.reason.slice(0, ACTION_LOG_RELATED_MSG_MAX_LENGTH),
+    relatedMsg: clampActionLogText(input.reason),
     relatedImage: target.avatarLight,
   });
 
