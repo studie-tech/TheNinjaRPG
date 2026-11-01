@@ -81,7 +81,8 @@ export const createTravelScene = async (options: {
         : Math.max(width * displayRatio(), Math.min(window.innerHeight * 0.6, 600)),
   });
   try {
-    const world = new Container(),
+    // The camera moves this group without repacking unchanged descendant transforms.
+    const world = new Container({ isRenderGroup: true }),
       terrainLayer = new Container(),
       terrainDrawLayer = new RenderLayer(),
       artLayer = new Container(),

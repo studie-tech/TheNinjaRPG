@@ -112,6 +112,13 @@ const drawOrder = (stage: Container) => {
   const pipe = { addRenderable: (view: Container) => drawn.push(view) };
   const renderer = { renderPipes: {
     sprite: pipe, mesh: pipe, graphics: pipe, text: pipe,
+    renderGroup: { addRenderGroup: (group: NonNullable<Container["renderGroup"]>) => {
+      for (const child of group.root.children) child.collectRenderables(
+        {} as Parameters<Container["collectRenderables"]>[0],
+        renderer as unknown as Parameters<Container["collectRenderables"]>[1],
+        null as unknown as Parameters<Container["collectRenderables"]>[2],
+      );
+    } },
     blendMode: { pushBlendMode() {}, popBlendMode() {} },
   } };
   stage.collectRenderables(

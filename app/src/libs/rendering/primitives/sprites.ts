@@ -465,22 +465,30 @@ export const createWorldSprites = async (
       }
     },
     setViewport: (bounds: WorldBounds, padding: number) => {
+      // Conservative world-space cells retain visibility and sprite batches during small pans.
+      const next = {
+        minX: Math.floor(bounds.minX / 64) * 64,
+        minY: Math.floor(bounds.minY / 64) * 64,
+        maxX: Math.ceil(bounds.maxX / 64) * 64,
+        maxY: Math.ceil(bounds.maxY / 64) * 64,
+        padding,
+      };
       if (
         viewport &&
-        viewport.minX === bounds.minX &&
-        viewport.minY === bounds.minY &&
-        viewport.maxX === bounds.maxX &&
-        viewport.maxY === bounds.maxY &&
+        viewport.minX === next.minX &&
+        viewport.minY === next.minY &&
+        viewport.maxX === next.maxX &&
+        viewport.maxY === next.maxY &&
         viewport.padding === padding
       )
         return;
-      viewport = { ...bounds, padding };
+      viewport = next;
       // Offscreen sprites keep their decoded lease but do not upload or join a GPU batch.
       for (const entry of entries) {
         entry.sprite.renderable =
           boundsOverlap(
             entry.bounds,
-            bounds,
+            viewport,
             padding +
               (entry.description.wind == null
                 ? 0

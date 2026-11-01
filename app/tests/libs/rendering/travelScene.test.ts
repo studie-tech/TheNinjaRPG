@@ -157,7 +157,7 @@ describe("travel scene ground depth", () => {
   });
 
   it("interleaves the same moving actor with trees and buildings at their ground baselines", async () => {
-    const { scene, state, depth, stage, advance } = await sceneFixture();
+    const { scene, state, depth, advance } = await sceneFixture();
     const sector = scene.sectors.get(724)!;
     const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
     const tree = sector.art.entries.find((entry) => entry.description.id === "tree")!;
@@ -169,12 +169,12 @@ describe("travel scene ground depth", () => {
     for (const entry of [tree, building]) expect(depth.renderLayerChildren.indexOf(actor)).toBeGreaterThan(depth.renderLayerChildren.indexOf(entry.sprite));
     const before = actor.y;
     state.users = [player({ latitude: 6 })]; state.actorRevision++;
-    stage.renderGroup!.structureDidChange = false;
+    depth.parentRenderGroup!.structureDidChange = false;
     advance(frame(1100, false));
     const height = sector.grid.getHex({ col: 4, row: 4 })!.height;
     expect(actor.y).not.toBe(before);
     expect(actor.zIndex).toBeCloseTo(-(actor.y + height * (0.1 + 1.8 * 0.7 * 4 / 64) + sector.position.y));
-    expect(stage.renderGroup!.structureDidChange).toBe(true);
+    expect(depth.parentRenderGroup!.structureDidChange).toBe(true);
     for (let tick = 0; tick < 8; tick++) advance(frame(1200 + tick));
     expect(depth.renderLayerChildren.find((child) => child.label === "user:self")).toBe(actor);
     depth.sortRenderLayerChildren();
