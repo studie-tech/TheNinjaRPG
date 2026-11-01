@@ -520,6 +520,14 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
     updatePreferences,
   } = useGameSettings(userData, updateUser);
 
+  const [settingsTab, setSettingsTab] = useLocalStorage<string>(
+    "gameSettingsTab",
+    "audio",
+  );
+  const activeSettingsTab = ["audio", "layout", "effects"].includes(settingsTab)
+    ? settingsTab
+    : "audio";
+
   // Track initial lightLayout value to detect changes
   const [initialLightLayout] = useState<boolean>(lightLayout);
   const [lightLayoutChanged, setLightLayoutChanged] = useState(false);
@@ -589,7 +597,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
   const handleLayoutChange = useSelectGameLayout();
 
   return (
-    <Tabs defaultValue="audio" className="min-w-0">
+    <Tabs value={activeSettingsTab} onValueChange={setSettingsTab} className="min-w-0">
       <TabsList aria-label="Settings categories" className="flex-nowrap">
         <TabsTrigger value="audio" className="min-h-9 flex-1 px-2 text-xs">
           Audio

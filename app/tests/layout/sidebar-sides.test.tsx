@@ -51,6 +51,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   document.documentElement.removeAttribute(SWAP_SIDEBARS_ATTRIBUTE);
   localStorage.removeItem(SWAP_SIDEBARS_STORAGE_KEY);
+  localStorage.removeItem("gameSettingsTab");
   for (const key of Object.values(VISUAL_EFFECT_KEYS)) localStorage.removeItem(key);
   browserGlobals.forEach((key, index) => {
     const descriptor = browserDescriptors[index];
@@ -229,5 +230,10 @@ describe("game settings categories", () => {
     expect(localStorage.getItem(VISUAL_EFFECT_KEYS.shadows)).toBe("false");
     expect(localStorage.getItem(VISUAL_EFFECT_KEYS.animations)).toBe("false");
     expect(view.queryByRole("switch", { name: "Swap sidebars" })).toBeNull();
+    expect(localStorage.getItem("gameSettingsTab")).toBe('"effects"');
+    view.unmount();
+    const reopened = renderSettings();
+    expect(reopened.getByRole("tab", { name: "Visual effects" }).getAttribute("aria-selected")).toBe("true");
+    expect(reopened.getByRole("switch", { name: "Lighting" })).toBeTruthy();
   });
 });
