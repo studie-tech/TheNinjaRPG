@@ -19,6 +19,18 @@ export const modalViewportClassName =
 export const modalScrollableBodyClassName =
   "min-h-0 space-y-2 overflow-y-auto overscroll-contain py-4";
 
+/**
+ * Footer row. On phones its buttons (Close, Proceed and any caller extras) share
+ * rows at equal width and a thumb-sized height, wrapping when they do not fit;
+ * from `sm` up they sit right-aligned at their natural size. Proceed comes last.
+ * Heights are minimums so a long label can wrap instead of overflowing.
+ */
+const modalFooterClassName = cn(
+  "flex-row flex-wrap items-center gap-2 sm:flex-nowrap sm:justify-end sm:space-x-0",
+  "[&>:is(button,a)]:h-auto [&>:is(button,a)]:min-h-12 [&>:is(button,a)]:flex-1 [&>:is(button,a)]:basis-28 [&>:is(button,a)]:rounded-lg [&>:is(button,a)]:text-base",
+  "sm:[&>:is(button,a)]:min-h-9 sm:[&>:is(button,a)]:flex-none sm:[&>:is(button,a)]:basis-auto sm:[&>:is(button,a)]:text-sm",
+);
+
 interface ModalProps {
   id?: string;
   title: string;
@@ -66,9 +78,6 @@ interface ModalProps {
  */
 export const Modal: React.FC<ModalProps> = (props) => {
   const bodyRef = useRef<HTMLDivElement>(null);
-  const confirmBtnClassName = props.confirmClassName
-    ? props.confirmClassName
-    : "bg-blue-600 text-white hover:bg-blue-700";
 
   const isProceedDisabled = props.isLoading || props.proceedDisabled;
 
@@ -205,41 +214,43 @@ export const Modal: React.FC<ModalProps> = (props) => {
         {(props.closeButton !== false || props.proceed_label || props.footerExtra) && (
           <DialogFooter
             className={cn(
+              modalFooterClassName,
               props.centerText && "sm:justify-center",
               props.footerClassName,
             )}
           >
             {props.proceed_label && (
-              <>
-                <Button
-                  id={props.id ? `${props.id}-proceed` : undefined}
-                  disabled={isProceedDisabled}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleAccept(e);
-                  }}
-                  className={`z-30 rounded-lg ${confirmBtnClassName}`}
-                >
-                  {props.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {props.isLoading
-                    ? (props.proceed_loading_label ?? props.proceed_label)
-                    : props.proceed_label}
-                </Button>
-                <div className="grow"></div>
-              </>
+              <Button
+                id={props.id ? `${props.id}-proceed` : undefined}
+                disabled={isProceedDisabled}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleAccept(e);
+                }}
+                // Callers colour their action (red for destructive, amber, ...); the
+                // theme's primary button is the default. First in the DOM so the dialog
+                // focuses it on open and Enter confirms; `order` places it last.
+                className={cn("z-30 order-2", props.confirmClassName)}
+              >
+                {props.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {props.isLoading
+                  ? (props.proceed_loading_label ?? props.proceed_label)
+                  : props.proceed_label}
+              </Button>
             )}
             {props.footerExtra}
             {props.closeButton !== false && (
               <Button
                 id={props.id ? `${props.id}-close` : undefined}
+                variant="outline"
                 disabled={props.isLoading}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   handleDialogClose();
                 }}
-                className="z-30 rounded-lg border border-gray-500 bg-gray-700 font-medium text-gray-300 text-sm hover:bg-gray-600 hover:text-white"
+                className="border-border bg-card text-foreground hover:bg-muted hover:text-foreground z-30 order-1"
               >
                 Close
               </Button>
