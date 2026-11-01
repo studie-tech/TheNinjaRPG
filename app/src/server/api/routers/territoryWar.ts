@@ -80,7 +80,7 @@ export const territoryWarRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
       if (!event || event.resolvedAt || event.endsAt <= new Date())
-        return errorResponse("This Territory War has ended");
+        return { ...errorResponse("This Territory War has ended"), userDelta: {} };
       if (user.isBanned || user.status !== "AWAKE" || user.sector !== event.sector)
         return errorResponse("You must be awake in the event sector");
       const competitor = getTerritoryCompetitor(user);

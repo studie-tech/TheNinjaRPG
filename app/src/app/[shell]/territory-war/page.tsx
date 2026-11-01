@@ -40,7 +40,7 @@ export default function TerritoryWarPage() {
     _variables: unknown,
     revision: number | undefined,
   ) => {
-    // Admission can settle timed work before returning an expected rejection.
+    // Battle launch can settle timed work before returning an expected rejection.
     await updateUser(result, { revision });
     showMutationToast({ ...result, message: result.message ?? "Updated team" });
     await utils.territoryWar.invalidate();

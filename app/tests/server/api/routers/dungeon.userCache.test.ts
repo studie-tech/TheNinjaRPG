@@ -135,6 +135,53 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
     expect(canonical.notifications.filter((entry) => entry.href === "/dungeon")).toEqual([activeDungeonNotification]);
   });
 
+  it.each(["missing", "hidden", "expired", "cleanup", "reservation"] as const)("reconciles an unavailable dungeon without losing mandatory state recovery: %s", async (scenario) => {
+    const db = await getTestDatabase();
+    if (scenario === "hidden" || scenario === "expired") {
+      const content = dungeonContent();
+      if (scenario === "hidden") content.hidden = true;
+      else content.expiresAt = new Date(0);
+      await db.insert(dungeon).values({ id: "unavailable", content, updatedAt: new Date() });
+    }
+    const profile = callerForDatabase(profileRouter, userId, db);
+    const initial = await profile.getUser();
+    const cache = cachedProfile(initial, () => profile.getUser());
+    const revision = cache.callbacks.onMutate();
+    const measured = await recordQueries(() => callerForDatabase(dungeonRouter, userId, db).create({ id: "unavailable" }));
+    const response = userDeltaResponseSchema.parse(measured.result);
+    expect(response).toMatchObject({ success: false, message: "This dungeon is unavailable.", userDelta: {} });
+    expect(measured.statements).toHaveLength(7);
+    expect(measured.statements.every((statement) => /^select /i.test(statement))).toBe(true);
+    if (scenario === "cleanup" || scenario === "reservation") {
+      // Another tab reserves a party after the rejected create, before its mandatory state read.
+      await db.insert(dungeonRun).values({ id: "concurrent-run", dungeonId: "definition", leaderId: userId,
+        content: dungeonContent(), status: "LOBBY", createdAt: new Date(),
+        expiresAt: new Date(scenario === "cleanup" ? 0 : Date.now() + 3600000),
+        state: { ...dungeonBattleState().runState, memberIds: [userId] } });
+      await db.insert(dungeonMember).values({ runId: "concurrent-run", userId, activeUserId: userId });
+      await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, userId));
+    }
+    await cache.callbacks.refresh(response, revision);
+    const refreshed = await cache.refetchState.mock.results[0]?.value;
+    if (scenario === "cleanup") {
+      expect(refreshed?.data?.userPatch).toBeUndefined();
+      expect(await db.query.dungeonRun.findFirst({ where: eq(dungeonRun.id, "concurrent-run") })).toMatchObject({ status: "ENDED" });
+      expect(cache.current().userData).toMatchObject({ status: "AWAKE", activeDungeonRunId: null });
+    } else if (scenario === "reservation") {
+      expect(refreshed?.data).toMatchObject({ userPatch: {}, userExpected: { status: "QUEUED", activeDungeonRunId: "concurrent-run" } });
+      expect(cache.current().userData).toMatchObject({ status: "QUEUED", activeDungeonRunId: "concurrent-run" });
+    } else {
+      expect(refreshed?.data).toMatchObject({ userPatch: {}, userExpected: { activeDungeonRunId: null } });
+      expect(cache.current().userData).toEqual(initial.userData);
+    }
+    expect(cache.refetch).toHaveBeenCalledTimes(Number(scenario === "cleanup" || scenario === "reservation"));
+    expect(cache.refetchState).toHaveBeenCalledTimes(1);
+    expect(cache.refetchAvailable).toHaveBeenCalledTimes(1);
+    expect(cache.showMutationToast).toHaveBeenCalledWith(response);
+    expect(cache.setMessage).toHaveBeenCalledWith(response.message);
+    expect(cache.setAbandonId).not.toHaveBeenCalled();
+  });
+
   it.each(["accept", "queued", "busy", "read-error", "other-queue", "other-poll", "vanished", "live"] as const)("reconciles the mandatory state refresh after %s", async (scenario) => {
     const db = await getTestDatabase();
     await db.update(userData).set({ sector: 1 }).where(eq(userData.userId, userId));

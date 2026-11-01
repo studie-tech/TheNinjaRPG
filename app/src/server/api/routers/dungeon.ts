@@ -357,7 +357,7 @@ export const dungeonRouter = createTRPCRouter({
         content.hidden ||
         (content.expiresAt && content.expiresAt.getTime() <= Date.now())
       )
-        return errorResponse("This dungeon is unavailable.");
+        return { ...errorResponse("This dungeon is unavailable."), userDelta: {} };
       if (user.sector !== content.sector)
         return errorResponse("Travel to the dungeon's sector to create a lobby.");
       const admission = dungeonAdmission(admissionData, user, definition.id, content);
