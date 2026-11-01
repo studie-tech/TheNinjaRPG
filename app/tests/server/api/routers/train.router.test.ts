@@ -554,7 +554,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
   });
 
   it("Energy training retains reduced gains after joining a village", async () => {
-    await trainee({ rank: "JONIN", curEnergy: 100, regeneration: 0, joinedVillageAt: new Date() });
+    await trainee({ rank: "JONIN", curEnergy: 100, regeneration: 0, joinedVillageAt: new Date(), createdAt: new Date(Date.now() - 30 * DAY) });
     const before = await readUser();
     const result = await (await caller()).startTraining({ stat: "offence", energy: 100 });
     expect(result.success).toBe(true);
@@ -755,7 +755,7 @@ describeWithDatabase("Energy and mastery training against a real MySQL", () => {
   );
 
   it("Energy recovery retains the recent village-transfer penalty", async () => {
-    await trainee({rank: "JONIN", level: 100, regeneration: 60, joinedVillageAt: new Date(), curEnergy: 0, regenAt: new Date(Date.now() - 75_000)});
+    await trainee({rank: "JONIN", level: 100, regeneration: 60, joinedVillageAt: new Date(), createdAt: new Date(Date.now() - 30 * DAY), curEnergy: 0, regenAt: new Date(Date.now() - 75_000)});
     const hydrated = await fetchUpdatedUser({client: await getTestDatabase(), userId: USER_ID, forceRegen: true});
     expect(hydrated.user?.regeneration).toBe(30);
     expect((await readUser()).curEnergy).toBe(30);

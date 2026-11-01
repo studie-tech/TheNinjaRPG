@@ -25,7 +25,8 @@ const participant = (userId: string, isAi: boolean) => ({
   items: [], jutsus: [], userSkills: [], queue: [], cookingJobs: [], raidBuffs: [],
   userQuests: [], completedQuests: [], bounties: [], bountySignups: [],
   bloodline: null, sageMode: null, village: null, clan: null,
-  regenAt: new Date(), joinedVillageAt: new Date(),
+  // Joined the village well after sign-up, so the recent-transfer penalty applies.
+  regenAt: new Date(), joinedVillageAt: new Date(), createdAt: new Date(Date.now() - 30 * 86_400_000),
 });
 
 afterEach(() => vi.restoreAllMocks());
