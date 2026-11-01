@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { api } from "@/app/_trpc/client";
 import { getLoadoutsWithHotkeys } from "@/deltas/loadout";
@@ -39,6 +40,7 @@ export const useBattleHotkeys = (
   const itemLoadoutId =
     options.itemLoadoutId !== undefined ? options.itemLoadoutId : userData?.itemLoadout;
   const utils = api.useUtils();
+  const queryClient = useQueryClient();
   const enabled = !!userData && (options.enabled ?? true);
   const { data: jutsuLoadouts } = api.jutsu.getLoadouts.useQuery(undefined, {
     enabled,
@@ -55,26 +57,35 @@ export const useBattleHotkeys = (
     [jutsuMap, itemMap],
   );
 
-  const onSettled = (kind: HotkeyKind) => () =>
-    kind === "jutsu"
-      ? utils.jutsu.getLoadouts.invalidate()
-      : utils.item.getItemLoadouts.invalidate();
   // Each save sends a whole map, so saves run one at a time: an older map can
   // never land after a newer one. Both kinds share the scope because a save is
   // checked against the other kind's keys.
+  const scope = { id: "loadoutHotkeys" };
+  // Refetch only after the last queued save: an earlier refetch would replace
+  // the newer keys shown for a save still waiting in the queue.
+  const onSettled = () => {
+    const pending = queryClient.isMutating({
+      predicate: (mutation) => mutation.options.scope?.id === scope.id,
+    });
+    if (pending > 1) return;
+    return Promise.all([
+      utils.jutsu.getLoadouts.invalidate(),
+      utils.item.getItemLoadouts.invalidate(),
+    ]);
+  };
   const saveJutsu = api.jutsu.setLoadoutHotkeys.useMutation({
-    scope: { id: "loadoutHotkeys" },
+    scope,
     onSuccess: (result) => {
       if (!result.success) showMutationToast(result);
     },
-    onSettled: onSettled("jutsu"),
+    onSettled,
   });
   const saveItem = api.item.setLoadoutHotkeys.useMutation({
-    scope: { id: "loadoutHotkeys" },
+    scope,
     onSuccess: (result) => {
       if (!result.success) showMutationToast(result);
     },
-    onSettled: onSettled("item"),
+    onSettled,
   });
 
   /** Bind (or with "" clear) a key; returns false when it could not be saved. */
@@ -116,14 +127,17 @@ export const useBattleHotkeys = (
       return false;
     }
     // Show the new keys at once (the next change builds on these rows); the save
-    // confirms them or the refetch restores them.
+    // confirms them or the refetch restores them. Cancelling first drops a
+    // refetch already in flight, which would otherwise overwrite them.
     if (kind === "jutsu") {
+      void utils.jutsu.getLoadouts.cancel();
       utils.jutsu.getLoadouts.setData(
         undefined,
         (rows) => rows && getLoadoutsWithHotkeys(rows, loadout.id, map),
       );
       saveJutsu.mutate({ id: loadout.id, hotkeys: map });
     } else {
+      void utils.item.getItemLoadouts.cancel();
       utils.item.getItemLoadouts.setData(
         undefined,
         (rows) => rows && getLoadoutsWithHotkeys(rows, loadout.id, map),
