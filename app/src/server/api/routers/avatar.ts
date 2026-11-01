@@ -51,7 +51,8 @@ export const avatarRouter = createTRPCRouter({
         user,
         true,
       );
-      if (!avatarUrl) return errorResponse("Failed to create avatar");
+      if (!avatarUrl)
+        return { ...errorResponse("Failed to create avatar"), userDelta: {} };
       const userPatch = { avatar: avatarUrl, avatarLight: thumbnailUrl || null };
 
       // Mutate

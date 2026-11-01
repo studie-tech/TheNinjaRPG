@@ -147,9 +147,21 @@ export function PetAcquisition() {
     onError: failMutation,
   });
   const generate = api.pets.generateAppearance.useMutation({
-    onMutate: prepareUserUpdate,
-    onSuccess: finishMutation,
-    onError: failMutation,
+    onSuccess: async (result) => {
+      setMessage(result.success ? null : result.message);
+      showMutationToast(result);
+      await Promise.all([
+        utils.pets.getPet.invalidate(),
+        utils.pets.getCollection.invalidate(),
+      ]);
+    },
+    onError: async (cause) => {
+      setMessage(cause.message);
+      await Promise.all([
+        utils.pets.getPet.invalidate(),
+        utils.pets.getCollection.invalidate(),
+      ]);
+    },
   });
   const isBusy =
     needsCollectionCheck || isAcquiring || acquire.isPending || generate.isPending;

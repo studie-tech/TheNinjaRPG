@@ -1168,18 +1168,7 @@ const NewAiAvatar: React.FC = () => {
     onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
       await Promise.all([
-        data.success
-          ? updateUser(
-              data.userPatch?.avatar !== undefined &&
-                data.userPatch.avatarLight !== undefined
-                ? {
-                    avatar: data.userPatch.avatar,
-                    avatarLight: data.userPatch.avatarLight,
-                  }
-                : undefined,
-              { revision, delta: data.userDelta },
-            )
-          : utils.profile.getUser.invalidate(),
+        updateUser(data, { revision }),
         utils.avatar.getHistoricalAvatars.invalidate(),
       ]);
     },

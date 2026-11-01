@@ -51,8 +51,9 @@ const setup = (file: string, procedure: string) => {
     clan: { getClanBattles: leaf },
     hunting: { getBoard: leaf, getSession: leaf },
     combat: { getBattle: leaf },
+    avatar: { getHistoricalAvatars: leaf },
     travel: { getSectorData: leaf },
-    profile: { getDashboard: leaf },
+    profile: { getDashboard: leaf, getUser: { invalidate: () => client.invalidateQueries({ queryKey: key }) } },
     territoryWar: { invalidate },
   };
   const updateUser = vi.fn((patch: UserPatch | undefined, options: UserUpdateOptions) => updateUserCache(client, key, patch, options));
@@ -124,6 +125,50 @@ describe.each(flows)("$procedure profile updates", ({ file, procedure, patch, in
       await test.updateUser.mock.results[0]?.value;
       expect(test.getUser).toHaveBeenCalledTimes(1);
       expect(test.invalidate).toHaveBeenCalledTimes(invalidations);
+    } finally { test.close(); }
+  });
+});
+
+describe("generated avatar profile recovery", () => {
+  it("keeps a confirmed file-generation rejection local", async () => {
+    const test = setup("layout/ProfileEdit.tsx", "avatar.createAvatar");
+    try {
+      const response = { success: false, message: "Failed to create avatar", userDelta: {} };
+      await test.options.onSuccess(response, undefined, test.options.onMutate());
+      expect(test.updateUser).toHaveBeenCalledWith(response, { revision: expect.any(Number) });
+      expect(test.getUser).not.toHaveBeenCalled();
+      expect(test.value()).toEqual(test.profile);
+      expect(test.invalidate).toHaveBeenCalledTimes(1);
+    } finally { test.close(); }
+  });
+
+  it("recovers a rejected guarded debit without confirmed profile state", async () => {
+    const test = setup("layout/ProfileEdit.tsx", "avatar.createAvatar");
+    const changed = { ...test.profile, userData: { ...test.profile.userData, reputationPoints: 0 } };
+    test.getUser.mockResolvedValue(changed);
+    try {
+      await test.options.onSuccess({ success: false, message: "Failed to upload avatar" }, undefined, test.options.onMutate());
+      expect(test.getUser).toHaveBeenCalledTimes(1);
+      expect(test.value()?.userData.reputationPoints).toBe(0);
+    } finally { test.close(); }
+  });
+
+  it("applies the avatar pair and confirmed debit without fetching the profile", async () => {
+    const test = setup("layout/ProfileEdit.tsx", "avatar.createAvatar");
+    try {
+      await test.options.onSuccess({ success: true, userPatch: { avatar: "/generated.webp", avatarLight: null }, userDelta: { reputationPoints: -1 } }, undefined, test.options.onMutate());
+      expect(test.value()?.userData).toMatchObject({ avatar: "/generated.webp", avatarLight: null, reputationPoints: 29 });
+      expect(test.getUser).not.toHaveBeenCalled();
+    } finally { test.close(); }
+  });
+
+  it("recovers a generated avatar response arriving after another profile revision", async () => {
+    const test = setup("layout/ProfileEdit.tsx", "avatar.createAvatar");
+    try {
+      const revision = test.options.onMutate();
+      test.client.setQueryData(key, { ...test.profile, userData: { ...test.profile.userData, reputationPoints: 20 } });
+      await test.options.onSuccess({ success: true, userPatch: { avatar: "/generated.webp", avatarLight: null }, userDelta: { reputationPoints: -1 } }, undefined, revision);
+      expect(test.getUser).toHaveBeenCalledTimes(1);
     } finally { test.close(); }
   });
 });
