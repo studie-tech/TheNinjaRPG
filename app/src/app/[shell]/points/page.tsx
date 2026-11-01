@@ -452,13 +452,13 @@ const PayPalSubscriptionButton = (props: {
   }, []);
 
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
-  const utils = api.useUtils();
   // Mutation for starting subscription
   const { mutate: subscribe, isPending: isSubscribing } =
     api.paypal.resolveSubscription.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
-        if (data.success) await utils.profile.getUser.invalidate();
+        if (data.success) await updateUser(data, { revision });
         if (data.success && props.onSuccess) props.onSuccess();
       },
       onError: (error) => {

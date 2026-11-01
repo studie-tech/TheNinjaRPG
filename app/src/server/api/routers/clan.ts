@@ -316,8 +316,8 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message: `${user.username} donated 0 reputation points to faction`,
-          userDelta: hasEnergyQueue(user) ? undefined : {},
-          userPatch: { clan: { id: fetchedClan.id } },
+          userDelta: {},
+          userPatch: {},
         };
       }
       // Mutate step 1 - update user
@@ -1159,8 +1159,8 @@ export const clanRouter = createTRPCRouter({
         return {
           success: true,
           message: "Successfully deposited 0 ryo",
-          userDelta: needsUserRefresh ? undefined : {},
-          userPatch: { clan: { id: fetchedClan.id } },
+          userDelta: {},
+          userPatch: {},
         };
       }
       const result = await debitUserMoney(ctx.drizzle, input.amount, ctx);

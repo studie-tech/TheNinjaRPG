@@ -11,7 +11,7 @@ const flows = [
 ];
 
 /** Run production purchase callbacks against the shared revision-aware cache updater. */
-const setup = (file: string, procedure: string, progress: AchievementProgress[]) => {
+const setup = (file: string, procedure: string, progress: AchievementProgress[], props: object = {}) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const profile = {
     userData: { userId: "buyer", money: 100, reputationPoints: 0, reputationPointsTotal: 0, federalStatus: "NONE", userQuests: [], questData: [] } as unknown as NonNullable<UserWithRelations>,
@@ -37,7 +37,7 @@ const setup = (file: string, procedure: string, progress: AchievementProgress[])
   if (!callbacks) throw new Error(`${procedure} callbacks were not found in ${file}`);
   // Execute production callbacks so dropping response metadata cannot hide behind a manual merge.
   const options = new Function("utils", "prepareUserUpdate", "updateUser", "showMutationToast", "setMessage", "setSessionId", "sendGTMEvent", "props", `return (${callbacks});`)(
-    utils, () => prepareUserUpdate(client, key), updateUser, showMutationToast, vi.fn(), vi.fn(), vi.fn(), {},
+    utils, () => prepareUserUpdate(client, key), updateUser, showMutationToast, vi.fn(), vi.fn(), vi.fn(), props,
   ) as { onMutate: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void> };
   return {
     client, getUser, updateUser, options, profile, showMutationToast,
@@ -106,7 +106,6 @@ it("applies a newly delivered scalar purchase once without a profile read", asyn
 
 describe.each([
   { file: "layout/StripePayments.tsx", procedure: "stripe.resolveSession" },
-  { file: "app/[shell]/points/page.tsx", procedure: "paypal.resolveSubscription" },
   { file: "app/[shell]/points/page.tsx", procedure: "paypal.resolveTransaction" },
 ])("$procedure receipt recovery", ({ file, procedure }) => {
   it("reconciles provider outcomes with one canonical profile read", async () => {
@@ -125,4 +124,49 @@ it("reconciles partial transaction delivery after an unsuccessful lookup", async
     await test.options.onSuccess({ success: false, message: "One receipt failed after another delivered" }, undefined, undefined);
     expect(test.getUser).toHaveBeenCalledTimes(1);
   } finally { test.close(); }
+});
+
+describe("paypal.resolveSubscription receipt recovery", () => {
+  it.each(["matching", "missing", "changed"] as const)("keeps the buyer profile and revision for a confirmed gift with %s revision", async (baseline) => {
+    const onSuccess = vi.fn();
+    // The selected recipient can change while PayPal approval is open.
+    const test = setup("app/[shell]/points/page.tsx", "paypal.resolveSubscription", [], { userId: "buyer", buyerId: "buyer", onSuccess });
+    const revision = baseline === "missing" ? undefined : test.options.onMutate();
+    if (baseline === "changed") test.client.setQueryData(key, { ...test.profile, userData: { ...test.profile.userData, money: 90 } });
+    const before = test.value();
+    const beforeRevision = prepareUserUpdate(test.client, key);
+    try {
+      await test.options.onSuccess({ success: true, message: "Subscription synchronized", userPatch: {} }, undefined, revision);
+      expect(test.updateUser).toHaveBeenCalledTimes(1);
+      expect(test.getUser).not.toHaveBeenCalled();
+      expect(test.value()).toBe(before);
+      expect(prepareUserUpdate(test.client, key)).toBe(beforeRevision);
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+      expect(test.showMutationToast).toHaveBeenCalledTimes(1);
+    } finally { test.close(); }
+  });
+
+  it.each([true, false])("reconciles self coverage from canonical floors with a captured revision=%s", async (hasRevision) => {
+    const onSuccess = vi.fn();
+    const test = setup("app/[shell]/points/page.tsx", "paypal.resolveSubscription", [], { userId: "other", buyerId: "buyer", onSuccess });
+    try {
+      await test.options.onSuccess({ success: true, message: "Subscription synchronized", userPatch: undefined }, undefined, hasRevision ? test.options.onMutate() : undefined);
+      expect(test.updateUser).toHaveBeenCalledTimes(1);
+      expect(test.getUser).toHaveBeenCalledTimes(1);
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+    } finally { test.close(); }
+  });
+
+  it("shows a rejected lookup without reconciling the profile or completing approval", async () => {
+    const onSuccess = vi.fn();
+    const test = setup("app/[shell]/points/page.tsx", "paypal.resolveSubscription", [], { onSuccess });
+    try {
+      const result = { success: false, message: "This subscription belongs to another account." };
+      await test.options.onSuccess(result, undefined, undefined);
+      expect(test.showMutationToast).toHaveBeenCalledWith(result);
+      expect(test.updateUser).not.toHaveBeenCalled();
+      expect(test.getUser).not.toHaveBeenCalled();
+      expect(onSuccess).not.toHaveBeenCalled();
+    } finally { test.close(); }
+  });
 });

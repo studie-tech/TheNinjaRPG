@@ -291,11 +291,35 @@ describeWithDatabase("Shared PayPal and Stripe reputation reservations", () => {
   it("a configured, owned paid subscription grants the gift once and sync retries succeed", async () => {
     subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
     const caller = await callerFor(paypalRouter, BUYER);
-    expect((await caller.resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
+    const giftResult = await caller.resolveSubscription({ subscriptionId: "SUB_TEST" });
+    expect(giftResult.success).toBe(true);
+    expect(giftResult.userPatch).toEqual({});
     expect((await target())?.federalStatus).toBe("GOLD");
-    expect((await caller.resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(true);
+    expect((await caller.resolveSubscription({ subscriptionId: "SUB_TEST" })).userPatch).toEqual({});
     expect(await (await getTestDatabase()).query.paypalSubscription.findMany()).toHaveLength(1);
-    expect((await (await callerFor(paypalRouter, OTHER)).resolveSubscription({ subscriptionId: "SUB_TEST" })).success).toBe(false);
+    const recipientResult = await (await callerFor(paypalRouter, TARGET)).resolveSubscription({ subscriptionId: "SUB_TEST" });
+    expect(recipientResult.success).toBe(true);
+    expect(recipientResult.userPatch).toBeUndefined();
+    expect(recipientResult.userDelta).toBeUndefined();
+    const rejected = await (await callerFor(paypalRouter, OTHER)).resolveSubscription({ subscriptionId: "SUB_TEST" });
+    expect(rejected.success).toBe(false);
+    expect(rejected.userPatch).toBeUndefined();
+  });
+  it.each(["buyer", "recipient"] as const)("uses canonical subscription ownership for a renamed %s's cache response", async (renamed) => {
+    const db = await getTestDatabase();
+    await db.insert(storeUserIdAlias).values(renamed === "recipient"
+      ? { oldUserId: TARGET, newUserId: BUYER }
+      : { oldUserId: BUYER, newUserId: OTHER });
+    subscriptions.set("SUB_TEST", { id: "SUB_TEST", status: "ACTIVE", plan_id: "plan_test_gold", custom_id: `${BUYER}-${TARGET}`, billing_info: { last_payment: { time: new Date().toISOString(), amount: { value: "15.00", currency_code: "USD" } } } });
+    const callerId = renamed === "recipient" ? BUYER : OTHER;
+    const affectedUserId = renamed === "recipient" ? BUYER : TARGET;
+    const result = await (await callerFor(paypalRouter, callerId)).resolveSubscription({ subscriptionId: "SUB_TEST" });
+    expect(result.success).toBe(true);
+    expect(result.userPatch).toEqual(renamed === "recipient" ? undefined : {});
+    expect(result.userDelta).toBeUndefined();
+    expect(await db.query.paypalSubscription.findFirst()).toMatchObject({ createdById: callerId, affectedUserId });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, affectedUserId) })).toMatchObject({ federalStatus: "GOLD" });
+    expect(await db.query.userData.findFirst({ where: eq(userData.userId, renamed === "recipient" ? TARGET : OTHER) })).toMatchObject({ federalStatus: "NONE" });
   });
   it.each([
     ["GOLD", "NORMAL", "plan_test_normal", "5.00"],

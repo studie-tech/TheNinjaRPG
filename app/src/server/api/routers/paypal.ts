@@ -462,7 +462,7 @@ export const paypalRouter = createTRPCRouter({
         orderId: z.string().min(1).max(191).optional(),
       }),
     )
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       const token = await getPaypalAccessToken();
       const subscription = await getPaypalSubscription(input.subscriptionId, token);
@@ -1338,7 +1338,7 @@ export const reconcilePaypalSubscription = async (input: {
     return errorResponse("This subscription belongs to another account.");
   // PayPal's subscription approval/reporting APIs can omit an order ID. Retain its
   // provider reference so the renewal job does not classify paid billing as rep-funded.
-  return updateSubscription({
+  const result = await updateSubscription({
     client: input.client,
     ...owners,
     subscriptionId: input.subscription.id,
@@ -1346,6 +1346,14 @@ export const reconcilePaypalSubscription = async (input: {
     federalStatus: getPaypalSubscriptionStatus(input.subscription).newStatus,
     status: input.subscription.status,
   });
+  return {
+    ...result,
+    // Only the canonical recipient's cross-provider entitlement changes.
+    userPatch:
+      result.success && input.callerId && input.callerId !== owners.affectedUserId
+        ? {}
+        : undefined,
+  };
 };
 
 /** Decode the legacy buyer-recipient reference without accepting ambiguous identities. */
