@@ -15,6 +15,7 @@ import { ensureDom } from "../setup/dom.mjs";
 ensureDom();
 const testApi = createTRPCReact<AppRouter>();
 let useInventoryCacheUpdate: typeof InventoryCacheHook;
+/** Bind the real typed procedures to this suite's provider without retaining other suites' mocks. */
 const installApi = () => Object.assign(vi.spyOn(appClient, "api" as never), {
   item: testApi.item, jutsu: testApi.jutsu, useUtils: testApi.useUtils,
 });
@@ -28,6 +29,7 @@ beforeEach(() => { installApi(); });
 const clients: QueryClient[] = [];
 afterEach(() => { cleanup(); for (const client of clients.splice(0)) client.clear(); vi.restoreAllMocks(); });
 
+/** Exercise feature hooks against a shared cache and reject unexpected network requests. */
 const harness = () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   clients.push(client);

@@ -13,10 +13,12 @@ export const usePetCacheUpdate = (input: RouterInputs["pets"]["getPet"]) => {
   const collection = useQueryCacheUpdate<RouterOutputs["pets"]["getCollection"]>(
     getQueryKey(api.pets.getCollection, undefined, "query"),
   );
+  /** Capture the selected pet's query key and both revisions before allocating XP. */
   const preparePetUpdate = () => ({
     pet: pet.prepareUpdate(),
     collection: collection.prepareUpdate(),
   });
+  /** Reconcile the captured pet and collection, refreshing other pet views and unsafe projections. */
   const updatePet = async (
     update: RouterOutputs["pets"]["assignExperience"]["petUpdate"],
     snapshot: ReturnType<typeof preparePetUpdate>,

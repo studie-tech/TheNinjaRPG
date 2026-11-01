@@ -22,6 +22,7 @@ type FarmQueryData = FarmStateResponse | { success: false; message: string };
 const isFarmState = (data: FarmQueryData | undefined): data is FarmStateResponse =>
   !!data && !("success" in data);
 
+/** Coordinate farm actions and keep controls pending until confirmed changes are reconciled. */
 export function useFarmController() {
   const utils = api.useUtils();
   const farmCache = useQueryCacheUpdate<RouterOutputs["farming"]["getFarmState"]>(
@@ -88,6 +89,7 @@ export function useFarmController() {
     setPendingPlotSlots(next);
   }, []);
 
+  /** Prevent overlapping plot actions and reconcile the revision captured before each write. */
   const runPlotAction = useCallback(
     async (
       plot: FarmPlotState,
@@ -206,6 +208,7 @@ export function useFarmController() {
     [harvestAllMutation, runBulkAction],
   );
 
+  /** Reconcile inventory actions without restoring snapshots that could undo another action. */
   const runInventoryAction = useCallback(
     async (
       key: string,

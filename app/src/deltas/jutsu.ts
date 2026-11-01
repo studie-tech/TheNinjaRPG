@@ -113,6 +113,7 @@ export const getEquippedJutsus = <
     !rows.some((row) => row.id === userJutsuId && row.jutsuId === change.jutsuId)
   )
     return;
+  // includeEquipped admits rows that need not match the other filters.
   if (
     !change.equipped &&
     input.includeEquipped &&

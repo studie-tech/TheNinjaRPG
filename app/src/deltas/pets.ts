@@ -143,6 +143,7 @@ export const getAssignExperienceUserUpdate = ({
   };
 };
 
+/** Committed XP projection shared by the selected pet and collection caches. */
 type PetExperienceUpdate = NonNullable<
   ReturnType<typeof getAssignExperienceUserUpdate>["petUpdate"]
 >;

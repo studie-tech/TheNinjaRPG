@@ -1765,6 +1765,7 @@ export const itemRouter = createTRPCRouter({
     .input(z.object({ userItemId: z.string(), slot: z.enum(ItemSlots).optional() }))
     .output(
       baseServerResponse.extend({
+        // Omission keeps clients on authoritative reads when no projection is supplied.
         equipmentChanges: z
           .array(
             z.object({

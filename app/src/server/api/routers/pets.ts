@@ -675,6 +675,7 @@ export const petsRouter = createTRPCRouter({
     .input(assignPetExperienceSchema)
     .output(
       userDeltaResponseSchema.extend({
+        // Only exact committed projections are returned; fractional writes use client refetches.
         petUpdate: z
           .object({
             offence: z.number(),

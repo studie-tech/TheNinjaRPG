@@ -1,6 +1,7 @@
 import { getFarmingLevel, patchFarmPlot } from "@/libs/farming";
 import type { FarmMutationResponse, FarmStateResponse } from "@/validators/farming";
 
+/** Project item-level quantities onto existing inventory lists without creating missing rows. */
 const patchInventory = (
   state: FarmStateResponse,
   deltas: NonNullable<FarmMutationResponse["inventoryDeltas"]>,
@@ -8,6 +9,7 @@ const patchInventory = (
   const deltaByItem = new Map(
     deltas.map((delta) => [delta.itemId, delta.quantityDelta]),
   );
+  /** Remove depleted stacks from every farm list that represents them. */
   const patchQuantity = <T extends { itemId: string; quantity: number }>(items: T[]) =>
     items
       .map((entry) => ({
@@ -51,7 +53,8 @@ export const applyFarmMutationPatch = (
 
 /**
  * Reconcile complete single-plot changes and unambiguous crop sales. Bulk plots, new rows,
- * harvest collection progress, extraction jobs and level or shop unlocks require a read.
+ * harvest collection progress, extraction jobs and level or shop unlocks return undefined
+ * so the query updater requests an authoritative refresh.
  */
 export const getFarmMutationUpdate = (
   state: FarmStateResponse,
@@ -79,6 +82,7 @@ export const getFarmMutationUpdate = (
       return;
   }
   const currency = state.farmCurrency + (result.farmCurrencyDelta ?? 0);
+  // Shop entries include affordability, so crossing a price threshold needs fresh state.
   if (
     state.shopEntries.some(
       (entry) => state.farmCurrency >= entry.cost !== currency >= entry.cost,
@@ -98,6 +102,7 @@ export const getFarmMutationUpdate = (
     return;
   for (const delta of result.inventoryDeltas ?? []) {
     if (delta.quantityDelta >= 0) return;
+    // Item-level deltas cannot identify which of several owned stacks was consumed.
     const entries = [
       state.availableSeeds,
       state.availableFertilizers,

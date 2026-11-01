@@ -958,6 +958,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       }
     },
     onError: async (error) => {
+      // A local handler replaces the provider's default toast; report before recovery reads.
       showMutationToast({
         success: false,
         message: error.message,
@@ -980,6 +981,7 @@ const Backpack: React.FC<BackpackProps> = (props) => {
       }
     },
     onError: async (error) => {
+      // The write may have committed before the error; show feedback and recover both views.
       showMutationToast({
         success: false,
         message: error.message,

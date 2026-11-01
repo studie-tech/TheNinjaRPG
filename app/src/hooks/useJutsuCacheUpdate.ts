@@ -11,7 +11,9 @@ export const useJutsuCacheUpdate = (input: UserJutsuFilteringSchema) => {
   const cache = useQueryCacheUpdate<RouterOutputs["jutsu"]["getUserJutsus"]>(
     getQueryKey(api.jutsu.getUserJutsus, input, "query"),
   );
+  /** Capture the filter and query revision before later renders can change the selection. */
   const prepareJutsuUpdate = () => ({ query: cache.prepareUpdate(), input });
+  /** Reconcile the initiating filter and refresh other filters whose membership may change. */
   const updateJutsus = async (
     userJutsuId: string,
     change: RouterOutputs["jutsu"]["toggleEquip"]["data"],

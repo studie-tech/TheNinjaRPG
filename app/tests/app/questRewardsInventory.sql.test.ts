@@ -89,6 +89,7 @@ describeWithDatabase("quest reward inventory reconciliation", () => {
         showMutationToast: vi.fn(), showRewardToast: vi.fn(), openRewardChoice: vi.fn(),
         currentStep: undefined, handleNextStepAsync: vi.fn(),
       };
+      // Run the production reward callbacks against real profile reads and both observed inventories.
       const source = readFileSync(join(import.meta.dirname, "../../src/layout/Logbook.tsx"), "utf8");
       const callbacks = source.match(/api\.quests\.checkRewards\.useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
       if (!callbacks) throw new Error("Quest reward callbacks were not found");

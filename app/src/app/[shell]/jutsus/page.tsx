@@ -229,6 +229,7 @@ export default function MyJutsu() {
       }
     },
     onError: async (error) => {
+      // Local recovery replaces the provider's error handler, so feedback must be explicit.
       showMutationToast({
         success: false,
         message: error.message,

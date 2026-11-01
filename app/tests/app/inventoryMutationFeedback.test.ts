@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { MutationObserver, type MutationObserverOptions, QueryClient, QueryObserver } from "@tanstack/react-query";
 import { expect, it, vi } from "bun:test";
 
+// Exercise the page's actual callbacks alongside cache recovery and user feedback.
 for (const procedure of ["item.sellUserItem", "item.toggleEquip", "jutsu.toggleEquip"]) {
   it(`${procedure} shows failures, recovers observed caches and releases the action`, async () => {
     const isItem = procedure.startsWith("item.");
