@@ -9,10 +9,7 @@ import {
   getReleasedOverworldQuestUserUpdate,
 } from "@/deltas/overworldAi";
 import { getUserProgressionUpdate } from "@/deltas/profile";
-import {
-  getConfirmedRewardUserUpdate,
-  getQuestRewardProjectionUpdate,
-} from "@/deltas/quests";
+import { getQuestRewardProjectionUpdate } from "@/deltas/quests";
 import { overworldAiPlacement, type UserQuest } from "@/drizzle/schema";
 
 import {
@@ -26,7 +23,6 @@ import {
   attemptCapReached,
   getBoundObjectiveCandidates,
   getNewTrackers,
-  getQuestTargetSectorsToCheck,
   getReward,
   isAvailableUserQuests,
   isMockQuestHistoryRow,

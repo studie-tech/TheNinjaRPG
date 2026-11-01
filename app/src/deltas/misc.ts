@@ -1,4 +1,6 @@
 import type { UserQueueState } from "@/deltas/profile";
+import type { GameSetting } from "@/drizzle/schema";
+import type { EventGameSettingName } from "@/libs/gameSettingBoost";
 import { getGlobalGameSettingNotification } from "@/libs/gameSettingBoost";
 import { calcActiveUserRegen } from "@/libs/profile";
 import { hasEnergyQueue } from "@/libs/queue";
@@ -13,31 +15,10 @@ export const getSetEventGameSettingUserUpdate = ({
   changedSettings,
   setting,
 }: {
-  inputSetting:
-    | "trainingGainMultiplier"
-    | "regenGainMultiplier"
-    | "battleExpMultiplier"
-    | "missionExpMultiplier"
-    | "jutsuExpMultiplier"
-    | "itemExpMultiplier";
+  inputSetting: EventGameSettingName;
   user: Parameters<typeof calcActiveUserRegen>[0];
-  changedSettings: {
-    id: string;
-    name: string;
-    value: number;
-    time: Date;
-  }[];
-  setting: {
-    name:
-      | "trainingGainMultiplier"
-      | "regenGainMultiplier"
-      | "battleExpMultiplier"
-      | "missionExpMultiplier"
-      | "jutsuExpMultiplier"
-      | "itemExpMultiplier";
-    value: number;
-    time: Date;
-  };
+  changedSettings: GameSetting[];
+  setting: Pick<GameSetting, "value" | "time"> & { name: EventGameSettingName };
 }) => ({
   userPatch:
     inputSetting === "regenGainMultiplier"

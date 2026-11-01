@@ -7,7 +7,6 @@ import {
   getCancelPetTaskUserUpdate,
   getClaimedRewardChoiceUserUpdate,
   getCollectPetTaskUserUpdate,
-  getConfirmedRewardUserUpdate,
   getQuestRewardProjectionUpdate,
   getRetryBattleUserUpdate,
   getRewardUserDelta,

@@ -117,7 +117,6 @@ import {
   snapQuestTargetsToReachable,
 } from "@/libs/quest";
 import { getIsolatedPyramid } from "@/libs/questRun";
-import { hasEnergyQueue } from "@/libs/queue";
 import {
   getRaidObjectiveData,
   isRaidListedForVillage,
@@ -1862,15 +1861,11 @@ export const profileRouter = createTRPCRouter({
           success: true,
           message: "User stats updated",
           // A pending queue is settled by the profile refresh, including quest progress.
-          ...(hasEnergyQueue(user)
-            ? {}
-            : {
-                ...getUseUnusedExperiencePointsUserUpdate({
-                  data,
-                  resultClaimedAt: result.claimedAt,
-                  user,
-                }),
-              }),
+          ...getUseUnusedExperiencePointsUserUpdate({
+            data,
+            resultClaimedAt: result.claimedAt,
+            user,
+          }),
         };
       }
     }),
