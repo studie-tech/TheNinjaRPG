@@ -829,7 +829,10 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
             }
           >
             {isSettingsTrigger ? (
-              <Settings className="h-4 w-4" suppressHydrationWarning />
+              <Settings
+                className={triggerClassName ? "h-4 w-4" : "h-6 w-6 p-1 xl:h-7 xl:w-7"}
+                suppressHydrationWarning
+              />
             ) : audioEnabled ? (
               <Volume2 className="h-6 w-6 p-1 xl:h-7 xl:w-7" suppressHydrationWarning />
             ) : (
