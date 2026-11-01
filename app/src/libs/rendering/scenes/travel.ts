@@ -263,6 +263,9 @@ export const createTravelScene = async (options: {
               calculateWidth2Height(entry.map.width, entry.map.height + 2),
             margin: (grid.toArray()[0]?.width ?? 50) * 3,
           });
+          // Installed, the scope belongs to `sectors`: a newer request arriving during
+          // the yield below must not dispose it as an unfinished build.
+          pending.delete(scope);
           actorsDirty = true;
           lastPath = "";
           options.onReady();
