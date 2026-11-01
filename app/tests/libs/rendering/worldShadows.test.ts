@@ -104,6 +104,38 @@ describe("world sunlight", () => {
 });
 
 describe("physical world lighting", () => {
+  it("retains screen-density lighting through a pan and refreshes coverage, zoom and resize", () => {
+    const f = fixture();
+    try {
+      f.shadows.registerTerrain(f.parent, f.terrain);
+      const night = worldSunlight(new Date((WORLD_DAY_SECONDS + 10) * 1000));
+      f.shadows.update(night, viewport);
+      const resources = f.shadows.container.filters![0]!.resources;
+      const view = resources.view as { uniforms: { uViewport: Float32Array; uReceiverSize: Float32Array } };
+      const look = resources.look as { uniforms: { uScreenViewport: Float32Array } };
+      const retained = Array.from(view.uniforms.uViewport);
+      const draws = f.render.mock.calls.length;
+      const texelWidth = view.uniforms.uViewport[2]! / view.uniforms.uReceiverSize[0]!;
+      expect(texelWidth).toBeCloseTo(100 / 800);
+      f.shadows.update(night, { ...viewport, minX: 1, maxX: 101 });
+      expect(f.render).toHaveBeenCalledTimes(draws);
+      expect(Array.from(view.uniforms.uViewport)).toEqual(retained);
+      expect(Array.from(look.uniforms.uScreenViewport)).toEqual([1, 0, 100, 100]);
+      f.shadows.update(night, { ...viewport, minX: 20, maxX: 120 });
+      expect(f.render.mock.calls.length).toBeGreaterThan(draws);
+      expect(Array.from(view.uniforms.uViewport)).not.toEqual(retained);
+      expect(view.uniforms.uViewport[2]! / view.uniforms.uReceiverSize[0]!).toBeCloseTo(texelWidth);
+      let previous = f.render.mock.calls.length;
+      f.shadows.update(night, { ...viewport, maxX: 50 });
+      expect(f.render.mock.calls.length).toBeGreaterThan(previous);
+      expect(view.uniforms.uViewport[2]! / view.uniforms.uReceiverSize[0]!).toBeCloseTo(50 / 800);
+      previous = f.render.mock.calls.length;
+      Object.assign(f.game.renderer, { width: 400 });
+      f.shadows.update(night, { ...viewport, maxX: 50 });
+      expect(f.render.mock.calls.length).toBeGreaterThan(previous);
+      expect(view.uniforms.uViewport[2]! / view.uniforms.uReceiverSize[0]!).toBeCloseTo(50 / 400);
+    } finally { f.dispose(); }
+  });
   it("retains occlusion for every visible fixture emitter and reuses stationary light buffers", async () => {
     const buildFrame = worldMaterials.worldMaterialFrame;
     const frameSpy = vi.spyOn(worldMaterials, "worldMaterialFrame").mockImplementation((material, rect) => ({
@@ -121,7 +153,7 @@ describe("physical world lighting", () => {
       const night = worldSunlight(new Date((WORLD_DAY_SECONDS + 10) * 1000));
       f.shadows.update(night, viewport);
       const pointPass = f.render.mock.calls.at(-1)![0]!;
-      expect([pointPass.target.width, pointPass.target.height]).toEqual([600, 450]);
+      expect([pointPass.target.width, pointPass.target.height]).toEqual([624, 474]);
       const buffer = pointPass.container.children[0].geometry.getBuffer("aPosition");
       const data = buffer.data as Float32Array;
       expect(data).toHaveLength(16 * 6 * 10);
@@ -130,6 +162,14 @@ describe("physical world lighting", () => {
       const upload = vi.spyOn(buffer, "update"), draws = f.render.mock.calls.length;
       f.shadows.update(night, viewport);
       expect(upload).not.toHaveBeenCalled(); expect(f.render).toHaveBeenCalledTimes(draws);
+      const retained = buffer.data;
+      const fixed = (retained as Float32Array).slice(0, 12 * 60);
+      const moving = (retained as Float32Array).slice(12 * 60);
+      (f.parent.children.at(-1)! as Sprite).x += 1;
+      f.shadows.update(night, viewport);
+      expect(buffer.data).toBe(retained);
+      expect((buffer.data as Float32Array).slice(0, 12 * 60)).toEqual(fixed);
+      expect((buffer.data as Float32Array).slice(12 * 60)).not.toEqual(moving);
     } finally { registrations.forEach((release) => release()); f.dispose(); source.dispose(); frameSpy.mockRestore(); }
   });
   it("inherits terrain lighting for distant small props and restores their receiver and shadows at close zoom", async () => {
@@ -350,6 +390,11 @@ describe("physical world lighting", () => {
       const after = f.render.mock.calls.length;
       f.shadows.update(worldSunlight(), viewport, gust);
       expect(f.render.mock.calls.length).toBe(after);
+      // Live wind redraws at screen density; translating the camera keeps light vertices.
+      const receiverTarget = f.render.mock.calls.find(([draw]) => draw.container === layer)![0]!.target;
+      expect([receiverTarget.width, receiverTarget.height]).toEqual([800, 600]);
+      f.shadows.update(worldSunlight(), { ...viewport, minX: 1, maxX: 101 }, gust);
+      expect(pointUpload).not.toHaveBeenCalled();
       art.dispose();
     } finally { f.dispose(); source.dispose(); }
   });
@@ -372,7 +417,7 @@ describe("physical world lighting", () => {
       await registration.ready;
       f.shadows.update(worldSunlight(), viewport);
       const target = f.render.mock.calls[0]?.[0]?.target;
-      expect([target.width, target.height]).toEqual([800, 600]);
+      expect([target.width, target.height]).toEqual([832, 632]);
       const receiverLayer = f.render.mock.calls[1]?.[0]?.container;
       const mesh = receiverLayer.children[0];
       const data = mesh.geometry.getBuffer("aNormalY").data as Float32Array;

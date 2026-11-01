@@ -12,7 +12,7 @@ import { type ContextType, type ReactNode, useContext } from "react";
 import * as client from "@/app/_trpc/client";
 import Countdown from "@/layout/Countdown";
 import * as pusher from "@/layout/PusherHandler";
-import { UserContext, UserContextProvider } from "@/utils/UserContext";
+import { UserContext, UserContextProvider, useUserDataSelector } from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { shareUserCache } from "@/utils/userCacheSharing";
 
@@ -111,6 +111,24 @@ const mount = (initial = snapshot(), children: ReactNode = null) => {
 };
 
 describe("profile context structural sharing", () => {
+  it("keeps selected UI stable during movement and publishes relevant changes and profile removal", async () => {
+    const seen: unknown[] = [];
+    const SelectedProfile = () => {
+      const { data } = useUserDataSelector((user) => ({ username: user.username }));
+      seen.push(data);
+      return null;
+    };
+    const test = mount(snapshot(), <SelectedProfile />);
+    const selected = seen.at(-1), renders = seen.length;
+    await test.settle(() => updateUserCache(test.queryClient, key, { longitude: 8, latitude: 9, updatedAt: new Date(BASE) }));
+    expect(seen).toHaveLength(renders);
+    expect(seen.at(-1)).toBe(selected);
+    expect(test.current().data?.longitude).toBe(8);
+    await test.settle(() => updateUserCache(test.queryClient, key, { username: "Renamed" }));
+    expect(seen.at(-1)).toEqual({ username: "Renamed" });
+    await test.settle(async () => { test.queryClient.setQueryData(key, { ...test.read(), userData: undefined }); });
+    expect(seen.at(-1)).toBeUndefined();
+  });
   it.each([100, 800, -800, 0])("does not fan out unchanged refetches after a first %i ms calibration", async (offset) => {
     const test = mount(snapshot(BASE - offset));
     const before = test.current();

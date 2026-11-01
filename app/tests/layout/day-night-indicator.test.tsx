@@ -36,7 +36,11 @@ beforeEach(() => {
   ensureDom();
   globalThis.CustomEvent = window.CustomEvent;
   // Staff access and the server-clock offset belong to this fixture's provider.
-  vi.spyOn(userContext, "useUserData").mockImplementation(() => useContext(UserContext));
+  vi.spyOn(userContext, "useUserInfo").mockImplementation(() => useContext(UserContext));
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
+    const context = useContext(UserContext);
+    return { ...context, data: context.data ? select(context.data) : undefined } as never;
+  });
   onChange.mockClear();
   onWeatherChange.mockClear();
   now = cycleStart + WORLD_DAY_SECONDS * 500 + timeDiff;

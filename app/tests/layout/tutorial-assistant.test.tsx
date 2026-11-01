@@ -9,6 +9,7 @@ import TutorialAssistant from "@/layout/TutorialAssistant";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import type { UserPatch } from "@/deltas/profile";
 import { updateUserCache } from "@/utils/userCache";
+import * as UserContext from "@/utils/UserContext";
 import { ensureDom } from "../setup/dom.mjs";
 
 const key = [["profile", "getUser"], { type: "query" }];
@@ -35,9 +36,6 @@ function testMocks() {
   return globals.__tutorialAssistantMocks;
 }
 const mocks = testMocks();
-vi.mock("@/utils/UserContext", () => ({
-  useUserData: () => ({ data: testMocks().client.getQueryData<ReturnType<typeof profile>>(key)?.userData, updateUser: testMocks().updateUser }),
-}));
 vi.mock("@/app/_trpc/client", () => ({ api: {
   useUtils: () => ({ profile: { getUser: {
     cancel: () => testMocks().client.cancelQueries({ queryKey: key, exact: true }),
@@ -66,6 +64,10 @@ const componentSpies: { mockRestore: () => void }[] = [];
 let close: (() => void) | undefined;
 const animationFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
 beforeEach(() => {
+  componentSpies.push(vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
+    const data = mocks.client.getQueryData<ReturnType<typeof profile>>(key)?.userData;
+    return { data: data ? select(data) : undefined, updateUser: mocks.updateUser } as never;
+  }));
   ensureDom();
   // Bun shares modules between suites; restore Objective after each test.
   componentSpies.push(vi.spyOn(objective, "Objective").mockImplementation(() => null));

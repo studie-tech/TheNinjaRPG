@@ -304,6 +304,7 @@ uniform sampler2D uDynamicField;
 uniform vec4 uStaticBounds;
 uniform vec4 uDynamicBounds;
 uniform vec4 uViewport;
+uniform vec4 uScreenViewport;
 uniform vec2 uReceiverSize;
 uniform vec3 uSun;
 uniform vec3 uSunRight;
@@ -338,9 +339,10 @@ float contactCoverage(sampler2D map, vec2 uv) {
 void main() {
   vec4 color = texture2D(uTexture, vTextureCoord);
   vec2 uv = vec2(vScreen.x, 1.0 - vScreen.y);
-  vec4 data = texture2D(uReceiver, uv);
+  vec2 screenWorld = uScreenViewport.xy + uv * uScreenViewport.zw;
+  vec2 lightingUV = (uScreenViewport.xy - uViewport.xy) / uViewport.zw + uv * (uScreenViewport.zw / uViewport.zw);
+  vec4 data = texture2D(uReceiver, lightingUV);
   float height = receiverHeight(data);
-  vec2 screenWorld = uViewport.xy + uv * uViewport.zw;
   vec3 n = receiverNormal(data);
   vec3 p = receiverPosition(screenWorld, height, n, uViewport, uReceiverSize);
   float shade = 1.0;
@@ -372,7 +374,7 @@ void main() {
   vec2 staticUV = (p.xy - uStaticBounds.xy) / uStaticBounds.zw;
   vec2 dynamicUV = (p.xy - uDynamicBounds.xy) / uDynamicBounds.zw;
   float contact = max(contactCoverage(uStaticField, staticUV), contactCoverage(uDynamicField, dynamicUV)) * (1.0 - smoothstep(1.0, 8.0, p.z));
-  vec3 light = uAmbient * (1.0 - contact * 0.22) + uSunColor * max(dot(n, uSun), 0.0) * shade * uDay + texture2D(uPoints, uv).rgb;
+  vec3 light = uAmbient * (1.0 - contact * 0.22) + uSunColor * max(dot(n, uSun), 0.0) * shade * uDay + texture2D(uPoints, lightingUV).rgb;
   vec3 albedo = color.rgb / max(color.a, 0.00001);
   // The diffuse art already contains painted highlights. Bounded compensation preserves their pixel detail under a moving sun.
   float baked = 0.4 + 0.6 * max(dot(n, normalize(vec3(-0.5, -0.4, 0.8))), 0.0);

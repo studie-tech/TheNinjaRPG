@@ -30,7 +30,7 @@ import { getMainNavbarLinks, type NavBarDropdownLink } from "@/libs/menus";
 import { cn } from "@/libs/shadui";
 import type { UserWithRelations } from "@/routers/profile";
 import { usePublicPathname } from "@/utils/routing";
-import { useUserData } from "@/utils/UserContext";
+import { useUserData, useUserDataSelector } from "@/utils/UserContext";
 import { CollapsibleNotifications } from "./LayoutNotifications";
 import { type LayoutVariant, layoutVariantClasses } from "./layoutVariants";
 
@@ -498,7 +498,7 @@ export const RightSideBar: React.FC<RightSideBarProps> = ({
 };
 
 export const StrongestUsersBanner: React.FC = () => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((user) => ({ status: user.status }));
   const { data: users, isPending } = api.profile.getStrongestUsers.useQuery(undefined, {
     staleTime: 1000 * 60 * 5,
   });

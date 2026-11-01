@@ -289,6 +289,7 @@ beforeEach(() => {
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
     () => ({ data: user, timeDiff, updateUser, prepareUserUpdate: () => 7 }) as never,
   );
+  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => ({ data: select(user as never), timeDiff, updateUser }) as never);
   vi.spyOn(routing, "pushToCombat").mockImplementation(() => {});
   // Exercise our mounting/selection logic; shared Modal and Radix behavior have their own coverage.
   vi.spyOn(modal, "default").mockImplementation((props) => (

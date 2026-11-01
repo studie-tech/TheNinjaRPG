@@ -145,6 +145,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
   const look = new UniformGroup(
     {
       uScreenSize: { value: new Float32Array(2), type: "vec2<f32>" },
+      uScreenViewport: { value: new Float32Array(4), type: "vec4<f32>" },
       uAmbient: { value: new Float32Array(3), type: "vec3<f32>" },
       uSunColor: { value: new Float32Array(3), type: "vec3<f32>" },
       uDay: { value: 1, type: "f32" },
@@ -233,8 +234,22 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     disposed = false,
     receiverKey = "",
     receiverWindKey = "",
-    pointKey = "",
-    pointGeometryKey = "";
+    pointKey = "";
+  let pointLights: PointLight[] = [],
+    pointDay = -1,
+    pointRevision = 0;
+  let coverage: {
+    bounds: WorldBounds;
+    pixelX: number;
+    pixelY: number;
+    width: number;
+    height: number;
+    baseWidth: number;
+    baseHeight: number;
+    anchorX: number;
+    anchorY: number;
+    padding: number;
+  } | null = null;
   let receiverRevision = 0;
   let previousReceivers: VisibleCaster[] = [];
   const invalidate = () => {
@@ -462,9 +477,79 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
               maxY: world.y / scale,
             }
           : fallbackViewport;
-      const anchorX = Math.floor(globalViewport.minX / 128) * 128,
-        anchorY = Math.floor(globalViewport.minY / 128) * 128;
+      const nextRecords = orderedRecords ?? [...records];
+      // Animated passes need a fresh image anyway; keep their raster work at screen size.
+      // Still scenes can reuse a small border while the camera moves.
+      const windMoves =
+        breeze.large.some((value) => value !== 0) ||
+        breeze.small.some((value) => value !== 0);
+      const animated = nextRecords.some((record) =>
+        record.wind
+          ? windMoves
+          : record.description.shadowCaster === "character" &&
+            (!record.cached ||
+              record.cached.pose.texture !== record.sprite.texture ||
+              !record.cached.pose.parentMatrix.equals(
+                origin(record.sprite.parent).matrix,
+              )),
+      );
+      const padding = animated ? 0 : 16;
+      const screenSpanX = globalViewport.maxX - globalViewport.minX,
+        screenSpanY = globalViewport.maxY - globalViewport.minY;
+      const baseWidth = Math.max(1, Math.min(2048, game.renderer.width)),
+        baseHeight = Math.max(1, Math.min(2048, game.renderer.height));
+      const pixelX = screenSpanX / baseWidth,
+        pixelY = screenSpanY / baseHeight;
+      // A screen-density border lets camera translation reuse material/light targets.
+      // Keep the world texel grid fixed until coverage, zoom or output dimensions change.
+      if (
+        !coverage ||
+        coverage.padding !== padding ||
+        coverage.baseWidth !== baseWidth ||
+        coverage.baseHeight !== baseHeight ||
+        Math.abs(coverage.pixelX - pixelX) > pixelX * 1e-6 ||
+        Math.abs(coverage.pixelY - pixelY) > pixelY * 1e-6 ||
+        globalViewport.minX < coverage.bounds.minX ||
+        globalViewport.maxX > coverage.bounds.maxX ||
+        globalViewport.minY < coverage.bounds.minY ||
+        globalViewport.maxY > coverage.bounds.maxY
+      ) {
+        const paddingX = Math.min(padding, Math.floor((2048 - baseWidth) / 2)),
+          paddingY = Math.min(padding, Math.floor((2048 - baseHeight) / 2));
+        const width = baseWidth + paddingX * 2,
+          height = baseHeight + paddingY * 2;
+        const minX = paddingX
+            ? (Math.floor(globalViewport.minX / pixelX) - paddingX) * pixelX
+            : globalViewport.minX,
+          minY = paddingY
+            ? (Math.floor(globalViewport.minY / pixelY) - paddingY) * pixelY
+            : globalViewport.minY;
+        coverage = {
+          bounds: {
+            minX,
+            minY,
+            maxX: minX + width * pixelX,
+            maxY: minY + height * pixelY,
+          },
+          pixelX,
+          pixelY,
+          width,
+          height,
+          baseWidth,
+          baseHeight,
+          padding,
+          anchorX: Math.floor(globalViewport.minX / 128) * 128,
+          anchorY: Math.floor(globalViewport.minY / 128) * 128,
+        };
+      }
+      const { anchorX, anchorY } = coverage;
       const viewport = {
+        minX: coverage.bounds.minX - anchorX,
+        maxX: coverage.bounds.maxX - anchorX,
+        minY: coverage.bounds.minY - anchorY,
+        maxY: coverage.bounds.maxY - anchorY,
+      };
+      const screenViewport = {
         minX: globalViewport.minX - anchorX,
         maxX: globalViewport.maxX - anchorX,
         minY: globalViewport.minY - anchorY,
@@ -472,9 +557,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       };
       const spanX = viewport.maxX - viewport.minX,
         spanY = viewport.maxY - viewport.minY;
-      // Materials and color share screen-pixel sampling; world-unit buffers would mix neighboring roof and wall pixels at zoom.
-      const width = Math.max(1, Math.min(2048, game.renderer.width)),
-        height = Math.max(1, Math.min(2048, game.renderer.height));
+      const { width, height } = coverage;
       if (receiver.width !== width || receiver.height !== height) {
         receiver.resize(width, height);
         invalidate();
@@ -495,8 +578,8 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       container.filterArea = new Rectangle(
         globalViewport.minX,
         globalViewport.minY,
-        spanX,
-        spanY,
+        screenSpanX,
+        screenSpanY,
       );
       view.uniforms.uViewport.set([viewport.minX, viewport.minY, spanX, spanY]);
       view.uniforms.uReceiverSize.set([width, height]);
@@ -518,15 +601,15 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         lights.push(...candidates);
       };
       if (!orderedRecords) {
-        orderedRecords = [...records];
+        orderedRecords = nextRecords;
         liveRecords = orderedRecords.filter((record) => !record.sceneryOwner);
       }
       // Fixed scenery shares one coarse visibility/pose snapshot. Wind remains a live shader input.
       const sceneryBounds = {
-        minX: Math.floor(globalViewport.minX / 128) * 128,
-        maxX: Math.ceil(globalViewport.maxX / 128) * 128,
-        minY: Math.floor(globalViewport.minY / 128) * 128,
-        maxY: Math.ceil(globalViewport.maxY / 128) * 128,
+        minX: Math.floor(coverage.bounds.minX / 128) * 128,
+        maxX: Math.ceil(coverage.bounds.maxX / 128) * 128,
+        minY: Math.floor(coverage.bounds.minY / 128) * 128,
+        maxY: Math.ceil(coverage.bounds.maxY / 128) * 128,
       };
       const sceneryViewport = {
         minX: sceneryBounds.minX - anchorX,
@@ -955,10 +1038,16 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         });
       }
       if (light.day > 0) {
-        sun.update(detailedSunCasters, viewport, light, breeze, minReceiverHeight);
+        sun.update(
+          detailedSunCasters,
+          screenViewport,
+          light,
+          breeze,
+          minReceiverHeight,
+        );
         hasSunCasters = true;
       } else if (hasSunCasters) {
-        sun.update([], viewport, light);
+        sun.update([], screenViewport, light);
         hasSunCasters = false;
       }
       const fieldBounds = {
@@ -1005,11 +1094,17 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
         dynamicField.prisms.source.pixelWidth,
         dynamicField.prisms.source.pixelHeight,
       ]);
-      const nextPointGeometryKey = `${viewKey}:${lights.map((l) => `${l.x}:${l.y}:${l.z}:${l.reach}:${l.color}:${l.castsShadows}`).join(";")}:${Math.round(light.day * 256)}`;
+      const nextPointDay = Math.round(light.day * 256);
+      // Cached emitter snapshots are immutable; camera and wind leave their identities intact.
+      const pointGeometryChanged =
+        pointDay !== nextPointDay ||
+        pointLights.length !== lights.length ||
+        lights.some((entry, index) => entry !== pointLights[index]);
+      if (pointGeometryChanged) pointRevision++;
       const nextPointKey =
         nextReceiverKey +
         `${staticField.revision}:${dynamicField.revision}` +
-        nextPointGeometryKey +
+        `:${pointRevision}:` +
         (hasWindReceivers ||
         staticOccluders.some((record) => record.wind !== undefined) ||
         dynamicOccluders.some((record) => record.wind !== undefined)
@@ -1030,27 +1125,35 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       if (pointKey !== nextPointKey) {
         pointKey = nextPointKey;
         // Wind changes visibility, while stationary light bounds keep their vertex buffer.
-        if (pointGeometryKey !== nextPointGeometryKey) {
-          pointGeometryKey = nextPointGeometryKey;
-          const vertices: number[] = [];
-          for (const l of lights) {
-            // Expand the ground reach after reading cached fixtures so stationary lights follow dusk and dawn.
-            const quad = pointLightBounds(l, light.day);
-            const { radius, cy, ry } = quad;
-            if (!boundsOverlap(quad, viewport)) continue;
-            for (const [u, v] of corners)
-              vertices.push(
-                l.x + (u - 0.5) * radius * 2,
-                cy + (v - 0.5) * ry * 2,
-                l.x,
-                l.y,
-                l.z,
-                radius,
-                ...l.color,
-                Number(l.castsShadows),
+        if (pointGeometryChanged) {
+          const resized = pointBuffer.data.length !== lights.length * 60;
+          if (resized) pointBuffer.data = new Float32Array(lights.length * 60);
+          const vertices = pointBuffer.data as Float32Array;
+          for (const [index, l] of lights.entries()) {
+            if (!resized && pointDay === nextPointDay && l === pointLights[index])
+              continue;
+            const { radius, cy, ry } = pointLightBounds(l, light.day);
+            let offset = index * 60;
+            // Offscreen quads clip on the GPU; only changed lights rewrite their retained slots.
+            for (const [u, v] of corners) {
+              vertices.set(
+                [
+                  l.x + (u - 0.5) * radius * 2,
+                  cy + (v - 0.5) * ry * 2,
+                  l.x,
+                  l.y,
+                  l.z,
+                  radius,
+                  ...l.color,
+                  Number(l.castsShadows),
+                ],
+                offset,
               );
+              offset += 10;
+            }
           }
-          pointBuffer.data = new Float32Array(vertices);
+          pointLights = lights;
+          pointDay = nextPointDay;
           pointBuffer.update();
           pointMesh.visible = vertices.length > 0;
         }
@@ -1063,6 +1166,12 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       }
       const day = light.day;
       look.uniforms.uScreenSize.set([game.renderer.width, game.renderer.height]);
+      look.uniforms.uScreenViewport.set([
+        screenViewport.minX,
+        screenViewport.minY,
+        screenSpanX,
+        screenSpanY,
+      ]);
       look.uniforms.uAmbient.set([
         0.13 + 0.19 * day,
         0.22 + 0.12 * day,

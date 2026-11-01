@@ -192,6 +192,7 @@ function Travel() {
   const [autoDestination, setAutoDestination] = useState<TravelLocation | null>(null);
   const requestedLocationRef = useRef<string | null>(null);
   const [pinLabel, setPinLabel] = useState("");
+  const [isQuickTravelOpen, setQuickTravelOpen] = useState(false);
   const [storedPins, setStoredPins] = useLocalStorage<Record<string, TravelPin[]>>(
     "travelPins",
     {},
@@ -496,13 +497,14 @@ function Travel() {
 
   useEffect(() => {
     if (userData && globe) {
-      setCurrentPosition({ x: userData.longitude, y: userData.latitude });
+      const { longitude: x, latitude: y } = userData;
+      setCurrentPosition((previous) =>
+        previous?.x === x && previous.y === y ? previous : { x, y },
+      );
       const tile = globe.tiles[userData.sector];
-      if (tile) {
-        setCurrentTile(tile);
-      }
+      if (tile) setCurrentTile(tile);
     }
-  }, [userData, currentSector, globe]);
+  }, [userData?.longitude, userData?.latitude, userData?.sector, globe]);
 
   useEffect(() => {
     // Only set initial tab, don't override user's selection
@@ -1147,7 +1149,7 @@ function Travel() {
                 </PopoverContent>
               </Popover>
             )}
-            <Popover>
+            <Popover open={isQuickTravelOpen} onOpenChange={setQuickTravelOpen}>
               <PopoverTrigger aria-label="Quick Travel">
                 <Search className={`mr-2 h-7 w-7 hover:text-orange-500`} />
               </PopoverTrigger>
@@ -1157,7 +1159,7 @@ function Travel() {
                   Travel to a village, saved pin, or sector ID.
                 </p>
                 <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto pb-3">
-                  {travelDestinations.map((destination) => {
+                  {(isQuickTravelOpen ? travelDestinations : []).map((destination) => {
                     const dotColor = getReadableVillageHexColor(destination.color);
                     const description =
                       "description" in destination

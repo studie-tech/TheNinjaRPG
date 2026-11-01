@@ -15,7 +15,7 @@ import {
 import Loader from "@/layout/Loader";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 const DisplayUserReport = dynamic(() => import("@/layout/UserReport"), {
   loading: () => <Loader explanation="Loading report" />,
@@ -25,7 +25,9 @@ const AcceptWarning: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   // Query
-  const { data: userData, updateUser } = useUserData();
+  const { data: userData, updateUser } = useUserDataSelector((user) => ({
+    isWarned: user.isWarned,
+  }));
   const { data: report } = api.reports.getBan.useQuery(undefined, {
     enabled: !!userData?.isWarned,
   });

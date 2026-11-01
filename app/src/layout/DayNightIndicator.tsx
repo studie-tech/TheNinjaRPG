@@ -16,7 +16,7 @@ import Countdown from "@/layout/Countdown";
 import { getWorldCyclePosition, getWorldCycleState } from "@/libs/dayNight";
 import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { isStaffRole } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 type DayNightIndicatorProps = {
   className?: string;
@@ -35,7 +35,9 @@ export function DayNightIndicator({
   onPreviewWeatherChange,
 }: DayNightIndicatorProps) {
   const dayNightCycle = useDayNightCycle();
-  const { data: userData, timeDiff } = useUserData();
+  const { data: userData, timeDiff } = useUserDataSelector((user) => ({
+    role: user.role,
+  }));
   const sliderId = useId();
   const weatherId = useId(),
     strengthId = useId();

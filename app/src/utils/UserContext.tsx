@@ -85,7 +85,7 @@ type UserContextValue = {
   ) => Promise<void>;
 };
 
-export const UserContext = createContext<UserContextValue>({
+const defaultUserContext: UserContextValue = {
   data: undefined,
   achievementProgress: undefined,
   notifications: undefined,
@@ -102,7 +102,11 @@ export const UserContext = createContext<UserContextValue>({
   updateNotifications: async () => {
     // do nothing
   },
-});
+};
+
+export const UserContext = createContext(defaultUserContext);
+const UserInfoContext =
+  createContext<Omit<UserContextValue, "data">>(defaultUserContext);
 
 /**
  * UserContextProvider component provides a context for managing user-related data and functionality.
@@ -241,14 +245,17 @@ export function UserContextProvider(props: {
       // Clear user context when logged out
       Sentry.setUser(null);
     }
-  }, [data?.userData, user?.primaryEmailAddress?.emailAddress]);
+  }, [
+    data?.userData?.userId,
+    data?.userData?.username,
+    user?.primaryEmailAddress?.emailAddress,
+  ]);
 
   // Keep identity stable for unchanged data, but include notifications: bonus expiry
   // removes a notification even when structural sharing preserves userData/timeDiff.
   // Consumers must rerender then to drop the expired bonus from activity previews.
-  const value = useMemo<UserContextValue>(
+  const info = useMemo<Omit<UserContextValue, "data">>(
     () => ({
-      data: data?.userData,
       achievementProgress: data?.achievementProgress,
       notifications: data?.notifications,
       isEventParticipant: data?.isEventParticipant ?? false,
@@ -264,7 +271,6 @@ export function UserContextProvider(props: {
       updateNotifications: updateNotifications,
     }),
     [
-      data?.userData,
       data?.achievementProgress,
       data?.notifications,
       data?.isEventParticipant,
@@ -281,12 +287,37 @@ export function UserContextProvider(props: {
     ],
   );
 
-  return <UserContext value={value}>{props.children}</UserContext>;
+  const value = useMemo(
+    () => ({ ...info, data: data?.userData }),
+    [info, data?.userData],
+  );
+  return (
+    <UserInfoContext value={info}>
+      <UserContext value={value}>{props.children}</UserContext>
+    </UserInfoContext>
+  );
 }
 
 // Easy hook for getting the current user data
 export const useUserData = () => {
   return useContext(UserContext);
+};
+
+/** Read session metadata and cache actions without subscribing to profile fields. */
+export const useUserInfo = () => useContext(UserInfoContext);
+
+/** Observe selected profile fields without subscribing unrelated UI to movement coordinates.
+ * The provider owns fetching; this disabled observer shares its authenticated tRPC cache.
+ */
+export const useUserDataSelector = <T,>(
+  select: (user: NonNullable<UserWithRelations>) => T,
+) => {
+  const info = useContext(UserInfoContext);
+  const { data } = api.profile.getUser.useQuery(undefined, {
+    enabled: false,
+    select: (snapshot) => (snapshot.userData ? select(snapshot.userData) : undefined),
+  });
+  return { ...info, data };
 };
 
 // Require the user to be logged in

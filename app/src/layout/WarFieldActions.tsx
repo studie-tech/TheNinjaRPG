@@ -14,14 +14,17 @@ import { useRefreshAt } from "@/hooks/useRefreshAt";
 import Link from "@/layout/Link";
 import Modal from "@/layout/Modal";
 import { ObjectiveWarPanel } from "@/layout/ObjectiveWarPanel";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Keep Travel focused on the map, fetching detailed war actions only on demand. */
 export const WarFieldActions = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedWar, setSelectedWar] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const { data: user, timeDiff } = useRequiredUserData();
+  const { data: user, timeDiff } = useUserDataSelector((user) => ({
+    villageId: user.villageId,
+    warMission: user.warMission,
+  }));
   const { data: wars } = api.war.getActiveWars.useQuery(
     { villageId: user?.villageId ?? "" },
     { enabled: !!user, staleTime: 10000, refetchInterval: 10000 },
