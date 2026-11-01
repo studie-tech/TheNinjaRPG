@@ -7,7 +7,6 @@ import {
   getCancelPetTaskUserUpdate,
   getClaimedRewardChoiceUserUpdate,
   getCollectPetTaskUserUpdate,
-  getQuestInventoryUpdate,
   getQuestRewardProjectionUpdate,
   getRetryBattleUserUpdate,
   getRewardUserDelta,
@@ -1465,7 +1464,7 @@ export const questsRouter = createTRPCRouter({
   checkRewards: protectedProcedure
     .meta({ mcp: { description: "Check and claim quest rewards" } })
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
-    .output(userDeltaResponseSchema.extend({ itemsChanged: z.boolean().optional() }))
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
       // Reward payout follows the history/account claim; isolated runs publish both together.
       const [
@@ -1474,7 +1473,6 @@ export const questsRouter = createTRPCRouter({
           toastMessages,
           settings,
           requiresProgressionRefresh,
-          craftingItemsChanged,
           publishedAchievementIds,
           progressionQuestCandidates,
         },
@@ -1623,14 +1621,6 @@ export const questsRouter = createTRPCRouter({
         resolved,
         badges: claim.badges,
         rewardChoicePending: claim.rewardChoicePending,
-        ...getQuestInventoryUpdate({
-          rewards: claim.rewards,
-          requiresProgressionRefresh:
-            requiresProgressionRefresh || toastMessages.length > 0,
-          craftingItemsChanged,
-          hasConsequences:
-            consequences.length > 0 || refreshedTrackers.consequences.length > 0,
-        }),
         ...getQuestRewardProjectionUpdate({
           user: user,
           requiresProgressionRefresh,

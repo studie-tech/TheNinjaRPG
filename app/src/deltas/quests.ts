@@ -257,23 +257,3 @@ export const getQuestRewardProjectionUpdate = ({
     delta,
   );
 };
-
-/** Mark inventory unchanged only when settlement, consequences and rewards cannot alter its rows. */
-export const getQuestInventoryUpdate = ({
-  rewards,
-  requiresProgressionRefresh,
-  craftingItemsChanged,
-  hasConsequences,
-}: {
-  rewards: GetRewardResult;
-  requiresProgressionRefresh: boolean;
-  craftingItemsChanged: boolean;
-  hasConsequences: boolean;
-}) => ({
-  itemsChanged:
-    requiresProgressionRefresh ||
-    craftingItemsChanged ||
-    hasConsequences ||
-    rewards.reward_items.length > 0 ||
-    getRewardUserDelta(rewards, 0, true) === undefined,
-});

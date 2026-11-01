@@ -58,13 +58,6 @@ describeWithDatabase("confirmed quest cache responses", () => {
   });
   afterEach(() => { vi.restoreAllMocks(); invalidatePublishedMapCache(); });
 
-  it("confirms unchanged inventory for ordinary quest progress", async () => {
-    const api = await callerFor(questsRouter, playerId);
-    expect((await api.startQuest({ questId: missionId, userSector: 0 })).success).toBe(true);
-    const result = await api.checkRewards({ questId: missionId });
-    expect(result).toMatchObject({ success: true, itemsChanged: false });
-  });
-
   it("returns ordinary abandonment from the existing profile read and exact written timestamp", async () => {
     const db = await getTestDatabase();
     await insertQuests([{ id: "unclaimed-cache-achievement", questType: "achievement", content: content(10000) }]);

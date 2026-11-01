@@ -940,13 +940,9 @@ export const useCheckRewards = () => {
           utils.profile.getDashboard.invalidate(),
           utils.quests.getQuestHistory.invalidate(),
           utils.quests.allianceBuilding.invalidate(),
-          // Missing metadata and inventory-changing rewards need authoritative rows.
-          ...(data.itemsChanged === false
-            ? []
-            : [
-                utils.item.getUserItems.invalidate(),
-                utils.item.getUserItemsWithVariants.invalidate(),
-              ]),
+          // Profile reconciliation can grant collection items from unlocked achievements.
+          utils.item.getUserItems.invalidate(),
+          utils.item.getUserItemsWithVariants.invalidate(),
         ]);
         if (
           currentStep?.title === "Academy Dialog Option" &&

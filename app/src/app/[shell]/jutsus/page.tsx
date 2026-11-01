@@ -228,12 +228,18 @@ export default function MyJutsu() {
         ]);
       }
     },
-    onError: () =>
-      Promise.all([
+    onError: async (error) => {
+      showMutationToast({
+        success: false,
+        message: error.message,
+        variant: "destructive",
+      });
+      await Promise.all([
         utils.jutsu.getUserJutsus.invalidate(),
         utils.jutsu.getLoadouts.invalidate(),
         utils.profile.getUser.invalidate(),
-      ]).then(() => undefined),
+      ]);
+    },
     onSettled: () => {
       loadoutRequestInFlightRef.current = false;
       onSettled();

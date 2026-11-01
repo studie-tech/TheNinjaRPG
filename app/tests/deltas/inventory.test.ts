@@ -1,8 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { getEquippedInventory, getInventoryEquipmentChanges, getSoldInventory } from "@/deltas/item";
 import { getEquippedJutsus } from "@/deltas/jutsu";
-import { getQuestInventoryUpdate } from "@/deltas/quests";
-import { PostProcessedRewardSchema } from "@/validators/rewards";
 
 const rows = [
   { id: "one", equipped: "NONE" as const, variants: ["red"] },
@@ -26,15 +24,6 @@ describe("inventory reconciliation", () => {
   it("removes only the confirmed sold instance", () => {
     expect(getSoldInventory(rows, "one")).toEqual([rows[1]!]);
     expect(getSoldInventory(rows, "missing")).toBeUndefined();
-  });
-
-  it("skips quest inventory reads only for proven unchanged inventory", () => {
-    const input = { rewards: PostProcessedRewardSchema.parse({ reward_money: 10 }), requiresProgressionRefresh: false, craftingItemsChanged: false, hasConsequences: false };
-    expect(getQuestInventoryUpdate(input)).toEqual({ itemsChanged: false });
-    for (const field of ["requiresProgressionRefresh", "craftingItemsChanged", "hasConsequences"])
-      expect(getQuestInventoryUpdate({ ...input, [field]: true }).itemsChanged).toBe(true);
-    for (const reward of [{ reward_items: ["gift"] }, { reward_hunter_items: true }, { reward_gathering_items: true }, { reward_rank: "GENIN" }])
-      expect(getQuestInventoryUpdate({ ...input, rewards: PostProcessedRewardSchema.parse(reward) }).itemsChanged).toBe(true);
   });
 });
 
