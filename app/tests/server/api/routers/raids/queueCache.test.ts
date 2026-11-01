@@ -10,6 +10,8 @@ import {
   mpvpBattleQueue,
   mpvpBattleUser,
   quest,
+  raidDamageThreshold,
+  raidParticipation,
   user2conversation,
   userData,
   userQueue,
@@ -41,18 +43,20 @@ describe("raid join cache reconciliation", () => {
   beforeEach(() => { stubRateLimitTransport(); });
   afterEach(() => vi.restoreAllMocks());
   const databaseFor = (pendingQueue: boolean, canClaim = true) => {
-    const userRead = vi.fn().mockResolvedValue({
+    const actor = {
       villageId: "queue-village",
       sector: 7,
       status: "AWAKE",
       isBanned: false,
       energyQueueHead: 0,
       energyQueueTail: pendingQueue ? 1 : 0,
-    });
+    };
+    const userRead = vi.fn().mockResolvedValue(actor);
     const insert = vi.fn(() => ({
       values: () => ({ onDuplicateKeyUpdate: async () => ({ rowsAffected: 1 }) }),
     }));
     return {
+      actor,
       query: {
         userData: { findFirst: userRead },
         quest: {
@@ -78,9 +82,9 @@ describe("raid join cache reconciliation", () => {
       select: () => ({
         from: () => ({ innerJoin: () => ({ where: async () => [] }) }),
       }),
-      update: () => ({
+      update: vi.fn(() => ({
         set: () => ({ where: async () => ({ rowsAffected: canClaim ? 1 : 0 }) }),
-      }),
+      })),
       insert,
     };
   };
@@ -111,6 +115,23 @@ describe("raid join cache reconciliation", () => {
     expect(result.userDelta).toBeUndefined();
     expect(db.insert).not.toHaveBeenCalled();
   });
+  it.each(["missing raid", "full team", "wrong sector", "inactive status"])(
+    "confirms unchanged profile data for a rejected join: %s",
+    async (reason) => {
+      const db = databaseFor(false);
+      if (reason === "missing raid") vi.spyOn(db.query.quest, "findFirst").mockResolvedValue(undefined as never);
+      if (reason === "full team") vi.spyOn(db.query.mpvpBattleQueue, "findFirst").mockResolvedValue({ id: "cache-team", queue: [{}, {}, {}] } as never);
+      if (reason === "wrong sector") db.actor.sector = 8;
+      if (reason === "inactive status") db.actor.status = "ASLEEP";
+      const result = await callerForDatabase(raidsRouter, "queue-user", db as never)
+        .joinRaidQueue({ questId: "cache-raid", teamId: "cache-team" });
+      expect(result).toMatchObject({ success: false, userDelta: {}, userExpected: { status: db.actor.status } });
+      expect(result.userPatch).toBeUndefined();
+      expect(db.update).not.toHaveBeenCalled();
+      expect(db.insert).not.toHaveBeenCalled();
+      expect(db.query.userData.findFirst).toHaveBeenCalledTimes(1);
+    },
+  );
 });
 
 describeWithDatabase("raid join committed queue", () => {
@@ -123,6 +144,8 @@ describeWithDatabase("raid join committed queue", () => {
       mpvpBattleUser,
       mpvpBattleQueue,
       quest,
+      raidDamageThreshold,
+      raidParticipation,
       userData,
     );
     await insertUsers([{ userId: "queue-sql-user", status: "AWAKE", sector: 7 }]);
@@ -159,6 +182,80 @@ describeWithDatabase("raid join committed queue", () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
   });
   afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
+  it.each([false, true])("refreshes a rejected ready-up only when cached activity differs, stale=%s", async (stale) => {
+    const db = await getTestDatabase();
+    const traveling = { status: "TRAVEL" as const, travelFinishAt: new Date(Date.now() + 3600000) };
+    if (!stale) await db.update(userData).set(traveling).where(eq(userData.userId, "queue-sql-user"));
+    const profile = await callerFor(profileRouter, "queue-sql-user");
+    const initial = await profile.getUser();
+    if (stale) await db.update(userData).set(traveling).where(eq(userData.userId, "queue-sql-user"));
+    const cache = new QueryClient();
+    const key = [["profile", "getUser"], { type: "query" }];
+    cache.setQueryData(key, initial);
+    const getUser = vi.fn(() => profile.getUser());
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      const revision = prepareUserUpdate(cache, key);
+      const { result, statements } = await recordQueries(() => callerForDatabase(raidsRouter, "queue-sql-user", db).readyToQueue());
+      expect(result).toMatchObject({ success: false, userDelta: {}, userExpected: { status: "TRAVEL" } });
+      expect(statements.some((statement) => /^\s*(update|insert|delete)/i.test(statement))).toBe(false);
+      await updateUserCache(cache, key, result, { revision });
+      expect(getUser).toHaveBeenCalledTimes(stale ? 1 : 0);
+      expect(cache.getQueryData<typeof initial>(key)?.userData?.status).toBe("TRAVEL");
+    } finally { stop(); cache.clear(); }
+  });
+
+  it("returns settled training with a rejected reward claim without a profile read", async () => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ isOutlaw: true }).where(eq(userData.userId, "queue-sql-user"));
+    const profile = await callerFor(profileRouter, "queue-sql-user");
+    const initial = await profile.getUser();
+    await queueEnergy("queue-sql-user", [{ stat: "offence", energy: 10 }]);
+    const cache = new QueryClient();
+    const key = [["profile", "getUser"], { type: "query" }];
+    cache.setQueryData(key, initial);
+    const getUser = vi.fn(() => profile.getUser());
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      const revision = prepareUserUpdate(cache, key);
+      const result = await callerForDatabase(raidsRouter, "queue-sql-user", db).claimDamageReward({ questId: "cache-raid", thresholdId: "missing" });
+      expect(result).toMatchObject({ success: false, userDelta: {} });
+      await updateUserCache(cache, key, result, { revision });
+      const saved = (await db.query.userData.findFirst({ where: eq(userData.userId, "queue-sql-user") }))!;
+      expect(saved.energyQueueHead).toBeGreaterThan(initial.userData!.energyQueueHead);
+      expect(cache.getQueryData<typeof initial>(key)?.userData).toMatchObject({ offence: saved.offence, energyQueueHead: saved.energyQueueHead });
+      expect(getUser).not.toHaveBeenCalled();
+    } finally { stop(); cache.clear(); }
+  });
+
+  it("refreshes rewards when another claim wins after the opening snapshot", async () => {
+    const db = await getTestDatabase();
+    await db.insert(raidParticipation).values({ id: "cache-participation", userId: "queue-sql-user", questId: "cache-raid", damageDealt: 100 });
+    await db.insert(raidDamageThreshold).values({ id: "cache-threshold", questId: "cache-raid", damageRequired: 1, rewards: ObjectiveReward.parse({}) });
+    const profile = await callerFor(profileRouter, "queue-sql-user");
+    const initial = await profile.getUser();
+    const raced = beforeStatements(db, raidParticipation, [async () => {
+      await db.update(raidParticipation).set({ rewardsClaimed: ["cache-threshold"] }).where(eq(raidParticipation.userId, "queue-sql-user"));
+      await db.update(userData).set({ money: 50 }).where(eq(userData.userId, "queue-sql-user"));
+    }]);
+    const cache = new QueryClient();
+    const key = [["profile", "getUser"], { type: "query" }];
+    cache.setQueryData(key, initial);
+    const getUser = vi.fn(() => profile.getUser());
+    const observer = new QueryObserver(cache, { queryKey: key, queryFn: getUser, staleTime: Infinity });
+    const stop = observer.subscribe(() => undefined);
+    try {
+      const revision = prepareUserUpdate(cache, key);
+      const result = await callerForDatabase(raidsRouter, "queue-sql-user", raced).claimDamageReward({ questId: "cache-raid", thresholdId: "cache-threshold" });
+      expect(result.success).toBe(false);
+      expect(result.userDelta).toBeUndefined();
+      await updateUserCache(cache, key, result, { revision });
+      expect(getUser).toHaveBeenCalledTimes(1);
+      expect(cache.getQueryData<typeof initial>(key)?.userData?.money).toBe(50);
+    } finally { stop(); cache.clear(); }
+  });
   it("applies fresh virtual achievement progress from raid admission to the warmed profile", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ status: "QUEUED", rank: "JONIN", level: 50, primaryElement: "Fire", secondaryElement: "Water", reputationPointsTotal: 10 }).where(eq(userData.userId, "queue-sql-user"));

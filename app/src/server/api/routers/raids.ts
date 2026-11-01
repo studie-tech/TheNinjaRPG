@@ -587,25 +587,31 @@ export const raidsRouter = createTRPCRouter({
       ]);
       // Guard
       if (!user) return errorResponse("User not found");
+      // Validation does not change the profile; reconcile only a mismatched activity status.
+      const reject = (message: string) => ({
+        ...errorResponse(message),
+        userDelta: {},
+        userExpected: { status: user.status },
+      });
       const bannedReady = guardNotBannedFromRaids(user, "queue for raids");
       if (bannedReady) return bannedReady;
       if (user.status === "HOSPITALIZED") {
-        return errorResponse("You cannot ready up while hospitalized");
+        return reject("You cannot ready up while hospitalized");
       }
       if (user.status === "BATTLE") {
-        return errorResponse("You cannot ready up while in an active battle");
+        return reject("You cannot ready up while in an active battle");
       }
       if (user.status === "TRAVEL") {
-        return errorResponse("You cannot ready up while traveling");
+        return reject("You cannot ready up while traveling");
       }
       if (user.status === "ASLEEP") {
-        return errorResponse("You cannot ready up while sleeping");
+        return reject("You cannot ready up while sleeping");
       }
       if (
         user.status === "QUEUED" &&
         queueEntry?.clanBattle?.battleType !== "RAID_BATTLE"
       ) {
-        return errorResponse(
+        return reject(
           "You are in another battle queue. Please leave it before readying for a raid.",
         );
       }
@@ -722,14 +728,20 @@ export const raidsRouter = createTRPCRouter({
 
       // Guard - basic validations
       if (!user) return errorResponse("User not found");
+      // Rejections before admission leave profile data untouched unless its status is stale.
+      const reject = (message: string) => ({
+        ...errorResponse(message),
+        userDelta: {},
+        userExpected: { status: user.status },
+      });
       const bannedJoin = guardNotBannedFromRaids(user, "queue for raids");
       if (bannedJoin) return bannedJoin;
-      if (!raid) return errorResponse("Raid not found");
+      if (!raid) return reject("Raid not found");
       if (existingQueueEntries.length > 0) {
-        return errorResponse("Already in a battle queue");
+        return reject("Already in a battle queue");
       }
       if (user.status !== "AWAKE") {
-        return errorResponse("You cannot join a raid queue in your current status");
+        return reject("You cannot join a raid queue in your current status");
       }
 
       // Guard - raid active state
@@ -738,43 +750,38 @@ export const raidsRouter = createTRPCRouter({
       if (!raidValidation.isValid) {
         if (raidValidation.error === "This raid has ended") {
           await checkAndCleanupExpiredRaid(ctx.drizzle, raid.id);
+          return errorResponse(raidValidation.error);
         }
-        return errorResponse(raidValidation.error);
+        return reject(raidValidation.error);
       }
 
       // Derived - raid data from objective
       const raidData = getRaidObjectiveData(raid);
       if (!raidData) {
-        return errorResponse(
-          "This raid is not properly configured (invalid objective)",
-        );
+        return reject("This raid is not properly configured (invalid objective)");
       }
 
       // Guard - user must be in the raid's sector to join
       if (raidData.sector !== null && user.sector !== raidData.sector) {
-        return errorResponse(
-          `You must travel to sector ${raidData.sector} to join this raid`,
-        );
+        return reject(`You must travel to sector ${raidData.sector} to join this raid`);
       }
 
       // Guard - exclusive raid eligibility (sector check required)
       if (raidData.isExclusive) {
         if (!user.villageId) {
-          return errorResponse("You must be in a village to join exclusive raids");
+          return reject("You must be in a village to join exclusive raids");
         }
         if (raidData.sector === null) {
-          return errorResponse("This exclusive raid is not properly configured");
+          return reject("This exclusive raid is not properly configured");
         }
 
         // Check capture deadline and grace period
         if (raid.raidCaptureDeadline && raid.raidCaptureDeadline < now) {
           if (!raid.raidGracePeriodEnd) {
-            return errorResponse("This raid's capture deadline has passed");
+            return reject("This raid's capture deadline has passed");
           }
           if (raid.raidGracePeriodEnd < now) {
-            return errorResponse(
-              "This raid's capture deadline and grace period have ended",
-            );
+            return reject("This raid's capture deadline and grace period have ended");
           }
         }
 
@@ -798,7 +805,7 @@ export const raidsRouter = createTRPCRouter({
             ));
 
         if (!sectorOwnership && !isAttackerOrAlly) {
-          return errorResponse("Your village does not control this sector");
+          return reject("Your village does not control this sector");
         }
       }
 
@@ -809,10 +816,10 @@ export const raidsRouter = createTRPCRouter({
       if (teamId) {
         // Guard - validate pre-fetched team
         if (!teamData) {
-          return errorResponse("Team not found or battle already started");
+          return reject("Team not found or battle already started");
         }
         if (teamData.queue.length >= RAID_BATTLE_MAX_USERS_PER_TEAM) {
-          return errorResponse("Team is full");
+          return reject("Team is full");
         }
       } else {
         // Mutation - create new team with atomic count guard
@@ -827,7 +834,7 @@ export const raidsRouter = createTRPCRouter({
 
         // Guard - check if insert succeeded
         if (insertResult.rowsAffected === 0) {
-          return errorResponse(
+          return reject(
             "Maximum number of raid teams reached. Please join an existing team.",
           );
         }
@@ -1198,13 +1205,22 @@ export const raidsRouter = createTRPCRouter({
       ]);
 
       const { user } = snapshot;
+      // Expected rejections can return progression already settled by the opening read.
+      const reject = (message: string) => ({
+        ...errorResponse(message),
+        ...getRaidSnapshotUpdate(snapshot),
+      });
       // Guard
-      if (!user) return errorResponse("User not found");
-      if (!participation)
-        return errorResponse("You have not participated in this raid");
-      if (!threshold) return errorResponse("Threshold not found");
+      if (!user) return reject("User not found");
+      if (!participation) return reject("You have not participated in this raid");
+      if (!threshold) return reject("Threshold not found");
       const block = raidRewardBlockMessage(participation, threshold);
-      if (block) return errorResponse(block);
+      if (block) {
+        // Another claim can pay rewards outside the opening progression snapshot.
+        if (participation.rewardsClaimed.includes(threshold.id))
+          return { ...errorResponse(block), userDelta: undefined };
+        return reject(block);
+      }
 
       // Derived
       const rewards = threshold.rewards;
@@ -1218,7 +1234,10 @@ export const raidsRouter = createTRPCRouter({
 
       // Guard - claim result
       if (claimResult.rowsAffected === 0) {
-        return errorResponse("You have already claimed this reward");
+        return {
+          ...errorResponse("You have already claimed this reward"),
+          userDelta: undefined,
+        };
       }
 
       // Derived - post-process rewards to convert item format

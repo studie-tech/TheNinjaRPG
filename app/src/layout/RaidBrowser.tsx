@@ -156,8 +156,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
           showMutationToast(data);
         }
         void util.raids.getRaidDetails.invalidate();
-        if (data.success) void updateUser(data, { revision, delta: data.userDelta });
-        else void updateUser(undefined, { revision });
+        void updateUser(data, { revision, delta: data.userDelta });
         if (data.success) void util.profile.getDashboard.invalidate();
       },
     });
