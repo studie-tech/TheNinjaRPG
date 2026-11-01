@@ -51,3 +51,20 @@ export const getEquippedJutsuLoadouts = <T extends { id: string; jutsuIds: strin
     getEquippedJutsuUserPatch(current.jutsuIds, change).loadout.jutsuIds,
   );
 };
+
+/**
+ * Show a loadout's new battle hotkeys before the save confirms them, keeping other rows.
+ * Return undefined when the loadout is not loaded, so nothing is patched.
+ */
+export const getLoadoutsWithHotkeys = <
+  T extends { id: string; hotkeys: Record<string, string> },
+>(
+  loadouts: T[],
+  loadoutId: string,
+  hotkeys: Record<string, string>,
+): T[] | undefined => {
+  if (!loadouts.some((loadout) => loadout.id === loadoutId)) return;
+  return loadouts.map((loadout) =>
+    loadout.id === loadoutId ? { ...loadout, hotkeys } : loadout,
+  );
+};

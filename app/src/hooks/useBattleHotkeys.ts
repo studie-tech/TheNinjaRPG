@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { api } from "@/app/_trpc/client";
+import { getLoadoutsWithHotkeys } from "@/deltas/loadout";
 import {
   assignHotkey,
   DEFAULT_BASIC_HOTKEYS,
@@ -114,15 +115,18 @@ export const useBattleHotkeys = (
       });
       return false;
     }
-    // Show the new keys at once; the save confirms or the refetch restores them.
+    // Show the new keys at once (the next change builds on these rows); the save
+    // confirms them or the refetch restores them.
     if (kind === "jutsu") {
-      utils.jutsu.getLoadouts.setData(undefined, (rows) =>
-        rows?.map((row) => (row.id === loadout.id ? { ...row, hotkeys: map } : row)),
+      utils.jutsu.getLoadouts.setData(
+        undefined,
+        (rows) => rows && getLoadoutsWithHotkeys(rows, loadout.id, map),
       );
       saveJutsu.mutate({ id: loadout.id, hotkeys: map });
     } else {
-      utils.item.getItemLoadouts.setData(undefined, (rows) =>
-        rows?.map((row) => (row.id === loadout.id ? { ...row, hotkeys: map } : row)),
+      utils.item.getItemLoadouts.setData(
+        undefined,
+        (rows) => rows && getLoadoutsWithHotkeys(rows, loadout.id, map),
       );
       saveItem.mutate({ id: loadout.id, hotkeys: map });
     }

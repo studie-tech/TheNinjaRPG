@@ -261,7 +261,15 @@ export default function CombatPage() {
   // than letting another action take its place. End Turn is handled by Combat.
   useEffect(() => {
     const onDocumentKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || hotkeyTarget) return;
+      // A held key repeats keydown, which would toggle the selection on and off.
+      if (
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.repeat ||
+        hotkeyTarget
+      )
+        return;
       const target = event.target;
       if (
         target instanceof HTMLElement &&

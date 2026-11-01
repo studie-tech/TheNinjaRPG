@@ -760,7 +760,8 @@ const Combat: React.FC<CombatProps> = (props) => {
       )
         return;
       // Modifier chords belong to the browser or OS, not to battle keys.
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      // A held key repeats keydown; one press ends one turn.
+      if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
       // An `if`, not a `switch`: React Compiler cannot compile a ref read as a `case` label.
       if (event.key.toLowerCase() === endTurnKeyRef.current) {
         // Same predicate the server authorizes with, so "w" fires on my own
